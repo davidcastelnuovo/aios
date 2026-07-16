@@ -83,6 +83,36 @@ serve(async (req) => {
 
     await setTranscriptionStatus(supabase, recording_id, 'processing');
 
+    // Case 0: Pre-segmented transcription audio (long extension recordings) —
+    // each part is a standalone file under the Whisper cap; transcribe in order.
+    const audioParts: string[] = Array.isArray(recording.audio_file_paths)
+      ? recording.audio_file_paths.filter(Boolean)
+      : [];
+    if (audioParts.length > 0) {
+      const pieces: string[] = [];
+      for (let i = 0; i < audioParts.length; i++) {
+        console.log(`🎙️ Transcribing segment ${i + 1}/${audioParts.length}: ${audioParts[i]}`);
+        const { data: partData, error: partError } = await supabase.storage
+          .from('recordings')
+          .download(audioParts[i]);
+        if (partError || !partData) {
+          const msg = `Failed to download segment ${i + 1}/${audioParts.length}: ${partError?.message || 'unknown'}`;
+          await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, msg);
+          return new Response(JSON.stringify({ error: msg }), {
+            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        pieces.push(await whisperTranscribe(partData, partData.type || 'audio/webm'));
+        // Touch the row between segments so UI stale-detection sees live progress.
+        await touchProcessing(supabase, recording_id);
+      }
+      const text = pieces.join('\n\n');
+      await setTranscriptionStatus(supabase, recording_id, 'completed', text);
+      return new Response(JSON.stringify({ text }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     let audioBlob: Blob | null = null;
     let contentType = 'audio/mp4';
 
@@ -159,8 +189,8 @@ serve(async (req) => {
       });
     }
 
-    // Transcribe via Gemini
-    const text = await transcribeWithGemini(audioBlob, contentType);
+    // Transcribe — splitting oversized files into Whisper-sized chunks when the format allows
+    const text = await transcribeBlob(supabase, recording_id, audioBlob, contentType);
     await setTranscriptionStatus(supabase, recording_id, 'completed', text);
 
     return new Response(JSON.stringify({ text }), {
@@ -186,10 +216,14 @@ serve(async (req) => {
 });
 
 // ── Transcription via OpenAI Whisper ──────────────────────────────────
-async function transcribeWithGemini(audioBlob: Blob, contentType: string): Promise<string> {
-  // Whisper caps a single request at ~25MB; larger recordings must be split upstream.
+
+const WHISPER_MAX_BYTES = 25 * 1024 * 1024;
+// Chunk target leaves headroom under the cap (mid-frame slice points, headers).
+const CHUNK_TARGET_BYTES = 20 * 1024 * 1024;
+
+async function whisperTranscribe(audioBlob: Blob, contentType: string): Promise<string> {
   const sizeMB = audioBlob.size / (1024 * 1024);
-  if (sizeMB > 25) {
+  if (audioBlob.size > WHISPER_MAX_BYTES) {
     throw new Error(`Recording too large to transcribe in one request (${sizeMB.toFixed(0)}MB > 25MB). Split it into shorter segments.`);
   }
   const ext = geminiAudioFormat(contentType) || 'mp3';
@@ -197,6 +231,102 @@ async function transcribeWithGemini(audioBlob: Blob, contentType: string): Promi
   const text = await aiTranscribe(audioBlob, { language: 'he', filename: `recording.${ext}` });
   if (!text) throw new Error('Whisper returned empty transcription');
   return text;
+}
+
+// Bump updated_at while a multi-chunk transcription runs so the UI's
+// stale-processing detector (3 min without change → mark failed) stays quiet.
+async function touchProcessing(supabase: any, recordingId: string) {
+  await supabase
+    .from('zoom_recordings')
+    .update({ transcription_status: 'processing', updated_at: new Date().toISOString() })
+    .eq('id', recordingId);
+}
+
+async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blob, contentType: string): Promise<string> {
+  if (audioBlob.size <= WHISPER_MAX_BYTES) {
+    return await whisperTranscribe(audioBlob, contentType);
+  }
+
+  const chunks = await splitOversizedBlob(audioBlob, contentType);
+  if (!chunks) {
+    const sizeMB = (audioBlob.size / (1024 * 1024)).toFixed(0);
+    throw new Error(
+      `ההקלטה גדולה מדי לתמלול (${sizeMB}MB > 25MB) ובפורמט שלא ניתן לפצל בשרת (${contentType}). ` +
+      `העלה גרסת MP3/WAV או פצל את הקובץ ידנית.`,
+    );
+  }
+
+  console.log(`✂️ Split ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB ${contentType} into ${chunks.length} chunks`);
+  const pieces: string[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    console.log(`🎙️ Transcribing chunk ${i + 1}/${chunks.length} (${(chunks[i].size / 1024 / 1024).toFixed(1)}MB)`);
+    pieces.push(await whisperTranscribe(chunks[i], contentType));
+    await touchProcessing(supabase, recordingId);
+  }
+  return pieces.join('\n\n');
+}
+
+// Split a too-large audio file into standalone playable chunks, when the
+// container format allows it without a real demuxer:
+// - MP3: frame-based; decoders resync at any byte offset, so plain byte slices work.
+// - WAV: fixed-rate PCM; slice the data payload on blockAlign boundaries and
+//   prepend a size-patched copy of the original header.
+// Other formats (m4a/webm/ogg/flac) need a demuxer — return null and let the
+// caller raise a clear error. (Extension recordings avoid this entirely by
+// uploading pre-segmented parts — see audio_file_paths.)
+async function splitOversizedBlob(blob: Blob, contentType: string): Promise<Blob[] | null> {
+  const format = geminiAudioFormat(contentType);
+
+  if (format === 'mp3') {
+    const chunks: Blob[] = [];
+    for (let off = 0; off < blob.size; off += CHUNK_TARGET_BYTES) {
+      chunks.push(blob.slice(off, Math.min(off + CHUNK_TARGET_BYTES, blob.size), contentType));
+    }
+    return chunks;
+  }
+
+  if (format === 'wav') {
+    return await splitWav(blob);
+  }
+
+  return null;
+}
+
+async function splitWav(blob: Blob): Promise<Blob[] | null> {
+  const headLen = Math.min(blob.size, 4096);
+  const head = new Uint8Array(await blob.slice(0, headLen).arrayBuffer());
+  const dv = new DataView(head.buffer);
+  const tag = (off: number) => String.fromCharCode(head[off], head[off + 1], head[off + 2], head[off + 3]);
+
+  if (blob.size < 44 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') return null;
+
+  let off = 12;
+  let blockAlign = 0;
+  let dataOff = -1;
+  while (off + 8 <= headLen) {
+    const id = tag(off);
+    const size = dv.getUint32(off + 4, true);
+    if (id === 'fmt ') blockAlign = dv.getUint16(off + 8 + 12, true) || 0;
+    if (id === 'data') { dataOff = off + 8; break; }
+    off += 8 + size + (size % 2);
+  }
+  // 'data' chunk not found within the first 4KB — unusual layout, bail out.
+  if (dataOff < 0 || blockAlign <= 0) return null;
+
+  const dataLen = blob.size - dataOff;
+  const payloadPerChunk = Math.floor((CHUNK_TARGET_BYTES - dataOff) / blockAlign) * blockAlign;
+  if (payloadPerChunk <= 0) return null;
+
+  const chunks: Blob[] = [];
+  for (let start = 0; start < dataLen; start += payloadPerChunk) {
+    const segLen = Math.min(payloadPerChunk, dataLen - start);
+    const header = head.slice(0, dataOff);
+    const hdv = new DataView(header.buffer);
+    hdv.setUint32(4, dataOff - 8 + segLen, true);        // RIFF chunk size
+    hdv.setUint32(dataOff - 4, segLen, true);            // data chunk size
+    chunks.push(new Blob([header, blob.slice(dataOff + start, dataOff + start + segLen)], { type: 'audio/wav' }));
+  }
+  return chunks;
 }
 
 // ── Helper: download media from Zoom ──────────────────────────────────

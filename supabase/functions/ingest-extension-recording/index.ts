@@ -50,12 +50,12 @@ Deno.serve(async (req) => {
     // RLS-scoped read: enforces that the caller belongs to the recording's tenant.
     const { data: recording, error: recError } = await userClient
       .from("zoom_recordings")
-      .select("id, tenant_id, client_id, meeting_topic, start_time, duration, host_email, file_path, audio_file_path, transcription")
+      .select("id, tenant_id, client_id, meeting_topic, start_time, duration, host_email, file_path, audio_file_path, audio_file_paths, transcription")
       .eq("id", recording_id)
       .maybeSingle();
 
     if (recError || !recording) return json({ error: "Recording not found" }, 404);
-    if (!recording.file_path && !recording.audio_file_path) {
+    if (!recording.file_path && !recording.audio_file_path && !(recording.audio_file_paths?.length)) {
       return json({ error: "Recording has no uploaded file" }, 400);
     }
 

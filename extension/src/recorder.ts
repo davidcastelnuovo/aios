@@ -9,6 +9,10 @@ const clientName = params.get("clientName") || "";
 const topic = params.get("topic") || "";
 const audioOnly = params.get("audioOnly") === "1";
 
+// The transcription track is rotated into standalone hour-long webm files so
+// every part stays far below Whisper's 25MB/request cap (32kbps ≈ 14MB/hour).
+const SEGMENT_MS = 60 * 60 * 1000;
+
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const startBtn = el<HTMLButtonElement>("start-btn");
 const stopBtn = el<HTMLButtonElement>("stop-btn");
@@ -24,10 +28,19 @@ el<HTMLElement>("info-mode").classList.toggle("hidden", !audioOnly);
 let displayStream: MediaStream | null = null;
 let micStream: MediaStream | null = null;
 let audioContext: AudioContext | null = null;
-let videoRecorder: MediaRecorder | null = null;
-let audioRecorder: MediaRecorder | null = null;
-const videoChunks: Blob[] = [];
-const audioChunks: Blob[] = [];
+
+// Continuous recorder for playback: screen video (or full audio in audio-only mode).
+let archiveRecorder: MediaRecorder | null = null;
+const archiveChunks: Blob[] = [];
+
+// Rotating low-bitrate audio recorder for transcription.
+let segmentRecorder: MediaRecorder | null = null;
+let segmentChunks: Blob[] = [];
+const audioPartBlobs: Blob[] = [];
+let segmentTimer: number | undefined;
+let audioMime: string | undefined;
+let mixedAudioStream: MediaStream | null = null;
+
 let startedAt = 0;
 let timerInterval: number | undefined;
 let recording = false;
@@ -49,6 +62,24 @@ function formatElapsed(ms: number): string {
 
 function pickMimeType(candidates: string[]): string | undefined {
   return candidates.find((t) => MediaRecorder.isTypeSupported(t));
+}
+
+function startSegmentRecorder() {
+  if (!mixedAudioStream) return;
+  segmentChunks = [];
+  segmentRecorder = new MediaRecorder(mixedAudioStream, {
+    mimeType: audioMime,
+    audioBitsPerSecond: 32_000,
+  });
+  segmentRecorder.ondataavailable = (e) => { if (e.data.size > 0) segmentChunks.push(e.data); };
+  // Runs before stopRecorder's promise resolves, so parts land in order.
+  segmentRecorder.onstop = () => {
+    if (segmentChunks.length > 0) {
+      audioPartBlobs.push(new Blob(segmentChunks, { type: "audio/webm" }));
+    }
+    segmentChunks = [];
+  };
+  segmentRecorder.start(1000);
 }
 
 async function startRecording() {
@@ -83,34 +114,44 @@ async function startRecording() {
     audioContext.createMediaStreamSource(micStream).connect(destination);
   }
   const mixedAudioTracks = destination.stream.getAudioTracks();
-  if (mixedAudioTracks.length === 0 && !audioOnly) {
+  mixedAudioStream = mixedAudioTracks.length > 0 ? new MediaStream(mixedAudioTracks) : null;
+  if (!mixedAudioStream && !audioOnly) {
     setStatus("⚠️ אין מקור אודיו — מוקלט וידאו בלבד");
   }
 
+  audioMime = pickMimeType(["audio/webm;codecs=opus", "audio/webm"]);
+
+  // Playback recording: full video, or continuous audio in audio-only mode.
   if (!audioOnly) {
     const videoMime = pickMimeType(["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]);
     const archiveStream = new MediaStream([...displayStream.getVideoTracks(), ...mixedAudioTracks]);
-    videoRecorder = new MediaRecorder(archiveStream, {
+    archiveRecorder = new MediaRecorder(archiveStream, {
       mimeType: videoMime,
       videoBitsPerSecond: 1_000_000,
       audioBitsPerSecond: 96_000,
     });
-    videoRecorder.ondataavailable = (e) => { if (e.data.size > 0) videoChunks.push(e.data); };
-    videoRecorder.start(1000);
-  }
-
-  if (mixedAudioTracks.length > 0) {
-    // Low-bitrate mono track kept small enough for a single Whisper request (~14MB/hour).
-    const audioMime = pickMimeType(["audio/webm;codecs=opus", "audio/webm"]);
-    audioRecorder = new MediaRecorder(new MediaStream(mixedAudioTracks), {
+    archiveRecorder.ondataavailable = (e) => { if (e.data.size > 0) archiveChunks.push(e.data); };
+    archiveRecorder.start(1000);
+  } else if (mixedAudioStream) {
+    archiveRecorder = new MediaRecorder(mixedAudioStream, {
       mimeType: audioMime,
       audioBitsPerSecond: 32_000,
     });
-    audioRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
-    audioRecorder.start(1000);
+    archiveRecorder.ondataavailable = (e) => { if (e.data.size > 0) archiveChunks.push(e.data); };
+    archiveRecorder.start(1000);
   }
 
-  if (!videoRecorder && !audioRecorder) {
+  // Transcription recording: rotated hourly into standalone parts.
+  if (mixedAudioStream) {
+    startSegmentRecorder();
+    segmentTimer = window.setInterval(() => {
+      if (!recording || !segmentRecorder) return;
+      segmentRecorder.stop(); // onstop pushes the finished part
+      startSegmentRecorder();
+    }, SEGMENT_MS);
+  }
+
+  if (!archiveRecorder && !segmentRecorder) {
     setStatus("אין מה להקליט — לא נמצא מקור וידאו או אודיו");
     cleanupStreams();
     startBtn.disabled = false;
@@ -146,6 +187,7 @@ function cleanupStreams() {
   micStream?.getTracks().forEach((t) => t.stop());
   audioContext?.close().catch(() => {});
   displayStream = micStream = null;
+  mixedAudioStream = null;
   audioContext = null;
 }
 
@@ -168,30 +210,32 @@ async function stopAndUpload() {
   if (!recording) return;
   recording = false;
   window.clearInterval(timerInterval);
+  window.clearInterval(segmentTimer);
   stopBtn.disabled = true;
   timerEl.classList.remove("recording");
   timerEl.textContent = formatElapsed(Date.now() - startedAt);
 
   setStatus("עוצר הקלטה...");
-  await Promise.all([stopRecorder(videoRecorder), stopRecorder(audioRecorder)]);
+  await Promise.all([stopRecorder(archiveRecorder), stopRecorder(segmentRecorder)]);
   cleanupStreams();
 
   const durationMinutes = Math.max(1, Math.round((Date.now() - startedAt) / 60000));
   const ts = Date.now();
-  const videoBlob = videoChunks.length > 0 ? new Blob(videoChunks, { type: "video/webm" }) : null;
-  const audioBlob = audioChunks.length > 0 ? new Blob(audioChunks, { type: "audio/webm" }) : null;
+  const archiveBlob = archiveChunks.length > 0
+    ? new Blob(archiveChunks, { type: audioOnly ? "audio/webm" : "video/webm" })
+    : null;
 
-  if (!videoBlob && !audioBlob) {
+  if (!archiveBlob && audioPartBlobs.length === 0) {
     setStatus("ההקלטה ריקה — לא הועלה דבר");
     return;
   }
 
-  await uploadAndRegister(videoBlob, audioBlob, durationMinutes, ts);
+  await uploadAndRegister(archiveBlob, [...audioPartBlobs], durationMinutes, ts);
 }
 
 async function uploadAndRegister(
-  videoBlob: Blob | null,
-  audioBlob: Blob | null,
+  archiveBlob: Blob | null,
+  audioParts: Blob[],
   durationMinutes: number,
   ts: number,
 ) {
@@ -201,31 +245,36 @@ async function uploadAndRegister(
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("פג תוקף ההתחברות — נא להתחבר מחדש בחלונית התוסף");
 
+    const totalUploads = (archiveBlob ? 1 : 0) + audioParts.length;
+    let done = 0;
+    const bump = () => {
+      done += 1;
+      progressBar.style.width = `${Math.round((done / (totalUploads + 1)) * 90)}%`;
+    };
+
     let filePath: string | null = null;
-    let audioFilePath: string | null = null;
-
-    if (videoBlob) {
-      setStatus(`מעלה וידאו (${(videoBlob.size / 1024 / 1024).toFixed(1)}MB)...`);
-      progressBar.style.width = "20%";
+    if (archiveBlob) {
+      setStatus(`מעלה ${audioOnly ? "אודיו" : "וידאו"} (${(archiveBlob.size / 1024 / 1024).toFixed(1)}MB)...`);
       filePath = `${tenantId}/${ts}.webm`;
-      await uploadWithRetry(filePath, videoBlob, "video/webm");
+      await uploadWithRetry(filePath, archiveBlob, archiveBlob.type);
+      bump();
     }
 
-    if (audioBlob) {
-      setStatus(`מעלה אודיו (${(audioBlob.size / 1024 / 1024).toFixed(1)}MB)...`);
-      progressBar.style.width = "60%";
-      audioFilePath = `${tenantId}/${ts}_audio.webm`;
-      await uploadWithRetry(audioFilePath, audioBlob, "audio/webm");
+    const audioPartPaths: string[] = [];
+    for (let i = 0; i < audioParts.length; i++) {
+      setStatus(`מעלה אודיו לתמלול — קטע ${i + 1}/${audioParts.length} (${(audioParts[i].size / 1024 / 1024).toFixed(1)}MB)...`);
+      const partPath = `${tenantId}/${ts}_audio_part${i + 1}.webm`;
+      await uploadWithRetry(partPath, audioParts[i], "audio/webm");
+      audioPartPaths.push(partPath);
+      bump();
     }
 
-    // Audio-only mode: the opus file doubles as the playable recording.
-    if (!filePath && audioFilePath) {
-      filePath = audioFilePath;
-      audioFilePath = null;
+    // No separate playback file (shouldn't happen) — fall back to the first part.
+    if (!filePath && audioPartPaths.length > 0) {
+      filePath = audioPartPaths[0];
     }
 
     setStatus("רושם את ההקלטה במערכת...");
-    progressBar.style.width = "80%";
 
     const { data: inserted, error: insertError } = await supabase
       .from("zoom_recordings")
@@ -238,8 +287,8 @@ async function uploadAndRegister(
         duration: durationMinutes,
         source: "chrome_extension",
         file_path: filePath,
-        audio_file_path: audioFilePath,
-        file_size: (videoBlob?.size ?? 0) + (audioBlob?.size ?? 0),
+        audio_file_paths: audioPartPaths.length > 0 ? audioPartPaths : null,
+        file_size: (archiveBlob?.size ?? 0) + audioParts.reduce((sum, b) => sum + b.size, 0),
         client_id: clientId,
         host_email: session.user.email ?? null,
       })
@@ -251,7 +300,7 @@ async function uploadAndRegister(
     }
 
     setStatus("מפעיל תמלול וסיכום...");
-    progressBar.style.width = "90%";
+    progressBar.style.width = "95%";
 
     const { error: fnError } = await supabase.functions.invoke("ingest-extension-recording", {
       body: { recording_id: inserted.id },
@@ -275,7 +324,7 @@ async function uploadAndRegister(
     stopBtn.textContent = "נסה להעלות שוב";
     stopBtn.onclick = () => {
       stopBtn.disabled = true;
-      uploadAndRegister(videoBlob, audioBlob, durationMinutes, ts);
+      uploadAndRegister(archiveBlob, audioParts, durationMinutes, ts);
     };
   }
 }
