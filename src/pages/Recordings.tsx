@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, FileText, Plus, Sparkles, CheckCircle2, AlertCircle, Trash2, Pencil, Check, X, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
+import { SummaryViewerDialog } from "@/components/recordings/SummaryViewerDialog";
 
 export default function Recordings() {
   const { currentTenantId } = useTenant();
@@ -40,6 +41,7 @@ export default function Recordings() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   const [summarizeOpen, setSummarizeOpen] = useState(false);
+  const [summaryViewRec, setSummaryViewRec] = useState<any>(null);
   const [selectedRecording, setSelectedRecording] = useState<any>(null);
 
   const { data: zoomIntegration } = useQuery({
@@ -327,8 +329,9 @@ export default function Recordings() {
           || null,
         // Merge transcription text from any file in the group
         transcription: transcribedRec?.transcription || null,
-        // Merge summary_file_url from any file in the group
+        // Merge summary from any file in the group
         summary_file_url: group.find((r: any) => r.summary_file_url)?.summary_file_url || null,
+        summary_md: group.find((r: any) => r.summary_md)?.summary_md || null,
         _group: group,
       };
     });
@@ -666,12 +669,15 @@ export default function Recordings() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            {rec.summary_file_url ? (
-                              <Button variant="ghost" size="sm" asChild className="text-green-600 hover:text-green-700">
-                                <a href={rec.summary_file_url} target="_blank" rel="noopener noreferrer">
-                                  <FileText className="h-4 w-4 ml-1" />
-                                  הורד
-                                </a>
+                            {(rec.summary_md || rec.summary_file_url) ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-green-600 hover:text-green-700"
+                                onClick={() => setSummaryViewRec(rec)}
+                              >
+                                <FileText className="h-4 w-4 ml-1" />
+                                סיכום
                               </Button>
                             ) : null}
                             <Button
@@ -736,6 +742,15 @@ export default function Recordings() {
         onOpenChange={setSummarizeOpen}
         recording={selectedRecording}
       />
+
+      {summaryViewRec && currentTenantId && (
+        <SummaryViewerDialog
+          open={!!summaryViewRec}
+          onOpenChange={(open) => !open && setSummaryViewRec(null)}
+          recording={summaryViewRec}
+          tenantId={currentTenantId}
+        />
+      )}
     </div>
   );
 }

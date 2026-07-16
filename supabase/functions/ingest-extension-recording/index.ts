@@ -1,3 +1,4 @@
+// redeploy trigger: rebundle _shared/meeting-summary.ts (rich summary structure + summary_md persistence)
 // Post-upload orchestrator for Chrome-extension screen recordings.
 // The extension uploads video + low-bitrate audio to the `recordings` bucket,
 // inserts a zoom_recordings row (source='chrome_extension'), then calls this

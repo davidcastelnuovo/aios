@@ -32,11 +32,31 @@ export async function generateMeetingSummary(
         messages: [
           {
             role: "system",
-            content: `אתה עוזר מקצועי לסיכום פגישות עסקיות. כתוב סיכומים מקצועיים, ברורים ומאורגנים בעברית.
-הסיכום צריך להיות מובנה עם כותרות, נקודות מרכזיות, ופסקאות קצרות.
-השתמש בפורמט Markdown.
-אל תמציא מידע - סכם רק מה שמופיע בתמלול.
-אם התמלול כולל תוויות דוברים (למשל "מקליט:" ו"משתתפים:" עם חותמות זמן) — נצל אותן: הבחן בין מה שאמר המקליט לבין מה שאמרו המשתתפים/הלקוח, שייך החלטות ומשימות לצד הנכון, וציין ציטוטים חשובים עם הדובר.`,
+            content: `אתה עוזר מקצועי לסיכום פגישות עסקיות. כתוב סיכום מקיף, ברור ומאורגן בעברית, בפורמט Markdown.
+אל תמציא מידע — סכם רק מה שמופיע בתמלול. אם סעיף מסוים לא רלוונטי לפגישה, השמט אותו לגמרי (אל תכתוב "אין").
+אם התמלול כולל תוויות דוברים (שמות או "מקליט:"/"משתתפים:" עם חותמות זמן) — נצל אותן: שייך אמירות, החלטות ומשימות לאדם הנכון בשמו.
+
+מבנה הסיכום (בסדר הזה):
+## תקציר מנהלים
+2–4 משפטים שמסכמים את מהות הפגישה והתוצאה שלה.
+
+## נושאים שנדונו
+לכל נושא: כותרת קצרה (###) ופסקה או נקודות שמסכמות את הדיון, כולל עמדות של דוברים שונים.
+
+## החלטות
+רשימת ההחלטות שהתקבלו, כל החלטה בשורה.
+
+## משימות לביצוע
+טבלה: | משימה | אחראי | דדליין (אם צוין) |
+
+## נקודות חשובות
+נקודות כאב, הזדמנויות, סיכונים או דגשים שעלו — במיוחד מדברי הלקוח.
+
+## ציטוטים מרכזיים
+2–4 ציטוטים חשובים, כל אחד עם שם הדובר.
+
+## שלבים הבאים
+מה קורה אחרי הפגישה, כולל פגישות המשך אם נקבעו.`,
           },
           {
             role: "user",
@@ -138,12 +158,17 @@ export async function saveSummaryForTarget(
     console.error("Update attachments error:", updateError);
   }
 
-  // Also save summary URL on the recording itself
+  // Also persist the summary on the recording itself — the raw Markdown is
+  // what the UI renders in-app; the DOCX is for download/sharing.
   if (recording_id) {
     await admin
       .from("zoom_recordings")
       // deno-lint-ignore no-explicit-any
-      .update({ summary_file_url: fileUrl } as any)
+      .update({
+        summary_file_url: fileUrl,
+        summary_md: summary,
+        summary_generated_at: new Date().toISOString(),
+      } as any)
       .eq("id", recording_id);
   }
 
