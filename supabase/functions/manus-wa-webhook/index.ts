@@ -340,7 +340,10 @@ Deno.serve(async (req) => {
     // as the direction/contact source AND route Carmen replies through Green API
     // (so the reply comes from the same WhatsApp number the operator actually used).
     let pairedFromGreenApi = false;
-    if (!isOutgoingFromPhone && !isGroup && isLidEvent && messageText.trim()) {
+    // When the LID was already deterministically resolved (payload field / learned map),
+    // the 2.6s pairing wait is pure latency — skip it. Pairing remains for unresolved LIDs
+    // (it both fixes direction for own-outbound mirrors and feeds the learned map).
+    if (!isOutgoingFromPhone && !isGroup && isLidEvent && messageText.trim() && !lidAutoResolved) {
       await new Promise((resolve) => setTimeout(resolve, 2600));
       const { data: greenMatches } = await supabase
         .from('chat_messages')
