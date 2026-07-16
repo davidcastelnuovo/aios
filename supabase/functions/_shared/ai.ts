@@ -214,6 +214,52 @@ export async function aiTranscribeVerbose(
   }
 }
 
+// Vision chat (gpt-4o-mini) returning parsed JSON. Images are inlined as
+// base64 data URLs. Used e.g. to read speaker name labels off meeting
+// screenshots. Returns null on any failure.
+export async function aiVisionJSON(
+  prompt: string,
+  images: Blob[],
+  opts?: { model?: string },
+  // deno-lint-ignore no-explicit-any
+): Promise<any | null> {
+  const key = await resolveOpenAIKey();
+  if (!key || images.length === 0) return null;
+  try {
+    // deno-lint-ignore no-explicit-any
+    const content: any[] = [{ type: "text", text: prompt }];
+    for (const img of images) {
+      const bytes = new Uint8Array(await img.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      }
+      content.push({
+        type: "image_url",
+        image_url: { url: `data:image/jpeg;base64,${btoa(binary)}` },
+      });
+    }
+    const r = await fetch(`${OPENAI_BASE}/chat/completions`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: opts?.model || "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content }],
+      }),
+    });
+    if (!r.ok) {
+      console.error("[vision] error", r.status, (await r.text()).slice(0, 200));
+      return null;
+    }
+    const j = await r.json();
+    return JSON.parse(j?.choices?.[0]?.message?.content ?? "null");
+  } catch (e) {
+    console.error("[vision] failed", e);
+    return null;
+  }
+}
+
 // Diarized speech-to-text (ElevenLabs Scribe v2) — separates multiple speakers
 // in one audio file. Used for the system/tab channel of meeting recordings so
 // remote participants get individual labels. Requires ELEVENLABS_API_KEY;

@@ -60,6 +60,14 @@ const uploadedPartPaths: string[] = [];
 const failedParts: { path: string; blob: Blob }[] = [];
 const pendingUploads: Promise<void>[] = [];
 
+// Screen frames sampled every minute — the server reads Zoom/Meet name labels
+// off them to replace "משתתף N" with real speaker names.
+const FRAME_INTERVAL_MS = 60_000;
+const MAX_FRAMES = 150;
+let frameTimer: number | undefined;
+let frameVideo: HTMLVideoElement | null = null;
+let framesCaptured = 0;
+
 let startedAt = 0;
 let timerInterval: number | undefined;
 let recording = false;
@@ -120,6 +128,45 @@ function uploadPart(channel: "mic" | "sys", partNum: number, blob: Blob) {
     }
   })();
   pendingUploads.push(job);
+}
+
+function startFrameCapture() {
+  if (audioOnly || !displayStream || displayStream.getVideoTracks().length === 0) return;
+  frameVideo = document.createElement("video");
+  frameVideo.srcObject = new MediaStream(displayStream.getVideoTracks());
+  frameVideo.muted = true;
+  frameVideo.play().catch(() => {});
+  // An early frame right after start — the participant grid is usually visible.
+  window.setTimeout(captureFrame, 8000);
+  frameTimer = window.setInterval(captureFrame, FRAME_INTERVAL_MS);
+}
+
+async function captureFrame() {
+  if (!recording || !frameVideo || framesCaptured >= MAX_FRAMES) return;
+  const w = frameVideo.videoWidth;
+  const h = frameVideo.videoHeight;
+  if (!w || !h) return;
+  const scale = Math.min(1, 1280 / w);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  canvas.getContext("2d")?.drawImage(frameVideo, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.7));
+  if (!blob) return;
+  framesCaptured += 1;
+  const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+  const path = `${tenantId}/${startedAt}_frame_${elapsedSec}.jpg`;
+  // Fire-and-forget: a lost frame just means one fewer naming sample.
+  supabase.storage.from("recordings").upload(path, blob, { contentType: "image/jpeg", upsert: true })
+    .then(({ error }) => { if (error) console.error("frame upload failed:", error); });
+}
+
+function stopFrameCapture() {
+  window.clearInterval(frameTimer);
+  if (frameVideo) {
+    frameVideo.srcObject = null;
+    frameVideo = null;
+  }
 }
 
 function startChannelRecorder(channel: Channel) {
@@ -271,6 +318,7 @@ async function startRecording() {
   }, 1000);
 
   void createRecordingRow();
+  startFrameCapture();
 
   // Stop when the user clicks Chrome's native "Stop sharing" bar.
   displayStream.getVideoTracks()[0]?.addEventListener("ended", () => {
@@ -299,6 +347,7 @@ async function stopAndUpload() {
   recording = false;
   window.clearInterval(timerInterval);
   window.clearInterval(segmentTimer);
+  stopFrameCapture();
   stopBtn.disabled = true;
   timerEl.classList.remove("recording");
   timerEl.textContent = formatElapsed(Date.now() - startedAt);
