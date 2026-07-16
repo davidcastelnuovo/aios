@@ -7,7 +7,8 @@
 </head>
 <body class="popup">
   <header class="header">
-    <div class="logo">AIOS</div>
+    <img class="logo" src="/icons/icon48.png" alt="AIOS" />
+    <div class="logo-text">AIOS Rec</div>
     <div class="subtitle">מקליט פגישות</div>
   </header>
 
@@ -39,13 +40,13 @@
         <input type="checkbox" id="camera-toggle" checked />
         כלול מצלמה (בועה צפה על המסך)
       </label>
-      <label>ארגון
-        <select id="tenant-select"></select>
+      <label>ארגון (חיפוש לפי שם)
+        <input type="text" id="tenant-input" list="tenant-list" placeholder="הקלד שם ארגון..." />
+        <datalist id="tenant-list"></datalist>
       </label>
-      <label>לקוח (אופציונלי)
-        <select id="client-select">
-          <option value="">— ללא שיוך —</option>
-        </select>
+      <label>לקוח (אופציונלי · פעילים ובקליטה בלבד)
+        <input type="text" id="client-input" list="client-list" placeholder="הקלד שם לקוח..." />
+        <datalist id="client-list"></datalist>
       </label>
       <label>נושא הפגישה (אופציונלי)
         <input type="text" id="topic-input" placeholder="למשל: פגישת אפיון עם הלקוח" />
