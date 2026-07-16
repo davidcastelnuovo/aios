@@ -213,47 +213,83 @@ export async function maybeCreateMarketingBrief(
       const briefData = await briefDetectRes.json();
       const briefJson = JSON.parse(briefData.choices?.[0]?.message?.content ?? "{}");
       if (briefJson.has_marketing_needs && briefJson.brief_title) {
-        // Find the campaigns pipeline for this client
-        const { data: pipeline } = await admin
-          .from("marketing_pipelines")
-          .select("id")
-          .eq("client_id", client_id)
-          .eq("tenant_id", tenant_id)
-          .eq("track", "campaigns")
-          .maybeSingle();
-        if (pipeline) {
+        const validTracks = new Set(["campaigns", "social_organic", "seo_geo"]);
+        const detectedTracks = Array.from(
+          new Set(
+            (Array.isArray(briefJson.tracks) ? briefJson.tracks : ["campaigns"])
+              .map((track: unknown) => String(track))
+              .filter((track: string) => validTracks.has(track)),
+          ),
+        ) as string[];
+        const tracks = detectedTracks.length > 0 ? detectedTracks : ["campaigns"];
+        let firstWorkItemId: string | null = null;
+
+        for (const track of tracks) {
+          // A summarizer retry must not create the same brief twice.
+          if (recording_id) {
+            const { data: existing } = await admin
+              .from("marketing_work_items")
+              .select("id")
+              .eq("tenant_id", tenant_id)
+              .eq("client_id", client_id)
+              .contains("payload", { source_recording_id: recording_id, source_track: track })
+              .maybeSingle();
+            if (existing?.id) {
+              firstWorkItemId ??= existing.id;
+              continue;
+            }
+          }
+
+          const { data: pipeline } = await admin
+            .from("marketing_pipelines")
+            .select("id")
+            .eq("client_id", client_id)
+            .eq("tenant_id", tenant_id)
+            .eq("track", track)
+            .maybeSingle();
+          if (!pipeline) {
+            console.warn(`[MARKETING] No ${track} pipeline for client ${client_id}`);
+            continue;
+          }
+
           const { data: briefStage } = await admin
             .from("marketing_pipeline_stages")
             .select("id")
             .eq("pipeline_id", pipeline.id)
             .eq("stage_type", "strategy")
             .maybeSingle();
-          if (briefStage) {
-            const { data: workItem } = await admin
-              .from("marketing_work_items")
-              .insert({
-                pipeline_id: pipeline.id,
-                tenant_id,
-                client_id,
-                current_stage_id: briefStage.id,
-                title: briefJson.brief_title,
-                status: "draft",
-                payload: {
-                  brief_text: briefJson.brief_content ?? "",
-                  source,
-                  source_recording_id: recording_id ?? null,
-                  source_summary_url: fileUrl,
-                  tracks: briefJson.tracks ?? ["campaigns"],
-                  meeting_date: new Date().toISOString(),
-                },
-              })
-              .select("id")
-              .single();
-            if (workItem) {
-              console.log(`[MARKETING] Auto-brief created: ${workItem.id}`);
-              return { created: true, workItemId: workItem.id };
-            }
+          if (!briefStage) continue;
+
+          const { data: workItem } = await admin
+            .from("marketing_work_items")
+            .insert({
+              pipeline_id: pipeline.id,
+              tenant_id,
+              client_id,
+              current_stage_id: briefStage.id,
+              title: briefJson.brief_title,
+              status: "draft",
+              payload: {
+                brief_text: briefJson.brief_content ?? "",
+                source,
+                source_recording_id: recording_id ?? null,
+                source_summary_url: fileUrl,
+                source_track: track,
+                tracks,
+                meeting_date: new Date().toISOString(),
+              },
+            })
+            .select("id")
+            .single();
+
+          if (workItem?.id) {
+            firstWorkItemId ??= workItem.id;
+            console.log(`[MARKETING] Auto-brief created for ${track}: ${workItem.id}`);
           }
+        }
+
+        if (firstWorkItemId) {
+          return { created: true, workItemId: firstWorkItemId };
         }
       }
     }
