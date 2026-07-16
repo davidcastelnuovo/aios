@@ -693,7 +693,7 @@ export default function Recordings() {
                                   onClick={() => {
                                     const allIds = rec._group?.map((r: any) => r.id) || [rec.id];
                                     const filePaths = (rec._group || [rec])
-                                      .flatMap((r: any) => [r.file_path, r.audio_file_path])
+                                      .flatMap((r: any) => [r.file_path, r.audio_file_path, ...(r.audio_file_paths || [])])
                                       .filter(Boolean);
                                     deleteMutation.mutate({ recordingIds: allIds, filePaths });
                                   }}
