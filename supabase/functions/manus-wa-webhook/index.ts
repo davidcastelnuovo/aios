@@ -354,13 +354,24 @@ Deno.serve(async (req) => {
         const since = new Date(Date.now() - idleMin * 60 * 1000).toISOString();
 
         // Resolution priority for LID events on private Carmen flows:
+        // 0) Explicit LID→phone map in the automation config (carmen_lid_aliases) — the only
+        //    deterministic option on a cold start when several phones are allowed.
         // 1) Explicit allowed phones (specific_phone scope) — pick fresh session phone, else single allowed phone.
         // 2) Otherwise (scope=all or no allowed list) — pick the unique fresh active Carmen session
         //    on this connection. This is what enables continuation messages without re-saying "כרמן".
         let aliasPhone: string | null = null;
         let aliasReason = '';
 
-        if (scopeMode === 'specific_phone' && allowedPhones.length >= 1) {
+        const lidAliases: Record<string, string> = (cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === 'object')
+          ? cfg.carmen_lid_aliases
+          : {};
+        const lidKey = String(counterpartPhone || '').replace(/\D/g, '');
+        if (lidKey && lidAliases[lidKey]) {
+          aliasPhone = String(lidAliases[lidKey]).replace(/\D/g, '');
+          aliasReason = 'configured_lid_alias';
+        }
+
+        if (!aliasPhone && scopeMode === 'specific_phone' && allowedPhones.length >= 1) {
           if (allowedPhones.length === 1) {
             aliasPhone = allowedPhones[0] as string;
             aliasReason = 'single_allowed_phone';
