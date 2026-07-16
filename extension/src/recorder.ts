@@ -8,6 +8,8 @@ const clientId = params.get("client") || null;
 const clientName = params.get("clientName") || "";
 const topic = params.get("topic") || "";
 const audioOnly = params.get("audioOnly") === "1";
+const mode = params.get("mode") === "screen" ? "screen" : "meeting";
+const cameraEnabled = params.get("camera") === "1";
 
 // Transcription audio is recorded as TWO separate channels — the mic (the
 // recording user) and system/tab audio (everyone else) — so speaker
@@ -25,9 +27,80 @@ const statusEl = el<HTMLDivElement>("status");
 const progressEl = el<HTMLDivElement>("progress");
 const progressBar = el<HTMLDivElement>("progress-bar");
 
+const cameraBtn = el<HTMLButtonElement>("camera-btn");
+const screenHint = el<HTMLDivElement>("screen-hint");
+
 el<HTMLElement>("info-topic").textContent = topic || "ללא נושא";
 el<HTMLElement>("info-client").textContent = clientName || "ללא שיוך";
-el<HTMLElement>("info-mode").classList.toggle("hidden", !audioOnly);
+if (audioOnly) {
+  el<HTMLElement>("info-mode").classList.remove("hidden");
+} else if (mode === "screen") {
+  const modeEl = el<HTMLElement>("info-mode");
+  modeEl.textContent = "🖥️ הקלטת מסך / הדרכה";
+  modeEl.classList.remove("hidden");
+}
+if (mode === "screen" && cameraEnabled) {
+  cameraBtn.classList.remove("hidden");
+  screenHint.classList.remove("hidden");
+}
+
+// Camera bubble: an always-on-top Picture-in-Picture window showing the camera.
+// When the user records the ENTIRE screen, the bubble is captured as part of
+// the recording — no canvas compositing (which freezes in background windows).
+let cameraStream: MediaStream | null = null;
+// deno-style loose typing: documentPictureInPicture is Chrome 116+
+let pipWindow: Window | null = null;
+
+async function startCameraBubble() {
+  cameraBtn.disabled = true;
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: "user" },
+    });
+  } catch {
+    cameraBtn.disabled = false;
+    setStatus("⚠️ אין גישה למצלמה");
+    return;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dpp = (window as any).documentPictureInPicture;
+    if (!dpp) throw new Error("Document PiP unsupported");
+    pipWindow = await dpp.requestWindow({ width: 240, height: 240 });
+    const doc = pipWindow!.document;
+    doc.body.style.cssText = "margin:0;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;";
+    const video = doc.createElement("video");
+    video.srcObject = cameraStream;
+    video.autoplay = true;
+    video.muted = true;
+    video.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%;";
+    doc.body.appendChild(video);
+    pipWindow!.addEventListener("pagehide", () => {
+      cameraStream?.getTracks().forEach((t) => t.stop());
+      cameraStream = null;
+      pipWindow = null;
+      if (!recording) {
+        cameraBtn.disabled = false;
+        cameraBtn.textContent = "📷 הפעל מצלמה (בועה צפה)";
+      }
+    });
+    cameraBtn.textContent = "📷 המצלמה פעילה — גרור את הבועה למיקום הרצוי";
+    setStatus("");
+  } catch (err) {
+    console.error("camera bubble failed:", err);
+    cameraStream?.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+    cameraBtn.disabled = false;
+    setStatus("⚠️ הדפדפן לא תומך בבועת מצלמה צפה — ההקלטה תמשיך בלי מצלמה");
+  }
+}
+
+function stopCameraBubble() {
+  try { pipWindow?.close(); } catch { /* already closed */ }
+  cameraStream?.getTracks().forEach((t) => t.stop());
+  cameraStream = null;
+  pipWindow = null;
+}
 
 let displayStream: MediaStream | null = null;
 let micStream: MediaStream | null = null;
@@ -341,6 +414,8 @@ async function startRecording() {
 
   recording = true;
   startBtn.classList.add("hidden");
+  cameraBtn.classList.add("hidden");
+  screenHint.classList.add("hidden");
   stopBtn.classList.remove("hidden");
   timerEl.classList.add("recording");
   timerEl.innerHTML = `00:00<span class="rec-dot"></span>`;
@@ -366,6 +441,7 @@ function stopRecorder(recorder: MediaRecorder | null): Promise<void> {
 }
 
 function cleanupStreams() {
+  stopCameraBubble();
   displayStream?.getTracks().forEach((t) => t.stop());
   micStream?.getTracks().forEach((t) => t.stop());
   audioContext?.close().catch(() => {});
@@ -526,6 +602,7 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
 }
 
 startBtn.addEventListener("click", startRecording);
+cameraBtn.addEventListener("click", startCameraBubble);
 stopBtn.addEventListener("click", stopAndUpload);
 
 window.addEventListener("beforeunload", (e) => {

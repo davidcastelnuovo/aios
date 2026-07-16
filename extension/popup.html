@@ -29,6 +29,16 @@
     </form>
 
     <div id="main" class="state hidden">
+      <label>סוג הקלטה
+        <select id="mode-select">
+          <option value="meeting">🎥 פגישת וידאו (מסך + משתתפים)</option>
+          <option value="screen">🖥️ הקלטת מסך / הדרכה</option>
+        </select>
+      </label>
+      <label class="checkbox hidden" id="camera-row">
+        <input type="checkbox" id="camera-toggle" checked />
+        כלול מצלמה (בועה צפה על המסך)
+      </label>
       <label>ארגון
         <select id="tenant-select"></select>
       </label>
