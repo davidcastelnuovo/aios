@@ -73,7 +73,11 @@ Deno.serve(async (req) => {
     }
 
     const settings = table.integration_settings || {};
-    const adAccountId = settings.ad_account_id;
+    // Graph API requires the act_ prefix; tolerate rows saved with the bare number.
+    const rawAdAccountId = settings.ad_account_id;
+    const adAccountId = rawAdAccountId && !String(rawAdAccountId).startsWith('act_')
+      ? `act_${rawAdAccountId}`
+      : rawAdAccountId;
     const dateRange = settings.date_range || 'last_30_days';
 
     if (!adAccountId) {
