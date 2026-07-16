@@ -66,14 +66,18 @@ async function startCameraBubble() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dpp = (window as any).documentPictureInPicture;
     if (!dpp) throw new Error("Document PiP unsupported");
-    pipWindow = await dpp.requestWindow({ width: 240, height: 240 });
+    pipWindow = await dpp.requestWindow({ width: 200, height: 200 });
     const doc = pipWindow!.document;
-    doc.body.style.cssText = "margin:0;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;";
+    // The OS window itself is always rectangular — keep the corners pure black
+    // and let a clean thin-bordered circle fill the entire window.
+    doc.body.style.cssText = "margin:0;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden;height:100vh;";
     const video = doc.createElement("video");
     video.srcObject = cameraStream;
     video.autoplay = true;
     video.muted = true;
-    video.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:50%;";
+    video.style.cssText =
+      "width:min(100vw,100vh);height:min(100vw,100vh);object-fit:cover;border-radius:50%;" +
+      "border:2px solid rgba(255,255,255,0.9);box-sizing:border-box;";
     doc.body.appendChild(video);
     pipWindow!.addEventListener("pagehide", () => {
       cameraStream?.getTracks().forEach((t) => t.stop());
