@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAuth } from "../_shared/security.ts";
+import { buildSkillsBlockBySlug } from "../_shared/skills/registry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +28,14 @@ serve(async (req) => {
   const admin = createClient(supaUrl, supaService);
 
   try {
+    const auth = await requireAuth(req);
+    if (!auth) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Get OpenAI API key from tenant_integrations (same as run-ai-agent)
     const getOpenAIKey = async (tenantId: string): Promise<string> => {
       const { data } = await admin
@@ -60,17 +70,7 @@ serve(async (req) => {
       });
     }
 
-    // Identify caller (optional — we use service role for inserts to bypass RLS,
-    // but record auth.uid() via header if present)
-    const authHeader = req.headers.get("Authorization");
-    let userId: string | null = null;
-    if (authHeader?.startsWith("Bearer ")) {
-      const userClient = createClient(supaUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data } = await userClient.auth.getUser();
-      userId = data.user?.id ?? null;
-    }
+    const userId = auth.userId;
 
     // Load item, stage, agent, client
     const { data: item, error: itemErr } = await admin
@@ -86,6 +86,26 @@ serve(async (req) => {
       .eq("id", stage_id)
       .single();
     if (stageErr || !stage) throw new Error("Stage not found");
+    if (stage.pipeline_id !== item.pipeline_id) {
+      throw new Error("Stage does not belong to the work item pipeline");
+    }
+    if (stage.tenant_id && stage.tenant_id !== item.tenant_id) {
+      throw new Error("Stage and work item tenant mismatch");
+    }
+    if (auth.kind === "user") {
+      const { data: membership } = await admin
+        .from("tenant_users")
+        .select("user_id")
+        .eq("tenant_id", item.tenant_id)
+        .eq("user_id", auth.userId)
+        .maybeSingle();
+      if (!membership) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     const { data: client } = await admin
       .from("clients")
@@ -134,10 +154,23 @@ serve(async (req) => {
     const cfg = (stage.configuration as any) ?? {};
     const instructions: string = cfg.instructions ?? "";
     const stageType: string = stage.stage_type;
+    const defaultSkinByStage: Record<string, string> = {
+      strategy: "campaigner",
+      copy: "copywriter",
+      creative: "social_media",
+      target_paid: "campaigner",
+      target_seo: "seo",
+      target_organic: "social_media",
+      measurement: "analyst",
+    };
+    const skinSlug: string =
+      cfg.skin ?? cfg.skin_slug ?? defaultSkinByStage[stageType] ?? "campaigner";
+    const skinBlock = await buildSkillsBlockBySlug([skinSlug], item.tenant_id);
 
-    // Build messages
+    // Build messages from Carmen Core + the pinned existing Skin + stage context.
     const systemParts: string[] = [];
     if (agent?.system_prompt) systemParts.push(agent.system_prompt);
+    if (skinBlock) systemParts.push(skinBlock);
     if (agent?.personality) systemParts.push(`אישיות: ${agent.personality}`);
     if (agent?.writing_style) systemParts.push(`סגנון כתיבה: ${agent.writing_style}`);
     if (instructions) systemParts.push(instructions);
@@ -150,6 +183,9 @@ serve(async (req) => {
 
     const userParts: string[] = [];
     userParts.push(`כותרת הפריט: ${item.title ?? "—"}`);
+    const sourceBrief =
+      item.payload?.brief_text ?? item.payload?.brief ?? item.payload?.source_summary ?? "";
+    if (sourceBrief) userParts.push(`בריף מקור / סיכום פגישה:\n${sourceBrief}`);
     if (item.payload?.notes) userParts.push(`הערות: ${item.payload.notes}`);
     if ((prevAssets ?? []).length > 0) {
       userParts.push("\nתוצרים מהשלבים הקודמים:");
@@ -286,15 +322,17 @@ serve(async (req) => {
         type: assetType,
         url: assetUrl,
         content: assetContent,
-        meta: { stage_type: stageType },
+        meta: { stage_type: stageType, skin_slug: skinSlug },
       })
       .select("id")
       .single();
 
     // Update item payload with latest copy/image
     const newPayload = { ...(item.payload ?? {}) };
-    if (assetType === "copy" || assetType === "brief") newPayload.copy_text = assetContent;
+    if (assetType === "brief") newPayload.brief_text = assetContent;
+    if (assetType === "copy") newPayload.copy_text = assetContent;
     if (assetType === "image") newPayload.image_url = assetUrl;
+    newPayload.last_skin_slug = skinSlug;
     await admin.from("marketing_work_items").update({ payload: newPayload }).eq("id", item_id);
 
     const cost = stageType === "creative"
@@ -319,6 +357,10 @@ serve(async (req) => {
 
     // ── Send approval notification when stage needs approval (semi mode) ──
     if (finalStatus === "awaiting_approval") {
+      await admin
+        .from("marketing_work_items")
+        .update({ status: "waiting_approval" })
+        .eq("id", item_id);
       try {
         // Find tenant owner/admin email + phone
         const { data: tenantOwners } = await admin
@@ -420,7 +462,7 @@ serve(async (req) => {
         // Last stage — mark work item as completed
         await admin
           .from("marketing_work_items")
-          .update({ status: "completed" })
+          .update({ status: "published" })
           .eq("id", item_id);
       }
     }
@@ -437,6 +479,7 @@ serve(async (req) => {
         tokens_out: tokensOut,
         cost_usd: cost,
         next_stage_id: nextStageId,
+        skin_slug: skinSlug,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
