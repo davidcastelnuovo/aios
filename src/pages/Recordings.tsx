@@ -96,7 +96,9 @@ export default function Recordings() {
       if (!currentTenantId) return [];
       const { data } = await supabase
         .from("zoom_recordings")
-        .select("*, clients(name), leads(company_name)")
+        // clients must be disambiguated: zoom_recordings has TWO FKs to clients
+        // (client_id + suggested_client_id) and an unhinted embed 300-errors.
+        .select("*, clients!zoom_recordings_client_id_fkey(name), leads(company_name)")
         .eq("tenant_id", currentTenantId)
         .order("start_time", { ascending: false, nullsFirst: false });
       const list = data || [];
