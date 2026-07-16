@@ -1,12 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "AIOS Meeting Recorder",
-  "description": "Record meetings (screen + audio) straight into the AIOS recordings library, with automatic transcription and summary",
-  "version": "0.1.0",
+  "name": "AIOS Rec",
+  "description": "Record meetings into the AIOS recordings library with automatic transcription and summary",
+  "version": "1.0",
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "AIOS Meeting Recorder"
+    "default_popup": "popup.html"
   },
-  "permissions": ["storage"],
-  "host_permissions": ["https://zvoijyneresvkadpprel.supabase.co/*"]
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://zvoijyneresvkadpprel.supabase.co/*"
+  ]
 }
