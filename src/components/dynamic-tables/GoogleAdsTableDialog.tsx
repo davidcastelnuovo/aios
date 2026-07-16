@@ -142,7 +142,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
 
   // Check if Google Ads is connected (direct API)
   const { data: googleAdsStatus, isLoading: checkingConnection } = useQuery({
-    queryKey: ['google-ads-connection-status'],
+    queryKey: ['google-ads-connection-status', tenantId],
     queryFn: async () => {
       const response = await supabase.functions.invoke('google-ads-auth', {
         body: { action: 'check_status' },
@@ -155,7 +155,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
 
   // Fetch Google Ads accounts (direct API)
   const { data: accountsData, isLoading: loadingAccounts, error: accountsError } = useQuery({
-    queryKey: ['google-ads-accounts'],
+    queryKey: ['google-ads-accounts', tenantId],
     queryFn: async () => {
       const response = await supabase.functions.invoke('google-ads-auth', {
         body: { action: 'get_accounts' },

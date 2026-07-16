@@ -50,7 +50,6 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
       return data;
     },
     enabled: open && !!activeTenantId,
-    refetchOnMount: "always",
   });
 
   const { data: sites = [], isLoading: sitesLoading } = useQuery({

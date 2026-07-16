@@ -58,7 +58,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success('הדוח נטען בהצלחה מ-Ahrefs');
-      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] });
+      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] });
     } catch (err: any) {
       console.error('fetch-ahrefs-snapshot failed:', err);
       toast.error(err?.message || 'שליפת הדוח נכשלה. ודא שהוגדר דומיין ושיש מפתח Ahrefs.');
@@ -125,7 +125,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       }
       return data || [];
     },
-    enabled: !!clientId,
+    enabled: !!clientId && reportTenants.length > 0,
   });
 
   const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
@@ -485,7 +485,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success(`הדוח סונכרן (${(data as any)?.keywords_count ?? 0} אורגניים, ${(data as any)?.tracked_count ?? 0} במעקב)`);
-      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] });
+      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] });
     } catch (err: any) {
       console.error('fetch-ahrefs-snapshot failed:', err);
       toast.error(err?.message || 'סנכרון Ahrefs נכשל');
@@ -514,7 +514,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         <h3 className="font-semibold text-lg mb-1">שגיאה בטעינת דוחות SEO</h3>
         <p className="text-muted-foreground text-sm mb-2">לא ניתן לטעון את הדוחות. ייתכן שיש בעיית הרשאה או חיבור.</p>
         <p className="text-xs text-muted-foreground mb-4">{(reportsError as any)?.message || String(reportsError)}</p>
-        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] })}>נסה שוב</Button>
+        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] })}>נסה שוב</Button>
       </Card>
     );
   }
@@ -543,7 +543,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           open={pickerOpen}
           onOpenChange={setPickerOpen}
           clientId={clientId}
-          onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] })}
+          onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] })}
         />
       </>
     );
@@ -696,7 +696,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         clientId={clientId}
-        onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId, clientId] })}
+        onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] })}
       />
     </div>
   );

@@ -185,7 +185,7 @@ export default function Dashboard() {
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier, isRestrictedClientViewer, assignedClientIds.join(",")],
+    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier, isRestrictedClientViewer, assignedClientIds.join(","), crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return null;
       let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);

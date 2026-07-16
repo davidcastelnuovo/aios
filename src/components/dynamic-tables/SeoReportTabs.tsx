@@ -197,7 +197,8 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-records', selectedGaTableId, reportTenantId] });
+      queryClient.invalidateQueries({ queryKey: ['crm-records', selectedGaTableId] });
+      queryClient.invalidateQueries({ queryKey: ['crm-records-aggregate', selectedGaTableId] });
       toast.success(`נתוני Analytics סונכרנו (${data?.records_synced || 0} שורות)`);
     },
     onError: (error: any) => {

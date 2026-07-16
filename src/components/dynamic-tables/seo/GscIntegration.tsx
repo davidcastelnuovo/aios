@@ -530,7 +530,7 @@ export function GscIntegration({
     },
     onSuccess: ({ siteUrl, dbUpdated }) => {
       queryClient.invalidateQueries({ queryKey: ["user-integrations", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["gsc-keyword-data"] });
       onSiteSelected?.(siteUrl);
       if (dbUpdated) toast.success("הנכס עודכן");
     },
@@ -778,7 +778,7 @@ export function GscIntegration({
         </CardContent>
       )}
 
-      {effectiveSiteUrl && !gscData && !isLoadingData && (
+      {effectiveSiteUrl && !enableMultiPeriod && !gscData && !isLoadingData && (
         <CardContent className="px-4 pb-3 pt-0">
           <p className="text-xs text-muted-foreground text-center">אין נתונים זמינים עבור הנכס שנבחר</p>
         </CardContent>

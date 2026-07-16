@@ -63,7 +63,7 @@ export default function RankTracking() {
 
   // Check SerpAPI connection
   const { data: serpStatus } = useQuery({
-    queryKey: ["serpapi-status"],
+    queryKey: ["serpapi-status", tenantId],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return { connected: false };

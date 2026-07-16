@@ -108,13 +108,13 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
 
   // Fetch tables for selected client (preview) - only for client type
   const { data: clientTables = [] } = useQuery({
-    queryKey: ['crm-tables-client', clientId],
+    queryKey: ['crm-tables-client', clientId, tenantId],
     queryFn: async () => {
       if (!clientId) return [];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      const response = await supabase.functions.invoke('crm-tables', {
+      const response = await supabase.functions.invoke(`crm-tables?tenant_id=${tenantId}`, {
         method: 'GET',
       });
 
@@ -122,7 +122,7 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
       const tables = Array.isArray(response.data) ? response.data : [];
       return tables.filter((t: any) => t.client_id === clientId);
     },
-    enabled: !!clientId && dashboardType === 'client',
+    enabled: !!clientId && !!tenantId && dashboardType === 'client',
   });
 
   // Count clients for selected agency (preview for agency type)

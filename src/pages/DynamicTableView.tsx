@@ -227,7 +227,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const response = await supabase.functions.invoke(
-        tenantId ? `crm-tables?tenant_id=${tenantId}` : 'crm-tables',
+        `crm-tables?tenant_id=${tenantId}`,
         { method: 'GET' }
       );
       if (response.error) {
@@ -236,6 +236,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       }
       return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
+    enabled: !!tenantId,
     refetchOnMount: 'always',
   });
 
