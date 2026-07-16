@@ -86,11 +86,13 @@ serve(async (req) => {
     let audioBlob: Blob | null = null;
     let contentType = 'audio/mp4';
 
-    // Case 1: Manual upload in Storage
-    if (recording.file_path) {
+    // Case 1: Manual upload in Storage — prefer the low-bitrate audio sibling
+    // (chrome_extension recordings) so long meetings stay under the Whisper cap.
+    if (recording.file_path || recording.audio_file_path) {
+      const storagePath = recording.audio_file_path || recording.file_path;
       const { data: fileData, error: dlError } = await supabase.storage
         .from('recordings')
-        .download(recording.file_path);
+        .download(storagePath);
 
       if (dlError || !fileData) {
         await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, 'Failed to download from storage');

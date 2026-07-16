@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "AIOS Meeting Recorder",
+  "description": "הקלטת פגישות (מסך + אודיו) ישירות לספריית ההקלטות של AIOS, כולל תמלול וסיכום אוטומטיים",
+  "version": "0.1.0",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AIOS Meeting Recorder"
+  },
+  "permissions": ["storage"],
+  "host_permissions": ["https://zvoijyneresvkadpprel.supabase.co/*"]
+}
