@@ -67,6 +67,8 @@ const MAX_FRAMES = 150;
 let frameTimer: number | undefined;
 let frameVideo: HTMLVideoElement | null = null;
 let framesCaptured = 0;
+// First captured frame doubles as the feed thumbnail.
+let thumbnailPath: string | null = null;
 
 let startedAt = 0;
 let timerInterval: number | undefined;
@@ -158,7 +160,18 @@ async function captureFrame() {
   const path = `${tenantId}/${startedAt}_frame_${elapsedSec}.jpg`;
   // Fire-and-forget: a lost frame just means one fewer naming sample.
   supabase.storage.from("recordings").upload(path, blob, { contentType: "image/jpeg", upsert: true })
-    .then(({ error }) => { if (error) console.error("frame upload failed:", error); });
+    .then(async ({ error }) => {
+      if (error) {
+        console.error("frame upload failed:", error);
+        return;
+      }
+      if (!thumbnailPath) {
+        thumbnailPath = path;
+        if (recordingId) {
+          await supabase.from("zoom_recordings").update({ thumbnail_path: path }).eq("id", recordingId);
+        }
+      }
+    });
 }
 
 function stopFrameCapture() {
@@ -422,6 +435,7 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
       file_path: filePath,
       audio_file_paths: finalPaths.length > 0 ? finalPaths : null,
       file_size: (archiveBlob?.size ?? 0),
+      ...(thumbnailPath ? { thumbnail_path: thumbnailPath } : {}),
     };
 
     if (recordingId) {
