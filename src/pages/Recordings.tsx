@@ -137,6 +137,19 @@ export default function Recordings() {
     enabled: !!currentTenantId,
   });
 
+  const { data: campaigners = [] } = useQuery({
+    queryKey: ["campaigners-for-recordings", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("tenant_id", currentTenantId);
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
   const { data: folders = [] } = useQuery({
     queryKey: ["recording-folders", currentTenantId],
     queryFn: async () => {
@@ -339,6 +352,8 @@ export default function Recordings() {
         summary_file_url: group.find((r: any) => r.summary_file_url)?.summary_file_url || null,
         summary_md: group.find((r: any) => r.summary_md)?.summary_md || null,
         thumbnail_path: group.find((r: any) => r.thumbnail_path)?.thumbnail_path || null,
+        suggested_client_id: group.find((r: any) => r.suggested_client_id)?.suggested_client_id || null,
+        campaigner_ids: group.find((r: any) => r.campaigner_ids?.length)?.campaigner_ids || null,
         _group: group,
       } as FeedRecording;
     });
@@ -384,6 +399,37 @@ export default function Recordings() {
   // ── Card action handlers ─────────────────────────────────────
 
   const groupIds = (rec: FeedRecording) => (rec._group || [rec]).map((r) => r.id);
+
+  const campaignerNamesFor = (rec: FeedRecording) =>
+    (rec.campaigner_ids || [])
+      .map((id) => (campaigners as any[]).find((c) => c.id === id)?.full_name)
+      .filter(Boolean) as string[];
+
+  // Accepting a suggestion assigns the client and re-runs the pipeline —
+  // transcription already exists, so it continues straight to summary + brief.
+  const acceptSuggestion = async (rec: FeedRecording) => {
+    if (!rec.suggested_client_id) return;
+    const { error } = await supabase
+      .from("zoom_recordings")
+      .update({ client_id: rec.suggested_client_id, suggested_client_id: null } as any)
+      .in("id", groupIds(rec));
+    if (error) {
+      toast({ title: "שגיאה באישור השיוך", description: error.message, variant: "destructive" });
+      return;
+    }
+    invalidate();
+    toast({ title: "השיוך אושר — נוצרים סיכום ובריף ברקע" });
+    supabase.functions.invoke("ingest-extension-recording", { body: { recording_id: rec.id } })
+      .catch((err) => console.error("ingest re-run failed:", err));
+  };
+
+  const rejectSuggestion = async (rec: FeedRecording) => {
+    await supabase
+      .from("zoom_recordings")
+      .update({ suggested_client_id: null } as any)
+      .in("id", groupIds(rec));
+    invalidate();
+  };
 
   const handleDelete = (rec: FeedRecording) => {
     const filePaths = (rec._group || [rec])
@@ -578,6 +624,9 @@ export default function Recordings() {
                   rec={rec}
                   clients={clients}
                   folders={folders}
+                  campaignerNames={campaignerNamesFor(rec)}
+                  onAcceptSuggestion={acceptSuggestion}
+                  onRejectSuggestion={rejectSuggestion}
                   onOpenSummary={setSummaryViewRec}
                   onCreateSummary={(r) => {
                     const audioRec = r._group?.find((g: any) => g.recording_type === "audio_only") || r;

@@ -61,6 +61,8 @@ export interface FeedRecording {
   transcription_status: string | null;
   summary_md: string | null;
   summary_file_url: string | null;
+  suggested_client_id: string | null;
+  campaigner_ids: string[] | null;
   clients?: { name: string } | null;
   // deno-style loose grouping payload from the page
   _group?: FeedRecording[];
@@ -76,12 +78,15 @@ interface RecordingCardProps {
   rec: FeedRecording;
   clients: { id: string; name: string }[];
   folders: FolderOption[];
+  campaignerNames?: string[];
   onOpenSummary: (rec: FeedRecording) => void;
   onCreateSummary: (rec: FeedRecording) => void;
   onShare: (rec: FeedRecording) => void;
   onAssignClient: (rec: FeedRecording, clientId: string | null) => void;
   onMoveToFolder: (rec: FeedRecording, folderId: string | null) => void;
   onDelete: (rec: FeedRecording) => void;
+  onAcceptSuggestion?: (rec: FeedRecording) => void;
+  onRejectSuggestion?: (rec: FeedRecording) => void;
 }
 
 const sourceLabel = (source: string | null) => {
@@ -105,13 +110,19 @@ export function RecordingCard({
   rec,
   clients,
   folders,
+  campaignerNames = [],
   onOpenSummary,
   onCreateSummary,
   onShare,
   onAssignClient,
   onMoveToFolder,
   onDelete,
+  onAcceptSuggestion,
+  onRejectSuggestion,
 }: RecordingCardProps) {
+  const suggestedClientName = rec.suggested_client_id && !rec.client_id
+    ? clients.find((c) => c.id === rec.suggested_client_id)?.name ?? null
+    : null;
   const [playOpen, setPlayOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -290,11 +301,29 @@ export function RecordingCard({
             </DropdownMenu>
           </div>
 
+          {/* AI suggestion: assign only after human confirmation */}
+          {suggestedClientName && (
+            <div className="flex items-center gap-1.5 rounded-md bg-primary/5 border border-primary/20 px-2 py-1">
+              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="text-[11px] flex-1 truncate">הצעה: {suggestedClientName}</span>
+              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[11px] text-green-600" onClick={() => onAcceptSuggestion?.(rec)}>
+                אשר
+              </Button>
+              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[11px] text-muted-foreground" onClick={() => onRejectSuggestion?.(rec)}>
+                דחה
+              </Button>
+            </div>
+          )}
+
           {/* Client chip + actions */}
           <div className="flex items-center justify-between gap-2">
             {rec.clients?.name ? (
               <Badge variant="secondary" className="text-[11px] max-w-[45%] truncate">
                 {rec.clients.name}
+              </Badge>
+            ) : campaignerNames.length > 0 ? (
+              <Badge variant="outline" className="text-[11px] max-w-[55%] truncate" title={campaignerNames.join(", ")}>
+                פנימי · {campaignerNames.join(", ")}
               </Badge>
             ) : (
               <span className="text-[11px] text-muted-foreground">ללא שיוך</span>
