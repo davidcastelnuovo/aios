@@ -34,8 +34,7 @@ function showError(target: HTMLElement, message: string | null) {
 async function loadTenants(): Promise<TenantOption[]> {
   const { data, error } = await supabase
     .from("tenant_users")
-    .select("tenant_id, tenants(id, name, slug)")
-    .order("tenant_id");
+    .select("tenant_id, tenants(id, name, slug)");
   if (error) throw error;
   const seen = new Set<string>();
   const result: TenantOption[] = [];
@@ -46,7 +45,7 @@ async function loadTenants(): Promise<TenantOption[]> {
       result.push(t);
     }
   }
-  return result;
+  return result.sort((a, b) => (a.name || "").localeCompare(b.name || "", "he"));
 }
 
 async function loadClients(tenantId: string) {
@@ -126,10 +125,17 @@ async function initMain() {
     tenantSelect.appendChild(opt);
   }
 
+  // Preselect the org the user is ACTIVE on in the web app (user_active_tenant)
+  // — with multiple orgs, an arbitrary default causes RLS clashes with the SPA.
+  const { data: activeRow } = await supabase
+    .from("user_active_tenant")
+    .select("tenant_id")
+    .maybeSingle();
   const { lastTenantId } = await chrome.storage.local.get("lastTenantId");
-  if (lastTenantId && tenants.some((t) => t.id === lastTenantId)) {
-    tenantSelect.value = lastTenantId;
-  }
+  const preferred = [activeRow?.tenant_id, lastTenantId].find(
+    (id) => id && tenants.some((t) => t.id === id),
+  );
+  if (preferred) tenantSelect.value = preferred;
 
   show("main");
   await onTenantChange();
