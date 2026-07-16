@@ -116,6 +116,7 @@ function uploadPart(channel: "mic" | "sys", partNum: number, blob: Blob) {
       await uploadWithRetry(path, blob, "audio/webm");
       uploadedPartPaths.push(path);
       if (recordingId) {
+        await ensureActiveTenant();
         await supabase
           .from("zoom_recordings")
           .update({ audio_file_paths: [...uploadedPartPaths].sort() })
@@ -200,11 +201,28 @@ function startChannelRecorder(channel: Channel) {
   channel.recorder.start(1000);
 }
 
+// RLS on zoom_recordings resolves the tenant via user_active_tenant, and the
+// web app re-asserts ITS tenant on every load — with multiple orgs the two can
+// clash mid-recording ("new row violates row-level security"). Re-assert our
+// tenant right before every DB write, and let callers retry once on RLS errors.
+async function ensureActiveTenant(): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from("user_active_tenant").upsert(
+    { user_id: user.id, tenant_id: tenantId, updated_at: new Date().toISOString() },
+    { onConflict: "user_id" },
+  );
+}
+
+const isRlsError = (err: { message?: string } | null) =>
+  !!err?.message && err.message.includes("row-level security");
+
 // Register the recording in AIOS as soon as it starts, so segments uploaded
 // mid-meeting are attached to a row even if the browser crashes before "stop".
 async function createRecordingRow(): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
+  await ensureActiveTenant();
   const { data, error } = await supabase
     .from("zoom_recordings")
     .insert({
@@ -438,15 +456,20 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
       ...(thumbnailPath ? { thumbnail_path: thumbnailPath } : {}),
     };
 
+    await ensureActiveTenant();
     if (recordingId) {
-      const { error: updateError } = await supabase
+      let { error: updateError } = await supabase
         .from("zoom_recordings")
         .update(rowData)
         .eq("id", recordingId);
+      if (updateError && isRlsError(updateError)) {
+        await ensureActiveTenant();
+        ({ error: updateError } = await supabase.from("zoom_recordings").update(rowData).eq("id", recordingId));
+      }
       if (updateError) throw new Error("שגיאה בעדכון ההקלטה: " + updateError.message);
     } else {
       // Early insert failed at start — create the row now.
-      const { data: inserted, error: insertError } = await supabase
+      const insertRow = () => supabase
         .from("zoom_recordings")
         .insert({
           tenant_id: tenantId,
@@ -461,6 +484,11 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
         })
         .select("id")
         .single();
+      let { data: inserted, error: insertError } = await insertRow();
+      if (insertError && isRlsError(insertError)) {
+        await ensureActiveTenant();
+        ({ data: inserted, error: insertError } = await insertRow());
+      }
       if (insertError || !inserted) {
         throw new Error("שגיאה ברישום ההקלטה: " + (insertError?.message ?? "unknown"));
       }
