@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAutoCreateTeamMember } from "@/hooks/useAutoCreateTeamMember";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useSalesPeople } from "@/hooks/useEntityLists";
 import { syncProfileToTeamMember } from "@/hooks/useSyncProfileTeamMember";
 
 interface EditUserSalesPersonDialogProps {
@@ -53,17 +54,7 @@ export function EditUserSalesPersonDialog({
 
   // Fetch all sales people
   const { data: salesPeople } = useQuery({
-    queryKey: ["sales-people-all"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales_people")
-        .select("id, full_name, active")
-        .eq("active", true)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+// moved to useSalesPeople
 
   // Fetch agencies for new sales person creation
   const { data: agencies } = useQuery({

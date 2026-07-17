@@ -37,16 +37,7 @@ export default function EditManagedAgenciesDialog({
   const { tenantId } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+// moved to useAgencies
 
   const updateMutation = useMutation({
     mutationFn: async (agencyIds: string[]) => {
