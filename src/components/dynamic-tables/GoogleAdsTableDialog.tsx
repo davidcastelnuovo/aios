@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { Loader2, AlertCircle, Check, ChevronsUpDown, Search } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

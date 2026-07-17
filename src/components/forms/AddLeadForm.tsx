@@ -110,30 +110,9 @@ export function AddLeadForm() {
     },
   });
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: agencies } = useAgencies();
 
-  const { data: salesPeople } = useQuery({
-    queryKey: ["sales-people-all"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales_people")
-        .select("*")
-        .eq("active", true)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: salesPeople } = useSalesPeople({ activeOnly: true });
 
   const { data: products } = useQuery({
     queryKey: ["products", tenantId],

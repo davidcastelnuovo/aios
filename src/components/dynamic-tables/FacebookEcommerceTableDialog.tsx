@@ -65,36 +65,10 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
   const [clientSearch, setClientSearch] = useState("");
 
   // Fetch agencies
-  const { data: agencies = [] } = useQuery({
-    queryKey: ['agencies', tenantId],
-    queryFn: async () => {
-      if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .order('name');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: open && !!tenantId,
-  });
+  const { data: agencies = [] } = useTableDialogAgencies({ enabled: open });
 
   // Fetch clients based on selected agency
-  const { data: rawClients = [] } = useQuery({
-    queryKey: ['clients-for-table', agencyId],
-    queryFn: async () => {
-      if (!agencyId) return [];
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, name')
-        .eq('agency_id', agencyId)
-        .order('name');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: open && !!agencyId,
-  });
+  const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
 
   const clients = assignedClientIds
     ? rawClients.filter(c => assignedClientIds.includes(c.id))
