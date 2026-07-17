@@ -9,6 +9,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTerminology } from "@/hooks/useTerminology";
+import { useAgencies, useCampaigners, useSalesPeople } from "@/hooks/useEntityLists";
 import {
   Form,
   FormControl,
@@ -152,18 +153,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     }
   }, [clientId, leadId, defaultCampaignerId, userCampaignerId, isCampaigner, form]);
 
-  const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("campaigners")
-        .select("*")
-        .eq("active", true)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: campaigners } = useCampaigners({ activeOnly: true });
 
   // Filter campaigners - campaigners only see themselves, team_manager+ sees all
   const canSelectAnyCampaigner = isOwner || isTeamManager || isSuperAdmin;
@@ -211,17 +201,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     enabled: !!currentTenantId,
   });
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: agencies } = useAgencies();
 
   const { data: leads } = useQuery({
     queryKey: ["leads"],
@@ -235,18 +215,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     },
   });
 
-  const { data: salesPeople } = useQuery({
-    queryKey: ["sales-people"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales_people")
-        .select("*")
-        .eq("active", true)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: salesPeople } = useSalesPeople({ activeOnly: true });
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {

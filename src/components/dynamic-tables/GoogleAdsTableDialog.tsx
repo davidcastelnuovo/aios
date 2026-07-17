@@ -76,60 +76,10 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
   const [campaignType, setCampaignType] = useState<"leads" | "ecommerce">("leads");
 
   // Fetch agencies (including cross-tenant shared agencies)
-  const { data: agencies = [] } = useQuery({
-    queryKey: ['agencies', tenantId],
-    queryFn: async () => {
-      if (!tenantId) return [];
-
-      const { data: ownedAgencies, error: ownedError } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .order('name');
-      if (ownedError) throw ownedError;
-
-      const { data: sharedAccess, error: sharedError } = await supabase
-        .from('agency_tenant_access')
-        .select(`
-          agency_id,
-          agencies (
-            id,
-            name
-          )
-        `)
-        .eq('accessing_tenant_id', tenantId);
-      if (sharedError) throw sharedError;
-
-      const sharedAgencies = (sharedAccess || [])
-        .map((row: any) => Array.isArray(row.agencies) ? row.agencies[0] : row.agencies)
-        .filter(Boolean)
-        .map((agency: any) => ({ id: agency.id, name: agency.name }));
-
-      const mergedAgencies = [...(ownedAgencies || []), ...sharedAgencies].filter(
-        (agency, index, arr) => arr.findIndex((item) => item.id === agency.id) === index
-      );
-
-      return mergedAgencies.sort((a, b) => a.name.localeCompare(b.name, 'he'));
-    },
-    enabled: open && !!tenantId,
-  });
+  const { data: agencies = [] } = useTableDialogAgencies({ includeShared: true, enabled: open });
 
   // Fetch clients based on selected agency
-  const { data: rawClients = [] } = useQuery({
-    queryKey: ['clients-for-table', tenantId, agencyId],
-    queryFn: async () => {
-      if (!agencyId || !tenantId) return [];
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, name')
-        .or(`tenant_id.eq.${tenantId},agency_id.eq.${agencyId}`)
-        .eq('agency_id', agencyId)
-        .order('name');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: open && !!agencyId && !!tenantId,
-  });
+  const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
 
   const clients = assignedClientIds
     ? rawClients.filter(c => assignedClientIds.includes(c.id))
