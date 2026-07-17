@@ -1472,6 +1472,9 @@ Deno.serve(async (req) => {
           isIncoming,
           isManualOutgoing,
           isGroup,
+          // Operator mirror: this channel sees ALL the operator's personal groups,
+          // so open-member-groups mode must never activate here.
+          sourceChannel: 'operator_mirror',
           sendMessage: async (chatId: string, message: string) => {
             return await sendGreenApiMessage(instanceId, apiToken, chatId, message);
           },
