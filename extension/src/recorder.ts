@@ -215,6 +215,21 @@ let recording = false;
 function setStatus(message: string, ok = false) {
   statusEl.textContent = message;
   statusEl.classList.toggle("ok", ok);
+  statusEl.classList.remove("working");
+}
+
+// Long uploads (a 1h meeting video can be ~0.5GB): keep the bar visibly alive
+// with animated stripes + a dots ticker so it never looks stuck.
+function setWorking(message: string) {
+  statusEl.textContent = message;
+  statusEl.classList.remove("ok");
+  statusEl.classList.add("working");
+  progressEl.classList.add("active");
+}
+
+function stopWorking() {
+  statusEl.classList.remove("working");
+  progressEl.classList.remove("active");
 }
 
 function formatElapsed(ms: number): string {
@@ -559,14 +574,14 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
     if (!session) throw new Error("פג תוקף ההתחברות — נא להתחבר מחדש בחלונית התוסף");
 
     // Wait for in-flight segment uploads (incl. the final rotation parts).
-    setStatus("ממתין לסיום שמירת הקטעים...");
+    setWorking("ממתין לסיום שמירת הקטעים");
     await Promise.allSettled(pendingUploads);
     progressBar.style.width = "40%";
 
     // Retry anything that failed mid-meeting.
     const retries = failedParts.splice(0, failedParts.length);
     for (const { path, blob } of retries) {
-      setStatus(`מעלה מחדש קטע שנכשל...`);
+      setWorking(`מעלה מחדש קטע שנכשל`);
       await uploadWithRetry(path, blob, "audio/webm");
       uploadedPartPaths.push(path);
     }
@@ -579,14 +594,14 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
     // Full system channel for diarization — one continuous file.
     if (sysFullBlob) {
       const sysFullPath = `${tenantId}/${startedAt}_sys_full.webm`;
-      setStatus(`מעלה ערוץ משתתפים לזיהוי דוברים (${(sysFullBlob.size / 1024 / 1024).toFixed(1)}MB)...`);
+      setWorking(`מעלה ערוץ משתתפים לזיהוי דוברים (${(sysFullBlob.size / 1024 / 1024).toFixed(1)}MB) — אל תסגור את החלון`);
       await uploadWithRetry(sysFullPath, sysFullBlob, "audio/webm");
       if (!uploadedPartPaths.includes(sysFullPath)) uploadedPartPaths.push(sysFullPath);
     }
 
     let filePath: string | null = null;
     if (archiveBlob) {
-      setStatus(`מעלה ${audioOnly ? "אודיו" : "וידאו"} (${(archiveBlob.size / 1024 / 1024).toFixed(1)}MB)...`);
+      setWorking(`מעלה ${audioOnly ? "אודיו" : "וידאו"} (${(archiveBlob.size / 1024 / 1024).toFixed(1)}MB) — אל תסגור את החלון, זה יכול לקחת כמה דקות`);
       filePath = `${tenantId}/${startedAt}.webm`;
       await uploadWithRetry(filePath, archiveBlob, archiveBlob.type);
     } else if (uploadedPartPaths.length > 0) {
@@ -594,7 +609,7 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
     }
     progressBar.style.width = "75%";
 
-    setStatus("רושם את ההקלטה במערכת...");
+    setWorking("רושם את ההקלטה במערכת");
     const finalPaths = [...uploadedPartPaths].sort();
     const rowData = {
       duration: durationMinutes,
@@ -643,7 +658,7 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
       recordingId = inserted.id;
     }
 
-    setStatus("מפעיל תמלול וסיכום...");
+    setWorking("מפעיל תמלול וסיכום");
     progressBar.style.width = "90%";
 
     const { error: fnError } = await supabase.functions.invoke("ingest-extension-recording", {
@@ -655,11 +670,13 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
     }
 
     progressBar.style.width = "100%";
+    stopWorking();
     const recordingsUrl = tenantSlug ? `${APP_ORIGIN}/t/${tenantSlug}/recordings` : APP_ORIGIN;
     statusEl.classList.add("ok");
     statusEl.innerHTML = `✅ ההקלטה הועלתה ומעובדת ברקע (תמלול עם דוברים${clientId ? " + סיכום + בריף" : ""}).<br/><a href="${recordingsUrl}" target="_blank" rel="noreferrer">פתח את ספריית ההקלטות</a>`;
   } catch (err) {
     console.error(err);
+    stopWorking();
     progressEl.classList.add("hidden");
     setStatus("❌ " + (err instanceof Error ? err.message : "שגיאה בהעלאה"));
     // Retry with the blobs still in memory — a reload would lose the recording.

@@ -63,6 +63,19 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+    // Recovery healing: if the recorder window died before finalize, the row
+    // has progressive audio parts but no playable file/duration — point
+    // playback at the first part so the recording is usable end-to-end.
+    if (!recording.file_path && recording.audio_file_paths?.length) {
+      const parts: string[] = recording.audio_file_paths;
+      const micParts = parts.filter((p: string) => /_mic_part\d+\./.test(p)).length;
+      const healed = {
+        file_path: parts[0],
+        ...(recording.duration ? {} : { duration: Math.max(1, (micParts || parts.length) * 10) }),
+      };
+      await admin.from("zoom_recordings").update(healed).eq("id", recording_id);
+    }
+
     await admin
       .from("zoom_recordings")
       .update({ transcription_status: "processing", transcription_error: null })
