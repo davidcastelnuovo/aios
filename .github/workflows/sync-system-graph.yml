@@ -1,0 +1,52 @@
+name: Sync AIOS System Graph
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: aios-system-graph
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PROJECT_REF: zvoijyneresvkadpprel
+      SUPABASE_URL: https://zvoijyneresvkadpprel.supabase.co
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install Graphify
+        run: uv tool install graphifyy==0.9.17
+
+      - name: Build code-only graph
+        run: graphify extract . --code-only --out .
+
+      - name: Resolve production service key
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYS="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/api-keys")"
+          SERVICE_KEY="$(jq -r '.[] | select(.name == "service_role") | .api_key' <<<"$KEYS")"
+          if [ -z "$SERVICE_KEY" ] || [ "$SERVICE_KEY" = "null" ]; then
+            echo "Could not resolve the service_role key" >&2
+            exit 1
+          fi
+          echo "::add-mask::$SERVICE_KEY"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> "$GITHUB_ENV"
+
+      - name: Stage, verify, and activate graph
+        run: node scripts/sync-graphify-to-supabase.mjs graphify-out/graph.json
