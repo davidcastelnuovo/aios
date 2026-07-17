@@ -130,6 +130,7 @@ export function CreativeDepartment({ clientId, tenantId }: Props) {
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
   const [frameDraft, setFrameDraft] = useState<StoryboardFrame | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   const { data: context, isLoading: loadingContext } = useQuery({
@@ -347,11 +348,12 @@ export function CreativeDepartment({ clientId, tenantId }: Props) {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-700 text-white"><Clapperboard className="h-4 w-4" /></div>
             <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-bold">{selected.title}</h2><p className="text-[11px] text-muted-foreground">Creative Studio · storyboard חי עם גרסאות</p></div>
             <Badge variant="outline">Skin: social_media</Badge>
+            <Button size="sm" className="gap-1.5 bg-gradient-to-r from-pink-600 to-violet-600" onClick={() => setAiOpen(true)}><WandSparkles className="h-3.5 w-3.5" />כרמן תבנה הכול</Button>
             <Button size="sm" variant="outline" className="gap-1.5" onClick={addFrame}><Plus className="h-3.5 w-3.5" />סצנה</Button>
             <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={() => handoff.mutate()} disabled={handoff.isPending || frames.length === 0}><Send className="h-3.5 w-3.5" />אשר לקמפיינים</Button>
           </div>
           {frames.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center p-8 text-center"><div><Clapperboard className="mx-auto mb-4 h-14 w-14 text-pink-400/40" /><h3 className="text-xl font-black">מתחילים מהרעיון, לא מהתמונה</h3><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">המערכת תהפוך את הקופי לסדרת סצנות. אחר כך אפשר לערוך כל פריים, לייצר ויזואל ולאשר.</p><Button className="mt-5 gap-2 bg-pink-600 hover:bg-pink-700" onClick={initializeStoryboard}><Sparkles className="h-4 w-4" />בנה storyboard מהקופי</Button></div></div>
+            <div className="flex flex-1 items-center justify-center p-8 text-center"><div><Clapperboard className="mx-auto mb-4 h-14 w-14 text-pink-400/40" /><h3 className="text-xl font-black">מתחילים מהרעיון, לא מהתמונה</h3><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">אפשר לתת לכרמן פרומפט אחד, לבנות אוטומטית מהבריף או להתחיל ידנית ולבקש ממנה להשלים.</p><div className="mt-5 flex justify-center gap-2"><Button className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={() => setAiOpen(true)}><WandSparkles className="h-4 w-4" />כרמן תבנה הכול</Button><Button variant="outline" className="gap-2" onClick={initializeStoryboard}><Sparkles className="h-4 w-4" />טיוטה מהקופי</Button></div></div></div>
           ) : (
             <div className="min-h-0 flex-1" dir="ltr">
               <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.2 }} onNodeClick={(_, node) => setSelectedFrameId(node.id)} onNodeDragStop={(_, node) => saveFramePosition(node.id, node.position.x, node.position.y)} proOptions={{ hideAttribution: true }}>
@@ -380,8 +382,32 @@ export function CreativeDepartment({ clientId, tenantId }: Props) {
       </aside>
 
       <ManualCreativeDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenantId} clientId={clientId} pipelineId={context?.pipeline.id ?? ""} stageId={context?.creativeStage?.id ?? ""} onCreated={async (id) => { setSelectedId(id); setCreateOpen(false); await refresh(); }} />
+      {selected && <CreativeAIDialog open={aiOpen} onClose={() => setAiOpen(false)} item={selected} hasStoryboard={frames.length > 0} onCompleted={async () => { setAiOpen(false); setSelectedFrameId(null); await refresh(); }} />}
     </div>
   );
+}
+
+function CreativeAIDialog({ open, onClose, item, hasStoryboard, onCompleted }: { open: boolean; onClose: () => void; item: CreativeItem; hasStoryboard: boolean; onCompleted: () => Promise<void> }) {
+  const [mode, setMode] = useState<"autopilot" | "fill" | "brief">("autopilot");
+  const [prompt, setPrompt] = useState("");
+  const [frameCount, setFrameCount] = useState("4");
+  const [running, setRunning] = useState(false);
+  const run = async () => {
+    setRunning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("marketing-creative-plan", { body: { item_id: item.id, prompt: prompt.trim(), mode, frame_count: Number(frameCount) } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`כרמן בנתה קונספט ו-${data.frames?.length ?? 0} סצנות מלאות`);
+      await onCompleted();
+    } catch (error: unknown) { toast.error(errorMessage(error, "כרמן לא הצליחה לבנות את ה-storyboard")); } finally { setRunning(false); }
+  };
+  const modes = [
+    { id: "autopilot" as const, title: "כרמן עושה הכול", description: "פרומפט אחד → קונספט, hook, סצנות, שוטים, טקסט וקריינות" },
+    { id: "brief" as const, title: "מתוך הבריף", description: "כרמן הופכת את הבריף והקופי הקיימים ל-storyboard מלא" },
+    { id: "fill" as const, title: "מילוי ושיפור AI", description: "שומרת על מה שבנית ומשלימה שדות חסרים או חלשים", disabled: !hasStoryboard },
+  ];
+  return <Dialog open={open} onOpenChange={(value) => !value && onClose()}><DialogContent className="max-w-2xl" dir="rtl"><DialogHeader><DialogTitle className="flex items-center gap-2"><WandSparkles className="h-5 w-5 text-pink-500" />עבודה עם כרמן — Skin קריאייטיב</DialogTitle></DialogHeader><div className="grid gap-5 py-2"><div className="grid grid-cols-3 gap-2">{modes.map((option) => <button key={option.id} disabled={option.disabled} onClick={() => setMode(option.id)} className={cn("rounded-xl border p-3 text-right transition-all", mode === option.id ? "border-pink-500 bg-pink-50 ring-2 ring-pink-500/10 dark:bg-pink-950/20" : "hover:bg-muted/50", option.disabled && "cursor-not-allowed opacity-40")}><div className="text-xs font-bold">{option.title}</div><div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{option.description}</div></button>)}</div><div><Label>{mode === "autopilot" ? "מה אתה רוצה שכרמן תיצור?" : "הנחיות נוספות לכרמן (לא חובה)"}</Label><Textarea className="mt-1 min-h-32" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === "autopilot" ? "לדוגמה: סרטון UGC חד ומשעשע שמתחיל בכאב של בעל העסק, שובר ציפייה ומציג את המוצר כפתרון. אל תיראה כמו פרסומת AI גנרית." : "דגשים, השראות, דברים שחייבים להופיע או אסור להמציא"} /></div><div className="flex items-end gap-3"><div className="w-40"><Label>מספר סצנות</Label><Select value={frameCount} onValueChange={setFrameCount}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{[3,4,5,6,8].map((count) => <SelectItem key={count} value={String(count)}>{count} סצנות</SelectItem>)}</SelectContent></Select></div><div className="flex-1 rounded-lg bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">כרמן משתמשת בבריף, בקופי, במידע על הלקוח וב־Skin <b>social_media</b>. אחרי היצירה אפשר לערוך ידנית כל פרט וליצור פריימים.</div></div><Button onClick={run} disabled={running || (mode === "autopilot" && !prompt.trim())} className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600">{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}{running ? "כרמן בונה קונספט ו-storyboard..." : mode === "fill" ? "השלימי ושפרי את ה-storyboard" : "בני קונספט ו-storyboard מלא"}</Button></div></DialogContent></Dialog>;
 }
 
 function ManualCreativeDialog({ open, onClose, tenantId, clientId, pipelineId, stageId, onCreated }: { open: boolean; onClose: () => void; tenantId: string; clientId: string; pipelineId: string; stageId: string; onCreated: (id: string) => void }) {
