@@ -1,5 +1,11 @@
 # AIOS — project notes for Claude
 
+## Shared AIOS system graph
+- Before architecture or implementation work, query the `aios-system-graph` MCP server to locate existing components, dependencies, database objects, Edge Functions, Carmen skins, skills, tools, and memory paths. Reuse or improve existing functionality instead of creating a parallel implementation.
+- Use `query_system_graph` for discovery and `graph_status` to confirm that the central graph matches a recent `main` commit. Inspect affected dependencies again before opening a pull request.
+- The central graph is rebuilt automatically after merges to `main`. If MCP is unavailable and `graphify-out/graph.json` exists locally, fall back to `graphify query`, `graphify path`, and `graphify affected`.
+- Never commit Graphify output, `graph.json`, generated reports, summaries, reflections, or work-memory files. Keep changes to Carmen and other critical monolithic functions small and additive.
+
 ## Working mode / autonomy (David's standing preference)
 - **Default to action — do not ask for confirmation on obvious, low-risk fixes or clearly-requested work.** Implement → commit → open PR → merge to `main` → verify the deploy, end-to-end, without pausing to ask at each step.
 - After merging an edge-function change, confirm the `deploy-edge-function.yml` run went green.
