@@ -176,7 +176,7 @@ const ALL_TOOLS = [
   { name: 'kb_learn', description: 'שמירת ידע פרוצדורלי/אפיזודי חדש (לקח שנלמד, נוהל, סיכום שיחה חשובה). שונה מ-save_memory: זה נכנס לממלכת הידע עם embedding לחיפוש סמנטי. שמור פה דברים שכרמן צריכה לזכור לטווח ארוך עם הקשר.', parameters: { type: 'object', properties: { topic: { type: 'string' }, summary: { type: 'string' }, topic_tags: { type: 'array', items: { type: 'string' } }, importance: { type: 'integer', description: '1-10' }, source_table: { type: 'string' }, source_ids: { type: 'array', items: { type: 'string' } } }, required: ['topic','summary'] } },
   // CHAT HISTORY
   { name: 'get_chat_history', description: 'שליפת היסטוריית שיחות WhatsApp עם ליד או לקוח', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['contact_type', 'contact_id'] } },
-  { name: 'search_conversation_history', description: 'חיפוש בכל היסטוריית ההתכתבויות של הארגון (WhatsApp) — ללא מגבלת זמן. חובה להשתמש כשנשאלת על שיחות/עובדות מהעבר שאינן בזיכרון: "מה X ביקש לפני שבועיים", "מה המייל/כתובת שנתתי לך", "מה שם הלקוח שדיברנו עליו". חפשי לפי מילות מפתח (שם, מייל, נושא). אם אין תוצאה — נסי ניסוח/מילה אחרת לפני שאת אומרת שאין.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מילות חיפוש (עד 4 מילים, כולן חייבות להופיע בהודעה)' }, days_back: { type: 'integer', description: 'כמה ימים אחורה (ברירת מחדל 180)' }, limit: { type: 'integer', description: 'מקסימום תוצאות (ברירת מחדל 20)' } }, required: ['query'] } },
+  { name: 'search_conversation_history', description: 'שליפה מכל היסטוריית ההתכתבויות של הארגון (WhatsApp) — ללא מגבלת סשן. שני מצבים: (1) חיפוש מילות מפתח — "מה המייל של פליקס", שם לקוח, נושא. חשוב: חפשי מילות תוכן בלבד (שם/מייל/נושא) — לעולם לא מילות זמן כמו "אתמול"/"בערב", הן לא מופיעות בהודעות! (2) דפדוף לפי זמן — לשאלות "מה דיברנו אתמול/בשבוע שעבר": קראי בלי query עם days_back מתאים ו-only_carmen_chats=true, ותקבלי את השיחות איתך כרונולוגית. אם חיפוש לא מצא — נסי מילה אחרת או עברי לדפדוף לפני שאת אומרת שאין.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מילות תוכן לחיפוש (עד 4, כולן חייבות להופיע). השמיטי לדפדוף לפי זמן.' }, days_back: { type: 'integer', description: 'כמה ימים אחורה (ברירת מחדל 180; לדפדוף "אתמול" השתמשי ב-2)' }, only_carmen_chats: { type: 'boolean', description: 'רק שיחות בערוץ של כרמן (ברירת מחדל true בדפדוף בלי query)' }, with_phone: { type: 'string', description: 'סינון לשיחות עם מספר טלפון מסוים' }, limit: { type: 'integer', description: 'מקסימום תוצאות (ברירת מחדל 20, בדפדוף 40)' } } } },
   { name: 'get_recent_inbound_messages', description: 'שליפת הודעות נכנסות אחרונות מכל השיחות', parameters: { type: 'object', properties: { limit: { type: 'integer' }, hours: { type: 'integer', description: 'כמה שעות אחורה (ברירת מחדל 24)' } } } },
   // FINANCE
   { name: 'list_finance', description: 'רשימת תנועות כספיות', parameters: { type: 'object', properties: { client_id: { type: 'string' }, type: { type: 'string', enum: ['income', 'expense'] }, limit: { type: 'integer' } } } },
@@ -2064,26 +2064,39 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'search_conversation_history': {
       const rawQuery = String(args.query || '').trim()
-      if (!rawQuery) return { error: 'query is required' }
+      // AND semantics: every token must appear in the message. Up to 4 tokens.
+      // No query = browse mode: chronological slice of the window, which then
+      // MUST be narrowed (Carmen channel / specific phone) or the whole tenant's
+      // WhatsApp traffic floods the result.
+      const tokens = rawQuery.split(/\s+/).filter(Boolean).slice(0, 4)
+      const browseMode = tokens.length === 0
       const daysBack = Math.min(Number(args.days_back) > 0 ? Number(args.days_back) : 180, 730)
       const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString()
-      // AND semantics: every token must appear in the message. Up to 4 tokens.
-      const tokens = rawQuery.split(/\s+/).filter(Boolean).slice(0, 4)
+      const defaultLimit = browseMode ? 40 : 20
+      const withPhone = String(args.with_phone || '').replace(/\D/g, '')
+      const onlyCarmen = args.only_carmen_chats === true || (browseMode && args.only_carmen_chats !== false)
       let q = supabase.from('chat_messages')
-        .select('message_text, direction, sender_name, sender_phone, created_at, group_id, clients(name)')
+        .select('message_text, direction, sender_name, sender_phone, created_at, group_id, provider, clients(name)')
         .in('tenant_id', accessibleTenantIds)
         .gte('created_at', since)
         .not('message_text', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(Math.min(Number(args.limit) > 0 ? Number(args.limit) : 20, 50))
+        .limit(Math.min(Number(args.limit) > 0 ? Number(args.limit) : defaultLimit, 60))
       for (const t of tokens) q = q.ilike('message_text', `%${t}%`)
+      if (onlyCarmen) q = q.eq('provider', 'manus_wa')
+      if (withPhone) q = q.ilike('sender_phone', `%${withPhone}%`)
       const { data, error } = await q
       if (error) throw error
       const fmt = (iso: string) => new Date(iso).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
       return {
         count: data.length,
-        note: data.length === 0 ? 'אין תוצאות — נסי מילות חיפוש אחרות (שם פרטי בלבד, חלק מהמייל, מילה נרדפת).' : undefined,
-        messages: data.map((m: any) => ({
+        mode: browseMode ? 'browse' : 'keyword_search',
+        note: data.length === 0
+          ? (browseMode
+              ? 'אין הודעות בחלון הזמן — נסי days_back גדול יותר או only_carmen_chats=false.'
+              : 'אין תוצאות — נסי מילת תוכן אחרת (שם פרטי בלבד, חלק מהמייל, מילה נרדפת) או דפדוף בלי query.')
+          : undefined,
+        messages: data.reverse().map((m: any) => ({
           when_israel: fmt(m.created_at),
           direction: m.direction,
           from: m.sender_name || m.sender_phone || '',
