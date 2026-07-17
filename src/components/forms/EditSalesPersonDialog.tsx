@@ -55,8 +55,7 @@ export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProp
     },
   });
 
-  const { data: agencies } = useQuery({
-// moved to useAgencies
+  const { data: agencies } = useAgencies();
 
   const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {

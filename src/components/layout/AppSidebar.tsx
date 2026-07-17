@@ -105,71 +105,12 @@ const iconMap: Record<string, any> = {
 
 // ─── Menu structure ───────────────────────────────────────────────────────────
 // Imported from a shared module so the Visual Workspace and the sidebar stay in sync.
-import { MENU_TABS as BASE_MENU_TABS, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
+import { MENU_TABS as BASE_MENU_TABS, permissionForMenuKey, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
 import { computeSidebarOverlay } from "@/visual-workspace/hooks/useSitemap";
 
-// Permission map
-/**
- * modulePermissions
- * מיפוי בין menu_key (מפתח בתפריט) לבין ModulePermission (הרשאה ב-useUserPermissions).
- * כשמוסיפים מודול עתידי – יש להוסיף כאן שורה בפורמט: "menu-key": "permission_id"
- */
-const modulePermissions: Record<string, string> = {
-  // ── ניהול שוטף ──────────────────────────────────────────────────────
-  dashboard: "dashboard",
-  clients: "clients",
-  
-  tasks: "tasks",
-  "time-tracking": "time_tracking",
-  recordings: "recordings",
-  // ── תקשורת ──────────────────────────────────────────────────────────
-  chat: "chat",
-  "team-chat": "team_chat",
-  gmail: "gmail",
-  signatures: "signatures",
-  // ── מכירות ──────────────────────────────────────────────────────────
-  "sales-dashboard": "sales_dashboard",
-  leads: "leads",
-  "sales-people": "sales_people",
-  campaigners: "campaigners",
-  products: "products",
-  // ── שיווק ואנליטיקס ─────────────────────────────────────────────────
-  marketing: "social_media",
-  broadcast: "broadcast",
-  "dynamic-tables": "dynamic_tables",
-  // ── ניהול ארגון ─────────────────────────────────────────────────────
-  agencies: "agencies",
-  suppliers: "suppliers",
-  tenants: "tenants",
-  users: "users",
-  // ── אוטומציה ו-AI ───────────────────────────────────────────────────
-  automations: "automations",
-  agents: "agents",
-  skins: "agents",
-  "carmen-access": "agents",
-  "visual-workspace": "agents",
-  // ── אינטגרציות ──────────────────────────────────────────────────────
-  "lead-integrations": "lead_integrations",
-  integrations: "integrations",
-  "chat-integrations": "chat_integrations",
-  "manychat-settings": "manychat_settings",
-  "green-api-settings": "green_api_settings",
-  "manus-wa-settings": "manus_wa_settings",
-  "accounting-integrations": "accounting_integrations",
-  // ── הגדרות מערכת ────────────────────────────────────────────────────
-  branding: "branding",
-  "menu-management": "menu_management",
-  "fields-management": "fields_management",
-  "ai-support": "ai_support",
-  // ── כספים ───────────────────────────────────────────────────────────
-  finance: "finance",
-  // ── מיפויים לתאימות לאחור ────────────────────────────────────────────
-  site_analytics: "site_analytics",
-  "site-analytics": "site_analytics",
-  rank_tracking: "rank_tracking",
-  "rank-tracking": "rank_tracking",
-  "dmm-dashboard": "crm_dashboard",
-};
+// Permissions are derived from the menu structure itself — see permissionForMenuKey
+// in @/lib/menuStructure (explicit `permission` field on a module, else
+// key.replace(/-/g, "_")). No hand-maintained map needed.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function AppSidebar() {
@@ -298,9 +239,7 @@ export function AppSidebar() {
 
   const canAccess = (key: string) => {
     if (key === "my-profile") return true;
-    const perm = modulePermissions[key];
-    if (!perm) return false;
-    return hasPermission(perm as any);
+    return hasPermission(permissionForMenuKey(key));
   };
 
   const getLabel = (key: string, fallback: string) =>

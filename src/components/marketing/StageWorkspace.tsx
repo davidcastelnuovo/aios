@@ -521,7 +521,7 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
   const handleUpdateMode = async (mode: string) => {
     try {
       await supabase
-        .from("pipeline_stages")
+        .from("marketing_pipeline_stages")
         .update({ approval_mode: mode })
         .eq("id", stage.id);
       toast({ title: `מצב עדכן ל-${mode}` });

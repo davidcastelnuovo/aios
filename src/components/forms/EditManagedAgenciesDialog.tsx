@@ -36,8 +36,7 @@ export default function EditManagedAgenciesDialog({
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
-  const { data: agencies } = useQuery({
-// moved to useAgencies
+  const { data: agencies } = useAgencies();
 
   const updateMutation = useMutation({
     mutationFn: async (agencyIds: string[]) => {

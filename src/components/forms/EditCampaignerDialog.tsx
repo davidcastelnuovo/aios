@@ -78,8 +78,7 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: agencies } = useQuery({
-// moved to useAgencies
+  const { data: agencies } = useAgencies();
 
   const updateMutation = useMutation({
     mutationFn: async (data: typeof formData) => {

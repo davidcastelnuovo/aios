@@ -53,8 +53,7 @@ export function EditUserSalesPersonDialog({
   const [notes, setNotes] = useState("");
 
   // Fetch all sales people
-  const { data: salesPeople } = useQuery({
-// moved to useSalesPeople
+  const { data: salesPeople } = useSalesPeople({ activeOnly: true });
 
   // Fetch agencies for new sales person creation
   const { data: agencies } = useQuery({
@@ -115,7 +114,7 @@ export function EditUserSalesPersonDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["user-sales-person", userId] });
-      queryClient.invalidateQueries({ queryKey: ["sales-people-all", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["sales-people", tenantId] });
       toast.success("איש מכירות עודכן בהצלחה");
       onClose();
     },

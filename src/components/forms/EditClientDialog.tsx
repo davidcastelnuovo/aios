@@ -206,8 +206,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     return contacts;
   }, [client.email, client.contact_name, client.name, clientContacts]);
 
-  const { data: agencies } = useQuery({
-// moved to useAgencies
+  const { data: agencies } = useAgencies();
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners", tenantId],
