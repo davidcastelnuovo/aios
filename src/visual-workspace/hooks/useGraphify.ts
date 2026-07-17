@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 export type GraphifyCommunity = {
-  community: number | null;
+  group_key: string;
   name: string;
   nodes: number;
   file_types: Record<string, number> | null;
@@ -62,13 +62,13 @@ export function useGraphifyOverview() {
   });
 }
 
-export function useGraphifyCommunity(community: number | null) {
+export function useGraphifyCommunity(groupKey: string | null) {
   const { tenantId } = useCurrentTenant();
   return useQuery({
-    queryKey: ["graphify-community", community, tenantId],
+    queryKey: ["graphify-community", groupKey, tenantId],
     queryFn: async (): Promise<{ nodes: GraphifyNode[]; edges: GraphifyEdge[] }> => {
-      const { data, error } = await supabase.rpc("graphify_community_subgraph" as any, {
-        p_community: community,
+      const { data, error } = await supabase.rpc("graphify_group_subgraph" as any, {
+        p_group: groupKey,
         p_limit: 400,
       });
       if (error) throw error;
@@ -78,7 +78,7 @@ export function useGraphifyCommunity(community: number | null) {
         edges: Array.isArray(parsed.edges) ? parsed.edges : [],
       };
     },
-    enabled: community !== null && !!tenantId,
+    enabled: !!groupKey && !!tenantId,
     staleTime: 1000 * 60 * 10,
     retry: false,
   });

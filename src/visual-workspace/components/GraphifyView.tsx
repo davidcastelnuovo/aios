@@ -14,6 +14,16 @@ import {
 } from "../hooks/useGraphify";
 import { GraphCanvas, GraphLegend } from "./GraphCanvas";
 
+/** Mirrors public.graphify_node_group: top one/two path segments of source_file. */
+function groupKeyOf(sourceFile: string | null): string | null {
+  if (!sourceFile) return null;
+  const parts = sourceFile.split("/");
+  if (sourceFile.startsWith("src/") || sourceFile.startsWith("supabase/")) {
+    return parts.slice(0, 2).join("/");
+  }
+  return parts.length > 1 ? parts[0] : "קבצי תצורה";
+}
+
 function useDebounced(value: string, ms = 400) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -30,7 +40,7 @@ export function GraphifyView() {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search);
   const { data: searchHits = [], isFetching: searching } = useGraphifySearch(debouncedSearch);
-  const subgraph = useGraphifyCommunity(selectedCommunity?.community ?? null);
+  const subgraph = useGraphifyCommunity(selectedCommunity?.group_key ?? null);
 
   if (isLoading) {
     return (
@@ -164,17 +174,18 @@ export function GraphifyView() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium break-all">{hit.label}</p>
                     <p className="text-xs text-muted-foreground font-mono break-all" dir="ltr">{hit.source_file}</p>
-                    {hit.community_name && (
-                      <button
-                        className="text-xs text-primary hover:underline"
-                        onClick={() => {
-                          const c = communities.find(x => x.name === hit.community_name);
-                          if (c) setSelectedCommunity(c);
-                        }}
-                      >
-                        {hit.community_name}
-                      </button>
-                    )}
+                    {(() => {
+                      const groupName = hit.community_name || groupKeyOf(hit.source_file);
+                      const c = groupName ? communities.find(x => x.group_key === groupName || x.name === groupName) : null;
+                      return c ? (
+                        <button
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => setSelectedCommunity(c)}
+                        >
+                          פתח בקבוצה: {c.name}
+                        </button>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
               ))}
@@ -188,7 +199,7 @@ export function GraphifyView() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {communities.map((c) => (
             <Card
-              key={String(c.community)}
+              key={c.group_key}
               className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all"
               onClick={() => setSelectedCommunity(c)}
             >

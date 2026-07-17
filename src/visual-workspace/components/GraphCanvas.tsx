@@ -1,19 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GraphifyNode, GraphifyEdge } from "../hooks/useGraphify";
 
-const TYPE_COLORS: Record<string, string> = {
+const KIND_COLORS: Record<string, string> = {
   component: "#6366f1",
   hook: "#8b5cf6",
   page: "#0ea5e9",
   edge_function: "#f59e0b",
-  sql_table: "#10b981",
-  sql_function: "#14b8a6",
-  module: "#64748b",
+  concept: "#10b981",
+  rationale: "#f43f5e",
+  lib: "#14b8a6",
   other: "#94a3b8",
 };
 
-function colorFor(fileType: string | null): string {
-  return TYPE_COLORS[fileType || "other"] || TYPE_COLORS.other;
+/** Node kind is inferred from file_type (concept/rationale) or source path (code nodes). */
+export function nodeKind(fileType: string | null, sourceFile: string | null): string {
+  if (fileType === "concept" || fileType === "rationale") return fileType;
+  const f = sourceFile || "";
+  if (f.startsWith("supabase/functions")) return "edge_function";
+  if (f.startsWith("src/pages")) return "page";
+  if (f.startsWith("src/hooks")) return "hook";
+  if (f.startsWith("src/components") || f.startsWith("src/visual-workspace")) return "component";
+  if (f.startsWith("src/lib") || f.startsWith("src/contexts") || f.startsWith("src/integrations")) return "lib";
+  return "other";
+}
+
+function colorFor(fileType: string | null, sourceFile: string | null): string {
+  return KIND_COLORS[nodeKind(fileType, sourceFile)] || KIND_COLORS.other;
 }
 
 type SimNode = GraphifyNode & { x: number; y: number; vx: number; vy: number };
@@ -156,7 +168,7 @@ export function GraphCanvas({
           >
             <circle
               r={r}
-              fill={colorFor(n.file_type)}
+              fill={colorFor(n.file_type, n.source_file)}
               fillOpacity={isSelected ? 1 : 0.8}
               stroke={isSelected ? "#0f172a" : "white"}
               strokeWidth={isSelected ? 2.5 : 1}
@@ -179,14 +191,15 @@ export function GraphLegend() {
     ["hook", "Hook"],
     ["page", "עמוד"],
     ["edge_function", "Edge Function"],
-    ["sql_table", "טבלת SQL"],
-    ["sql_function", "פונקציית SQL"],
+    ["lib", "ליבה/עזר"],
+    ["concept", "מושג"],
+    ["rationale", "רציונל"],
   ];
   return (
     <div className="flex flex-wrap gap-3 text-xs text-muted-foreground" dir="rtl">
       {entries.map(([key, label]) => (
         <span key={key} className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[key] }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: KIND_COLORS[key] }} />
           {label}
         </span>
       ))}
