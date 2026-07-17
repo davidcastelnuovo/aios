@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAutoCreateTeamMember } from "@/hooks/useAutoCreateTeamMember";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useSalesPeople } from "@/hooks/useEntityLists";
 import { syncProfileToTeamMember } from "@/hooks/useSyncProfileTeamMember";
 
 interface EditUserSalesPersonDialogProps {
@@ -52,18 +53,7 @@ export function EditUserSalesPersonDialog({
   const [notes, setNotes] = useState("");
 
   // Fetch all sales people
-  const { data: salesPeople } = useQuery({
-    queryKey: ["sales-people-all"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales_people")
-        .select("id, full_name, active")
-        .eq("active", true)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: salesPeople } = useSalesPeople({ activeOnly: true });
 
   // Fetch agencies for new sales person creation
   const { data: agencies } = useQuery({
@@ -124,7 +114,7 @@ export function EditUserSalesPersonDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["user-sales-person", userId] });
-      queryClient.invalidateQueries({ queryKey: ["sales-people-all", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["sales-people", tenantId] });
       toast.success("איש מכירות עודכן בהצלחה");
       onClose();
     },

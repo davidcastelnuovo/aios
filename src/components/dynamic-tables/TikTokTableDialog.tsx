@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { Loader2, AlertCircle, Music2 } from "lucide-react";
 
 interface Props {
@@ -58,25 +59,9 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
     enabled: open && !!tenantId,
   });
 
-  const { data: agencies = [] } = useQuery({
-    queryKey: ['agencies', tenantId],
-    queryFn: async () => {
-      if (!tenantId) return [];
-      const { data } = await supabase.from('agencies').select('id, name').eq('tenant_id', tenantId).order('name');
-      return data || [];
-    },
-    enabled: open && !!tenantId,
-  });
+  const { data: agencies = [] } = useTableDialogAgencies({ enabled: open });
 
-  const { data: rawClients = [] } = useQuery({
-    queryKey: ['clients-for-tt', agencyId],
-    queryFn: async () => {
-      if (!agencyId) return [];
-      const { data } = await supabase.from('clients').select('id, name').eq('agency_id', agencyId).order('name');
-      return data || [];
-    },
-    enabled: open && !!agencyId,
-  });
+  const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
   const clients = assignedClientIds
     ? rawClients.filter(c => assignedClientIds.includes(c.id))
     : rawClients;

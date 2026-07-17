@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencies } from "@/hooks/useEntityLists";
 
 interface EditSalesPersonAgenciesDialogProps {
   open: boolean;
@@ -35,17 +36,7 @@ export default function EditSalesPersonAgenciesDialog({
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: agencies } = useAgencies();
 
   const updateMutation = useMutation({
     mutationFn: async (agencyIds: string[]) => {

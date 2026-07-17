@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Pencil, Check, ChevronsUpDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencies } from "@/hooks/useEntityLists";
 
 const formSchema = z.object({
   full_name: z.string().min(1, "שם מלא הוא שדה חובה"),
@@ -54,17 +55,7 @@ export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProp
     },
   });
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: agencies } = useAgencies();
 
   const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {

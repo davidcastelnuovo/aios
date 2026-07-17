@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { Loader2, TrendingUp, ExternalLink, Link, Globe } from "lucide-react";
 
 interface AhrefsTableDialogProps {
@@ -54,33 +55,10 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
   });
 
   // Fetch agencies
-  const { data: agencies } = useQuery({
-    queryKey: ['agencies-for-table', activeTenantId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', activeTenantId)
-        .order('name');
-      return data || [];
-    },
-    enabled: open && !!activeTenantId,
-  });
+  const { data: agencies } = useTableDialogAgencies({ enabled: open });
 
   // Fetch clients based on selected agency
-  const { data: rawClients } = useQuery({
-    queryKey: ['clients-for-table', selectedAgency],
-    queryFn: async () => {
-      if (!selectedAgency) return [];
-      const { data } = await supabase
-        .from('clients')
-        .select('id, name')
-        .eq('agency_id', selectedAgency)
-        .order('name');
-      return data || [];
-    },
-    enabled: !!selectedAgency,
-  });
+  const { data: rawClients } = useAgencyClients(selectedAgency || null);
 
   const clients = assignedClientIds
     ? (rawClients || []).filter(c => assignedClientIds.includes(c.id))

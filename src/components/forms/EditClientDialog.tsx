@@ -49,6 +49,7 @@ import { addMonths, format, startOfMonth } from "date-fns";
 import { he } from "date-fns/locale";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
+import { useAgencies } from "@/hooks/useEntityLists";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
   contact_name: z.string().optional(),
@@ -205,17 +206,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     return contacts;
   }, [client.email, client.contact_name, client.name, clientContacts]);
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: agencies } = useAgencies();
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners", tenantId],

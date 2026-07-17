@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { useTeamRoles } from "@/hooks/useTeamRoles";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencies } from "@/hooks/useEntityLists";
 
 interface EditCampaignerDialogProps {
   campaigner: {
@@ -77,17 +78,7 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: agencies } = useAgencies();
 
   const updateMutation = useMutation({
     mutationFn: async (data: typeof formData) => {

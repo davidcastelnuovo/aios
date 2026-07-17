@@ -69,6 +69,7 @@ import { he } from "date-fns/locale";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
+import { useCampaigners, useSalesPeople } from "@/hooks/useEntityLists";
 
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
@@ -176,18 +177,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
   const { userId } = useCurrentUser();
   const { t } = useTerminology();
 
-  const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("campaigners")
-        .select("*")
-        .eq("active", true)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: campaigners } = useCampaigners({ activeOnly: true });
 
   const { crossTenantAgencyIds, tenantId: ctTenantId } = useCrossTenantAgencyIds();
 
@@ -208,18 +198,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
   });
 
-  const { data: salesPeople } = useQuery({
-    queryKey: ["sales-people"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales_people")
-        .select("*")
-        .eq("active", true)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: salesPeople } = useSalesPeople({ activeOnly: true });
 
   const { data: taskUpdates, refetch: refetchUpdates } = useQuery({
     queryKey: ["task-updates", task.id],

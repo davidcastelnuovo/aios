@@ -25,6 +25,12 @@ export type MenuModule = {
   label: string;
   route: string;
   icon: LucideIcon;
+  /**
+   * Permission id (snake_case) required to see this module.
+   * Only set when it differs from the default rule key.replace(/-/g, "_").
+   * Resolved via permissionForMenuKey().
+   */
+  permission?: string;
 };
 
 export type MenuSection = {
@@ -49,7 +55,7 @@ export const MENU_TABS: MenuTab[] = [
         label: "לקוחות",
         items: [
           { key: "clients", label: "לקוחות", route: "/clients", icon: Users },
-          { key: "dmm-dashboard", label: "דשבורד CRM סוכנות", route: "/dmm-dashboard", icon: LayoutDashboard },
+          { key: "dmm-dashboard", label: "דשבורד CRM סוכנות", route: "/dmm-dashboard", icon: LayoutDashboard, permission: "crm_dashboard" },
           
           { key: "tasks", label: "משימות", route: "/tasks", icon: CheckSquare },
           { key: "time-tracking", label: "מעקב זמני עבודה", route: "/time-tracking", icon: Clock },
@@ -105,7 +111,7 @@ export const MENU_TABS: MenuTab[] = [
       {
         label: "מחלקת שיווק",
         items: [
-          { key: "marketing", label: "מחלקת שיווק", route: "/marketing", icon: Share2 },
+          { key: "marketing", label: "מחלקת שיווק", route: "/marketing", icon: Share2, permission: "social_media" },
           { key: "campaign-alerts", label: "התראות קמפיינים", route: "/campaign-alerts", icon: AlertTriangle },
           { key: "recordings", label: "הקלטות", route: "/recordings", icon: Cpu },
         ],
@@ -159,7 +165,7 @@ export const MENU_TABS: MenuTab[] = [
         items: [
           { key: "automations", label: "אוטומציות", route: "/automations", icon: Zap },
           { key: "agents", label: "סוכני AI", route: "/agents", icon: Bot },
-          { key: "visual-workspace", label: "Visual Workspace", route: "/visual-workspace", icon: Sparkles },
+          { key: "visual-workspace", label: "Visual Workspace", route: "/visual-workspace", icon: Sparkles, permission: "agents" },
         ],
       },
       {
@@ -221,6 +227,48 @@ export const ORPHAN_MODULES: MenuModule[] = [
   { key: "landing-page-submissions", label: "פניות מדפי נחיתה", route: "/landing-page-submissions", icon: FileText },
   { key: "finance", label: "כספים", route: "/finance", icon: DollarSign },
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Permission resolution
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Explicit permission overrides for menu keys that are NOT part of the static
+ * catalog above (e.g. keys that only exist as tenant `menu_items` rows or
+ * legacy deep-link keys), or whose permission differs from the default rule.
+ * Keys present in MENU_TABS/SUB_MODULES/etc. should carry their override on
+ * the module's `permission` field instead.
+ */
+const PERMISSION_KEY_OVERRIDES: Record<string, string> = {
+  skins: "agents",
+  "carmen-access": "agents",
+};
+
+/** Lazily-built lookup of explicit `permission` values across all module catalogs. */
+let explicitPermissionByKey: Map<string, string> | null = null;
+
+function buildExplicitPermissionMap(): Map<string, string> {
+  const map = new Map<string, string>(Object.entries(PERMISSION_KEY_OVERRIDES));
+  const collect = (modules: MenuModule[]) => {
+    for (const m of modules) {
+      if (m.permission) map.set(m.key, m.permission);
+    }
+  };
+  for (const tab of MENU_TABS) for (const section of tab.sections) collect(section.items);
+  collect(SUB_MODULES);
+  collect(INTEGRATION_SETTINGS);
+  collect(ORPHAN_MODULES);
+  return map;
+}
+
+/**
+ * Resolve the permission id for a menu key.
+ * Explicit `permission` value (or override) if set, else key.replace(/-/g, "_").
+ */
+export function permissionForMenuKey(key: string): string {
+  if (!explicitPermissionByKey) explicitPermissionByKey = buildExplicitPermissionMap();
+  return explicitPermissionByKey.get(key) ?? key.replace(/-/g, "_");
+}
 
 export type SectionKey = `${MenuTabId}:${string}`;
 

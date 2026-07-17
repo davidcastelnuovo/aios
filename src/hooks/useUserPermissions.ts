@@ -6,65 +6,11 @@ import { useUserRole } from "./useUserRole";
 /**
  * ModulePermission
  * ─────────────────────────────────────────────────────────────────────────────
- * כל הרשאה חייבת להיות מוגדרת כאן וגם ב-PERMISSION_CATEGORIES שב-modules.ts.
- * כשמוסיפים מודול עתידי – יש להוסיף את ה-ID כאן.
+ * ה-catalog נגזר ממבנה התפריט (menuStructure.ts → modules.ts), לכן הטיפוס הוא
+ * string — אין צורך לתחזק כאן union ידני כשמוסיפים מודול.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-export type ModulePermission =
-  // ── ניהול שוטף ────────────────────────────────────────────────────────
-  | "dashboard"
-  | "crm_dashboard"
-  | "clients"
-  | "client_onboarding"
-  | "tasks"
-  | "time_tracking"
-  | "recordings"
-  // ── תקשורת ────────────────────────────────────────────────────────────
-  | "chat"
-  | "team_chat"
-  | "gmail"
-  | "signatures"
-  // ── מכירות ────────────────────────────────────────────────────────────
-  | "sales_dashboard"
-  | "leads"
-  | "sales_people"
-  | "campaigners"
-  | "products"
-  // ── שיווק ואנליטיקס ───────────────────────────────────────────────────
-  | "social_media"
-  | "broadcast"
-  | "reports"
-  | "dynamic_tables"
-  | "site_analytics"
-  | "rank_tracking"
-  | "ai_detection"
-  // ── ניהול ארגון ───────────────────────────────────────────────────────
-  | "agencies"
-  | "suppliers"
-  | "tenants"
-  | "users"
-  // ── אוטומציה ו-AI ─────────────────────────────────────────────────────
-  | "automations"
-  | "agents"
-  // ── אינטגרציות ────────────────────────────────────────────────────────
-  | "integrations"
-  | "lead_integrations"
-  | "chat_integrations"
-  | "manychat_settings"
-  | "green_api_settings"
-  | "manus_wa_settings"
-  | "accounting_integrations"
-  // ── הגדרות מערכת ──────────────────────────────────────────────────────
-  | "branding"
-  | "menu_management"
-  | "fields_management"
-  | "ai_support"
-  // ── הרשאות מיוחדות ────────────────────────────────────────────────────
-  | "finance"
-  | "finance_view"
-  // ── Backward-compat (לא מוצגים בדיאלוג, נשמרים לתאימות) ──────────────
-  | "accounting"   // alias ל-accounting_integrations
-  | "settings";    // גישה כללית להגדרות
+export type ModulePermission = string;
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();

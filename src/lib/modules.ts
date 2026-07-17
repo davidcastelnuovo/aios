@@ -3,19 +3,23 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * מקור האמת היחיד לכל המודולים / הרשאות במערכת.
  *
- * כדי להוסיף מודול עתידי:
- *  1. הוסף ערך ל-ModulePermission (useUserPermissions.ts)
- *  2. הוסף ModuleConfig לקטגוריה המתאימה כאן
- *  3. הוסף את ה-key ל-modulePermissions ב-AppSidebar.tsx
- *  4. הוסף Route ב-App.tsx עם requiredPermission
+ * ה-catalog נגזר אוטומטית ממבנה התפריט (menuStructure.ts):
+ *   tab   → PermissionCategory
+ *   module → ModuleConfig (id = permissionForMenuKey(key))
  *
- * הדיאלוג EditUserPermissionsDialog קורא PERMISSION_CATEGORIES ומרנדר
- * אוטומטית כל מודול שמוסיפים – אין צורך לעדכן את הדיאלוג עצמו.
+ * כדי להוסיף מודול עתידי:
+ *  1. הוסף אותו ל-MENU_TABS ב-menuStructure.ts (עם `permission` רק אם ה-id
+ *     שונה מברירת המחדל key.replace(/-/g, "_"))
+ *  2. הוסף Route ב-App.tsx עם requiredPermission
+ * זהו — הסרגל, דיאלוג ההרשאות וה-catalog מתעדכנים אוטומטית.
+ * הרשאות ללא מודול בתפריט מוגדרות ב-EXTRA_PERMISSIONS למטה.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+import { MENU_TABS, ORPHAN_MODULES, permissionForMenuKey } from "./menuStructure";
+
 export interface ModuleConfig {
-  /** מזהה ייחודי – חייב להתאים ל-ModulePermission ב-useUserPermissions.ts */
+  /** מזהה ייחודי – permission id (snake_case) */
   id: string;
   /** תווית לתצוגה בעברית */
   label: string;
@@ -37,331 +41,149 @@ export interface PermissionCategory {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// קטגוריות ומודולים
+// תיאורים (משמרים את הטקסטים מה-catalog הידני הקודם)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const PERMISSION_CATEGORIES: PermissionCategory[] = [
-  // ── ניהול שוטף ──────────────────────────────────────────────────────────
-  {
-    id: "daily",
-    label: "ניהול שוטף",
-    description: "מודולים לעבודה יומיומית עם לקוחות ומשימות",
-    modules: [
-      {
-        id: "dashboard",
-        label: "דשבורד",
-        description: "צפייה בדשבורד הראשי",
-        category: "daily",
-      },
-      {
-        id: "crm_dashboard",
-        label: "דשבורד CRM סוכנות",
-        description: "דשבורד ניהול לקוחות עם Health Score ודגלים",
-        category: "daily",
-      },
-      {
-        id: "clients",
-        label: "ניהול לקוחות",
-        description: "צפייה ועריכת לקוחות",
-        category: "daily",
-      },
-      {
-        id: "client_onboarding",
-        label: "קליטת לקוחות",
-        description: "ניהול תהליך קליטת לקוחות חדשים",
-        category: "daily",
-      },
-      {
-        id: "tasks",
-        label: "משימות",
-        description: "ניהול משימות",
-        category: "daily",
-      },
-      {
-        id: "time_tracking",
-        label: "מעקב זמן",
-        description: "שעון נוכחות ומעקב שעות",
-        category: "daily",
-      },
-      {
-        id: "recordings",
-        label: "הקלטות",
-        description: "ניהול הקלטות מכל המקורות",
-        category: "daily",
-      },
-    ],
-  },
+const DESCRIPTIONS: Record<string, string> = {
+  dashboard: "צפייה בדשבורד הראשי",
+  crm_dashboard: "דשבורד ניהול לקוחות עם Health Score ודגלים",
+  clients: "צפייה ועריכת לקוחות",
+  client_onboarding: "ניהול תהליך קליטת לקוחות חדשים",
+  tasks: "ניהול משימות",
+  time_tracking: "שעון נוכחות ומעקב שעות",
+  recordings: "ניהול הקלטות מכל המקורות",
+  chat: "מודול צ'אט עם לקוחות ולידים",
+  team_chat: "תקשורת פנים-ארגונית בסגנון Slack",
+  gmail: "שליחת וקבלת מיילים דרך Gmail",
+  signatures: "ניהול מסמכים וחתימות דיגיטליות",
+  sales_dashboard: "דשבורד ייעודי למכירות",
+  leads: "צפייה ועריכת לידים",
+  sales_people: "צפייה ועריכת אנשי מכירות",
+  campaigners: "צפייה ועריכת קמפיינרים",
+  products: "ניהול מוצרים ושירותים",
+  social_media: "ניהול פוסטים ולוח שנה לרשתות חברתיות",
+  campaign_alerts: "התראות וניטור קמפיינים",
+  broadcast: "שליחת דיוור המוני ללקוחות, לידים וצוות בערוצי WhatsApp",
+  dynamic_tables: "יצירת דשבורדים וטבלאות מותאמות אישית",
+  site_analytics: "מעקב אנליטיקס ונתוני אתר",
+  rank_tracking: "מעקב דירוגי מילות מפתח בגוגל",
+  ai_detection: "מעקב אחר נראות המותג במנועי AI",
+  agencies: "צפייה ועריכת סוכנויות",
+  suppliers: "צפייה ועריכת ספקים",
+  tenants: "ניהול ארגונים ומנויים (מנהל בלבד)",
+  users: "הוספה ועריכת משתמשים",
+  automations: "הגדרת אוטומציות מבוססות טריגרים",
+  agents: "ניהול והפעלת סוכני AI",
+  integrations: "גישה למסך האינטגרציות המרכזי",
+  lead_integrations: "ניהול אינטגרציות לידים, פייסבוק, גוגל ועוד",
+  chat_integrations: "ניהול אינטגרציות צ'אט",
+  manychat_settings: "אינטגרציה עם ManyChat",
+  green_api_settings: "אינטגרציה עם Green API (WhatsApp)",
+  manus_wa_settings: "אינטגרציה עם Manus WA (WhatsApp)",
+  accounting_integrations: "חיבור למערכות הנהלת חשבונות",
+  branding: "התאמת לוגו, צבעים ומראה המערכת",
+  menu_management: "התאמת תפריט הניווט",
+  fields_management: "הוספת שדות מותאמים אישית",
+  ai_support: "גישה לצ'אטבוט AI לתמיכה טכנית",
+  finance: "גישה מלאה לניהול פיננסי",
+  finance_view: "הרשאת צפייה בנתונים פיננסיים בלבד (ללא עריכה)",
+  home: "עמוד הבית",
+  landing_page_submissions: "פניות מדפי נחיתה",
+};
 
-  // ── תקשורת ──────────────────────────────────────────────────────────────
-  {
-    id: "communication",
-    label: "תקשורת",
-    description: "כלי תקשורת עם לקוחות וצוות",
-    modules: [
-      {
-        id: "chat",
-        label: "צ'אט",
-        description: "מודול צ'אט עם לקוחות ולידים",
-        category: "communication",
-      },
-      {
-        id: "team_chat",
-        label: "צ'אט צוות",
-        description: "תקשורת פנים-ארגונית בסגנון Slack",
-        category: "communication",
-      },
-      {
-        id: "gmail",
-        label: "Gmail",
-        description: "שליחת וקבלת מיילים דרך Gmail",
-        category: "communication",
-      },
-      {
-        id: "signatures",
-        label: "חתימות דיגיטליות",
-        description: "ניהול מסמכים וחתימות דיגיטליות",
-        category: "communication",
-      },
-    ],
-  },
+/** תוויות עדיפות ל-catalog (כשהתווית בתפריט קצרה/שונה מהתווית בדיאלוג ההרשאות) */
+const LABEL_OVERRIDES: Record<string, string> = {
+  clients: "ניהול לקוחות",
+  time_tracking: "מעקב זמן",
+  signatures: "חתימות דיגיטליות",
+  leads: "ניהול לידים",
+  sales_people: "ניהול אנשי מכירות",
+  campaigners: "ניהול קמפיינרים",
+  social_media: "ניהול סושיאל",
+  agencies: "ניהול סוכנויות",
+  suppliers: "ניהול ספקים",
+  users: "ניהול משתמשים",
+  branding: "ברנדינג והתאמת מערכת",
+  finance: "ניהול כספים",
+};
 
-  // ── מכירות ──────────────────────────────────────────────────────────────
-  {
-    id: "sales",
-    label: "מכירות",
-    description: "מודולי מכירות ולידים",
-    modules: [
-      {
-        id: "sales_dashboard",
-        label: "דשבורד מכירות",
-        description: "דשבורד ייעודי למכירות",
-        category: "sales",
-      },
-      {
-        id: "leads",
-        label: "ניהול לידים",
-        description: "צפייה ועריכת לידים",
-        category: "sales",
-      },
-      {
-        id: "sales_people",
-        label: "ניהול אנשי מכירות",
-        description: "צפייה ועריכת אנשי מכירות",
-        category: "sales",
-      },
-      {
-        id: "campaigners",
-        label: "ניהול קמפיינרים",
-        description: "צפייה ועריכת קמפיינרים",
-        category: "sales",
-      },
-      {
-        id: "products",
-        label: "מוצרים ושירותים",
-        description: "ניהול מוצרים ושירותים",
-        category: "sales",
-      },
-    ],
-  },
+/** מפתחות תפריט שאינם הרשאה (נגישים תמיד) — לא נכללים ב-catalog */
+const NON_PERMISSION_MENU_KEYS = new Set(["my-profile"]);
 
-  // ── שיווק ────────────────────────────────────────────────────────────────
-  {
-    id: "marketing",
-    label: "שיווק ואנליטיקס",
-    description: "כלי שיווק, ניטור ואנליטיקס",
-    modules: [
-      {
-        id: "social_media",
-        label: "ניהול סושיאל",
-        description: "ניהול פוסטים ולוח שנה לרשתות חברתיות",
-        category: "marketing",
-      },
-      {
-        id: "broadcast",
-        label: "דיוור",
-        description: "שליחת דיוור המוני ללקוחות, לידים וצוות בערוצי WhatsApp",
-        category: "marketing",
-      },
-      {
-        id: "dynamic_tables",
-        label: "דשבורדים ודוחות",
-        description: "יצירת דשבורדים וטבלאות מותאמות אישית",
-        category: "marketing",
-      },
-      {
-        id: "site_analytics",
-        label: "אנליטיקס אתרים",
-        description: "מעקב אנליטיקס ונתוני אתר",
-        category: "marketing",
-      },
-      {
-        id: "rank_tracking",
-        label: "מעקב דירוגים",
-        description: "מעקב דירוגי מילות מפתח בגוגל",
-        category: "marketing",
-      },
-      {
-        id: "ai_detection",
-        label: "ניטור נראות AI",
-        description: "מעקב אחר נראות המותג במנועי AI",
-        category: "marketing",
-      },
-    ],
-  },
+// ─────────────────────────────────────────────────────────────────────────────
+// הרשאות ללא מודול בתפריט (catalog-only)
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // ── ניהול ארגון ──────────────────────────────────────────────────────────
-  {
-    id: "organization",
-    label: "ניהול ארגון",
-    description: "ניהול ישויות ארגוניות",
-    modules: [
-      {
-        id: "agencies",
-        label: "ניהול סוכנויות",
-        description: "צפייה ועריכת סוכנויות",
-        category: "organization",
-      },
-      {
-        id: "suppliers",
-        label: "ניהול ספקים",
-        description: "צפייה ועריכת ספקים",
-        category: "organization",
-      },
-      {
-        id: "tenants",
-        label: "ניהול ארגונים",
-        description: "ניהול ארגונים ומנויים (מנהל בלבד)",
-        category: "organization",
-      },
-      {
-        id: "users",
-        label: "ניהול משתמשים",
-        description: "הוספה ועריכת משתמשים",
-        category: "organization",
-      },
-    ],
-  },
-
-  // ── אוטומציה ו-AI ────────────────────────────────────────────────────────
-  {
-    id: "automation",
-    label: "אוטומציה ו-AI",
-    description: "כלי אוטומציה וסוכני AI",
-    modules: [
-      {
-        id: "automations",
-        label: "אוטומציות",
-        description: "הגדרת אוטומציות מבוססות טריגרים",
-        category: "automation",
-      },
-      {
-        id: "agents",
-        label: "סוכני AI",
-        description: "ניהול והפעלת סוכני AI",
-        category: "automation",
-      },
-    ],
-  },
-
-  // ── אינטגרציות ──────────────────────────────────────────────────────────
-  {
-    id: "integrations",
-    label: "אינטגרציות",
-    description: "חיבורים לכלים ושירותים חיצוניים",
-    modules: [
-      {
-        id: "integrations",
-        label: "אינטגרציות (כללי)",
-        description: "גישה למסך האינטגרציות המרכזי",
-        category: "integrations",
-      },
-      {
-        id: "lead_integrations",
-        label: "אינטגרציות לידים",
-        description: "ניהול אינטגרציות לידים, פייסבוק, גוגל ועוד",
-        category: "integrations",
-      },
-      {
-        id: "chat_integrations",
-        label: "אינטגרציות צ'אט",
-        description: "ניהול אינטגרציות צ'אט",
-        category: "integrations",
-      },
-      {
-        id: "manychat_settings",
-        label: "הגדרות ManyChat",
-        description: "אינטגרציה עם ManyChat",
-        category: "integrations",
-      },
-      {
-        id: "green_api_settings",
-        label: "הגדרות Green API",
-        description: "אינטגרציה עם Green API (WhatsApp)",
-        category: "integrations",
-      },
-      {
-        id: "accounting_integrations",
-        label: "אינטגרציות הנה\"ח",
-        description: "חיבור למערכות הנהלת חשבונות",
-        category: "integrations",
-      },
-    ],
-  },
-
-  // ── הגדרות מערכת ────────────────────────────────────────────────────────
-  {
-    id: "settings",
-    label: "הגדרות מערכת",
-    description: "הגדרות והתאמות מערכת (בעלים בלבד)",
-    modules: [
-      {
-        id: "branding",
-        label: "ברנדינג והתאמת מערכת",
-        description: "התאמת לוגו, צבעים ומראה המערכת",
-        category: "settings",
-      },
-      {
-        id: "menu_management",
-        label: "ניהול תפריטים",
-        description: "התאמת תפריט הניווט",
-        category: "settings",
-      },
-      {
-        id: "fields_management",
-        label: "ניהול שדות",
-        description: "הוספת שדות מותאמים אישית",
-        category: "settings",
-      },
-      {
-        id: "ai_support",
-        label: "תמיכה טכנית AI",
-        description: "גישה לצ'אטבוט AI לתמיכה טכנית",
-        category: "settings",
-      },
-    ],
-  },
-
-  // ── הרשאות מיוחדות ──────────────────────────────────────────────────────
-  {
-    id: "special",
-    label: "הרשאות מיוחדות",
-    description: "גישה למידע רגיש",
-    modules: [
-      {
-        id: "finance",
-        label: "ניהול כספים",
-        description: "גישה מלאה לניהול פיננסי",
-        category: "special",
-      },
-      {
-        id: "finance_view",
-        label: "צפייה בנתונים פיננסיים",
-        description: "הרשאת צפייה בנתונים פיננסיים בלבד (ללא עריכה)",
-        category: "special",
-      },
-    ],
-  },
+export const EXTRA_PERMISSIONS: ModuleConfig[] = [
+  { id: "client_onboarding", label: "קליטת לקוחות", description: DESCRIPTIONS.client_onboarding, category: "daily" },
+  { id: "site_analytics", label: "אנליטיקס אתרים", description: DESCRIPTIONS.site_analytics, category: "marketing" },
+  { id: "rank_tracking", label: "מעקב דירוגים", description: DESCRIPTIONS.rank_tracking, category: "marketing" },
+  { id: "ai_detection", label: "ניטור נראות AI", description: DESCRIPTIONS.ai_detection, category: "marketing" },
+  { id: "manychat_settings", label: "הגדרות ManyChat", description: DESCRIPTIONS.manychat_settings, category: "marketing" },
+  { id: "green_api_settings", label: "הגדרות Green API", description: DESCRIPTIONS.green_api_settings, category: "marketing" },
+  { id: "manus_wa_settings", label: "הגדרות Manus WA", description: DESCRIPTIONS.manus_wa_settings, category: "marketing" },
+  { id: "finance_view", label: "צפייה בנתונים פיננסיים", description: DESCRIPTIONS.finance_view, category: "special" },
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// יצירת ה-catalog מהתפריט
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildPermissionCategories(): PermissionCategory[] {
+  const seen = new Set<string>();
+  const categories: PermissionCategory[] = [];
+  const categoryById = new Map<string, PermissionCategory>();
+
+  const ensureCategory = (id: string, label: string, description?: string): PermissionCategory => {
+    let cat = categoryById.get(id);
+    if (!cat) {
+      cat = { id, label, description, modules: [] };
+      categoryById.set(id, cat);
+      categories.push(cat);
+    }
+    return cat;
+  };
+
+  const addModule = (cat: PermissionCategory, id: string, menuLabel: string) => {
+    if (seen.has(id)) return; // dedupe by permission id — first label wins
+    seen.add(id);
+    cat.modules.push({
+      id,
+      label: LABEL_OVERRIDES[id] ?? menuLabel,
+      description: DESCRIPTIONS[id] ?? menuLabel,
+      category: cat.id,
+    });
+  };
+
+  // Tabs → categories, menu modules → permissions
+  for (const tab of MENU_TABS) {
+    const cat = ensureCategory(tab.id, tab.label);
+    for (const section of tab.sections) {
+      for (const item of section.items) {
+        if (NON_PERMISSION_MENU_KEYS.has(item.key)) continue;
+        addModule(cat, permissionForMenuKey(item.key), item.label);
+      }
+    }
+  }
+
+  // Orphan modules (routes with no sidebar entry)
+  const special = ensureCategory("special", "הרשאות מיוחדות", "גישה למידע רגיש ומודולים ללא תפריט");
+  for (const orphan of ORPHAN_MODULES) {
+    addModule(special, permissionForMenuKey(orphan.key), orphan.label);
+  }
+
+  // Catalog-only permissions with no menu entry
+  for (const extra of EXTRA_PERMISSIONS) {
+    const cat = categoryById.get(extra.category) ?? special;
+    if (seen.has(extra.id)) continue;
+    seen.add(extra.id);
+    cat.modules.push({ ...extra, category: cat.id });
+  }
+
+  return categories;
+}
+
+export const PERMISSION_CATEGORIES: PermissionCategory[] = buildPermissionCategories();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Backward-compatible exports (שומרים על תאימות לקוד קיים)
@@ -369,21 +191,22 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
 
 /** @deprecated השתמש ב-PERMISSION_CATEGORIES במקום */
 export const MAIN_MODULES: ModuleConfig[] =
-  PERMISSION_CATEGORIES.find(c => c.id === "daily")!.modules;
+  PERMISSION_CATEGORIES.find(c => c.id === "daily")?.modules ?? [];
 
 /** @deprecated השתמש ב-PERMISSION_CATEGORIES במקום */
 export const SALES_MODULES: ModuleConfig[] =
-  PERMISSION_CATEGORIES.find(c => c.id === "sales")!.modules;
+  PERMISSION_CATEGORIES.find(c => c.id === "sales")?.modules ?? [];
 
 /** @deprecated השתמש ב-PERMISSION_CATEGORIES במקום */
 export const SETTINGS_MODULES: ModuleConfig[] = [
-  ...PERMISSION_CATEGORIES.find(c => c.id === "settings")!.modules,
-  ...PERMISSION_CATEGORIES.find(c => c.id === "integrations")!.modules,
+  ...(PERMISSION_CATEGORIES.find(c => c.id === "settings")?.modules ?? []),
+  ...(PERMISSION_CATEGORIES.find(c => c.id === "admin")?.modules ?? []),
+  ...(PERMISSION_CATEGORIES.find(c => c.id === "integrations")?.modules ?? []),
 ];
 
 /** @deprecated השתמש ב-PERMISSION_CATEGORIES במקום */
 export const SPECIAL_PERMISSIONS: ModuleConfig[] =
-  PERMISSION_CATEGORIES.find(c => c.id === "special")!.modules;
+  PERMISSION_CATEGORIES.find(c => c.id === "special")?.modules ?? [];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility functions

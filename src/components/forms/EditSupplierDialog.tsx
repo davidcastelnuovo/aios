@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencies, useCampaigners } from "@/hooks/useEntityLists";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -58,31 +59,9 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .eq("status", "active")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: agencies } = useAgencies({ activeOnly: true });
 
-  const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("active", true)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { data: campaigners } = useCampaigners({ activeOnly: true });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
