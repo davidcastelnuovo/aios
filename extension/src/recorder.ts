@@ -1,4 +1,5 @@
-import { APP_ORIGIN } from "./config";
+import * as tus from "tus-js-client";
+import { APP_ORIGIN, SUPABASE_URL } from "./config";
 import { supabase } from "./supabase";
 
 const params = new URLSearchParams(location.search);
@@ -259,6 +260,68 @@ async function uploadWithRetry(path: string, blob: Blob, contentType: string, at
     await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
   }
   throw lastError instanceof Error ? lastError : new Error(String((lastError as { message?: string })?.message ?? lastError));
+}
+
+// Large files (a 2h meeting video can exceed 1GB) go through TUS resumable
+// upload: 6MB chunks, automatic retries with resume-from-offset, and REAL
+// progress reporting. Small files keep the simple single-request path.
+const TUS_THRESHOLD = 20 * 1024 * 1024;
+
+function uploadLargeWithProgress(
+  path: string,
+  blob: Blob,
+  contentType: string,
+  onProgress: (sentBytes: number, totalBytes: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        reject(new Error("פג תוקף ההתחברות — נא להתחבר מחדש בחלונית התוסף"));
+        return;
+      }
+      const upload = new tus.Upload(blob, {
+        endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
+        retryDelays: [0, 3000, 6000, 12000, 24000],
+        headers: {
+          authorization: `Bearer ${session.access_token}`,
+          "x-upsert": "true",
+        },
+        uploadDataDuringCreation: true,
+        removeFingerprintOnSuccess: true,
+        metadata: {
+          bucketName: "recordings",
+          objectName: path,
+          contentType,
+          cacheControl: "3600",
+        },
+        chunkSize: 6 * 1024 * 1024, // Supabase's resumable endpoint requires exactly 6MB
+        onProgress,
+        onError: (err) => reject(err),
+        onSuccess: () => resolve(),
+      });
+      const previous = await upload.findPreviousUploads();
+      if (previous.length > 0) upload.resumeFromPreviousUpload(previous[0]);
+      upload.start();
+    })().catch(reject);
+  });
+}
+
+async function uploadSmart(
+  path: string,
+  blob: Blob,
+  contentType: string,
+  label: string,
+): Promise<void> {
+  if (blob.size <= TUS_THRESHOLD) {
+    return uploadWithRetry(path, blob, contentType);
+  }
+  const totalMB = (blob.size / 1024 / 1024).toFixed(0);
+  await uploadLargeWithProgress(path, blob, contentType, (sent, total) => {
+    const pct = Math.round((sent / total) * 100);
+    progressBar.style.width = `${Math.max(5, Math.round(pct * 0.9))}%`;
+    setWorking(`מעלה ${label} — ${(sent / 1024 / 1024).toFixed(0)}MB מתוך ${totalMB}MB (${pct}%)`);
+  });
 }
 
 // Progressive save: called for every finished segment, during the meeting.
@@ -595,7 +658,7 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
     if (sysFullBlob) {
       const sysFullPath = `${tenantId}/${startedAt}_sys_full.webm`;
       setWorking(`מעלה ערוץ משתתפים לזיהוי דוברים (${(sysFullBlob.size / 1024 / 1024).toFixed(1)}MB) — אל תסגור את החלון`);
-      await uploadWithRetry(sysFullPath, sysFullBlob, "audio/webm");
+      await uploadSmart(sysFullPath, sysFullBlob, "audio/webm", "ערוץ משתתפים");
       if (!uploadedPartPaths.includes(sysFullPath)) uploadedPartPaths.push(sysFullPath);
     }
 
@@ -603,7 +666,7 @@ async function finalizeUpload(archiveBlob: Blob | null, sysFullBlob: Blob | null
     if (archiveBlob) {
       setWorking(`מעלה ${audioOnly ? "אודיו" : "וידאו"} (${(archiveBlob.size / 1024 / 1024).toFixed(1)}MB) — אל תסגור את החלון, זה יכול לקחת כמה דקות`);
       filePath = `${tenantId}/${startedAt}.webm`;
-      await uploadWithRetry(filePath, archiveBlob, archiveBlob.type);
+      await uploadSmart(filePath, archiveBlob, archiveBlob.type, audioOnly ? "אודיו" : "וידאו");
     } else if (uploadedPartPaths.length > 0) {
       filePath = [...uploadedPartPaths].sort()[0];
     }
