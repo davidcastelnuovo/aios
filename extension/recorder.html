@@ -22,9 +22,21 @@
 
       <div class="timer" id="timer">00:00</div>
 
+      <div id="camera-setup" class="state hidden">
+        <video id="cam-preview" autoplay muted playsinline
+          style="width:96px;height:96px;object-fit:cover;border-radius:50%;border:2px solid rgba(255,255,255,.9);align-self:center;background:#000;"></video>
+        <label>מיקום הבועה בהקלטה
+          <select id="corner-select">
+            <option value="bottom-right">פינה ימנית תחתונה</option>
+            <option value="bottom-left">פינה שמאלית תחתונה</option>
+            <option value="top-right">פינה ימנית עליונה</option>
+            <option value="top-left">פינה שמאלית עליונה</option>
+          </select>
+        </label>
+      </div>
       <button class="btn primary hidden" id="camera-btn">📷 הפעל מצלמה (בועה צפה)</button>
       <button class="btn primary" id="start-btn">🖥️ בחר מסך והתחל הקלטה</button>
-      <div class="status hidden" id="screen-hint">💡 כדי שהמצלמה תיכלל בהקלטה — בחר "המסך כולו" (Entire Screen)</div>
+      <div class="status hidden" id="screen-hint"></div>
       <button class="btn danger hidden" id="stop-btn">⏹️ עצור הקלטה והעלה</button>
 
       <div class="progress hidden" id="progress"><div id="progress-bar"></div></div>

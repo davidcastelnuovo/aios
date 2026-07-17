@@ -28,3 +28,7 @@ dist-ssr
 
 # Claude Code worktrees (temporary, session-scoped)
 .claude/worktrees/
+
+# Graphify output is generated locally and may contain reports or work-memory.
+# Keep it out of source control; only the portable integration is versioned.
+graphify-out/
