@@ -82,12 +82,14 @@ Deno.serve(async (req) => {
         continue
       }
 
-      // Fire-and-forget run-agent-task
+      // Fire-and-forget run-agent-task. Must authenticate with the service-role
+      // key — run-agent-task rejects the anon key with 401, which left claimed
+      // tasks stuck in status='running' forever.
       fetch(`${SUPABASE_URL}/functions/v1/run-agent-task`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         },
         body: JSON.stringify({ task_id: task.id }),
       }).catch((e) => console.error(`[dispatch-agent-tasks] invoke failed for ${task.id}:`, e?.message))

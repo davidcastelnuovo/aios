@@ -1350,7 +1350,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .from('clients')
         .select('id, name, agency_id, is_ecommerce, agencies(name)')
         .in('tenant_id', accessibleTenantIds)
-        .in('status', ['active', 'onboarding'])
+        .in('status', ['active'])  // pulse/health reports must exclude paused/ended/onboarding clients
         .order('name')
       if (args.client_id) clientsQuery = clientsQuery.eq('id', args.client_id)
       if (agencyIdsFilter) clientsQuery = clientsQuery.in('agency_id', agencyIdsFilter)
@@ -2302,7 +2302,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .from('clients')
         .select('id, name, agency_id, meta_ads_account_id, agencies(name)')
         .in('tenant_id', accessibleTenantIds)
-        .in('status', ['active', 'onboarding'])
+        .in('status', ['active'])  // pulse/health reports must exclude paused/ended/onboarding clients
         .order('name')
       if (args.client_id) clientsQuery = clientsQuery.eq('id', args.client_id)
       if (args.agency_id) clientsQuery = clientsQuery.eq('agency_id', args.agency_id)
