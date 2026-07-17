@@ -36,6 +36,7 @@ import { AttachmentsField } from "./AttachmentsField";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
+import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
 
 const formSchema = z.object({
   // NOTE: company_name can be hidden by tenant field visibility settings.

@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { Loader2, Facebook, AlertCircle, Lock, Globe, Users } from "lucide-react";

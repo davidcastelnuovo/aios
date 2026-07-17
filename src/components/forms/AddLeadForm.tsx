@@ -29,6 +29,7 @@ import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
 import { ManagePipelineStagesDialog } from "./ManagePipelineStagesDialog";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
 
 const formSchema = z.object({
   company_name: z.string().optional().default(""),

@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { Loader2, AlertCircle, Music2 } from "lucide-react";
 
 interface Props {

@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { Loader2, Facebook, AlertCircle, ShoppingCart } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 

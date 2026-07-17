@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgencies } from "@/hooks/useEntityLists";
 
 interface EditManagedAgenciesDialogProps {
   open: boolean;
