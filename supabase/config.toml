@@ -13,6 +13,10 @@ verify_jwt = false
 [functions.claude-mcp]
 verify_jwt = false
 
+# Shared read-only architecture graph MCP. It validates its own bearer token.
+[functions.system-graph-mcp]
+verify_jwt = false
+
 # Manus MCP server — called by mcp-connect with a custom bearer token,
 # not a Supabase JWT. Must stay false.
 [functions.manus-mcp]
