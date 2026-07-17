@@ -3282,8 +3282,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: new Date(Date.now() + rd.expires_in * 1000).toISOString() }).eq('user_id', calTokenUserId)
       }
 
-      const start = new Date(`${date}T${time}:00`)
-      const end = new Date(start.getTime() + (duration_minutes || 60) * 60_000)
+      // Send naive wall-clock times with an explicit timeZone — Google interprets
+      // them in Asia/Jerusalem. toISOString() ('Z') marked Israel wall times as
+      // UTC, landing every event 3 hours late (08:00 request → 11:00 invite).
+      const startNaive = `${date}T${time}:00`
+      const endNaive = new Date(Date.parse(`${startNaive}Z`) + (duration_minutes || 60) * 60_000).toISOString().slice(0, 19)
       const attendees = [{ email: attendee_email, ...(attendee_name ? { displayName: attendee_name } : {}) }]
 
       const calResp = await fetch(
@@ -3294,8 +3297,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           body: JSON.stringify({
             summary: title,
             description: notes || '',
-            start: { dateTime: start.toISOString(), timeZone: 'Asia/Jerusalem' },
-            end: { dateTime: end.toISOString(), timeZone: 'Asia/Jerusalem' },
+            start: { dateTime: startNaive, timeZone: 'Asia/Jerusalem' },
+            end: { dateTime: endNaive, timeZone: 'Asia/Jerusalem' },
             attendees,
             guestsCanModify: false,
           }),
