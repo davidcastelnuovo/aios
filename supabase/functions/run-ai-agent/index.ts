@@ -73,6 +73,56 @@ async function resolveLLMTarget(
   return { url: 'https://api.openai.com/v1/chat/completions', key, model: m.replace(/^openai\//, '') }
 }
 
+// Resolve a usable Google Calendar access token for the tenant: caller's user →
+// explicit user → any campaigner with tokens → tenant owner/admin. Refreshes if
+// expired. Returns { accessToken } or { error } (Hebrew, user-facing).
+async function resolveCalendarAccessToken(supabase: any, tenantId: string, callerCampaignerId: string | null, userId: string | null): Promise<{ accessToken?: string; error?: string }> {
+  let calTokenUserId: string | null = null
+  if (callerCampaignerId) {
+    const { data: prof } = await supabase.from('profiles').select('id').eq('campaigner_id', callerCampaignerId).maybeSingle()
+    if (prof?.id) calTokenUserId = prof.id
+  }
+  if (!calTokenUserId && userId && userId !== 'system') calTokenUserId = userId
+  if (!calTokenUserId) {
+    const { data: tenantCampaigners } = await supabase.from('campaigners').select('id').eq('tenant_id', tenantId).limit(20)
+    for (const c of (tenantCampaigners || [])) {
+      const { data: prof } = await supabase.from('profiles').select('id').eq('campaigner_id', c.id).maybeSingle()
+      if (!prof?.id) continue
+      const { data: tok } = await supabase.from('calendar_tokens').select('user_id').eq('user_id', prof.id).maybeSingle()
+      if (tok?.user_id) { calTokenUserId = tok.user_id; break }
+    }
+  }
+  if (!calTokenUserId) {
+    // Owners (e.g. a second-tenant owner) are tenant_users without a campaigner row.
+    const { data: owners } = await supabase.from('tenant_users')
+      .select('user_id').eq('tenant_id', tenantId).in('role', ['owner', 'admin']).limit(10)
+    for (const o of (owners || [])) {
+      const { data: tok } = await supabase.from('calendar_tokens').select('user_id').eq('user_id', o.user_id).maybeSingle()
+      if (tok?.user_id) { calTokenUserId = o.user_id; break }
+    }
+  }
+  if (!calTokenUserId) return { error: 'לא נמצא חיבור Google Calendar פעיל בטננט. חבר יומן תחת הגדרות אינטגרציות.' }
+
+  const { data: tokenData } = await supabase.from('calendar_tokens').select('access_token, refresh_token, expires_at').eq('user_id', calTokenUserId).maybeSingle()
+  if (!tokenData) return { error: 'לא נמצא חיבור Google Calendar. חבר יומן תחת הגדרות אינטגרציות.' }
+  let accessToken: string = tokenData.access_token
+  if (new Date(tokenData.expires_at) <= new Date()) {
+    const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+    const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+    if (!clientId || !clientSecret) return { error: 'חסרות הגדרות GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET' }
+    const r = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: tokenData.refresh_token, grant_type: 'refresh_token' }),
+    })
+    const rd = await r.json()
+    if (!rd.access_token) return { error: `רענון טוקן נכשל: ${rd.error || 'unknown'}` }
+    accessToken = rd.access_token
+    await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: new Date(Date.now() + rd.expires_in * 1000).toISOString() }).eq('user_id', calTokenUserId)
+  }
+  return { accessToken }
+}
+
 // ===========================
 // ALL AVAILABLE TOOLS
 // ===========================
@@ -287,6 +337,9 @@ const ALL_TOOLS = [
   // CALENDAR INVITES
   // ===========================
   { name: 'send_calendar_invite', description: 'שליחת זימון Google Calendar (ICS) דרך מייל לנמען חיצוני — האירוע נוצר ביומן הארגון עם הנמען כמשתתף, וגוגל שולחת לו מייל אוטומטי עם כפתורי אישור/דחייה. השתמש כשהמשתמש רוצה לזמן פגישה עם אדם חיצוני.', parameters: { type: 'object', properties: { attendee_email: { type: 'string', description: 'כתובת המייל של המוזמן' }, attendee_name: { type: 'string', description: 'שם המוזמן (אופציונלי)' }, title: { type: 'string', description: 'שם הפגישה/האירוע' }, date: { type: 'string', description: 'תאריך בפורמט YYYY-MM-DD' }, time: { type: 'string', description: 'שעת התחלה בפורמט HH:MM' }, duration_minutes: { type: 'integer', description: 'משך בדקות (ברירת מחדל 60)' }, notes: { type: 'string', description: 'הערות / תיאור הפגישה (אופציונלי)' } }, required: ['attendee_email', 'title', 'date', 'time'] } },
+  { name: 'list_calendar_events', description: 'רשימת אירועים ביומן הארגון בטווח תאריכים (ברירת מחדל: 14 הימים הקרובים). השתמשי כדי למצוא event_id לפני עדכון/ביטול פגישה, או כשנשאלת "מה יש ביומן".', parameters: { type: 'object', properties: { date_from: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל היום)' }, date_to: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל +14 ימים)' }, search: { type: 'string', description: 'סינון טקסט חופשי (שם פגישה/משתתף)' } } } },
+  { name: 'update_calendar_invite', description: 'עדכון פגישה/זימון קיים ביומן — הזזת מועד, שינוי כותרת או הערות. כל המשתתפים מקבלים מייל עדכון אוטומטי. חובה event_id (מ-list_calendar_events). לעדכון מועד ספקי date+time (שעון ישראל).', parameters: { type: 'object', properties: { event_id: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'HH:MM שעון ישראל' }, duration_minutes: { type: 'integer' }, title: { type: 'string' }, notes: { type: 'string' } }, required: ['event_id'] } },
+  { name: 'cancel_calendar_invite', description: 'ביטול פגישה ביומן — המשתתפים מקבלים הודעת ביטול. חובה event_id (מ-list_calendar_events). בקשי אישור מהמשתמש לפני ביטול.', parameters: { type: 'object', properties: { event_id: { type: 'string' } }, required: ['event_id'] } },
   // ===========================
   // CAMPAIGNER MESSAGING
   // ===========================
@@ -3231,56 +3284,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { attendee_email, attendee_name, title, date, time, duration_minutes, notes } = args
       if (!attendee_email || !title || !date || !time) return { error: 'attendee_email, title, date, time נדרשים' }
 
-      // Resolve calendar tokens: prefer caller's user, fall back to tenant owner
-      let calTokenUserId: string | null = null
-      if (callerCampaignerId) {
-        const { data: prof } = await supabase.from('profiles').select('id').eq('campaigner_id', callerCampaignerId).maybeSingle()
-        if (prof?.id) calTokenUserId = prof.id
-      }
-      if (!calTokenUserId && userId && userId !== 'system') {
-        calTokenUserId = userId
-      }
-      if (!calTokenUserId) {
-        // fall back to any tenant campaigner that has calendar tokens
-        const { data: tenantCampaigners } = await supabase.from('campaigners').select('id').eq('tenant_id', tenantId).limit(20)
-        for (const c of (tenantCampaigners || [])) {
-          const { data: prof } = await supabase.from('profiles').select('id').eq('campaigner_id', c.id).maybeSingle()
-          if (!prof?.id) continue
-          const { data: tok } = await supabase.from('calendar_tokens').select('user_id').eq('user_id', prof.id).maybeSingle()
-          if (tok?.user_id) { calTokenUserId = tok.user_id; break }
-        }
-      }
-      if (!calTokenUserId) {
-        // Last resort: a tenant owner/admin with connected calendar tokens. Owners
-        // (e.g. David in a second tenant) are tenant_users but often have no
-        // campaigner row, so the loop above never finds their token.
-        const { data: owners } = await supabase.from('tenant_users')
-          .select('user_id').eq('tenant_id', tenantId).in('role', ['owner', 'admin']).limit(10)
-        for (const o of (owners || [])) {
-          const { data: tok } = await supabase.from('calendar_tokens').select('user_id').eq('user_id', o.user_id).maybeSingle()
-          if (tok?.user_id) { calTokenUserId = tok.user_id; break }
-        }
-      }
-      if (!calTokenUserId) return { error: 'לא נמצא חיבור Google Calendar פעיל בטננט. חבר יומן תחת הגדרות אינטגרציות.' }
-
-      const { data: tokenData } = await supabase.from('calendar_tokens').select('access_token, refresh_token, expires_at').eq('user_id', calTokenUserId).maybeSingle()
-      if (!tokenData) return { error: 'לא נמצא חיבור Google Calendar. חבר יומן תחת הגדרות אינטגרציות.' }
-
-      let accessToken = tokenData.access_token
-      if (new Date(tokenData.expires_at) <= new Date()) {
-        const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
-        const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
-        if (!clientId || !clientSecret) return { error: 'חסרות הגדרות GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET' }
-        const r = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: tokenData.refresh_token, grant_type: 'refresh_token' }),
-        })
-        const rd = await r.json()
-        if (!rd.access_token) return { error: `רענון טוקן נכשל: ${rd.error || 'unknown'}` }
-        accessToken = rd.access_token
-        await supabase.from('calendar_tokens').update({ access_token: accessToken, expires_at: new Date(Date.now() + rd.expires_in * 1000).toISOString() }).eq('user_id', calTokenUserId)
-      }
+      const cal = await resolveCalendarAccessToken(supabase, tenantId, callerCampaignerId, userId)
+      if (cal.error || !cal.accessToken) return { error: cal.error }
+      const accessToken = cal.accessToken
 
       // Send naive wall-clock times with an explicit timeZone — Google interprets
       // them in Asia/Jerusalem. toISOString() ('Z') marked Israel wall times as
@@ -3313,10 +3319,84 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         attendee_email,
         attendee_name: attendee_name || null,
         title,
-        start: start.toISOString(),
+        start_israel: startNaive,
         duration_minutes: duration_minutes || 60,
         message: `זימון נשלח למייל ${attendee_email} — ${attendee_name || attendee_email} יקבל הזמנה עם כפתורי אישור/דחייה.`,
       }
+    }
+
+    case 'list_calendar_events': {
+      const cal = await resolveCalendarAccessToken(supabase, tenantId, callerCampaignerId, userId)
+      if (cal.error || !cal.accessToken) return { error: cal.error }
+      const fromDate = String(args.date_from || new Date().toISOString().slice(0, 10))
+      const toDate = String(args.date_to || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+      const qp = new URLSearchParams({
+        timeMin: `${fromDate}T00:00:00+03:00`,
+        timeMax: `${toDate}T23:59:59+03:00`,
+        singleEvents: 'true',
+        orderBy: 'startTime',
+        maxResults: '30',
+      })
+      if (args.search) qp.set('q', String(args.search))
+      const resp = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${qp}`, {
+        headers: { 'Authorization': `Bearer ${cal.accessToken}` },
+      })
+      const data = await resp.json()
+      if (!resp.ok) return { error: `שגיאת Google Calendar: ${data?.error?.message || resp.status}` }
+      return {
+        count: (data.items || []).length,
+        events: (data.items || []).map((e: any) => ({
+          event_id: e.id,
+          title: e.summary,
+          start: e.start?.dateTime || e.start?.date,
+          end: e.end?.dateTime || e.end?.date,
+          attendees: (e.attendees || []).map((a: any) => a.email),
+          link: e.htmlLink,
+        })),
+      }
+    }
+
+    case 'update_calendar_invite': {
+      const { event_id, date, time, duration_minutes, title, notes } = args
+      if (!event_id) return { error: 'event_id נדרש — מצאי אותו קודם עם list_calendar_events' }
+      const cal = await resolveCalendarAccessToken(supabase, tenantId, callerCampaignerId, userId)
+      if (cal.error || !cal.accessToken) return { error: cal.error }
+
+      const patch: Record<string, unknown> = {}
+      if (title) patch.summary = title
+      if (notes) patch.description = notes
+      if (date || time) {
+        if (!date || !time) return { error: 'לעדכון מועד יש לספק גם date וגם time' }
+        const startNaive = `${date}T${time}:00`
+        const endNaive = new Date(Date.parse(`${startNaive}Z`) + (Number(duration_minutes) > 0 ? Number(duration_minutes) : 60) * 60_000).toISOString().slice(0, 19)
+        patch.start = { dateTime: startNaive, timeZone: 'Asia/Jerusalem' }
+        patch.end = { dateTime: endNaive, timeZone: 'Asia/Jerusalem' }
+      }
+      if (Object.keys(patch).length === 0) return { error: 'לא סופק שום שדה לעדכון' }
+
+      const resp = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(String(event_id))}?sendUpdates=all`,
+        { method: 'PATCH', headers: { 'Authorization': `Bearer ${cal.accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }
+      )
+      const data = await resp.json()
+      if (!resp.ok) return { error: `שגיאת Google Calendar: ${data?.error?.message || resp.status}` }
+      return { success: true, event_id: data.id, title: data.summary, start: data.start?.dateTime, link: data.htmlLink, message: 'האירוע עודכן — כל המשתתפים קיבלו מייל עדכון.' }
+    }
+
+    case 'cancel_calendar_invite': {
+      const { event_id } = args
+      if (!event_id) return { error: 'event_id נדרש — מצאי אותו קודם עם list_calendar_events' }
+      const cal = await resolveCalendarAccessToken(supabase, tenantId, callerCampaignerId, userId)
+      if (cal.error || !cal.accessToken) return { error: cal.error }
+      const resp = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(String(event_id))}?sendUpdates=all`,
+        { method: 'DELETE', headers: { 'Authorization': `Bearer ${cal.accessToken}` } }
+      )
+      if (!resp.ok && resp.status !== 204 && resp.status !== 410) {
+        const data = await resp.json().catch(() => ({}))
+        return { error: `שגיאת Google Calendar: ${(data as any)?.error?.message || resp.status}` }
+      }
+      return { success: true, message: 'האירוע בוטל — המשתתפים קיבלו הודעת ביטול.' }
     }
 
     // ============ CAMPAIGNER MESSAGING ============
