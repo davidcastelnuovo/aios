@@ -3150,6 +3150,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           if (tok?.user_id) { calTokenUserId = tok.user_id; break }
         }
       }
+      if (!calTokenUserId) {
+        // Last resort: a tenant owner/admin with connected calendar tokens. Owners
+        // (e.g. David in a second tenant) are tenant_users but often have no
+        // campaigner row, so the loop above never finds their token.
+        const { data: owners } = await supabase.from('tenant_users')
+          .select('user_id').eq('tenant_id', tenantId).in('role', ['owner', 'admin']).limit(10)
+        for (const o of (owners || [])) {
+          const { data: tok } = await supabase.from('calendar_tokens').select('user_id').eq('user_id', o.user_id).maybeSingle()
+          if (tok?.user_id) { calTokenUserId = tok.user_id; break }
+        }
+      }
       if (!calTokenUserId) return { error: 'לא נמצא חיבור Google Calendar פעיל בטננט. חבר יומן תחת הגדרות אינטגרציות.' }
 
       const { data: tokenData } = await supabase.from('calendar_tokens').select('access_token, refresh_token, expires_at').eq('user_id', calTokenUserId).maybeSingle()
