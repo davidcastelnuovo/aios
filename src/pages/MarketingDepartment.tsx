@@ -22,6 +22,9 @@ const CopyDepartment = lazy(() =>
 const CreativeDepartment = lazy(() =>
   import("@/components/marketing/departments/CreativeDepartment").then((module) => ({ default: module.CreativeDepartment })),
 );
+const SeoGeoDepartment = lazy(() =>
+  import("@/components/marketing/departments/SeoGeoDepartment").then((module) => ({ default: module.SeoGeoDepartment })),
+);
 
 type DepartmentId = "copy" | "creative" | "seo" | "campaigns" | "analytics";
 
@@ -55,7 +58,7 @@ const DEPARTMENTS: Array<{
     description: "מחקר ביטויים, תוכנית תוכן, מאמרים ונראות במנועי AI",
     icon: Search,
     gradient: "from-emerald-500 to-teal-700",
-    status: "next",
+    status: "active",
   },
   {
     id: "campaigns",
@@ -137,6 +140,10 @@ export default function MarketingDepartment() {
       ) : department === "creative" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-pink-500" /></div>}>
           <CreativeDepartment clientId={clientId} tenantId={tenantId} />
+        </Suspense>
+      ) : department === "seo" && tenantId ? (
+        <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-emerald-500" /></div>}>
+          <SeoGeoDepartment clientId={clientId} tenantId={tenantId} />
         </Suspense>
       ) : (
         <ComingSoon department={department} onBack={() => navigate(`/t/${tenantSlug}/marketing/${clientId}`)} />
