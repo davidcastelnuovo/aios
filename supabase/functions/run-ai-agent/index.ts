@@ -175,6 +175,7 @@ const ALL_TOOLS = [
   { name: 'kb_learn', description: 'שמירת ידע פרוצדורלי/אפיזודי חדש (לקח שנלמד, נוהל, סיכום שיחה חשובה). שונה מ-save_memory: זה נכנס לממלכת הידע עם embedding לחיפוש סמנטי. שמור פה דברים שכרמן צריכה לזכור לטווח ארוך עם הקשר.', parameters: { type: 'object', properties: { topic: { type: 'string' }, summary: { type: 'string' }, topic_tags: { type: 'array', items: { type: 'string' } }, importance: { type: 'integer', description: '1-10' }, source_table: { type: 'string' }, source_ids: { type: 'array', items: { type: 'string' } } }, required: ['topic','summary'] } },
   // CHAT HISTORY
   { name: 'get_chat_history', description: 'שליפת היסטוריית שיחות WhatsApp עם ליד או לקוח', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['contact_type', 'contact_id'] } },
+  { name: 'search_conversation_history', description: 'חיפוש בכל היסטוריית ההתכתבויות של הארגון (WhatsApp) — ללא מגבלת זמן. חובה להשתמש כשנשאלת על שיחות/עובדות מהעבר שאינן בזיכרון: "מה X ביקש לפני שבועיים", "מה המייל/כתובת שנתתי לך", "מה שם הלקוח שדיברנו עליו". חפשי לפי מילות מפתח (שם, מייל, נושא). אם אין תוצאה — נסי ניסוח/מילה אחרת לפני שאת אומרת שאין.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מילות חיפוש (עד 4 מילים, כולן חייבות להופיע בהודעה)' }, days_back: { type: 'integer', description: 'כמה ימים אחורה (ברירת מחדל 180)' }, limit: { type: 'integer', description: 'מקסימום תוצאות (ברירת מחדל 20)' } }, required: ['query'] } },
   { name: 'get_recent_inbound_messages', description: 'שליפת הודעות נכנסות אחרונות מכל השיחות', parameters: { type: 'object', properties: { limit: { type: 'integer' }, hours: { type: 'integer', description: 'כמה שעות אחורה (ברירת מחדל 24)' } } } },
   // FINANCE
   { name: 'list_finance', description: 'רשימת תנועות כספיות', parameters: { type: 'object', properties: { client_id: { type: 'string' }, type: { type: 'string', enum: ['income', 'expense'] }, limit: { type: 'integer' } } } },
@@ -2047,6 +2048,37 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .order('created_at', { ascending: false }).limit(args.limit || 20)
       if (error) throw error
       return { count: data.length, messages: data.reverse() }
+    }
+    case 'search_conversation_history': {
+      const rawQuery = String(args.query || '').trim()
+      if (!rawQuery) return { error: 'query is required' }
+      const daysBack = Math.min(Number(args.days_back) > 0 ? Number(args.days_back) : 180, 730)
+      const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString()
+      // AND semantics: every token must appear in the message. Up to 4 tokens.
+      const tokens = rawQuery.split(/\s+/).filter(Boolean).slice(0, 4)
+      let q = supabase.from('chat_messages')
+        .select('message_text, direction, sender_name, sender_phone, created_at, group_id, clients(name)')
+        .in('tenant_id', accessibleTenantIds)
+        .gte('created_at', since)
+        .not('message_text', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(Number(args.limit) > 0 ? Number(args.limit) : 20, 50))
+      for (const t of tokens) q = q.ilike('message_text', `%${t}%`)
+      const { data, error } = await q
+      if (error) throw error
+      const fmt = (iso: string) => new Date(iso).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
+      return {
+        count: data.length,
+        note: data.length === 0 ? 'אין תוצאות — נסי מילות חיפוש אחרות (שם פרטי בלבד, חלק מהמייל, מילה נרדפת).' : undefined,
+        messages: data.map((m: any) => ({
+          when_israel: fmt(m.created_at),
+          direction: m.direction,
+          from: m.sender_name || m.sender_phone || '',
+          client: m.clients?.name || null,
+          in_group: !!m.group_id,
+          text: String(m.message_text).slice(0, 400),
+        })),
+      }
     }
     case 'get_recent_inbound_messages': {
       const hoursAgo = args.hours || 24
