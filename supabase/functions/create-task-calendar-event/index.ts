@@ -145,9 +145,11 @@ Deno.serve(async (req) => {
     }
 
     // 5. Build event — due_time is HH:MM:SS from Postgres time column
-    const startDateTime = new Date(`${task.due_date}T${task.due_time}`)
+    // Naive wall-clock + timeZone (not toISOString/'Z') — otherwise Israel wall
+    // times are treated as UTC and events land 3 hours late.
+    const startNaive = `${task.due_date}T${task.due_time}`
     const durationMs = (task.duration_minutes ?? 30) * 60 * 1000
-    const endDateTime = new Date(startDateTime.getTime() + durationMs)
+    const endNaive = new Date(Date.parse(`${startNaive}Z`) + durationMs).toISOString().slice(0, 19)
 
     // Build description: include client link if present
     let description = task.notes ?? ''
@@ -159,8 +161,8 @@ Deno.serve(async (req) => {
     const event = {
       summary: task.title,
       description,
-      start: { dateTime: startDateTime.toISOString(), timeZone: 'Asia/Jerusalem' },
-      end:   { dateTime: endDateTime.toISOString(),   timeZone: 'Asia/Jerusalem' },
+      start: { dateTime: startNaive, timeZone: 'Asia/Jerusalem' },
+      end:   { dateTime: endNaive,   timeZone: 'Asia/Jerusalem' },
     }
 
     // 6. Create Google Calendar event
