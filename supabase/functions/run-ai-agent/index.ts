@@ -1362,8 +1362,19 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let targetClients: any[] = perfOwn || []
       const { data: perfShares } = await supabase.from('agency_tenant_access')
         .select('source_tenant_id, agency_id').eq('accessing_tenant_id', tenantId)
+      // Reports pull cross-tenant clients only for agencies the reporting tenant
+      // OWNS (its own agency's clients parked in a partner tenant) — not the
+      // partner's agencies, whose clients belong in the partner's own report.
+      const perfShareAgencyIds = [...new Set((perfShares || []).map((s: any) => s.agency_id).filter(Boolean))]
+      const perfOwnedAgencies = new Set<string>()
+      if (perfShareAgencyIds.length > 0) {
+        const { data: ags } = await supabase.from('agencies')
+          .select('id').eq('tenant_id', tenantId).in('id', perfShareAgencyIds)
+        for (const a of (ags || [])) perfOwnedAgencies.add(a.id)
+      }
       for (const sh of (perfShares || [])) {
         if (!sh.source_tenant_id || sh.source_tenant_id === tenantId || !sh.agency_id) continue
+        if (!perfOwnedAgencies.has(sh.agency_id)) continue
         const { data: sharedClients } = await perfFilters(
           supabase.from('clients').select(perfSel).eq('tenant_id', sh.source_tenant_id).eq('agency_id', sh.agency_id))
         if (sharedClients?.length) targetClients = targetClients.concat(sharedClients)
@@ -2336,8 +2347,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let scopeClients: any[] = healthOwn || []
       const { data: healthShares } = await supabase.from('agency_tenant_access')
         .select('source_tenant_id, agency_id').eq('accessing_tenant_id', tenantId)
+      // Same ownership rule as analyze_campaign_performance above.
+      const healthShareAgencyIds = [...new Set((healthShares || []).map((s: any) => s.agency_id).filter(Boolean))]
+      const healthOwnedAgencies = new Set<string>()
+      if (healthShareAgencyIds.length > 0) {
+        const { data: ags } = await supabase.from('agencies')
+          .select('id').eq('tenant_id', tenantId).in('id', healthShareAgencyIds)
+        for (const a of (ags || [])) healthOwnedAgencies.add(a.id)
+      }
       for (const sh of (healthShares || [])) {
         if (!sh.source_tenant_id || sh.source_tenant_id === tenantId || !sh.agency_id) continue
+        if (!healthOwnedAgencies.has(sh.agency_id)) continue
         const { data: sharedClients } = await healthFilters(
           supabase.from('clients').select(healthSel).eq('tenant_id', sh.source_tenant_id).eq('agency_id', sh.agency_id))
         if (sharedClients?.length) scopeClients = scopeClients.concat(sharedClients)
