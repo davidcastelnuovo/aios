@@ -128,9 +128,21 @@ const STAGE_CONFIG: Record<
 const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string; borderColor: string }> = {
   draft: { label: "טיוטה", icon: Clock, color: "text-gray-500", borderColor: "border-border/60" },
   in_progress: { label: "בעבודה", icon: Loader2, color: "text-blue-500", borderColor: "border-blue-400" },
-  awaiting_approval: { label: "ממתין לאישור", icon: AlertCircle, color: "text-amber-500", borderColor: "border-amber-400" },
-  completed: { label: "הושלם", icon: CheckCircle2, color: "text-emerald-500", borderColor: "border-emerald-400" },
+  waiting_approval: { label: "ממתין לאישור", icon: AlertCircle, color: "text-amber-500", borderColor: "border-amber-400" },
+  approved: { label: "אושר", icon: CheckCircle2, color: "text-emerald-500", borderColor: "border-emerald-400" },
+  published: { label: "פורסם", icon: CheckCircle2, color: "text-emerald-600", borderColor: "border-emerald-500" },
   failed: { label: "נכשל", icon: AlertCircle, color: "text-red-500", borderColor: "border-red-400" },
+  archived: { label: "בארכיון", icon: Clock, color: "text-gray-500", borderColor: "border-gray-400" },
+};
+
+const DEFAULT_SKIN_BY_STAGE: Record<string, string> = {
+  strategy: "campaigner",
+  copy: "copywriter",
+  creative: "social_media",
+  target_paid: "campaigner",
+  target_seo: "seo",
+  target_organic: "social_media",
+  measurement: "analyst",
 };
 
 // ─── Mode Toggle ──────────────────────────────────────────────────────────────
@@ -141,10 +153,10 @@ function ModeToggle({
   stage: any;
   onUpdate: (mode: string) => void;
 }) {
-  const current = stage.approval_mode ?? "semi";
+  const current = stage.approval_mode ?? "hybrid";
   const modes = [
     { key: "auto", label: "אוטומטי", icon: Zap, activeClass: "bg-emerald-500 text-white" },
-    { key: "semi", label: "חצי", icon: Clock, activeClass: "bg-amber-500 text-white" },
+    { key: "hybrid", label: "חצי", icon: Clock, activeClass: "bg-amber-500 text-white" },
     { key: "manual", label: "ידני", icon: Hand, activeClass: "bg-gray-500 text-white" },
   ];
 
@@ -226,7 +238,7 @@ function WorkItemCard({
   const statusCfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.draft;
   const StatusIcon = statusCfg.icon;
   const isRunning = item.status === "in_progress" || running;
-  const isAwaiting = item.status === "awaiting_approval";
+  const isAwaiting = item.status === "waiting_approval";
 
   return (
     <div
@@ -280,9 +292,9 @@ function WorkItemCard({
         </div>
 
         {/* Copy preview (2 lines) */}
-        {(item.payload?.brief || item.payload?.copy_text) && (
+        {(item.payload?.brief_text || item.payload?.brief || item.payload?.copy_text) && (
           <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-            {item.payload?.copy_text ?? item.payload?.brief}
+            {item.payload?.copy_text ?? item.payload?.brief_text ?? item.payload?.brief}
           </p>
         )}
 
@@ -392,6 +404,11 @@ export function StageWorkspace({
   const cfg = STAGE_CONFIG[stage.stage_type] ?? STAGE_CONFIG.strategy;
   const Icon = cfg.icon;
   const agentName = stage.ai_agents?.name ?? "כרמן";
+  const skinSlug =
+    stage.configuration?.skin ??
+    stage.configuration?.skin_slug ??
+    DEFAULT_SKIN_BY_STAGE[stage.stage_type] ??
+    "campaigner";
 
   const [messages, setMessages] = useState<
     { role: "user" | "assistant"; content: string; ts: number }[]
@@ -456,6 +473,7 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
           tenant_id: tenantId,
           client_id: clientId,
           task_mode: STAGE_TYPE_TO_TASK_MODE[stage.stage_type] ?? "copywriting",
+          task_skills: [skinSlug],
           system_prompt_addon: systemPrompt,
           user_name: "מחלקת שיווק",
         },
@@ -494,12 +512,30 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
 
   const handleApprove = async (itemId: string) => {
     try {
-      await supabase
+      const { data: stages, error: stagesError } = await supabase
+        .from("marketing_pipeline_stages")
+        .select("id, sort_order")
+        .eq("pipeline_id", pipelineId)
+        .order("sort_order");
+      if (stagesError) throw stagesError;
+
+      const currentIndex = (stages ?? []).findIndex((candidate) => candidate.id === stage.id);
+      const nextStage = currentIndex >= 0 ? stages?.[currentIndex + 1] : null;
+      const update = nextStage
+        ? { current_stage_id: nextStage.id, status: "draft" }
+        : { status: "approved" };
+
+      const { error: updateError } = await supabase
         .from("marketing_work_items")
-        .update({ status: "approved" })
-        .eq("id", itemId);
+        .update(update)
+        .eq("id", itemId)
+        .eq("tenant_id", tenantId);
+      if (updateError) throw updateError;
+
       queryClient.invalidateQueries({ queryKey: ["marketing-items", pipelineId, tenantId] });
-      toast({ title: "הפריט אושר" });
+      toast({
+        title: nextStage ? "הפריט אושר והועבר לשלב הבא" : "הפריט אושר",
+      });
     } catch (e: any) {
       toast({ title: "שגיאה באישור", description: e.message, variant: "destructive" });
     }
@@ -521,7 +557,7 @@ ${itemsSummary ? `פריטי תוכן נוכחיים:\n${itemsSummary}` : ""}
   const handleUpdateMode = async (mode: string) => {
     try {
       await supabase
-        .from("pipeline_stages")
+        .from("marketing_pipeline_stages")
         .update({ approval_mode: mode })
         .eq("id", stage.id);
       toast({ title: `מצב עדכן ל-${mode}` });
