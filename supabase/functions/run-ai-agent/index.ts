@@ -1346,16 +1346,28 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
       }
 
-      let clientsQuery = supabase
-        .from('clients')
-        .select('id, name, agency_id, is_ecommerce, agencies(name)')
-        .in('tenant_id', accessibleTenantIds)
-        .in('status', ['active'])  // pulse/health reports must exclude paused/ended/onboarding clients
-        .order('name')
-      if (args.client_id) clientsQuery = clientsQuery.eq('id', args.client_id)
-      if (agencyIdsFilter) clientsQuery = clientsQuery.in('agency_id', agencyIdsFilter)
-      const { data: targetClients, error: clientsErr } = await clientsQuery
+      // Own tenant's clients + shared-tenant clients ONLY within agencies shared via
+      // agency_tenant_access. A tenant-wide scope here floods the report with the
+      // partner tenant's entire client base and scrambles the per-agency grouping.
+      const perfSel = 'id, name, agency_id, is_ecommerce, agencies(name)'
+      const perfFilters = (q: any) => {
+        q = q.in('status', ['active'])  // pulse/health reports must exclude paused/ended/onboarding clients
+        if (args.client_id) q = q.eq('id', args.client_id)
+        if (agencyIdsFilter) q = q.in('agency_id', agencyIdsFilter)
+        return q
+      }
+      const { data: perfOwn, error: clientsErr } = await perfFilters(
+        supabase.from('clients').select(perfSel).eq('tenant_id', tenantId)).order('name')
       if (clientsErr) throw clientsErr
+      let targetClients: any[] = perfOwn || []
+      const { data: perfShares } = await supabase.from('agency_tenant_access')
+        .select('source_tenant_id, agency_id').eq('accessing_tenant_id', tenantId)
+      for (const sh of (perfShares || [])) {
+        if (!sh.source_tenant_id || sh.source_tenant_id === tenantId || !sh.agency_id) continue
+        const { data: sharedClients } = await perfFilters(
+          supabase.from('clients').select(perfSel).eq('tenant_id', sh.source_tenant_id).eq('agency_id', sh.agency_id))
+        if (sharedClients?.length) targetClients = targetClients.concat(sharedClients)
+      }
 
       const clientIds = (targetClients || []).map((c: any) => c.id)
       if (clientIds.length === 0) {
@@ -2310,16 +2322,26 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { success: true, table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name }
     }
     case 'check_ad_accounts_health': {
-      // 1. Resolve client scope
-      let clientsQuery = supabase
-        .from('clients')
-        .select('id, name, agency_id, meta_ads_account_id, agencies(name)')
-        .in('tenant_id', accessibleTenantIds)
-        .in('status', ['active'])  // pulse/health reports must exclude paused/ended/onboarding clients
-        .order('name')
-      if (args.client_id) clientsQuery = clientsQuery.eq('id', args.client_id)
-      if (args.agency_id) clientsQuery = clientsQuery.eq('agency_id', args.agency_id)
-      const { data: scopeClients } = await clientsQuery
+      // 1. Resolve client scope: own tenant + shared-agency clients only (see
+      // analyze_campaign_performance — same cross-tenant flooding hazard).
+      const healthSel = 'id, name, agency_id, meta_ads_account_id, agencies(name)'
+      const healthFilters = (q: any) => {
+        q = q.in('status', ['active'])  // pulse/health reports must exclude paused/ended/onboarding clients
+        if (args.client_id) q = q.eq('id', args.client_id)
+        if (args.agency_id) q = q.eq('agency_id', args.agency_id)
+        return q
+      }
+      const { data: healthOwn } = await healthFilters(
+        supabase.from('clients').select(healthSel).eq('tenant_id', tenantId)).order('name')
+      let scopeClients: any[] = healthOwn || []
+      const { data: healthShares } = await supabase.from('agency_tenant_access')
+        .select('source_tenant_id, agency_id').eq('accessing_tenant_id', tenantId)
+      for (const sh of (healthShares || [])) {
+        if (!sh.source_tenant_id || sh.source_tenant_id === tenantId || !sh.agency_id) continue
+        const { data: sharedClients } = await healthFilters(
+          supabase.from('clients').select(healthSel).eq('tenant_id', sh.source_tenant_id).eq('agency_id', sh.agency_id))
+        if (sharedClients?.length) scopeClients = scopeClients.concat(sharedClients)
+      }
       const clientIds = (scopeClients || []).map((c: any) => c.id)
       if (clientIds.length === 0) return { count: 0, healthy: 0, unhealthy: [], note: 'no clients in scope' }
 
