@@ -19,6 +19,9 @@ import { ClientSelector } from "@/components/marketing/ClientSelector";
 const CopyDepartment = lazy(() =>
   import("@/components/marketing/departments/CopyDepartment").then((module) => ({ default: module.CopyDepartment })),
 );
+const CreativeDepartment = lazy(() =>
+  import("@/components/marketing/departments/CreativeDepartment").then((module) => ({ default: module.CreativeDepartment })),
+);
 
 type DepartmentId = "copy" | "creative" | "seo" | "campaigns" | "analytics";
 
@@ -44,7 +47,7 @@ const DEPARTMENTS: Array<{
     description: "קונספטים, storyboard, גרפיקה וסרטונים במקום אחד",
     icon: Palette,
     gradient: "from-pink-500 to-rose-700",
-    status: "next",
+    status: "active",
   },
   {
     id: "seo",
@@ -130,6 +133,10 @@ export default function MarketingDepartment() {
       ) : department === "copy" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-violet-500" /></div>}>
           <CopyDepartment clientId={clientId} tenantId={tenantId} />
+        </Suspense>
+      ) : department === "creative" && tenantId ? (
+        <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-pink-500" /></div>}>
+          <CreativeDepartment clientId={clientId} tenantId={tenantId} />
         </Suspense>
       ) : (
         <ComingSoon department={department} onBack={() => navigate(`/t/${tenantSlug}/marketing/${clientId}`)} />
