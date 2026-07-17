@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 type WorkspaceView = "graph" | "sitemap";
 
 export function WorkspaceCanvas() {
-  const [view, setView] = useState<WorkspaceView>("graph");
+  // Graphify is the richer view, but its RPCs may not be applied yet —
+  // default to the always-working sitemap until the graph backend is live.
+  const [view, setView] = useState<WorkspaceView>("sitemap");
 
   return (
     <div className="flex flex-col h-full overflow-auto bg-gradient-to-br from-background via-background to-primary/5">
