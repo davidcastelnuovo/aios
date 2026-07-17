@@ -15,4 +15,17 @@ export type CarmenCapabilityHandlerKind = "internal" | "edge" | "mcp";
 export interface CarmenCapabilityDefinition {
   name: string;
   displayName: string;
-  category: string
+  category: string;
+  description?: string;
+  risk: CarmenCapabilityRisk;
+  handlerKind: CarmenCapabilityHandlerKind;
+  handlerRef?: string;
+  inputSchema: Record<string, unknown>;
+  requiresApproval: boolean;
+  enabled: false;
+  metadata?: Record<string, unknown>;
+}
+
+// Phase 1 deliberately ships no active capabilities. Entries can be reviewed
+// here before a later migration seeds them into agent_tools.
+export const CARMEN_CAPABILITY_REGISTRY: readonly CarmenCapabilityDefinition[] = [];
