@@ -610,7 +610,36 @@ Deno.serve(async (req) => {
         (msgContainer as any)?.participant, (msgContainer as any)?.author,
       ].filter((v: any) => typeof v === 'string' && v.includes('@')) as string[];
       const authorRaw = authorCandidates[0] || '';
-      const authorPhone = authorRaw ? authorRaw.split('@')[0].replace(/\D/g, '') : '';
+      let authorPhone = authorRaw ? authorRaw.split('@')[0].replace(/\D/g, '') : '';
+
+      // GROUP AUTHOR LID RESOLUTION — same layers as the private branch above.
+      // The "כרמן" trigger comes from group MEMBERS, and members often arrive as
+      // anonymous @lid authors; without resolution Carmen can't tell WHO in the
+      // group is speaking. 1) real-phone payload fields → 2) learned wa_lid_map.
+      // Payload resolutions are persisted so group traffic keeps teaching the map.
+      if (/@lid/i.test(authorRaw) && authorPhone) {
+        const lidDigits = authorPhone;
+        const realCandidates = [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber]
+          .map((v: unknown) => String(v || '').split('@')[0].replace(/\D/g, ''))
+          .filter((d: string) => d && d.length >= 9 && d.length <= 15 && d !== lidDigits);
+        if (realCandidates.length > 0) {
+          authorPhone = realCandidates[0];
+          console.log('[manus-wa group] author LID resolved from payload field', { lid: lidDigits, phone: authorPhone });
+          supabase.from('wa_lid_map')
+            .upsert({ lid: lidDigits, phone: authorPhone, connection_user_id: connectionUserId, source: 'payload' }, { onConflict: 'lid' })
+            .then(() => {}, () => {});
+        } else {
+          const { data: knownLid } = await supabase
+            .from('wa_lid_map')
+            .select('phone')
+            .eq('lid', lidDigits)
+            .maybeSingle();
+          if (knownLid?.phone) {
+            authorPhone = String(knownLid.phone).replace(/\D/g, '');
+            console.log('[manus-wa group] author LID resolved from learned map', { lid: lidDigits, phone: authorPhone });
+          }
+        }
+      }
 
       // ECHO / OUTBOUND GUARD for groups: Manus mirrors our own outbound back as inbound.
       // If author's digits match our connected phone, OR if the body matches an outbound we
@@ -652,6 +681,7 @@ Deno.serve(async (req) => {
           isIncoming: !isOutgoingFromPhone,
           isManualOutgoing: isOutgoingFromPhone,
           isGroup: true,
+          sourceChannel: 'own_instance',
           sendMessage: async (_chatId: string, message: string) => {
             const settingsAny = (integ.settings as any) || {};
             const baseUrl = settingsAny.gateway_url || 'https://whatsappgw-pzpyrrww.manus.space';
@@ -797,6 +827,7 @@ Deno.serve(async (req) => {
         isIncoming: !isOutgoingFromPhone,
         isManualOutgoing: isOutgoingFromPhone,
         isGroup: false,
+        sourceChannel: 'own_instance',
         sendMessage: async (_chatId: string, message: string) => {
           try {
             const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';

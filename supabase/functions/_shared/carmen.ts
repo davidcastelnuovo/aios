@@ -192,6 +192,79 @@ export async function fetchRecentChatContext(
   }
 }
 
+// In groups the "כרמן" trigger comes from group MEMBERS, not from Carmen's own
+// phone — and senders often arrive behind anonymous LIDs. Build a short note that
+// tells the model who is known to be in this group, by cross-referencing the
+// group's chat history with the tenant's team (campaigners), so Carmen recognises
+// the members and attributes each speaker correctly.
+export async function buildGroupRosterNote(
+  supabase: any,
+  tenantId: string,
+  groupChatId: string,
+): Promise<string> {
+  try {
+    const { data: g } = await supabase
+      .from('whatsapp_groups')
+      .select('id, group_name')
+      .eq('tenant_id', tenantId)
+      .eq('group_chat_id', groupChatId)
+      .maybeSingle();
+    if (!g?.id) return '';
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: msgs } = await supabase
+      .from('chat_messages')
+      .select('sender_phone, sender_name')
+      .eq('tenant_id', tenantId)
+      .eq('group_id', g.id)
+      .eq('direction', 'inbound')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(300);
+
+    // Dedup senders by last-9-digits (or by name when no phone survived LID anonymity).
+    const seen = new Map<string, { phone: string; name: string | null }>();
+    for (const m of (msgs || [])) {
+      const digits = String(m.sender_phone || '').replace(/\D/g, '');
+      const name = m.sender_name ? String(m.sender_name).trim() : null;
+      const key = digits ? digits.slice(-9) : (name ? `name:${name}` : '');
+      if (!key) continue;
+      const existing = seen.get(key);
+      if (!existing) seen.set(key, { phone: digits, name });
+      else if (!existing.name && name) existing.name = name;
+    }
+    if (seen.size === 0) return '';
+
+    const { data: team } = await supabase
+      .from('campaigners')
+      .select('full_name, phone')
+      .eq('tenant_id', tenantId)
+      .limit(200);
+    const teamByLast9 = new Map<string, string>();
+    for (const t of (team || [])) {
+      const d = String(t.phone || '').replace(/\D/g, '');
+      const n = String(t.full_name || '').trim();
+      if (d && n) teamByLast9.set(d.slice(-9), n);
+    }
+
+    const entries: string[] = [];
+    for (const v of seen.values()) {
+      const teamName = v.phone ? teamByLast9.get(v.phone.slice(-9)) : undefined;
+      const label = teamName
+        ? `${teamName} (צוות, ${v.phone})`
+        : (v.name ? (v.phone ? `${v.name} (${v.phone})` : v.name) : v.phone);
+      if (label) entries.push(label);
+      if (entries.length >= 15) break;
+    }
+    if (entries.length === 0) return '';
+
+    return `\n\n[הקשר קבוצה: ההודעות כאן נשלחות על-ידי חברי הקבוצה${g.group_name ? ` "${g.group_name}"` : ''}, לא מהמספר שלך. משתתפים מוכרים לפי היסטוריית הצ'אט: ${entries.join(' · ')}. פני לדובר הנוכחי לפי שמו; אם השולח לא מזוהה — אל תנחשי זהות.]`;
+  } catch (e) {
+    console.error('[carmen] buildGroupRosterNote failed:', String(e));
+    return '';
+  }
+}
+
 // Merge background chat-history context with the in-session conversation history.
 // Drops items from the background context that overlap with the session by timestamp,
 // and prepends a short note so the model treats them as background, not as a new question.
@@ -293,9 +366,25 @@ export async function findDualCarmenClaims(
       .eq('action_type', 'carmen_whatsapp_session')
       .neq('tenant_id', tenantId);
     const claimIds: string[] = [];
+    const openCandidates: string[] = [];
     for (const r of (data || [])) {
       const g = r?.configuration?.carmen_allowed_group_ids;
-      if (Array.isArray(g) && g.includes(groupChatId) && !claimIds.includes(r.tenant_id)) claimIds.push(r.tenant_id);
+      if (Array.isArray(g) && g.includes(groupChatId)) {
+        if (!claimIds.includes(r.tenant_id)) claimIds.push(r.tenant_id);
+      } else if (r?.configuration?.carmen_open_member_groups === true && !openCandidates.includes(r.tenant_id)) {
+        openCandidates.push(r.tenant_id);
+      }
+    }
+    // Open-member-groups tenants claim a group by MEMBERSHIP, not by allow-list:
+    // a whatsapp_groups row for this chat id is the evidence their Carmen sits here.
+    const openUnclaimed = openCandidates.filter((t) => !claimIds.includes(t));
+    if (openUnclaimed.length > 0) {
+      const { data: wg } = await supabase
+        .from('whatsapp_groups')
+        .select('tenant_id')
+        .eq('group_chat_id', groupChatId)
+        .in('tenant_id', openUnclaimed);
+      for (const w of (wg || [])) if (!claimIds.includes(w.tenant_id)) claimIds.push(w.tenant_id);
     }
     if (claimIds.length === 0) return { others: [], iAmPrimary: true };
     const { data: tenants } = await supabase.from('tenants').select('id, name').in('id', claimIds);
@@ -402,6 +491,9 @@ export async function findCarmenSessionAutomation(
       if (isGroup) {
         if (mode === 'specific_group' && groupMatch) return 100;
         if (mode === 'specific_group') return 40; // group-mode but this chat isn't listed
+        // Open-member-groups automation is usable in ANY group Carmen sits in —
+        // above a generic 'all' automation, below an explicit group match.
+        if (cfg.carmen_open_member_groups === true) return 30;
         if (mode === 'all') return 20;
         // specific_phone in a group context → unusable
         return -50;
@@ -655,6 +747,7 @@ export async function findActiveCarmenSession(
   chatId: string,
   connectionUserId: string,
   idleMinutes: number = CARMEN_SESSION_IDLE_MINUTES_DEFAULT,
+  integrationId?: string | null,
 ): Promise<any | null> {
   // Key the lookup on chat_id only — it uniquely identifies the conversation
   // (a 1:1 "<phone>@c.us" or a group "<id>@g.us"). We must NOT also filter on
@@ -662,7 +755,7 @@ export async function findActiveCarmenSession(
   // (often empty), while this lookup would derive the GROUP id from chatId.
   // That mismatch meant a group session was never found, so every inbound
   // group message spawned a brand-new "active" session (duplicate sessions).
-  const { data } = await supabase
+  const { data: rows } = await supabase
     .from('carmen_whatsapp_sessions')
     .select('*')
     .eq('tenant_id', tenantId)
@@ -670,8 +763,19 @@ export async function findActiveCarmenSession(
     .eq('connection_user_id', connectionUserId)
     .eq('chat_id', chatId)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(5);
+
+  // Preference only, never exclusion: pick the session opened on the SAME
+  // integration when one exists (each session records its source channel),
+  // otherwise fall back to legacy/NULL rows and finally to the newest row —
+  // so pre-migration sessions and cross-channel continuations keep working.
+  const list: any[] = Array.isArray(rows) ? rows : [];
+  const data = integrationId
+    ? (list.find((s: any) => s.integration_id === integrationId)
+      || list.find((s: any) => !s.integration_id)
+      || list[0]
+      || null)
+    : (list[0] || null);
 
   if (!data) return null;
 
@@ -709,13 +813,21 @@ export interface CarmenContext {
   /** True for messages the operator typed in the WhatsApp app (not API sends). */
   isManualOutgoing: boolean;
   isGroup: boolean;
+  /**
+   * Which channel received this message: Carmen's OWN WhatsApp instance
+   * ('own_instance', manus_wa webhook) vs the operator's mirrored personal phone
+   * ('operator_mirror', green_api webhook). Open-member-groups mode only ever
+   * activates on 'own_instance' — the operator mirror keeps the legacy
+   * default-deny so Carmen never answers in the operator's private groups.
+   */
+  sourceChannel?: 'own_instance' | 'operator_mirror' | null;
   /** Transport-specific send function. Returns true on success. */
   sendMessage: (chatId: string, message: string) => Promise<boolean>;
 }
 
 export type CarmenHandleResult =
   | { handled: false; reason: string }
-  | { handled: true; outcome: 'ended' | 'active' | 'started' | 'error' };
+  | { handled: true; outcome: 'ended' | 'active' | 'started' | 'error' | 'deferred_to_other_carmen' };
 
 // Top-level Carmen message handler. Returns whether the message was consumed by Carmen.
 // Callers should NOT trigger other automations for the same message if `handled` is true.
@@ -723,7 +835,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   const {
     supabase, tenantId, integrationId, connectionUserId,
     chatId, phoneNumber, sourcePhoneNumber, senderName, messageText,
-    isIncoming, isManualOutgoing, isGroup, sendMessage,
+    isIncoming, isManualOutgoing, isGroup, sourceChannel, sendMessage,
   } = ctx;
 
   const handlerStartedAt = Date.now();
@@ -787,7 +899,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: true, outcome: 'active' };
   }
 
-  let activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
+  let activeSession = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes, integrationId);
 
   // Agent-switch guard: if there is an active session for a DIFFERENT automation and
   // the current message explicitly triggers the new automation's keyword (within the
@@ -857,6 +969,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         .eq('id', activeSession.id);
       await routedSend(chatId, 'סבבה, סיימנו 🙏');
       return { handled: true, outcome: 'ended' };
+    }
+
+    // Open-member-group session: Carmen answers ONLY messages that address her
+    // directly ("כרמן ..."). Everything else in the group is the members' own
+    // conversation — she must stay out of it, so skip silently without even
+    // touching the session timestamps.
+    if (isGroup && activeSession.open_group === true
+      && !messageHasTrigger(normalizedMsg, resolveTriggerKeywords(cfg))) {
+      return { handled: false, reason: 'open_group_not_addressed' };
     }
 
     // Short acknowledgement ("תודה" / "מעולה" / "ok") — don't reply, just keep session warm.
@@ -954,21 +1075,22 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     const effectiveName = senderName || activeSession.sender_name;
 
     let carmenResponse: string;
-    let dualNote = '';
+    let groupNotes = '';
     try {
       if (isGroup) {
         const dual = await findDualCarmenClaims(supabase, tenantId, chatId);
         if (dual.others.length > 0) {
           const { data: myTenant } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
-          dualNote = buildDualCarmenNote(myTenant?.name || 'הארגון שלך', dual.others.map((o) => o.name));
+          groupNotes += buildDualCarmenNote(myTenant?.name || 'הארגון שלך', dual.others.map((o) => o.name));
         }
+        groupNotes += await buildGroupRosterNote(supabase, tenantId, chatId);
       }
       const recentContext = await fetchRecentChatContext(
         supabase, tenantId, chatId, isGroup, effectivePhone,
       );
       const mergedHistory = buildCarmenMergedHistory(recentContext, history);
       carmenResponse = await runCarmenAI(
-        supabase, activeSession.agent_id, tenantId, messageText + dualNote, mergedHistory,
+        supabase, activeSession.agent_id, tenantId, messageText + groupNotes, mergedHistory,
         effectivePhone, effectiveName, waNotify,
       );
 
@@ -1090,9 +1212,22 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // WhatsApp groups. Groups require explicit opt-in via scopeMode === 'specific_group'
   // (and the group listed in allowedGroups) — this way disabling the dedicated groups
   // automation actually silences Carmen in groups.
-  if (isGroup && scopeMode !== 'specific_group') {
+  //
+  // Exception — open-member-groups mode: when the automation opts in via
+  // `carmen_open_member_groups: true`, Carmen may answer in ANY group her own
+  // WhatsApp number is a member of (being added to the group IS the opt-in),
+  // but only for messages arriving via her OWN instance (sourceChannel
+  // 'own_instance'). The operator's mirrored green_api channel keeps the legacy
+  // default-deny — that channel sees ALL the operator's personal groups.
+  const openMemberGroups = isGroup
+    && carmenAutomation.configuration?.carmen_open_member_groups === true
+    && sourceChannel === 'own_instance';
+  if (isGroup && scopeMode !== 'specific_group' && !openMemberGroups) {
     return { handled: false, reason: 'group_requires_explicit_scope' };
   }
+  // Sessions opened through the exception are direct-address-only for their whole
+  // lifetime (see the open_group gate in the continuation branch above).
+  const openGroupStart = openMemberGroups && scopeMode !== 'specific_group';
 
   const triggerKeywords = resolveTriggerKeywords(carmenAutomation.configuration);
   const triggerKeyword = triggerKeywords[0]; // primary — used for prompt copy below
@@ -1130,6 +1265,10 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       started_by_keyword: messageText,
       end_keyword: endKeywordConfig,
       automation_id: carmenAutomation.id,
+      // Source identity: which channel opened this session, and whether it runs
+      // in open-member-groups (direct-address-only) mode.
+      integration_id: integrationId || null,
+      open_group: openGroupStart,
     })
     .select()
     .single();
@@ -1140,7 +1279,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     // Treat that as success and let the existing session take this turn — never create
     // a duplicate or surface an error to the user.
     if ((sessionError as any)?.code === '23505') {
-      const existing = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes);
+      const existing = await findActiveCarmenSession(supabase, tenantId, chatId, connectionUserId, idleMinutes, integrationId);
       if (existing) {
         console.log('[carmen] Lost create race — deferring to existing active session', { session: existing.id, chatId });
         await supabase
@@ -1167,20 +1306,21 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // Otherwise send a brief greeting only. Either way — save the assistant reply to history
   // so the echo-guard catches the provider mirroring it back.
   if (contentAfterKeyword.length > 2) {
-    let dualNote = '';
+    let groupNotes = '';
     if (isGroup) {
       const dual = await findDualCarmenClaims(supabase, tenantId, chatId);
       if (dual.others.length > 0) {
         const { data: myTenant } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
-        dualNote = buildDualCarmenNote(myTenant?.name || 'הארגון שלך', dual.others.map((o) => o.name));
+        groupNotes += buildDualCarmenNote(myTenant?.name || 'הארגון שלך', dual.others.map((o) => o.name));
       }
+      groupNotes += await buildGroupRosterNote(supabase, tenantId, chatId);
     }
     const recentContext = await fetchRecentChatContext(
       supabase, tenantId, chatId, isGroup, phoneNumber,
     );
     const mergedHistory = buildCarmenMergedHistory(recentContext, []);
     const carmenResponse = await runCarmenAI(
-      supabase, agentId, tenantId, contentAfterKeyword + dualNote, mergedHistory, phoneNumber, senderName, waNotify,
+      supabase, agentId, tenantId, contentAfterKeyword + groupNotes, mergedHistory, phoneNumber, senderName, waNotify,
     );
 
     if (carmenResponse.includes(DUAL_CARMEN_SKIP)) {
