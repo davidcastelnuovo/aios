@@ -273,6 +273,47 @@ export async function fetchKnownEntityNames(supabase: any, tenantId: string): Pr
 // When `integrationId` is provided, we prefer a step whose `carmen_integration_id` matches it.
 // Steps pinned to a different integration are excluded. Unpinned steps are used as a fallback
 // when no pinned match exists.
+export const DUAL_CARMEN_SKIP = 'SKIP_OTHER_CARMEN';
+
+// A WhatsApp group can host Carmen bots of more than one tenant (e.g. MC + DMM),
+// each receiving the same event via her own gateway instance — without
+// arbitration both would answer. Returns the OTHER tenants claiming this group
+// in an active carmen trigger, plus whether WE are the deterministic "primary"
+// (lowest tenant_id) for content-free turns like a bare greeting.
+export async function findDualCarmenClaims(
+  supabase: any,
+  tenantId: string,
+  groupChatId: string,
+): Promise<{ others: Array<{ tenant_id: string; name: string }>; iAmPrimary: boolean }> {
+  try {
+    const { data } = await supabase
+      .from('automation_flow_steps')
+      .select('tenant_id, configuration')
+      .eq('step_type', 'trigger')
+      .eq('action_type', 'carmen_whatsapp_session')
+      .neq('tenant_id', tenantId);
+    const claimIds: string[] = [];
+    for (const r of (data || [])) {
+      const g = r?.configuration?.carmen_allowed_group_ids;
+      if (Array.isArray(g) && g.includes(groupChatId) && !claimIds.includes(r.tenant_id)) claimIds.push(r.tenant_id);
+    }
+    if (claimIds.length === 0) return { others: [], iAmPrimary: true };
+    const { data: tenants } = await supabase.from('tenants').select('id, name').in('id', claimIds);
+    const others = (tenants || []).map((t: any) => ({ tenant_id: t.id, name: t.name }));
+    const iAmPrimary = [tenantId, ...claimIds].sort()[0] === tenantId;
+    return { others, iAmPrimary };
+  } catch (e) {
+    console.error('[carmen] findDualCarmenClaims failed (treating as sole owner):', String(e));
+    return { others: [], iAmPrimary: true };
+  }
+}
+
+// Arbitration note appended to the model input in dual-Carmen groups. The model
+// answers only org-relevant messages and emits the skip sentinel otherwise.
+export function buildDualCarmenNote(myTenantName: string, otherNames: string[]): string {
+  return `\n\n[הנחיית מערכת — בקבוצה זו פעילה גם כרמן של ${otherNames.join(' ו-')} בנוסף אלייך (כרמן של ${myTenantName}). עני אך ורק אם ההודעה נוגעת לארגון שלך — לקוחות, קמפיינים, אנשים או נושאים של ${myTenantName}. אם ההודעה שייכת לארגון האחר, מופנית לכרמן שלו, או שאין דרך לדעת בוודאות ואת לא הנמענת הטבעית — השיבי בדיוק את המחרוזת ${DUAL_CARMEN_SKIP} ותו לא.]`;
+}
+
 export async function findCarmenSessionAutomation(
   supabase: any,
   tenantId: string,
@@ -913,13 +954,21 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     const effectiveName = senderName || activeSession.sender_name;
 
     let carmenResponse: string;
+    let dualNote = '';
     try {
+      if (isGroup) {
+        const dual = await findDualCarmenClaims(supabase, tenantId, chatId);
+        if (dual.others.length > 0) {
+          const { data: myTenant } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
+          dualNote = buildDualCarmenNote(myTenant?.name || 'הארגון שלך', dual.others.map((o) => o.name));
+        }
+      }
       const recentContext = await fetchRecentChatContext(
         supabase, tenantId, chatId, isGroup, effectivePhone,
       );
       const mergedHistory = buildCarmenMergedHistory(recentContext, history);
       carmenResponse = await runCarmenAI(
-        supabase, activeSession.agent_id, tenantId, messageText, mergedHistory,
+        supabase, activeSession.agent_id, tenantId, messageText + dualNote, mergedHistory,
         effectivePhone, effectiveName, waNotify,
       );
 
@@ -932,6 +981,16 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', activeSession.id);
       return { handled: true, outcome: 'error' };
+    }
+
+    // Dual-Carmen groups: the model deferred to the other org's Carmen — stay silent.
+    if (carmenResponse.includes(DUAL_CARMEN_SKIP)) {
+      console.log('[carmen] dual-carmen skip (continue)', { session: activeSession.id, chatId });
+      await supabase
+        .from('carmen_whatsapp_sessions')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', activeSession.id);
+      return { handled: true, outcome: 'deferred_to_other_carmen' };
     }
 
     // Output guard: if Carmen is about to "report" instructions, suppress it.
@@ -1108,13 +1167,26 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // Otherwise send a brief greeting only. Either way — save the assistant reply to history
   // so the echo-guard catches the provider mirroring it back.
   if (contentAfterKeyword.length > 2) {
+    let dualNote = '';
+    if (isGroup) {
+      const dual = await findDualCarmenClaims(supabase, tenantId, chatId);
+      if (dual.others.length > 0) {
+        const { data: myTenant } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
+        dualNote = buildDualCarmenNote(myTenant?.name || 'הארגון שלך', dual.others.map((o) => o.name));
+      }
+    }
     const recentContext = await fetchRecentChatContext(
       supabase, tenantId, chatId, isGroup, phoneNumber,
     );
     const mergedHistory = buildCarmenMergedHistory(recentContext, []);
     const carmenResponse = await runCarmenAI(
-      supabase, agentId, tenantId, contentAfterKeyword, mergedHistory, phoneNumber, senderName, waNotify,
+      supabase, agentId, tenantId, contentAfterKeyword + dualNote, mergedHistory, phoneNumber, senderName, waNotify,
     );
+
+    if (carmenResponse.includes(DUAL_CARMEN_SKIP)) {
+      console.log('[carmen] dual-carmen skip (session start)', { session: newSession.id, chatId });
+      return { handled: true, outcome: 'deferred_to_other_carmen' };
+    }
 
     const history = [
       { role: 'user', content: contentAfterKeyword, timestamp: new Date().toISOString() },
@@ -1126,6 +1198,11 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       .eq('id', newSession.id);
     await routedSend(chatId, carmenResponse);
     await syncCarmenToAIConversation(supabase, newSession, history);
+  } else if (isGroup && !(await findDualCarmenClaims(supabase, tenantId, chatId)).iAmPrimary) {
+    // Dual-Carmen group + bare keyword (no content to judge relevance by):
+    // only the deterministic primary tenant greets, so the user gets one hello.
+    console.log('[carmen] dual-carmen bare-greeting skip (not primary)', { chatId, tenantId });
+    return { handled: true, outcome: 'deferred_to_other_carmen' };
   } else {
     // Context-aware opener: load recent chat history so Carmen doesn't reintroduce
     // herself on every new session. If there's prior conversation, she picks up
