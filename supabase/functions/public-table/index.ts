@@ -59,7 +59,8 @@ function getDateRange(
       return { startDate: fmt(startLW), endDate: fmt(endLW) };
     }
     case "last_7_days":
-      return { startDate: fmt(subDays(today, 6)), endDate: fmt(today) };
+      // Match Facebook's "Last 7 days": 7 full days ending yesterday.
+      return { startDate: fmt(subDays(today, 7)), endDate: fmt(subDays(today, 1)) };
     case "last_14_days":
       return { startDate: fmt(subDays(today, 14)), endDate: fmt(subDays(today, 1)) };
     case "last_30_days":
