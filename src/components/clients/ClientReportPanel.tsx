@@ -57,16 +57,15 @@ function getSyncFunction(integrationType: string | null): string | null {
 
 function getAdAccountUrl(table: any): string | null {
   const settings = table?.integration_settings || {};
-  const rawId = settings.ad_account_id;
-  if (!rawId) return null;
   const type = table?.integration_type;
   if (type === "facebook_insights" || type === "facebook_ecommerce") {
-    const id = String(rawId).replace(/^act_/, "");
+    const id = String(settings.ad_account_id || "").replace(/^act_/, "");
     if (!id) return null;
     return `https://business.facebook.com/adsmanager/manage/campaigns?act=${id}`;
   }
   if (type === "google_ads") {
-    const id = String(rawId).replace(/-/g, "");
+    // Google Ads tables store the account under customer_id (not ad_account_id).
+    const id = String(settings.customer_id || settings.ad_account_id || "").replace(/-/g, "");
     if (!id) return null;
     return `https://ads.google.com/aw/overview?__e=${id}`;
   }
@@ -214,7 +213,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         setIsSyncing(true);
         try {
           await supabase.functions.invoke(syncFn, {
-            body: { tableId: table.id, tenantId },
+            body: { table_id: table.id },
           });
         } catch (err) {
           console.error("Sync error:", err);
@@ -262,7 +261,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       await supabase.functions.invoke(syncFn, {
-        body: { tableId: table.id, tenantId },
+        body: { table_id: table.id },
       });
       await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
     } catch (err) {
@@ -291,13 +290,37 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         if (computed > 100) height = computed;
       }
 
+      // Canvas size guard: browsers silently return an invalid "data:," URL
+      // when the canvas exceeds their max dimensions (~32k px), which showed
+      // as a broken image on tall reports (e.g. Google Ads with many daily
+      // rows). Lower the pixel ratio for tall nodes and hard-crop past a
+      // safe maximum so the capture always yields a valid image.
+      const MAX_CANVAS_PX = 16000;
+      const fullHeight = height ?? Math.ceil(node.getBoundingClientRect().height);
+      let pixelRatio = 1.5;
+      if (fullHeight * pixelRatio > MAX_CANVAS_PX) {
+        pixelRatio = Math.max(0.75, MAX_CANVAS_PX / fullHeight);
+      }
+      let captureHeight = height;
+      if (fullHeight * pixelRatio > MAX_CANVAS_PX) {
+        captureHeight = Math.floor(MAX_CANVAS_PX / pixelRatio);
+      }
+
       const dataUrl = await toPng(node, {
         quality: 0.9,
-        pixelRatio: 1.5,
+        pixelRatio,
         backgroundColor: "#ffffff",
         skipFonts: true,
-        ...(height ? { height, canvasHeight: height } : {}),
+        ...(captureHeight
+          ? { height: captureHeight, canvasHeight: Math.floor(captureHeight * pixelRatio) }
+          : {}),
       });
+
+      // An oversized/failed canvas yields an empty data URL — treat as an error
+      // instead of setting a broken <img> source.
+      if (!dataUrl || dataUrl.length < 200) {
+        throw new Error("Screenshot produced an empty image (canvas too large?)");
+      }
 
       setScreenshotUrl(dataUrl);
       try {
