@@ -30,10 +30,10 @@ function getDateRange(filter: string, integrationType?: string | null): { startD
       endDate = yesterdayStr;
       break;
     case "last_7_days": {
-      // Ads platforms: last 7 days includes today + 6 days back.
+      // Ads platforms: match Facebook's "Last 7 days" — 7 full days ending yesterday.
       if (["facebook_insights", "facebook_ecommerce", "google_ads"].includes(String(integrationType || ""))) {
-        startDate = new Date(Date.UTC(y, m, d - 6)).toISOString().split("T")[0];
-        endDate = todayStr;
+        startDate = new Date(Date.UTC(y, m, d - 7)).toISOString().split("T")[0];
+        endDate = yesterdayStr;
         break;
       }
       // WooCommerce remains most recent COMPLETED Sunday → Saturday week (UTC).

@@ -338,8 +338,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         break;
       }
       case 'last_7_days':
-        startDate = format(subDays(today, 6), 'yyyy-MM-dd');
-        endDate = format(today, 'yyyy-MM-dd');
+        // Match Facebook's "Last 7 days": 7 full days ending yesterday.
+        startDate = format(subDays(today, 7), 'yyyy-MM-dd');
+        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
         break;
       case 'last_14_days':
         startDate = format(subDays(today, 14), 'yyyy-MM-dd');
