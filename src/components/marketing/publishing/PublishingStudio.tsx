@@ -134,7 +134,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     try {
       const { data, error } = await supabase.functions.invoke("domain-connections", { body: { tenant_id: tenantId, action: "test" } });
       if (error) throw error;
-      if (!data?.ionos?.connected) throw new Error(`IONOS לא התחבר (HTTP ${data?.ionos?.status ?? "?"})`);
+      if (!data?.ionos?.connected) throw new Error(`IONOS לא התחבר (HTTP ${data?.ionos?.status ?? "?"})${data?.ionos?.error ? `: ${data.ionos.error}` : ""}`);
       if (!data?.vercel?.connected || !data?.vercel?.project_access) throw new Error("Vercel מחובר אך אין גישה לפרויקט האתר");
       toast.success(data?.ionos?.paperlief_found ? "IONOS ו-Vercel מחוברים; paperlief.com זוהה" : "IONOS ו-Vercel מחוברים; paperlief.com לא נמצא באזורי ה-DNS");
     } catch (error: unknown) { toast.error(errorMessage(error, "בדיקת החיבורים נכשלה")); } finally { setTestingConnections(false); }
