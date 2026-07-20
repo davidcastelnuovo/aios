@@ -115,9 +115,17 @@ Deno.serve(async (request) => {
     const requestedName = String(body?.name ?? "").trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
     if (!requestedName) return reply({ success: false, error: "site_name_required" }, 400);
     const headers = { Authorization: `Bearer ${vercelToken}`, Accept: "application/json", "Content-Type": "application/json" };
-    const projectResponse = await fetch(`https://api.vercel.com/v10/projects?teamId=${teamId}`, { method: "POST", headers, body: JSON.stringify({ name: requestedName, framework: "astro" }) });
-    const project = await projectResponse.json().catch(() => ({}));
-    if (!projectResponse.ok) return reply({ success: false, error: "vercel_create_project_failed", status: projectResponse.status, detail: project?.error?.message }, 400);
+    const existingResponse = await fetch(`https://api.vercel.com/v9/projects/${requestedName}?teamId=${teamId}`, { headers });
+    let project = existingResponse.ok ? await existingResponse.json().catch(() => ({})) : null;
+    if (!project) {
+      const projectResponse = await fetch(`https://api.vercel.com/v10/projects?teamId=${teamId}`, { method: "POST", headers, body: JSON.stringify({ name: requestedName, framework: "astro" }) });
+      project = await projectResponse.json().catch(() => ({}));
+      if (!projectResponse.ok) return reply({ success: false, error: "vercel_create_project_failed", status: projectResponse.status, detail: project?.error?.message }, 400);
+    }
+    const currentDeploymentsResponse = await fetch(`https://api.vercel.com/v6/deployments?projectId=${project.id}&teamId=${teamId}&limit=1&state=READY`, { headers });
+    const currentDeployments = await currentDeploymentsResponse.json().catch(() => ({}));
+    const currentDeployment = currentDeployments?.deployments?.[0];
+    if (currentDeployment) return reply({ success: true, existing: true, project: { id: project.id, name: project.name }, deployment: { id: currentDeployment.uid, url: currentDeployment.url, status: currentDeployment.state } });
     const deploymentsResponse = await fetch(`https://api.vercel.com/v6/deployments?projectId=${templateProjectId}&teamId=${teamId}&limit=1&state=READY`, { headers });
     const deployments = await deploymentsResponse.json().catch(() => ({}));
     const templateDeploymentId = deployments?.deployments?.[0]?.uid;
@@ -125,7 +133,7 @@ Deno.serve(async (request) => {
     const deployResponse = await fetch(`https://api.vercel.com/v13/deployments?teamId=${teamId}`, { method: "POST", headers, body: JSON.stringify({ name: requestedName, project: project.id, deploymentId: templateDeploymentId, target: "production" }) });
     const deployment = await deployResponse.json().catch(() => ({}));
     if (!deployResponse.ok) return reply({ success: false, error: "vercel_deploy_site_failed", status: deployResponse.status, detail: deployment?.error?.message, project }, 400);
-    return reply({ success: true, project: { id: project.id, name: project.name }, deployment: { id: deployment.id, url: deployment.url, status: deployment.status ?? deployment.readyState } });
+    return reply({ success: true, existing: false, project: { id: project.id, name: project.name }, deployment: { id: deployment.id, url: deployment.url, status: deployment.status ?? deployment.readyState } });
   }
 
   if (action === "connect") {
