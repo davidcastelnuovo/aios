@@ -25,6 +25,11 @@ verify_jwt = false
 [functions.claude-notify]
 verify_jwt = false
 
+# Called from Postgres (carmen_send_activation) with the CLAUDE_MCP_BEARER
+# shared secret, not a Supabase JWT. Must stay false.
+[functions.carmen-activate-phone]
+verify_jwt = false
+
 [functions.carmen-admin-mcp]
 verify_jwt = false
 
