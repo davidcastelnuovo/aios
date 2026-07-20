@@ -420,15 +420,18 @@ export default function AccountingIntegrations() {
     return { monthStart, monthEnd };
   }, [selectedMonth]);
 
+  // A non-active client counts as "active in the selected month" only when it
+  // has an explicit end_date inside/after that month. Without an end_date we
+  // can't claim it was active then — otherwise every paused/ended client
+  // without an end_date leaks into every month.
   const wasActiveInMonth = (client: any) => {
     const { monthStart, monthEnd } = monthRange;
+    if (!client.end_date) return false;
+    const ed = new Date(client.end_date);
+    if (ed < monthStart) return false;
     if (client.start_date) {
       const sd = new Date(client.start_date);
       if (sd >= monthEnd) return false;
-    }
-    if (client.end_date) {
-      const ed = new Date(client.end_date);
-      if (ed < monthStart) return false;
     }
     return true;
   };
