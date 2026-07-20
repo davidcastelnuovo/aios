@@ -9,7 +9,9 @@ import { cn } from "@/lib/utils";
 interface Props {
   tenantId: string | undefined;
   value: string | null;
-  onChange: (id: string) => void;
+  onChange: (id: string | null) => void;
+  allowGeneral?: boolean;
+  generalLabel?: string;
 }
 
 interface Client {
@@ -26,7 +28,7 @@ interface Agency {
 const ALL_AGENCY = "__all__";
 const NO_AGENCY = "__none__";
 
-export function ClientSelector({ tenantId, value, onChange }: Props) {
+export function ClientSelector({ tenantId, value, onChange, allowGeneral = false, generalLabel = "תוכן כללי" }: Props) {
   const [open, setOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
@@ -92,7 +94,7 @@ export function ClientSelector({ tenantId, value, onChange }: Props) {
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="min-w-[220px] justify-between" dir="rtl">
-          <span className="truncate">{current?.name ?? "בחר לקוח"}</span>
+          <span className="truncate">{current?.name ?? (allowGeneral ? generalLabel : "בחר לקוח")}</span>
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -101,6 +103,14 @@ export function ClientSelector({ tenantId, value, onChange }: Props) {
           <div>
             <div className="border-b p-2 text-xs font-medium text-muted-foreground">בחר סוכנות</div>
             <div className="max-h-[320px] overflow-y-auto">
+              {allowGeneral && (
+                <button
+                  className={cn("flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60", value === null && "bg-muted")}
+                  onClick={() => { onChange(null); setOpen(false); }}
+                >
+                  <User className="h-4 w-4 text-muted-foreground" /> {generalLabel}
+                </button>
+              )}
               <button
                 className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-muted/60"
                 onClick={() => setSelectedAgency(ALL_AGENCY)}
