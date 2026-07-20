@@ -11,6 +11,7 @@ const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body)
 });
 
 Deno.serve(async (request) => {
+  try {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (request.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
 
@@ -26,6 +27,7 @@ Deno.serve(async (request) => {
 
   const body = await request.json().catch(() => ({}));
   const tenantId = typeof body?.tenant_id === "string" ? body.tenant_id : "";
+  const action = body?.action === "connect" ? "connect" : "test";
   if (!tenantId) return reply({ error: "tenant_id_required" }, 400);
 
   const [{ data: membership }, { data: superAdmin }] = await Promise.all([
@@ -34,8 +36,8 @@ Deno.serve(async (request) => {
   ]);
   if (!membership && superAdmin !== true) return reply({ error: "forbidden" }, 403);
 
-  const ionosKey = Deno.env.get("IONOS_API_KEY") ?? "";
-  const vercelToken = Deno.env.get("VERCEL_TOKEN") ?? "";
+  const ionosKey = (Deno.env.get("IONOS_API_KEY") ?? "").trim();
+  const vercelToken = (Deno.env.get("VERCEL_TOKEN") ?? "").trim();
   const result: Record<string, unknown> = {
     ionos: { configured: Boolean(ionosKey), connected: false },
     vercel: { configured: Boolean(vercelToken), connected: false, project_access: false },
@@ -46,12 +48,20 @@ Deno.serve(async (request) => {
       headers: { "X-API-Key": ionosKey, Accept: "application/json" },
     });
     const responseText = await response.text();
-    const zones = response.ok ? JSON.parse(responseText) : [];
+    let zones: unknown = [];
+    if (response.ok && responseText.trim()) {
+      try {
+        zones = JSON.parse(responseText);
+      } catch {
+        zones = [];
+      }
+    }
     result.ionos = {
       configured: true,
       connected: response.ok,
       status: response.status,
       error: response.ok ? null : responseText.slice(0, 300),
+      response_format: response.ok && responseText.trim() && !Array.isArray(zones) ? "unexpected" : "ok",
       paperlief_found: Array.isArray(zones) && zones.some((zone) => String(zone?.zoneName ?? zone?.name ?? "").replace(/\.$/, "").toLowerCase() === "paperlief.com"),
       zone_count: Array.isArray(zones) ? zones.length : 0,
     };
@@ -72,5 +82,84 @@ Deno.serve(async (request) => {
     };
   }
 
+  if (action === "connect") {
+    if (!ionosKey || !vercelToken) return reply({ success: false, error: "provider_credentials_missing", ...result }, 400);
+
+    const domain = "paperlief.com";
+    const projectId = "prj_rNR7SGvwcSFTMDTauQQlNqabmZLD";
+    const teamId = "team_anYCth1AhJ3ZrgT0tJGvv63t";
+    const vercelHeaders = { Authorization: `Bearer ${vercelToken}`, Accept: "application/json", "Content-Type": "application/json" };
+    const addDomainResponse = await fetch(`https://api.vercel.com/v10/projects/${projectId}/domains?teamId=${teamId}`, {
+      method: "POST",
+      headers: vercelHeaders,
+      body: JSON.stringify({ name: domain }),
+    });
+    const addDomainText = await addDomainResponse.text();
+    if (!addDomainResponse.ok && addDomainResponse.status !== 409) {
+      return reply({ success: false, error: "vercel_add_domain_failed", status: addDomainResponse.status, detail: addDomainText.slice(0, 500), ...result }, 400);
+    }
+
+    const configResponse = await fetch(`https://api.vercel.com/v6/domains/${domain}/config?projectIdOrName=${projectId}&teamId=${teamId}`, {
+      headers: vercelHeaders,
+    });
+    const configText = await configResponse.text();
+    if (!configResponse.ok) return reply({ success: false, error: "vercel_domain_config_failed", status: configResponse.status, detail: configText.slice(0, 500), ...result }, 400);
+    const config = JSON.parse(configText);
+    const rankedIps = Array.isArray(config?.recommendedIPv4) ? [...config.recommendedIPv4].sort((a, b) => Number(a?.rank ?? 99) - Number(b?.rank ?? 99)) : [];
+    const ipValue = Array.isArray(rankedIps[0]?.value) ? rankedIps[0].value[0] : rankedIps[0]?.value;
+    if (typeof ipValue !== "string" || !/^\d{1,3}(\.\d{1,3}){3}$/.test(ipValue)) {
+      return reply({ success: false, error: "vercel_dns_recommendation_missing", detail: "No recommended IPv4 was returned", ...result }, 400);
+    }
+
+    const ionosHeaders = { "X-API-Key": ionosKey, Accept: "application/json", "Content-Type": "application/json" };
+    const zonesResponse = await fetch("https://api.hosting.ionos.com/dns/v1/zones", { headers: ionosHeaders });
+    const zonesText = await zonesResponse.text();
+    if (!zonesResponse.ok) return reply({ success: false, error: "ionos_zones_failed", status: zonesResponse.status, detail: zonesText.slice(0, 500), ...result }, 400);
+    const zones = JSON.parse(zonesText);
+    const zone = Array.isArray(zones) ? zones.find((item) => String(item?.name ?? item?.zoneName ?? "").replace(/\.$/, "").toLowerCase() === domain) : null;
+    if (!zone?.id) return reply({ success: false, error: "ionos_zone_not_found", detail: domain, ...result }, 404);
+
+    const record = { name: domain, type: "A", content: ipValue, ttl: 3600, prio: 0, disabled: false };
+    const recordsResponse = await fetch(`https://api.hosting.ionos.com/dns/v1/zones/${zone.id}?recordName=${encodeURIComponent(domain)}&recordType=A`, { headers: ionosHeaders });
+    const recordsText = await recordsResponse.text();
+    if (!recordsResponse.ok) return reply({ success: false, error: "ionos_records_read_failed", status: recordsResponse.status, detail: recordsText.slice(0, 500), ...result }, 400);
+    const zoneDetails = recordsText.trim() ? JSON.parse(recordsText) : {};
+    const currentRecords = Array.isArray(zoneDetails?.records) ? zoneDetails.records : [];
+    const alreadyConfigured = currentRecords.some((item) => String(item?.name ?? "").replace(/\.$/, "").toLowerCase() === domain && item?.type === "A" && item?.content === ipValue && item?.disabled !== true);
+
+    let dnsStatus = 200;
+    if (!alreadyConfigured) {
+      const hasApexA = currentRecords.some((item) => String(item?.name ?? "").replace(/\.$/, "").toLowerCase() === domain && item?.type === "A");
+      const dnsResponse = await fetch(`https://api.hosting.ionos.com/dns/v1/zones/${zone.id}${hasApexA ? "" : "/records"}`, {
+        method: hasApexA ? "PATCH" : "POST",
+        headers: ionosHeaders,
+        body: JSON.stringify([record]),
+      });
+      dnsStatus = dnsResponse.status;
+      const dnsText = await dnsResponse.text();
+      if (!dnsResponse.ok) return reply({ success: false, error: "ionos_dns_write_failed", status: dnsResponse.status, detail: dnsText.slice(0, 500), ...result }, 400);
+    }
+
+    return reply({
+      success: true,
+      connected: true,
+      domain,
+      vercel: { added: addDomainResponse.ok, already_added: addDomainResponse.status === 409, config_status: configResponse.status },
+      ionos: { zone_id: zone.id, record_type: "A", record_value: ipValue, already_configured: alreadyConfigured, write_status: dnsStatus },
+      propagation: "pending",
+    });
+  }
+
   return reply({ success: true, ...result });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown_error";
+    console.error("domain-connections failed", detail);
+    return reply({
+      success: false,
+      error: "domain_connection_check_failed",
+      detail,
+      ionos: { configured: Boolean((Deno.env.get("IONOS_API_KEY") ?? "").trim()), connected: false, error: detail },
+      vercel: { configured: Boolean((Deno.env.get("VERCEL_TOKEN") ?? "").trim()), connected: false, project_access: false },
+    });
+  }
 });
