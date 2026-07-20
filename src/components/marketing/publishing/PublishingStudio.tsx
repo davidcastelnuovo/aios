@@ -52,7 +52,7 @@ function readCell(record: Record<string, unknown>, aliases: string[]) {
   return normalize(entry?.[1]);
 }
 
-export function PublishingStudio({ tenantId, clientId }: { tenantId: string; clientId: string }) {
+export function PublishingStudio({ tenantId, clientId }: { tenantId: string; clientId?: string }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewRows, setPreviewRows] = useState<ImportRow[]>([]);
@@ -60,6 +60,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const [sheetCount, setSheetCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [testingConnections, setTestingConnections] = useState(false);
+  const [connectingDomain, setConnectingDomain] = useState(false);
   // The generated Supabase types will include these tables after the migration is applied.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any;
@@ -113,7 +114,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     try {
       const rows = wordpressSites.map((site) => ({
         tenant_id: tenantId,
-        client_id: site.client_id ?? clientId,
+        client_id: site.client_id ?? clientId ?? null,
         site_key: `wordpress-${site.id}`,
         name: site.site_name || new URL(site.site_url).hostname,
         destination_type: "wordpress",
@@ -138,6 +139,28 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
       if (!data?.vercel?.connected || !data?.vercel?.project_access) throw new Error("Vercel מחובר אך אין גישה לפרויקט האתר");
       toast.success(data?.ionos?.paperlief_found ? "IONOS ו-Vercel מחוברים; paperlief.com זוהה" : "IONOS ו-Vercel מחוברים; paperlief.com לא נמצא באזורי ה-DNS");
     } catch (error: unknown) { toast.error(errorMessage(error, "בדיקת החיבורים נכשלה")); } finally { setTestingConnections(false); }
+  };
+
+  const connectPaperlief = async () => {
+    setConnectingDomain(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("domain-connections", { body: { tenant_id: tenantId, action: "connect" } });
+      if (error) throw error;
+      if (!data?.success || !data?.connected) throw new Error(data?.detail || data?.error || "חיבור הדומיין נכשל");
+      toast.success("paperlief.com חובר ל-Vercel ורשומת ה-DNS עודכנה ב-IONOS");
+    } catch (error: unknown) {
+      let detail = errorMessage(error, "חיבור paperlief.com נכשל");
+      const context = (error as { context?: Response })?.context;
+      if (context) {
+        try {
+          const payload = await context.clone().json();
+          detail = payload?.detail || payload?.error || detail;
+        } catch { /* Keep the original client error. */ }
+      }
+      toast.error(detail);
+    } finally {
+      setConnectingDomain(false);
+    }
   };
 
   const parseWorkbook = async (file: File) => {
@@ -202,7 +225,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         {previewRows.length > 0 && <Card className="overflow-hidden"><div className="flex items-center border-b p-4"><div className="flex-1"><h3 className="font-bold">תצוגה מקדימה — {fileName}</h3><p className="text-xs text-muted-foreground">{previewRows.length} שורות · {sheetCount} גיליונות · אפשר לשנות יעד וקטגוריה לפני השמירה</p></div><Button onClick={importRows} disabled={busy || !sites.length}>{busy ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="ml-2 h-4 w-4" />}ייבא משימות</Button></div><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי</th><th className="p-3 text-right">נושא</th><th className="p-3 text-right">יעד פרסום</th><th className="p-3 text-right">קטגוריה</th></tr></thead><tbody>{previewRows.slice(0, 200).map((row, index) => { const destination = siteByKey.get(row.siteKey); const categories = destination?.categories.length ? destination.categories : SITE_TEMPLATES.find((site) => site.site_key === row.siteKey)?.categories ?? [row.category]; return <tr key={`${row.sheetName}-${index}`} className="border-t"><td className="p-3 font-medium">{row.customerName || "—"}</td><td className="p-3">{row.primaryKeyword}</td><td className="max-w-sm p-3">{row.topic || "—"}</td><td className="p-3"><Select value={row.siteKey} onValueChange={(siteKey) => { const next = siteByKey.get(siteKey); updatePreview(index, { siteKey, category: next?.categories[0] ?? row.category }); }}><SelectTrigger className="h-8 w-52"><SelectValue /></SelectTrigger><SelectContent>{sites.map((site) => <SelectItem key={site.site_key} value={site.site_key}>{site.destination_type === "pbn" ? "PBN" : "לקוח"} · {site.name}</SelectItem>)}</SelectContent></Select></td><td className="p-3"><Select value={row.category} onValueChange={(category) => updatePreview(index, { category })}><SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></td></tr>})}</tbody></table>{previewRows.length > 200 && <div className="p-3 text-center text-xs text-muted-foreground">מוצגות 200 השורות הראשונות מתוך {previewRows.length}</div>}</div></Card>}
       </div></ScrollArea></TabsContent>
       <TabsContent value="articles" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><Card className="overflow-hidden">{loadingArticles ? <Loader2 className="mx-auto my-12 h-6 w-6 animate-spin" /> : <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי ונושא</th><th className="p-3 text-right">אתר</th><th className="p-3 text-right">סטטוס</th><th className="p-3 text-right">פעולה</th></tr></thead><tbody>{articles.map((article) => <tr key={article.id} className="border-t"><td className="p-3 font-medium">{article.customer_name || "מערכתי"}</td><td className="p-3"><div className="font-medium">{article.primary_keyword}</div><div className="max-w-md truncate text-muted-foreground">{article.proposed_topic}</div></td><td className="p-3">{siteById.get(article.site_id ?? "")?.name ?? "לא משויך"}<div className="text-[10px] text-muted-foreground">{article.category}</div></td><td className="p-3"><Badge variant="outline">{article.status}</Badge></td><td className="p-3"><Select value={article.status} onValueChange={(status) => updateStatus(article, status)}><SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger><SelectContent>{["imported","draft","review","approved","published","failed"].map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></td></tr>)}</tbody></table></div>}</Card></div></ScrollArea></TabsContent>
-      <TabsContent value="sites" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><div className="mb-4 flex items-center justify-between"><div><h3 className="font-bold">יעדי פרסום</h3><p className="text-xs text-muted-foreground">מגזיני PBN, אתרי WordPress של לקוחות ובהמשך חיבורי API נוספים</p></div><div className="flex gap-2"><Button variant="outline" onClick={testDomainConnections} disabled={testingConnections}>{testingConnections ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <PlugZap className="ml-2 h-4 w-4" />}בדיקת IONOS ו-Vercel</Button><Button variant="outline" onClick={syncWordPressSites} disabled={busy || !wordpressSites.length}><Globe2 className="ml-2 h-4 w-4" />סנכרון WordPress ({wordpressSites.length})</Button></div></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{loadingSites ? <Loader2 className="h-6 w-6 animate-spin" /> : sites.map((site) => <Card key={site.id} className="p-4"><div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100"><Globe2 className="h-5 w-5 text-emerald-700" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h3 className="font-bold">{site.name}</h3><Badge variant="outline">{site.destination_type === "pbn" ? "PBN" : site.destination_type === "wordpress" ? "WordPress" : "API"}</Badge><Badge variant="outline">{site.status}</Badge></div><p className="truncate text-xs text-muted-foreground">{site.base_url || site.site_key}</p></div>{site.status === "active" && <Rocket className="h-4 w-4 text-emerald-600" />}</div><div className="mt-4 flex flex-wrap gap-1">{site.categories.map((category) => <Badge key={category} variant="secondary" className="text-[10px]">{category}</Badge>)}</div></Card>)}</div></div></ScrollArea></TabsContent>
+      <TabsContent value="sites" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><div className="mb-4 flex items-center justify-between"><div><h3 className="font-bold">יעדי פרסום</h3><p className="text-xs text-muted-foreground">מגזיני PBN, אתרי WordPress של לקוחות ובהמשך חיבורי API נוספים</p></div><div className="flex gap-2"><Button onClick={connectPaperlief} disabled={connectingDomain}>{connectingDomain ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Rocket className="ml-2 h-4 w-4" />}חבר paperlief.com</Button><Button variant="outline" onClick={testDomainConnections} disabled={testingConnections}>{testingConnections ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <PlugZap className="ml-2 h-4 w-4" />}בדיקת IONOS ו-Vercel</Button><Button variant="outline" onClick={syncWordPressSites} disabled={busy || !wordpressSites.length}><Globe2 className="ml-2 h-4 w-4" />סנכרון WordPress ({wordpressSites.length})</Button></div></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{loadingSites ? <Loader2 className="h-6 w-6 animate-spin" /> : sites.map((site) => <Card key={site.id} className="p-4"><div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100"><Globe2 className="h-5 w-5 text-emerald-700" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h3 className="font-bold">{site.name}</h3><Badge variant="outline">{site.destination_type === "pbn" ? "PBN" : site.destination_type === "wordpress" ? "WordPress" : "API"}</Badge><Badge variant="outline">{site.status}</Badge></div><p className="truncate text-xs text-muted-foreground">{site.base_url || site.site_key}</p></div>{site.status === "active" && <Rocket className="h-4 w-4 text-emerald-600" />}</div><div className="mt-4 flex flex-wrap gap-1">{site.categories.map((category) => <Badge key={category} variant="secondary" className="text-[10px]">{category}</Badge>)}</div></Card>)}</div></div></ScrollArea></TabsContent>
     </Tabs>
   </div>;
 }
