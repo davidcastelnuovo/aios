@@ -45,11 +45,13 @@ Deno.serve(async (request) => {
     const response = await fetch("https://api.hosting.ionos.com/dns/v1/zones", {
       headers: { "X-API-Key": ionosKey, Accept: "application/json" },
     });
-    const zones = response.ok ? await response.json() : [];
+    const responseText = await response.text();
+    const zones = response.ok ? JSON.parse(responseText) : [];
     result.ionos = {
       configured: true,
       connected: response.ok,
       status: response.status,
+      error: response.ok ? null : responseText.slice(0, 300),
       paperlief_found: Array.isArray(zones) && zones.some((zone) => String(zone?.zoneName ?? zone?.name ?? "").replace(/\.$/, "").toLowerCase() === "paperlief.com"),
       zone_count: Array.isArray(zones) ? zones.length : 0,
     };
