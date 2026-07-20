@@ -4,17 +4,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { CheckCircle2, FileSpreadsheet, Globe2, Loader2, PlugZap, Rocket, Upload } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Plus, Rocket, Upload } from "lucide-react";
 
 type PublishingSite = { id: string; site_key: string; name: string; destination_type: "pbn" | "wordpress" | "custom_api"; client_id: string | null; connection_id: string | null; base_url: string | null; categories: string[]; status: string };
 type WordPressSite = { id: string; site_url: string; site_name: string | null; client_id: string | null; is_active: boolean };
 type PublishingArticle = { id: string; customer_name: string | null; primary_keyword: string; proposed_topic: string | null; target_url: string | null; category: string | null; status: string; site_id: string | null; live_url: string | null; updated_at: string };
 type ImportRow = { customerName: string; primaryKeyword: string; topic: string; targetUrl: string; siteKey: string; category: string; sheetName: string; rowNumber: number; errors: string[] };
+type VercelProject = { id: string; name: string; framework: string | null; updated_at?: number };
 
 const SITE_TEMPLATES = [
   { site_key: "site-01", name: "נקודת מבט", categories: ["חדשנות", "טכנולוגיה", "תעשייה חכמה", "בטיחות ומיגון", "תחבורה ושטח", "העתיד כבר כאן"] },
@@ -65,6 +68,11 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const [busy, setBusy] = useState(false);
   const [testingConnections, setTestingConnections] = useState(false);
   const [connectingDomain, setConnectingDomain] = useState(false);
+  const [siteDialogOpen, setSiteDialogOpen] = useState(false);
+  const [domainDialogOpen, setDomainDialogOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<VercelProject | null>(null);
+  const [newSiteName, setNewSiteName] = useState("");
+  const [domainName, setDomainName] = useState("");
   // The generated Supabase types will include these tables after the migration is applied.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any;
@@ -77,6 +85,16 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
       const { data, error } = await db.from("publishing_sites").select("id,site_key,name,destination_type,client_id,connection_id,base_url,categories,status").eq("tenant_id", tenantId).order("site_key");
       if (error) throw error;
       return (data ?? []) as PublishingSite[];
+    },
+  });
+
+  const { data: vercelProjects = [], isLoading: loadingVercel, refetch: refetchVercel } = useQuery({
+    queryKey: ["vercel-publishing-projects", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("domain-connections", { body: { tenant_id: tenantId, action: "list_projects" } });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.detail || data?.error || "טעינת האתרים נכשלה");
+      return (data.projects ?? []) as VercelProject[];
     },
   });
 
@@ -167,6 +185,34 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     }
   };
 
+  const createVercelSite = async () => {
+    if (!newSiteName.trim()) return;
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("domain-connections", { body: { tenant_id: tenantId, action: "create_site", name: newSiteName } });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.detail || data?.error || "יצירת האתר נכשלה");
+      await db.from("publishing_sites").upsert({ tenant_id: tenantId, site_key: `vercel-${data.project.id}`, name: data.project.name, destination_type: "pbn", connection_id: data.project.id, base_url: data.deployment?.url ? `https://${data.deployment.url}` : null, categories: SITE_TEMPLATES[0].categories, status: "active" }, { onConflict: "tenant_id,site_key" });
+      setSiteDialogOpen(false); setNewSiteName("");
+      await Promise.all([refetchVercel(), queryClient.invalidateQueries({ queryKey: ["publishing-sites", tenantId] })]);
+      toast.success("האתר נוצר ונשלח לפריסה");
+    } catch (error: unknown) { toast.error(errorMessage(error, "יצירת האתר נכשלה")); } finally { setBusy(false); }
+  };
+
+  const assignDomain = async () => {
+    if (!selectedProject || !domainName.trim()) return;
+    setConnectingDomain(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("domain-connections", { body: { tenant_id: tenantId, action: "connect", project_id: selectedProject.id, domain: domainName } });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.detail || data?.error || "שיוך הדומיין נכשל");
+      await db.from("publishing_sites").update({ base_url: `https://${data.domain}`, status: "active" }).eq("tenant_id", tenantId).eq("connection_id", selectedProject.id);
+      setDomainDialogOpen(false); setDomainName("");
+      await queryClient.invalidateQueries({ queryKey: ["publishing-sites", tenantId] });
+      toast.success(`${data.domain} שויך לאתר`);
+    } catch (error: unknown) { toast.error(errorMessage(error, "שיוך הדומיין נכשל")); } finally { setConnectingDomain(false); }
+  };
+
   const parseWorkbook = async (file: File) => {
     setBusy(true);
     try {
@@ -242,7 +288,9 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         {previewRows.length > 0 && <Card className="overflow-hidden"><div className="flex items-center border-b p-4"><div className="flex-1"><h3 className="font-bold">תצוגה מקדימה — {fileName}</h3><p className="text-xs text-muted-foreground">{previewRows.length} שורות · {sheetCount} גיליונות · אפשר לשנות יעד וקטגוריה לפני השמירה</p></div><Button onClick={importRows} disabled={busy || !sites.length || previewRows.some((row) => row.errors.length > 0)}>{busy ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="ml-2 h-4 w-4" />}ייבא משימות</Button></div><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי עוגן וקישור חיצוני</th><th className="p-3 text-right">נושא ומקור</th><th className="p-3 text-right">יעד פרסום</th><th className="p-3 text-right">קטגוריה</th></tr></thead><tbody>{previewRows.slice(0, 200).map((row, index) => { const destination = siteByKey.get(row.siteKey); const categories = destination?.categories.length ? destination.categories : SITE_TEMPLATES.find((site) => site.site_key === row.siteKey)?.categories ?? [row.category]; return <tr key={`${row.sheetName}-${index}`} className="border-t"><td className="p-3 font-medium">{row.customerName || "—"}</td><td className="max-w-xs p-3"><div className="font-medium">{row.primaryKeyword || "—"}</div><a className="mt-1 block truncate text-[10px] text-blue-600 hover:underline" href={row.targetUrl} target="_blank" rel="noreferrer">{row.targetUrl || "ללא קישור"}</a>{row.errors.length > 0 && <div className="mt-1 text-[10px] font-medium text-red-600">{row.errors.join(" · ")}</div>}</td><td className="max-w-sm p-3"><div>{row.topic || "—"}</div><div className="mt-1 text-[10px] text-muted-foreground">{row.sheetName} · שורה {row.rowNumber}</div></td><td className="p-3"><Select value={row.siteKey} onValueChange={(siteKey) => { const next = siteByKey.get(siteKey); updatePreview(index, { siteKey, category: next?.categories[0] ?? row.category }); }}><SelectTrigger className="h-8 w-52"><SelectValue /></SelectTrigger><SelectContent>{sites.map((site) => <SelectItem key={site.site_key} value={site.site_key}>{site.destination_type === "pbn" ? "PBN" : "לקוח"} · {site.name}</SelectItem>)}</SelectContent></Select></td><td className="p-3"><Select value={row.category} onValueChange={(category) => updatePreview(index, { category })}><SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></td></tr>})}</tbody></table>{previewRows.length > 200 && <div className="p-3 text-center text-xs text-muted-foreground">מוצגות 200 השורות הראשונות מתוך {previewRows.length}</div>}</div></Card>}
       </div></ScrollArea></TabsContent>
       <TabsContent value="articles" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><Card className="overflow-hidden">{loadingArticles ? <Loader2 className="mx-auto my-12 h-6 w-6 animate-spin" /> : <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי ונושא</th><th className="p-3 text-right">אתר</th><th className="p-3 text-right">סטטוס</th><th className="p-3 text-right">פעולה</th></tr></thead><tbody>{articles.map((article) => <tr key={article.id} className="border-t"><td className="p-3 font-medium">{article.customer_name || "מערכתי"}</td><td className="p-3"><div className="font-medium">{article.primary_keyword}</div><div className="max-w-md truncate text-muted-foreground">{article.proposed_topic}</div></td><td className="p-3">{siteById.get(article.site_id ?? "")?.name ?? "לא משויך"}<div className="text-[10px] text-muted-foreground">{article.category}</div></td><td className="p-3"><Badge variant="outline">{article.status}</Badge></td><td className="p-3"><Select value={article.status} onValueChange={(status) => updateStatus(article, status)}><SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger><SelectContent>{["imported","draft","review","approved","published","failed"].map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></td></tr>)}</tbody></table></div>}</Card></div></ScrollArea></TabsContent>
-      <TabsContent value="sites" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><div className="mb-4 flex items-center justify-between"><div><h3 className="font-bold">יעדי פרסום</h3><p className="text-xs text-muted-foreground">מגזיני PBN, אתרי WordPress של לקוחות ובהמשך חיבורי API נוספים</p></div><div className="flex gap-2"><Button onClick={connectPaperlief} disabled={connectingDomain}>{connectingDomain ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Rocket className="ml-2 h-4 w-4" />}חבר paperlief.com</Button><Button variant="outline" onClick={testDomainConnections} disabled={testingConnections}>{testingConnections ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <PlugZap className="ml-2 h-4 w-4" />}בדיקת IONOS ו-Vercel</Button><Button variant="outline" onClick={syncWordPressSites} disabled={busy || !wordpressSites.length}><Globe2 className="ml-2 h-4 w-4" />סנכרון WordPress ({wordpressSites.length})</Button></div></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{loadingSites ? <Loader2 className="h-6 w-6 animate-spin" /> : sites.map((site) => <Card key={site.id} className="p-4"><div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100"><Globe2 className="h-5 w-5 text-emerald-700" /></div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h3 className="font-bold">{site.name}</h3><Badge variant="outline">{site.destination_type === "pbn" ? "PBN" : site.destination_type === "wordpress" ? "WordPress" : "API"}</Badge><Badge variant="outline">{site.status}</Badge></div><p className="truncate text-xs text-muted-foreground">{site.base_url || site.site_key}</p></div>{site.status === "active" && <Rocket className="h-4 w-4 text-emerald-600" />}</div><div className="mt-4 flex flex-wrap gap-1">{site.categories.map((category) => <Badge key={category} variant="secondary" className="text-[10px]">{category}</Badge>)}</div></Card>)}</div></div></ScrollArea></TabsContent>
+      <TabsContent value="sites" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><div className="mb-5 flex items-center justify-between"><div><h3 className="font-bold">האתרים שלי</h3><p className="text-xs text-muted-foreground">האתרים מ־Vercel. בוחרים אתר כדי לשייך לו דומיין.</p></div><Button onClick={() => setSiteDialogOpen(true)}><Plus className="ml-2 h-4 w-4" />אתר חדש</Button></div>{loadingVercel ? <Loader2 className="mx-auto mt-12 h-6 w-6 animate-spin" /> : <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{vercelProjects.map((project) => { const linked = sites.find((site) => site.connection_id === project.id); return <button key={project.id} onClick={() => { setSelectedProject(project); setDomainName(linked?.base_url?.replace(/^https?:\/\//, "") ?? ""); setDomainDialogOpen(true); }} className="rounded-2xl border bg-card p-4 text-right transition hover:border-emerald-400 hover:shadow-md"><div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100"><Globe2 className="h-5 w-5 text-emerald-700" /></div><div className="min-w-0 flex-1"><h3 className="truncate font-bold">{project.name}</h3><p className="mt-1 truncate text-xs text-muted-foreground">{linked?.base_url || "עדיין ללא דומיין"}</p></div>{linked?.base_url && <ExternalLink className="h-4 w-4 text-emerald-600" />}</div><div className="mt-4 text-xs font-medium text-emerald-700">{linked?.base_url ? "שינוי דומיין" : "שיוך דומיין"}</div></button>})}</div>}</div></ScrollArea></TabsContent>
     </Tabs>
+    <Dialog open={siteDialogOpen} onOpenChange={setSiteDialogOpen}><DialogContent dir="rtl" className="max-w-md"><DialogHeader><DialogTitle>יצירת אתר חדש</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>שם האתר</Label><Input className="mt-1" value={newSiteName} onChange={(event) => setNewSiteName(event.target.value)} placeholder="לדוגמה: מגזין חדשנות" /></div><p className="text-xs text-muted-foreground">האתר ישוכפל מתבנית המגזין ויופיע אוטומטית ב־Vercel.</p><Button className="w-full" onClick={createVercelSite} disabled={busy || !newSiteName.trim()}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}צור אתר</Button></div></DialogContent></Dialog>
+    <Dialog open={domainDialogOpen} onOpenChange={setDomainDialogOpen}><DialogContent dir="rtl" className="max-w-md"><DialogHeader><DialogTitle>דומיין עבור {selectedProject?.name}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>שם הדומיין</Label><Input dir="ltr" className="mt-1 text-left" value={domainName} onChange={(event) => setDomainName(event.target.value)} placeholder="example.com" /></div><p className="text-xs text-muted-foreground">המערכת תחבר את הדומיין ל־Vercel ותעדכן את ה־DNS ב־IONOS.</p><Button className="w-full" onClick={assignDomain} disabled={connectingDomain || !domainName.trim()}>{connectingDomain && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}שייך דומיין</Button></div></DialogContent></Dialog>
   </div>;
 }
