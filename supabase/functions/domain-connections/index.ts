@@ -10,6 +10,19 @@ const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body)
   headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
 });
 
+const flattenDeploymentFiles = (nodes: Array<Record<string, unknown>>, prefix = ""): Array<{ file: string; uid: string }> => nodes.flatMap((node) => {
+  const name = String(node.name ?? "");
+  const path = prefix ? `${prefix}/${name}` : name;
+  if (node.type === "directory" && Array.isArray(node.children)) return flattenDeploymentFiles(node.children as Array<Record<string, unknown>>, path);
+  return node.type === "file" && typeof node.uid === "string" ? [{ file: path, uid: node.uid }] : [];
+});
+
+const toBase64 = (bytes: Uint8Array) => {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  return btoa(binary);
+};
+
 Deno.serve(async (request) => {
   try {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -130,7 +143,17 @@ Deno.serve(async (request) => {
     const deployments = await deploymentsResponse.json().catch(() => ({}));
     const templateDeploymentId = deployments?.deployments?.[0]?.uid;
     if (!templateDeploymentId) return reply({ success: false, error: "template_deployment_missing", project }, 400);
-    const deployResponse = await fetch(`https://api.vercel.com/v13/deployments?teamId=${teamId}`, { method: "POST", headers, body: JSON.stringify({ name: requestedName, project: project.id, deploymentId: templateDeploymentId, target: "production" }) });
+    const filesResponse = await fetch(`https://api.vercel.com/v6/deployments/${templateDeploymentId}/files?teamId=${teamId}`, { headers });
+    const fileTree = await filesResponse.json().catch(() => []);
+    if (!filesResponse.ok || !Array.isArray(fileTree)) return reply({ success: false, error: "template_files_failed", status: filesResponse.status }, 400);
+    const templateFiles = flattenDeploymentFiles(fileTree);
+    if (!templateFiles.length) return reply({ success: false, error: "template_files_missing" }, 400);
+    const files = await Promise.all(templateFiles.map(async ({ file, uid }) => {
+      const contentResponse = await fetch(`https://api.vercel.com/v8/deployments/${templateDeploymentId}/files/${uid}?teamId=${teamId}`, { headers });
+      if (!contentResponse.ok) throw new Error(`template_file_read_failed:${file}:${contentResponse.status}`);
+      return { file, data: toBase64(new Uint8Array(await contentResponse.arrayBuffer())), encoding: "base64" };
+    }));
+    const deployResponse = await fetch(`https://api.vercel.com/v13/deployments?teamId=${teamId}&forceNew=1`, { method: "POST", headers, body: JSON.stringify({ name: requestedName, project: project.id, files, target: "production" }) });
     const deployment = await deployResponse.json().catch(() => ({}));
     if (!deployResponse.ok) return reply({ success: false, error: "vercel_deploy_site_failed", status: deployResponse.status, detail: deployment?.error?.message, project }, 400);
     return reply({ success: true, existing: false, project: { id: project.id, name: project.name }, deployment: { id: deployment.id, url: deployment.url, status: deployment.status ?? deployment.readyState } });
