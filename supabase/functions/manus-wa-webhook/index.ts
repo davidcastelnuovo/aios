@@ -311,6 +311,58 @@ Deno.serve(async (req) => {
     }
 
 
+    // ACTIVATION HANDSHAKE: an unresolved-LID private message may be the reply to
+    // a "you were authorized" activation message (sent by carmen-activate-phone
+    // when a phone is added to carmen_allowed_phones). A reply carrying the
+    // one-time code — or quoting the activation message — proves the sender owns
+    // the allow-listed number, so we learn the LID→phone mapping permanently.
+    if (!isGroup && isLidEvent && !isOutgoingFromPhone && !lidAutoResolved && messageText.trim()) {
+      try {
+        const { data: pendings } = await supabase
+          .from('wa_pending_activations')
+          .select('id, phone, code, activation_message_id')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'pending')
+          .gte('created_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
+          .limit(10);
+        if (pendings && pendings.length > 0) {
+          const quotedId = String(
+            (payload as any).quotedMsgId || (payload as any).quotedMessageId ||
+            (payload as any)?.quotedMsg?.id || (msgContainer as any)?.contextInfo?.stanzaId || '',
+          );
+          const hit = pendings.find((p: any) =>
+            (p.code && new RegExp(`(^|\\D)${p.code}(\\D|$)`).test(messageText)) ||
+            (p.activation_message_id && quotedId && p.activation_message_id === quotedId));
+          if (hit) {
+            const lidDigits = counterpartPhone.replace(/\D/g, '');
+            const realPhone = String(hit.phone).replace(/\D/g, '');
+            await supabase.from('wa_lid_map')
+              .upsert({ lid: lidDigits, phone: realPhone, connection_user_id: connectionUserId, source: 'activation' }, { onConflict: 'lid' });
+            await supabase.from('wa_pending_activations')
+              .update({ status: 'completed', completed_at: new Date().toISOString(), completed_lid: lidDigits })
+              .eq('id', hit.id);
+            console.log('[manus-wa] activation completed — LID mapped', { lid: lidDigits, phone: realPhone });
+            // Confirm to the user through the standard send path (to the real phone).
+            fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              },
+              body: JSON.stringify({
+                integrationId: integ.id, tenantId, phoneNumber: realPhone,
+                senderUserId: connectionUserId,
+                message: 'מעולה, זיהיתי אותך ✅ מעכשיו אפשר לדבר איתי — פשוט תתחיל הודעה במילה "כרמן".',
+              }),
+            }).catch((e) => console.error('[manus-wa] activation confirm send failed:', e?.message));
+            return ok({ received: true, activation: 'completed' });
+          }
+        }
+      } catch (e) {
+        console.error('[manus-wa] activation check failed (continuing):', String(e));
+      }
+    }
+
     // ECHO GUARD: Manus mirrors EVERY message (in and out) as inbound @lid events.
     // If we just sent this exact text via Manus or Green API in the last 2 minutes, drop it.
     if (!isOutgoingFromPhone && isLidEvent && messageText.trim()) {
