@@ -31,10 +31,15 @@ Deno.serve(async (request) => {
   if (!site) return new Response(JSON.stringify({ error: "site_not_found" }), { status: 404, headers: jsonHeaders });
 
   const { data: articles, error } = await admin.from("publishing_articles")
-    .select("id,slug,title,excerpt,category,published_at,content,sources,internal_links,target_url,anchor_text")
+    .select("id,slug,title,excerpt,category,source_month,published_at,content,sources,internal_links,target_url,anchor_text")
     .eq("site_id", site.id).eq("status", "published").not("slug", "is", null).not("title", "is", null)
-    .order("published_at", { ascending: false });
+    .order("source_month", { ascending: false, nullsFirst: false });
   if (error) return new Response(JSON.stringify({ error: "article_lookup_failed" }), { status: 500, headers: jsonHeaders });
 
-  return new Response(JSON.stringify({ site, articles: articles ?? [], generatedAt: new Date().toISOString() }), { status: 200, headers: jsonHeaders });
+  const datedArticles = (articles ?? []).map((article) => ({
+    ...article,
+    article_date: article.source_month ?? article.published_at,
+  }));
+
+  return new Response(JSON.stringify({ site, articles: datedArticles, generatedAt: new Date().toISOString() }), { status: 200, headers: jsonHeaders });
 });
