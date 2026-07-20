@@ -640,13 +640,32 @@ Deno.serve(async (req) => {
       // Falls back to the bot's own tenant when the group isn't registered.
       let groupTenantId = tenantId;
       try {
-        const { data: wgRow } = await supabase
+        const { data: wgRows } = await supabase
           .from('whatsapp_groups')
           .select('tenant_id')
           .eq('group_chat_id', groupChatId)
-          .limit(1)
-          .maybeSingle();
-        if (wgRow?.tenant_id) groupTenantId = wgRow.tenant_id as string;
+          .limit(10);
+        const rows = wgRows || [];
+        const ownRegistered = rows.some((r: any) => r.tenant_id === tenantId);
+        if (!ownRegistered && rows.length > 0) {
+          // The bot's own tenant has no whatsapp_groups claim here. A group is
+          // often registered under ANOTHER tenant just because the operator's
+          // green_api phone synced it (e.g. "דוד ואנה DMM" under MC) — that must
+          // NOT steal events from a Carmen whose own tenant runs in
+          // open-member-groups mode, where membership itself is the claim.
+          // Route to the registered tenant only in the legacy shared-bot case.
+          const { data: ownSteps } = await supabase
+            .from('automation_flow_steps')
+            .select('configuration')
+            .eq('tenant_id', tenantId)
+            .eq('step_type', 'trigger')
+            .eq('action_type', 'carmen_whatsapp_session')
+            .limit(10);
+          const ownHasOpenMode = (ownSteps || []).some(
+            (s: any) => s?.configuration?.carmen_open_member_groups === true,
+          );
+          if (!ownHasOpenMode) groupTenantId = rows[0].tenant_id as string;
+        }
       } catch (_e) { /* fall back to bot tenant */ }
       if (groupTenantId !== tenantId) {
         console.log('[manus-wa group] routed by group → tenant', { groupChatId, botTenant: tenantId, groupTenant: groupTenantId });
