@@ -274,3 +274,8 @@ verify_jwt = false
 # Chrome-extension recording ingest — requires the user's session JWT.
 [functions.ingest-extension-recording]
 verify_jwt = true
+[functions.publishing-feed]
+verify_jwt = false
+
+[functions.domain-connections]
+verify_jwt = true
