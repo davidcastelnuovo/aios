@@ -16,8 +16,9 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BookOpen, Brain, FilePlus2, Gauge, Loader2, Plus, Search, Sparkles, WandSparkles } from "lucide-react";
 import { PublishingStudio } from "@/components/marketing/publishing/PublishingStudio";
+import { ClientSelector } from "@/components/marketing/ClientSelector";
 
-interface Props { clientId: string; tenantId: string }
+interface Props { clientId?: string; tenantId: string; onClientChange: (id: string | null) => void }
 interface SeoItem { id: string; title: string | null; status: string; payload: Record<string, unknown> | null; current_stage_id: string | null; updated_at: string }
 interface Cluster { name?: string; intent?: string; pillarKeyword?: string; supportingKeywords?: string[]; priority?: string; evidence?: string }
 interface ContentItem { title?: string; contentType?: string; primaryKeyword?: string; cluster?: string; intent?: string; angle?: string; geoQuestions?: string[]; priority?: string; status?: string }
@@ -27,7 +28,7 @@ const message = (error: unknown, fallback: string) => error instanceof Error ? e
 const asPlan = (value: unknown): SeoPlan | null => value && typeof value === "object" ? value as SeoPlan : null;
 const priorityClass = (priority?: string) => priority === "high" ? "border-red-300 bg-red-50 text-red-700" : priority === "medium" ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-300 bg-slate-50 text-slate-600";
 
-export function SeoGeoDepartment({ clientId, tenantId }: Props) {
+export function SeoGeoDepartment({ clientId, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -37,17 +38,21 @@ export function SeoGeoDepartment({ clientId, tenantId }: Props) {
   const { data: context, isLoading: loadingContext } = useQuery({
     queryKey: ["seo-department-context", clientId, tenantId],
     queryFn: async () => {
+      if (!clientId) return null;
       const pipeline = await ensurePipelineForClient({ clientId, tenantId, track: "seo_geo" });
       if (!pipeline) throw new Error("לא ניתן לפתוח סביבת SEO/GEO");
       const { data, error } = await supabase.from("marketing_pipeline_stages").select("id,stage_type").eq("pipeline_id", pipeline.id);
       if (error) throw error;
       return { pipeline, seoStage: data?.find((stage) => stage.stage_type === "target_seo") ?? null };
-    },
+    }, enabled: !!clientId,
   });
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ["seo-department-items", clientId, tenantId], enabled: !!context?.pipeline.id,
+    queryKey: ["seo-department-items", clientId, tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("marketing_work_items").select("id,title,status,payload,current_stage_id,updated_at").eq("tenant_id", tenantId).eq("client_id", clientId).order("updated_at", { ascending: false });
+      let query = supabase.from("marketing_work_items").select("id,title,status,payload,current_stage_id,updated_at").eq("tenant_id", tenantId).order("updated_at", { ascending: false });
+      if (clientId) query = query.eq("client_id", clientId);
+      else query = query.is("client_id", null);
+      const { data, error } = await query;
       if (error) throw error;
       return ((data ?? []) as SeoItem[]).filter((item) => item.current_stage_id === context?.seoStage?.id || item.payload?.department === "seo" || !!item.payload?.seo_plan);
     },
@@ -55,6 +60,7 @@ export function SeoGeoDepartment({ clientId, tenantId }: Props) {
   const { data: signals } = useQuery({
     queryKey: ["seo-department-signals", clientId, tenantId],
     queryFn: async () => {
+      if (!clientId) return { reports: 0, keywords: 0, projects: 0 };
       const [{ count: reports }, { data: projects }] = await Promise.all([
         supabase.from("ahrefs_reports").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("client_id", clientId),
         supabase.from("rank_tracking_projects").select("id").eq("tenant_id", tenantId).eq("client_id", clientId).eq("is_active", true),
@@ -62,7 +68,7 @@ export function SeoGeoDepartment({ clientId, tenantId }: Props) {
       const ids = (projects ?? []).map((project) => project.id);
       const { count: keywords } = ids.length ? await supabase.from("rank_tracking_keywords").select("id", { count: "exact", head: true }).in("project_id", ids).eq("is_active", true) : { count: 0 };
       return { reports: reports ?? 0, keywords: keywords ?? 0, projects: ids.length };
-    },
+    }, enabled: !!clientId,
   });
   useEffect(() => { if (!selectedId && items[0]?.id) setSelectedId(items[0].id); if (selectedId && !items.some((item) => item.id === selectedId)) setSelectedId(items[0]?.id ?? null); }, [items, selectedId]);
   const selected = items.find((item) => item.id === selectedId) ?? null;
@@ -70,13 +76,13 @@ export function SeoGeoDepartment({ clientId, tenantId }: Props) {
   const refresh = async () => queryClient.invalidateQueries({ queryKey: ["seo-department-items", clientId, tenantId] });
 
   if (loadingContext) return <div className="flex flex-1 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-emerald-500" /></div>;
-  const sectionTabs = <Tabs value={workspace} onValueChange={(value) => setWorkspace(value as typeof workspace)}><TabsList><TabsTrigger value="strategy">SEO / GEO</TabsTrigger><TabsTrigger value="publishing">ניהול PBN ומאמרים</TabsTrigger></TabsList></Tabs>;
-  if (workspace === "publishing") return <div className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-4 py-2">{sectionTabs}</div><PublishingStudio tenantId={tenantId} clientId={clientId} /></div>;
-  return <div className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-4 py-2">{sectionTabs}</div><div className="grid min-h-0 flex-1 grid-cols-[270px_minmax(0,1fr)_290px] bg-muted/10">
+  const sectionHeader = <div className="flex items-center gap-3"><Tabs value={workspace} onValueChange={(value) => setWorkspace(value as typeof workspace)}><TabsList><TabsTrigger value="strategy">SEO / GEO</TabsTrigger><TabsTrigger value="publishing">ניהול PBN ומאמרים</TabsTrigger></TabsList></Tabs>{workspace === "strategy" && <div className="mr-auto"><ClientSelector tenantId={tenantId} value={clientId ?? null} onChange={onClientChange} allowGeneral generalLabel="תוכן כללי" /></div>}</div>;
+  if (workspace === "publishing") return <div className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-4 py-2">{sectionHeader}</div><PublishingStudio tenantId={tenantId} clientId={clientId} /></div>;
+  return <div className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-4 py-2">{sectionHeader}</div><div className="grid min-h-0 flex-1 grid-cols-[270px_minmax(0,1fr)_290px] bg-muted/10">
     <aside className="flex min-h-0 flex-col border-l bg-card/70"><div className="flex items-center justify-between border-b p-3"><div><h2 className="text-sm font-bold">תוכניות SEO / GEO</h2><p className="text-[11px] text-muted-foreground">בריף, מחקר ותוכנית ביצוע</p></div><Button size="icon" className="h-8 w-8 bg-emerald-600 hover:bg-emerald-700" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /></Button></div><ScrollArea className="flex-1"><div className="space-y-2 p-2">{isLoading ? <Loader2 className="mx-auto mt-8 h-5 w-5 animate-spin" /> : items.length === 0 ? <div className="px-4 py-10 text-center text-xs text-muted-foreground"><FilePlus2 className="mx-auto mb-2 h-8 w-8 opacity-30" />אין תוכניות עדיין</div> : items.map((item) => <button key={item.id} onClick={() => setSelectedId(item.id)} className={cn("w-full rounded-xl border p-3 text-right", selectedId === item.id ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20" : "bg-background hover:bg-muted/50")}><div className="truncate text-xs font-semibold">{item.title || "ללא כותרת"}</div><div className="mt-1 text-[10px] text-muted-foreground">{asPlan(item.payload?.seo_plan)?.contentPlan?.length ?? 0} פריטי תוכן</div></button>)}</div></ScrollArea></aside>
     <main className="flex min-h-0 min-w-0 flex-col">{selected ? <><div className="flex items-center gap-3 border-b bg-card/60 px-4 py-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white"><Search className="h-4 w-4" /></div><div className="min-w-0 flex-1"><h2 className="truncate text-sm font-bold">{selected.title}</h2><p className="text-[11px] text-muted-foreground">SEO / GEO Strategy Studio</p></div><Badge variant="outline">Skin: seo</Badge><Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600" onClick={() => setAiOpen(true)}><WandSparkles className="h-3.5 w-3.5" />כרמן תבנה הכול</Button></div>{plan ? <SeoPlanView plan={plan} /> : <div className="flex flex-1 items-center justify-center p-8 text-center"><div><Brain className="mx-auto mb-4 h-14 w-14 text-emerald-400/40" /><h3 className="text-xl font-black">מנתונים לתוכנית עבודה</h3><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">כרמן תחבר את הבריף, נתוני Ahrefs ומעקב המיקומים לאשכולות, תוכנית תוכן ו-GEO.</p><Button className="mt-5 gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => setAiOpen(true)}><Sparkles className="h-4 w-4" />בני תוכנית מלאה</Button></div></div>}</> : <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">בחר תוכנית או פתח חדשה</div>}</main>
     <aside className="flex min-h-0 flex-col border-r bg-card/80"><div className="border-b p-4"><h3 className="text-sm font-bold">מקורות מידע חיים</h3><p className="text-[11px] text-muted-foreground">כרמן מסמנת כשאין נתון ולא ממציאה</p></div><div className="space-y-3 p-4"><Signal icon={Gauge} label="דוחות Ahrefs" value={signals?.reports ?? 0} /><Signal icon={Search} label="ביטויים במעקב" value={signals?.keywords ?? 0} /><Signal icon={BookOpen} label="פרויקטי דירוג" value={signals?.projects ?? 0} /><Card className="mt-4 p-3 text-[11px] leading-relaxed text-muted-foreground">GEO הוא חלק מהתוכנית: שאלות שמנועי AI צריכים לענות עליהן, ישויות מותג, מקורות סמכות ו-Schema מומלץ.</Card></div></aside>
-    <ManualSeoDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenantId} clientId={clientId} pipelineId={context?.pipeline.id ?? ""} stageId={context?.seoStage?.id ?? ""} onCreated={async (id) => { setSelectedId(id); setCreateOpen(false); await refresh(); }} />
+    <ManualSeoDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenantId} defaultClientId={clientId} onCreated={async (id) => { setSelectedId(id); setCreateOpen(false); await refresh(); }} />
     {selected && <SeoAIDialog open={aiOpen} onClose={() => setAiOpen(false)} item={selected} hasPlan={!!plan} onCompleted={async () => { setAiOpen(false); await refresh(); }} />}
   </div></div>;
 }
@@ -94,10 +100,29 @@ function SeoPlanView({ plan }: { plan: SeoPlan }) {
 function Signal({ icon: Icon, label, value }: { icon: typeof Search; label: string; value: number }) { return <div className="flex items-center gap-3 rounded-xl border bg-background p-3"><Icon className="h-4 w-4 text-emerald-600" /><div className="flex-1 text-xs">{label}</div><div className="text-lg font-black">{value}</div></div> }
 function ListCard({ title, values = [] }: { title: string; values?: string[] }) { return <Card className="p-4"><h3 className="text-sm font-bold">{title}</h3><ul className="mt-3 space-y-2">{values.map((value, index) => <li key={`${value}-${index}`} className="flex gap-2 text-xs leading-relaxed"><span className="text-emerald-500">●</span>{value}</li>)}</ul></Card> }
 
-function ManualSeoDialog({ open, onClose, tenantId, clientId, pipelineId, stageId, onCreated }: { open: boolean; onClose: () => void; tenantId: string; clientId: string; pipelineId: string; stageId: string; onCreated: (id: string) => void }) {
+function ManualSeoDialog({ open, onClose, tenantId, defaultClientId, onCreated }: { open: boolean; onClose: () => void; tenantId: string; defaultClientId?: string; onCreated: (id: string) => void }) {
   const [title, setTitle] = useState(""); const [brief, setBrief] = useState(""); const [saving, setSaving] = useState(false);
-  const create = async () => { if (!title.trim() || !brief.trim()) return; setSaving(true); try { const { data, error } = await supabase.from("marketing_work_items").insert({ tenant_id: tenantId, client_id: clientId, pipeline_id: pipelineId, current_stage_id: stageId, title: title.trim(), status: "draft", target_channel: "seo", payload: { brief_text: brief.trim(), department: "seo", intake_source: "manual" } }).select("id").single(); if (error) throw error; toast.success("הבריף נכנס למחלקת SEO/GEO"); onCreated(data.id); setTitle(""); setBrief(""); } catch (error: unknown) { toast.error(message(error, "יצירת התוכנית נכשלה")); } finally { setSaving(false); } };
-  return <Dialog open={open} onOpenChange={(value) => !value && onClose()}><DialogContent className="max-w-xl" dir="rtl"><DialogHeader><DialogTitle>תוכנית SEO / GEO חדשה</DialogTitle></DialogHeader><div className="grid gap-4 py-2"><div><Label>שם התוכנית</Label><Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="לדוגמה: תוכנית SEO רבעון 4" /></div><div><Label>בריף / מטרות</Label><Textarea className="mt-1 min-h-36" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="שירותים, קהל, שוק, אזורים, מתחרים, מטרות ודגשים שאסור להמציא" /></div><Button onClick={create} disabled={saving || !title.trim() || !brief.trim()} className="bg-emerald-600 hover:bg-emerald-700">{saving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Plus className="ml-2 h-4 w-4" />}פתח תוכנית</Button></div></DialogContent></Dialog>;
+  const [assignedClientId, setAssignedClientId] = useState<string | null>(defaultClientId ?? null);
+  useEffect(() => { if (open) setAssignedClientId(defaultClientId ?? null); }, [defaultClientId, open]);
+  const create = async () => {
+    if (!title.trim() || !brief.trim()) return;
+    setSaving(true);
+    try {
+      let pipelineId: string | null = null; let stageId: string | null = null;
+      if (assignedClientId) {
+        const pipeline = await ensurePipelineForClient({ clientId: assignedClientId, tenantId, track: "seo_geo" });
+        const { data: stages, error: stageError } = await supabase.from("marketing_pipeline_stages").select("id,stage_type").eq("pipeline_id", pipeline.id);
+        if (stageError) throw stageError;
+        pipelineId = pipeline.id; stageId = stages?.find((stage) => stage.stage_type === "target_seo")?.id ?? null;
+        if (!stageId) throw new Error("שלב SEO/GEO לא נמצא");
+      }
+      const { data, error } = await supabase.from("marketing_work_items").insert({ tenant_id: tenantId, client_id: assignedClientId, pipeline_id: pipelineId, current_stage_id: stageId, title: title.trim(), status: "draft", target_channel: "seo", payload: { brief_text: brief.trim(), department: "seo", intake_source: "manual" } }).select("id").single();
+      if (error) throw error;
+      toast.success(assignedClientId ? "הבריף נכנס למחלקת SEO/GEO" : "נוצרה תוכנית SEO/GEO כללית");
+      onCreated(data.id); setTitle(""); setBrief("");
+    } catch (error: unknown) { toast.error(message(error, "יצירת התוכנית נכשלה")); } finally { setSaving(false); }
+  };
+  return <Dialog open={open} onOpenChange={(value) => !value && onClose()}><DialogContent className="max-w-xl" dir="rtl"><DialogHeader><DialogTitle>תוכנית SEO / GEO חדשה</DialogTitle></DialogHeader><div className="grid gap-4 py-2"><div><Label>שיוך</Label><div className="mt-1"><ClientSelector tenantId={tenantId} value={assignedClientId} onChange={setAssignedClientId} allowGeneral generalLabel="תוכן כללי — ללא לקוח" /></div></div><div><Label>שם התוכנית</Label><Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="לדוגמה: תוכנית SEO רבעון 4" /></div><div><Label>בריף / מטרות</Label><Textarea className="mt-1 min-h-36" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="שירותים, קהל, שוק, אזורים, מתחרים, מטרות ודגשים שאסור להמציא" /></div><Button onClick={create} disabled={saving || !title.trim() || !brief.trim()} className="bg-emerald-600 hover:bg-emerald-700">{saving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Plus className="ml-2 h-4 w-4" />}פתח תוכנית</Button></div></DialogContent></Dialog>;
 }
 
 function SeoAIDialog({ open, onClose, item, hasPlan, onCompleted }: { open: boolean; onClose: () => void; item: SeoItem; hasPlan: boolean; onCompleted: () => Promise<void> }) {
