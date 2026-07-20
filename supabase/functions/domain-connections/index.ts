@@ -89,7 +89,25 @@ Deno.serve(async (request) => {
     const response = await fetch(`https://api.vercel.com/v9/projects?teamId=${teamId}&limit=100`, { headers: { Authorization: `Bearer ${vercelToken}`, Accept: "application/json" } });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) return reply({ success: false, error: "vercel_projects_failed", status: response.status }, 400);
-    return reply({ success: true, projects: (payload?.projects ?? []).map((project: Record<string, unknown>) => ({ id: project.id, name: project.name, framework: project.framework, updated_at: project.updatedAt })) });
+    const projects = await Promise.all((payload?.projects ?? []).map(async (project: Record<string, unknown>) => {
+      const projectId = String(project.id ?? "");
+      const [domainsResponse, deploymentsResponse] = await Promise.all([
+        fetch(`https://api.vercel.com/v9/projects/${projectId}/domains?teamId=${teamId}&limit=100`, { headers: { Authorization: `Bearer ${vercelToken}`, Accept: "application/json" } }),
+        fetch(`https://api.vercel.com/v6/deployments?projectId=${projectId}&teamId=${teamId}&limit=1`, { headers: { Authorization: `Bearer ${vercelToken}`, Accept: "application/json" } }),
+      ]);
+      const domainsPayload = await domainsResponse.json().catch(() => ({}));
+      const deploymentsPayload = await deploymentsResponse.json().catch(() => ({}));
+      const deployment = deploymentsPayload?.deployments?.[0] ?? null;
+      return {
+        id: project.id,
+        name: project.name,
+        framework: project.framework,
+        updated_at: project.updatedAt,
+        domains: (domainsPayload?.domains ?? []).map((domain: Record<string, unknown>) => ({ name: domain.name, verified: domain.verified })),
+        deployment: deployment ? { id: deployment.uid, url: deployment.url, state: deployment.state, created_at: deployment.created } : null,
+      };
+    }));
+    return reply({ success: true, projects });
   }
 
   if (action === "create_site") {
