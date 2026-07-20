@@ -189,6 +189,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/carmen-insights" element={<Navigate to="../agents?tab=learning" replace />} />
                   <Route path="/t/:tenantSlug/visual-workspace" element={<ProtectedRoute><AppLayout><VisualWorkspace /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/marketing/department/:department" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing/:clientId" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/marketing/:clientId/:department" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/campaign-alerts" element={<ProtectedRoute><AppLayout><CampaignAlerts /></AppLayout></ProtectedRoute>} />
