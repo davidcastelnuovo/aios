@@ -90,7 +90,6 @@ export default function CarmenCommandCenter() {
         <div className="order-1 flex min-h-0 flex-col gap-3 lg:order-2 lg:col-span-6">
           <div className="cc-panel relative min-h-[220px] flex-1 overflow-hidden">
             <CarmenFace state={faceState} audioLevelRef={audioLevelRef} className="absolute inset-0 h-full w-full" />
-            <div className="cc-scan" aria-hidden />
             <span className="absolute right-3 top-2 text-[10px] tracking-[0.2em] text-[var(--cc-text-dim)]">
               CARMEN AI CORE · {faceState === "listening" ? "מקשיבה…" : faceState === "speaking" ? "מדברת…" : faceState === "alert" ? "התראה!" : "בהמתנה"}
             </span>

@@ -13,6 +13,26 @@ const corsHeaders = {
 
 const REALTIME_MODEL = 'gpt-realtime';
 
+// Mirrors resolveOpenAIKey in _shared/ai.ts (kept local so this function stays
+// single-file deployable): env var first, then the active llm integration row.
+async function resolveOpenAIKey(): Promise<string | null> {
+  const envKey = Deno.env.get('OPENAI_API_KEY');
+  if (envKey) return envKey;
+  try {
+    const url = `${Deno.env.get('SUPABASE_URL')}/rest/v1/tenant_integrations` +
+      `?integration_type=eq.llm&is_active=eq.true&select=settings`;
+    const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const r = await fetch(url, { headers: { apikey: service, Authorization: `Bearer ${service}` } });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const k = row?.settings?.openai_api_key;
+      if (typeof k === 'string' && k.trim()) return k.trim();
+    }
+  } catch { /* fall through */ }
+  return null;
+}
+
 // Voice-first persona. Data questions are delegated to Carmen's full brain
 // (run-ai-agent) through the ask_carmen tool — the realtime model never
 // invents system data on its own.
@@ -39,8 +59,8 @@ Deno.serve(async (req) => {
     const { data: claims } = await supabase.auth.getClaims(authHeader.replace('Bearer ', ''));
     if (!claims?.claims) return json(401, { error: 'Unauthorized' });
 
-    const key = Deno.env.get('OPENAI_API_KEY');
-    if (!key) return json(500, { error: 'OPENAI_API_KEY not configured' });
+    const key = await resolveOpenAIKey();
+    if (!key) return json(500, { error: 'No OpenAI key available (env or llm integration)' });
 
     const { voice } = await req.json().catch(() => ({} as Record<string, unknown>));
 
