@@ -334,7 +334,7 @@ export const AI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "
 // WhatsApp voice notes) or null.
 export async function aiSpeak(
   text: string,
-  opts?: { voice?: string; model?: string; format?: "opus" | "mp3" | "aac" | "flac" | "wav" },
+  opts?: { voice?: string; model?: string; format?: "opus" | "mp3" | "aac" | "flac" | "wav"; instructions?: string },
 ): Promise<Uint8Array | null> {
   const key = await resolveOpenAIKey();
   if (!key || !text?.trim()) return null;
@@ -347,6 +347,8 @@ export async function aiSpeak(
         voice: opts?.voice || "shimmer",
         input: text.slice(0, 4000),
         response_format: opts?.format || "opus",
+        // gpt-4o-mini-tts supports style steering (accent/tone/pacing)
+        ...(opts?.instructions ? { instructions: opts.instructions } : {}),
       }),
     });
     if (!r.ok) return null;

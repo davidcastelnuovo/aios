@@ -1,5 +1,5 @@
 import {
-  forwardRef, useCallback, useImperativeHandle, useRef, useState,
+  forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState,
 } from "react";
 import { ChevronDown, ChevronUp, Loader2, Mic, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -44,6 +44,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [voiceOn, setVoiceOn] = useState(true);
     const [expanded, setExpanded] = useState(false);
+    const [isConvMode, setIsConvMode] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -54,6 +55,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const ttsQueueRef = useRef<string[]>([]);
     const ttsPumpingRef = useRef(false);
     const ttsGenRef = useRef(0);
+    // Continuous conversation mode (VAD): refs so async loops see fresh state
+    const convModeRef = useRef(false);
+    const micStreamRef = useRef<MediaStream | null>(null);
+    const vadRafRef = useRef(0);
+    const sendTextRef = useRef<(t: string) => void>(() => {});
+    const listenTurnRef = useRef<() => void>(() => {});
     const { toast } = useToast();
 
     const scrollDown = () => {
@@ -142,7 +149,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         if (ttsGenRef.current === gen) {
           // More sentences may have arrived while the last one was playing
           if (ttsQueueRef.current.length) pumpTts();
-          else { audioLevelRef.current = 0; onFaceState("idle"); }
+          else {
+            audioLevelRef.current = 0;
+            // Natural conversation: when Carmen finishes speaking, listen again
+            if (convModeRef.current) listenTurnRef.current();
+            else onFaceState("idle");
+          }
         }
       }
     }, [audioLevelRef, fetchTts, onFaceState, playBlob]);
@@ -257,27 +269,91 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         toast({ title: "שגיאה", description: err.message ?? "שגיאה בשליחה", variant: "destructive" });
       } finally {
         setIsStreaming(false);
+        // Hands-free mode with the voice muted (or an empty reply): reopen the mic
+        if (convModeRef.current && !ttsPumpingRef.current && ttsQueueRef.current.length === 0) {
+          listenTurnRef.current();
+        }
       }
     }, [isStreaming, tenantId, messages, voiceOn, enqueueSpeech, stopSpeech, toast]);
 
-    const startVoice = useCallback(async () => {
-      if (isRecording) {
-        mediaRecorderRef.current?.stop();
-        setIsRecording(false);
-        return;
-      }
+    const endConversation = useCallback(() => {
+      convModeRef.current = false;
+      setIsConvMode(false);
+      cancelAnimationFrame(vadRafRef.current);
+      if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+      micStreamRef.current?.getTracks().forEach(t => t.stop());
+      micStreamRef.current = null;
+      setIsRecording(false);
+      stopSpeech();
+    }, [stopSpeech]);
+
+    /**
+     * One listening turn in continuous-conversation mode: open the mic with a
+     * voice-activity detector — recording ends automatically after ~1.2s of
+     * silence following speech, is transcribed and sent; Carmen's spoken reply
+     * hands the mic back (see pumpTts). No clicks between turns.
+     */
+    const beginListenTurn = useCallback(async () => {
+      if (!convModeRef.current) return;
+      if (mediaRecorderRef.current?.state === "recording") return; // already listening
       try {
-        stopSpeech();
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+        if (!convModeRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+        micStreamRef.current = stream;
         const rec = new MediaRecorder(stream, { mimeType: "audio/webm" });
         mediaRecorderRef.current = rec;
         chunksRef.current = [];
         rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+
+        // Voice-activity detection on the mic stream
+        const ctx = audioCtxRef.current ?? new AudioContext();
+        audioCtxRef.current = ctx;
+        if (ctx.state === "suspended") await ctx.resume();
+        const src = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        src.connect(analyser);
+        const buf = new Uint8Array(analyser.frequencyBinCount);
+        const startedAt = performance.now();
+        let speechStarted = false;
+        let lastSpeechAt = startedAt;
+
+        const SPEECH_RMS = 0.045;      // above → counts as speech
+        const SILENCE_MS = 1200;       // this much quiet after speech → turn over
+        const NO_SPEECH_TIMEOUT = 12000; // nothing said → end the conversation
+        const MAX_TURN_MS = 60000;
+
+        const vad = () => {
+          if (!convModeRef.current || mediaRecorderRef.current !== rec) return;
+          analyser.getByteTimeDomainData(buf);
+          let sum = 0;
+          for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+          const rms = Math.sqrt(sum / buf.length);
+          audioLevelRef.current = Math.min(1, rms * 5); // face pulses while you talk
+          const now = performance.now();
+          if (rms > SPEECH_RMS) { speechStarted = true; lastSpeechAt = now; }
+          const turnOver = speechStarted && now - lastSpeechAt > SILENCE_MS;
+          const gaveUp = !speechStarted && now - startedAt > NO_SPEECH_TIMEOUT;
+          const tooLong = now - startedAt > MAX_TURN_MS;
+          if (turnOver || tooLong) { rec.stop(); return; }
+          if (gaveUp) { endConversation(); onFaceState("idle"); return; }
+          vadRafRef.current = requestAnimationFrame(vad);
+        };
+
         rec.onstop = async () => {
+          cancelAnimationFrame(vadRafRef.current);
+          src.disconnect();
           stream.getTracks().forEach(t => t.stop());
-          onFaceState("idle");
+          if (micStreamRef.current === stream) micStreamRef.current = null;
+          setIsRecording(false);
+          audioLevelRef.current = 0;
           const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-          if (blob.size < 1000) return;
+          if (!speechStarted || blob.size < 1000) {
+            if (convModeRef.current) beginListenTurn();
+            return;
+          }
           setIsTranscribing(true);
           try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -291,20 +367,42 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             });
             if (!res.ok) throw new Error("התמלול נכשל");
             const { text } = await res.json();
-            if (text?.trim()) sendText(text.trim());
+            const clean = (text ?? "").trim();
+            if (clean.length >= 2) sendTextRef.current(clean);
+            else if (convModeRef.current) beginListenTurn();
           } catch {
             toast({ title: "שגיאה בתמלול", description: "לא הצלחנו לתמלל — נסי שוב", variant: "destructive" });
+            if (convModeRef.current) beginListenTurn();
           } finally {
             setIsTranscribing(false);
           }
         };
+
         rec.start();
         setIsRecording(true);
         onFaceState("listening");
+        vadRafRef.current = requestAnimationFrame(vad);
       } catch {
+        endConversation();
         toast({ title: "אין גישה למיקרופון", description: "יש לאפשר גישה למיקרופון בדפדפן", variant: "destructive" });
       }
-    }, [isRecording, onFaceState, sendText, stopSpeech, toast]);
+    }, [audioLevelRef, endConversation, onFaceState, toast]);
+
+    /** Mic button: toggles a natural hands-free conversation with Carmen. */
+    const startVoice = useCallback(async () => {
+      if (convModeRef.current) { endConversation(); onFaceState("idle"); return; }
+      stopSpeech();
+      convModeRef.current = true;
+      setIsConvMode(true);
+      beginListenTurn();
+    }, [beginListenTurn, endConversation, onFaceState, stopSpeech]);
+
+    // Keep async loops (VAD, TTS pump) pointed at the freshest callbacks
+    sendTextRef.current = sendText;
+    listenTurnRef.current = beginListenTurn;
+
+    // Release the mic and stop audio when the page unmounts
+    useEffect(() => () => endConversation(), [endConversation]);
 
     useImperativeHandle(ref, () => ({
       prefill: (text: string) => { setInput(text); inputRef.current?.focus(); },
@@ -362,24 +460,27 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         <div className="flex items-center gap-2 p-2.5">
           <button
             onClick={startVoice}
-            disabled={isTranscribing || isStreaming}
-            title={isRecording ? "עצרי הקלטה" : "דברי עם כרמן"}
+            title={isConvMode ? "סיימי את השיחה הקולית" : "התחילי שיחה קולית רציפה"}
             className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
-              isRecording
+              isConvMode
                 ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
                 : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(46,230,166,0.15)]"
-            } disabled:opacity-40`}
+            }`}
           >
-            {isTranscribing ? <Loader2 className="h-5 w-5 animate-spin" /> : isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
+            {isTranscribing ? <Loader2 className="h-5 w-5 animate-spin" /> : isConvMode ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
           </button>
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") sendText(input); }}
-            placeholder={isRecording ? "מקליטה… דברי עכשיו" : "דברי עם כרמן — כתבי או לחצי על המיקרופון"}
+            placeholder={
+              isConvMode
+                ? isRecording ? "שיחה פעילה — דברי חופשי, אני מקשיבה…" : "שיחה פעילה — כרמן עונה…"
+                : "דברי עם כרמן — כתבי, או לחצי על המיקרופון לשיחה רציפה"
+            }
             disabled={isStreaming}
-            className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(11,15,30,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,11,9,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
           />
           <button
             onClick={() => { if (playingRef.current) stopSpeech(); else setVoiceOn(v => !v); }}
