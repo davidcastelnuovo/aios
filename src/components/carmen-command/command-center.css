@@ -1,0 +1,68 @@
+/* Carmen Command Center — HUD design language.
+   Signature color: Carmen Violet. Chart series colors are validated for
+   CVD-safety on the dark surface (#0B0F1E): #8B5CF6 / #0EA5A0. */
+
+.cc-root {
+  --cc-bg: #0b0f1e;
+  --cc-bg-2: #0e1428;
+  --cc-panel: rgba(17, 24, 48, 0.72);
+  --cc-line: rgba(167, 139, 250, 0.22);
+  --cc-line-strong: rgba(167, 139, 250, 0.5);
+  --cc-accent: #a78bfa;
+  --cc-accent-dim: #8b5cf6;
+  --cc-teal: #0ea5a0;
+  --cc-ok: #34d399;
+  --cc-warn: #fbbf24;
+  --cc-crit: #f87171;
+  --cc-text: #e7e9f4;
+  --cc-text-dim: #9aa3c0;
+  background-color: var(--cc-bg);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.14), transparent),
+    radial-gradient(rgba(167, 139, 250, 0.10) 1px, transparent 1px);
+  background-size: auto, 26px 26px;
+  color: var(--cc-text);
+}
+
+.cc-panel {
+  background: var(--cc-panel);
+  border: 1px solid var(--cc-line);
+  border-radius: 0.75rem;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.08), inset 0 0 24px rgba(139, 92, 246, 0.04);
+  backdrop-filter: blur(6px);
+}
+
+.cc-panel-title {
+  color: var(--cc-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.cc-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+@keyframes cc-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.82); }
+}
+.cc-live-dot { animation: cc-pulse-dot 2.2s ease-in-out infinite; }
+
+@keyframes cc-scanline {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-live-dot { animation: none; }
+  .cc-root * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  /* CarmenFace checks the media query itself and renders a calm static frame */
+}
+
+.cc-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.cc-scroll::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, 0.25); border-radius: 3px; }
+.cc-scroll::-webkit-scrollbar-track { background: transparent; }

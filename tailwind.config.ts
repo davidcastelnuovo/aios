@@ -16,6 +16,7 @@ export default {
       fontFamily: {
         sans: ['Heebo', 'sans-serif'],
         heebo: ['Heebo', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",

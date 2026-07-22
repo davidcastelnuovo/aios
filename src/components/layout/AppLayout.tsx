@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { LogOut, Building2 } from "lucide-react";
-import { AIOSDialog } from "@/components/AIOSDialog";
 import { GlobalApprovalsBell } from "@/components/agents/GlobalApprovalsBell";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
@@ -42,8 +40,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
-  const [carmenOpen, setCarmenOpen] = useState(false);
-  const [carmenWorking, setCarmenWorking] = useState(false);
 
   // Fetch available tenants for the user
   const { data: userTenants } = useQuery({
@@ -211,22 +207,21 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </div>
                 )}
                 <GlobalApprovalsBell />
-                {/* Carmen button in header */}
+                {/* Carmen button in header — opens the full-screen Command Center */}
                 <button
-                  onClick={() => setCarmenOpen(true)}
+                  onClick={() => {
+                    const slug = currentTenant?.slug;
+                    if (slug) navigate(`/t/${slug}/command-center`);
+                  }}
                   className="relative group"
-                  title="כרמן — עוזרת AI"
-                  aria-label="פתח את כרמן"
+                  title="כרמן — מרכז פיקוד ובקרה"
+                  aria-label="פתח את מרכז הפיקוד של כרמן"
                 >
                   <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-background animate-pulse z-10" />
                   <img
                     src={CARMEN_ICON}
                     alt="כרמן"
-                    className={`h-9 w-9 rounded-full object-cover border-2 group-hover:scale-110 transition-all duration-200 ${
-                      carmenWorking
-                        ? 'border-emerald-400 animate-carmen-glow'
-                        : 'border-red-600/60'
-                    }`}
+                    className="h-9 w-9 rounded-full object-cover border-2 border-violet-400/70 group-hover:scale-110 group-hover:border-violet-300 transition-all duration-200"
                   />
                 </button>
                 <DropdownMenu>
@@ -249,7 +244,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             </main>
           </div>
 
-          <AIOSDialog open={carmenOpen} onOpenChange={setCarmenOpen} onWorkingChange={setCarmenWorking} />
         </div>
       </SidebarProvider>
     </ViewAsProvider>
