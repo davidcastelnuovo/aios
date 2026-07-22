@@ -128,23 +128,6 @@
 }
 .cc-live-dot { animation: cc-pulse-dot 2.2s ease-in-out infinite; }
 
-/* sweeping scanline over the face panel */
-@keyframes cc-scan-sweep {
-  0% { top: -8%; opacity: 0; }
-  8% { opacity: 1; }
-  92% { opacity: 1; }
-  100% { top: 104%; opacity: 0; }
-}
-.cc-scan {
-  position: absolute;
-  left: 4%; right: 4%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(46, 230, 166, 0.5), transparent);
-  filter: blur(0.5px);
-  animation: cc-scan-sweep 7s linear infinite;
-  pointer-events: none;
-}
-
 /* the "talk to Carmen" bar gets a stronger presence */
 .cc-talkbar {
   border-color: var(--cc-line-strong);
@@ -162,7 +145,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .cc-live-dot, .cc-mic { animation: none; }
-  .cc-scan { display: none; }
   .cc-root * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
   /* CarmenFace checks the media query itself and renders a calm static frame */
 }

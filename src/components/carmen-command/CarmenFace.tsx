@@ -9,51 +9,152 @@ interface CarmenFaceProps {
   className?: string;
 }
 
+interface P3 { x: number; y: number; z: number; }
 interface Pt { x: number; y: number; }
 
-/** Sample a smooth closed/open curve through control points (Catmull-Rom). */
-function sampleCurve(ctrl: Pt[], samples: number, closed = false): Pt[] {
-  const pts: Pt[] = [];
+/** Sample a smooth open curve through 3D control points (Catmull-Rom per axis). */
+function sampleCurve3(ctrl: P3[], samples: number): P3[] {
+  const pts: P3[] = [];
   const n = ctrl.length;
-  const seg = closed ? n : n - 1;
-  for (let i = 0; i < seg; i++) {
-    const p0 = ctrl[(i - 1 + n) % n], p1 = ctrl[i], p2 = ctrl[(i + 1) % n], p3 = ctrl[(i + 2) % n];
-    const steps = Math.max(2, Math.round(samples / seg));
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = ctrl[Math.max(0, i - 1)], p1 = ctrl[i], p2 = ctrl[i + 1], p3 = ctrl[Math.min(n - 1, i + 2)];
+    const steps = Math.max(2, Math.round(samples / (n - 1)));
     for (let s = 0; s < steps; s++) {
       const t = s / steps, t2 = t * t, t3 = t2 * t;
-      pts.push({
-        x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-        y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
-      });
+      const c = (a: number, b: number, cc: number, d: number) =>
+        0.5 * ((2 * b) + (-a + cc) * t + (2 * a - 5 * b + 4 * cc - d) * t2 + (-a + 3 * b - 3 * cc + d) * t3);
+      pts.push({ x: c(p0.x, p1.x, p2.x, p3.x), y: c(p0.y, p1.y, p2.y, p3.y), z: c(p0.z, p1.z, p2.z, p3.z) });
     }
   }
+  pts.push(ctrl[n - 1]);
   return pts;
 }
 
-const mirror = (pts: Pt[]): Pt[] => pts.map(p => ({ x: -p.x, y: p.y }));
+const mirror3 = (pts: P3[]): P3[] => pts.map(p => ({ x: -p.x, y: p.y, z: p.z }));
 
-// Face geometry in normalized space: x,y in [-1,1], y down. Right half; mirrored for left.
-const FACE_HALF: Pt[] = [
-  { x: 0, y: -0.86 }, { x: 0.3, y: -0.8 }, { x: 0.52, y: -0.58 }, { x: 0.56, y: -0.22 },
-  { x: 0.52, y: 0.12 }, { x: 0.42, y: 0.42 }, { x: 0.24, y: 0.66 }, { x: 0, y: 0.76 },
+/* ---------- Geometry (normalized: x right, y down, z toward viewer) ---------- */
+
+// Face dome radii at a given y (forehead hidden under the hat, tapered chin)
+function faceRx(y: number): number {
+  const base = 0.52 * Math.sqrt(Math.max(0.05, 1 - (y / 0.7) ** 2));
+  return y > 0.2 ? base * (1 - (y - 0.2) * 0.5) : base;
+}
+function faceRz(y: number): number {
+  return 0.46 * Math.sqrt(Math.max(0.05, 1 - (y / 0.74) ** 2));
+}
+
+function buildFaceMesh(): P3[][] {
+  const lines: P3[][] = [];
+  // latitude rings (front half only)
+  for (let i = 0; i <= 8; i++) {
+    const y = -0.26 + (0.86 / 8) * i;
+    const row: P3[] = [];
+    for (let s = 0; s <= 22; s++) {
+      const phi = -1.25 + (2.5 / 22) * s;
+      row.push({ x: faceRx(y) * Math.sin(phi), y, z: faceRz(y) * Math.cos(phi) });
+    }
+    lines.push(row);
+  }
+  // longitude arcs
+  for (let l = 0; l <= 6; l++) {
+    const phi = -1.25 + (2.5 / 6) * l;
+    const col: P3[] = [];
+    for (let s = 0; s <= 14; s++) {
+      const y = -0.26 + (0.86 / 14) * s;
+      col.push({ x: faceRx(y) * Math.sin(phi), y, z: faceRz(y) * Math.cos(phi) });
+    }
+    lines.push(col);
+  }
+  return lines;
+}
+
+function buildHat(): P3[][] {
+  const lines: P3[][] = [];
+  // Brim — wide front arc dipping over the eyes, doubled for thickness
+  for (const [r, dy] of [[0.98, 0], [0.9, -0.015]] as const) {
+    const arc: P3[] = [];
+    for (let s = 0; s <= 26; s++) {
+      const phi = -1.45 + (2.9 / 26) * s;
+      arc.push({ x: r * Math.sin(phi), y: -0.3 + 0.055 * Math.cos(phi) + dy, z: 0.5 * Math.cos(phi) + 0.1 });
+    }
+    lines.push(arc);
+  }
+  // Crown — short and wide, sitting right on the brim (fedora, not a lampshade)
+  const ring = (r: number, y: number, zs: number): P3[] => {
+    const arc: P3[] = [];
+    for (let s = 0; s <= 18; s++) {
+      const phi = -1.25 + (2.5 / 18) * s;
+      arc.push({ x: r * Math.sin(phi), y, z: zs * Math.cos(phi) });
+    }
+    return arc;
+  };
+  const bottom = ring(0.68, -0.33, 0.44);
+  const top = ring(0.54, -0.74, 0.34);
+  lines.push(bottom, top);
+  for (const phi of [-1.25, -0.55, 0.55, 1.25]) {
+    lines.push(sampleCurve3([
+      { x: 0.68 * Math.sin(phi), y: -0.33, z: 0.44 * Math.cos(phi) },
+      { x: 0.62 * Math.sin(phi), y: -0.55, z: 0.4 * Math.cos(phi) },
+      { x: 0.54 * Math.sin(phi), y: -0.74, z: 0.34 * Math.cos(phi) },
+    ], 8));
+  }
+  // center crease of the fedora crown
+  lines.push(sampleCurve3([
+    { x: 0, y: -0.74, z: 0.34 }, { x: 0.02, y: -0.62, z: 0.4 }, { x: 0, y: -0.5, z: 0.43 },
+  ], 8));
+  return lines;
+}
+
+function buildHairSide(): P3[][] {
+  const strand = (o: number): P3[] => sampleCurve3([
+    { x: 0.46 + o * 0.5, y: -0.3, z: 0.2 },
+    { x: 0.58 + o, y: 0.02, z: 0.1 },
+    { x: 0.54 + o, y: 0.36, z: 0.04 },
+    { x: 0.4 + o * 0.6, y: 0.6, z: 0 },
+  ], 16);
+  return [strand(0), strand(0.05), strand(0.1)];
+}
+
+function buildCollarSide(): P3[][] {
+  // Big coat collar rising in front of the jaw — the strongest, closest shape.
+  // The inner edges of the two sides converge to a tight V under the lips.
+  const outline = sampleCurve3([
+    { x: 0.68, y: 1.05, z: 0.5 },
+    { x: 0.5, y: 0.56, z: 0.52 },
+    { x: 0.2, y: 0.3, z: 0.55 },
+    { x: 0.06, y: 0.62, z: 0.55 },
+    { x: 0.03, y: 1.05, z: 0.53 },
+  ], 30);
+  const fold = sampleCurve3([
+    { x: 0.56, y: 1.05, z: 0.51 },
+    { x: 0.42, y: 0.62, z: 0.53 },
+    { x: 0.24, y: 0.42, z: 0.55 },
+  ], 14);
+  return [outline, fold];
+}
+
+// Facial features (z sits on the dome front)
+const EYE_R: P3[] = [
+  { x: 0.07, y: -0.1, z: 0.4 }, { x: 0.24, y: -0.195, z: 0.42 }, { x: 0.44, y: -0.09, z: 0.37 },
+  { x: 0.24, y: -0.03, z: 0.42 }, { x: 0.07, y: -0.1, z: 0.4 },
 ];
-const HAIR_HALF: Pt[] = [
-  { x: 0, y: -1.0 }, { x: 0.42, y: -0.92 }, { x: 0.66, y: -0.6 }, { x: 0.7, y: -0.1 },
-  { x: 0.64, y: 0.42 }, { x: 0.56, y: 0.8 },
+const NOSE: P3[] = [{ x: 0.015, y: 0.02, z: 0.46 }, { x: 0.045, y: 0.16, z: 0.46 }, { x: -0.02, y: 0.2, z: 0.47 }];
+const LIP_TOP: P3[] = [
+  { x: -0.13, y: 0.36, z: 0.45 }, { x: -0.05, y: 0.335, z: 0.46 }, { x: 0, y: 0.35, z: 0.46 },
+  { x: 0.05, y: 0.335, z: 0.46 }, { x: 0.13, y: 0.36, z: 0.45 },
 ];
-const BROW_R: Pt[] = [{ x: 0.14, y: -0.34 }, { x: 0.27, y: -0.39 }, { x: 0.4, y: -0.33 }];
-const EYE_R: Pt[] = [
-  { x: 0.15, y: -0.18 }, { x: 0.26, y: -0.235 }, { x: 0.37, y: -0.18 },
-  { x: 0.26, y: -0.13 },
+const LIP_BOTTOM: P3[] = [
+  { x: -0.13, y: 0.36, z: 0.45 }, { x: -0.06, y: 0.41, z: 0.46 }, { x: 0, y: 0.425, z: 0.46 },
+  { x: 0.06, y: 0.41, z: 0.46 }, { x: 0.13, y: 0.36, z: 0.45 },
 ];
-const NOSE: Pt[] = [{ x: 0.02, y: -0.16 }, { x: 0.05, y: 0.08 }, { x: -0.03, y: 0.14 }];
-const LIP_TOP: Pt[] = [
-  { x: -0.2, y: 0.38 }, { x: -0.08, y: 0.345 }, { x: 0, y: 0.365 }, { x: 0.08, y: 0.345 }, { x: 0.2, y: 0.38 },
-];
-const LIP_BOTTOM: Pt[] = [
-  { x: -0.2, y: 0.38 }, { x: -0.09, y: 0.43 }, { x: 0, y: 0.445 }, { x: 0.09, y: 0.43 }, { x: 0.2, y: 0.38 },
-];
-const NECK_R: Pt[] = [{ x: 0.16, y: 0.74 }, { x: 0.2, y: 0.92 }, { x: 0.44, y: 1.0 }];
+
+const FACE_MESH = buildFaceMesh();
+const HAT = buildHat();
+const HAIR_R = buildHairSide();
+const HAIR_L = HAIR_R.map(mirror3);
+const COLLAR_R = buildCollarSide();
+const COLLAR_L = COLLAR_R.map(mirror3);
+const EYE_L = mirror3(EYE_R);
 
 const COLORS = {
   idle:      { line: "46, 230, 166", dot: "110, 240, 200" },
@@ -63,9 +164,10 @@ const COLORS = {
 };
 
 /**
- * Carmen's digital face — a wireframe/particle female face rendered on canvas.
- * States: idle (breathing + blink), listening (sound-wave ring), speaking
- * (audio-reactive mouth), alert (warning tint pulse).
+ * Carmen's digital face — a Carmen-Sandiego-style portrait (fedora, intense
+ * eyes, raised coat collar) rendered as a dense 3D wireframe with a slow yaw
+ * sway for depth. States: idle (breathing + blink), listening (sound rings),
+ * speaking (audio-reactive mouth), alert (warning tint).
  */
 export function CarmenFace({ state, audioLevelRef, className }: CarmenFaceProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -82,11 +184,10 @@ export function CarmenFace({ state, audioLevelRef, className }: CarmenFaceProps)
     let raf = 0;
     let running = true;
     let blinkAt = performance.now() + 1800 + Math.random() * 3000;
-    let blink = 0; // 0 open .. 1 closed
-    let mouth = 0; // smoothed openness 0..1
-    // Ambient particles drifting inside the silhouette
-    const particles = Array.from({ length: reduced ? 0 : 26 }, (_, i) => ({
-      a: (i / 26) * Math.PI * 2, r: 0.15 + ((i * 37) % 100) / 160, s: 0.0004 + ((i * 13) % 10) / 22000,
+    let blink = 0;
+    let mouth = 0;
+    const particles = Array.from({ length: reduced ? 0 : 30 }, (_, i) => ({
+      a: (i / 30) * Math.PI * 2, r: 0.2 + ((i * 37) % 100) / 130, s: 0.0004 + ((i * 13) % 10) / 22000,
     }));
 
     const resize = () => {
@@ -105,158 +206,147 @@ export function CarmenFace({ state, audioLevelRef, className }: CarmenFaceProps)
       const level = Math.min(1, Math.max(0, audioLevelRef?.current ?? 0));
       const w = canvas.width, h = canvas.height;
       const cx = w / 2, cy = h / 2;
-      const scaleBase = Math.min(w, h) / 2.35;
+      const scale = (Math.min(w, h) / 2.5) * (reduced ? 1 : 1 + Math.sin(now / 1000 * 1.1) * 0.006);
       const t = now / 1000;
+      const yaw = reduced ? 0 : Math.sin(t * 0.32) * 0.13;
 
-      // Breathing + blink timing
-      const breathe = reduced ? 1 : 1 + Math.sin(t * 1.1) * 0.008;
-      if (!reduced) {
-        if (now > blinkAt) {
-          const phase = (now - blinkAt) / 130;
-          blink = phase < 1 ? Math.sin(phase * Math.PI) : 0;
-          if (phase >= 1) blinkAt = now + 1800 + Math.random() * 3200;
-        }
+      if (!reduced && now > blinkAt) {
+        const phase = (now - blinkAt) / 130;
+        blink = phase < 1 ? Math.sin(phase * Math.PI) : 0;
+        if (phase >= 1) blinkAt = now + 1800 + Math.random() * 3200;
       }
-      // Audio-reactive mouth (smoothed); tiny idle murmur while speaking with no signal
       const targetMouth = st === "speaking" ? Math.max(level * 1.6, 0.06 + Math.sin(t * 9) * 0.03) : 0;
       mouth += (targetMouth - mouth) * 0.35;
 
       const c = COLORS[st];
       const alertPulse = st === "alert" ? 0.6 + Math.sin(t * 6) * 0.4 : 1;
-      const scale = scaleBase * breathe;
-      const jitter = (i: number, amp: number) =>
-        reduced ? 0 : Math.sin(t * 1.7 + i * 1.37) * amp;
 
-      const px = (p: Pt, i = 0, amp = 0.006) => ({
-        x: cx + (p.x + jitter(i, amp)) * scale,
-        y: cy + (p.y + jitter(i + 50, amp)) * scale,
-      });
+      // 3D → 2D: yaw around the vertical axis + slight perspective by depth
+      const project = (p: P3, jitterI = 0, jitterAmp = 0.0035): Pt & { depth: number } => {
+        const jx = reduced ? 0 : Math.sin(t * 1.7 + jitterI * 1.37) * jitterAmp;
+        const jy = reduced ? 0 : Math.sin(t * 1.9 + jitterI * 2.11) * jitterAmp;
+        const x = p.x * Math.cos(yaw) + p.z * Math.sin(yaw);
+        const depth = -p.x * Math.sin(yaw) + p.z * Math.cos(yaw);
+        const s = 1 + depth * 0.14;
+        return { x: cx + (x * s + jx) * scale, y: cy + ((p.y - 0.08) * (1 + depth * 0.03) + jy) * scale, depth };
+      };
 
       ctx.clearRect(0, 0, w, h);
 
-      const strokePoints = (pts: Pt[], lineAlpha: number, dotAlpha: number, dotEvery = 3, amp = 0.006) => {
+      // Ambient glow behind the portrait
+      const glow = ctx.createRadialGradient(cx, cy, scale * 0.1, cx, cy, scale * 1.3);
+      glow.addColorStop(0, `rgba(${c.line}, ${0.07 * alertPulse})`);
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+
+      const strokeLine = (
+        pts: P3[],
+        baseAlpha: number,
+        width: number,
+        dots: { every: number; alpha: number } | null = null,
+        jitterAmp = 0.0035,
+      ) => {
+        let depthSum = 0;
         ctx.beginPath();
         pts.forEach((p, i) => {
-          const q = px(p, i, amp);
+          const q = project(p, i, jitterAmp);
+          depthSum += q.depth;
           if (i === 0) ctx.moveTo(q.x, q.y); else ctx.lineTo(q.x, q.y);
         });
-        ctx.strokeStyle = `rgba(${c.line}, ${lineAlpha * alertPulse})`;
-        ctx.lineWidth = Math.max(1, scale * 0.006);
+        // depth shading: nearer lines glow brighter — this sells the 3D
+        const shade = Math.max(0.3, Math.min(1, 0.55 + (depthSum / pts.length) * 1.1));
+        ctx.strokeStyle = `rgba(${c.line}, ${baseAlpha * shade * alertPulse})`;
+        ctx.lineWidth = Math.max(1, scale * width);
         ctx.stroke();
-        ctx.shadowColor = `rgba(${c.dot}, 0.9)`;
-        ctx.shadowBlur = scale * 0.05;
-        for (let i = 0; i < pts.length; i += dotEvery) {
-          const q = px(pts[i], i, amp);
-          ctx.beginPath();
-          ctx.arc(q.x, q.y, Math.max(1, scale * 0.009), 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${c.dot}, ${dotAlpha * alertPulse})`;
-          ctx.fill();
+        if (dots) {
+          ctx.shadowColor = `rgba(${c.dot}, 0.9)`;
+          ctx.shadowBlur = scale * 0.045;
+          for (let i = 0; i < pts.length; i += dots.every) {
+            const q = project(pts[i], i, jitterAmp);
+            ctx.beginPath();
+            ctx.arc(q.x, q.y, Math.max(1, scale * 0.008), 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${c.dot}, ${dots.alpha * alertPulse})`;
+            ctx.fill();
+          }
+          ctx.shadowBlur = 0;
         }
-        ctx.shadowBlur = 0;
       };
 
-      // Hair + face contour (both halves)
-      const hairR = sampleCurve(HAIR_HALF, 30);
-      strokePoints(hairR, 0.28, 0.5, 4);
-      strokePoints(mirror(hairR), 0.28, 0.5, 4);
-      const faceR = sampleCurve(FACE_HALF, 40);
-      strokePoints(faceR, 0.55, 0.85, 3);
-      strokePoints(mirror(faceR), 0.55, 0.85, 3);
-      // Neck
-      const neckR = sampleCurve(NECK_R, 10);
-      strokePoints(neckR, 0.35, 0.55, 3);
-      strokePoints(mirror(neckR), 0.35, 0.55, 3);
+      // 1. Face mesh — the dense 3D wireframe skin
+      for (const line of FACE_MESH) strokeLine(line, 0.2, 0.004, { every: 4, alpha: 0.35 });
 
-      // Brows
-      const browR = sampleCurve(BROW_R, 10);
-      strokePoints(browR, 0.6, 0.8, 3, 0.004);
-      strokePoints(mirror(browR), 0.6, 0.8, 3, 0.004);
+      // 2. Hair
+      for (const s2 of HAIR_R) strokeLine(s2, 0.4, 0.005, { every: 4, alpha: 0.5 });
+      for (const s2 of HAIR_L) strokeLine(s2, 0.4, 0.005, { every: 4, alpha: 0.5 });
 
-      // Eyes (blink squashes vertically around the eye center)
-      const squashEye = (pts: Pt[]): Pt[] => {
-        const cyE = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-        return pts.map(p => ({ x: p.x, y: cyE + (p.y - cyE) * (1 - blink * 0.92) }));
+      // 3. Eyes — large, intense, right under the brim
+      const squash = (pts: P3[]): P3[] => {
+        const cyE = pts.reduce((s2, p) => s2 + p.y, 0) / pts.length;
+        return pts.map(p => ({ ...p, y: cyE + (p.y - cyE) * (1 - blink * 0.92) }));
       };
-      const eyeR = squashEye(sampleCurve(EYE_R, 16, true));
-      strokePoints(eyeR, 0.7, 0.95, 2, 0.003);
-      strokePoints(mirror(eyeR), 0.7, 0.95, 2, 0.003);
-      // Pupils
+      strokeLine(squash(sampleCurve3(EYE_R, 20)), 0.85, 0.007, { every: 3, alpha: 0.9 }, 0.002);
+      strokeLine(squash(sampleCurve3(EYE_L, 20)), 0.85, 0.007, { every: 3, alpha: 0.9 }, 0.002);
       if (blink < 0.5) {
         for (const sx of [1, -1]) {
-          const q = px({ x: 0.26 * sx, y: -0.18 }, 7, 0.002);
+          const center = project({ x: 0.24 * sx, y: -0.11, z: 0.43 }, 7, 0.002);
+          // iris ring + glowing pupil
           ctx.beginPath();
-          ctx.arc(q.x, q.y, Math.max(1.5, scale * 0.016), 0, Math.PI * 2);
+          ctx.arc(center.x, center.y, Math.max(2, scale * 0.042), 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${c.line}, ${0.8 * (1 - blink) * alertPulse})`;
+          ctx.lineWidth = Math.max(1, scale * 0.005);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(center.x, center.y, Math.max(1.5, scale * 0.014), 0, Math.PI * 2);
           ctx.fillStyle = `rgba(${c.dot}, ${0.95 * (1 - blink) * alertPulse})`;
           ctx.shadowColor = `rgba(${c.dot}, 1)`;
-          ctx.shadowBlur = scale * 0.08;
+          ctx.shadowBlur = scale * 0.09;
           ctx.fill();
           ctx.shadowBlur = 0;
         }
       }
 
-      // Nose
-      strokePoints(sampleCurve(NOSE, 8), 0.4, 0.6, 3, 0.003);
+      // 4. Nose + audio-reactive lips (visible in the collar's V gap)
+      strokeLine(sampleCurve3(NOSE, 8), 0.4, 0.005, null, 0.002);
+      const open = mouth * 0.11;
+      strokeLine(sampleCurve3(LIP_TOP, 16).map(p => ({ ...p, y: p.y - open * 0.25 })), 0.8, 0.006, { every: 3, alpha: 0.85 }, 0.002);
+      strokeLine(sampleCurve3(LIP_BOTTOM, 16).map(p => ({ ...p, y: p.y + open })), 0.8, 0.006, { every: 3, alpha: 0.85 }, 0.002);
 
-      // Mouth — lips separate by `mouth`
-      const open = mouth * 0.13;
-      const lipTop = sampleCurve(LIP_TOP, 16).map(p => ({ x: p.x, y: p.y - open * 0.25 }));
-      const lipBot = sampleCurve(LIP_BOTTOM, 16).map(p => ({ x: p.x, y: p.y + open }));
-      strokePoints(lipTop, 0.75, 0.95, 2, 0.002);
-      strokePoints(lipBot, 0.75, 0.95, 2, 0.002);
+      // 5. Fedora — bold, closest to the viewer after the collar
+      for (const line of HAT) strokeLine(line, 0.65, 0.007, { every: 4, alpha: 0.8 });
 
-      // Ambient particles
+      // 6. Coat collar — the strongest shape, in front of everything
+      for (const s2 of COLLAR_R) strokeLine(s2, 0.8, 0.008, { every: 4, alpha: 0.9 });
+      for (const s2 of COLLAR_L) strokeLine(s2, 0.8, 0.008, { every: 4, alpha: 0.9 });
+
+      // Ambient particles drifting around the portrait
       for (const p of particles) {
         p.a += p.s * 16;
-        const q = { x: Math.cos(p.a) * p.r * 0.7, y: Math.sin(p.a * 0.8) * p.r };
-        const s = px(q, 0, 0);
+        const q = project({ x: Math.cos(p.a) * p.r * 0.9, y: Math.sin(p.a * 0.8) * p.r, z: 0.1 }, 0, 0);
         ctx.beginPath();
-        ctx.arc(s.x, s.y, Math.max(0.8, scale * 0.004), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${c.dot}, 0.18)`;
+        ctx.arc(q.x, q.y, Math.max(0.8, scale * 0.0035), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${c.dot}, 0.16)`;
         ctx.fill();
       }
 
-      // Futuristic core rings: one dashed ring rotating slowly, one counter-rotating arc
-      if (!reduced) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(t * 0.15);
-        ctx.beginPath();
-        ctx.setLineDash([scale * 0.06, scale * 0.045]);
-        ctx.arc(0, 0, scale * 1.06, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${c.line}, ${0.28 * alertPulse})`;
-        ctx.lineWidth = Math.max(1, scale * 0.004);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.rotate(-t * 0.4);
-        ctx.beginPath();
-        ctx.arc(0, 0, scale * 1.12, 0, Math.PI * 0.55);
-        ctx.strokeStyle = `rgba(${c.line}, ${0.45 * alertPulse})`;
-        ctx.lineWidth = Math.max(1, scale * 0.006);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0, 0, scale * 1.12, Math.PI, Math.PI * 1.55);
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // Listening: expanding sound-wave rings around the face
+      // Listening: expanding sound rings
       if (st === "listening" && !reduced) {
         for (let k = 0; k < 3; k++) {
           const phase = ((t * 0.6 + k / 3) % 1);
           ctx.beginPath();
-          ctx.arc(cx, cy, scale * (0.95 + phase * 0.35), 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(${c.line}, ${0.35 * (1 - phase)})`;
+          ctx.arc(cx, cy, scale * (1.05 + phase * 0.32), 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${c.line}, ${0.3 * (1 - phase)})`;
           ctx.lineWidth = Math.max(1, scale * 0.005);
           ctx.stroke();
         }
       }
-      // Speaking: ripples emanating from the mouth
+      // Speaking: ripples from the mouth
       if (st === "speaking" && !reduced && mouth > 0.04) {
-        const m = px({ x: 0, y: 0.4 }, 0, 0);
+        const m = project({ x: 0, y: 0.38, z: 0.46 }, 0, 0);
         for (let k = 0; k < 2; k++) {
           const phase = ((t * 1.2 + k / 2) % 1);
           ctx.beginPath();
-          ctx.arc(m.x, m.y, scale * (0.15 + phase * 0.45), Math.PI * 0.15, Math.PI * 0.85);
+          ctx.arc(m.x, m.y, scale * (0.14 + phase * 0.42), Math.PI * 0.15, Math.PI * 0.85);
           ctx.strokeStyle = `rgba(${c.line}, ${0.4 * mouth * (1 - phase)})`;
           ctx.lineWidth = Math.max(1, scale * 0.005);
           ctx.stroke();
@@ -264,7 +354,6 @@ export function CarmenFace({ state, audioLevelRef, className }: CarmenFaceProps)
       }
 
       if (reduced) {
-        // Calm mode: re-render slowly (mouth/blink state changes only)
         setTimeout(() => { if (running) raf = requestAnimationFrame(draw); }, 200);
       } else {
         raf = requestAnimationFrame(draw);
