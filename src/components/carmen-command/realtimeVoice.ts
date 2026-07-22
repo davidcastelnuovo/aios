@@ -67,18 +67,31 @@ export async function startRealtimeVoice(
 
   const dc = pc.createDataChannel("oai-events");
   let assistantBuf = "";
+  // OpenAI rejects response.create while a response is still streaming
+  // ("Conversation already has an active response in progress") — so tool
+  // answers queue their response.create until the active one finishes.
+  let responseActive = false;
+  let pendingResponseCreate = false;
   dc.onmessage = async (e) => {
     let ev: any;
     try { ev = JSON.parse(e.data); } catch { return; }
     switch (ev.type) {
+      case "response.created":
+        responseActive = true;
+        break;
       // GA and beta event names for the spoken-answer transcript
       case "response.output_audio_transcript.delta":
       case "response.audio_transcript.delta":
         if (typeof ev.delta === "string") { assistantBuf += ev.delta; cb.onAssistantDelta(ev.delta); }
         break;
       case "response.done":
+        responseActive = false;
         if (assistantBuf.trim()) cb.onAssistantDone(assistantBuf.trim());
         assistantBuf = "";
+        if (pendingResponseCreate && !stopped) {
+          pendingResponseCreate = false;
+          dc.send(JSON.stringify({ type: "response.create" }));
+        }
         break;
       case "conversation.item.input_audio_transcription.completed":
         if (typeof ev.transcript === "string" && ev.transcript.trim()) cb.onUserTranscript(ev.transcript.trim());
@@ -94,7 +107,8 @@ export async function startRealtimeVoice(
             type: "conversation.item.create",
             item: { type: "function_call_output", call_id: item.call_id, output: answer.slice(0, 8000) },
           }));
-          dc.send(JSON.stringify({ type: "response.create" }));
+          if (responseActive) pendingResponseCreate = true;
+          else dc.send(JSON.stringify({ type: "response.create" }));
         }
         break;
       }
