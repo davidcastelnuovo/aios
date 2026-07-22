@@ -79,8 +79,9 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       const c = COLORS[st];
       const alertPulse = st === "alert" ? 0.6 + Math.sin(t * 6) * 0.4 : 1;
 
-      const targetMouth = st === "speaking" ? Math.max(level * 1.5, 0.08) : 0;
-      mouth += (targetMouth - mouth) * 0.3;
+      // Slow smoothing so the glow breathes with the voice instead of jumping
+      const targetMouth = st === "speaking" ? Math.max(level * 1.2, 0.08) : 0;
+      mouth += (targetMouth - mouth) * 0.12;
 
       ctx.clearRect(0, 0, w, h);
 
@@ -115,25 +116,25 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
         ctx.fillRect(0, 0, w, h);
       }
 
-      // Audio-reactive mouth glow — Carmen's voice literally lights her lips
+      // Audio-reactive mouth glow — Carmen's voice softly lights her lips
       if (mouth > 0.02) {
-        const r = side * (0.05 + mouth * 0.09);
+        const r = side * (0.045 + mouth * 0.05);
         const g = ctx.createRadialGradient(mouthPx.x, mouthPx.y, 0, mouthPx.x, mouthPx.y, r);
-        g.addColorStop(0, `rgba(${c.dot}, ${0.5 * mouth})`);
+        g.addColorStop(0, `rgba(${c.dot}, ${0.32 * mouth})`);
         g.addColorStop(1, "rgba(0,0,0,0)");
         ctx.globalCompositeOperation = "lighter";
         ctx.fillStyle = g;
         ctx.fillRect(mouthPx.x - r, mouthPx.y - r, r * 2, r * 2);
         ctx.globalCompositeOperation = "source-over";
-        // the speech circle — full rings rippling out from the mouth, kept
-        // clearly visible above the transparent figure
+        // the speech circles — two slow, delicate ripples with an eased fade
         if (!reduced) {
-          for (let k = 0; k < 3; k++) {
-            const phase = ((t * 1.1 + k / 3) % 1);
+          for (let k = 0; k < 2; k++) {
+            const phase = ((t * 0.4 + k / 2) % 1);
+            const fade = (1 - phase) ** 2; // eases out gently instead of popping
             ctx.beginPath();
-            ctx.arc(mouthPx.x, mouthPx.y, side * (0.05 + phase * 0.24), 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(${c.line}, ${0.55 * mouth * (1 - phase)})`;
-            ctx.lineWidth = Math.max(1.5, side * 0.003);
+            ctx.arc(mouthPx.x, mouthPx.y, side * (0.05 + phase * 0.14), 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(${c.line}, ${0.25 * mouth * fade})`;
+            ctx.lineWidth = Math.max(1, side * 0.0018);
             ctx.stroke();
           }
         }
