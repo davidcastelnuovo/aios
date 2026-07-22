@@ -285,7 +285,7 @@ serve(async (req) => {
             .select('integration_settings')
             .eq('id', table_id)
             .single();
-          
+
           updateData.integration_settings = {
             ...(existingTable?.integration_settings as Record<string, unknown> || {}),
             ...integration_settings,
@@ -297,12 +297,122 @@ serve(async (req) => {
           .update(updateData)
           .eq('id', table_id)
           .select()
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
 
+        if (table) {
+          return new Response(JSON.stringify({ table }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
 
-        return new Response(JSON.stringify({ table }), {
+        // RLS matched no rows (crm_tables has no UPDATE policy for campaigners).
+        // If this request only changes the client link, a campaigner may still be
+        // allowed within their own agency/client scope — verify explicitly and
+        // apply with the service role.
+        const isClientLinkOnly =
+          client_id !== undefined &&
+          name === undefined && slug === undefined && description === undefined &&
+          icon === undefined && category === undefined &&
+          integration_settings === undefined && agency_id === undefined;
+
+        const forbidden = (msg: string) =>
+          new Response(JSON.stringify({ error: msg }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+
+        if (!isClientLinkOnly) {
+          return forbidden('אין לך הרשאה לעדכן את הטבלה הזו');
+        }
+
+        const admin = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+
+        const { data: tableRow, error: tableErr } = await admin
+          .from('crm_tables')
+          .select('id, tenant_id, agency_id, client_id')
+          .eq('id', table_id)
+          .maybeSingle();
+        if (tableErr) throw tableErr;
+        if (!tableRow) {
+          return new Response(JSON.stringify({ error: 'Table not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Must be a campaigner in the table's tenant with a linked campaigner profile
+        const [{ data: campaignerRole }, { data: profileRow }] = await Promise.all([
+          admin
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', user.id)
+            .eq('tenant_id', tableRow.tenant_id)
+            .eq('role', 'campaigner')
+            .maybeSingle(),
+          admin
+            .from('profiles')
+            .select('campaigner_id')
+            .eq('id', user.id)
+            .maybeSingle(),
+        ]);
+        if (!campaignerRole || !profileRow?.campaigner_id) {
+          return forbidden('אין לך הרשאה לשנות שיוך של הטבלה הזו');
+        }
+
+        const [{ data: agencyRows }, { data: teamRows }] = await Promise.all([
+          admin
+            .from('campaigner_agencies')
+            .select('agency_id')
+            .eq('campaigner_id', profileRow.campaigner_id),
+          admin
+            .from('client_team')
+            .select('client_id')
+            .eq('campaigner_id', profileRow.campaigner_id),
+        ]);
+        const myAgencyIds = new Set((agencyRows || []).map((r: any) => r.agency_id));
+        const myClientIds = new Set((teamRows || []).map((r: any) => r.client_id));
+
+        // The table itself must be within the campaigner's scope:
+        // linked to one of their clients, in one of their agencies, or unassigned.
+        const canTouchTable =
+          (tableRow.client_id && myClientIds.has(tableRow.client_id)) ||
+          (tableRow.agency_id && myAgencyIds.has(tableRow.agency_id)) ||
+          (!tableRow.client_id && !tableRow.agency_id);
+
+        // When linking, the target client must also be within their scope.
+        const newClientId = client_id || null;
+        let canTouchTarget = true;
+        if (newClientId) {
+          const { data: clientRow } = await admin
+            .from('clients')
+            .select('id, tenant_id, agency_id')
+            .eq('id', newClientId)
+            .maybeSingle();
+          canTouchTarget =
+            !!clientRow &&
+            clientRow.tenant_id === tableRow.tenant_id &&
+            (myClientIds.has(clientRow.id) ||
+              (!!clientRow.agency_id && myAgencyIds.has(clientRow.agency_id)));
+        }
+
+        if (!canTouchTable || !canTouchTarget) {
+          return forbidden('אין לך הרשאה לשנות שיוך של הטבלה הזו');
+        }
+
+        const { data: linkedTable, error: linkErr } = await admin
+          .from('crm_tables')
+          .update({ client_id: newClientId, updated_at: new Date().toISOString() })
+          .eq('id', table_id)
+          .select()
+          .single();
+        if (linkErr) throw linkErr;
+
+        return new Response(JSON.stringify({ table: linkedTable }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
