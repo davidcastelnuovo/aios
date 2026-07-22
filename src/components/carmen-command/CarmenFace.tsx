@@ -11,11 +11,11 @@ interface CarmenFaceProps {
   imageUrl?: string;
 }
 
-// AI-generated hologram portrait of Carmen (fedora, electric-blue particles).
-// Served from CDN like the header CARMEN_ICON; the component degrades to a
-// procedural glow if the image can't load.
+// Carmen's hologram portrait — David's chosen variant, with the background
+// removed at the source (true alpha PNG). Served from CDN like the header
+// CARMEN_ICON; the component degrades to a procedural glow if it can't load.
 const CARMEN_HOLOGRAM_URL =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_3BBiWCZmwyTleUe5EJZHttLX0mx/hf_20260722_174724_58992c4f-7f39-4367-aa05-ec5739dd3ccf.png";
+  "https://d8j0ntlcm91z4.cloudfront.net/user_3BBiWCZmwyTleUe5EJZHttLX0mx/hf_20260722_175942_9d7a17c9-2391-4c31-a38f-09a2434de5a0.png";
 
 // Where the mouth sits inside the portrait (fractions of image width/height)
 const MOUTH_X = 0.5;
@@ -169,9 +169,9 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
     <canvas
       ref={canvasRef}
       className={className}
-      // screen-blend drops dark pixels; the contrast pass first crushes the
-      // artwork's navy background to true black so it vanishes completely
-      style={{ mixBlendMode: "screen", filter: "contrast(1.35) brightness(1.06)" }}
+      // The portrait carries true alpha now; screen-blend stays for the soft
+      // holographic melt into the panel (and hides any leftover dark fringes)
+      style={{ mixBlendMode: "screen" }}
       aria-label="ההולוגרמה של כרמן"
       role="img"
     />
