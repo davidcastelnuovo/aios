@@ -318,6 +318,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         const decoder = new TextDecoder();
         let buffer = "";
         let answer = "";
+        let streamError: string | null = null;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -331,8 +332,16 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             try {
               const parsed = JSON.parse(payload);
               if (parsed.type === "token") answer += parsed.content;
+              // the wrapper returns 200 and reports failures inside the stream
+              else if (parsed.type === "error") streamError = String(parsed.message ?? parsed.error ?? "שגיאה במערכת");
+              else if (parsed.type === "done" && parsed.success === false && !streamError) streamError = "הפעולה נכשלה";
             } catch { /* partial line */ }
           }
+        }
+        if (streamError) {
+          return answer.trim()
+            ? `${answer.trim()}\n(שים לב: הפעולה נקטעה בשגיאה: ${streamError.slice(0, 200)})`
+            : `נתקלתי בשגיאה במערכת: ${streamError.slice(0, 200)}`;
         }
         return answer.trim() || "לא נמצאה תשובה.";
       } catch (e) {
