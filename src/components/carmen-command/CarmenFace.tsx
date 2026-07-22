@@ -91,32 +91,34 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       const ix = cx - side / 2, iy = cy - side / 2;
       let mouthPx = { x: cx, y: cy + side * 0.1 };
 
-      // The AI-core sphere — a slowly rotating wireframe globe BEHIND Carmen,
-      // visible through her semi-transparent figure (static under reduced motion)
+      // The AI-core sphere — Carmen sits at its center. The back hemisphere is
+      // drawn here (behind her); the front arcs are drawn AFTER the portrait so
+      // the sphere visibly wraps around her. Static under reduced motion.
+      const sphereR = Math.min(side * 0.47, Math.min(w, h) * 0.47);
+      const sphereY = cy;
+      const sphereLat = [-0.95, -0.55, -0.18, 0.18, 0.55, 0.95];
       {
-        const R = side * 0.33;
-        const sy = cy - side * 0.04;
-        const core = ctx.createRadialGradient(cx, sy, 0, cx, sy, R);
-        core.addColorStop(0, `rgba(${c.line}, ${0.10 * alertPulse})`);
+        const core = ctx.createRadialGradient(cx, sphereY, 0, cx, sphereY, sphereR);
+        core.addColorStop(0, `rgba(${c.line}, ${0.09 * alertPulse})`);
         core.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = core;
-        ctx.fillRect(cx - R, sy - R, R * 2, R * 2);
+        ctx.fillRect(cx - sphereR, sphereY - sphereR, sphereR * 2, sphereR * 2);
         ctx.lineWidth = Math.max(1, side * 0.0012);
         // meridians (rotation gives the 3D spin)
         for (let i = 0; i < 6; i++) {
           const phase = (reduced ? 0 : t * 0.22) + (i * Math.PI) / 6;
-          const rx = Math.abs(Math.cos(phase)) * R;
-          if (rx < R * 0.04) continue;
+          const rx = Math.abs(Math.cos(phase)) * sphereR;
+          if (rx < sphereR * 0.04) continue;
           ctx.beginPath();
-          ctx.ellipse(cx, sy, rx, R, 0, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(${c.line}, ${0.13 * alertPulse})`;
+          ctx.ellipse(cx, sphereY, rx, sphereR, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${c.line}, ${0.12 * alertPulse})`;
           ctx.stroke();
         }
-        // latitudes
-        for (const a of [-0.9, -0.45, 0, 0.45, 0.9]) {
+        // latitudes — full rings (their upper halves read as the back side)
+        for (const a of sphereLat) {
           ctx.beginPath();
-          ctx.ellipse(cx, sy + Math.sin(a) * R, Math.cos(a) * R, Math.cos(a) * R * 0.2, 0, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(${c.line}, ${0.11 * alertPulse})`;
+          ctx.ellipse(cx, sphereY + Math.sin(a) * sphereR, Math.cos(a) * sphereR, Math.cos(a) * sphereR * 0.18, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${c.line}, ${0.10 * alertPulse})`;
           ctx.stroke();
         }
       }
@@ -143,6 +145,18 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
         orb.addColorStop(1, "rgba(0,0,0,0)");
         ctx.fillStyle = orb;
         ctx.fillRect(0, 0, w, h);
+      }
+
+      // Front of the sphere — the lower halves of the latitude rings pass IN
+      // FRONT of Carmen, so she reads as sitting inside the sphere
+      {
+        ctx.lineWidth = Math.max(1, side * 0.0016);
+        for (const a of sphereLat) {
+          ctx.beginPath();
+          ctx.ellipse(cx, sphereY + Math.sin(a) * sphereR, Math.cos(a) * sphereR, Math.cos(a) * sphereR * 0.18, 0, 0, Math.PI);
+          ctx.strokeStyle = `rgba(${c.line}, ${0.22 * alertPulse})`;
+          ctx.stroke();
+        }
       }
 
       // Audio-reactive mouth glow — Carmen's voice softly lights her lips

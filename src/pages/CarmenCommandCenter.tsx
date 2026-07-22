@@ -84,41 +84,36 @@ export default function CarmenCommandCenter() {
         </div>
       </header>
 
-      {/* Main grid */}
-      <main className="cc-scroll grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-12 lg:grid-rows-[minmax(0,7fr)_minmax(0,5fr)] lg:overflow-hidden">
-        {/* Center — face + core overview */}
-        <div className="order-1 flex min-h-0 flex-col gap-3 lg:order-2 lg:col-span-6">
-          <div className="cc-panel relative min-h-[220px] flex-1 overflow-hidden">
+      {/* Main grid — Carmen owns the whole center; every panel lives in the side rails */}
+      <main className="cc-scroll grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-12 lg:overflow-hidden">
+        {/* Center — Carmen, full height inside the sphere */}
+        <div className="order-1 flex min-h-[320px] lg:order-2 lg:col-span-6">
+          <div className="cc-panel relative flex-1 overflow-hidden">
             <CarmenFace state={faceState} audioLevelRef={audioLevelRef} className="absolute inset-0 h-full w-full" />
             <span className="absolute right-3 top-2 text-[10px] tracking-[0.2em] text-[var(--cc-text-dim)]">
               CARMEN AI CORE · {faceState === "listening" ? "מקשיבה…" : faceState === "speaking" ? "מדברת…" : faceState === "alert" ? "התראה!" : "בהמתנה"}
             </span>
           </div>
-          <CoreOverviewPanel tenantId={tenantId} />
         </div>
 
-        {/* Right rail — tasks + timeline */}
-        <div className="order-2 flex min-h-0 flex-col gap-3 lg:order-1 lg:col-span-3">
-          <TasksPanel tenantId={tenantId} />
-          <TimelinePanel tenantId={tenantId} />
+        {/* Right rail */}
+        <div className="cc-scroll order-2 flex min-h-0 flex-col gap-3 lg:order-1 lg:col-span-3 lg:overflow-y-auto">
+          <TasksPanel tenantId={tenantId} className="max-h-[300px] shrink-0" />
+          <TimelinePanel tenantId={tenantId} className="max-h-[240px] shrink-0" />
+          <CoreOverviewPanel tenantId={tenantId} className="shrink-0" />
         </div>
 
-        {/* Left rail — intel feed + quick commands */}
-        <div className="order-3 flex min-h-0 flex-col gap-3 lg:col-span-3">
-          <IntelFeedPanel tenantId={tenantId} />
+        {/* Left rail */}
+        <div className="cc-scroll order-3 flex min-h-0 flex-col gap-3 lg:col-span-3 lg:overflow-y-auto">
+          <IntelFeedPanel tenantId={tenantId} className="max-h-[300px] shrink-0" />
           <QuickCommandsPanel
             onCommand={(text) => chatRef.current?.prefill(text)}
             onVoice={() => chatRef.current?.startVoice()}
             onHealthCheck={healthCheck}
+            className="shrink-0"
           />
-        </div>
-
-        {/* Bottom row — health + usage */}
-        <div className="order-4 min-h-0 lg:col-span-6">
-          <HealthPanel tenantId={tenantId} />
-        </div>
-        <div className="order-5 min-h-0 lg:col-span-6">
-          <UsagePanel tenantId={tenantId} />
+          <HealthPanel tenantId={tenantId} className="shrink-0" />
+          <UsagePanel tenantId={tenantId} className="shrink-0" />
         </div>
       </main>
 
