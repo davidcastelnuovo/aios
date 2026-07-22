@@ -93,11 +93,20 @@ export function LinkTableToClientDialog({
 
   const linkMutation = useMutation({
     mutationFn: async (clientId: string | null) => {
-      const { error } = await supabase
-        .from("crm_tables")
-        .update({ client_id: clientId })
-        .eq("id", tableId);
-      if (error) throw error;
+      // Via the crm-tables edge function: campaigners can link/unlink within
+      // their agency/client scope even without a direct RLS UPDATE policy.
+      const { error } = await supabase.functions.invoke("crm-tables", {
+        method: "PATCH",
+        body: { table_id: tableId, client_id: clientId },
+      });
+      if (error) {
+        let message = error.message;
+        try {
+          const details = await (error as any).context?.json();
+          if (details?.error) message = details.error;
+        } catch { /* keep generic message */ }
+        throw new Error(message);
+      }
     },
     onSuccess: () => {
       toast.success("הטבלה שויכה ללקוח בהצלחה");

@@ -105,12 +105,20 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   }, [allDashboards, dashboards, dashboardSearch]);
 
   // Link/unlink table
+  const serverErrorMessage = async (error: any, fallback: string) => {
+    try {
+      const details = await error?.context?.json();
+      if (details?.error) return details.error as string;
+    } catch { /* keep fallback */ }
+    return fallback;
+  };
+
   const linkTable = async (tableId: string) => {
     const { error } = await supabase.functions.invoke("crm-tables", {
       method: "PATCH",
       body: { table_id: tableId, client_id: clientId },
     });
-    if (error) { toast.error("שגיאה בשיוך הטבלה"); return; }
+    if (error) { toast.error(await serverErrorMessage(error, "שגיאה בשיוך הטבלה")); return; }
     toast.success("טבלה שויכה בהצלחה");
     queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
     setTableSearch("");
@@ -122,7 +130,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       method: "PATCH",
       body: { table_id: tableId, client_id: null },
     });
-    if (error) { toast.error("שגיאה בהסרת השיוך"); return; }
+    if (error) { toast.error(await serverErrorMessage(error, "שגיאה בהסרת השיוך")); return; }
     toast.success("שיוך הטבלה הוסר");
     queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
   };

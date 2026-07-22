@@ -131,21 +131,28 @@ export function ConvertContactDialog({
         return { data, type: "group" as const };
       } else if (type === "client") {
         const clientData = values as ClientFormValues;
-        const { data, error } = await supabase
-          .from("clients")
-          .insert({
-            name: clientData.name,
-            agency_id: clientData.agency_id,
-            phone: clientData.phone,
-            email: clientData.email,
-            notes: clientData.notes,
-            active_chat_provider: activeChatProvider,
-          })
-          .select()
-          .single();
+        // Use the RPC so a campaigner who converts a contact is auto-assigned to
+        // client_team — otherwise the new client is invisible to them (and to
+        // anyone filtering clients by that campaigner).
+        const { data: newClientId, error } = await supabase.rpc("create_client_with_assignment", {
+          p_tenant_id: tenantId,
+          p_agency_id: clientData.agency_id,
+          p_name: clientData.name,
+          p_phone: clientData.phone || null,
+          p_email: clientData.email || null,
+          p_notes: clientData.notes || null,
+        });
         if (error) throw error;
-        
-        return { id: data.id, type: "client" as const };
+
+        if (activeChatProvider && newClientId) {
+          const { error: providerError } = await supabase
+            .from("clients")
+            .update({ active_chat_provider: activeChatProvider })
+            .eq("id", newClientId);
+          if (providerError) console.error("Failed to set chat provider on new client:", providerError);
+        }
+
+        return { id: newClientId as string, type: "client" as const };
       } else {
         const leadData = values as LeadFormValues;
         const { data, error } = await supabase
