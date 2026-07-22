@@ -91,11 +91,40 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       const ix = cx - side / 2, iy = cy - side / 2;
       let mouthPx = { x: cx, y: cy + side * 0.1 };
 
+      // The AI-core sphere — a slowly rotating wireframe globe BEHIND Carmen,
+      // visible through her semi-transparent figure (static under reduced motion)
+      {
+        const R = side * 0.33;
+        const sy = cy - side * 0.04;
+        const core = ctx.createRadialGradient(cx, sy, 0, cx, sy, R);
+        core.addColorStop(0, `rgba(${c.line}, ${0.10 * alertPulse})`);
+        core.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = core;
+        ctx.fillRect(cx - R, sy - R, R * 2, R * 2);
+        ctx.lineWidth = Math.max(1, side * 0.0012);
+        // meridians (rotation gives the 3D spin)
+        for (let i = 0; i < 6; i++) {
+          const phase = (reduced ? 0 : t * 0.22) + (i * Math.PI) / 6;
+          const rx = Math.abs(Math.cos(phase)) * R;
+          if (rx < R * 0.04) continue;
+          ctx.beginPath();
+          ctx.ellipse(cx, sy, rx, R, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${c.line}, ${0.13 * alertPulse})`;
+          ctx.stroke();
+        }
+        // latitudes
+        for (const a of [-0.9, -0.45, 0, 0.45, 0.9]) {
+          ctx.beginPath();
+          ctx.ellipse(cx, sy + Math.sin(a) * R, Math.cos(a) * R, Math.cos(a) * R * 0.2, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${c.line}, ${0.11 * alertPulse})`;
+          ctx.stroke();
+        }
+      }
+
       if (imgReady && !imgFailed) {
-        // Semi-transparent hologram: the canvas is screen-blended over the page
-        // (see the style below), so the artwork's dark background disappears and
-        // the dashboard grid shows through the figure.
-        ctx.globalAlpha = 0.85 + (st === "speaking" ? mouth * 0.15 : 0);
+        // More transparent hologram so the sphere shows through the figure;
+        // the canvas is screen-blended over the page (see the style below).
+        ctx.globalAlpha = 0.66 + (st === "speaking" ? mouth * 0.12 : 0);
         ctx.drawImage(img, ix, iy, side, side);
         ctx.globalAlpha = 1;
         mouthPx = { x: ix + side * MOUTH_X, y: iy + side * MOUTH_Y };
