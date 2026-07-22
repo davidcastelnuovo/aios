@@ -22,6 +22,7 @@ import Setup from "./pages/Setup";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 const AIOSDashboard = lazy(() => import("./pages/AIOSDashboard"));
+const CarmenCommandCenter = lazy(() => import("./pages/CarmenCommandCenter"));
 const Home = lazy(() => import("./pages/Home"));
 
 // Lazily loaded pages
@@ -200,6 +201,8 @@ const App = () => (
                   <Route path="/t/:tenantSlug/accounting-settings" element={<ProtectedRoute requiredPermission="accounting_integrations"><AppLayout><AccountingSettings /></AppLayout></ProtectedRoute>} />
                   {/* AIOS is now accessed via header button, keeping route for backward compat */}
                   <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
+                  {/* Carmen Command Center — full-screen HUD, opened from the Carmen header button */}
+                  <Route path="/t/:tenantSlug/command-center" element={<ProtectedRoute><CarmenCommandCenter /></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/dynamic-tables" element={<ProtectedRoute requiredPermission="dynamic_tables"><AppLayout><DynamicTables /></AppLayout></ProtectedRoute>} />

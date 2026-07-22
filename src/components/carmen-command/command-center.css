@@ -1,0 +1,172 @@
+/* Carmen Command Center — HUD design language, v2 ("neon mint").
+   Signature color: the system logo's green. Chart series colors are validated
+   for CVD-safety on the dark surface (#06100D): #0FA37F / #3B82F6. */
+
+.cc-root {
+  --cc-bg: #050b09;
+  --cc-bg-2: #081410;
+  --cc-panel: rgba(8, 20, 17, 0.68);
+  --cc-line: rgba(46, 230, 166, 0.16);
+  --cc-line-strong: rgba(46, 230, 166, 0.55);
+  --cc-accent: #2ee6a6;
+  --cc-accent-dim: #0fa37f;
+  --cc-blue: #3b82f6;
+  --cc-ok: #34d399;
+  --cc-warn: #fbbf24;
+  --cc-crit: #f87171;
+  --cc-text: #e4f5ee;
+  --cc-text-dim: #8faea2;
+  background-color: var(--cc-bg);
+  background-image:
+    radial-gradient(ellipse 70% 45% at 50% -8%, rgba(46, 230, 166, 0.12), transparent),
+    radial-gradient(ellipse 45% 35% at 8% 105%, rgba(59, 130, 246, 0.08), transparent),
+    repeating-linear-gradient(0deg, rgba(46, 230, 166, 0.025) 0 1px, transparent 1px 3px),
+    radial-gradient(rgba(46, 230, 166, 0.09) 1px, transparent 1px);
+  background-size: auto, auto, auto, 28px 28px;
+  color: var(--cc-text);
+}
+
+/* ---------- Panels: glow frame + HUD corner brackets ---------- */
+
+.cc-panel {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(46, 230, 166, 0.06), transparent 32%),
+    var(--cc-panel);
+  border: 1px solid var(--cc-line);
+  border-radius: 0.625rem;
+  box-shadow:
+    0 0 18px rgba(46, 230, 166, 0.07),
+    inset 0 1px 0 rgba(46, 230, 166, 0.12),
+    inset 0 0 32px rgba(46, 230, 166, 0.03);
+  backdrop-filter: blur(7px);
+}
+
+.cc-panel::before,
+.cc-panel::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: var(--cc-line-strong);
+  border-style: solid;
+  border-width: 0;
+  pointer-events: none;
+}
+.cc-panel::before {
+  top: 0; right: 0;
+  border-top-width: 2px; border-right-width: 2px;
+  border-top-right-radius: 0.625rem;
+  filter: drop-shadow(0 0 4px rgba(46, 230, 166, 0.6));
+}
+.cc-panel::after {
+  bottom: 0; left: 0;
+  border-bottom-width: 2px; border-left-width: 2px;
+  border-bottom-left-radius: 0.625rem;
+  filter: drop-shadow(0 0 4px rgba(46, 230, 166, 0.6));
+}
+
+.cc-panel-title {
+  color: var(--cc-accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(46, 230, 166, 0.55);
+  white-space: nowrap;
+}
+
+/* decorative rule that stretches from the panel title to the panel edge */
+.cc-title-line {
+  flex: 1;
+  height: 1px;
+  margin-inline-start: 0.6rem;
+  background: linear-gradient(to left, var(--cc-line-strong), rgba(46, 230, 166, 0.03));
+  position: relative;
+}
+.cc-title-line::after {
+  content: "";
+  position: absolute;
+  left: 0; top: -2px;
+  width: 5px; height: 5px;
+  transform: rotate(45deg);
+  background: var(--cc-accent);
+  box-shadow: 0 0 6px var(--cc-accent);
+}
+
+/* ---------- Header chrome ---------- */
+
+.cc-title {
+  letter-spacing: 0.3em;
+  text-shadow: 0 0 14px rgba(46, 230, 166, 0.8), 0 0 40px rgba(46, 230, 166, 0.35);
+}
+
+.cc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--cc-line);
+  background: rgba(8, 20, 17, 0.8);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  padding: 0.25rem 0.75rem;
+}
+
+/* ---------- Numbers / data ---------- */
+
+.cc-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ---------- Motion ---------- */
+
+@keyframes cc-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 6px var(--cc-ok); }
+  50% { opacity: 0.5; transform: scale(0.8); box-shadow: 0 0 2px var(--cc-ok); }
+}
+.cc-live-dot { animation: cc-pulse-dot 2.2s ease-in-out infinite; }
+
+/* sweeping scanline over the face panel */
+@keyframes cc-scan-sweep {
+  0% { top: -8%; opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { top: 104%; opacity: 0; }
+}
+.cc-scan {
+  position: absolute;
+  left: 4%; right: 4%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(46, 230, 166, 0.5), transparent);
+  filter: blur(0.5px);
+  animation: cc-scan-sweep 7s linear infinite;
+  pointer-events: none;
+}
+
+/* the "talk to Carmen" bar gets a stronger presence */
+.cc-talkbar {
+  border-color: var(--cc-line-strong);
+  box-shadow:
+    0 0 24px rgba(46, 230, 166, 0.14),
+    inset 0 1px 0 rgba(46, 230, 166, 0.15),
+    inset 0 0 40px rgba(46, 230, 166, 0.04);
+}
+
+@keyframes cc-mic-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(46, 230, 166, 0.35), 0 0 12px rgba(46, 230, 166, 0.4); }
+  50% { box-shadow: 0 0 0 7px rgba(46, 230, 166, 0), 0 0 18px rgba(46, 230, 166, 0.6); }
+}
+.cc-mic { animation: cc-mic-ring 2.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-live-dot, .cc-mic { animation: none; }
+  .cc-scan { display: none; }
+  .cc-root * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  /* CarmenFace checks the media query itself and renders a calm static frame */
+}
+
+.cc-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.cc-scroll::-webkit-scrollbar-thumb { background: rgba(46, 230, 166, 0.25); border-radius: 3px; }
+.cc-scroll::-webkit-scrollbar-track { background: transparent; }
