@@ -73,6 +73,24 @@ async function resolveLLMTarget(
   return { url: 'https://api.openai.com/v1/chat/completions', key, model: m.replace(/^openai\//, '') }
 }
 
+// Rough per-model pricing (USD per 1M tokens in/out) for the usage panel.
+// Unknown models log tokens with a null cost rather than a wrong one.
+function estimateLLMCostUSD(model: string, tokensIn: number, tokensOut: number): number | null {
+  if (!tokensIn && !tokensOut) return null
+  const m = (model || '').toLowerCase()
+  const price: [number, number] | null =
+    m.includes('gpt-4o-mini') ? [0.15, 0.6]
+    : m.includes('gpt-4o') ? [2.5, 10]
+    : m.includes('gpt-4.1-mini') ? [0.4, 1.6]
+    : m.includes('gpt-4.1') ? [2, 8]
+    : m.includes('haiku') ? [0.8, 4]
+    : m.includes('sonnet') ? [3, 15]
+    : m.includes('gemini') ? [0.1, 0.4]
+    : null
+  if (!price) return null
+  return +((tokensIn * price[0] + tokensOut * price[1]) / 1e6).toFixed(6)
+}
+
 // Resolve a usable Google Calendar access token for the tenant: caller's user →
 // explicit user → any campaigner with tokens → tenant owner/admin. Refreshes if
 // expired. Returns { accessToken } or { error } (Hebrew, user-facing).
@@ -4366,6 +4384,10 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const llm = await resolveLLMTarget(supabase, agent.tenant_id, model)
     console.log(`[AGENT] LLM target=${llm.url} model=${llm.model}`)
 
+    // Usage metering: accumulated across rounds, written to agent_action_log
+    let usageTokensIn = 0
+    let usageTokensOut = 0
+
     for (let round = 0; round < maxRounds; round++) {
       const payload: any = { model: llm.model, messages }
       if (safeTemp !== undefined) payload.temperature = safeTemp
@@ -4386,6 +4408,10 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       }
 
       const data = await res.json()
+      if (data?.usage) {
+        usageTokensIn += data.usage.prompt_tokens ?? data.usage.input_tokens ?? 0
+        usageTokensOut += data.usage.completion_tokens ?? data.usage.output_tokens ?? 0
+      }
       const choice = data.choices?.[0]
       const msg = choice?.message
 
@@ -4499,6 +4525,9 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         tool_calls: toolLog.length,
         model,
         duration_ms: executionTime,
+        tokens_in: usageTokensIn || null,
+        tokens_out: usageTokensOut || null,
+        cost_usd: estimateLLMCostUSD(model, usageTokensIn, usageTokensOut),
       })
     } catch (e: any) {
       console.error('[AGENT] action_log insert failed:', e?.message)

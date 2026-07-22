@@ -87,13 +87,22 @@ export function useIntelFeed(tenantId: string | null) {
           title: `${alertTypeLabel(a.alert_type)}${a.campaign_name ? ` — ${a.campaign_name}` : ""}`,
           time: a.created_at,
         })),
-        ...integr.map((a: any): FeedItem => ({
-          id: `il-${a.id}`,
-          severity: a.alert_type === "reconnected" ? "info" : "critical",
-          source: "אינטגרציות",
-          title: a.alert_type === "reconnected" ? `${a.provider} התחבר מחדש` : `${a.provider} התנתק${a.reason ? ` — ${a.reason}` : ""}`,
-          time: a.fired_at,
-        })),
+        ...integr.map((a: any): FeedItem => {
+          const map: Record<string, { sev: Severity; title: string }> = {
+            reconnected: { sev: "info", title: a.reason || `${a.provider} התחבר מחדש` },
+            quota_out: { sev: "critical", title: "🚨 הקרדיט ב-OpenAI נגמר — הקול והצ'אט מושבתים" },
+            budget_95: { sev: "critical", title: a.reason || "השימוש ב-AI חצה 95% מהתקציב החודשי" },
+            budget_80: { sev: "warning", title: a.reason || "השימוש ב-AI חצה 80% מהתקציב החודשי" },
+          };
+          const m = map[a.alert_type];
+          return {
+            id: `il-${a.id}`,
+            severity: m?.sev ?? "critical",
+            source: m ? "קרדיט AI" : "אינטגרציות",
+            title: m?.title ?? `${a.provider} התנתק${a.reason ? ` — ${a.reason}` : ""}`,
+            time: a.fired_at,
+          };
+        }),
         ...anomalies.map((a: any): FeedItem => ({
           id: `an-${a.id}`, severity: "warning", source: "אנומליות", title: a.title, time: a.created_at,
         })),
@@ -167,6 +176,7 @@ export function useHealth(tenantId: string | null) {
       const waProbe = latestOf("whatsapp");
       const mcpProbe = latestOf("mcp");
       const openaiProbe = latestOf("openai");
+      const quotaProbe = latestOf("openai_quota");
 
       const services: ServiceHealth[] = [
         {
@@ -202,6 +212,12 @@ export function useHealth(tenantId: string | null) {
           history: historyOf("openai"),
         },
         {
+          key: "openai_quota", label: "קרדיט OpenAI",
+          status: quotaProbe?.status ?? "unknown",
+          detail: quotaProbe ? quotaProbe.detail : "ממתין לבדיקה הבאה",
+          history: historyOf("openai_quota"),
+        },
+        {
           key: "integrations", label: "אינטגרציות",
           status: ihRes.error || !ihRes.data?.length ? "unknown" : openCircuits.length ? "warn" : "ok",
           detail: ihRes.error || !ihRes.data?.length
@@ -230,9 +246,11 @@ export function useUsage(tenantId: string | null) {
       const safe = async (p: Promise<{ data: any[] | null }>) => {
         try { return (await p).data ?? []; } catch { return []; }
       };
-      const [actions, marketing] = await Promise.all([
+      const [actions, marketing, aiUsage, llmRow] = await Promise.all([
         safe(sb.from("agent_action_log").select("created_at, tokens_in, tokens_out, cost_usd").eq("tenant_id", tenantId).gte("created_at", since).limit(5000)),
         safe(sb.from("marketing_runs").select("created_at, tokens_in, tokens_out, cost_usd").eq("tenant_id", tenantId).gte("created_at", since).limit(5000)),
+        safe(sb.from("ai_usage_log").select("created_at, tokens_in, tokens_out, cost_usd").gte("created_at", since).limit(10000)),
+        sb.from("tenant_integrations").select("settings").eq("integration_type", "llm").eq("is_active", true).limit(1).maybeSingle().then((r: any) => r.data).catch(() => null),
       ]);
 
       const byDay = new Map<string, UsageDay>();
@@ -250,17 +268,22 @@ export function useUsage(tenantId: string | null) {
           day.calls += 1;
         }
       };
-      add(actions); add(marketing);
+      add(actions); add(marketing); add(aiUsage);
 
       const days = Array.from(byDay.values());
       const today = days[days.length - 1];
       const week = days.slice(-7);
+      const monthStart = new Date();
+      monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+      const mtdKey = monthStart.toISOString().slice(0, 10);
       return {
         days,
         callsToday: today?.calls ?? 0,
         tokens7d: week.reduce((s, d) => s + d.tokens, 0),
         cost30d: days.reduce((s, d) => s + d.cost, 0),
-        tracked: actions.some((r: any) => r.tokens_in) || marketing.length > 0,
+        costMtd: days.filter((d) => d.date >= mtdKey).reduce((s, d) => s + d.cost, 0),
+        monthlyBudget: Number(llmRow?.settings?.monthly_budget_usd ?? 0) || null,
+        tracked: actions.some((r: any) => r.tokens_in) || marketing.length > 0 || aiUsage.length > 0,
       };
     },
   });

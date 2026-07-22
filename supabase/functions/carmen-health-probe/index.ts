@@ -11,6 +11,9 @@ const corsHeaders = {
 
 const MANUS_GW_BASE = 'https://whatsappgw-pzpyrrww.manus.space';
 const RETENTION_DAYS = 7;
+// Alert anchor tenant (claude_notify_david's default tenant is MarketingCaptain;
+// alerts rows anchor to DMM, David's main org)
+const DAVID_TENANT = '6ad8f321-25db-4a04-8e44-e57a7c8961b2';
 
 interface CheckRow {
   tenant_id: string | null;
@@ -93,6 +96,102 @@ Deno.serve(async (req) => {
       latency_ms: res.latency,
       detail: res.status === null ? (res.error ?? 'no response') : `HTTP ${res.status}`,
     });
+
+    // 3b. Credit canary — a minimal BILLED call. /v1/models succeeds even with
+    // an empty balance, so this is the only reliable "credits are alive" signal.
+    const t0 = performance.now();
+    let quota: CheckRow = {
+      tenant_id: null, service: 'openai_quota', status: 'down', latency_ms: null, detail: 'no response',
+    };
+    try {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'ok' }], max_tokens: 1 }),
+      });
+      const bodyText = await r.text();
+      const isQuota = r.status === 429 || bodyText.includes('insufficient_quota');
+      quota = {
+        tenant_id: null, service: 'openai_quota',
+        status: r.ok ? 'ok' : isQuota ? 'down' : 'warn',
+        latency_ms: Math.round(performance.now() - t0),
+        detail: r.ok ? 'קרדיט פעיל' : isQuota ? 'הקרדיט נגמר' : `HTTP ${r.status}`,
+      };
+    } catch (e) {
+      quota.detail = e instanceof Error ? e.message : 'canary failed';
+    }
+    rows.push(quota);
+
+    // Alert on state flip (ok→down) — WhatsApp via claude_notify_david + a row
+    // the intel feed picks up. Deduped by comparing to the previous check.
+    const { data: prev } = await supabase
+      .from('service_health_checks')
+      .select('status')
+      .eq('service', 'openai_quota')
+      .order('checked_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (quota.status === 'down' && prev && prev.status !== 'down') {
+      await supabase.from('integration_alerts_log').insert({
+        tenant_id: DAVID_TENANT, provider: 'openai', alert_type: 'quota_out',
+        reason: 'בדיקת קנרית מחויבת נכשלה — הקרדיט ב-OpenAI נגמר',
+      });
+      await supabase.rpc('claude_notify_david', {
+        p_message: '🚨 הקרדיט ב-OpenAI נגמר! הקול, התמלול והצ׳אט של כרמן מושבתים עד טעינה: platform.openai.com/settings/organization/billing',
+      }).then(() => {}, (e: unknown) => console.error('[probe] notify failed', e));
+    }
+    if (quota.status === 'ok' && prev && prev.status === 'down') {
+      await supabase.from('integration_alerts_log').insert({
+        tenant_id: DAVID_TENANT, provider: 'openai', alert_type: 'reconnected',
+        reason: 'הקרדיט ב-OpenAI חזר לפעול',
+      });
+    }
+
+    // 3c. Monthly budget guard — warn at 80%, alert + WhatsApp at 95%.
+    // Budget lives in the llm integration settings (monthly_budget_usd).
+    try {
+      const { data: llmRow } = await supabase
+        .from('tenant_integrations')
+        .select('settings')
+        .eq('integration_type', 'llm')
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+      const budget = Number((llmRow?.settings as Record<string, unknown>)?.monthly_budget_usd ?? 0);
+      if (budget > 0) {
+        const monthStart = new Date();
+        monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
+        const since = monthStart.toISOString();
+        const sumOf = async (table: string, col: string) => {
+          const { data } = await supabase.from(table).select(col).gte('created_at', since).limit(20000);
+          return (data ?? []).reduce((s: number, r: Record<string, unknown>) => s + Number(r[col] ?? 0), 0);
+        };
+        const spent =
+          (await sumOf('ai_usage_log', 'cost_usd')) +
+          (await sumOf('agent_action_log', 'cost_usd')) +
+          (await sumOf('marketing_runs', 'cost_usd'));
+        const pct = (spent / budget) * 100;
+        for (const [threshold, type] of [[95, 'budget_95'], [80, 'budget_80']] as const) {
+          if (pct < threshold) continue;
+          const { data: already } = await supabase
+            .from('integration_alerts_log')
+            .select('id').eq('provider', 'openai').eq('alert_type', type).gte('fired_at', since).limit(1);
+          if (already?.length) break; // highest crossed threshold alerts once/month
+          await supabase.from('integration_alerts_log').insert({
+            tenant_id: DAVID_TENANT, provider: 'openai', alert_type: type,
+            reason: `שימוש AI החודש: $${spent.toFixed(2)} מתוך תקציב $${budget} (${pct.toFixed(0)}%)`,
+          });
+          if (type === 'budget_95') {
+            await supabase.rpc('claude_notify_david', {
+              p_message: `⚠️ רגע לפני שנגמר: השימוש ב-AI הגיע ל-${pct.toFixed(0)}% מהתקציב החודשי ($${spent.toFixed(2)} מתוך $${budget}). כדאי לטעון קרדיט ב-OpenAI.`,
+            }).then(() => {}, (e: unknown) => console.error('[probe] notify failed', e));
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      console.error('[probe] budget check failed', e);
+    }
   }
 
   // 4. WhatsApp gateway per tenant with an active Manus WA integration

@@ -44,6 +44,27 @@ export function UsagePanel({ tenantId, className }: { tenantId: string | null; c
             <StatTile label="טוקנים · 7 ימים" value={data.tokens7d >= 1000 ? `${(data.tokens7d / 1000).toFixed(1)}K` : `${data.tokens7d}`} />
             <StatTile label="עלות · 30 יום" value={`$${data.cost30d.toFixed(2)}`} sub="ממקורות מנוטרים" />
           </div>
+          {data.monthlyBudget ? (
+            (() => {
+              const pct = Math.min(100, (data.costMtd / data.monthlyBudget) * 100);
+              const barColor = pct >= 95 ? "var(--cc-crit)" : pct >= 80 ? "var(--cc-warn)" : "var(--cc-ok)";
+              return (
+                <div>
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="text-[var(--cc-text-dim)]">תקציב חודשי</span>
+                    <span className="cc-num">${data.costMtd.toFixed(2)} / ${data.monthlyBudget} ({pct.toFixed(0)}%)</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full border border-[var(--cc-line)]" dir="ltr">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor, boxShadow: `0 0 6px ${barColor}` }} />
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            <p className="text-[11px] text-[var(--cc-text-dim)]">
+              💡 לא הוגדר תקציב חודשי — הוסף <span className="cc-num">monthly_budget_usd</span> בהגדרות ה-LLM כדי לקבל התראות 80%/95% לפני שהקרדיט נגמר.
+            </p>
+          )}
           <div className="min-h-[110px] flex-1" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.days} margin={{ top: 4, right: 4, bottom: 0, left: 4 }} barCategoryGap={2}>
