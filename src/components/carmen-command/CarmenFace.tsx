@@ -91,8 +91,10 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       let mouthPx = { x: cx, y: cy + side * 0.1 };
 
       if (imgReady && !imgFailed) {
-        // Speaking adds a subtle overall brightness lift on top of the mouth glow
-        ctx.globalAlpha = 0.92 + (st === "speaking" ? mouth * 0.08 : 0);
+        // Semi-transparent hologram: the canvas is screen-blended over the page
+        // (see the style below), so the artwork's dark background disappears and
+        // the dashboard grid shows through the figure.
+        ctx.globalAlpha = 0.85 + (st === "speaking" ? mouth * 0.15 : 0);
         ctx.drawImage(img, ix, iy, side, side);
         ctx.globalAlpha = 1;
         mouthPx = { x: ix + side * MOUTH_X, y: iy + side * MOUTH_Y };
@@ -123,14 +125,15 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
         ctx.fillStyle = g;
         ctx.fillRect(mouthPx.x - r, mouthPx.y - r, r * 2, r * 2);
         ctx.globalCompositeOperation = "source-over";
-        // ripples spreading from the mouth
+        // the speech circle — full rings rippling out from the mouth, kept
+        // clearly visible above the transparent figure
         if (!reduced) {
-          for (let k = 0; k < 2; k++) {
-            const phase = ((t * 1.2 + k / 2) % 1);
+          for (let k = 0; k < 3; k++) {
+            const phase = ((t * 1.1 + k / 3) % 1);
             ctx.beginPath();
-            ctx.arc(mouthPx.x, mouthPx.y, side * (0.06 + phase * 0.22), Math.PI * 0.15, Math.PI * 0.85);
-            ctx.strokeStyle = `rgba(${c.line}, ${0.35 * mouth * (1 - phase)})`;
-            ctx.lineWidth = Math.max(1, side * 0.0025);
+            ctx.arc(mouthPx.x, mouthPx.y, side * (0.05 + phase * 0.24), 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(${c.line}, ${0.55 * mouth * (1 - phase)})`;
+            ctx.lineWidth = Math.max(1.5, side * 0.003);
             ctx.stroke();
           }
         }
@@ -145,8 +148,8 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
           const phase = ((t * 0.6 + k / 3) % 1);
           ctx.beginPath();
           ctx.arc(cx, cy, side * (0.47 + phase * 0.16), 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(${c.line}, ${0.3 * (1 - phase)})`;
-          ctx.lineWidth = Math.max(1, side * 0.002);
+          ctx.strokeStyle = `rgba(${c.line}, ${0.45 * (1 - phase)})`;
+          ctx.lineWidth = Math.max(1.5, side * 0.0028);
           ctx.stroke();
         }
       }
@@ -162,5 +165,14 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
     return () => { running = false; cancelAnimationFrame(raf); ro.disconnect(); };
   }, [audioLevelRef, imageUrl]);
 
-  return <canvas ref={canvasRef} className={className} aria-label="ההולוגרמה של כרמן" role="img" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      className={className}
+      // screen-blend drops the artwork's dark background → transparent hologram
+      style={{ mixBlendMode: "screen" }}
+      aria-label="ההולוגרמה של כרמן"
+      role="img"
+    />
+  );
 }
