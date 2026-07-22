@@ -51,6 +51,7 @@ import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
 import { ShareTableDialog } from "@/components/dynamic-tables/ShareTableDialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
+import { EditTableDialog } from "@/components/dynamic-tables/EditTableDialog";
 import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
 
 import { MaskyooSiblingCard } from "@/components/dynamic-tables/MaskyooSiblingCard";
@@ -115,6 +116,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const [reportScreenshotBlob, setReportScreenshotBlob] = useState<Blob | null>(null);
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showEditTableDialog, setShowEditTableDialog] = useState(false);
   const [debugDialogOpen, setDebugDialogOpen] = useState(false);
   const [debugData, setDebugData] = useState<any>(null);
   const [debugLoading, setDebugLoading] = useState(false);
@@ -2399,8 +2401,21 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 <Send className="ml-2 h-4 w-4" />
                 {isCapturingScreenshot ? 'מצלם...' : 'שלח עדכון ללקוח'}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowEditTableDialog(true)}>
+                <Settings className="ml-2 h-4 w-4" />
+                ערוך טבלה (חיבור, לקוח וסוכנות)
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {table && (
+            <EditTableDialog
+              open={showEditTableDialog}
+              onOpenChange={setShowEditTableDialog}
+              table={table}
+              tenantId={table.tenant_id}
+            />
+          )}
         </div>
       </div>
       )}
