@@ -15,7 +15,7 @@ interface CarmenFaceProps {
 // Served from CDN like the header CARMEN_ICON; the component degrades to a
 // procedural glow if the image can't load.
 const CARMEN_HOLOGRAM_URL =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_3BBiWCZmwyTleUe5EJZHttLX0mx/hf_20260722_173953_d31cce6f-5f35-4405-86f2-c7a6592778d1.png";
+  "https://d8j0ntlcm91z4.cloudfront.net/user_3BBiWCZmwyTleUe5EJZHttLX0mx/hf_20260722_174724_58992c4f-7f39-4367-aa05-ec5739dd3ccf.png";
 
 // Where the mouth sits inside the portrait (fractions of image width/height)
 const MOUTH_X = 0.5;
