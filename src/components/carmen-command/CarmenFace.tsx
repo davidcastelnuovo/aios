@@ -29,10 +29,10 @@ const COLORS = {
 };
 
 /**
- * Carmen's hologram — the generated portrait drawn on canvas with live
- * overlays: breathing scale, twinkling particles, rotating orbital rings,
- * listening sound-waves, an audio-reactive mouth glow while speaking, and an
- * amber tint pulse on alert.
+ * Carmen's hologram — the portrait drawn on canvas with restrained live
+ * overlays only: breathing scale, listening sound-waves, an audio-reactive
+ * mouth glow while speaking, and an amber tint pulse on alert. The artwork
+ * itself carries the rings/sparkles, so nothing synthetic is drawn on top.
  */
 export function CarmenFace({ state, audioLevelRef, className, imageUrl }: CarmenFaceProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -58,13 +58,6 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
     img.onload = () => { imgReady = true; };
     img.onerror = () => { imgFailed = true; };
     img.src = imageUrl || CARMEN_HOLOGRAM_URL;
-
-    const particles = Array.from({ length: reduced ? 0 : 40 }, (_, i) => ({
-      a: (i / 40) * Math.PI * 2,
-      r: 0.55 + ((i * 37) % 100) / 150,
-      s: (0.0003 + ((i * 13) % 10) / 26000) * (i % 2 ? 1 : -1),
-      tw: (i * 17) % 100 / 100,
-    }));
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -143,40 +136,8 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
         }
       }
 
-      // Orbital rings — one dashed slow ring + counter-rotating arcs
-      if (!reduced) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(t * 0.12);
-        ctx.beginPath();
-        ctx.setLineDash([side * 0.03, side * 0.022]);
-        ctx.arc(0, 0, side * 0.46, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${c.line}, ${0.22 * alertPulse})`;
-        ctx.lineWidth = Math.max(1, side * 0.0018);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.rotate(-t * 0.3);
-        for (const [from, to] of [[0, 0.55], [Math.PI, Math.PI * 1.55]] as const) {
-          ctx.beginPath();
-          ctx.arc(0, 0, side * 0.485, from, to);
-          ctx.strokeStyle = `rgba(${c.line}, ${0.35 * alertPulse})`;
-          ctx.lineWidth = Math.max(1, side * 0.0028);
-          ctx.stroke();
-        }
-        ctx.restore();
-      }
-
-      // Twinkling particles drifting around the portrait
-      for (const p of particles) {
-        p.a += p.s * 16;
-        const px = cx + Math.cos(p.a) * p.r * side * 0.42;
-        const py = cy + Math.sin(p.a * 0.9) * p.r * side * 0.45;
-        const tw = 0.4 + 0.6 * Math.abs(Math.sin(t * 1.3 + p.tw * Math.PI * 2));
-        ctx.beginPath();
-        ctx.arc(px, py, Math.max(0.8, side * 0.0022 * (0.7 + p.tw)), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${c.dot}, ${0.35 * tw})`;
-        ctx.fill();
-      }
+      // The reference artwork already carries its own rings and sparkles —
+      // no synthetic orbital rings or particles on top; the portrait stays clean.
 
       // Listening: expanding sound-wave rings around the hologram
       if (st === "listening" && !reduced) {
