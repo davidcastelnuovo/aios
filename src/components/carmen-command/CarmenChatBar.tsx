@@ -353,19 +353,36 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       }
     }, [tenantId]);
 
+    /** Ship realtime failures to error_logs so they can be diagnosed server-side. */
+    const reportRealtimeError = useCallback(async (message: string) => {
+      console.error("[realtime]", message);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/report-error`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ source: "command-center-realtime", error_message: message.slice(0, 500), url: window.location.pathname }),
+        });
+      } catch { /* diagnostics are best-effort */ }
+    }, []);
+
     /** Try to open an OpenAI Realtime session. Returns false to fall back to the VAD loop. */
     const beginRealtime = useCallback(async (): Promise<boolean> => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return false;
+        if (!session) { reportRealtimeError("no auth session"); return false; }
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carmen-realtime-session`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({}),
         });
-        if (!res.ok) return false;
+        if (!res.ok) {
+          reportRealtimeError(`session mint failed: HTTP ${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`);
+          return false;
+        }
         const { client_secret, model } = await res.json();
-        if (!client_secret) return false;
+        if (!client_secret) { reportRealtimeError("no client_secret in mint response"); return false; }
 
         const handle = await startRealtimeVoice(client_secret, model, {
           onUserTranscript: (text) => {
@@ -381,17 +398,18 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           },
           onToolCall: askCarmenBrain,
           onStateChange: (state) => { if (convModeRef.current) onFaceState(state); },
-          onError: (msg) => console.error("[realtime]", msg),
+          onError: (msg) => reportRealtimeError(msg),
           audioLevelRef,
         });
         realtimeRef.current = handle;
         setIsRealtime(true);
         onFaceState("listening");
         return true;
-      } catch {
+      } catch (e) {
+        reportRealtimeError(e instanceof Error ? e.message : String(e));
         return false;
       }
-    }, [askCarmenBrain, audioLevelRef, onFaceState]);
+    }, [askCarmenBrain, audioLevelRef, onFaceState, reportRealtimeError]);
 
     /**
      * One listening turn in continuous-conversation mode: open the mic with a

@@ -104,6 +104,15 @@ export async function startRealtimeVoice(
     }
   };
 
+  // Surface transport failures (network blocks WebRTC/UDP, ICE failure) —
+  // otherwise the session looks alive while no audio ever flows
+  pc.onconnectionstatechange = () => {
+    if (stopped) return;
+    if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+      cb.onError(`WebRTC connection ${pc.connectionState}`);
+    }
+  };
+
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   const resp = await fetch(`https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(model)}`, {
@@ -112,9 +121,10 @@ export async function startRealtimeVoice(
     body: offer.sdp,
   });
   if (!resp.ok) {
+    const detail = await resp.text().catch(() => "");
     mic.getTracks().forEach((t) => t.stop());
     pc.close();
-    throw new Error(`Realtime handshake failed (${resp.status})`);
+    throw new Error(`Realtime handshake failed (${resp.status}): ${detail.slice(0, 300)}`);
   }
   await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
 
