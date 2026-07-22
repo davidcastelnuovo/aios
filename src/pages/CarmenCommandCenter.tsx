@@ -71,13 +71,14 @@ export default function CarmenCommandCenter() {
             <ArrowRight className="h-3.5 w-3.5" />
             חזרה
           </Link>
-          <h1 className="text-lg font-bold tracking-[0.25em] text-[var(--cc-accent)]">CARMEN</h1>
-          <span className="hidden text-xs text-[var(--cc-text-dim)] sm:inline">מרכז פיקוד ובקרה</span>
+          <h1 className="cc-title text-lg font-bold text-[var(--cc-accent)]">CARMEN</h1>
+          <span className="hidden text-xs tracking-[0.15em] text-[var(--cc-text-dim)] sm:inline">COMMAND CENTER · מרכז פיקוד</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5 text-xs">
+          <span className="cc-chip text-xs">
             <span className="cc-live-dot inline-block h-2 w-2 rounded-full bg-[var(--cc-ok)]" />
-            <span className="text-[var(--cc-text-dim)]">מערכת פעילה</span>
+            <span className="text-[var(--cc-text-dim)]">סטטוס מערכת</span>
+            <span className="font-bold text-[var(--cc-ok)]">תקין</span>
           </span>
           <Clock />
         </div>
@@ -87,10 +88,11 @@ export default function CarmenCommandCenter() {
       <main className="cc-scroll grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-12 lg:grid-rows-[minmax(0,7fr)_minmax(0,5fr)] lg:overflow-hidden">
         {/* Center — face + core overview */}
         <div className="order-1 flex min-h-0 flex-col gap-3 lg:order-2 lg:col-span-6">
-          <div className="cc-panel relative min-h-[220px] flex-1">
+          <div className="cc-panel relative min-h-[220px] flex-1 overflow-hidden">
             <CarmenFace state={faceState} audioLevelRef={audioLevelRef} className="absolute inset-0 h-full w-full" />
+            <div className="cc-scan" aria-hidden />
             <span className="absolute right-3 top-2 text-[10px] tracking-[0.2em] text-[var(--cc-text-dim)]">
-              {faceState === "listening" ? "מקשיבה…" : faceState === "speaking" ? "מדברת…" : faceState === "alert" ? "התראה!" : "בהמתנה"}
+              CARMEN AI CORE · {faceState === "listening" ? "מקשיבה…" : faceState === "speaking" ? "מדברת…" : faceState === "alert" ? "התראה!" : "בהמתנה"}
             </span>
           </div>
           <CoreOverviewPanel tenantId={tenantId} />

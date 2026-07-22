@@ -315,7 +315,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const hasThread = messages.length > 0 || !!streamingText;
 
     return (
-      <div className="cc-panel flex flex-col overflow-hidden">
+      <div className="cc-panel cc-talkbar flex flex-col overflow-hidden">
         {hasThread && (
           <>
             <button
@@ -334,7 +334,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 ) : (
                   <div key={i} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
                     m.role === "user"
-                      ? "mr-auto bg-[rgba(139,92,246,0.25)]"
+                      ? "mr-auto bg-[rgba(46,230,166,0.18)]"
                       : "ml-auto border border-[var(--cc-line)] bg-[rgba(14,20,40,0.8)]"
                   }`}>
                     <div className="prose prose-invert prose-sm max-w-none [&_p]:my-1">
@@ -364,10 +364,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             onClick={startVoice}
             disabled={isTranscribing || isStreaming}
             title={isRecording ? "עצרי הקלטה" : "דברי עם כרמן"}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
+            className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
               isRecording
                 ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
-                : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(139,92,246,0.15)]"
+                : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(46,230,166,0.15)]"
             } disabled:opacity-40`}
           >
             {isTranscribing ? <Loader2 className="h-5 w-5 animate-spin" /> : isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}

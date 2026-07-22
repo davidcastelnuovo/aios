@@ -56,10 +56,10 @@ const LIP_BOTTOM: Pt[] = [
 const NECK_R: Pt[] = [{ x: 0.16, y: 0.74 }, { x: 0.2, y: 0.92 }, { x: 0.44, y: 1.0 }];
 
 const COLORS = {
-  idle:      { line: "167, 139, 250", dot: "196, 181, 253" },
-  listening: { line: "167, 139, 250", dot: "196, 181, 253" },
-  speaking:  { line: "167, 139, 250", dot: "221, 214, 254" },
-  alert:     { line: "251, 191, 36",  dot: "252, 211, 77"  },
+  idle:      { line: "46, 230, 166", dot: "110, 240, 200" },
+  listening: { line: "46, 230, 166", dot: "110, 240, 200" },
+  speaking:  { line: "46, 230, 166", dot: "167, 250, 220" },
+  alert:     { line: "251, 191, 36", dot: "252, 211, 77"  },
 };
 
 /**
@@ -213,6 +213,30 @@ export function CarmenFace({ state, audioLevelRef, className }: CarmenFaceProps)
         ctx.arc(s.x, s.y, Math.max(0.8, scale * 0.004), 0, Math.PI * 2);
         ctx.fillStyle = `rgba(${c.dot}, 0.18)`;
         ctx.fill();
+      }
+
+      // Futuristic core rings: one dashed ring rotating slowly, one counter-rotating arc
+      if (!reduced) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(t * 0.15);
+        ctx.beginPath();
+        ctx.setLineDash([scale * 0.06, scale * 0.045]);
+        ctx.arc(0, 0, scale * 1.06, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${c.line}, ${0.28 * alertPulse})`;
+        ctx.lineWidth = Math.max(1, scale * 0.004);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.rotate(-t * 0.4);
+        ctx.beginPath();
+        ctx.arc(0, 0, scale * 1.12, 0, Math.PI * 0.55);
+        ctx.strokeStyle = `rgba(${c.line}, ${0.45 * alertPulse})`;
+        ctx.lineWidth = Math.max(1, scale * 0.006);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, scale * 1.12, Math.PI, Math.PI * 1.55);
+        ctx.stroke();
+        ctx.restore();
       }
 
       // Listening: expanding sound-wave rings around the face

@@ -21,6 +21,7 @@ export function HudPanel({ title, icon, children, className = "" }: {
       <header className="mb-2 flex items-center gap-2">
         {icon}
         <h2 className="cc-panel-title">{title}</h2>
+        <span className="cc-title-line" aria-hidden />
       </header>
       <div className="min-h-0 flex-1">{children}</div>
     </section>
@@ -198,7 +199,7 @@ export function TasksPanel({ tenantId }: { tenantId: string | null }) {
         {data?.map((t) => {
           const overdue = t.due_date && t.due_date < today;
           return (
-            <li key={t.id} className="group flex items-center gap-2 rounded-md p-1.5 text-sm hover:bg-[rgba(139,92,246,0.08)]">
+            <li key={t.id} className="group flex items-center gap-2 rounded-md p-1.5 text-sm hover:bg-[rgba(46,230,166,0.08)]">
               <button
                 onClick={() => markDone.mutate(t.id)}
                 title="סמן כבוצע"
@@ -247,7 +248,7 @@ export function QuickCommandsPanel({ onCommand, onVoice, onHealthCheck }: {
   onVoice: () => void;
   onHealthCheck: () => void;
 }) {
-  const btn = "flex items-center gap-2 rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm transition-colors hover:border-[var(--cc-line-strong)] hover:bg-[rgba(139,92,246,0.1)]";
+  const btn = "flex items-center gap-2 rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm transition-colors hover:border-[var(--cc-line-strong)] hover:bg-[rgba(46,230,166,0.1)]";
   return (
     <HudPanel title="פקודות מהירות" icon={<Zap className="h-4 w-4 text-[var(--cc-accent)]" />}>
       <div className="grid grid-cols-2 gap-2">
