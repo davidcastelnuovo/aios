@@ -44,7 +44,7 @@ const MOOD_LABELS: Record<string, string> = {
   angry: "מצב רוח: זועף", random: "מצב רוח: אקראי",
 };
 
-export function CoreOverviewPanel({ tenantId }: { tenantId: string | null }) {
+export function CoreOverviewPanel({ tenantId, className }: { tenantId: string | null; className?: string }) {
   const { data, isLoading, isError } = useCoreOverview(tenantId);
   const items = data ? [
     { label: "סטטוס", value: "פעילה", ok: true, icon: <Activity className="h-3.5 w-3.5" /> },
@@ -58,7 +58,7 @@ export function CoreOverviewPanel({ tenantId }: { tenantId: string | null }) {
   ] : [];
 
   return (
-    <HudPanel title="CORE OVERVIEW" icon={<Cpu className="h-4 w-4 text-[var(--cc-accent)]" />}>
+    <HudPanel title="CORE OVERVIEW" icon={<Cpu className="h-4 w-4 text-[var(--cc-accent)]" />} className={className ?? ""}>
       <PanelState loading={isLoading} error={isError} />
       {data && (
         <>
@@ -88,10 +88,10 @@ const SEV_STYLE: Record<Severity, { icon: ReactNode; color: string; label: strin
   info: { icon: <Info className="h-4 w-4" />, color: "var(--cc-ok)", label: "עדכון" },
 };
 
-export function IntelFeedPanel({ tenantId }: { tenantId: string | null }) {
+export function IntelFeedPanel({ tenantId, className }: { tenantId: string | null; className?: string }) {
   const { data, isLoading, isError } = useIntelFeed(tenantId);
   return (
-    <HudPanel title="פיד מודיעין חי" icon={<ScrollText className="h-4 w-4 text-[var(--cc-accent)]" />} className="min-h-0">
+    <HudPanel title="פיד מודיעין חי" icon={<ScrollText className="h-4 w-4 text-[var(--cc-accent)]" />} className={`min-h-0 ${className ?? ""}`}>
       <PanelState loading={isLoading} error={isError} empty={data?.length === 0} emptyText="שקט בחזית — אין אזהרות פעילות ✨" />
       <ul className="cc-scroll flex h-full max-h-full flex-col gap-1.5 overflow-y-auto pl-1">
         {data?.map((item) => {
@@ -144,14 +144,14 @@ function UptimeStrip({ history }: { history: ("ok" | "warn" | "down")[] }) {
   );
 }
 
-export function HealthPanel({ tenantId }: { tenantId: string | null }) {
+export function HealthPanel({ tenantId, className }: { tenantId: string | null; className?: string }) {
   const { data, isLoading, isError, refetch, isFetching } = useHealth(tenantId);
   return (
-    <HudPanel title="בדיקות דופק" icon={<HeartPulse className="h-4 w-4 text-[var(--cc-accent)]" />}>
+    <HudPanel title="בדיקות דופק" icon={<HeartPulse className="h-4 w-4 text-[var(--cc-accent)]" />} className={className ?? ""}>
       <PanelState loading={isLoading} error={isError} />
       {data && (
         <div className="flex h-full flex-col">
-          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+          <ul className="grid grid-cols-2 gap-2">
             {data.services.map((svc) => {
               const m = STATUS_META[svc.status];
               return (
@@ -188,12 +188,12 @@ export function HealthPanel({ tenantId }: { tenantId: string | null }) {
 
 /* ---------------- Tasks ---------------- */
 
-export function TasksPanel({ tenantId }: { tenantId: string | null }) {
+export function TasksPanel({ tenantId, className }: { tenantId: string | null; className?: string }) {
   const { data, isLoading, isError } = useCcTasks(tenantId);
   const markDone = useMarkTaskDone(tenantId);
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <HudPanel title={`משימות${data?.length ? ` · ${data.length}` : ""}`} icon={<ListTodo className="h-4 w-4 text-[var(--cc-accent)]" />} className="min-h-0">
+    <HudPanel title={`משימות${data?.length ? ` · ${data.length}` : ""}`} icon={<ListTodo className="h-4 w-4 text-[var(--cc-accent)]" />} className={`min-h-0 ${className ?? ""}`}>
       <PanelState loading={isLoading} error={isError} empty={data?.length === 0} emptyText="אין משימות פתוחות 🎉" />
       <ul className="cc-scroll flex h-full max-h-full flex-col gap-1 overflow-y-auto pl-1">
         {data?.map((t) => {
@@ -224,10 +224,10 @@ export function TasksPanel({ tenantId }: { tenantId: string | null }) {
 
 /* ---------------- Daily timeline ---------------- */
 
-export function TimelinePanel({ tenantId }: { tenantId: string | null }) {
+export function TimelinePanel({ tenantId, className }: { tenantId: string | null; className?: string }) {
   const { data, isLoading, isError } = useTimeline(tenantId);
   return (
-    <HudPanel title="ציר זמן יומי" icon={<Activity className="h-4 w-4 text-[var(--cc-accent)]" />} className="min-h-0">
+    <HudPanel title="ציר זמן יומי" icon={<Activity className="h-4 w-4 text-[var(--cc-accent)]" />} className={`min-h-0 ${className ?? ""}`}>
       <PanelState loading={isLoading} error={isError} empty={data?.length === 0} emptyText="אין אירועים מתוזמנים להיום" />
       <ul className="cc-scroll flex h-full max-h-full flex-col gap-0.5 overflow-y-auto pl-1">
         {data?.map((ev) => (
@@ -243,14 +243,15 @@ export function TimelinePanel({ tenantId }: { tenantId: string | null }) {
 
 /* ---------------- Quick commands ---------------- */
 
-export function QuickCommandsPanel({ onCommand, onVoice, onHealthCheck }: {
+export function QuickCommandsPanel({ onCommand, onVoice, onHealthCheck, className }: {
   onCommand: (text: string) => void;
   onVoice: () => void;
   onHealthCheck: () => void;
+  className?: string;
 }) {
   const btn = "flex items-center gap-2 rounded-lg border border-[var(--cc-line)] px-3 py-2 text-sm transition-colors hover:border-[var(--cc-line-strong)] hover:bg-[rgba(76,195,255,0.1)]";
   return (
-    <HudPanel title="פקודות מהירות" icon={<Zap className="h-4 w-4 text-[var(--cc-accent)]" />}>
+    <HudPanel title="פקודות מהירות" icon={<Zap className="h-4 w-4 text-[var(--cc-accent)]" />} className={className ?? ""}>
       <div className="grid grid-cols-2 gap-2">
         <button className={btn} onClick={() => onCommand("צרי לי משימה חדשה: ")}>
           <PlusCircle className="h-4 w-4 text-[var(--cc-accent)]" />משימה חדשה

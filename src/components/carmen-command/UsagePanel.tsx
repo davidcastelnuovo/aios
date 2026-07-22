@@ -31,10 +31,10 @@ function UsageTooltip({ active, payload }: any) {
   );
 }
 
-export function UsagePanel({ tenantId }: { tenantId: string | null }) {
+export function UsagePanel({ tenantId, className }: { tenantId: string | null; className?: string }) {
   const { data, isLoading, isError } = useUsage(tenantId);
   return (
-    <HudPanel title="שימוש ב-API" icon={<BarChart3 className="h-4 w-4 text-[var(--cc-accent)]" />}>
+    <HudPanel title="שימוש ב-API" icon={<BarChart3 className="h-4 w-4 text-[var(--cc-accent)]" />} className={className ?? ""}>
       {isLoading && <p className="text-sm text-[var(--cc-text-dim)]">טוענת נתונים…</p>}
       {isError && <p className="text-sm text-[var(--cc-warn)]">המקור לא זמין כרגע</p>}
       {data && (

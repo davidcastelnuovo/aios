@@ -294,23 +294,62 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       stopSpeech();
     }, [stopSpeech]);
 
-    /** Carmen's full brain, exposed to the realtime model as the ask_carmen tool. */
+    /**
+     * Carmen's full brain, exposed to the realtime model as the ask_carmen tool.
+     * Streams (SSE) so long tool runs keep the connection alive — a non-streaming
+     * call hits the edge gateway's ~150s cutoff and kills the live conversation.
+     */
     const askCarmenBrain = useCallback(async (question: string): Promise<string> => {
       if (!question.trim() || !tenantId) return "לא התקבלה שאלה.";
       setMessages(prev => [...prev, { role: "tool_call", tool: `ask_carmen: ${question.slice(0, 80)}` }]);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return "שגיאת התחברות למערכת.";
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ command_text: question, tenant_id: tenantId, surface: "internal_chat", stream: false }),
+          body: JSON.stringify({ command_text: question, tenant_id: tenantId, surface: "internal_chat", stream: true }),
+          signal: controller.signal,
         });
-        if (!res.ok) return "לא הצלחתי לגשת למערכת כרגע.";
-        const data = await res.json();
-        return typeof data.output === "string" && data.output ? data.output : "לא נמצאה תשובה.";
-      } catch {
-        return "שגיאה בגישה למערכת.";
+        if (!res.ok || !res.body) return "לא הצלחתי לגשת למערכת כרגע.";
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let answer = "";
+        let streamError: string | null = null;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6);
+            if (payload === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(payload);
+              if (parsed.type === "token") answer += parsed.content;
+              // the wrapper returns 200 and reports failures inside the stream
+              else if (parsed.type === "error") streamError = String(parsed.message ?? parsed.error ?? "שגיאה במערכת");
+              else if (parsed.type === "done" && parsed.success === false && !streamError) streamError = "הפעולה נכשלה";
+            } catch { /* partial line */ }
+          }
+        }
+        if (streamError) {
+          return answer.trim()
+            ? `${answer.trim()}\n(שים לב: הפעולה נקטעה בשגיאה: ${streamError.slice(0, 200)})`
+            : `נתקלתי בשגיאה במערכת: ${streamError.slice(0, 200)}`;
+        }
+        return answer.trim() || "לא נמצאה תשובה.";
+      } catch (e) {
+        return e instanceof DOMException && e.name === "AbortError"
+          ? "הפעולה לקחה יותר מדי זמן — נסי לפרק אותה לשאלות קטנות יותר."
+          : "שגיאה בגישה למערכת.";
+      } finally {
+        clearTimeout(timeout);
       }
     }, [tenantId]);
 
