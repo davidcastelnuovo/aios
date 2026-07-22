@@ -169,8 +169,9 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
     <canvas
       ref={canvasRef}
       className={className}
-      // screen-blend drops the artwork's dark background → transparent hologram
-      style={{ mixBlendMode: "screen" }}
+      // screen-blend drops dark pixels; the contrast pass first crushes the
+      // artwork's navy background to true black so it vanishes completely
+      style={{ mixBlendMode: "screen", filter: "contrast(1.35) brightness(1.06)" }}
       aria-label="ההולוגרמה של כרמן"
       role="img"
     />
