@@ -69,6 +69,11 @@ export async function aiEmbed(text: string): Promise<number[] | null> {
     });
     if (!r.ok) return null;
     const j = await r.json();
+    logAiUsage({
+      source: "aiEmbed", model: AI_EMBED_MODEL,
+      tokens_in: j?.usage?.prompt_tokens ?? null,
+      cost_usd: estimateOpenAICostUSD(AI_EMBED_MODEL, j?.usage?.prompt_tokens ?? 0, 0),
+    });
     return j?.data?.[0]?.embedding ?? null;
   } catch {
     return null;
@@ -76,6 +81,50 @@ export async function aiEmbed(text: string): Promise<number[] | null> {
 }
 
 /** Single-prompt chat completion → raw assistant string, or null. */
+/* ---------- Usage metering (additive, best-effort) ----------
+   Every helper logs its OpenAI usage to ai_usage_log so the Command Center
+   can show consumption and fire budget alerts. Failures are swallowed —
+   metering must never break the actual AI call. */
+
+const USD_PER_M: Record<string, [number, number]> = {
+  "gpt-4o-mini": [0.15, 0.6],
+  "gpt-4o": [2.5, 10],
+  "gpt-4.1-mini": [0.4, 1.6],
+  "gpt-4.1": [2, 8],
+  "text-embedding-3-small": [0.02, 0],
+};
+
+export function estimateOpenAICostUSD(model: string, tokensIn: number, tokensOut: number): number | null {
+  const m = (model || "").toLowerCase();
+  const price = Object.entries(USD_PER_M).find(([k]) => m.includes(k))?.[1];
+  if (!price || (!tokensIn && !tokensOut)) return null;
+  return +((tokensIn * price[0] + tokensOut * price[1]) / 1e6).toFixed(6);
+}
+
+export function logAiUsage(row: {
+  source: string;
+  model?: string | null;
+  tokens_in?: number | null;
+  tokens_out?: number | null;
+  cost_usd?: number | null;
+  tenant_id?: string | null;
+  meta?: Record<string, unknown>;
+}): void {
+  try {
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return;
+    fetch(`${SUPABASE_URL}/rest/v1/ai_usage_log`, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(row),
+    }).catch(() => {});
+  } catch { /* never break the caller */ }
+}
+
 export async function aiChat(prompt: string, opts?: { model?: string; jsonMode?: boolean }): Promise<string | null> {
   const key = await resolveOpenAIKey();
   if (!key) return null;
@@ -92,6 +141,13 @@ export async function aiChat(prompt: string, opts?: { model?: string; jsonMode?:
     });
     if (!r.ok) return null;
     const j = await r.json();
+    const model = opts?.model || AI_CHAT_MODEL;
+    logAiUsage({
+      source: "aiChat", model,
+      tokens_in: j?.usage?.prompt_tokens ?? null,
+      tokens_out: j?.usage?.completion_tokens ?? null,
+      cost_usd: estimateOpenAICostUSD(model, j?.usage?.prompt_tokens ?? 0, j?.usage?.completion_tokens ?? 0),
+    });
     return j?.choices?.[0]?.message?.content ?? null;
   } catch {
     return null;
@@ -163,6 +219,14 @@ export async function aiTranscribe(
     });
     if (!r.ok) return null;
     const j = await r.json();
+    // Whisper bills per audio minute ($0.006/min); duration estimated from
+    // blob size (webm/ogg opus ≈ 12KB/s) since the simple response has none.
+    const estMinutes = audio.size / (12 * 1024 * 60);
+    logAiUsage({
+      source: "aiTranscribe", model: "whisper-1",
+      cost_usd: +(estMinutes * 0.006).toFixed(6),
+      meta: { bytes: audio.size, estimated: true },
+    });
     return (j?.text ?? "").toString().trim() || null;
   } catch {
     return null;
@@ -253,6 +317,13 @@ export async function aiVisionJSON(
       return null;
     }
     const j = await r.json();
+    const visionModel = opts?.model || "gpt-4o-mini";
+    logAiUsage({
+      source: "aiVisionJSON", model: visionModel,
+      tokens_in: j?.usage?.prompt_tokens ?? null,
+      tokens_out: j?.usage?.completion_tokens ?? null,
+      cost_usd: estimateOpenAICostUSD(visionModel, j?.usage?.prompt_tokens ?? 0, j?.usage?.completion_tokens ?? 0),
+    });
     return JSON.parse(j?.choices?.[0]?.message?.content ?? "null");
   } catch (e) {
     console.error("[vision] failed", e);
@@ -352,6 +423,12 @@ export async function aiSpeak(
       }),
     });
     if (!r.ok) return null;
+    // gpt-4o-mini-tts ≈ $0.015/min of audio; ~1000 chars ≈ 1 spoken minute.
+    logAiUsage({
+      source: "aiSpeak", model: opts?.model || "gpt-4o-mini-tts",
+      cost_usd: +((Math.min(text.length, 4000) / 1000) * 0.015).toFixed(6),
+      meta: { chars: Math.min(text.length, 4000), estimated: true },
+    });
     return new Uint8Array(await r.arrayBuffer());
   } catch {
     return null;

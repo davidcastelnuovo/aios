@@ -49,6 +49,9 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
     let raf = 0;
     let running = true;
     let mouth = 0;
+    // Slow on/off envelope: rings react to "is she speaking", never to
+    // instantaneous amplitude — that's what made them jumpy
+    let speechEnv = 0;
 
     // No crossOrigin: we only draw (never read pixels), so a tainted canvas is
     // fine and we avoid depending on the CDN's CORS headers.
@@ -82,6 +85,7 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
       // Slow smoothing so the glow breathes with the voice instead of jumping
       const targetMouth = st === "speaking" ? Math.max(level * 1.2, 0.08) : 0;
       mouth += (targetMouth - mouth) * 0.12;
+      speechEnv += ((st === "speaking" ? 1 : 0) - speechEnv) * 0.05;
 
       ctx.clearRect(0, 0, w, h);
 
@@ -159,27 +163,26 @@ export function CarmenFace({ state, audioLevelRef, className, imageUrl }: Carmen
         }
       }
 
-      // Audio-reactive mouth glow — Carmen's voice softly lights her lips
-      if (mouth > 0.02) {
-        const r = side * (0.045 + mouth * 0.05);
+      // Mouth glow — a near-steady halo while she speaks; the amplitude only
+      // adds a whisper of movement on top of the slow envelope
+      if (speechEnv > 0.02 || mouth > 0.02) {
+        const r = side * (0.05 + speechEnv * 0.02 + mouth * 0.015);
         const g = ctx.createRadialGradient(mouthPx.x, mouthPx.y, 0, mouthPx.x, mouthPx.y, r);
-        g.addColorStop(0, `rgba(${c.dot}, ${0.32 * mouth})`);
+        g.addColorStop(0, `rgba(${c.dot}, ${0.22 * speechEnv + 0.08 * mouth})`);
         g.addColorStop(1, "rgba(0,0,0,0)");
         ctx.globalCompositeOperation = "lighter";
         ctx.fillStyle = g;
         ctx.fillRect(mouthPx.x - r, mouthPx.y - r, r * 2, r * 2);
         ctx.globalCompositeOperation = "source-over";
-        // the speech circles — two slow, delicate ripples with an eased fade
-        if (!reduced) {
-          for (let k = 0; k < 2; k++) {
-            const phase = ((t * 0.4 + k / 2) % 1);
-            const fade = (1 - phase) ** 2; // eases out gently instead of popping
-            ctx.beginPath();
-            ctx.arc(mouthPx.x, mouthPx.y, side * (0.05 + phase * 0.14), 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(${c.line}, ${0.25 * mouth * fade})`;
-            ctx.lineWidth = Math.max(1, side * 0.0018);
-            ctx.stroke();
-          }
+        // one calm speech ring, driven only by the slow envelope
+        if (!reduced && speechEnv > 0.05) {
+          const phase = (t * 0.25) % 1;
+          const fade = (1 - phase) ** 2;
+          ctx.beginPath();
+          ctx.arc(mouthPx.x, mouthPx.y, side * (0.055 + phase * 0.12), 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${c.line}, ${0.16 * speechEnv * fade})`;
+          ctx.lineWidth = Math.max(1, side * 0.0016);
+          ctx.stroke();
         }
       }
 
