@@ -57,8 +57,10 @@ export default function GoogleAnalyticsSettings() {
   const hasMakeConnection = !!makeIntegration?.is_active && !!makeSettings?.api_token;
   const hasGaTemplate = !!(makeSettings?.google_analytics_template_scenario_id);
 
-  // Connect to Google Analytics (direct API)
-  const handleConnect = async (addNew = false) => {
+  // Connect to Google Analytics (direct API).
+  // loginHint (a Google email) preselects that account — used by "חבר מחדש"
+  // on a specific connection so the user renews the right one.
+  const handleConnect = async (addNew = false, loginHint?: string) => {
     if (!currentTenantId || !userId) {
       toast.error("נא להתחבר למערכת");
       return;
@@ -72,7 +74,7 @@ export default function GoogleAnalyticsSettings() {
       }
 
       const response = await supabase.functions.invoke('google-analytics-auth?action=authorize', {
-        body: { tenantId: currentTenantId, userId, addNew, origin: window.location.origin },
+        body: { tenantId: currentTenantId, userId, addNew, origin: window.location.origin, loginHint: loginHint || undefined },
         headers: { Authorization: `Bearer ${session.session.access_token}` },
         method: 'POST',
       });
@@ -379,14 +381,15 @@ export default function GoogleAnalyticsSettings() {
                            </div>
                          </div>
                          <div className="flex gap-2">
-                           {needsReauth && isOwn && (
+                           {isOwn && (
                              <Button
-                               variant="destructive"
+                               variant={needsReauth ? "destructive" : "outline"}
                                size="sm"
-                               onClick={() => handleConnect(true)}
+                               onClick={() => handleConnect(false, (s?.google_email as string) || undefined)}
                                disabled={isConnecting}
+                               title="חידוש ההרשאה מול Google לחשבון הזה"
                              >
-                               {isConnecting ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <ExternalLink className="h-4 w-4 ml-1" />}
+                               {isConnecting ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <RefreshCw className="h-4 w-4 ml-1" />}
                                חבר מחדש
                              </Button>
                            )}

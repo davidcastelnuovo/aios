@@ -40,7 +40,7 @@ serve(async (req) => {
     }
 
     try {
-      const { tenantId, userId, addNew, origin } = await req.json();
+      const { tenantId, userId, addNew, origin, loginHint } = await req.json();
       
       if (!tenantId || !userId) {
         return new Response(
@@ -63,10 +63,15 @@ serve(async (req) => {
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('scope', scopes);
       authUrl.searchParams.set('access_type', 'offline');
-      authUrl.searchParams.set('prompt', 'consent');
-      // Force account selection when adding a new account
-      if (addNew) {
-        authUrl.searchParams.set('login_hint', '');
+      if (loginHint) {
+        // Reconnect flow: preselect the specific Google account being renewed.
+        authUrl.searchParams.set('prompt', 'consent');
+        authUrl.searchParams.set('login_hint', String(loginHint));
+      } else if (addNew) {
+        // Adding another account: force the account chooser.
+        authUrl.searchParams.set('prompt', 'select_account consent');
+      } else {
+        authUrl.searchParams.set('prompt', 'consent');
       }
       authUrl.searchParams.set('state', state);
 
@@ -326,18 +331,38 @@ serve(async (req) => {
         accountsData?.error?.code === 401 ||
         /invalid.*credential|invalid_grant|unauthorized/i.test(accountsData?.error?.message || '');
 
+      // Persist the broken state so the settings page shows the red
+      // "reconnect needed" state — not only when a data sync fails.
+      const markNeedsReauth = async (reason: string) => {
+        try {
+          await supabase
+            .from('tenant_integrations')
+            .update({
+              settings: {
+                ...settings,
+                needs_reauth: true,
+                reauth_reason: reason,
+                reauth_marked_at: new Date().toISOString(),
+              },
+            })
+            .eq('id', integrationId);
+        } catch (_e) { /* non-fatal */ }
+      };
+
       if (looksUnauthorized) {
         const refreshResult = await refreshAccessToken();
         if (refreshResult.ok) {
           accountsResponse = await fetchAccounts();
           accountsData = await accountsResponse.json().catch(() => ({}));
         } else {
+          const reason = refreshResult.reason || 'token_revoked';
+          await markNeedsReauth(reason);
           return new Response(
             JSON.stringify({
               properties: [],
               needs_reconnect: true,
               owner_email: ownerEmail,
-              reason: refreshResult.reason || 'token_revoked',
+              reason,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -349,6 +374,7 @@ serve(async (req) => {
           accountsData.error.code === 401 ||
           /invalid.*credential|invalid_grant|unauthorized/i.test(accountsData.error.message || '');
         if (stillUnauthorized) {
+          await markNeedsReauth('token_revoked');
           return new Response(
             JSON.stringify({
               properties: [],
@@ -394,12 +420,18 @@ serve(async (req) => {
         }
       }
 
-      // Cache the fresh list so the UI can fall back to it if a future call fails.
+      // Cache the fresh list so the UI can fall back to it if a future call
+      // fails, and clear any stale reconnect flag — this call just succeeded.
       try {
         await supabase
           .from('tenant_integrations')
           .update({
-            settings: { ...settings, available_properties: properties },
+            settings: {
+              ...settings,
+              available_properties: properties,
+              needs_reauth: false,
+              reauth_reason: null,
+            },
           })
           .eq('id', integrationId);
       } catch (_e) { /* non-fatal */ }
