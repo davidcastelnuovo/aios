@@ -67,8 +67,22 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 3. OpenAI API (skipped when no key is configured)
-  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  // 3. OpenAI API — key from env or the active llm integration row
+  // (mirrors resolveOpenAIKey in _shared/ai.ts; local for single-file deploys)
+  let openaiKey = Deno.env.get('OPENAI_API_KEY') ?? null;
+  if (!openaiKey) {
+    try {
+      const { data: llmRows } = await supabase
+        .from('tenant_integrations')
+        .select('settings')
+        .eq('integration_type', 'llm')
+        .eq('is_active', true);
+      for (const row of llmRows ?? []) {
+        const k = (row.settings as Record<string, unknown>)?.openai_api_key;
+        if (typeof k === 'string' && k.trim()) { openaiKey = k.trim(); break; }
+      }
+    } catch { /* no key → check skipped */ }
+  }
   if (openaiKey) {
     const res = await timedFetch('https://api.openai.com/v1/models?limit=1', {
       headers: { Authorization: `Bearer ${openaiKey}` },

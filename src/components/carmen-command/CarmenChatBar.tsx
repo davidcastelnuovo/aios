@@ -466,8 +466,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       convModeRef.current = true;
       setIsConvMode(true);
       const realtimeOk = await beginRealtime();
-      if (!realtimeOk && convModeRef.current) beginListenTurn();
-    }, [beginListenTurn, beginRealtime, endConversation, onFaceState, stopSpeech]);
+      if (!realtimeOk && convModeRef.current) {
+        // Loud fallback — a silent one makes realtime failures invisible
+        toast({ title: "שיחה חיה לא זמינה כרגע", description: "עברתי למצב שיחה רגיל (הקלטה ותמלול)" });
+        beginListenTurn();
+      }
+    }, [beginListenTurn, beginRealtime, endConversation, onFaceState, stopSpeech, toast]);
 
     // Keep async loops (VAD, TTS pump) pointed at the freshest callbacks
     sendTextRef.current = sendText;
