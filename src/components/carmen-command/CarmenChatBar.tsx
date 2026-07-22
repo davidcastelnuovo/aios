@@ -50,6 +50,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const chunksRef = useRef<Blob[]>([]);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const playingRef = useRef<HTMLAudioElement | null>(null);
+    // Sentence-streaming TTS: queue of segments + generation counter for cancellation
+    const ttsQueueRef = useRef<string[]>([]);
+    const ttsPumpingRef = useRef(false);
+    const ttsGenRef = useRef(0);
     const { toast } = useToast();
 
     const scrollDown = () => {
@@ -57,29 +61,34 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     };
 
     const stopSpeech = useCallback(() => {
+      ttsGenRef.current++;
+      ttsQueueRef.current = [];
       playingRef.current?.pause();
       playingRef.current = null;
       audioLevelRef.current = 0;
       onFaceState("idle");
     }, [audioLevelRef, onFaceState]);
 
-    /** Play TTS audio through an analyser so the face can move with it. */
-    const speak = useCallback(async (text: string) => {
+    const fetchTts = useCallback(async (text: string): Promise<Blob | null> => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+        if (!session) return null;
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carmen-speak`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({ text }),
         });
-        if (!res.ok) throw new Error("TTS failed");
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
+        return res.ok ? await res.blob() : null;
+      } catch { return null; }
+    }, []);
 
-        stopSpeech();
-        const audio = new Audio(url);
-        playingRef.current = audio;
+    /** Play one audio blob through an analyser so the face moves with it. Resolves on end. */
+    const playBlob = useCallback(async (blob: Blob, gen: number) => {
+      if (ttsGenRef.current !== gen) return;
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      playingRef.current = audio;
+      try {
         const ctx = audioCtxRef.current ?? new AudioContext();
         audioCtxRef.current = ctx;
         if (ctx.state === "suspended") await ctx.resume();
@@ -89,7 +98,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         src.connect(analyser);
         analyser.connect(ctx.destination);
         const buf = new Uint8Array(analyser.frequencyBinCount);
-
         const tick = () => {
           if (playingRef.current !== audio) return;
           analyser.getByteTimeDomainData(buf);
@@ -98,24 +106,65 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           audioLevelRef.current = Math.min(1, Math.sqrt(sum / buf.length) * 4);
           requestAnimationFrame(tick);
         };
-
-        onFaceState("speaking");
-        const done = () => {
-          URL.revokeObjectURL(url);
-          if (playingRef.current === audio) {
-            playingRef.current = null;
-            audioLevelRef.current = 0;
-            onFaceState("idle");
-          }
-        };
-        audio.onended = done;
-        audio.onerror = done;
-        await audio.play();
-        tick();
-      } catch {
-        onFaceState("idle"); // voice is best-effort; the text answer is already on screen
+        await new Promise<void>((resolve) => {
+          const done = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.onended = done;
+          audio.onerror = done;
+          audio.play().then(tick).catch(done);
+        });
+      } finally {
+        if (playingRef.current === audio) { playingRef.current = null; audioLevelRef.current = 0; }
       }
-    }, [audioLevelRef, onFaceState, stopSpeech]);
+    }, [audioLevelRef]);
+
+    /**
+     * Drain the sentence queue: fetch TTS for the next segment while the
+     * current one is playing, so speech flows continuously as text streams in.
+     */
+    const pumpTts = useCallback(async () => {
+      if (ttsPumpingRef.current) return;
+      ttsPumpingRef.current = true;
+      const gen = ttsGenRef.current;
+      onFaceState("speaking");
+      try {
+        let prefetch: Promise<Blob | null> | null = null;
+        while (ttsGenRef.current === gen) {
+          const next = prefetch ?? (ttsQueueRef.current.length ? fetchTts(ttsQueueRef.current.shift()!) : null);
+          prefetch = null;
+          if (!next) break;
+          const blob = await next;
+          if (ttsGenRef.current !== gen) break;
+          if (ttsQueueRef.current.length) prefetch = fetchTts(ttsQueueRef.current.shift()!);
+          if (blob) await playBlob(blob, gen);
+        }
+      } finally {
+        ttsPumpingRef.current = false;
+        if (ttsGenRef.current === gen) {
+          // More sentences may have arrived while the last one was playing
+          if (ttsQueueRef.current.length) pumpTts();
+          else { audioLevelRef.current = 0; onFaceState("idle"); }
+        }
+      }
+    }, [audioLevelRef, fetchTts, onFaceState, playBlob]);
+
+    const enqueueSpeech = useCallback((segment: string) => {
+      const clean = segment.trim();
+      if (!clean) return;
+      ttsQueueRef.current.push(clean);
+      pumpTts();
+    }, [pumpTts]);
+
+    /** Cut the next speakable sentence off the front of the buffer, if one is complete. */
+    const extractSentence = (buf: string, minLen: number): [string, string] | null => {
+      if (buf.length < minLen) return null;
+      const re = /[.!?…]["']?(?=\s|$)|\n/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(buf))) {
+        const end = m.index + m[0].length;
+        if (end >= minLen) return [buf.slice(0, end), buf.slice(end)];
+      }
+      return null;
+    };
 
     const sendText = useCallback(async (text: string) => {
       const trimmed = text.trim();
@@ -154,6 +203,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         let buffer = "";
         let answer = "";
         let gotDone = false;
+        // Sentence-streaming TTS: speak each sentence as soon as it completes,
+        // while the rest of the answer is still being generated.
+        let speechBuf = "";
+        let firstSegmentSent = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -170,6 +223,17 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               if (parsed.type === "token") {
                 answer += parsed.content;
                 setStreamingText(prev => prev + parsed.content);
+                if (voiceOn) {
+                  speechBuf += parsed.content;
+                  // Short first segment so speech starts fast, longer afterwards
+                  let cut = extractSentence(speechBuf, firstSegmentSent ? 90 : 25);
+                  while (cut) {
+                    enqueueSpeech(cut[0]);
+                    speechBuf = cut[1];
+                    firstSegmentSent = true;
+                    cut = extractSentence(speechBuf, 90);
+                  }
+                }
                 scrollDown();
               } else if (parsed.type === "tool_call") {
                 setMessages(prev => [...prev, { role: "tool_call", tool: parsed.tool }]);
@@ -181,10 +245,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           }
         }
 
+        if (voiceOn && speechBuf.trim()) enqueueSpeech(speechBuf);
+
         const finalText = answer || (gotDone ? "" : "⚠️ החיבור נותק באמצע — נסי שוב.");
         if (finalText) {
           setMessages(prev => [...prev, { role: "assistant", content: finalText }]);
-          if (voiceOn && answer) speak(answer);
         }
         setStreamingText("");
         scrollDown();
@@ -193,7 +258,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       } finally {
         setIsStreaming(false);
       }
-    }, [isStreaming, tenantId, messages, voiceOn, speak, stopSpeech, toast]);
+    }, [isStreaming, tenantId, messages, voiceOn, enqueueSpeech, stopSpeech, toast]);
 
     const startVoice = useCallback(async () => {
       if (isRecording) {

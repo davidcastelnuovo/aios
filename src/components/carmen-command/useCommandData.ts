@@ -25,6 +25,8 @@ export interface ServiceHealth {
   status: "ok" | "warn" | "down" | "unknown";
   detail: string;
   latencyMs?: number;
+  /** Chronological probe history (oldest→newest) from service_health_checks */
+  history?: ("ok" | "warn" | "down")[];
 }
 
 /* ---------------- Core overview ---------------- */
@@ -35,14 +37,19 @@ export function useCoreOverview(tenantId: string | null) {
     enabled: !!tenantId,
     refetchInterval: 60000,
     queryFn: async () => {
-      const [agentRes, memRes, sessRes, llmRes, agentsCount] = await Promise.all([
+      const todayStart = `${todayStr()}T00:00:00Z`;
+      const [agentRes, memRes, sessRes, llmRes, agentsCount, inToday, outToday] = await Promise.all([
         sb.from("ai_agents").select("id, name, mood, voice, engine").eq("tenant_id", tenantId).limit(1).maybeSingle(),
         sb.from("carmen_memory_pointers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
         sb.from("carmen_whatsapp_sessions").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "active"),
         sb.from("tenant_integrations").select("id, is_active").eq("tenant_id", tenantId).eq("integration_type", "llm").maybeSingle(),
         sb.from("ai_agents").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+        sb.from("chat_messages").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("direction", "inbound").gte("created_at", todayStart),
+        sb.from("chat_messages").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("direction", "outbound").gte("created_at", todayStart),
       ]);
       return {
+        inboundToday: inToday.count ?? 0,
+        outboundToday: outToday.count ?? 0,
         agent: agentRes.data as { id: string; name: string; mood: string | null; voice: string | null; engine: string | null } | null,
         memoryCount: memRes.count ?? 0,
         activeSessions: sessRes.count ?? 0,
@@ -124,11 +131,29 @@ export function useHealth(tenantId: string | null) {
       const dbRes = await sb.from("tenants").select("id").limit(1);
       const dbLatency = Math.round(performance.now() - t0);
 
-      const [waRes, hbRes, ihRes] = await Promise.all([
+      const [waRes, hbRes, ihRes, probeRes] = await Promise.all([
         sb.from("tenant_integrations").select("is_active, settings").eq("tenant_id", tenantId).eq("integration_type", "manus_wa").maybeSingle(),
         sb.from("heartbeat_logs").select("triggered_at, summary").eq("tenant_id", tenantId).order("triggered_at", { ascending: false }).limit(1).maybeSingle(),
         sb.from("integration_health").select("provider, consecutive_failures, is_circuit_open, last_success_at").eq("tenant_id", tenantId),
+        sb.from("service_health_checks").select("service, status, latency_ms, detail, checked_at, tenant_id")
+          .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
+          .gte("checked_at", daysAgo(1))
+          .order("checked_at", { ascending: false })
+          .limit(400),
       ]);
+
+      // Group probe history per logical service (both mcp_* rows fold into "mcp")
+      const probeRows: any[] = probeRes.error ? [] : (probeRes.data ?? []);
+      const logical = (svc: string) => (svc.startsWith("mcp_") ? "mcp" : svc);
+      const histories = new Map<string, { status: "ok" | "warn" | "down"; latency_ms: number | null; detail: string; checked_at: string }[]>();
+      for (const r of probeRows) {
+        const key = logical(r.service);
+        if (!histories.has(key)) histories.set(key, []);
+        histories.get(key)!.push(r);
+      }
+      const latestOf = (key: string) => histories.get(key)?.[0];
+      const historyOf = (key: string) =>
+        histories.get(key)?.slice(0, 24).reverse().map((r) => r.status);
 
       const waSettings = waRes.data?.settings ?? {};
       const waStatus: ServiceHealth["status"] = waRes.error ? "unknown"
@@ -139,19 +164,42 @@ export function useHealth(tenantId: string | null) {
 
       const openCircuits = (ihRes.data ?? []).filter((r: any) => r.is_circuit_open);
 
+      const waProbe = latestOf("whatsapp");
+      const mcpProbe = latestOf("mcp");
+      const openaiProbe = latestOf("openai");
+
       const services: ServiceHealth[] = [
         {
           key: "db", label: "מסד נתונים",
           status: dbRes.error ? "down" : dbLatency > 1500 ? "warn" : "ok",
           detail: dbRes.error ? "שגיאת חיבור" : "Supabase Postgres",
           latencyMs: dbRes.error ? undefined : dbLatency,
+          history: historyOf("db"),
         },
         {
           key: "whatsapp", label: "WhatsApp",
-          status: waStatus,
-          detail: waRes.data
-            ? `${waSettings.phone_number ?? ""} ${waSettings.status ?? "מחובר"}`.trim()
-            : "לא מוגדר לטננט הזה",
+          status: waProbe ? waProbe.status : waStatus,
+          detail: waProbe
+            ? `${waSettings.phone_number ?? ""} ${waProbe.detail}`.trim()
+            : waRes.data
+              ? `${waSettings.phone_number ?? ""} ${waSettings.status ?? "מחובר"}`.trim()
+              : "לא מוגדר לטננט הזה",
+          latencyMs: waProbe?.latency_ms ?? undefined,
+          history: historyOf("whatsapp"),
+        },
+        {
+          key: "mcp", label: "שרתי MCP",
+          status: mcpProbe?.status ?? "unknown",
+          detail: mcpProbe ? mcpProbe.detail : "אין ניטור פעיל עדיין",
+          latencyMs: mcpProbe?.latency_ms ?? undefined,
+          history: historyOf("mcp"),
+        },
+        {
+          key: "openai", label: "OpenAI",
+          status: openaiProbe?.status ?? "unknown",
+          detail: openaiProbe ? openaiProbe.detail : "אין ניטור פעיל עדיין",
+          latencyMs: openaiProbe?.latency_ms ?? undefined,
+          history: historyOf("openai"),
         },
         {
           key: "integrations", label: "אינטגרציות",
@@ -161,11 +209,6 @@ export function useHealth(tenantId: string | null) {
             : openCircuits.length
               ? `${openCircuits.length} אינטגרציות בכשל`
               : `${ihRes.data.length} אינטגרציות תקינות`,
-        },
-        {
-          key: "mcp", label: "שרתי MCP",
-          status: "unknown",
-          detail: "אין ניטור פעיל עדיין",
         },
       ];
       return { services, lastHeartbeat: hbRes.data?.triggered_at ?? null };

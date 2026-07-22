@@ -52,6 +52,8 @@ export function CoreOverviewPanel({ tenantId }: { tenantId: string | null }) {
     { label: "סוכנים", value: `${data.agentsCount}`, ok: data.agentsCount > 0, icon: <Bot className="h-3.5 w-3.5" /> },
     { label: "LLM", value: data.llmConfigured ? (data.llmActive ? "מחובר" : "מושבת") : "ברירת מחדל", ok: !data.llmConfigured || data.llmActive, icon: <Cpu className="h-3.5 w-3.5" /> },
     { label: "שיחות WA", value: `${data.activeSessions} פעילות`, ok: true, icon: <MessageCircle className="h-3.5 w-3.5" /> },
+    { label: "התקבלו היום", value: `${data.inboundToday.toLocaleString("he-IL")}`, ok: true, icon: <MessageCircle className="h-3.5 w-3.5" /> },
+    { label: "נענו היום", value: `${data.outboundToday.toLocaleString("he-IL")}`, ok: true, icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
   ] : [];
 
   return (
@@ -124,7 +126,22 @@ const SERVICE_ICON: Record<string, ReactNode> = {
   whatsapp: <MessageCircle className="h-4 w-4" />,
   integrations: <Zap className="h-4 w-4" />,
   mcp: <Cpu className="h-4 w-4" />,
+  openai: <Brain className="h-4 w-4" />,
 };
+
+function UptimeStrip({ history }: { history: ("ok" | "warn" | "down")[] }) {
+  return (
+    <div className="mt-1 flex items-end gap-[2px]" dir="ltr" title="היסטוריית זמינות (24 בדיקות אחרונות)">
+      {history.map((s, i) => (
+        <span
+          key={i}
+          className="h-2 w-[3px] rounded-sm"
+          style={{ background: STATUS_META[s].color, opacity: s === "ok" ? 0.75 : 1 }}
+        />
+      ))}
+    </div>
+  );
+}
 
 export function HealthPanel({ tenantId }: { tenantId: string | null }) {
   const { data, isLoading, isError, refetch, isFetching } = useHealth(tenantId);
@@ -133,7 +150,7 @@ export function HealthPanel({ tenantId }: { tenantId: string | null }) {
       <PanelState loading={isLoading} error={isError} />
       {data && (
         <div className="flex h-full flex-col">
-          <ul className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
             {data.services.map((svc) => {
               const m = STATUS_META[svc.status];
               return (
@@ -147,6 +164,7 @@ export function HealthPanel({ tenantId }: { tenantId: string | null }) {
                     {svc.latencyMs != null && <span className="cc-num mr-1 text-[var(--cc-text-dim)]">{svc.latencyMs}ms</span>}
                   </div>
                   <p className="mt-0.5 truncate text-xs text-[var(--cc-text-dim)]" title={svc.detail}>{svc.detail}</p>
+                  {svc.history && svc.history.length > 0 && <UptimeStrip history={svc.history} />}
                 </li>
               );
             })}

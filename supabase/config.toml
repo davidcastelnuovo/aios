@@ -279,3 +279,7 @@ verify_jwt = false
 # Chrome-extension recording ingest — requires the user's session JWT.
 [functions.ingest-extension-recording]
 verify_jwt = true
+
+# Cron-invoked health probe for the Command Center (called with the anon key).
+[functions.carmen-health-probe]
+verify_jwt = true
