@@ -508,7 +508,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 ) : (
                   <div key={i} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
                     m.role === "user"
-                      ? "mr-auto bg-[rgba(46,230,166,0.18)]"
+                      ? "mr-auto bg-[rgba(76,195,255,0.18)]"
                       : "ml-auto border border-[var(--cc-line)] bg-[rgba(14,20,40,0.8)]"
                   }`}>
                     <div className="prose prose-invert prose-sm max-w-none [&_p]:my-1">
@@ -540,7 +540,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
               isConvMode
                 ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
-                : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(46,230,166,0.15)]"
+                : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(76,195,255,0.15)]"
             }`}
           >
             {isTranscribing ? <Loader2 className="h-5 w-5 animate-spin" /> : isConvMode ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
@@ -558,7 +558,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 : "דברי עם כרמן — כתבי, או לחצי על המיקרופון לשיחה רציפה"
             }
             disabled={isStreaming}
-            className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,11,9,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
+            className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
           />
           <button
             onClick={() => { if (playingRef.current) stopSpeech(); else setVoiceOn(v => !v); }}

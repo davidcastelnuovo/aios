@@ -221,7 +221,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <img
                     src={CARMEN_ICON}
                     alt="כרמן"
-                    className="h-9 w-9 rounded-full object-cover border-2 border-emerald-400/70 group-hover:scale-110 group-hover:border-emerald-300 transition-all duration-200"
+                    className="h-9 w-9 rounded-full object-cover border-2 border-sky-400/70 group-hover:scale-110 group-hover:border-sky-300 transition-all duration-200"
                   />
                 </button>
                 <DropdownMenu>

@@ -6,7 +6,7 @@ import { HudPanel } from "./panels";
 import { useUsage, UsageDay } from "./useCommandData";
 
 // Series color validated for the dark HUD surface (see command-center.css)
-const SERIES_GREEN = "#0FA37F";
+const SERIES_BLUE = "#3B82F6";
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -47,20 +47,20 @@ export function UsagePanel({ tenantId }: { tenantId: string | null }) {
           <div className="min-h-[110px] flex-1" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.days} margin={{ top: 4, right: 4, bottom: 0, left: 4 }} barCategoryGap={2}>
-                <CartesianGrid vertical={false} stroke="rgba(46,230,166,0.12)" />
+                <CartesianGrid vertical={false} stroke="rgba(76,195,255,0.12)" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: "#8faea2", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                  tick={{ fill: "#8fa3c4", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
                   tickFormatter={(d: string) => d.slice(8, 10) + "/" + d.slice(5, 7)}
                   interval={6} axisLine={false} tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: "#8faea2", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                  tick={{ fill: "#8fa3c4", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
                   tickFormatter={(v: number) => (v >= 1000 ? `${v / 1000}K` : `${v}`)}
                   width={34} axisLine={false} tickLine={false}
                 />
-                <Tooltip content={<UsageTooltip />} cursor={{ fill: "rgba(46,230,166,0.08)" }} />
-                <Bar dataKey="tokens" name="טוקנים ליום" fill={SERIES_GREEN} radius={[4, 4, 0, 0]} />
+                <Tooltip content={<UsageTooltip />} cursor={{ fill: "rgba(76,195,255,0.08)" }} />
+                <Bar dataKey="tokens" name="טוקנים ליום" fill={SERIES_BLUE} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
