@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { CarmenFaceState } from "./CarmenFace";
+import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
 
 interface ChatMessage {
   role: "user" | "assistant" | "tool_call";
@@ -45,6 +46,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const [voiceOn, setVoiceOn] = useState(true);
     const [expanded, setExpanded] = useState(false);
     const [isConvMode, setIsConvMode] = useState(false);
+    const [isRealtime, setIsRealtime] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -61,6 +63,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const vadRafRef = useRef(0);
     const sendTextRef = useRef<(t: string) => void>(() => {});
     const listenTurnRef = useRef<() => void>(() => {});
+    // OpenAI Realtime session (preferred voice mode; VAD loop is the fallback)
+    const realtimeRef = useRef<RealtimeHandle | null>(null);
     const { toast } = useToast();
 
     const scrollDown = () => {
@@ -279,6 +283,9 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const endConversation = useCallback(() => {
       convModeRef.current = false;
       setIsConvMode(false);
+      realtimeRef.current?.stop();
+      realtimeRef.current = null;
+      setIsRealtime(false);
       cancelAnimationFrame(vadRafRef.current);
       if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
       micStreamRef.current?.getTracks().forEach(t => t.stop());
@@ -286,6 +293,66 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setIsRecording(false);
       stopSpeech();
     }, [stopSpeech]);
+
+    /** Carmen's full brain, exposed to the realtime model as the ask_carmen tool. */
+    const askCarmenBrain = useCallback(async (question: string): Promise<string> => {
+      if (!question.trim() || !tenantId) return "לא התקבלה שאלה.";
+      setMessages(prev => [...prev, { role: "tool_call", tool: `ask_carmen: ${question.slice(0, 80)}` }]);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return "שגיאת התחברות למערכת.";
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ command_text: question, tenant_id: tenantId, surface: "internal_chat", stream: false }),
+        });
+        if (!res.ok) return "לא הצלחתי לגשת למערכת כרגע.";
+        const data = await res.json();
+        return typeof data.output === "string" && data.output ? data.output : "לא נמצאה תשובה.";
+      } catch {
+        return "שגיאה בגישה למערכת.";
+      }
+    }, [tenantId]);
+
+    /** Try to open an OpenAI Realtime session. Returns false to fall back to the VAD loop. */
+    const beginRealtime = useCallback(async (): Promise<boolean> => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return false;
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carmen-realtime-session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) return false;
+        const { client_secret, model } = await res.json();
+        if (!client_secret) return false;
+
+        const handle = await startRealtimeVoice(client_secret, model, {
+          onUserTranscript: (text) => {
+            setMessages(prev => [...prev, { role: "user", content: text }]);
+            setExpanded(true);
+            scrollDown();
+          },
+          onAssistantDelta: (delta) => { setStreamingText(prev => prev + delta); scrollDown(); },
+          onAssistantDone: (text) => {
+            setStreamingText("");
+            setMessages(prev => [...prev, { role: "assistant", content: text }]);
+            scrollDown();
+          },
+          onToolCall: askCarmenBrain,
+          onStateChange: (state) => { if (convModeRef.current) onFaceState(state); },
+          onError: (msg) => console.error("[realtime]", msg),
+          audioLevelRef,
+        });
+        realtimeRef.current = handle;
+        setIsRealtime(true);
+        onFaceState("listening");
+        return true;
+      } catch {
+        return false;
+      }
+    }, [askCarmenBrain, audioLevelRef, onFaceState]);
 
     /**
      * One listening turn in continuous-conversation mode: open the mic with a
@@ -388,14 +455,19 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       }
     }, [audioLevelRef, endConversation, onFaceState, toast]);
 
-    /** Mic button: toggles a natural hands-free conversation with Carmen. */
+    /**
+     * Mic button: toggles a natural hands-free conversation with Carmen.
+     * Prefers OpenAI Realtime (ChatGPT-voice-grade latency + barge-in); falls
+     * back to the local VAD loop when the realtime session can't be opened.
+     */
     const startVoice = useCallback(async () => {
       if (convModeRef.current) { endConversation(); onFaceState("idle"); return; }
       stopSpeech();
       convModeRef.current = true;
       setIsConvMode(true);
-      beginListenTurn();
-    }, [beginListenTurn, endConversation, onFaceState, stopSpeech]);
+      const realtimeOk = await beginRealtime();
+      if (!realtimeOk && convModeRef.current) beginListenTurn();
+    }, [beginListenTurn, beginRealtime, endConversation, onFaceState, stopSpeech]);
 
     // Keep async loops (VAD, TTS pump) pointed at the freshest callbacks
     sendTextRef.current = sendText;
@@ -476,7 +548,9 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             onKeyDown={e => { if (e.key === "Enter") sendText(input); }}
             placeholder={
               isConvMode
-                ? isRecording ? "שיחה פעילה — דברי חופשי, אני מקשיבה…" : "שיחה פעילה — כרמן עונה…"
+                ? isRealtime
+                  ? "שיחה חיה פעילה — דברי חופשי, אפשר גם לקטוע אותי באמצע…"
+                  : isRecording ? "שיחה פעילה — דברי חופשי, אני מקשיבה…" : "שיחה פעילה — כרמן עונה…"
                 : "דברי עם כרמן — כתבי, או לחצי על המיקרופון לשיחה רציפה"
             }
             disabled={isStreaming}

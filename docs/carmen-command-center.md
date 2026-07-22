@@ -41,9 +41,13 @@ src/components/carmen-command/
 
 ## קול
 
-- **כרמן שומעת:** מיקרופון → `MediaRecorder` → edge function `transcribe-voice` (Whisper עברית) → שליחה אוטומטית.
-- **כרמן מדברת:** התשובה זורמת ב-SSE; כל משפט שמסתיים נשלח מיד ל-`carmen-speak` (TTS) ומתנגן בתור רציף — הדיבור מתחיל אחרי המשפט הראשון, לא בסוף התשובה. ה-audio עובר דרך `AudioContext` analyser שמניע את הפה של הפנים.
-- כיבוי/הדלקה: כפתור הרמקול בשורת הצ'אט.
+שלוש שכבות, מהטובה ביותר למטה:
+
+1. **שיחה חיה — OpenAI Realtime (ברירת המחדל):** לחיצה על המיקרופון פותחת session דרך `carmen-realtime-session` (טוקן זמני, המפתח לא בפרונט) → WebRTC ישיר דפדפן↔OpenAI (`gpt-realtime`, קול marin). latency ~300ms, VAD בצד השרת, barge-in (אפשר לקטוע באמצע). שאלות על נתוני המערכת עוברות דרך הכלי `ask_carmen` → `run-ai-agent` (non-streaming) עם ה-JWT של המשתמש — המוח של כרמן נשאר המקור היחיד לנתונים. עלות: ~$0.10–0.30 לדקת שיחה.
+2. **Fallback — לולאת VAD מקומית:** אם ה-session לא נפתח (אין רשת/מפתח) — הקלטה עם זיהוי סוף-דיבור לפי שקט (~1.2s) → `transcribe-voice` (Whisper) → תשובה ב-TTS זורם משפט-משפט דרך `carmen-speak` עם prefetch.
+3. **טקסט:** הצ'אט הרגיל ב-SSE; כפתור הרמקול מפעיל/מכבה הקראה.
+
+`carmen-speak` תומך גם ב-`instructions` (הכוונת סגנון עברית ל-`gpt-4o-mini-tts`, פעיל כברירת מחדל) וגם ב-`provider:'elevenlabs'` (eleven_multilingual_v2, דורש `ELEVENLABS_API_KEY`; אפשר לקבוע קול עם `ELEVENLABS_VOICE_ID`).
 
 ## מה עדיין לא מחובר (ראו `carmen-dashboard-data-map.md`)
 

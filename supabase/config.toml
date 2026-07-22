@@ -283,3 +283,7 @@ verify_jwt = true
 # Cron-invoked health probe for the Command Center (called with the anon key).
 [functions.carmen-health-probe]
 verify_jwt = true
+
+# Mints ephemeral OpenAI Realtime tokens for the Command Center voice chat.
+[functions.carmen-realtime-session]
+verify_jwt = true
