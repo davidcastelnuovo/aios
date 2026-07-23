@@ -203,9 +203,9 @@ ${raw}`;
 // transcript text or null. Defaults to Hebrew.
 export async function aiTranscribe(
   audio: Blob,
-  opts?: { language?: string; filename?: string },
+  opts?: { language?: string; filename?: string; key?: string },
 ): Promise<string | null> {
-  const key = await resolveOpenAIKey();
+  const key = opts?.key || await resolveOpenAIKey();
   if (!key) return null;
   try {
     const form = new FormData();
@@ -405,9 +405,9 @@ export const AI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "
 // WhatsApp voice notes) or null.
 export async function aiSpeak(
   text: string,
-  opts?: { voice?: string; model?: string; format?: "opus" | "mp3" | "aac" | "flac" | "wav"; instructions?: string },
+  opts?: { voice?: string; model?: string; format?: "opus" | "mp3" | "aac" | "flac" | "wav"; instructions?: string; key?: string },
 ): Promise<Uint8Array | null> {
-  const key = await resolveOpenAIKey();
+  const key = opts?.key || await resolveOpenAIKey();
   if (!key || !text?.trim()) return null;
   try {
     const r = await fetch(`${OPENAI_BASE}/audio/speech`, {
