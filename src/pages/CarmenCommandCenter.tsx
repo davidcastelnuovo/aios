@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCommandCenterAccess } from "@/components/carmen-command/access";
 import { CarmenFace, CarmenFaceState } from "@/components/carmen-command/CarmenFace";
 import {
   CoreOverviewPanel, HealthPanel, IntelFeedPanel, QuickCommandsPanel,
@@ -35,6 +36,7 @@ function Clock() {
 export default function CarmenCommandCenter() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { tenantId } = useCurrentTenant();
+  const access = useCommandCenterAccess();
   const qc = useQueryClient();
   const [faceState, setFaceState] = useState<CarmenFaceState>("idle");
   const audioLevelRef = useRef(0);
@@ -57,6 +59,10 @@ export default function CarmenCommandCenter() {
     qc.invalidateQueries({ queryKey: ["cc-health", tenantId] });
     qc.invalidateQueries({ queryKey: ["cc-feed", tenantId] });
   }, [qc, tenantId]);
+
+  // Allowlist gate — the Command Center is David-only until per-user API keys land
+  if (access.loading) return <div className="cc-root h-dvh" />;
+  if (!access.allowed) return <Navigate to={tenantSlug ? `/t/${tenantSlug}` : "/"} replace />;
 
   return (
     <div dir="rtl" className="cc-root flex h-dvh flex-col overflow-hidden font-heebo">
