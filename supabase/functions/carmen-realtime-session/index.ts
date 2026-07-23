@@ -13,6 +13,11 @@ const corsHeaders = {
 
 const REALTIME_MODEL = 'gpt-realtime';
 
+// Server-side gate for the Command Center's paid live-voice sessions.
+// Temporary allowlist (mirrored in src/components/carmen-command/access.ts)
+// until per-user API keys land — then each user consumes their own key.
+const COMMAND_CENTER_ALLOWLIST = ['david.castelnuovo@gmail.com'];
+
 // Mirrors resolveOpenAIKey in _shared/ai.ts (kept local so this function stays
 // single-file deployable): env var first, then the active llm integration row.
 async function resolveOpenAIKey(): Promise<string | null> {
@@ -58,6 +63,10 @@ Deno.serve(async (req) => {
     );
     const { data: claims } = await supabase.auth.getClaims(authHeader.replace('Bearer ', ''));
     if (!claims?.claims) return json(401, { error: 'Unauthorized' });
+    const email = String(claims.claims.email ?? '').toLowerCase();
+    if (!COMMAND_CENTER_ALLOWLIST.includes(email)) {
+      return json(403, { error: 'Command Center access is restricted' });
+    }
 
     const key = await resolveOpenAIKey();
     if (!key) return json(500, { error: 'No OpenAI key available (env or llm integration)' });
