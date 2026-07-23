@@ -19,6 +19,9 @@ export interface RealtimeCallbacks {
 
 export interface RealtimeHandle {
   stop: () => void;
+  /** Mute/unmute the user's mic without breaking the session — Carmen keeps
+   * talking and finishing her work; she just stops hearing the room. */
+  setMicMuted: (muted: boolean) => void;
 }
 
 export async function startRealtimeVoice(
@@ -143,6 +146,9 @@ export async function startRealtimeVoice(
   await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
 
   return {
+    setMicMuted: (muted: boolean) => {
+      mic.getAudioTracks().forEach((t) => { t.enabled = !muted; });
+    },
     stop: () => {
       stopped = true;
       cancelAnimationFrame(raf);

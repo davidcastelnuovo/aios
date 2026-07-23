@@ -155,9 +155,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { session_id, force } = await req.json();
-    if (!session_id) {
-      return new Response(JSON.stringify({ error: "session_id required" }), {
+    const { session_id, ai_conversation_id, force } = await req.json();
+    if (!session_id && !ai_conversation_id) {
+      return new Response(JSON.stringify({ error: "session_id or ai_conversation_id required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -165,17 +165,50 @@ Deno.serve(async (req) => {
 
     const supabase = svc();
 
-    // Load session
-    const { data: session, error: sErr } = await supabase
-      .from("carmen_whatsapp_sessions")
-      .select("*")
-      .eq("id", session_id)
-      .maybeSingle();
-    if (sErr || !session) {
-      return new Response(JSON.stringify({ error: "session not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Load the conversation: a WhatsApp session, or (additive) a Command
+    // Center / in-app conversation from ai_conversations — normalized to the
+    // same shape so the extraction below is untouched.
+    let session: any = null;
+    let sourceTable = "carmen_whatsapp_sessions";
+    let topicPrefix = "WhatsApp";
+    if (session_id) {
+      const { data, error: sErr } = await supabase
+        .from("carmen_whatsapp_sessions")
+        .select("*")
+        .eq("id", session_id)
+        .maybeSingle();
+      if (sErr || !data) {
+        return new Response(JSON.stringify({ error: "session not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      session = data;
+    } else {
+      const { data, error: cErr } = await supabase
+        .from("ai_conversations")
+        .select("*")
+        .eq("id", ai_conversation_id)
+        .maybeSingle();
+      if (cErr || !data) {
+        return new Response(JSON.stringify({ error: "conversation not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      sourceTable = "ai_conversations";
+      topicPrefix = "Command Center";
+      session = {
+        id: data.id,
+        tenant_id: data.tenant_id,
+        conversation_history: data.messages,
+        sender_name: data.title || "שיחת דשבורד",
+        phone: null,
+        chat_id: null,
+        last_message_at: data.updated_at,
+        ended_at: null,
+        created_at: data.created_at,
+      };
     }
 
     // Idempotency: skip if already analyzed (unless force)
@@ -230,11 +263,11 @@ Deno.serve(async (req) => {
     await supabase.from("carmen_memory_episodes").insert({
       tenant_id,
       session_ref: session.id,
-      topic: `WhatsApp · ${session.sender_name || session.phone || "שיחה"}`,
+      topic: `${topicPrefix} · ${session.sender_name || session.phone || "שיחה"}`,
       topic_tags: tags,
       summary: summaryFull,
       summary_embedding: emb as any,
-      source_table: "carmen_whatsapp_sessions",
+      source_table: sourceTable,
       source_ids: [session.id],
       participants: { phone: session.phone, sender_name: session.sender_name, chat_id: session.chat_id },
       importance: Math.min(5, Math.max(1, Math.round(insight.quality_score))),

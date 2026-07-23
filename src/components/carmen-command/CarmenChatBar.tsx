@@ -1,7 +1,8 @@
 import {
   forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState,
 } from "react";
-import { ChevronDown, ChevronUp, Loader2, Mic, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronUp, History, Loader2, Mic, MicOff, Plus, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +48,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const [expanded, setExpanded] = useState(false);
     const [isConvMode, setIsConvMode] = useState(false);
     const [isRealtime, setIsRealtime] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
+    const muteRef = useRef(false);
+    const conversationIdRef = useRef<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -291,6 +296,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       micStreamRef.current?.getTracks().forEach(t => t.stop());
       micStreamRef.current = null;
       setIsRecording(false);
+      muteRef.current = false;
+      setIsMuted(false);
       stopSpeech();
     }, [stopSpeech]);
 
@@ -419,6 +426,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
      */
     const beginListenTurn = useCallback(async () => {
       if (!convModeRef.current) return;
+      if (muteRef.current) return; // muted: stay in the conversation, don't listen
       if (mediaRecorderRef.current?.state === "recording") return; // already listening
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -473,6 +481,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           if (micStreamRef.current === stream) micStreamRef.current = null;
           setIsRecording(false);
           audioLevelRef.current = 0;
+          if (muteRef.current) return; // muted mid-recording: discard quietly
           const blob = new Blob(chunksRef.current, { type: "audio/webm" });
           if (!speechStarted || blob.size < 1000) {
             if (convModeRef.current) beginListenTurn();
@@ -530,6 +539,106 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       }
     }, [beginListenTurn, beginRealtime, endConversation, onFaceState, stopSpeech, toast]);
 
+    /* ---------- Conversation persistence + Carmen's memory ---------- */
+
+    // Save the thread to ai_conversations after every completed exchange, so
+    // it survives refreshes and appears in the history drawer.
+    const persistConversation = useCallback(async (msgs: ChatMessage[]) => {
+      const textMsgs = msgs.filter(m => m.role !== "tool_call").map(m => ({ role: m.role, content: m.content ?? "" }));
+      if (textMsgs.length < 2 || !tenantId) return;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const sbAny = supabase as any;
+        if (!conversationIdRef.current) {
+          const { data } = await sbAny.from("ai_conversations")
+            .insert({ user_id: user.id, tenant_id: tenantId, title: (textMsgs[0].content || "שיחה").slice(0, 60), messages: textMsgs })
+            .select("id").single();
+          conversationIdRef.current = data?.id ?? null;
+        } else {
+          await sbAny.from("ai_conversations")
+            .update({ messages: textMsgs, updated_at: new Date().toISOString() })
+            .eq("id", conversationIdRef.current);
+        }
+      } catch { /* persistence is best-effort */ }
+    }, [tenantId]);
+
+    const persistRef = useRef(persistConversation);
+    persistRef.current = persistConversation;
+    useEffect(() => {
+      const last = messages[messages.length - 1];
+      if (last?.role === "assistant") persistRef.current(messages);
+    }, [messages]);
+
+    /** Send a finished conversation to Carmen's memory (importance-graded extraction). */
+    const learnFromConversation = useCallback(async () => {
+      const convId = conversationIdRef.current;
+      const meaningful = messages.filter(m => m.role !== "tool_call").length >= 4;
+      if (!convId || !meaningful) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carmen-learn-from-session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ ai_conversation_id: convId }),
+          keepalive: true,
+        }).catch(() => {});
+      } catch { /* learning is best-effort */ }
+    }, [messages]);
+
+    const startNewConversation = useCallback(() => {
+      learnFromConversation();
+      conversationIdRef.current = null;
+      setMessages([]);
+      setStreamingText("");
+      setShowHistory(false);
+    }, [learnFromConversation]);
+
+    const loadConversation = useCallback((conv: { id: string; messages: unknown }) => {
+      learnFromConversation();
+      conversationIdRef.current = conv.id;
+      const msgs = (Array.isArray(conv.messages) ? conv.messages : []) as { role: string; content?: string }[];
+      setMessages(msgs
+        .filter(m => m.role === "user" || m.role === "assistant")
+        .map(m => ({ role: m.role as "user" | "assistant", content: m.content ?? "" })));
+      setShowHistory(false);
+      setExpanded(true);
+      scrollDown();
+    }, [learnFromConversation]);
+
+    const { data: pastConversations } = useQuery({
+      queryKey: ["cc-conversations", tenantId],
+      enabled: showHistory && !!tenantId,
+      queryFn: async () => {
+        const { data } = await (supabase as any)
+          .from("ai_conversations")
+          .select("id, title, updated_at, messages")
+          .order("updated_at", { ascending: false })
+          .limit(30);
+        return data ?? [];
+      },
+    });
+
+    /* ---------- Mute (keep the conversation, stop listening) ---------- */
+
+    const toggleMute = useCallback(() => {
+      const next = !muteRef.current;
+      muteRef.current = next;
+      setIsMuted(next);
+      // Realtime: just disable the mic track — the session and Carmen's own
+      // speech continue untouched
+      realtimeRef.current?.setMicMuted(next);
+      if (!realtimeRef.current && convModeRef.current) {
+        // VAD fallback: stop the open listening turn quietly; resume on unmute
+        if (next && mediaRecorderRef.current?.state === "recording") {
+          cancelAnimationFrame(vadRafRef.current);
+          mediaRecorderRef.current.stop();
+        }
+        if (!next) listenTurnRef.current();
+      }
+    }, []);
+
     // Keep async loops (VAD, TTS pump) pointed at the freshest callbacks
     sendTextRef.current = sendText;
     listenTurnRef.current = beginListenTurn;
@@ -547,6 +656,29 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
 
     return (
       <div className="cc-panel cc-talkbar flex flex-col overflow-hidden">
+        {showHistory && (
+          <div className="cc-scroll max-h-[40vh] overflow-y-auto border-b border-[var(--cc-line)] p-2">
+            <div className="mb-1 flex items-center justify-between px-1">
+              <span className="cc-panel-title">שיחות קודמות</span>
+              <button onClick={startNewConversation} className="flex items-center gap-1 text-xs text-[var(--cc-accent)] hover:underline">
+                <Plus className="h-3.5 w-3.5" />שיחה חדשה
+              </button>
+            </div>
+            {!pastConversations?.length && <p className="px-1 py-2 text-sm text-[var(--cc-text-dim)]">אין שיחות שמורות עדיין</p>}
+            {pastConversations?.map((conv: any) => (
+              <button
+                key={conv.id}
+                onClick={() => loadConversation(conv)}
+                className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-right text-sm hover:bg-[rgba(76,195,255,0.08)] ${conversationIdRef.current === conv.id ? "bg-[rgba(76,195,255,0.12)]" : ""}`}
+              >
+                <span className="min-w-0 flex-1 truncate">{conv.title || "שיחה"}</span>
+                <span className="cc-num mr-2 shrink-0 text-[10px] text-[var(--cc-text-dim)]">
+                  {new Date(conv.updated_at).toLocaleDateString("he-IL", { day: "numeric", month: "numeric" })}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
         {hasThread && (
           <>
             <button
@@ -602,6 +734,19 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           >
             {isTranscribing ? <Loader2 className="h-5 w-5 animate-spin" /> : isConvMode ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
           </button>
+          {isConvMode && (
+            <button
+              onClick={toggleMute}
+              title={isMuted ? "בטל השתקה — כרמן תחזור להקשיב" : "השתק אותי — כרמן ממשיכה לעבוד אבל לא שומעת אותך"}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
+                isMuted
+                  ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
+                  : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
+              }`}
+            >
+              <MicOff className="h-4 w-4" />
+            </button>
+          )}
           <input
             ref={inputRef}
             value={input}
@@ -617,6 +762,13 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             disabled={isStreaming}
             className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
           />
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            title="שיחות קודמות"
+            className={`shrink-0 ${showHistory ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"}`}
+          >
+            <History className="h-5 w-5" />
+          </button>
           <button
             onClick={() => { if (playingRef.current) stopSpeech(); else setVoiceOn(v => !v); }}
             title={playingRef.current ? "השתקה" : voiceOn ? "קול פעיל — כבי הקראה" : "קול כבוי — הפעילי הקראה"}

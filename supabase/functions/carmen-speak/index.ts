@@ -5,6 +5,10 @@
 // POST body: { text: string, voice?: string, provider?: 'openai' | 'elevenlabs', instructions?: string }
 // Response: audio/mpeg bytes (or JSON error).
 import { aiSpeak } from '../_shared/ai.ts';
+import { getCaller, getUserOpenAIKey } from '../_shared/userKey.ts';
+
+// Users with a personal key are billed on it; these owners may use the org key.
+const ORG_KEY_ALLOWLIST = ['david.castelnuovo@gmail.com'];
 
 // Style steering for gpt-4o-mini-tts — native-sounding Israeli Hebrew.
 const HEBREW_STEERING =
@@ -66,14 +70,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Personal-key users are billed on their own key; org key only for owners.
+    const caller = await getCaller(req.headers.get('Authorization') || '');
+    const userKey = caller ? await getUserOpenAIKey(caller.id) : null;
+    if (!userKey && !(caller && ORG_KEY_ALLOWLIST.includes(caller.email))) {
+      return new Response(JSON.stringify({ error: 'personal_key_required', message: 'כדי להשתמש בקול של כרמן יש להזין API key אישי בפרופיל' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // mp3 plays everywhere; shimmer reads Hebrew naturally (matches Carmen's WA voice).
     let audio: Uint8Array | null = null;
-    if (provider === 'elevenlabs') audio = await elevenSpeak(clean);
+    if (provider === 'elevenlabs' && !userKey) audio = await elevenSpeak(clean);
     if (!audio) {
       audio = await aiSpeak(clean, {
         voice: voice || 'shimmer',
         format: 'mp3',
         instructions: typeof instructions === 'string' && instructions ? instructions : HEBREW_STEERING,
+        ...(userKey ? { key: userKey } : {}),
       });
     }
     if (!audio) {

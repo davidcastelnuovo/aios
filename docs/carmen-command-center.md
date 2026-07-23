@@ -49,6 +49,11 @@ src/components/carmen-command/
 
 `carmen-speak` תומך גם ב-`instructions` (הכוונת סגנון עברית ל-`gpt-4o-mini-tts`, פעיל כברירת מחדל) וגם ב-`provider:'elevenlabs'` (eleven_multilingual_v2, דורש `ELEVENLABS_API_KEY`; אפשר לקבוע קול עם `ELEVENLABS_VOICE_ID`).
 
+## גישה ו-API keys
+
+- **בעלים (allowlist):** משתמשים ב-`COMMAND_CENTER_ALLOWLIST` (משוכפל ב-`access.ts` ובפונקציות הקול) משתמשים במפתח הארגוני.
+- **כל משתמש אחר — bring your own key:** מזין מפתח OpenAI אישי בכרטיס "כרמן — מפתח API אישי" באזור האישי (`user_api_keys`, RLS של הבעלים בלבד). המפתח נבדק מול OpenAI לפני שמירה. ברגע שיש מפתח: כפתור כרמן מופיע, וכל שרשרת הקול (Realtime / TTS / תמלול) מחויבת על המפתח האישי — כולל בצד השרת (403 בלעדיו).
+
 ## מה עדיין לא מחובר (ראו `carmen-dashboard-data-map.md`)
 
 - מעקב טוקנים/עלות בצ'אט הראשי (`run-ai-agent` v1 לא רושם usage) — דורש שינוי אדיטיבי בקוד הריצה של כרמן, ממתין לאישור.

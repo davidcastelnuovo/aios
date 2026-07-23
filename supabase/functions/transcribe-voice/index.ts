@@ -1,5 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { aiTranscribe, aiCleanTranscript, hasAiKey } from '../_shared/ai.ts';
+import { getCaller, getUserOpenAIKey } from '../_shared/userKey.ts';
+
+// Users with a personal key are billed on it; these owners may use the org key.
+const ORG_KEY_ALLOWLIST = ['david.castelnuovo@gmail.com'];
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +27,18 @@ serve(async (req) => {
       });
     }
 
-    if (!(await hasAiKey())) {
+    // Personal-key users are billed on their own key; org key only for owners.
+    const caller = await getCaller(req.headers.get('Authorization') || '');
+    const userKey = caller ? await getUserOpenAIKey(caller.id) : null;
+    const isOwner = !!caller && ORG_KEY_ALLOWLIST.includes(caller.email);
+    if (!userKey && !isOwner) {
+      return new Response(JSON.stringify({ error: 'personal_key_required', message: 'כדי להשתמש בקול של כרמן יש להזין API key אישי בפרופיל' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!userKey && !(await hasAiKey())) {
       return new Response(JSON.stringify({ error: 'OpenAI key not configured (env secret or llm integration)' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -33,6 +48,7 @@ serve(async (req) => {
     const text = await aiTranscribe(audioFile, {
       language: 'he',
       filename: audioFile.name || 'audio.ogg',
+      ...(userKey ? { key: userKey } : {}),
     });
 
     if (text == null) {
@@ -42,8 +58,9 @@ serve(async (req) => {
       });
     }
 
-    // Rewrite garbled Whisper output into clean, sensible Hebrew before returning.
-    const cleaned = await aiCleanTranscript(text);
+    // Rewrite garbled Whisper output into clean Hebrew. The cleanup runs on the
+    // org key, so personal-key users get the raw transcript (still good).
+    const cleaned = userKey ? text : await aiCleanTranscript(text);
 
     return new Response(JSON.stringify({ text: cleaned }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

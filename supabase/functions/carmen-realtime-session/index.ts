@@ -5,6 +5,7 @@
 // POST body: { voice?: string }
 // Response: { client_secret: string, model: string }
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { getCaller, getUserOpenAIKey } from '../_shared/userKey.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,12 +64,18 @@ Deno.serve(async (req) => {
     );
     const { data: claims } = await supabase.auth.getClaims(authHeader.replace('Bearer ', ''));
     if (!claims?.claims) return json(401, { error: 'Unauthorized' });
-    const email = String(claims.claims.email ?? '').toLowerCase();
-    if (!COMMAND_CENTER_ALLOWLIST.includes(email)) {
-      return json(403, { error: 'Command Center access is restricted' });
+
+    // Bring-your-own-key: a personal key grants access and gets billed;
+    // allowlisted owners may fall back to the org key.
+    const caller = await getCaller(authHeader);
+    if (!caller) return json(401, { error: 'Unauthorized' });
+    const userKey = await getUserOpenAIKey(caller.id);
+    const isOwner = COMMAND_CENTER_ALLOWLIST.includes(caller.email);
+    if (!userKey && !isOwner) {
+      return json(403, { error: 'personal_key_required', message: 'כדי להשתמש בכרמן יש להזין API key אישי של OpenAI בפרופיל שלך' });
     }
 
-    const key = await resolveOpenAIKey();
+    const key = userKey ?? await resolveOpenAIKey();
     if (!key) return json(500, { error: 'No OpenAI key available (env or llm integration)' });
 
     const { voice } = await req.json().catch(() => ({} as Record<string, unknown>));

@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useState, useEffect } from "react";
 import { MFASettings } from "@/components/MFASettings";
+import { PersonalApiKeyCard } from "@/components/carmen-command/PersonalApiKeyCard";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { CalendarIframeSettings } from "@/components/CalendarIframeSettings";
 import { CalendarSharingSettings } from "@/components/CalendarSharingSettings";
@@ -258,6 +259,8 @@ export default function MyProfile() {
       <ChangePasswordForm />
 
       <MFASettings />
+
+      <PersonalApiKeyCard />
 
       <CalendarIframeSettings />
 
