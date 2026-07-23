@@ -7,6 +7,67 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 };
 
+interface CampaignerScope {
+  campaignerId: string;
+  agencyIds: Set<string>;
+  clientIds: Set<string>;
+}
+
+// A campaigner's scope = the agencies they're assigned to (campaigner_agencies)
+// + the clients they're on (client_team). crm_tables has no INSERT/UPDATE RLS
+// policies for campaigners, so the service-role fallbacks below authorize
+// against this scope explicitly instead of widening RLS.
+async function getCampaignerScope(admin: any, userId: string): Promise<CampaignerScope | null> {
+  const [{ data: campaignerRole }, { data: profileRow }] = await Promise.all([
+    admin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'campaigner')
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from('profiles')
+      .select('campaigner_id')
+      .eq('id', userId)
+      .maybeSingle(),
+  ]);
+  if (!campaignerRole || !profileRow?.campaigner_id) return null;
+
+  const [{ data: agencyRows }, { data: teamRows }] = await Promise.all([
+    admin
+      .from('campaigner_agencies')
+      .select('agency_id')
+      .eq('campaigner_id', profileRow.campaigner_id),
+    admin
+      .from('client_team')
+      .select('client_id')
+      .eq('campaigner_id', profileRow.campaigner_id),
+  ]);
+  return {
+    campaignerId: profileRow.campaigner_id,
+    agencyIds: new Set((agencyRows || []).map((r: any) => r.agency_id)),
+    clientIds: new Set((teamRows || []).map((r: any) => r.client_id)),
+  };
+}
+
+async function isClientInCampaignerScope(admin: any, clientId: string, scope: CampaignerScope): Promise<boolean> {
+  if (scope.clientIds.has(clientId)) return true;
+  const { data: clientRow } = await admin
+    .from('clients')
+    .select('id, agency_id')
+    .eq('id', clientId)
+    .maybeSingle();
+  return !!clientRow?.agency_id && scope.agencyIds.has(clientRow.agency_id);
+}
+
+function serviceRoleClient() {
+  return createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -230,28 +291,59 @@ serve(async (req) => {
           tenantId = fallbackTenantId;
         }
 
+        const insertPayload = {
+          tenant_id: tenantId,
+          name,
+          slug,
+          description,
+          icon,
+          category,
+          integration_type: integration_type || null,
+          integration_settings: integration_settings || {},
+          agency_id: agency_id || null,
+          client_id: client_id || null,
+          created_by: user.id,
+        };
+
         const { data: table, error } = await supabase
           .from('crm_tables')
-          .insert({
-            tenant_id: tenantId,
-            name,
-            slug,
-            description,
-            icon,
-            category,
-            integration_type: integration_type || null,
-            integration_settings: integration_settings || {},
-            agency_id: agency_id || null,
-            client_id: client_id || null,
-            created_by: user.id,
-          })
+          .insert(insertPayload)
           .select()
           .single();
 
-        if (error) throw error;
+        if (!error) {
+          return new Response(JSON.stringify(table), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
 
+        // RLS blocked the insert (crm_tables has no INSERT policy for campaigners).
+        // A campaigner may still create a table for their own clients/agencies —
+        // verify the scope explicitly and insert with the service role.
+        const admin = serviceRoleClient();
+        const scope = await getCampaignerScope(admin, user.id);
+        if (!scope) throw error;
 
-        return new Response(JSON.stringify(table), {
+        const inScope =
+          (client_id && (await isClientInCampaignerScope(admin, client_id, scope))) ||
+          (agency_id && scope.agencyIds.has(agency_id));
+        if (!inScope) {
+          return new Response(JSON.stringify({
+            error: 'אין לך הרשאה ליצור טבלה שאינה משויכת ללקוח או לסוכנות שלך',
+          }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const { data: campaignerTable, error: campaignerInsertError } = await admin
+          .from('crm_tables')
+          .insert(insertPayload)
+          .select()
+          .single();
+        if (campaignerInsertError) throw campaignerInsertError;
+
+        return new Response(JSON.stringify(campaignerTable), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -327,10 +419,7 @@ serve(async (req) => {
           return forbidden('אין לך הרשאה לעדכן את הטבלה הזו');
         }
 
-        const admin = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
+        const admin = serviceRoleClient();
 
         const { data: tableRow, error: tableErr } = await admin
           .from('crm_tables')
@@ -345,59 +434,25 @@ serve(async (req) => {
           });
         }
 
-        // Must be a campaigner in the table's tenant with a linked campaigner profile
-        const [{ data: campaignerRole }, { data: profileRow }] = await Promise.all([
-          admin
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', user.id)
-            .eq('tenant_id', tableRow.tenant_id)
-            .eq('role', 'campaigner')
-            .maybeSingle(),
-          admin
-            .from('profiles')
-            .select('campaigner_id')
-            .eq('id', user.id)
-            .maybeSingle(),
-        ]);
-        if (!campaignerRole || !profileRow?.campaigner_id) {
+        const scope = await getCampaignerScope(admin, user.id);
+        if (!scope) {
           return forbidden('אין לך הרשאה לשנות שיוך של הטבלה הזו');
         }
 
-        const [{ data: agencyRows }, { data: teamRows }] = await Promise.all([
-          admin
-            .from('campaigner_agencies')
-            .select('agency_id')
-            .eq('campaigner_id', profileRow.campaigner_id),
-          admin
-            .from('client_team')
-            .select('client_id')
-            .eq('campaigner_id', profileRow.campaigner_id),
-        ]);
-        const myAgencyIds = new Set((agencyRows || []).map((r: any) => r.agency_id));
-        const myClientIds = new Set((teamRows || []).map((r: any) => r.client_id));
-
         // The table itself must be within the campaigner's scope:
         // linked to one of their clients, in one of their agencies, or unassigned.
+        // (Tables may live under a shared agency's tenant, so scope is judged by the
+        // campaigner's agency/client assignments rather than by tenant equality.)
         const canTouchTable =
-          (tableRow.client_id && myClientIds.has(tableRow.client_id)) ||
-          (tableRow.agency_id && myAgencyIds.has(tableRow.agency_id)) ||
+          (tableRow.client_id && scope.clientIds.has(tableRow.client_id)) ||
+          (tableRow.agency_id && scope.agencyIds.has(tableRow.agency_id)) ||
           (!tableRow.client_id && !tableRow.agency_id);
 
         // When linking, the target client must also be within their scope.
         const newClientId = client_id || null;
         let canTouchTarget = true;
         if (newClientId) {
-          const { data: clientRow } = await admin
-            .from('clients')
-            .select('id, tenant_id, agency_id')
-            .eq('id', newClientId)
-            .maybeSingle();
-          canTouchTarget =
-            !!clientRow &&
-            clientRow.tenant_id === tableRow.tenant_id &&
-            (myClientIds.has(clientRow.id) ||
-              (!!clientRow.agency_id && myAgencyIds.has(clientRow.agency_id)));
+          canTouchTarget = await isClientInCampaignerScope(admin, newClientId, scope);
         }
 
         if (!canTouchTable || !canTouchTarget) {
