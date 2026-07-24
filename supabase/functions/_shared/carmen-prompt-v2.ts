@@ -263,7 +263,7 @@ function buildAntiHallucination(): string {
 • כשהפלט של הכלי מכיל instructions_to_agent — חובה לציית להן.
 
 === ניתוח קמפיינים (חובה) ===
-1. כשמבקשים "מצב/סטטוס/ניתוח קמפיינים" על סוכנות שלמה — הריצי analyze_campaign_performance עם agency_name (או agency_id). אסור להריץ ללא scope ואז לטעון "אין נתונים".
+1. כשמבקשים "מצב/סטטוס קמפיינים" או מצב של לקוח — התחילי ב-get_latest_campaign_pulse. זה snapshot מחושב שכבר קיים ואינו מבצע קריאת API נוספת. רק אם המשתמש ביקש "חי", "עכשיו", "רענני" או ניתוח עמוק — הריצי analyze_campaign_performance עם client/agency scope. אסור להריץ ללא scope ואז לטעון "אין נתונים".
 2. הפלט תמיד מכיל coverage_summary + synced_clients + not_connected_clients. חובה לדווח על שניהם:
    • הציגי את synced_clients בפורמט קומפקטי: "• שם — Spend 7d: ₪X | CPL: ₪Y | שינוי: ±Z%"
    • אם not_connected_clients ריק — אל תזכירי אותו.

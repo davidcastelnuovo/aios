@@ -257,6 +257,7 @@ const ALL_TOOLS = [
   { name: 'hide_social_comment', description: 'הסתרת תגובה (FB בלבד). דורש confirmed=true.', parameters: { type: 'object', properties: { comment_row_id: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['comment_row_id', 'confirmed'] } },
   { name: 'sync_social_pages', description: 'סנכרון מחדש של כל העמודים (כולל Page Access Tokens) מפייסבוק. הרץ אחרי חיבור חדש או כשעמוד חסר.', parameters: { type: 'object', properties: { client_id: { type: 'string' } } } },
   { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM. מזהה טבלאות קמפיין לפי שדות (spend+campaign_name) ולא לפי שם — תופס גם טבלאות בעברית. מחזיר coverage_summary (כמה לקוחות מסונכרנים מתוך הסקופ), synced_clients (עם spend/CPL/שינוי 7 מול 30 יום) ו-not_connected_clients (לקוחות שאין להם טבלת קמפיין). חובה לדווח על שני הסלוטים, ולא רק על מי שיש לו נתונים.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי' }, agency_id: { type: 'string', description: 'סינון לסוכנות מסוימת' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (case-insensitive, חיפוש חלקי)' } } } },
+  { name: 'get_latest_campaign_pulse', description: 'שליפת תמונת הדופק האחרונה שכבר חושבה ונשמרה, ללא קריאת API חיצונית וללא חישוב מחדש. זה הכלי הראשון לשאלות על מצב לקוח/סוכנות/קמפיינים. מחזיר freshness ומקור; רק אם המשתמש מבקש נתונים חיים או ניתוח עמוק יש לעבור ל-analyze_campaign_performance.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, client_name: { type: 'string', description: 'חיפוש חלקי בשם הלקוח' }, agency_id: { type: 'string' }, agency_name: { type: 'string', description: 'חיפוש חלקי בשם הסוכנות' }, status: { type: 'string', enum: ['healthy', 'warning', 'critical', 'no_data'] } } } },
   // MASKYOO CALLS REPORTING
   { name: 'get_maskyoo_calls_report', description: 'דוח שיחות מסקיו לדוחות SEO. מחזיר ספירות שיחות נכנסות לפי לקוח וקטגוריה (organic/paid) מ-seo_call_snapshots. אם אין snapshot — שולף ישירות מ-call_logs. מחזיר השוואה בין תקופות אם period_compare=true.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח (אופציונלי — בלעדיו מחזיר כל הלקוחות)' }, client_name: { type: 'string', description: 'חיפוש לקוח לפי שם אם אין client_id' }, period_start: { type: 'string', description: 'תחילת תקופה YYYY-MM-DD (ברירת מחדל: תחילת החודש הנוכחי)' }, period_end: { type: 'string', description: 'סוף תקופה YYYY-MM-DD (ברירת מחדל: היום)' }, category: { type: 'string', enum: ['organic', 'paid', 'all'], description: 'ברירת מחדל: all' }, period_compare: { type: 'boolean', description: 'אם true — מחזיר גם תקופה קודמת מקבילה להשוואה' } } } },
   { name: 'sync_maskyoo_cdr', description: 'סנכרון CDRs (Call Detail Records) מ-API של מסקיו אל call_logs. הרץ כשהנתונים לא עדכניים. מחזיר כמה רשומות נוספו.', parameters: { type: 'object', properties: { from_date: { type: 'string', description: 'YYYY-MM-DD — תאריך התחלה לסנכרון (ברירת מחדל 7 ימים אחורה)' } } } },
@@ -1468,6 +1469,47 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         body: JSON.stringify({ action, tenant_id: targetTenantId, comment_row_id: args.comment_row_id, message: args.message }),
       })
       return await r.json()
+    }
+    case 'get_latest_campaign_pulse': {
+      let query = supabase
+        .from('campaign_pulse_snapshots')
+        .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, client_id, agency_id, clients(name), agencies(name)')
+        .in('tenant_id', accessibleTenantIds)
+        .order('calculated_at', { ascending: false })
+      if (args.client_id) query = query.eq('client_id', args.client_id)
+      if (args.agency_id) query = query.eq('agency_id', args.agency_id)
+      if (args.status) query = query.eq('status', args.status)
+      if (callerManagedAgencyIds && callerManagedAgencyIds.length > 0) {
+        query = query.in('agency_id', callerManagedAgencyIds)
+      }
+      const { data, error } = await query
+      if (error) throw error
+      let rows = data || []
+      if (args.client_name) {
+        const needle = String(args.client_name).toLocaleLowerCase('he')
+        rows = rows.filter((row: any) => String(row.clients?.name || '').toLocaleLowerCase('he').includes(needle))
+      }
+      if (args.agency_name) {
+        const needle = String(args.agency_name).toLocaleLowerCase('he')
+        rows = rows.filter((row: any) => String(row.agencies?.name || '').toLocaleLowerCase('he').includes(needle))
+      }
+      return {
+        data_source: 'deterministic_campaign_pulse_cache',
+        external_api_called: false,
+        ai_used_to_calculate: false,
+        count: rows.length,
+        freshness: rows[0]?.calculated_at || null,
+        rows: rows.map((row: any) => ({
+          ...row,
+          client_name: row.clients?.name || null,
+          agency_name: row.agencies?.name || null,
+          clients: undefined,
+          agencies: undefined,
+        })),
+        instructions_to_agent: rows.length
+          ? 'הציגי את הנתונים הקיימים וצייני מתי חושבו. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.'
+          : 'אין עדיין snapshot. אמרי זאת והציעי להריץ את מנוע הדופק; אל תטעני שאין קמפיינים.',
+      }
     }
     case 'analyze_campaign_performance': {
       // 1. Resolve scope -> list of target clients (active+onboarding)
@@ -4739,4 +4781,3 @@ Deno.serve(async (req) => {
     },
   })
 })
-

@@ -9037,6 +9037,9 @@ export type Database = {
           active_hours_end: number
           active_hours_start: number
           allowed_actions: Json
+          campaign_pulse_enabled: boolean
+          campaign_pulse_last_sent_at: string | null
+          campaign_pulse_phone: string | null
           enabled: boolean
           interval_hours: number
           tenant_id: string
@@ -9046,6 +9049,9 @@ export type Database = {
           active_hours_end?: number
           active_hours_start?: number
           allowed_actions?: Json
+          campaign_pulse_enabled?: boolean
+          campaign_pulse_last_sent_at?: string | null
+          campaign_pulse_phone?: string | null
           enabled?: boolean
           interval_hours?: number
           tenant_id: string
@@ -9055,6 +9061,9 @@ export type Database = {
           active_hours_end?: number
           active_hours_start?: number
           allowed_actions?: Json
+          campaign_pulse_enabled?: boolean
+          campaign_pulse_last_sent_at?: string | null
+          campaign_pulse_phone?: string | null
           enabled?: boolean
           interval_hours?: number
           tenant_id?: string

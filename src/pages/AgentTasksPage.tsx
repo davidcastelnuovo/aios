@@ -476,7 +476,15 @@ export default function AgentTasksPage() {
 
 
   const saveHeartbeatSettings = useMutation({
-    mutationFn: async (settings: { enabled: boolean; interval_hours: number; active_hours_start: number; active_hours_end: number; allowed_actions: string[] }) => {
+    mutationFn: async (settings: {
+      enabled: boolean;
+      interval_hours: number;
+      active_hours_start: number;
+      active_hours_end: number;
+      allowed_actions: string[];
+      campaign_pulse_enabled?: boolean;
+      campaign_pulse_phone?: string | null;
+    }) => {
       const { error } = await supabase
         .from("tenant_heartbeat_settings")
         .upsert({ tenant_id: tenantId!, ...settings, updated_at: new Date().toISOString() });
@@ -907,6 +915,53 @@ export default function AgentTasksPage() {
                             <p className="text-xs text-muted-foreground">
                               כרמן סוקרת אוטומטית משימות פתוחות, מזהה חסומות, ושולחת תזכורות
                             </p>
+
+                            <div className="rounded-lg border bg-background p-3 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <Label className="text-xs font-medium">עדכון קמפיינים פעמיים ביום</Label>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    מחושב מהמידע המסונכרן, ללא כרמן וללא קריאת API נוספת
+                                  </p>
+                                </div>
+                                <Switch
+                                  checked={heartbeatSettings?.campaign_pulse_enabled || false}
+                                  onCheckedChange={(campaignPulseEnabled) => {
+                                    saveHeartbeatSettings.mutate({
+                                      enabled: heartbeatSettings?.enabled || false,
+                                      interval_hours: heartbeatSettings?.interval_hours || 8,
+                                      active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                      active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                      allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                      campaign_pulse_enabled: campaignPulseEnabled,
+                                      campaign_pulse_phone: heartbeatSettings?.campaign_pulse_phone || null,
+                                    });
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">מספר WhatsApp לקבלת העדכון</Label>
+                                <Input
+                                  dir="ltr"
+                                  defaultValue={heartbeatSettings?.campaign_pulse_phone || ""}
+                                  placeholder="9725XXXXXXXX"
+                                  className="h-8 text-xs mt-1"
+                                  onBlur={(event) => {
+                                    const campaignPulsePhone = event.target.value.replace(/[^\d+]/g, "") || null;
+                                    if (campaignPulsePhone === heartbeatSettings?.campaign_pulse_phone) return;
+                                    saveHeartbeatSettings.mutate({
+                                      enabled: heartbeatSettings?.enabled || false,
+                                      interval_hours: heartbeatSettings?.interval_hours || 8,
+                                      active_hours_start: heartbeatSettings?.active_hours_start || 7,
+                                      active_hours_end: heartbeatSettings?.active_hours_end || 22,
+                                      allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+                                      campaign_pulse_enabled: heartbeatSettings?.campaign_pulse_enabled || false,
+                                      campaign_pulse_phone: campaignPulsePhone,
+                                    });
+                                  }}
+                                />
+                              </div>
+                            </div>
 
                             <div className="grid grid-cols-3 gap-3">
                               <div>
