@@ -1487,24 +1487,6 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       let { data, error } = await loadPulse()
       if (error) throw error
-      let autoRefreshed = false
-      if (!data?.length) {
-        const refresh = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/campaign-pulse-snapshot`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          },
-          body: JSON.stringify({ tenant_id: tenantId, deliver: false, source: 'carmen_cache_refresh' }),
-        })
-        if (refresh.ok) {
-          autoRefreshed = true
-          const reloaded = await loadPulse()
-          data = reloaded.data
-          error = reloaded.error
-          if (error) throw error
-        }
-      }
       let rows = data || []
       if (args.client_name) {
         const needle = String(args.client_name).toLocaleLowerCase('he')
@@ -1518,7 +1500,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         data_source: 'deterministic_campaign_pulse_cache',
         external_api_called: false,
         ai_used_to_calculate: false,
-        auto_refreshed: autoRefreshed,
+        auto_refreshed: false,
         count: rows.length,
         freshness: rows[0]?.calculated_at || null,
         rows: rows.map((row: any) => ({
@@ -1530,7 +1512,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         })),
         instructions_to_agent: rows.length
           ? 'הציגי את הנתונים בטבלה מסודרת המקובצת לפי סוכנות וצייני מתי חושבו. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.'
-          : 'מנוע הדופק הופעל אוטומטית אך לא החזיר snapshot. אמרי שלא נמצאו נתונים מחושבים; אל תטעני שאין קמפיינים.',
+          : 'לא נמצא Snapshot שמור. אמרי שאין בדיקת דופק זמינה. אסור ליצור בדיקה חדשה, להריץ כלי חלופי או להמציא נתונים.',
       }
     }
     case 'analyze_campaign_performance': {
@@ -4398,6 +4380,8 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     // - On 'task' surface (a subagent itself running via run-agent-task): hide delegation tools entirely
     //   so a subagent can't recursively spawn more subagents.
     const cmd = (command_text || '').toString()
+    const isStoredPulseRequest = /בדיקת\s*דופק|\bpulse\s*check\b/i.test(cmd)
+      && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
@@ -4479,6 +4463,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
           skillToolNames.has(t.name) && !present.has(t.name) && !disabledTools.includes(t.name))
         if (missing.length > 0) {
           filteredTools = [...filteredTools, ...missing]
+          toolsForAPI.push(...missing.map(t => ({ type: 'function', function: t })))
           console.log(`[AGENT] Skill tools added: ${missing.map(t => t.name).join(', ')}`)
         }
       }
@@ -4561,6 +4546,9 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         const payload: any = { model: llm.model, messages }
         if (safeTemp !== undefined) payload.temperature = safeTemp
         if (cappedTools.length > 0) payload.tools = cappedTools
+        if (round === 0 && isStoredPulseRequest && cappedTools.some((t: any) => t.function?.name === 'get_latest_campaign_pulse')) {
+          payload.tool_choice = { type: 'function', function: { name: 'get_latest_campaign_pulse' } }
+        }
 
         console.log(`[AGENT] Round ${round + 1}/${maxRounds}, provider=${llm.label}`)
         res = await fetch(llm.url, {
