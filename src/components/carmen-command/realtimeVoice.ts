@@ -22,6 +22,8 @@ export interface RealtimeHandle {
   /** Mute/unmute the user's mic without breaking the session — Carmen keeps
    * talking and finishing her work; she just stops hearing the room. */
   setMicMuted: (muted: boolean) => void;
+  /** Mute only Carmen's speaker output. Transcripts and tool work continue. */
+  setOutputMuted: (muted: boolean) => void;
 }
 
 export async function startRealtimeVoice(
@@ -148,6 +150,9 @@ export async function startRealtimeVoice(
   return {
     setMicMuted: (muted: boolean) => {
       mic.getAudioTracks().forEach((t) => { t.enabled = !muted; });
+    },
+    setOutputMuted: (muted: boolean) => {
+      audioEl.muted = muted;
     },
     stop: () => {
       stopped = true;

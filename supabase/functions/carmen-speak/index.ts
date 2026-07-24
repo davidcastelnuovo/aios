@@ -9,6 +9,10 @@ import { getCaller, getUserOpenAIKey } from '../_shared/userKey.ts';
 
 // Users with a personal key are billed on it; these owners may use the org key.
 const ORG_KEY_ALLOWLIST = ['david.castelnuovo@gmail.com'];
+const OPENAI_VOICES = new Set([
+  'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx',
+  'sage', 'shimmer', 'verse', 'marin', 'cedar',
+]);
 
 // Style steering for gpt-4o-mini-tts — native-sounding Israeli Hebrew.
 const HEBREW_STEERING =
@@ -63,6 +67,7 @@ Deno.serve(async (req) => {
 
   try {
     const { text, voice, provider, instructions } = await req.json();
+    const selectedVoice = typeof voice === 'string' && OPENAI_VOICES.has(voice) ? voice : 'marin';
     const clean = cleanForSpeech(typeof text === 'string' ? text : '');
     if (!clean) {
       return new Response(JSON.stringify({ error: 'text is required' }), {
@@ -90,8 +95,8 @@ Deno.serve(async (req) => {
     };
     let audio: Uint8Array | null = null;
     if (provider === 'elevenlabs' && !userKey) audio = await elevenSpeak(clean);
-    if (!audio) audio = await aiSpeak(clean, { ...ttsOpts, voice: voice || 'marin' });
-    if (!audio && !voice) {
+    if (!audio) audio = await aiSpeak(clean, { ...ttsOpts, voice: selectedVoice });
+    if (!audio && selectedVoice === 'marin') {
       console.warn('[carmen-speak] marin failed, falling back to shimmer');
       audio = await aiSpeak(clean, { ...ttsOpts, voice: 'shimmer' });
     }

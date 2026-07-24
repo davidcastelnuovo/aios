@@ -2,7 +2,7 @@ import {
   forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, History, Loader2, Mic, MicOff, Plus, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
+import { ChevronDown, ChevronUp, Headphones, History, Loader2, Mic, MicOff, Play, Plus, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +31,22 @@ interface CarmenChatBarProps {
   audioLevelRef: React.MutableRefObject<number>;
 }
 
+const CARMEN_VOICES = [
+  { id: "marin", label: "Marin — טבעי וחם" },
+  { id: "cedar", label: "Cedar — עמוק ובטוח" },
+  { id: "coral", label: "Coral — בהיר וידידותי" },
+  { id: "sage", label: "Sage — רגוע ומאוזן" },
+  { id: "shimmer", label: "Shimmer — רך ונעים" },
+  { id: "alloy", label: "Alloy — ניטרלי ומדויק" },
+  { id: "ash", label: "Ash — יציב וישיר" },
+  { id: "ballad", label: "Ballad — עשיר והבעתי" },
+  { id: "echo", label: "Echo — חד ואנרגטי" },
+  { id: "verse", label: "Verse — דינמי ושיחתי" },
+] as const;
+
+type CarmenVoice = typeof CARMEN_VOICES[number]["id"];
+const VOICE_STORAGE_KEY = "aios:carmen-voice";
+
 /**
  * The "talk to Carmen" bar: text + voice in, streamed text + spoken voice out.
  * Uses the existing run-ai-agent (SSE), transcribe-voice and carmen-speak
@@ -49,8 +65,15 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const [isConvMode, setIsConvMode] = useState(false);
     const [isRealtime, setIsRealtime] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
+    const [isOutputMuted, setIsOutputMuted] = useState(false);
+    const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
+    const [selectedVoice, setSelectedVoice] = useState<CarmenVoice>(() => {
+      const saved = localStorage.getItem(VOICE_STORAGE_KEY);
+      return CARMEN_VOICES.some(voice => voice.id === saved) ? saved as CarmenVoice : "marin";
+    });
     const [showHistory, setShowHistory] = useState(false);
     const muteRef = useRef(false);
+    const outputMutedRef = useRef(false);
     const conversationIdRef = useRef<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
@@ -92,11 +115,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carmen-speak`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, voice: selectedVoice }),
         });
         return res.ok ? await res.blob() : null;
       } catch { return null; }
-    }, []);
+    }, [selectedVoice]);
 
     /** Play one audio blob through an analyser so the face moves with it. Resolves on end. */
     const playBlob = useCallback(async (blob: Blob, gen: number) => {
@@ -375,14 +398,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     }, []);
 
     /** Try to open an OpenAI Realtime session. Returns false to fall back to the VAD loop. */
-    const beginRealtime = useCallback(async (): Promise<boolean> => {
+    const beginRealtime = useCallback(async (voice: CarmenVoice = selectedVoice): Promise<boolean> => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) { reportRealtimeError("no auth session"); return false; }
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/carmen-realtime-session`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ voice }),
         });
         if (!res.ok) {
           reportRealtimeError(`session mint failed: HTTP ${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`);
@@ -408,6 +431,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           onError: (msg) => reportRealtimeError(msg),
           audioLevelRef,
         });
+        handle.setOutputMuted(outputMutedRef.current);
         realtimeRef.current = handle;
         setIsRealtime(true);
         onFaceState("listening");
@@ -416,7 +440,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         reportRealtimeError(e instanceof Error ? e.message : String(e));
         return false;
       }
-    }, [askCarmenBrain, audioLevelRef, onFaceState, reportRealtimeError]);
+    }, [askCarmenBrain, audioLevelRef, onFaceState, reportRealtimeError, selectedVoice]);
 
     /**
      * One listening turn in continuous-conversation mode: open the mic with a
@@ -639,6 +663,43 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       }
     }, []);
 
+    const toggleOutputMute = useCallback(() => {
+      const next = !outputMutedRef.current;
+      outputMutedRef.current = next;
+      setIsOutputMuted(next);
+      setVoiceOn(!next);
+      realtimeRef.current?.setOutputMuted(next);
+      if (next) stopSpeech();
+    }, [stopSpeech]);
+
+    const selectVoice = useCallback(async (voice: CarmenVoice) => {
+      setSelectedVoice(voice);
+      localStorage.setItem(VOICE_STORAGE_KEY, voice);
+      if (!convModeRef.current || !realtimeRef.current) return;
+
+      realtimeRef.current.stop();
+      realtimeRef.current = null;
+      setIsRealtime(false);
+      onFaceState("idle");
+      const restarted = await beginRealtime(voice);
+      if (!restarted && convModeRef.current) beginListenTurn();
+    }, [beginListenTurn, beginRealtime, onFaceState]);
+
+    const previewVoice = useCallback(async () => {
+      if (isPreviewingVoice) return;
+      setIsPreviewingVoice(true);
+      stopSpeech();
+      try {
+        const blob = await fetchTts("היי, אני כרמן. זה הקול שבחרת עבורי.");
+        if (blob) {
+          const gen = ttsGenRef.current;
+          await playBlob(blob, gen);
+        }
+      } finally {
+        setIsPreviewingVoice(false);
+      }
+    }, [fetchTts, isPreviewingVoice, playBlob, stopSpeech]);
+
     // Keep async loops (VAD, TTS pump) pointed at the freshest callbacks
     sendTextRef.current = sendText;
     listenTurnRef.current = beginListenTurn;
@@ -735,17 +796,30 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             {isTranscribing ? <Loader2 className="h-5 w-5 animate-spin" /> : isConvMode ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
           </button>
           {isConvMode && (
-            <button
-              onClick={toggleMute}
-              title={isMuted ? "בטל השתקה — כרמן תחזור להקשיב" : "השתק אותי — כרמן ממשיכה לעבוד אבל לא שומעת אותך"}
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
-                isMuted
-                  ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
-                  : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
-              }`}
-            >
-              <MicOff className="h-4 w-4" />
-            </button>
+            <>
+              <button
+                onClick={toggleMute}
+                title={isMuted ? "פתחי את המיקרופון" : "השתק את המיקרופון שלי"}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
+                  isMuted
+                    ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
+                    : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
+                }`}
+              >
+                {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={toggleOutputMute}
+                title={isOutputMuted ? "הפעל את הקול של כרמן" : "השתק את כרמן — הכתיבה תמשיך"}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
+                  isOutputMuted
+                    ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
+                    : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
+                }`}
+              >
+                {isOutputMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </button>
+            </>
           )}
           <input
             ref={inputRef}
@@ -770,12 +844,31 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             <History className="h-5 w-5" />
           </button>
           <button
-            onClick={() => { if (playingRef.current) stopSpeech(); else setVoiceOn(v => !v); }}
-            title={playingRef.current ? "השתקה" : voiceOn ? "קול פעיל — כבי הקראה" : "קול כבוי — הפעילי הקראה"}
-            className={`shrink-0 ${voiceOn ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)]"}`}
+            onClick={toggleOutputMute}
+            title={isOutputMuted ? "הפעל את הקול של כרמן" : "השתק את כרמן — היא תמשיך לכתוב"}
+            className={`shrink-0 ${!isOutputMuted ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)]"}`}
           >
-            {voiceOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+            {!isOutputMuted ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           </button>
+          <div className="flex h-10 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2">
+            <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />
+            <select
+              value={selectedVoice}
+              onChange={e => selectVoice(e.target.value as CarmenVoice)}
+              title="בחירת הקול של כרמן"
+              className="max-w-[145px] bg-transparent text-xs text-[var(--cc-text)] outline-none"
+            >
+              {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
+            </select>
+            <button
+              onClick={previewVoice}
+              disabled={isPreviewingVoice}
+              title="השמעת דוגמה"
+              className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50"
+            >
+              {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            </button>
+          </div>
           <button
             onClick={() => sendText(input)}
             disabled={!input.trim() || isStreaming}

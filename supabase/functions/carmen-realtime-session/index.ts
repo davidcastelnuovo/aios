@@ -13,6 +13,9 @@ const corsHeaders = {
 };
 
 const REALTIME_MODEL = 'gpt-realtime';
+const REALTIME_VOICES = new Set([
+  'alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar',
+]);
 
 // Server-side gate for the Command Center's paid live-voice sessions.
 // Temporary allowlist (mirrored in src/components/carmen-command/access.ts)
@@ -97,6 +100,7 @@ Deno.serve(async (req) => {
     } catch { /* name is a nicety */ }
 
     const { voice } = await req.json().catch(() => ({} as Record<string, unknown>));
+    const selectedVoice = typeof voice === 'string' && REALTIME_VOICES.has(voice) ? voice : 'marin';
 
     const r = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
@@ -109,7 +113,7 @@ Deno.serve(async (req) => {
           instructions: buildInstructions(callerName),
           audio: {
             input: { transcription: { model: 'gpt-4o-mini-transcribe', language: 'he' } },
-            output: { voice: typeof voice === 'string' && voice ? voice : 'marin' },
+            output: { voice: selectedVoice },
           },
           tools: [{
             type: 'function',
