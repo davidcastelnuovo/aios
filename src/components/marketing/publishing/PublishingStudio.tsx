@@ -8,14 +8,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Plus, Rocket, Upload } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, Plus, Rocket, Save, Upload } from "lucide-react";
 
 type PublishingSite = { id: string; site_key: string; name: string; destination_type: "pbn" | "wordpress" | "custom_api"; client_id: string | null; connection_id: string | null; base_url: string | null; categories: string[]; status: string; is_hidden: boolean };
 type WordPressSite = { id: string; site_url: string; site_name: string | null; client_id: string | null; is_active: boolean };
-type PublishingArticle = { id: string; client_id: string | null; customer_name: string | null; primary_keyword: string; proposed_topic: string | null; target_url: string | null; category: string | null; status: string; site_id: string | null; live_url: string | null; source_month: string | null; source_sheet: string | null; source_row: number | null; updated_at: string };
+type PublishingArticle = { id: string; client_id: string | null; customer_name: string | null; primary_keyword: string; proposed_topic: string | null; target_url: string | null; category: string | null; status: string; site_id: string | null; live_url: string | null; source_month: string | null; source_sheet: string | null; source_row: number | null; title: string | null; excerpt: string | null; content: string[]; updated_at: string };
 type ImportRow = { customerName: string; primaryKeyword: string; topic: string; targetUrl: string; siteKey: string; category: string; sheetName: string; rowNumber: number; sourceMonth: string; errors: string[] };
 type ClientOption = { id: string; name: string };
 type VercelProject = { id: string; name: string; framework: string | null; updated_at?: number; domains: Array<{ name: string; verified: boolean }>; deployment: { id: string; url: string; state: string; created_at: number } | null };
@@ -35,7 +36,7 @@ const SITE_TEMPLATES = [
 
 const normalize = (value: unknown) => String(value ?? "").trim().replace(/\s+/g, " ");
 const normalizeHeader = (value: unknown) => normalize(value).replace(/["'׳״]/g, "").toLowerCase();
-const normalizeClientName = (value: unknown) => normalize(value).replace(/["'׳״.,()\-]/g, "").toLowerCase();
+const normalizeClientName = (value: unknown) => normalize(value).replace(/["'׳״.,()-]/g, "").toLowerCase();
 
 function sourceMonthFromSheet(sheetName: string) {
   const match = sheetName.match(/חודש\s*0?([1-9]|1[0-2])/);
@@ -89,6 +90,11 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const [selectedProject, setSelectedProject] = useState<VercelProject | null>(null);
   const [newSiteName, setNewSiteName] = useState("");
   const [domainName, setDomainName] = useState("");
+  const [editingArticle, setEditingArticle] = useState<PublishingArticle | null>(null);
+  const [editorTitle, setEditorTitle] = useState("");
+  const [editorExcerpt, setEditorExcerpt] = useState("");
+  const [editorContent, setEditorContent] = useState("");
+  const [savingArticle, setSavingArticle] = useState(false);
   const [networkProgress, setNetworkProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   // The generated Supabase types will include these tables after the migration is applied.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,7 +143,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const { data: articles = [], isLoading: loadingArticles } = useQuery({
     queryKey: ["publishing-articles", tenantId],
     queryFn: async () => {
-      const { data, error } = await db.from("publishing_articles").select("id,client_id,customer_name,primary_keyword,proposed_topic,target_url,category,status,site_id,live_url,source_month,source_sheet,source_row,updated_at").eq("tenant_id", tenantId).order("source_month", { ascending: false, nullsFirst: false }).order("customer_name").limit(500);
+      const { data, error } = await db.from("publishing_articles").select("id,client_id,customer_name,primary_keyword,proposed_topic,target_url,category,status,site_id,live_url,source_month,source_sheet,source_row,title,excerpt,content,updated_at").eq("tenant_id", tenantId).order("source_month", { ascending: false, nullsFirst: false }).order("customer_name").limit(500);
       if (error) throw error;
       return (data ?? []) as PublishingArticle[];
     },
@@ -360,7 +366,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         source_month: row.sourceMonth, source_sheet: row.sheetName, source_row: row.rowNumber,
         row_fingerprint: `${row.sourceMonth}|${normalizeClientName(row.customerName)}|${normalize(row.primaryKeyword).toLowerCase()}|${normalize(row.targetUrl).toLowerCase()}|${normalize(row.topic).toLowerCase()}`,
       }));
-      const { data: inserted, error } = await db.from("publishing_articles").upsert(payload, { onConflict: "tenant_id,target_url,primary_keyword,proposed_topic", ignoreDuplicates: true }).select("id");
+      const { data: inserted, error } = await db.from("publishing_articles").upsert(payload, { onConflict: "tenant_id,target_url,primary_keyword,proposed_topic" }).select("id");
       if (error) throw error;
       const importedCount = inserted?.length ?? 0;
       await db.from("publishing_imports").update({ status: "completed", imported_count: importedCount, duplicate_count: previewRows.length - importedCount }).eq("id", importRecord.id);
@@ -377,17 +383,80 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     toast.success(status === "published" ? "המאמר אושר ל-Feed הפרסום" : "הסטטוס עודכן");
   };
 
+  const updateArticleClient = async (article: PublishingArticle, nextClientId: string) => {
+    const { error } = await db.from("publishing_articles").update({ client_id: nextClientId === "none" ? null : nextClientId, updated_at: new Date().toISOString() }).eq("id", article.id);
+    if (error) return toast.error(error.message || "שיוך הלקוח נכשל");
+    await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
+    toast.success("שיוך הלקוח עודכן");
+  };
+
+  const openArticleEditor = (article: PublishingArticle) => {
+    setEditingArticle(article);
+    setEditorTitle(article.title || article.proposed_topic || "");
+    setEditorExcerpt(article.excerpt || "");
+    setEditorContent(Array.isArray(article.content) ? article.content.join("\n\n") : "");
+  };
+
+  const saveArticle = async () => {
+    if (!editingArticle || !editorTitle.trim()) return;
+    setSavingArticle(true);
+    try {
+      const paragraphs = editorContent.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+      const { error } = await db.from("publishing_articles").update({
+        title: editorTitle.trim(),
+        excerpt: editorExcerpt.trim() || null,
+        content: paragraphs,
+        status: paragraphs.length ? "draft" : editingArticle.status,
+        updated_at: new Date().toISOString(),
+      }).eq("id", editingArticle.id);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
+      setEditingArticle(null);
+      toast.success("המאמר נשמר");
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "שמירת המאמר נכשלה"));
+    } finally {
+      setSavingArticle(false);
+    }
+  };
+
   return <div className="flex min-h-0 flex-1 flex-col bg-muted/10" dir="rtl">
     <div className="flex items-center gap-3 border-b bg-card/70 px-5 py-3"><Globe2 className="h-5 w-5 text-emerald-600" /><div className="flex-1"><h2 className="text-sm font-bold">ניהול PBN ומאמרים</h2><p className="text-[11px] text-muted-foreground">Excel → כתיבה ועריכה → בחירת יעד → אישור → פרסום</p></div><Badge variant="outline">{visiblePbnSites.length} אתרי PBN</Badge><Badge variant="outline">{articles.length} משימות</Badge></div>
+    <div className="flex items-center gap-3 border-b bg-background px-5 py-3">
+      <Pencil className="h-4 w-4 text-emerald-600" />
+      <div className="min-w-48"><div className="text-xs font-bold">צפייה ועריכת מאמר</div><div className="text-[10px] text-muted-foreground">בחר מאמר כדי לפתוח את העורך המלא</div></div>
+      <Select onValueChange={(articleId) => { const article = articles.find((item) => item.id === articleId); if (article) openArticleEditor(article); }}>
+        <SelectTrigger className="max-w-xl flex-1"><SelectValue placeholder="בחר לקוח, חודש או נושא..." /></SelectTrigger>
+        <SelectContent>{articles.map((article) => <SelectItem key={article.id} value={article.id}>{formatSourceMonth(article.source_month)} · {article.customer_name || "מערכתי"} · {article.title || article.proposed_topic || article.primary_keyword}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
     <Tabs defaultValue="imports" className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-5 pt-2"><TabsList><TabsTrigger value="imports">ייבוא Excel</TabsTrigger><TabsTrigger value="articles">מאמרים ({articles.length})</TabsTrigger><TabsTrigger value="sites">אתרים ({visiblePbnSites.length})</TabsTrigger></TabsList></div>
       <TabsContent value="imports" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="space-y-4 p-5">
         {!sites.some((site) => site.destination_type === "pbn") && !loadingSites && <Card className="flex items-center gap-4 border-amber-300 bg-amber-50 p-4"><Globe2 className="h-8 w-8 text-amber-600" /><div className="flex-1"><h3 className="font-bold">הוספת רשת המגזינים</h3><p className="text-xs text-muted-foreground">הפעולה יוצרת עשרה יעדי PBN במצב טיוטה. היא לא פורסת דומיינים.</p></div><Button onClick={createDefaultSites} disabled={busy}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}יצירת 10 מגזינים</Button></Card>}
         <Card className="p-5"><div className="flex items-center gap-4"><div className="grid h-12 w-12 place-items-center rounded-xl bg-emerald-100"><FileSpreadsheet className="h-6 w-6 text-emerald-700" /></div><div className="flex-1"><h3 className="font-bold">העלאת טבלת קישורים</h3><p className="text-xs text-muted-foreground">המערכת קוראת את כל הגיליונות ומזהה לקוח, ביטוי, נושא ו-URL.</p></div><Input ref={inputRef} className="hidden" type="file" accept=".xlsx,.xls" onChange={(event) => event.target.files?.[0] && parseWorkbook(event.target.files[0])} /><Button variant="outline" onClick={() => inputRef.current?.click()} disabled={busy}><Upload className="ml-2 h-4 w-4" />בחר Excel</Button></div></Card>
         {previewRows.length > 0 && <Card className="overflow-hidden"><div className="flex items-center border-b p-4"><div className="flex-1"><h3 className="font-bold">תצוגה מקדימה — {fileName}</h3><p className="text-xs text-muted-foreground">{previewRows.length} שורות · {sheetCount} גיליונות · מסודר מיוני אחורה</p></div><Button onClick={importRows} disabled={busy || !sites.length || previewRows.some((row) => row.errors.length > 0)}>{busy ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="ml-2 h-4 w-4" />}ייבא משימות</Button></div><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-right">חודש שיוך</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי עוגן וקישור חיצוני</th><th className="p-3 text-right">נושא ומקור</th><th className="p-3 text-right">יעד פרסום</th><th className="p-3 text-right">קטגוריה</th></tr></thead><tbody>{previewRows.sort((a, b) => b.sourceMonth.localeCompare(a.sourceMonth)).slice(0, 200).map((row, index) => { const destination = siteByKey.get(row.siteKey); const categories = destination?.categories.length ? destination.categories : SITE_TEMPLATES.find((site) => site.site_key === row.siteKey)?.categories ?? [row.category]; return <tr key={`${row.sheetName}-${row.rowNumber}`} className="border-t"><td className="whitespace-nowrap p-3 font-medium">{formatSourceMonth(row.sourceMonth)}</td><td className="p-3"><div className="font-medium">{row.customerName || "—"}</div><div className="text-[10px] text-muted-foreground">{clientByName.has(normalizeClientName(row.customerName)) ? "משויך ללקוח במערכת" : "דורש שיוך ללקוח"}</div></td><td className="max-w-xs p-3"><div className="font-medium">{row.primaryKeyword || "—"}</div><a className="mt-1 block truncate text-[10px] text-blue-600 hover:underline" href={row.targetUrl} target="_blank" rel="noreferrer">{row.targetUrl || "ללא קישור"}</a>{row.errors.length > 0 && <div className="mt-1 text-[10px] font-medium text-red-600">{row.errors.join(" · ")}</div>}</td><td className="max-w-sm p-3"><div>{row.topic || "—"}</div><div className="mt-1 text-[10px] text-muted-foreground">{row.sheetName} · שורה {row.rowNumber}</div></td><td className="p-3"><Select value={row.siteKey} onValueChange={(siteKey) => { const next = siteByKey.get(siteKey); updatePreview(index, { siteKey, category: next?.categories[0] ?? row.category }); }}><SelectTrigger className="h-8 w-52"><SelectValue /></SelectTrigger><SelectContent>{sites.map((site) => <SelectItem key={site.site_key} value={site.site_key}>{site.destination_type === "pbn" ? "PBN" : "לקוח"} · {site.name}</SelectItem>)}</SelectContent></Select></td><td className="p-3"><Select value={row.category} onValueChange={(category) => updatePreview(index, { category })}><SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></td></tr>})}</tbody></table>{previewRows.length > 200 && <div className="p-3 text-center text-xs text-muted-foreground">מוצגות 200 השורות הראשונות מתוך {previewRows.length}</div>}</div></Card>}
       </div></ScrollArea></TabsContent>
-      <TabsContent value="articles" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><Card className="overflow-hidden">{loadingArticles ? <Loader2 className="mx-auto my-12 h-6 w-6 animate-spin" /> : <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-right">חודש שיוך</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי וקישור</th><th className="p-3 text-right">נושא</th><th className="p-3 text-right">אתר</th><th className="p-3 text-right">סטטוס</th><th className="p-3 text-right">פעולה</th></tr></thead><tbody>{articles.map((article) => <tr key={article.id} className="border-t"><td className="whitespace-nowrap p-3 font-medium">{formatSourceMonth(article.source_month)}</td><td className="p-3"><div className="font-medium">{article.customer_name || "מערכתי"}</div><div className={`text-[10px] ${article.client_id ? "text-emerald-700" : "text-amber-700"}`}>{article.client_id ? "משויך" : "לא משויך"}</div></td><td className="max-w-xs p-3"><div className="font-medium">{article.primary_keyword}</div>{article.target_url && <a className="block max-w-56 truncate text-[10px] text-blue-600 hover:underline" href={article.target_url} target="_blank" rel="noreferrer">{article.target_url}</a>}</td><td className="max-w-sm p-3"><div className="truncate">{article.proposed_topic}</div><div className="text-[10px] text-muted-foreground">{article.source_sheet}{article.source_row ? ` · שורה ${article.source_row}` : ""}</div></td><td className="p-3">{siteById.get(article.site_id ?? "")?.name ?? "לא משויך"}<div className="text-[10px] text-muted-foreground">{article.category}</div></td><td className="p-3"><Badge variant="outline">{article.status}</Badge></td><td className="p-3"><Select value={article.status} onValueChange={(status) => updateStatus(article, status)}><SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger><SelectContent>{["imported","draft","review","approved","published","failed"].map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></td></tr>)}</tbody></table></div>}</Card></div></ScrollArea></TabsContent>
+      <TabsContent value="articles" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><Card className="overflow-hidden">{loadingArticles ? <Loader2 className="mx-auto my-12 h-6 w-6 animate-spin" /> : <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-right">חודש שיוך</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי וקישור</th><th className="p-3 text-right">נושא</th><th className="p-3 text-right">אתר</th><th className="p-3 text-right">סטטוס</th><th className="p-3 text-right">פעולות</th></tr></thead><tbody>{articles.map((article) => <tr key={article.id} className="border-t"><td className="whitespace-nowrap p-3 font-medium">{formatSourceMonth(article.source_month)}</td><td className="p-3"><div className="font-medium">{article.customer_name || "מערכתי"}</div><div className={`text-[10px] ${article.client_id ? "text-emerald-700" : "text-amber-700"}`}>{article.client_id ? "משויך" : "לא משויך"}</div></td><td className="max-w-xs p-3"><div className="font-medium">{article.primary_keyword}</div>{article.target_url && <a className="block max-w-56 truncate text-[10px] text-blue-600 hover:underline" href={article.target_url} target="_blank" rel="noreferrer">{article.target_url}</a>}</td><td className="max-w-sm p-3"><div className="truncate">{article.proposed_topic}</div><div className="text-[10px] text-muted-foreground">{article.source_sheet}{article.source_row ? ` · שורה ${article.source_row}` : ""}</div></td><td className="p-3">{siteById.get(article.site_id ?? "")?.name ?? "לא משויך"}<div className="text-[10px] text-muted-foreground">{article.category}</div></td><td className="p-3"><Badge variant="outline">{article.status}</Badge></td><td className="p-3"><div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => openArticleEditor(article)}><Pencil className="ml-1 h-3.5 w-3.5" />צפייה ועריכה</Button><Select value={article.status} onValueChange={(status) => updateStatus(article, status)}><SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger><SelectContent>{["imported","draft","review","approved","published","failed"].map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></div></td></tr>)}</tbody></table></div>}</Card></div></ScrollArea></TabsContent>
       <TabsContent value="sites" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><div className="mb-5 flex items-center justify-between"><div><h3 className="font-bold">אתרי PBN</h3><p className="text-xs text-muted-foreground">כל אתר במערכת מול פרויקט ה־Vercel, הבילד והדומיין שלו.</p></div><Button onClick={() => setSiteDialogOpen(true)}><Plus className="ml-2 h-4 w-4" />יצירת אתרים</Button></div>{loadingVercel || loadingSites ? <Loader2 className="mx-auto mt-12 h-6 w-6 animate-spin" /> : <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="p-3 text-right">אתר PBN</th><th className="p-3 text-right">פרויקט Vercel</th><th className="p-3 text-right">בילד אחרון</th><th className="p-3 text-right">דומיין</th><th className="p-3 text-right">פעולות</th></tr></thead><tbody>{pbnRows.map(({ site, project, primaryDomain }) => <tr key={site.id} className="border-t"><td className="p-3"><div className="font-semibold">{site.name}</div><div className="text-[11px] text-muted-foreground">{site.site_key}</div></td><td className="p-3">{project ? <><div className="font-medium" dir="ltr">{project.name}</div><div className="text-[10px] text-muted-foreground" dir="ltr">{project.id}</div></> : <Badge variant="outline" className="border-amber-300 text-amber-700">טרם נוצר ב-Vercel</Badge>}</td><td className="p-3"><Badge variant="outline" className={project?.deployment?.state === "READY" ? "border-emerald-300 text-emerald-700" : ""}>{project ? project.deployment?.state ?? "טרם פורסם" : "—"}</Badge>{project?.deployment?.url && <div className="mt-1 max-w-52 truncate text-[10px] text-muted-foreground" dir="ltr">{project.deployment.url}</div>}</td><td className="p-3">{primaryDomain && project?.deployment?.state === "READY" ? <a href={`https://${primaryDomain}`} target="_blank" rel="noreferrer" className="font-medium text-emerald-700 hover:underline" dir="ltr">{primaryDomain}</a> : <span className="text-muted-foreground">{project?.deployment ? "ללא דומיין" : "ממתין לפרסום"}</span>}</td><td className="p-3">{project?.deployment?.state === "READY" ? <Button size="sm" variant="outline" onClick={() => { setSelectedProject(project); setDomainName(primaryDomain ?? ""); setDomainDialogOpen(true); }}>דומיין</Button> : <span className="text-xs text-muted-foreground">נדרש פרסום</span>}</td></tr>)}{unrelatedProjects.map(({ project }) => <tr key={project.id} className="border-t bg-muted/20"><td className="p-3 text-muted-foreground">לא שויך ל-PBN</td><td className="p-3 font-medium" dir="ltr">{project.name}</td><td className="p-3"><Badge variant="outline">{project.deployment?.state ?? "—"}</Badge></td><td className="p-3 text-muted-foreground">—</td><td className="p-3"><Button size="sm" variant="ghost" onClick={() => hideVercelProject(project)}>הסתר</Button></td></tr>)}</tbody></table></div></Card>}</div></ScrollArea></TabsContent>
     </Tabs>
+    <Dialog open={Boolean(editingArticle)} onOpenChange={(open) => !open && setEditingArticle(null)}>
+      <DialogContent dir="rtl" className="max-h-[92vh] max-w-4xl overflow-y-auto">
+        <DialogHeader><DialogTitle>צפייה ועריכת מאמר</DialogTitle></DialogHeader>
+        {editingArticle && <div className="space-y-5">
+          <div className="grid gap-3 rounded-xl border bg-muted/30 p-4 md:grid-cols-3">
+            <div><div className="text-[10px] text-muted-foreground">חודש שיוך מהאקסל</div><div className="font-semibold">{formatSourceMonth(editingArticle.source_month)}</div></div>
+            <div><div className="text-[10px] text-muted-foreground">ביטוי לקידום</div><div className="font-semibold">{editingArticle.primary_keyword}</div></div>
+            <div><div className="text-[10px] text-muted-foreground">אתר פרסום</div><div className="font-semibold">{siteById.get(editingArticle.site_id ?? "")?.name ?? "לא משויך"}</div></div>
+            <div className="md:col-span-3"><div className="text-[10px] text-muted-foreground">עמוד יעד</div>{editingArticle.target_url ? <a href={editingArticle.target_url} target="_blank" rel="noreferrer" className="break-all text-sm text-blue-600 hover:underline">{editingArticle.target_url}</a> : <span>—</span>}</div>
+          </div>
+          <div><Label>שיוך ללקוח במערכת</Label><Select value={editingArticle.client_id ?? "none"} onValueChange={async (value) => { await updateArticleClient(editingArticle, value); setEditingArticle({ ...editingArticle, client_id: value === "none" ? null : value }); }}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">לא משויך</SelectItem>{clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select></div>
+          <div><Label>כותרת המאמר</Label><Input className="mt-1" value={editorTitle} onChange={(event) => setEditorTitle(event.target.value)} placeholder="כותרת המאמר" /></div>
+          <div><Label>תקציר</Label><Textarea className="mt-1 min-h-24" value={editorExcerpt} onChange={(event) => setEditorExcerpt(event.target.value)} placeholder="תקציר קצר שיופיע בכרטיס המאמר" /></div>
+          <div><Label>גוף המאמר</Label><Textarea className="mt-1 min-h-[360px] leading-7" value={editorContent} onChange={(event) => setEditorContent(event.target.value)} placeholder="המאמר עדיין לא נכתב. לאחר יצירת התוכן הוא יופיע כאן ויהיה ניתן לערוך אותו לפני אישור." /><div className="mt-1 text-[10px] text-muted-foreground">הפרד פסקאות באמצעות שורה ריקה. הקישור לביטוי העוגן יתווסף בפרסום.</div></div>
+          <div className="flex items-center justify-between"><Badge variant="outline">{editingArticle.status}</Badge><Button onClick={saveArticle} disabled={savingArticle || !editorTitle.trim()}>{savingArticle ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}שמור מאמר</Button></div>
+        </div>}
+      </DialogContent>
+    </Dialog>
     <Dialog open={siteDialogOpen} onOpenChange={setSiteDialogOpen}><DialogContent dir="rtl" className="max-w-md"><DialogHeader><DialogTitle>יצירת אתר חדש</DialogTitle></DialogHeader><div className="space-y-4"><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div className="font-semibold">השלמת רשת ה-PBN</div><p className="mt-1 text-xs text-muted-foreground">ייווצרו ב-Vercel רק האתרים שחסר להם בילד פעיל, וכל אחד יקושר לשורה המתאימה.</p>{networkProgress && <div className="mt-3 text-xs font-medium">{networkProgress.current} מתוך {networkProgress.total} · {networkProgress.name}</div>}<Button className="mt-3 w-full" onClick={createMissingPbnSites} disabled={busy || !pbnRows.some((row) => !row.project?.deployment)}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}פרסם {pbnRows.filter((row) => !row.project?.deployment).length} אתרים</Button></div><div className="border-t pt-4"><Label>או צור אתר בודד</Label><div className="mt-2"><Label>שם האתר</Label><Input className="mt-1" value={newSiteName} onChange={(event) => setNewSiteName(event.target.value)} placeholder="לדוגמה: מגזין חדשנות" /></div></div><p className="text-xs text-muted-foreground">האתר ישוכפל מתבנית המגזין ויופיע אוטומטית ב־Vercel.</p><Button className="w-full" onClick={createVercelSite} disabled={busy || !newSiteName.trim()}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}צור אתר</Button></div></DialogContent></Dialog>
     <Dialog open={domainDialogOpen} onOpenChange={setDomainDialogOpen}><DialogContent dir="rtl" className="max-w-md"><DialogHeader><DialogTitle>דומיין עבור {selectedProject?.name}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>שם הדומיין</Label><Input dir="ltr" className="mt-1 text-left" value={domainName} onChange={(event) => setDomainName(event.target.value)} placeholder="example.com" /></div><p className="text-xs text-muted-foreground">המערכת תחבר את הדומיין ל־Vercel ותעדכן את ה־DNS ב־IONOS.</p><Button className="w-full" onClick={assignDomain} disabled={connectingDomain || !domainName.trim()}>{connectingDomain && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}שייך דומיין</Button></div></DialogContent></Dialog>
   </div>;
