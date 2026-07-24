@@ -258,6 +258,19 @@ Deno.serve(async (req) => {
     // These are per-tenant and independent of the direct sync, so run them once
     // on the first invocation only (not on each chained batch).
     if (offset !== 0) {
+      if (!hasMore && !table_ids && !isBackfill) {
+        const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({ source: 'google_ads_sync' }),
+        });
+        if (!pulseResponse.ok) {
+          console.error('[cron-google-ads] pulse calculation failed:', await pulseResponse.text());
+        }
+      }
       return new Response(JSON.stringify({ success: true, batch_offset: offset, results }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -457,6 +470,20 @@ Deno.serve(async (req) => {
         }
       } catch (zeroErr: any) {
         console.error(`[google-ads zero-spend] tenant ${tenantId}:`, zeroErr.message);
+      }
+    }
+
+    if (!hasMore && !table_ids && !isBackfill) {
+      const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({ source: 'google_ads_sync' }),
+      });
+      if (!pulseResponse.ok) {
+        console.error('[cron-google-ads] pulse calculation failed:', await pulseResponse.text());
       }
     }
 

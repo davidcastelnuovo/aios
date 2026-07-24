@@ -704,6 +704,23 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({ batch_offset: nextOffset }),
       }).catch(err => console.error('Failed to trigger next batch:', err));
+    } else if (!tableIds) {
+      // The twice-daily sync has finished. Calculate and optionally deliver the
+      // pulse from the CRM rows we just stored. This performs no extra Meta API
+      // call and does not invoke run-ai-agent/Carmen.
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+      const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+        body: '{}',
+      });
+      if (!pulseResponse.ok) {
+        console.error('Failed to calculate deterministic campaign pulse:', await pulseResponse.text());
+      }
     }
 
     return new Response(JSON.stringify({
@@ -722,6 +739,5 @@ Deno.serve(async (req) => {
     });
   }
 });
-
 
 
