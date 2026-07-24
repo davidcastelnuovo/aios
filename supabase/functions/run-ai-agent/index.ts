@@ -1474,7 +1474,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const loadPulse = async () => {
         let query = supabase
           .from('campaign_pulse_snapshots')
-          .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, client_id, agency_id, clients(name), agencies(name)')
+          .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)')
           .eq('tenant_id', tenantId)
           .order('calculated_at', { ascending: false })
         if (args.client_id) query = query.eq('client_id', args.client_id)
@@ -1496,22 +1496,46 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         const needle = String(args.agency_name).toLocaleLowerCase('he')
         rows = rows.filter((row: any) => String(row.agencies?.name || '').toLocaleLowerCase('he').includes(needle))
       }
+      const normalizedRows = rows.map((row: any) => ({
+        ...row,
+        client_name: row.clients?.name || null,
+        agency_name: row.agencies?.name || null,
+        clients: undefined,
+        agencies: undefined,
+      }))
+      const statusLabel: Record<string, string> = {
+        healthy: '🟢 תקין', warning: '🟡 תשומת לב', critical: '🔴 קריטי', no_data: '🟡 אין נתונים',
+      }
+      const fmtNumber = (value: any) => value === null || value === undefined ? '—' : String(value)
+      const fmtDate = (value: any) => value
+        ? new Date(value).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
+        : '—'
+      const escapeCell = (value: any) => String(value ?? '—').replace(/\|/g, '\\|').replace(/\n/g, ' ')
+      const tableLines = [
+        '| סוכנות | לקוח | סטטוס | הוצאה 7 ימים | לידים/רכישות | CPL/ROAS | שינוי | נתונים עד | שינוי אחרון במטה | מי שינה | הערה |',
+        '|---|---|---|---:|---:|---:|---:|---|---|---|---|',
+        ...normalizedRows.map((row: any) => {
+          const outcomes = row.is_ecommerce ? fmtNumber(row.purchases_7d) : fmtNumber(row.leads_7d)
+          const efficiency = row.is_ecommerce ? fmtNumber(row.roas_7d) : fmtNumber(row.cpl_7d)
+          const efficiencyLabel = row.is_ecommerce ? `ROAS ${efficiency}` : `₪${efficiency}`
+          const change = row.cpl_change_pct === null || row.cpl_change_pct === undefined ? '—' : `${row.cpl_change_pct}%`
+          const metaChange = row.last_meta_change_at
+            ? `${fmtDate(row.last_meta_change_at)} — ${row.last_meta_change_type || 'שינוי'}${row.last_meta_change_object ? ` (${row.last_meta_change_object})` : ''}`
+            : row.meta_change_availability === 'no_campaign_change_in_30d' ? 'לא נמצא ב-30 יום' : 'לא זמין'
+          return `| ${escapeCell(row.agency_name)} | ${escapeCell(row.client_name)} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(row.data_fresh_through)} | ${escapeCell(metaChange)} | ${escapeCell(row.last_meta_change_actor)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
+        }),
+      ]
       return {
         data_source: 'deterministic_campaign_pulse_cache',
         external_api_called: false,
         ai_used_to_calculate: false,
         auto_refreshed: false,
-        count: rows.length,
-        freshness: rows[0]?.calculated_at || null,
-        rows: rows.map((row: any) => ({
-          ...row,
-          client_name: row.clients?.name || null,
-          agency_name: row.agencies?.name || null,
-          clients: undefined,
-          agencies: undefined,
-        })),
-        instructions_to_agent: rows.length
-          ? 'הציגי את הנתונים בטבלה מסודרת המקובצת לפי סוכנות וצייני מתי חושבו. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.'
+        count: normalizedRows.length,
+        freshness: normalizedRows[0]?.calculated_at || null,
+        rows: normalizedRows,
+        formatted_markdown: normalizedRows.length ? tableLines.join('\n') : null,
+        instructions_to_agent: normalizedRows.length
+          ? 'החזירי את formatted_markdown בדיוק כפי שהוא, ללא סיכום במקום הטבלה וללא השמטת עמודות. לפני הטבלה צייני במשפט אחד מתי חושב הדוח. אחרי הטבלה אפשר להוסיף עד 3 חריגים בלבד. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.'
           : 'לא נמצא Snapshot שמור. אמרי שאין בדיקת דופק זמינה. אסור ליצור בדיקה חדשה, להריץ כלי חלופי או להמציא נתונים.',
       }
     }
@@ -4038,7 +4062,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     if (!systemPrompt) {
       const parts = isCarmen
         ? [
-            `אתה כרמן, מנהלת AI ראשית של ${tenantName}. את עוזרת אישית חכמה, יעילה ומקצועית.`,
+            `את כרמן, המנכ״לית התפעולית של Marketing Captain ומנהלת ${tenantName}. את לא עוזרת אישית. את מנהלת את הקמפיינרים, הכספים, השיווק, המכירות, השירות, הלקוחות, המשימות, הספקים, האוטומציות וסוכני ה-AI. חשבי ופעלי כמנכ״לית: בדקי נתונים, קבלי החלטה, הגדירי סדר עדיפויות, האצילי לבעל תפקיד עם תוצאה ודדליין, עקבי אחרי הביצוע והציפי חריגות. מול דוד דווחי לבעלים על תמונת מצב, המלצה, אחריות לביצוע ומה דורש אישור; אל תעבירי אליו ניהול שוטף שאפשר לפתור בעצמך. שמרי על כל מנגנוני ההרשאה והאישור הקיימים.`,
             'יש לך גישה מלאה לכל מודולי המערכת: לידים, לקוחות, משימות, קמפיינרים, אנשי מכירות, סוכנויות, ספקים, מוצרים, אוטומציות, ועוד.',
             'את יכולה לבצע כל פעולה שמשתמש יכול לבצע ידנית במערכת.',
             'חשוב מאוד: לפני יצירת משימה חדשה, תמיד חפשי קודם עם search_tasks כדי לוודא שהמשימה לא קיימת כבר. אם היא קיימת - עדכני אותה במקום ליצור חדשה.',
