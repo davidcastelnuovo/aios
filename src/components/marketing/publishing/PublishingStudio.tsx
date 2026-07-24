@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, Plus, Rocket, Save, Upload } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, Plus, Rocket, Save, Sparkles, Upload } from "lucide-react";
 
 type PublishingSite = { id: string; site_key: string; name: string; destination_type: "pbn" | "wordpress" | "custom_api"; client_id: string | null; connection_id: string | null; base_url: string | null; categories: string[]; status: string; is_hidden: boolean };
 type WordPressSite = { id: string; site_url: string; site_name: string | null; client_id: string | null; is_active: boolean };
@@ -95,6 +96,9 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const [editorExcerpt, setEditorExcerpt] = useState("");
   const [editorContent, setEditorContent] = useState("");
   const [savingArticle, setSavingArticle] = useState(false);
+  const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([]);
+  const [generatingArticleIds, setGeneratingArticleIds] = useState<string[]>([]);
+  const [publishingSelected, setPublishingSelected] = useState(false);
   const [networkProgress, setNetworkProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   // The generated Supabase types will include these tables after the migration is applied.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -420,6 +424,53 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     }
   };
 
+  const toggleArticle = (articleId: string, checked: boolean) => {
+    setSelectedArticleIds((current) => checked ? [...new Set([...current, articleId])] : current.filter((id) => id !== articleId));
+  };
+
+  const generateArticles = async (articleIds: string[]) => {
+    const ids = articleIds.slice(0, 10);
+    if (!ids.length) return;
+    setGeneratingArticleIds(ids);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-publishing-articles", { body: { article_ids: ids } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
+      const generated = Number(data?.generated ?? 0);
+      const failed = Number(data?.failed ?? 0);
+      if (failed) toast.warning(`${generated} מאמרים נכתבו, ${failed} נכשלו`);
+      else toast.success(generated === 1 ? "כרמן כתבה את המאמר והוא ממתין לבדיקה" : `כרמן כתבה ${generated} מאמרים והם ממתינים לבדיקה`);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "כתיבת המאמרים נכשלה"));
+    } finally {
+      setGeneratingArticleIds([]);
+    }
+  };
+
+  const approveAndPublishSelected = async () => {
+    const selected = articles.filter((article) => selectedArticleIds.includes(article.id));
+    const invalid = selected.filter((article) => !article.title || !article.content?.length || !article.site_id || !article.target_url);
+    if (!selected.length) return;
+    if (invalid.length) return toast.error(`${invalid.length} מאמרים חסרים תוכן, אתר או קישור יעד`);
+    setPublishingSelected(true);
+    try {
+      const { error } = await db.from("publishing_articles").update({
+        status: "published",
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).in("id", selected.map((article) => article.id)).eq("tenant_id", tenantId);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
+      setSelectedArticleIds([]);
+      toast.success(`${selected.length} מאמרים אושרו ונשלחו ל־Feed של האתרים`);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "אישור המאמרים נכשל"));
+    } finally {
+      setPublishingSelected(false);
+    }
+  };
+
   return <div className="flex min-h-0 flex-1 flex-col bg-muted/10" dir="rtl">
     <div className="flex items-center gap-3 border-b bg-card/70 px-5 py-3"><Globe2 className="h-5 w-5 text-emerald-600" /><div className="flex-1"><h2 className="text-sm font-bold">ניהול PBN ומאמרים</h2><p className="text-[11px] text-muted-foreground">Excel → כתיבה ועריכה → בחירת יעד → אישור → פרסום</p></div><Badge variant="outline">{visiblePbnSites.length} אתרי PBN</Badge><Badge variant="outline">{articles.length} משימות</Badge></div>
     <div className="flex items-center gap-3 border-b bg-background px-5 py-3">
@@ -436,7 +487,47 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         <Card className="p-5"><div className="flex items-center gap-4"><div className="grid h-12 w-12 place-items-center rounded-xl bg-emerald-100"><FileSpreadsheet className="h-6 w-6 text-emerald-700" /></div><div className="flex-1"><h3 className="font-bold">העלאת טבלת קישורים</h3><p className="text-xs text-muted-foreground">המערכת קוראת את כל הגיליונות ומזהה לקוח, ביטוי, נושא ו-URL.</p></div><Input ref={inputRef} className="hidden" type="file" accept=".xlsx,.xls" onChange={(event) => event.target.files?.[0] && parseWorkbook(event.target.files[0])} /><Button variant="outline" onClick={() => inputRef.current?.click()} disabled={busy}><Upload className="ml-2 h-4 w-4" />בחר Excel</Button></div></Card>
         {previewRows.length > 0 && <Card className="overflow-hidden"><div className="flex items-center border-b p-4"><div className="flex-1"><h3 className="font-bold">תצוגה מקדימה — {fileName}</h3><p className="text-xs text-muted-foreground">{previewRows.length} שורות · {sheetCount} גיליונות · מסודר מיוני אחורה</p></div><Button onClick={importRows} disabled={busy || !sites.length || previewRows.some((row) => row.errors.length > 0)}>{busy ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="ml-2 h-4 w-4" />}ייבא משימות</Button></div><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-right">חודש שיוך</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי עוגן וקישור חיצוני</th><th className="p-3 text-right">נושא ומקור</th><th className="p-3 text-right">יעד פרסום</th><th className="p-3 text-right">קטגוריה</th></tr></thead><tbody>{previewRows.sort((a, b) => b.sourceMonth.localeCompare(a.sourceMonth)).slice(0, 200).map((row, index) => { const destination = siteByKey.get(row.siteKey); const categories = destination?.categories.length ? destination.categories : SITE_TEMPLATES.find((site) => site.site_key === row.siteKey)?.categories ?? [row.category]; return <tr key={`${row.sheetName}-${row.rowNumber}`} className="border-t"><td className="whitespace-nowrap p-3 font-medium">{formatSourceMonth(row.sourceMonth)}</td><td className="p-3"><div className="font-medium">{row.customerName || "—"}</div><div className="text-[10px] text-muted-foreground">{clientByName.has(normalizeClientName(row.customerName)) ? "משויך ללקוח במערכת" : "דורש שיוך ללקוח"}</div></td><td className="max-w-xs p-3"><div className="font-medium">{row.primaryKeyword || "—"}</div><a className="mt-1 block truncate text-[10px] text-blue-600 hover:underline" href={row.targetUrl} target="_blank" rel="noreferrer">{row.targetUrl || "ללא קישור"}</a>{row.errors.length > 0 && <div className="mt-1 text-[10px] font-medium text-red-600">{row.errors.join(" · ")}</div>}</td><td className="max-w-sm p-3"><div>{row.topic || "—"}</div><div className="mt-1 text-[10px] text-muted-foreground">{row.sheetName} · שורה {row.rowNumber}</div></td><td className="p-3"><Select value={row.siteKey} onValueChange={(siteKey) => { const next = siteByKey.get(siteKey); updatePreview(index, { siteKey, category: next?.categories[0] ?? row.category }); }}><SelectTrigger className="h-8 w-52"><SelectValue /></SelectTrigger><SelectContent>{sites.map((site) => <SelectItem key={site.site_key} value={site.site_key}>{site.destination_type === "pbn" ? "PBN" : "לקוח"} · {site.name}</SelectItem>)}</SelectContent></Select></td><td className="p-3"><Select value={row.category} onValueChange={(category) => updatePreview(index, { category })}><SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></td></tr>})}</tbody></table>{previewRows.length > 200 && <div className="p-3 text-center text-xs text-muted-foreground">מוצגות 200 השורות הראשונות מתוך {previewRows.length}</div>}</div></Card>}
       </div></ScrollArea></TabsContent>
-      <TabsContent value="articles" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><Card className="overflow-hidden">{loadingArticles ? <Loader2 className="mx-auto my-12 h-6 w-6 animate-spin" /> : <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/50"><tr><th className="p-3 text-right">חודש שיוך</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי וקישור</th><th className="p-3 text-right">נושא</th><th className="p-3 text-right">אתר</th><th className="p-3 text-right">סטטוס</th><th className="p-3 text-right">פעולות</th></tr></thead><tbody>{articles.map((article) => <tr key={article.id} className="border-t"><td className="whitespace-nowrap p-3 font-medium">{formatSourceMonth(article.source_month)}</td><td className="p-3"><div className="font-medium">{article.customer_name || "מערכתי"}</div><div className={`text-[10px] ${article.client_id ? "text-emerald-700" : "text-amber-700"}`}>{article.client_id ? "משויך" : "לא משויך"}</div></td><td className="max-w-xs p-3"><div className="font-medium">{article.primary_keyword}</div>{article.target_url && <a className="block max-w-56 truncate text-[10px] text-blue-600 hover:underline" href={article.target_url} target="_blank" rel="noreferrer">{article.target_url}</a>}</td><td className="max-w-sm p-3"><div className="truncate">{article.proposed_topic}</div><div className="text-[10px] text-muted-foreground">{article.source_sheet}{article.source_row ? ` · שורה ${article.source_row}` : ""}</div></td><td className="p-3">{siteById.get(article.site_id ?? "")?.name ?? "לא משויך"}<div className="text-[10px] text-muted-foreground">{article.category}</div></td><td className="p-3"><Badge variant="outline">{article.status}</Badge></td><td className="p-3"><div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => openArticleEditor(article)}><Pencil className="ml-1 h-3.5 w-3.5" />צפייה ועריכה</Button><Select value={article.status} onValueChange={(status) => updateStatus(article, status)}><SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger><SelectContent>{["imported","draft","review","approved","published","failed"].map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select></div></td></tr>)}</tbody></table></div>}</Card></div></ScrollArea></TabsContent>
+      <TabsContent value="articles" className="min-h-0 flex-1 mt-0">
+        <ScrollArea className="h-full">
+          <div className="space-y-3 p-5">
+            <Card className="flex flex-wrap items-center gap-3 p-3">
+              <div className="flex-1 text-xs text-muted-foreground">{selectedArticleIds.length} מאמרים נבחרו · כתיבה מרובה מוגבלת ל־10 בכל הרצה</div>
+              <Button variant="outline" onClick={() => generateArticles(selectedArticleIds)} disabled={!selectedArticleIds.length || Boolean(generatingArticleIds.length)}>
+                {generatingArticleIds.length ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Sparkles className="ml-2 h-4 w-4" />}כתיבת נבחרים
+              </Button>
+              <Button onClick={approveAndPublishSelected} disabled={!selectedArticleIds.length || publishingSelected}>
+                {publishingSelected ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Rocket className="ml-2 h-4 w-4" />}אשר ופרסם נבחרים
+              </Button>
+            </Card>
+            <Card className="overflow-hidden">
+              {loadingArticles ? <Loader2 className="mx-auto my-12 h-6 w-6 animate-spin" /> : <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50"><tr>
+                    <th className="p-3"><Checkbox checked={articles.length > 0 && selectedArticleIds.length === articles.length} onCheckedChange={(checked) => setSelectedArticleIds(checked ? articles.map((article) => article.id) : [])} /></th>
+                    <th className="p-3 text-right">חודש שיוך</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי וקישור</th><th className="p-3 text-right">נושא</th><th className="p-3 text-right">אתר</th><th className="p-3 text-right">סטטוס</th><th className="p-3 text-right">פעולות</th>
+                  </tr></thead>
+                  <tbody>{articles.map((article) => {
+                    const isGenerating = generatingArticleIds.includes(article.id);
+                    return <tr key={article.id} className="border-t">
+                      <td className="p-3"><Checkbox checked={selectedArticleIds.includes(article.id)} onCheckedChange={(checked) => toggleArticle(article.id, Boolean(checked))} /></td>
+                      <td className="whitespace-nowrap p-3 font-medium">{formatSourceMonth(article.source_month)}</td>
+                      <td className="p-3"><div className="font-medium">{article.customer_name || "מערכתי"}</div><div className={`text-[10px] ${article.client_id ? "text-emerald-700" : "text-amber-700"}`}>{article.client_id ? "משויך" : "לא משויך"}</div></td>
+                      <td className="max-w-xs p-3"><div className="font-medium">{article.primary_keyword}</div>{article.target_url && <a className="block max-w-56 truncate text-[10px] text-blue-600 hover:underline" href={article.target_url} target="_blank" rel="noreferrer">{article.target_url}</a>}</td>
+                      <td className="max-w-sm p-3"><div className="truncate">{article.title || article.proposed_topic}</div><div className="text-[10px] text-muted-foreground">{article.source_sheet}{article.source_row ? ` · שורה ${article.source_row}` : ""}</div></td>
+                      <td className="p-3">{siteById.get(article.site_id ?? "")?.name ?? "לא משויך"}<div className="text-[10px] text-muted-foreground">{article.category}</div></td>
+                      <td className="p-3"><Badge variant="outline">{article.status}</Badge></td>
+                      <td className="p-3"><div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => generateArticles([article.id])} disabled={Boolean(generatingArticleIds.length)}>{isGenerating ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="ml-1 h-3.5 w-3.5" />}כתיבה</Button>
+                        <Button size="sm" variant="outline" onClick={() => openArticleEditor(article)}><Pencil className="ml-1 h-3.5 w-3.5" />צפייה ועריכה</Button>
+                      </div></td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>}
+            </Card>
+          </div>
+        </ScrollArea>
+      </TabsContent>
       <TabsContent value="sites" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><div className="mb-5 flex items-center justify-between"><div><h3 className="font-bold">אתרי PBN</h3><p className="text-xs text-muted-foreground">כל אתר במערכת מול פרויקט ה־Vercel, הבילד והדומיין שלו.</p></div><Button onClick={() => setSiteDialogOpen(true)}><Plus className="ml-2 h-4 w-4" />יצירת אתרים</Button></div>{loadingVercel || loadingSites ? <Loader2 className="mx-auto mt-12 h-6 w-6 animate-spin" /> : <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="p-3 text-right">אתר PBN</th><th className="p-3 text-right">פרויקט Vercel</th><th className="p-3 text-right">בילד אחרון</th><th className="p-3 text-right">דומיין</th><th className="p-3 text-right">פעולות</th></tr></thead><tbody>{pbnRows.map(({ site, project, primaryDomain }) => <tr key={site.id} className="border-t"><td className="p-3"><div className="font-semibold">{site.name}</div><div className="text-[11px] text-muted-foreground">{site.site_key}</div></td><td className="p-3">{project ? <><div className="font-medium" dir="ltr">{project.name}</div><div className="text-[10px] text-muted-foreground" dir="ltr">{project.id}</div></> : <Badge variant="outline" className="border-amber-300 text-amber-700">טרם נוצר ב-Vercel</Badge>}</td><td className="p-3"><Badge variant="outline" className={project?.deployment?.state === "READY" ? "border-emerald-300 text-emerald-700" : ""}>{project ? project.deployment?.state ?? "טרם פורסם" : "—"}</Badge>{project?.deployment?.url && <div className="mt-1 max-w-52 truncate text-[10px] text-muted-foreground" dir="ltr">{project.deployment.url}</div>}</td><td className="p-3">{primaryDomain && project?.deployment?.state === "READY" ? <a href={`https://${primaryDomain}`} target="_blank" rel="noreferrer" className="font-medium text-emerald-700 hover:underline" dir="ltr">{primaryDomain}</a> : <span className="text-muted-foreground">{project?.deployment ? "ללא דומיין" : "ממתין לפרסום"}</span>}</td><td className="p-3">{project?.deployment?.state === "READY" ? <Button size="sm" variant="outline" onClick={() => { setSelectedProject(project); setDomainName(primaryDomain ?? ""); setDomainDialogOpen(true); }}>דומיין</Button> : <span className="text-xs text-muted-foreground">נדרש פרסום</span>}</td></tr>)}{unrelatedProjects.map(({ project }) => <tr key={project.id} className="border-t bg-muted/20"><td className="p-3 text-muted-foreground">לא שויך ל-PBN</td><td className="p-3 font-medium" dir="ltr">{project.name}</td><td className="p-3"><Badge variant="outline">{project.deployment?.state ?? "—"}</Badge></td><td className="p-3 text-muted-foreground">—</td><td className="p-3"><Button size="sm" variant="ghost" onClick={() => hideVercelProject(project)}>הסתר</Button></td></tr>)}</tbody></table></div></Card>}</div></ScrollArea></TabsContent>
     </Tabs>
     <Dialog open={Boolean(editingArticle)} onOpenChange={(open) => !open && setEditingArticle(null)}>
