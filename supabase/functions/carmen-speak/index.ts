@@ -79,16 +79,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    // mp3 plays everywhere; shimmer reads Hebrew naturally (matches Carmen's WA voice).
+    // mp3 plays everywhere; marin = the same voice as Carmen's live (Realtime)
+    // conversations, so typed chat and voice chat sound like one person.
+    // marin is newer than most TTS voices — if the TTS endpoint rejects it,
+    // retry with shimmer rather than going silent.
+    const ttsOpts = {
+      format: 'mp3' as const,
+      instructions: typeof instructions === 'string' && instructions ? instructions : HEBREW_STEERING,
+      ...(userKey ? { key: userKey } : {}),
+    };
     let audio: Uint8Array | null = null;
     if (provider === 'elevenlabs' && !userKey) audio = await elevenSpeak(clean);
-    if (!audio) {
-      audio = await aiSpeak(clean, {
-        voice: voice || 'shimmer',
-        format: 'mp3',
-        instructions: typeof instructions === 'string' && instructions ? instructions : HEBREW_STEERING,
-        ...(userKey ? { key: userKey } : {}),
-      });
+    if (!audio) audio = await aiSpeak(clean, { ...ttsOpts, voice: voice || 'marin' });
+    if (!audio && !voice) {
+      console.warn('[carmen-speak] marin failed, falling back to shimmer');
+      audio = await aiSpeak(clean, { ...ttsOpts, voice: 'shimmer' });
     }
     if (!audio) {
       return new Response(JSON.stringify({ error: 'TTS failed (check OPENAI_API_KEY)' }), {

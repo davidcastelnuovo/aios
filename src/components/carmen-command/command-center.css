@@ -152,3 +152,35 @@
 .cc-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
 .cc-scroll::-webkit-scrollbar-thumb { background: rgba(76, 195, 255, 0.25); border-radius: 3px; }
 .cc-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- Markdown reports in the chat (tables etc.) ---------- */
+
+/* Wide pulse-check tables scroll inside the bubble instead of breaking layout */
+.cc-md { overflow-x: auto; }
+
+.cc-md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+  border: 1px solid var(--cc-line-strong);
+  background: rgba(6, 12, 28, 0.55);
+}
+.cc-md thead th {
+  color: var(--cc-accent);
+  font-weight: 600;
+  text-align: right;
+  letter-spacing: 0.02em;
+  background: rgba(76, 195, 255, 0.08);
+  border-bottom: 1px solid var(--cc-line-strong);
+  padding: 0.4rem 0.6rem;
+  white-space: nowrap;
+}
+.cc-md tbody td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--cc-line);
+  vertical-align: top;
+}
+.cc-md tbody tr:last-child td { border-bottom: none; }
+.cc-md tbody tr:nth-child(even) { background: rgba(76, 195, 255, 0.04); }
+.cc-md tbody tr:hover { background: rgba(76, 195, 255, 0.09); }
