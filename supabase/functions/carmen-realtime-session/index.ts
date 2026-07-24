@@ -40,13 +40,20 @@ async function resolveOpenAIKey(): Promise<string | null> {
 }
 
 // Voice-first persona. Data questions are delegated to Carmen's full brain
-// (run-ai-agent) through the ask_carmen tool — the realtime model never
-// invents system data on its own.
-const CARMEN_REALTIME_INSTRUCTIONS =
-  'את כרמן — עוזרת ה-AI של מערכת AIOS. דברי עברית ישראלית טבעית וחמה, במשפטים קצרים וישירים. ' +
-  'לכל שאלה על נתונים במערכת — לקוחות, לידים, משימות, קמפיינים, דוחות, זיכרון — או בקשה לבצע פעולה, ' +
-  'חובה לקרוא לכלי ask_carmen עם הבקשה המלאה, ולענות רק לפי מה שהכלי החזיר. אל תמציאי נתונים. ' +
-  'בזמן שהכלי עובד אפשר לומר משפט קצר כמו "שניה, בודקת". שיחת חולין — עני ישירות ובקצרה.';
+// (run-ai-agent) through the ask_carmen tool — same brain, same data, caller-
+// scoped permissions enforced server-side.
+function buildInstructions(callerName: string | null): string {
+  return [
+    'את כרמן — עוזרת ה-AI שמנהלת את העסק במערכת AIOS. דברי עברית ישראלית טבעית וחמה, במשפטים קצרים וישירים.',
+    callerName
+      ? `את מדברת עכשיו עם ${callerName}. פתחי את השיחה בפנייה אישית בשמו/ה, ופני כך לאורך השיחה.`
+      : 'פתחי את השיחה בברכה קצרה.',
+    'ask_carmen הוא המוח שלך — אותו מוח, אותם נתונים ואותו זיכרון של כרמן בכל המערכת. לכל שאלה על נתונים — לקוחות, לידים, משימות, קמפיינים, דוחות, זיכרון — או בקשה לבצע פעולה, קראי לו מיד עם הבקשה המלאה וענִי רק לפי מה שחזר. אל תמציאי נתונים ואל תציגי את זה כ"בדיקה מול מערכת אחרת" — זו את.',
+    'הרשאות: התשובות מ-ask_carmen כבר מוגבלות אוטומטית להרשאות של המשתמש שמולך (קמפיינר רואה רק את הלקוחות שלו; הכל בטננט הנוכחי בלבד). לעולם אל תזכירי לקוחות או נתונים מחוץ למה שהכלי החזיר.',
+    'שיחות שלא קשורות לעבודה בשום צורה: עני קצר וחביב — "אין לי זמן לזה עכשיו, אני באמצע ניהול עסק 😉" — והחזירי מיד לענייני עבודה.',
+    'בזמן שהכלי עובד אפשר לומר משפט קצר כמו "שניה, בודקת".',
+  ].join('\n');
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -78,6 +85,17 @@ Deno.serve(async (req) => {
     const key = userKey ?? await resolveOpenAIKey();
     if (!key) return json(500, { error: 'No OpenAI key available (env or llm integration)' });
 
+    // Personalization: greet the caller by name (best-effort)
+    let callerName: string | null = null;
+    try {
+      const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+      const pr = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/rest/v1/profiles?id=eq.${caller.id}&select=full_name`,
+        { headers: { apikey: service, Authorization: `Bearer ${service}` } },
+      );
+      if (pr.ok) callerName = (await pr.json())?.[0]?.full_name ?? null;
+    } catch { /* name is a nicety */ }
+
     const { voice } = await req.json().catch(() => ({} as Record<string, unknown>));
 
     const r = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
@@ -88,7 +106,7 @@ Deno.serve(async (req) => {
         session: {
           type: 'realtime',
           model: REALTIME_MODEL,
-          instructions: CARMEN_REALTIME_INSTRUCTIONS,
+          instructions: buildInstructions(callerName),
           audio: {
             input: { transcription: { model: 'gpt-4o-mini-transcribe', language: 'he' } },
             output: { voice: typeof voice === 'string' && voice ? voice : 'marin' },

@@ -79,6 +79,7 @@ interface CrmTable {
   integration_settings: any;
   agency_id: string | null;
   client_id: string | null;
+  campaign_active?: boolean;
 }
 
 export default function DynamicTables() {
@@ -833,6 +834,24 @@ export default function DynamicTables() {
                     </div>
                     {/* Agency & Client Badges */}
                     <div className="flex flex-wrap gap-1 mt-2">
+                      {(table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce' || table.integration_type === 'google_ads') && (
+                        <Badge
+                          variant={(table.campaign_active ?? true) ? "default" : "destructive"}
+                          className={`text-xs ${canManageTables ? "cursor-pointer" : ""}`}
+                          title={canManageTables ? "לחיצה מחליפה מצב — כרמן מדווחת רק על קמפיינים פעילים" : undefined}
+                          onClick={canManageTables ? async (e) => {
+                            e.stopPropagation();
+                            const next = !(table.campaign_active ?? true);
+                            const { error } = await (supabase as any).from('crm_tables')
+                              .update({ campaign_active: next }).eq('id', table.id);
+                            if (error) { toast.error('עדכון סטטוס הקמפיין נכשל'); return; }
+                            toast.success(next ? 'הקמפיין סומן כפעיל' : 'הקמפיין סומן כלא פעיל — כרמן תפסיק לדווח עליו');
+                            queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+                          } : undefined}
+                        >
+                          {(table.campaign_active ?? true) ? "🟢 קמפיין פעיל" : "⭕ קמפיין לא פעיל"}
+                        </Badge>
+                      )}
                       {table.agency_id && (
                         <Badge variant="outline" className="text-xs">
                           <Building2 className="h-3 w-3 ml-1" />
