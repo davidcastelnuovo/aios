@@ -194,6 +194,91 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 3d. Credit canaries for the OTHER LLM providers Carmen can fail over to.
+  // Carmen's brain may run on Google (Gemini) or Anthropic (Claude), not only
+  // OpenAI — so the monitor must watch every provider that has a key, otherwise
+  // a spend cap / empty balance on the ACTIVE provider stays invisible (exactly
+  // the blind spot that once let Carmen go silent while "openai_quota" was green).
+  {
+    // State-flip alert shared by all provider canaries.
+    const flipAlert = async (service: string, provider: string, row: CheckRow, downMsg: string, upMsg: string) => {
+      const { data: prev } = await supabase
+        .from('service_health_checks').select('status')
+        .eq('service', service).order('checked_at', { ascending: false }).limit(1).maybeSingle();
+      if (row.status === 'down' && prev && prev.status !== 'down') {
+        await supabase.from('integration_alerts_log').insert({
+          tenant_id: DAVID_TENANT, provider, alert_type: 'quota_out', reason: downMsg,
+        });
+        await supabase.rpc('claude_notify_david', { p_message: `🚨 ${downMsg}` }).then(() => {}, () => {});
+      }
+      if (row.status === 'ok' && prev && prev.status === 'down') {
+        await supabase.from('integration_alerts_log').insert({
+          tenant_id: DAVID_TENANT, provider, alert_type: 'reconnected', reason: upMsg,
+        });
+      }
+    };
+
+    // Resolve the active llm integration's provider keys.
+    let gKey: string | null = null, aKey: string | null = null;
+    try {
+      const { data: llmRow } = await supabase
+        .from('tenant_integrations').select('settings')
+        .eq('integration_type', 'llm').eq('is_active', true)
+        .order('updated_at', { ascending: false }).limit(1).maybeSingle();
+      const s = (llmRow?.settings as Record<string, unknown>) || {};
+      gKey = typeof s.google_api_key === 'string' && s.google_api_key.trim() ? s.google_api_key.trim() : null;
+      aKey = typeof s.anthropic_api_key === 'string' && s.anthropic_api_key.trim() ? s.anthropic_api_key.trim() : null;
+    } catch { /* no keys → canaries skipped */ }
+
+    // Google Gemini billed canary
+    if (gKey) {
+      const t0 = performance.now();
+      let row: CheckRow = { tenant_id: null, service: 'google_quota', status: 'down', latency_ms: null, detail: 'no response' };
+      try {
+        const r = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+          method: 'POST', headers: { Authorization: `Bearer ${gKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gemini-3-flash-preview', messages: [{ role: 'user', content: 'ok' }], max_tokens: 1 }),
+        });
+        const body = await r.text();
+        const isQuota = r.status === 429 || /RESOURCE_EXHAUSTED|spending cap|quota/i.test(body);
+        row = {
+          tenant_id: null, service: 'google_quota',
+          status: r.ok ? 'ok' : isQuota ? 'down' : 'warn',
+          latency_ms: Math.round(performance.now() - t0),
+          detail: r.ok ? 'קרדיט פעיל' : isQuota ? 'מכסת Gemini נגמרה' : `HTTP ${r.status}`,
+        };
+      } catch (e) { row.detail = e instanceof Error ? e.message : 'canary failed'; }
+      rows.push(row);
+      await flipAlert('google_quota', 'google', row,
+        'מכסת ההוצאה של Gemini נגמרה — אם כרמן על Gemini היא תעבור אוטומטית לספק אחר. טען ב-ai.studio/spend',
+        'הקרדיט ב-Gemini חזר לפעול');
+    }
+
+    // Anthropic Claude billed canary
+    if (aKey) {
+      const t0 = performance.now();
+      let row: CheckRow = { tenant_id: null, service: 'anthropic_quota', status: 'down', latency_ms: null, detail: 'no response' };
+      try {
+        const r = await fetch('https://api.anthropic.com/v1/chat/completions', {
+          method: 'POST', headers: { Authorization: `Bearer ${aKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'claude-sonnet-4-6', messages: [{ role: 'user', content: 'ok' }], max_tokens: 1 }),
+        });
+        const body = await r.text();
+        const isQuota = r.status === 429 || /credit balance|too low|quota/i.test(body);
+        row = {
+          tenant_id: null, service: 'anthropic_quota',
+          status: r.ok ? 'ok' : isQuota ? 'down' : 'warn',
+          latency_ms: Math.round(performance.now() - t0),
+          detail: r.ok ? 'קרדיט פעיל' : isQuota ? 'הקרדיט ב-Claude נגמר' : `HTTP ${r.status}`,
+        };
+      } catch (e) { row.detail = e instanceof Error ? e.message : 'canary failed'; }
+      rows.push(row);
+      await flipAlert('anthropic_quota', 'anthropic', row,
+        'הקרדיט ב-Claude נגמר — אם כרמן על Claude היא תעבור אוטומטית לספק אחר. טען ב-console.anthropic.com',
+        'הקרדיט ב-Claude חזר לפעול');
+    }
+  }
+
   // 4. WhatsApp gateway per tenant with an active Manus WA integration
   const { data: waIntegrations } = await supabase
     .from('tenant_integrations')
