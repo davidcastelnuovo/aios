@@ -237,6 +237,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             tenant_id: tenantId,
             surface: "internal_chat",
             stream: true,
+            conversation_id: conversationIdRef.current,
             conversation_history: history,
           }),
         });
@@ -282,6 +283,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               } else if (parsed.type === "tool_call") {
                 setMessages(prev => [...prev, { role: "tool_call", tool: parsed.tool }]);
                 scrollDown();
+              } else if (parsed.type === "conversation_id" && parsed.id) {
+                conversationIdRef.current = parsed.id;
               } else if (parsed.type === "done") {
                 gotDone = true;
               }
@@ -340,7 +343,17 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ command_text: question, tenant_id: tenantId, surface: "internal_chat", stream: true }),
+          body: JSON.stringify({
+            command_text: question,
+            tenant_id: tenantId,
+            surface: "internal_chat",
+            stream: true,
+            conversation_id: conversationIdRef.current,
+            conversation_history: messages
+              .filter(m => m.role === "user" || m.role === "assistant")
+              .map(m => ({ role: m.role, content: m.content ?? "" }))
+              .slice(-24),
+          }),
           signal: controller.signal,
         });
         if (!res.ok || !res.body) return "לא הצלחתי לגשת למערכת כרגע.";
@@ -362,6 +375,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             try {
               const parsed = JSON.parse(payload);
               if (parsed.type === "token") answer += parsed.content;
+              else if (parsed.type === "conversation_id" && parsed.id) conversationIdRef.current = parsed.id;
               // the wrapper returns 200 and reports failures inside the stream
               else if (parsed.type === "error") streamError = String(parsed.message ?? parsed.error ?? "שגיאה במערכת");
               else if (parsed.type === "done" && parsed.success === false && !streamError) streamError = "הפעולה נכשלה";
@@ -373,7 +387,16 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             ? `${answer.trim()}\n(שים לב: הפעולה נקטעה בשגיאה: ${streamError.slice(0, 200)})`
             : `נתקלתי בשגיאה במערכת: ${streamError.slice(0, 200)}`;
         }
-        return answer.trim() || "לא נמצאה תשובה.";
+        const brainAnswer = answer.trim() || "לא נמצאה תשובה.";
+        // Realtime may verbally summarize a tool result instead of rendering
+        // it. Pulse reports are operational tables, so put the brain's exact
+        // answer in the transcript as soon as it returns.
+        if (/\bדופק\b|\bpulse\s*check\b/i.test(question) && answer.trim()) {
+          setMessages(prev => [...prev, { role: "assistant", content: answer.trim() }]);
+          setStreamingText("");
+          scrollDown();
+        }
+        return brainAnswer;
       } catch (e) {
         return e instanceof DOMException && e.name === "AbortError"
           ? "הפעולה לקחה יותר מדי זמן — נסי לפרק אותה לשאלות קטנות יותר."
@@ -381,7 +404,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       } finally {
         clearTimeout(timeout);
       }
-    }, [tenantId]);
+    }, [tenantId, messages]);
 
     /** Ship realtime failures to error_logs so they can be diagnosed server-side. */
     const reportRealtimeError = useCallback(async (message: string) => {
