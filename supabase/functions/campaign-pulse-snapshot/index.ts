@@ -8,6 +8,63 @@ const json = (body: unknown, status = 200) =>
 const round = (value: number | null, digits = 2) =>
   value === null ? null : Math.round(value * 10 ** digits) / 10 ** digits
 
+const META_GRAPH_VERSION = 'v21.0'
+const META_ACTIVITY_OBJECTS = new Set(['CAMPAIGN', 'AD_SET', 'AD'])
+
+async function getMetaToken(supabase: any, tenantId: string): Promise<string | null> {
+  let { data } = await supabase.from('tenant_integrations')
+    .select('api_key, shared_from_integration_id')
+    .eq('tenant_id', tenantId)
+    .in('integration_type', ['facebook', 'facebook_lead_ads'])
+    .eq('is_active', true)
+    .limit(1).maybeSingle()
+  if (data && !data.api_key && data.shared_from_integration_id) {
+    const source = await supabase.from('tenant_integrations')
+      .select('api_key').eq('id', data.shared_from_integration_id).eq('is_active', true).maybeSingle()
+    if (source.data?.api_key) data = { ...data, api_key: source.data.api_key }
+  }
+  return data?.api_key || null
+}
+
+async function getLastMetaCampaignChange(
+  token: string | null,
+  adAccountId: string | null,
+): Promise<{ at: string | null; type: string | null; actor: string | null; object: string | null; availability: string }> {
+  if (!adAccountId) return { at: null, type: null, actor: null, object: null, availability: 'ad_account_not_connected' }
+  if (!token) return { at: null, type: null, actor: null, object: null, availability: 'meta_token_unavailable' }
+  try {
+    const account = String(adAccountId).replace(/^act_/, '')
+    const since = new Date(Date.now() - 30 * 86400000).toISOString()
+    const params = new URLSearchParams({
+      fields: 'event_time,date_time_in_timezone,event_type,translated_event_type,actor_name,object_id,object_name,object_type',
+      add_children: 'true',
+      since,
+      limit: '100',
+      access_token: token,
+    })
+    const response = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/act_${account}/activities?${params}`)
+    const payload = await response.json()
+    if (!response.ok || payload?.error || !Array.isArray(payload?.data)) {
+      console.warn('[campaign-pulse] Meta activities unavailable', account, payload?.error?.code || response.status)
+      return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
+    }
+    const latest = payload.data
+      .filter((activity: any) => META_ACTIVITY_OBJECTS.has(String(activity?.object_type || '').toUpperCase()))
+      .sort((a: any, b: any) => new Date(b.event_time || b.date_time_in_timezone || 0).getTime() - new Date(a.event_time || a.date_time_in_timezone || 0).getTime())[0]
+    if (!latest) return { at: null, type: null, actor: null, object: null, availability: 'no_campaign_change_in_30d' }
+    return {
+      at: latest.event_time || latest.date_time_in_timezone || null,
+      type: latest.translated_event_type || latest.event_type || null,
+      actor: latest.actor_name || null,
+      object: latest.object_name || latest.object_id || null,
+      availability: 'available',
+    }
+  } catch (error) {
+    console.warn('[campaign-pulse] Meta activities error', error instanceof Error ? error.message : String(error))
+    return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
+  }
+}
+
 function buildDigest(rows: any[]): string {
   const count = (status: string) => rows.filter((row) => row.status === status).length
   const statusDisplay: Record<string, { icon: string; label: string; priority: number }> = {
@@ -37,7 +94,10 @@ function buildDigest(rows: any[]): string {
         ? `ROAS ${row.roas_7d ?? '—'}`
         : `CPL ₪${row.cpl_7d ?? '—'}`
       const detail = (row.flags || []).length ? ` — ${(row.flags || []).join(', ')}` : ''
-      lines.push(`${display.icon} *${row.client_name}* — ${display.label} — ${metric}${detail}`)
+      const metaChange = row.last_meta_change_at
+        ? ` — שינוי Meta אחרון: ${new Date(row.last_meta_change_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`
+        : ` — שינוי Meta אחרון: ${row.meta_change_availability === 'no_campaign_change_in_30d' ? 'לא נמצא ב-30 יום' : 'לא זמין'}`
+      lines.push(`${display.icon} *${row.client_name}* — ${display.label} — ${metric}${metaChange}${detail}`)
     }
   }
   lines.push('מקור: הנתונים המסונכרנים ב-AIOS. ללא הפעלת כרמן וללא קריאת API נוספת.')
@@ -93,6 +153,21 @@ Deno.serve(async (req) => {
       const ids = tablesByClient.get(table.client_id) || []
       ids.push(table.table_id); tablesByClient.set(table.client_id, ids)
     }
+    const allTableIds = [...tablesByClient.values()].flat()
+    const tableSettingsByClient = new Map<string, any>()
+    if (allTableIds.length) {
+      const { data: configuredTables } = await supabase.from('crm_tables')
+        .select('id, client_id, integration_settings')
+        .in('id', allTableIds)
+      for (const table of configuredTables || []) {
+        const settings = table.integration_settings || {}
+        if (!tableSettingsByClient.has(table.client_id) && (settings.ad_account_id || settings.account_id || settings.meta_account_id)) {
+          tableSettingsByClient.set(table.client_id, settings)
+        }
+      }
+    }
+    const metaToken = await getMetaToken(supabase, tenantId)
+    let metaActivityCalls = 0
 
     const now = new Date()
     const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
@@ -104,6 +179,10 @@ Deno.serve(async (req) => {
     const snapshots: any[] = []
     for (const client of clients || []) {
       const tableIds = tablesByClient.get(client.id) || []
+      const tableSettings = tableSettingsByClient.get(client.id) || {}
+      const adAccountId = tableSettings.ad_account_id || tableSettings.account_id || tableSettings.meta_account_id || null
+      if (adAccountId && metaToken) metaActivityCalls += 1
+      const lastMetaChange = await getLastMetaCampaignChange(metaToken, adAccountId)
       let records: any[] = []
       if (tableIds.length) {
         const response = await supabase.from('crm_records').select('data')
@@ -147,6 +226,11 @@ Deno.serve(async (req) => {
         is_ecommerce: !!client.is_ecommerce, spend_7d: round(spend7), leads_7d: round(leads7),
         cpl_7d: round(cpl7), cpl_change_pct: round(cplChange, 1), purchases_7d: round(purchases),
         revenue_7d: round(revenue), roas_7d: round(roas), flags, source: 'synced_crm',
+        last_meta_change_at: lastMetaChange.at,
+        last_meta_change_type: lastMetaChange.type,
+        last_meta_change_actor: lastMetaChange.actor,
+        last_meta_change_object: lastMetaChange.object,
+        meta_change_availability: lastMetaChange.availability,
         client_name: client.name, agency_name: (client.agencies as any)?.name || null,
       })
     }
@@ -193,7 +277,7 @@ Deno.serve(async (req) => {
     }
     await supabase.from('heartbeat_logs').insert({
       tenant_id: tenantId, tasks_reviewed: snapshots.length,
-      actions_taken: [{ type: 'deterministic_campaign_pulse', sent, ai_used: false, external_api_calls: 0 }],
+      actions_taken: [{ type: 'deterministic_campaign_pulse', sent, ai_used: false, external_api_calls: metaActivityCalls }],
       summary: digest, duration_ms: Date.now() - started,
     })
     results.push({
@@ -204,7 +288,7 @@ Deno.serve(async (req) => {
       delivery_requested: deliveryRequested,
       skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !deliveryClaimed,
       ai_used: false,
-      external_api_calls: 0,
+      external_api_calls: metaActivityCalls,
     })
   }
   return json({ success: true, results })
