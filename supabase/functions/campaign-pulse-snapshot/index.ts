@@ -10,15 +10,15 @@ const round = (value: number | null, digits = 2) =>
 
 function buildDigest(rows: any[]): string {
   const count = (status: string) => rows.filter((row) => row.status === status).length
-  const statusLabel: Record<string, string> = {
-    healthy: 'תקין',
-    warning: 'אזהרה',
-    critical: 'קריטי',
-    no_data: 'אין נתונים',
+  const statusDisplay: Record<string, { icon: string; label: string; priority: number }> = {
+    critical: { icon: '🔴', label: 'קריטי', priority: 0 },
+    warning: { icon: '🟡', label: 'תשומת לב', priority: 1 },
+    no_data: { icon: '🟡', label: 'תשומת לב', priority: 1 },
+    healthy: { icon: '🟢', label: 'תקין', priority: 2 },
   }
   const lines = [
-    'עדכון קמפיינים אוטומטי',
-    `נבדקו ${rows.length} לקוחות פעילים: ${count('healthy')} תקינים, ${count('warning')} דורשים תשומת לב, ${count('critical')} קריטיים, ${count('no_data')} ללא נתונים.`,
+    '*עדכון קמפיינים אוטומטי*',
+    `נבדקו ${rows.length} לקוחות פעילים: 🟢 ${count('healthy')} תקינים | 🟡 ${count('warning') + count('no_data')} דורשים תשומת לב | 🔴 ${count('critical')} קריטיים`,
   ]
   const agencies = new Map<string, any[]>()
   for (const row of rows) {
@@ -26,13 +26,18 @@ function buildDigest(rows: any[]): string {
     agencies.set(agency, [...(agencies.get(agency) || []), row])
   }
   for (const [agency, agencyRows] of agencies) {
-    lines.push('', `*${agency}*`, 'לקוח | מדד 7 ימים | מצב')
-    for (const row of agencyRows) {
+    lines.push('', `*${agency}*`)
+    const sortedRows = [...agencyRows].sort((a, b) =>
+      (statusDisplay[a.status]?.priority ?? 3) - (statusDisplay[b.status]?.priority ?? 3)
+      || String(a.client_name).localeCompare(String(b.client_name), 'he')
+    )
+    for (const row of sortedRows) {
+      const display = statusDisplay[row.status] || { icon: '🟡', label: 'תשומת לב' }
       const metric = row.is_ecommerce
         ? `ROAS ${row.roas_7d ?? '—'}`
         : `CPL ₪${row.cpl_7d ?? '—'}`
-      lines.push(`${row.client_name} | ${metric} | ${statusLabel[row.status] || row.status}`)
-      if ((row.flags || []).length) lines.push(`↳ ${(row.flags || []).join(', ')}`)
+      const detail = (row.flags || []).length ? ` — ${(row.flags || []).join(', ')}` : ''
+      lines.push(`${display.icon} *${row.client_name}* — ${display.label} — ${metric}${detail}`)
     }
   }
   lines.push('מקור: הנתונים המסונכרנים ב-AIOS. ללא הפעלת כרמן וללא קריאת API נוספת.')
@@ -49,8 +54,9 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
   let body: any = {}
   try { body = await req.json() } catch { /* empty cron body */ }
+  const deliveryRequested = body.deliver !== false
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
-    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_phone, campaign_pulse_last_sent_at')
+    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
   const { data: settings, error: settingsError } = await settingsQuery
   if (settingsError) return json({ error: settingsError.message }, 500)
@@ -144,6 +150,18 @@ Deno.serve(async (req) => {
         client_name: client.name, agency_name: (client.agencies as any)?.name || null,
       })
     }
+    const currentClientIds = snapshots.map((snapshot) => snapshot.client_id)
+    let staleSnapshotsQuery = supabase.from('campaign_pulse_snapshots')
+      .delete()
+      .eq('tenant_id', tenantId)
+    if (currentClientIds.length) {
+      staleSnapshotsQuery = staleSnapshotsQuery.not('client_id', 'in', `(${currentClientIds.join(',')})`)
+    }
+    const { error: staleSnapshotsError } = await staleSnapshotsQuery
+    if (staleSnapshotsError) {
+      results.push({ tenant_id: tenantId, error: staleSnapshotsError.message })
+      continue
+    }
     if (snapshots.length) {
       const rows = snapshots.map(({ client_name: _c, agency_name: _a, ...row }) => row)
       const { error } = await supabase.from('campaign_pulse_snapshots')
@@ -153,41 +171,22 @@ Deno.serve(async (req) => {
     const digest = buildDigest(snapshots)
     let sent = false
     let deliveryClaimed = false
-    if (setting.campaign_pulse_enabled && setting.campaign_pulse_phone) {
+    if (deliveryRequested && setting.campaign_pulse_enabled) {
       const claim = await supabase.rpc('claim_campaign_pulse_delivery', { p_tenant_id: tenantId })
       deliveryClaimed = claim.data === true && !claim.error
       if (claim.error) console.error('Failed to claim campaign pulse delivery:', claim.error.message)
     }
     if (deliveryClaimed) {
-      const { data: senderIntegration } = await supabase
-        .from('tenant_integrations')
-        .select('user_id')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true)
-        .not('user_id', 'is', null)
-        .limit(1)
-        .maybeSingle()
-      if (!senderIntegration?.user_id) {
-        console.error('No active user-owned Green API integration for campaign pulse tenant:', tenantId)
-        await supabase.from('tenant_heartbeat_settings')
-          .update({ campaign_pulse_last_sent_at: null }).eq('tenant_id', tenantId)
-        results.push({ tenant_id: tenantId, error: 'No active WhatsApp sender connection' })
-        continue
-      }
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SERVICE_KEY}` },
-        body: JSON.stringify({
-          phoneNumber: setting.campaign_pulse_phone,
-          message: digest,
-          tenantId,
-          senderUserId: senderIntegration.user_id,
-        }),
+      // Reuse the tenant's existing "Carmen Direct" automation and its most
+      // recent direct chat. This keeps the sender, recipient and provider
+      // identical to Carmen's normal replies (Manus WA or Green API).
+      const delivery = await supabase.rpc('claude_notify_david', {
+        p_message: digest,
+        p_tenant: tenantId,
       })
-      sent = response.ok
+      sent = !delivery.error && delivery.data?.queued === true
       if (!sent) {
-        console.error('Failed to deliver deterministic campaign pulse:', await response.text())
+        console.error('Failed to queue deterministic campaign pulse via Carmen Direct:', delivery.error?.message)
         await supabase.from('tenant_heartbeat_settings')
           .update({ campaign_pulse_last_sent_at: null }).eq('tenant_id', tenantId)
       }
@@ -201,7 +200,9 @@ Deno.serve(async (req) => {
       tenant_id: tenantId,
       clients: snapshots.length,
       sent,
-      skipped_duplicate_delivery: setting.campaign_pulse_enabled && !!setting.campaign_pulse_phone && !deliveryClaimed,
+      delivery_channel: 'carmen_direct',
+      delivery_requested: deliveryRequested,
+      skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !deliveryClaimed,
       ai_used: false,
       external_api_calls: 0,
     })
