@@ -196,6 +196,7 @@ const ALL_TOOLS = [
   { name: 'create_client', description: 'יצירת לקוח חדש במערכת', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם העסק/לקוח' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, agency_id: { type: 'string', description: 'מזהה סוכנות (אופציונלי)' }, notes: { type: 'string' } }, required: ['name'] } },
   { name: 'update_client', description: 'עדכון פרטי לקוח קיים', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] }, notes: { type: 'string' } }, required: ['client_id'] } },
   { name: 'update_client_status', description: 'עדכון סטטוס לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] } }, required: ['client_id', 'status'] } },
+  { name: 'set_campaign_table_active', description: 'סימון טבלת קמפיין כפעילה/כבויה (crm_tables.campaign_active). השתמשי כשאומרים לך שקמפיין של לקוח הופסק או חזר לפעול — בדיקות דופק ובדיקות חיבורים מדווחות רק על טבלאות שמסומנות פעילות. זיהוי לפי client_id (כל טבלאות הקמפיינים של הלקוח), table_id מדויק, או table_name (חיפוש חלקי).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, table_id: { type: 'string' }, table_name: { type: 'string', description: 'שם או slug של הטבלה (חיפוש חלקי)' }, active: { type: 'boolean', description: 'true=הקמפיין פעיל ומדווחים עליו, false=כבוי ולא מדווחים' } }, required: ['active'] } },
   // LEADS - full CRUD
   { name: 'update_lead', description: 'עדכון פרטי ליד קיים (שם, טלפון, אימייל, מקור, הערות)', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, company_name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, source: { type: 'string' }, notes: { type: 'string' }, follow_up_date: { type: 'string', description: 'תאריך מעקב בפורמט YYYY-MM-DD' } }, required: ['lead_id'] } },
   { name: 'delete_lead', description: 'מחיקת ליד מהמערכת', parameters: { type: 'object', properties: { lead_id: { type: 'string' } }, required: ['lead_id'] } },
@@ -1826,6 +1827,18 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('clients').update({ status: args.status }).eq('id', args.client_id).in('tenant_id', accessibleTenantIds).select('id, name, status').single()
       if (error) throw error
       return data
+    }
+    case 'set_campaign_table_active': {
+      if (!args.table_id && !args.client_id && !args.table_name) throw new Error('נדרש client_id, table_id או table_name')
+      if (args.client_id) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      let q = supabase.from('crm_tables').update({ campaign_active: !!args.active }).in('tenant_id', accessibleTenantIds)
+      if (args.table_id) q = q.eq('id', args.table_id)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.table_name) q = q.or(`name.ilike.%${String(args.table_name).replace(/[%,]/g, '')}%,slug.ilike.%${String(args.table_name).replace(/[%,]/g, '')}%`)
+      const { data, error } = await q.select('id, name, client_id, campaign_active')
+      if (error) throw error
+      if (!data?.length) throw new Error('לא נמצאה טבלת קמפיין תואמת')
+      return { updated: data.length, campaign_active: !!args.active, tables: data.map((t: any) => t.name) }
     }
     // LEADS - full CRUD
     case 'update_lead': {
