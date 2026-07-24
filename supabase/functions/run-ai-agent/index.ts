@@ -73,6 +73,75 @@ async function resolveLLMTarget(
   return { url: 'https://api.openai.com/v1/chat/completions', key, model: m.replace(/^openai\//, '') }
 }
 
+// ─── Provider failover chain ───
+// When the agent's primary provider is out of quota/credit (Gemini spend cap,
+// OpenAI credit gone, Anthropic balance low), Carmen automatically retries the
+// SAME request against the next provider that has a configured key — so she keeps
+// working instead of failing the whole conversation. Only providers whose key
+// exists are included; the agent's own engine is always tried first.
+type LLMProvider = 'openai' | 'google' | 'anthropic'
+interface LLMTarget { url: string; key: string; model: string; label: string; provider: LLMProvider }
+const LLM_FALLBACK_ORDER = ['google/gemini-3-flash-preview', 'openai/gpt-5.4-mini', 'anthropic/claude-sonnet-4-6']
+
+function providerOf(fullId: string): LLMProvider {
+  const l = (fullId || '').toLowerCase()
+  if (l.startsWith('google/') || l.includes('gemini')) return 'google'
+  if (l.startsWith('anthropic/') || l.includes('claude')) return 'anthropic'
+  return 'openai'
+}
+
+async function buildLLMChain(supabase: any, tenantId: string, primaryFullId: string): Promise<LLMTarget[]> {
+  const ordered: string[] = []
+  const add = (id: string) => { const full = resolveModelId(id); if (!ordered.includes(full)) ordered.push(full) }
+  add(primaryFullId)
+  for (const m of LLM_FALLBACK_ORDER) add(m)
+  const chain: LLMTarget[] = []
+  for (const full of ordered) {
+    try {
+      const t = await resolveLLMTarget(supabase, tenantId, full) // throws if that provider's key is missing
+      chain.push({ ...t, label: full, provider: providerOf(full) })
+    } catch { /* provider key not configured → skip it in the chain */ }
+  }
+  return chain
+}
+
+// OpenAI's Chat Completions API hard-caps the tools array at 128 functions per
+// request; Google/Anthropic allow far more. When targeting OpenAI with a larger
+// toolset, drop low-priority niche tools first, then hard-slice as a last resort,
+// so Carmen keeps her full daily toolkit and only sheds rarely-used extras.
+const OPENAI_MAX_TOOLS = 128
+const LOW_PRIORITY_TOOLS = new Set([
+  'send_message_to_manus', 'get_subagent_result', 'get_batch_results', 'delegate_parallel',
+  'duplicate_facebook_campaign', 'sync_maskyoo_cdr', 'create_supplier', 'create_product',
+  'create_sales_person', 'create_agency', 'prioritize_tasks', 'propose_automation',
+  'create_whatsapp_instance', 'get_whatsapp_qr_link', 'connect_google_ads_account', 'save_media_from_chat',
+])
+function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
+  if (target.provider !== 'openai' || tools.length <= OPENAI_MAX_TOOLS) return tools
+  const kept = tools.filter((t) => !LOW_PRIORITY_TOOLS.has(t?.function?.name))
+  const capped = kept.length <= OPENAI_MAX_TOOLS ? kept : kept.slice(0, OPENAI_MAX_TOOLS)
+  console.log(`[AGENT] OpenAI tool cap: ${tools.length} → ${capped.length}`)
+  return capped
+}
+
+// Surface an automatic provider switch so David sees it (intel feed + WhatsApp).
+// Deduped to once per 30 min so a sustained outage doesn't spam the channel.
+async function recordProviderFailover(supabase: any, tenantId: string, fromLabel: string, toLabel: string, reason: string) {
+  try {
+    const since = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    const { data: recent } = await supabase.from('integration_alerts_log')
+      .select('id').eq('alert_type', 'provider_failover').gte('fired_at', since).limit(1)
+    if (recent?.length) return
+    await supabase.from('integration_alerts_log').insert({
+      tenant_id: tenantId, provider: providerOf(toLabel), alert_type: 'provider_failover',
+      reason: `כרמן עברה אוטומטית מ-${fromLabel} ל-${toLabel} (${reason})`,
+    })
+    await supabase.rpc('claude_notify_david', {
+      p_message: `♻️ כרמן המשיכה לעבוד ללא הפרעה: הספק ${fromLabel} נגמר/נחסם ועברתי אוטומטית ל-${toLabel}. כדאי לטעון קרדיט לספק המקורי.`,
+    }).then(() => {}, () => {})
+  } catch { /* reporting must never break the reply */ }
+}
+
 // Rough per-model pricing (USD per 1M tokens in/out) for the usage panel.
 // Unknown models log tokens with a null cost rather than a wrong one.
 function estimateLLMCostUSD(model: string, tokensIn: number, tokensOut: number): number | null {
@@ -4406,30 +4475,50 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       return finalOutput
     }
 
-    // Route to the org's own LLM provider (OpenAI/Google/Anthropic) using the
-    // keys stored in the "llm" integration.
-    const llm = await resolveLLMTarget(supabase, agent.tenant_id, model)
-    console.log(`[AGENT] LLM target=${llm.url} model=${llm.model}`)
+    // Route to the org's own LLM provider(s) using the keys stored in the "llm"
+    // integration. Build a fallback chain so Carmen automatically continues on the
+    // next funded provider if the primary runs out of quota/credit mid-request.
+    const llmChain = await buildLLMChain(supabase, agent.tenant_id, model)
+    if (llmChain.length === 0) throw new Error('לא מוגדר אף מפתח מודל AI פעיל באינטגרציית מודלי AI')
+    let activeIdx = 0
+    let llm = llmChain[activeIdx]
+    console.log(`[AGENT] LLM chain: ${llmChain.map((c) => c.label).join(' → ')}`)
 
     // Usage metering: accumulated across rounds, written to agent_action_log
     let usageTokensIn = 0
     let usageTokensOut = 0
 
     for (let round = 0; round < maxRounds; round++) {
-      const payload: any = { model: llm.model, messages }
-      if (safeTemp !== undefined) payload.temperature = safeTemp
-      if (toolsForAPI.length > 0) payload.tools = toolsForAPI
+      // Provider failover: try the active provider; on a quota/credit error, advance
+      // to the next provider in the chain and retry THIS round (no round consumed).
+      let res!: Response
+      while (true) {
+        const cappedTools = capToolsForTarget(llm, toolsForAPI)
+        const payload: any = { model: llm.model, messages }
+        if (safeTemp !== undefined) payload.temperature = safeTemp
+        if (cappedTools.length > 0) payload.tools = cappedTools
 
-      console.log(`[AGENT] Round ${round + 1}/${maxRounds}, model=${llm.model}`)
-      const res = await fetch(llm.url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${llm.key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+        console.log(`[AGENT] Round ${round + 1}/${maxRounds}, provider=${llm.label}`)
+        res = await fetch(llm.url, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${llm.key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (res.ok) break
 
-      if (!res.ok) {
         const err = await res.text()
-        console.error(`[AGENT] AI error: ${res.status}`, err.substring(0, 200))
+        console.error(`[AGENT] AI error ${res.status} on ${llm.label}:`, err.substring(0, 200))
+        // A 429, or any body signalling exhausted balance/quota, triggers failover.
+        const outOfCredit = res.status === 429 ||
+          /insufficient_quota|exceeded its|spending cap|credit balance|RESOURCE_EXHAUSTED|quota/i.test(err)
+        if (outOfCredit && activeIdx < llmChain.length - 1) {
+          const from = llm.label
+          activeIdx++
+          llm = llmChain[activeIdx]
+          const reason = res.status === 429 ? 'מגבלת קצב/קרדיט' : 'קרדיט נגמר'
+          recordProviderFailover(supabase, agent.tenant_id, from, llm.label, reason).catch(() => {})
+          continue // retry the same round on the next provider
+        }
         if (res.status === 429) throw new Error('מגבלת קצב. נסה שוב.')
         throw new Error(`AI error: ${res.status} ${err}`)
       }
@@ -4550,11 +4639,11 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         },
         user_id: callerUserId,
         tool_calls: toolLog.length,
-        model,
+        model: llm.label, // the provider that actually served the request (after any failover)
         duration_ms: executionTime,
         tokens_in: usageTokensIn || null,
         tokens_out: usageTokensOut || null,
-        cost_usd: estimateLLMCostUSD(model, usageTokensIn, usageTokensOut),
+        cost_usd: estimateLLMCostUSD(llm.label, usageTokensIn, usageTokensOut),
       })
     } catch (e: any) {
       console.error('[AGENT] action_log insert failed:', e?.message)

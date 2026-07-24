@@ -90,7 +90,8 @@ export function useIntelFeed(tenantId: string | null) {
         ...integr.map((a: any): FeedItem => {
           const map: Record<string, { sev: Severity; title: string }> = {
             reconnected: { sev: "info", title: a.reason || `${a.provider} התחבר מחדש` },
-            quota_out: { sev: "critical", title: "🚨 הקרדיט ב-OpenAI נגמר — הקול והצ'אט מושבתים" },
+            quota_out: { sev: "critical", title: a.reason || `🚨 הקרדיט ב-${a.provider} נגמר` },
+            provider_failover: { sev: "warning", title: a.reason || `♻️ כרמן עברה אוטומטית לספק AI אחר` },
             budget_95: { sev: "critical", title: a.reason || "השימוש ב-AI חצה 95% מהתקציב החודשי" },
             budget_80: { sev: "warning", title: a.reason || "השימוש ב-AI חצה 80% מהתקציב החודשי" },
           };
@@ -177,6 +178,8 @@ export function useHealth(tenantId: string | null) {
       const mcpProbe = latestOf("mcp");
       const openaiProbe = latestOf("openai");
       const quotaProbe = latestOf("openai_quota");
+      const googleQuotaProbe = latestOf("google_quota");
+      const anthropicQuotaProbe = latestOf("anthropic_quota");
 
       const services: ServiceHealth[] = [
         {
@@ -217,6 +220,20 @@ export function useHealth(tenantId: string | null) {
           detail: quotaProbe ? quotaProbe.detail : "ממתין לבדיקה הבאה",
           history: historyOf("openai_quota"),
         },
+        // Gemini / Claude credit — only shown when that provider key is configured
+        // (Carmen fails over between funded providers automatically).
+        ...(googleQuotaProbe ? [{
+          key: "google_quota", label: "קרדיט Gemini",
+          status: googleQuotaProbe.status,
+          detail: googleQuotaProbe.detail,
+          history: historyOf("google_quota"),
+        }] : []),
+        ...(anthropicQuotaProbe ? [{
+          key: "anthropic_quota", label: "קרדיט Claude",
+          status: anthropicQuotaProbe.status,
+          detail: anthropicQuotaProbe.detail,
+          history: historyOf("anthropic_quota"),
+        }] : []),
         {
           key: "integrations", label: "אינטגרציות",
           status: ihRes.error || !ihRes.data?.length ? "unknown" : openCircuits.length ? "warn" : "ok",
