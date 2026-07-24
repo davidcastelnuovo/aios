@@ -10,15 +10,15 @@ const round = (value: number | null, digits = 2) =>
 
 function buildDigest(rows: any[]): string {
   const count = (status: string) => rows.filter((row) => row.status === status).length
-  const statusLabel: Record<string, string> = {
-    healthy: 'תקין',
-    warning: 'אזהרה',
-    critical: 'קריטי',
-    no_data: 'אין נתונים',
+  const statusDisplay: Record<string, { icon: string; label: string; priority: number }> = {
+    critical: { icon: '🔴', label: 'קריטי', priority: 0 },
+    warning: { icon: '🟡', label: 'תשומת לב', priority: 1 },
+    no_data: { icon: '🟡', label: 'תשומת לב', priority: 1 },
+    healthy: { icon: '🟢', label: 'תקין', priority: 2 },
   }
   const lines = [
-    'עדכון קמפיינים אוטומטי',
-    `נבדקו ${rows.length} לקוחות פעילים: ${count('healthy')} תקינים, ${count('warning')} דורשים תשומת לב, ${count('critical')} קריטיים, ${count('no_data')} ללא נתונים.`,
+    '*עדכון קמפיינים אוטומטי*',
+    `נבדקו ${rows.length} לקוחות פעילים: 🟢 ${count('healthy')} תקינים | 🟡 ${count('warning') + count('no_data')} דורשים תשומת לב | 🔴 ${count('critical')} קריטיים`,
   ]
   const agencies = new Map<string, any[]>()
   for (const row of rows) {
@@ -26,13 +26,18 @@ function buildDigest(rows: any[]): string {
     agencies.set(agency, [...(agencies.get(agency) || []), row])
   }
   for (const [agency, agencyRows] of agencies) {
-    lines.push('', `*${agency}*`, 'לקוח | מדד 7 ימים | מצב')
-    for (const row of agencyRows) {
+    lines.push('', `*${agency}*`)
+    const sortedRows = [...agencyRows].sort((a, b) =>
+      (statusDisplay[a.status]?.priority ?? 3) - (statusDisplay[b.status]?.priority ?? 3)
+      || String(a.client_name).localeCompare(String(b.client_name), 'he')
+    )
+    for (const row of sortedRows) {
+      const display = statusDisplay[row.status] || { icon: '🟡', label: 'תשומת לב' }
       const metric = row.is_ecommerce
         ? `ROAS ${row.roas_7d ?? '—'}`
         : `CPL ₪${row.cpl_7d ?? '—'}`
-      lines.push(`${row.client_name} | ${metric} | ${statusLabel[row.status] || row.status}`)
-      if ((row.flags || []).length) lines.push(`↳ ${(row.flags || []).join(', ')}`)
+      const detail = (row.flags || []).length ? ` — ${(row.flags || []).join(', ')}` : ''
+      lines.push(`${display.icon} *${row.client_name}* — ${display.label} — ${metric}${detail}`)
     }
   }
   lines.push('מקור: הנתונים המסונכרנים ב-AIOS. ללא הפעלת כרמן וללא קריאת API נוספת.')
