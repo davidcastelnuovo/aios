@@ -1495,7 +1495,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
             'Content-Type': 'application/json',
             Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
           },
-          body: JSON.stringify({ tenant_id: tenantId }),
+          body: JSON.stringify({ tenant_id: tenantId, deliver: false, source: 'carmen_cache_refresh' }),
         })
         if (refresh.ok) {
           autoRefreshed = true
