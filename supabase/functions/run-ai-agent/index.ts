@@ -3683,7 +3683,7 @@ type Emit = ((obj: any) => void) | undefined
 
 async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Promise<Response> {
   try {
-    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history, wa_notify } = bodyJson
+    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history, conversation_id, wa_notify } = bodyJson
     console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
 
     if (!command_text) throw new Error('Missing command_text')
@@ -3780,6 +3780,53 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const isManagerRoleCaller = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
     const isTeamManagerCaller = callerRole === 'team_manager'
 
+    // The server is the source of truth for Command Center continuity. The
+    // browser may send a recent in-memory history for a brand-new thread, but
+    // once a conversation id exists we reload it from the DB and persist every
+    // completed turn here. This also makes Realtime ask_carmen calls continue
+    // the exact same conversation as typed chat.
+    let serverConversationId: string | null = null
+    let serverConversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
+    if ((surface === 'internal_chat' || surface === 'aios') && callerUserId) {
+      if (conversation_id) {
+        const { data: existingConversation } = await supabase
+          .from('ai_conversations')
+          .select('id, messages')
+          .eq('id', conversation_id)
+          .eq('user_id', callerUserId)
+          .eq('tenant_id', resolvedTenantId)
+          .maybeSingle()
+        if (existingConversation) {
+          serverConversationId = existingConversation.id
+          serverConversationHistory = (Array.isArray(existingConversation.messages) ? existingConversation.messages : [])
+            .filter((m: any) => m?.role === 'user' || m?.role === 'assistant')
+            .map((m: any) => ({ role: m.role, content: String(m.content || '') }))
+            .slice(-24)
+        }
+      }
+      if (!serverConversationId) {
+        const clientHistory = (Array.isArray(conversation_history) ? conversation_history : [])
+          .filter((m: any) => m?.role === 'user' || m?.role === 'assistant')
+          .map((m: any) => ({ role: m.role, content: String(m.content || '') }))
+          .slice(-24)
+        const { data: createdConversation } = await supabase
+          .from('ai_conversations')
+          .insert({
+            user_id: callerUserId,
+            tenant_id: resolvedTenantId,
+            title: String(command_text).slice(0, 60),
+            messages: clientHistory,
+          })
+          .select('id')
+          .single()
+        if (createdConversation?.id) {
+          serverConversationId = createdConversation.id
+          serverConversationHistory = clientHistory
+        }
+      }
+      if (serverConversationId && emit) emit({ type: 'conversation_id', id: serverConversationId })
+    }
+
 
     // ─── 2.7. Code-level instruction capture (cross-channel learning) ───
     // Don't depend on the model deciding to call save_memory. Whenever the user
@@ -3857,6 +3904,47 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       source_tenant_id: s.source_tenant_id,
       source_tenant_name: s.tenants?.name || 'other-tenant',
     }))
+    const memoryTenantIds = Array.from(new Set([
+      resolvedTenantId,
+      ...sharedAgencies.map((agency: any) => agency.source_tenant_id),
+    ]))
+    const [pointerMemoryRes, episodeMemoryRes] = await Promise.all([
+      supabase.from('carmen_memory_pointers')
+        .select('title, summary, category, subcategory, importance, ref_date')
+        .in('tenant_id', memoryTenantIds)
+        .is('valid_until', null)
+        .order('importance', { ascending: false })
+        .order('ref_date', { ascending: false })
+        .limit(80),
+      supabase.from('carmen_memory_episodes')
+        .select('topic, summary, topic_tags, importance, ref_date')
+        .in('tenant_id', memoryTenantIds)
+        .order('importance', { ascending: false })
+        .order('ref_date', { ascending: false })
+        .limit(50),
+    ])
+    const memoryTerms = String(command_text || '')
+      .toLocaleLowerCase('he')
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((term: string) => term.length >= 3)
+    const scoreMemory = (text: string, importance: number) =>
+      memoryTerms.reduce((score: number, term: string) =>
+        score + (text.toLocaleLowerCase('he').includes(term) ? 20 : 0), importance / 10)
+    const relevantLongTermMemory = [
+      ...(pointerMemoryRes.data || []).map((row: any) => ({
+        label: [row.category, row.subcategory].filter(Boolean).join('/'),
+        text: [row.title, row.summary].filter(Boolean).join(': '),
+        score: scoreMemory(`${row.title || ''} ${row.summary || ''}`, row.importance || 0),
+      })),
+      ...(episodeMemoryRes.data || []).map((row: any) => ({
+        label: 'episode',
+        text: [row.topic, row.summary].filter(Boolean).join(': '),
+        score: scoreMemory(`${row.topic || ''} ${row.summary || ''} ${(row.topic_tags || []).join(' ')}`, row.importance || 0),
+      })),
+    ]
+      .filter((item: any) => item.text)
+      .sort((a: any, b: any) => b.score - a.score)
+      .slice(0, 12)
     const ownAgencyList = (agenciesRes.data || []).map((a: any) => `${a.name} (${a.id})`).join(', ')
     const sharedAgencyList = sharedAgencies.map((a: any) => `${a.name} [משותפת מ-${a.source_tenant_name}] (${a.id})`).join(', ')
     const [leadsData, clientsData, tasksData] = statsRes
@@ -4316,6 +4404,12 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     }
     } // ─── end V1 PROMPT BUILDING (else branch of shouldUseV2Prompt) ───
 
+    if (isCarmen && relevantLongTermMemory.length > 0) {
+      systemPrompt += `\n\n🧠 === זיכרון ארוך רלוונטי שנשלף אוטומטית ===
+זהו זיכרון העבודה שלך מהמערכת, לא "מערכת אחרת". השתמשי בו כשהוא רלוונטי לבקשה, אך העדיפי נתוני כלים חיים כשיש סתירה.
+${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).join('\n')}`
+    }
+
     // ─── Mood / persona modulation (swappable tone layer) ───
     // ai_agents.mood ∈ {'fun','focused','tired','angry','random'} | null.
     // Colours TONE ONLY — it never overrides the hard rules (accuracy, anti-bluff,
@@ -4380,7 +4474,10 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     // - On 'task' surface (a subagent itself running via run-agent-task): hide delegation tools entirely
     //   so a subagent can't recursively spawn more subagents.
     const cmd = (command_text || '').toString()
-    const isStoredPulseRequest = /בדיקת\s*דופק|\bpulse\s*check\b/i.test(cmd)
+    // "דופק" is intentionally sufficient: speech transcription frequently
+    // mangles the word before it ("ביגת דופק", "מדיקת דופק"). A pulse request
+    // must never depend on the model deciding whether to call the data tool.
+    const isStoredPulseRequest = /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
       && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
@@ -4482,7 +4579,9 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     let messages: any[] = [{ role: 'system', content: systemPrompt }]
     
     // Add conversation history from Carmen WhatsApp sessions
-    const history = Array.isArray(conversation_history) ? conversation_history : []
+    const history = serverConversationId
+      ? serverConversationHistory
+      : (Array.isArray(conversation_history) ? conversation_history : [])
     for (const h of history) {
       if (h.role === 'user' || h.role === 'assistant') {
         messages.push({ role: h.role, content: h.content })
@@ -4640,6 +4739,23 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     const executionTime = Date.now() - startTime
 
+    if (serverConversationId && callerUserId) {
+      const persistedMessages = [
+        ...serverConversationHistory,
+        { role: 'user', content: String(command_text) },
+        { role: 'assistant', content: String(finalOutput || '') },
+      ].slice(-60)
+      const { error: conversationSaveError } = await supabase
+        .from('ai_conversations')
+        .update({ messages: persistedMessages, updated_at: new Date().toISOString() })
+        .eq('id', serverConversationId)
+        .eq('user_id', callerUserId)
+        .eq('tenant_id', resolvedTenantId)
+      if (conversationSaveError) {
+        console.error('[AGENT] conversation persistence failed:', conversationSaveError.message)
+      }
+    }
+
     // 6. Log to automation_logs
     if (automation_id) {
       await supabase.from('automation_logs').insert({
@@ -4749,6 +4865,9 @@ Deno.serve(async (req) => {
 
   let bodyJson: any = {}
   try { bodyJson = await req.json() } catch { /* ignore */ }
+  // Never trust a browser-supplied user id. Bind interactive requests to the
+  // verified JWT identity; service-to-service calls keep their explicit user.
+  if (auth.kind === 'user') bodyJson.user_id = auth.userId
 
   const wantStream = bodyJson.stream === true
   const surface: Surface = bodyJson.surface === 'aios' ? 'aios'
