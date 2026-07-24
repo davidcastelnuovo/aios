@@ -4226,6 +4226,20 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       }
     }
 
+    // ─── Command Center (internal_chat) rendering layer ───
+    // The dashboard chat renders full GitHub-flavored Markdown (ReactMarkdown +
+    // remark-gfm), unlike WhatsApp. Placed after the V1/V2 prompt building so it
+    // overrides the WhatsApp plain-text + brevity rules on this surface only.
+    if (isCarmen && surface === 'internal_chat') {
+      systemPrompt += `\n\n🖥️ === תצוגת דשבורד (חובה — גובר על כללי WhatsApp) ===
+את עונה עכשיו בצ'אט של ה-Command Center, שמציג Markdown מלא (כולל טבלאות GFM) — לא ב-WhatsApp.
+• כלל "בלי markdown" וכלל "1–3 משפטים" לא חלים כאן. מותר ורצוי Markdown מלא.
+• כל דוח או רשימה עם 3+ פריטים או כמה שדות לפריט (בדיקת דופק, סקירת לקוחות, קמפיינים, לידים, משימות) — חובה להציג כטבלת Markdown מסודרת עם שורת כותרות, ולא כטקסט רץ.
+• מבנה תשובה לדוח: משפט פתיחה קצר → הטבלה → 1–3 שורות תובנות/חריגים בסוף (אפשר כרשימת נקודות).
+• דוגמה לבדיקת דופק:\n| לקוח | סטטוס | קמפיינים | לידים | עלות/ליד | הערה |\n|---|---|---|---|---|---|\n• מספרים בתאים כמספרים (בלי מלל מיותר), הערות קצרות; סטטוס עם אימוג'י (🟢/🟡/🔴) כשרלוונטי.
+• תשובות קצרות לשאלות פשוטות נשארות קצרות — טבלה רק כשיש באמת נתונים טבלאיים.`
+    }
+
     // 4. Filter tools
     const allowedTools = (agent.allowed_tools || []) as string[]
     let filteredTools = allowedTools.length > 0

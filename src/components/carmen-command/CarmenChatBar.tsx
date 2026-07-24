@@ -700,14 +700,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                       ? "mr-auto bg-[rgba(76,195,255,0.18)]"
                       : "ml-auto border border-[var(--cc-line)] bg-[rgba(14,20,40,0.8)]"
                   }`}>
-                    <div className="prose prose-invert prose-sm max-w-none [&_p]:my-1">
+                    <div className="cc-md prose prose-invert prose-sm max-w-none [&_p]:my-1">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content ?? ""}</ReactMarkdown>
                     </div>
                   </div>
                 ))}
                 {streamingText && (
                   <div className="ml-auto max-w-[85%] rounded-lg border border-[var(--cc-line)] bg-[rgba(14,20,40,0.8)] px-3 py-2 text-sm">
-                    <div className="prose prose-invert prose-sm max-w-none [&_p]:my-1">
+                    <div className="cc-md prose prose-invert prose-sm max-w-none [&_p]:my-1">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingText}</ReactMarkdown>
                     </div>
                   </div>
