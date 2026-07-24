@@ -5,7 +5,7 @@
 // → gateway fetches by URL.
 //
 // POST body: { tenant_id: string, to: string, text: string, voice?: string }
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import { aiSpeak } from '../_shared/ai.ts';
 
 const DEFAULT_GATEWAY = 'https://whatsappgw-pzpyrrww.manus.space';
