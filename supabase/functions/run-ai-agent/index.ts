@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 84104)
-Total output lines: 4912
-
 // redeploy trigger (restore #5): a Grok-driven session replaced this file — in git AND in prod (v81) — with a
 // literal "REPLACE_WITH_FIXED_VERSION" placeholder, so the deployed function had no code at all and every Carmen
 // call failed. This restores the last known-good monolithic version (cb03f8b, includes Maskyoo tools from PR #102).
@@ -778,7 +775,2659 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { lead_id: data.id, company_name: data.company_name, status: data.status }
     }
     case 'list_leads': {
-      let query = supabas…34104 tokens truncated… attendee_email, attendee_name, title, date, time, duration_minutes, notes } = args
+      let query = supabase.from('leads').select('id, company_name, contact_name, phone, status, source, created_at').in('tenant_id', accessibleTenantIds).order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (args.status) query = query.eq('status', args.status)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, leads: data }
+    }
+    case 'update_lead_status': {
+      const { data, error } = await supabase.from('leads').update({ status: args.status }).eq('id', args.lead_id).in('tenant_id', accessibleTenantIds).select('id, company_name, status').single()
+      if (error) throw error
+      return data
+    }
+    case 'add_lead_update': {
+      const { data, error } = await supabase.from('lead_updates').insert({ lead_id: args.lead_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
+      if (error) throw error
+      return { update_id: data.id }
+    }
+    case 'create_task': {
+      let campaignerId = args.campaigner_id
+      let agencyId = null
+      // Priority: 1) explicit arg, 2) caller identity (from WhatsApp phone), 3) user profile, 4) tenant owner
+      if (!campaignerId && callerCampaignerId) {
+        campaignerId = callerCampaignerId
+      }
+      if (!campaignerId && userId && userId !== 'system') {
+        const { data: profile } = await supabase.from('profiles').select('campaigner_id').eq('id', userId).single()
+        campaignerId = profile?.campaigner_id
+      }
+      // Fallback for system/WhatsApp without phone match: assign to tenant owner
+      if (!campaignerId) {
+        const { data: ownerRole } = await supabase.from('user_roles').select('user_id').eq('role', 'owner').limit(1).maybeSingle()
+        if (ownerRole?.user_id) {
+          const { data: ownerProfile } = await supabase.from('profiles').select('campaigner_id').eq('id', ownerRole.user_id).maybeSingle()
+          campaignerId = ownerProfile?.campaigner_id
+        }
+      }
+      if (campaignerId) {
+        const { data: campAgency } = await supabase.from('campaigner_agencies').select('agency_id').eq('campaigner_id', campaignerId).limit(1).single()
+        agencyId = campAgency?.agency_id
+      }
+      if (!agencyId) {
+        const { data: defaultAgency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).eq('is_default', true).limit(1).maybeSingle()
+        if (defaultAgency) {
+          agencyId = defaultAgency.id
+        } else {
+          const { data: fallbackAgency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).order('created_at', { ascending: true }).limit(1).single()
+          agencyId = fallbackAgency?.id
+        }
+      }
+      const { data, error } = await supabase.from('tasks').insert({
+        title: args.title, agency_id: agencyId, campaigner_id: campaignerId,
+        tenant_id: tenantId, priority: args.priority || 5, status: 'open', task_type: 'other',
+        client_id: args.client_id || null, lead_id: args.lead_id || null,
+        due_date: args.due_date, due_time: args.due_time, notes: args.notes,
+        duration_minutes: args.duration_minutes || null,
+      }).select('id, title, status').single()
+      if (error) throw error
+      // Auto-sync to Google Calendar — fire-and-forget; never fails the create_task call
+      if (data?.id && args.due_date && args.due_time && campaignerId) {
+        tryCreateCalendarEventForTask(
+          supabase, data.id, args.title, args.due_date, args.due_time, args.duration_minutes ?? null, campaignerId
+        ).catch(e => console.warn('[create_task] calendar sync uncaught:', e?.message))
+      }
+      return { task_id: data.id, title: data.title, status: data.status }
+    }
+    case 'create_agent_task': {
+      // Create task in agent_tasks table (for Carmen herself)
+      // If this looks like a reminder and we know the caller's WhatsApp phone,
+      // inject explicit reminder-delivery instructions so when the dispatcher
+      // fires the task, the agent knows where to send the reminder.
+      const skillsArr: string[] = Array.isArray(args.task_skills) ? args.task_skills : []
+      const titleStr = String(args.title || '')
+      const descStr = String(args.description || '')
+      const looksLikeReminder = skillsArr.includes('reminder')
+        || /תזכור|reminder|להזכיר|תזכר/i.test(titleStr + ' ' + descStr)
+      let finalDescription = descStr || null
+      if (looksLikeReminder && callerPhone) {
+        const reminderText = descStr || titleStr
+        const instruction = `\n\n[הוראת ביצוע אוטומטית לזמן ההפעלה]\nכשמשימה זו רצה, חובה לשלוח עכשיו הודעת WhatsApp תזכורת לטלפון ${callerPhone} עם הטקסט בעברית, בקצרה ובחום:\n"${reminderText}"\nהשתמשי בכלי send_whatsapp_via_gateway (אם יש integrationId זמין) או send_message (אם phone=${callerPhone} שייך ל-lead/client). אם אף כלי לא זמין — השתמשי בכל כלי WhatsApp אחר שיש לך. אסור לסיים את המשימה בלי לשלוח בפועל. אל תיצרי משימת agent חדשה.`
+        finalDescription = (descStr ? descStr : titleStr) + instruction
+      }
+      const taskData: any = {
+        agent_id: agentId || args.agent_id,
+        tenant_id: tenantId,
+        title: args.title,
+        description: finalDescription,
+        priority: args.priority || 5,
+        status: 'pending',
+        schedule_type: args.schedule_type || 'once',
+        scheduled_at: args.scheduled_at || null,
+        cron_expression: args.cron_expression || null,
+        task_skills: args.task_skills ? JSON.stringify(args.task_skills) : null,
+        task_mode: 'agent',
+        enabled: true,
+        created_by: userId !== 'system' ? userId : null,
+      }
+      const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type, scheduled_at').single()
+      if (error) throw error
+      const scheduledIl = data.scheduled_at
+        ? new Date(data.scheduled_at).toLocaleString('he-IL', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' })
+        : null
+      return { agent_task_id: data.id, title: data.title, status: data.status, schedule_type: data.schedule_type, scheduled_at_utc: data.scheduled_at, scheduled_at_israel: scheduledIl, reminder_phone: looksLikeReminder ? callerPhone : null, note: scheduledIl ? `המשימה תוזמנה ל-${scheduledIl} (שעון ישראל). השיבי למשתמש את הזמן בשעון ישראל בלבד.` : 'נשמר ללא תזמון.' }
+    }
+    case 'list_my_agent_tasks': {
+      let q = supabase.from('agent_tasks')
+        .select('id, title, description, status, schedule_type, scheduled_at, last_run, run_count, result, created_at')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(args.limit || 10)
+      if (agentId) q = q.eq('agent_id', agentId)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      const fmtIl = (iso: string | null) => iso ? new Date(iso).toLocaleString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : null
+      return {
+        count: data.length,
+        tasks: data.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          schedule_type: t.schedule_type,
+          scheduled_at_israel: fmtIl(t.scheduled_at),
+          last_run_israel: fmtIl(t.last_run),
+          run_count: t.run_count || 0,
+          last_output: t.result?.last_output ? String(t.result.last_output).slice(0, 200) : (t.result?.error ? `שגיאה: ${String(t.result.error).slice(0,200)}` : null),
+          description_preview: t.description ? String(t.description).slice(0, 120) : null,
+        })),
+      }
+    }
+    case 'recall_recent_action': {
+      // Check if Carmen already performed an action recently — used before heavy
+      // operations (pulse_check, campaign_analysis, lead_review) so she doesn't
+      // re-run the same work and can answer "I already did it at HH:MM".
+      const action = String(args.action_type || '').trim()
+      const maxHours = Math.max(1, Math.min(168, Number(args.max_age_hours) || 8))
+      const since = new Date(Date.now() - maxHours * 60 * 60 * 1000).toISOString()
+      let q = supabase.from('carmen_memory_episodes')
+        .select('id, topic, topic_tags, summary, importance, ref_date, created_at')
+        .eq('tenant_id', tenantId)
+        .gte('ref_date', since)
+        .order('ref_date', { ascending: false })
+        .limit(3)
+      if (action) q = q.or(`topic.ilike.%${action}%,topic_tags.cs.{${action}}`)
+      const { data, error } = await q
+      if (error) throw error
+      const fmtIl = (iso: string | null) => iso ? new Date(iso).toLocaleString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' }) : null
+      return {
+        found: data.length > 0,
+        recent_episodes: data.map((e: any) => ({
+          id: e.id,
+          topic: e.topic,
+          topic_tags: e.topic_tags,
+          summary: e.summary,
+          when_israel: fmtIl(e.ref_date || e.created_at),
+          importance: e.importance,
+        })),
+        guidance: data.length > 0
+          ? 'יש פעולה דומה שנעשתה לאחרונה. אסור לחזור עליה מחדש אלא אם המשתמש ביקש "רענני" / "עכשיו" / "בזמן אמת". ענו עם הסיכום הקיים, ציינו את הזמן, ושאלו אם לרענן.'
+          : 'אין רישום מ-N השעות האחרונות. אפשר להריץ את הפעולה.',
+      }
+    }
+    case 'record_action_episode': {
+      // Persist a heavy-action result into long-term memory so future calls
+      // hit recall_recent_action instead of re-running.
+      const topic = String(args.action_type || args.topic || '').trim()
+      if (!topic) throw new Error('action_type required')
+      const summary = String(args.summary || '').slice(0, 4000)
+      if (!summary) throw new Error('summary required')
+      const tags = Array.isArray(args.topic_tags) && args.topic_tags.length > 0
+        ? args.topic_tags
+        : [topic]
+      const importance = Math.max(1, Math.min(100, Number(args.importance) || 50))
+      const { data, error } = await supabase.from('carmen_memory_episodes').insert({
+        tenant_id: tenantId,
+        topic,
+        topic_tags: tags,
+        summary,
+        importance,
+        ref_date: new Date().toISOString(),
+        source_table: 'agent_runs',
+        participants: callerPhone ? { caller_phone: callerPhone } : {},
+      }).select('id').single()
+      if (error) throw error
+      return { episode_id: data.id, recorded: true }
+    }
+    case 'search_tasks': {
+      let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, notes, duration_minutes, clients(name), leads(company_name), campaigners(full_name)')
+        .in('tenant_id', accessibleTenantIds)
+        .ilike('title', `%${args.search_term}%`)
+        .order('created_at', { ascending: false })
+        .limit(10)
+      if (args.status) query = query.eq('status', args.status)
+      if (args.client_id) query = query.eq('client_id', args.client_id)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
+    }
+    case 'list_tasks': {
+      let query = supabase.from('tasks').select('id, title, status, priority, due_date, due_time, duration_minutes, clients(name), leads(company_name), campaigners(full_name)').in('tenant_id', accessibleTenantIds).order('priority', { ascending: false }).limit(args.limit || 20)
+      if (args.status) query = query.eq('status', args.status)
+      if (args.client_id) {
+        if (callerCampaignerId && !bypassCampaignerScope) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+        query = query.eq('client_id', args.client_id)
+      } else if (callerCampaignerId && !bypassCampaignerScope) {
+        const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
+        const ids = (links || []).map((l: any) => l.client_id)
+        query = ids.length > 0
+          ? query.or(`client_id.is.null,client_id.in.(${ids.join(',')})`)
+          : query.is('client_id', null)
+      }
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, tasks: data.map((t: any) => ({ ...t, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name })) }
+    }
+    case 'update_task_status': {
+      await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
+      const { data, error } = await supabase.from('tasks').update({ status: args.status }).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
+      if (error) throw error
+      return data
+    }
+    case 'list_clients': {
+      // --- Scoping rules ---
+      // 1. agency_id / agency_name → resolve to agency UUIDs (must be in accessible tenants)
+      let agencyIdsFilter: string[] | null = null
+      if (args.agency_id) {
+        agencyIdsFilter = [args.agency_id]
+      } else if (args.agency_name) {
+        const { data: ags } = await supabase
+          .from('agencies').select('id, name')
+          .in('tenant_id', accessibleTenantIds)
+          .ilike('name', `%${args.agency_name}%`)
+        agencyIdsFilter = (ags || []).map((a: any) => a.id)
+        if (agencyIdsFilter.length === 0) {
+          return { count: 0, clients: [], note: `no agency matched "${args.agency_name}"` }
+        }
+      }
+
+      // 2. campaigner filter (explicit OR auto-scope to caller)
+      let campaignerIds: string[] | null = null
+      const explicitCampaigner = !!(args.campaigner_id || args.campaigner_name)
+      if (args.campaigner_id) {
+        campaignerIds = [args.campaigner_id]
+      } else if (args.campaigner_name) {
+        const { data: camps } = await supabase
+          .from('campaigners').select('id, full_name')
+          .in('tenant_id', accessibleTenantIds)
+          .ilike('full_name', `%${args.campaigner_name}%`)
+        campaignerIds = (camps || []).map((c: any) => c.id)
+        if (campaignerIds.length === 0) {
+          return { count: 0, clients: [], note: `no campaigner matched "${args.campaigner_name}"` }
+        }
+      } else if (callerCampaignerId && !args.all_scopes && !agencyIdsFilter && !bypassCampaignerScope) {
+        // Auto-scope: a campaigner asking via WhatsApp should only see their own clients
+        campaignerIds = [callerCampaignerId]
+      } else if (isTeamManager && !args.all_scopes && !agencyIdsFilter && managedAgencyIds.length > 0) {
+        // Team manager scope: limit to clients within agencies they manage
+        agencyIdsFilter = managedAgencyIds
+      }
+
+      let clientIdsFilter: string[] | null = null
+      if (campaignerIds) {
+        const { data: links, error: linkErr } = await supabase
+          .from('client_team').select('client_id')
+          .in('campaigner_id', campaignerIds)
+        if (linkErr) throw linkErr
+        clientIdsFilter = Array.from(new Set((links || []).map((l: any) => l.client_id)))
+        if (clientIdsFilter.length === 0) {
+          const who = explicitCampaigner ? 'this campaigner' : 'you'
+          return { count: 0, clients: [], note: `no clients assigned to ${who}` }
+        }
+      }
+
+      let query = supabase.from('clients')
+        .select('id, name, contact_name, phone, status, agency_id, agencies(name)')
+        .in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+
+      // Default status for auto-scoped campaigner queries: active + onboarding only
+      if (args.status) {
+        query = query.eq('status', args.status)
+      } else if (callerCampaignerId && !args.all_scopes && !explicitCampaigner) {
+        query = query.in('status', ['active', 'onboarding'])
+      }
+
+      if (agencyIdsFilter) query = query.in('agency_id', agencyIdsFilter)
+      if (clientIdsFilter) query = query.in('id', clientIdsFilter)
+      if (args.name_search) {
+        const term = String(args.name_search).trim().replace(/[%_]/g, '')
+        query = query.or(`name.ilike.%${term}%,contact_name.ilike.%${term}%`)
+      }
+      const { data, error } = await query
+      if (error) throw error
+      const enriched = (data || []).map((c: any) => ({
+        id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone,
+        status: c.status, agency_id: c.agency_id, agency_name: c.agencies?.name ?? null,
+      }))
+      const scope_note = (callerCampaignerId && !args.all_scopes && !explicitCampaigner && !agencyIdsFilter)
+        ? 'auto-scoped to caller campaigner (active+onboarding only). pass all_scopes=true or explicit campaigner_name/agency_name to widen.'
+        : undefined
+      return { count: enriched.length, clients: enriched, scope_note }
+    }
+    case 'get_client_info': {
+      const { data, error } = await supabase.from('clients').select('*, agencies(name)').eq('id', args.client_id).in('tenant_id', accessibleTenantIds).single()
+      if (error) throw error
+      // Enforce caller-campaigner scope: campaigner only; managers bypass.
+      if (callerCampaignerId && !args.all_scopes && !bypassCampaignerScope) {
+        const { data: link } = await supabase
+          .from('client_team').select('client_id')
+          .eq('client_id', args.client_id).eq('campaigner_id', callerCampaignerId).maybeSingle()
+        if (!link) {
+          return { error: 'access_denied', note: 'הלקוח הזה לא משוייך אליך. אם נדרשת גישה — בקש מהמנהל לשייך אותך לצוות הלקוח.' }
+        }
+      } else if (isTeamManager && !args.all_scopes && managedAgencyIds.length > 0) {
+        if (!data?.agency_id || !managedAgencyIds.includes(data.agency_id)) {
+          return { error: 'access_denied', note: 'הלקוח לא בסוכנויות שאת מנהלת.' }
+        }
+      }
+      return data
+    }
+    case 'add_client_update': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const { data, error } = await supabase.from('client_updates').insert({ client_id: args.client_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
+      if (error) throw error
+      return { update_id: data.id }
+    }
+    case 'send_message': {
+      let phone: string | null = null
+      let contactName: string | null = null
+      if (args.contact_type === 'lead') {
+        const { data } = await supabase.from('leads').select('phone, company_name, contact_name').eq('id', args.contact_id).single()
+        phone = data?.phone; contactName = data?.contact_name || data?.company_name
+      } else {
+        const { data } = await supabase.from('clients').select('phone, name, contact_name').eq('id', args.contact_id).single()
+        phone = data?.phone; contactName = data?.contact_name || data?.name
+      }
+      if (!phone) return { success: false, error: 'לא נמצא מספר טלפון' }
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ phone, message: args.message_text, tenantId, [`${args.contact_type}_id`]: args.contact_id }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      return { sent_to: contactName, phone }
+    }
+    case 'search_entities': {
+      const tableMap: Record<string, string> = { agency: 'agencies', client: 'clients', campaigner: 'campaigners', lead: 'leads' }
+      const nameMap: Record<string, string> = { agency: 'name', client: 'name', campaigner: 'full_name', lead: 'company_name' }
+      const table = tableMap[args.entity_type]
+      const nameField = nameMap[args.entity_type]
+      const selectCols = args.entity_type === 'client' || args.entity_type === 'lead'
+        ? `id, ${nameField}, agency_id`
+        : `id, ${nameField}`
+      let q = supabase.from(table).select(selectCols).in('tenant_id', accessibleTenantIds).ilike(nameField, `%${args.search_term}%`).limit(20)
+      if ((args.entity_type === 'client' || args.entity_type === 'lead') && args.agency_id) {
+        q = q.eq('agency_id', args.agency_id)
+      }
+      // Auto-scope clients to caller campaigner unless overridden; managers bypass.
+      if (args.entity_type === 'client' && callerCampaignerId && !args.all_scopes && !bypassCampaignerScope) {
+        const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
+        const ids = (links || []).map((l: any) => l.client_id)
+        if (ids.length === 0) return { count: 0, results: [], note: 'no clients assigned to you' }
+        q = q.in('id', ids)
+      } else if (args.entity_type === 'client' && isTeamManager && !args.all_scopes && managedAgencyIds.length > 0) {
+        q = q.in('agency_id', managedAgencyIds)
+      }
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, results: data }
+    }
+    case 'delegate_to_manus': {
+      // Call the existing manus-api edge function
+      const manusBody: any = {
+        action: 'create_task',
+        tenantId,
+        prompt: args.prompt,
+      }
+      if (args.context_data) {
+        manusBody.prompt = `${args.prompt}\n\nנתוני הקשר:\n${args.context_data}`
+      }
+
+      const manusRes = await fetch(`${SUPABASE_URL}/functions/v1/manus-api`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify(manusBody),
+      })
+
+      if (!manusRes.ok) {
+        const errText = await manusRes.text()
+        let parsed: any = null
+        try { parsed = JSON.parse(errText) } catch { /* ignore */ }
+        const detail = parsed?.error || errText
+        // Distinguish between local config errors and real Manus API errors
+        if (manusRes.status === 400 && /not configured|key not found/i.test(String(detail))) {
+          throw new Error(`Manus לא מוגדר עבור הטננט הזה: ${detail}. הוסיפי מפתח API בהגדרות אינטגרציות → Manus.`)
+        }
+        if (manusRes.status === 401) {
+          throw new Error(`Manus auth failed (internal): ${detail}`)
+        }
+        throw new Error(`Manus API error [${manusRes.status}]: ${detail}`)
+      }
+
+      const manusData = await manusRes.json()
+      return {
+        success: true,
+        task_id: manusData.task_id,
+        task_url: manusData.task_url,
+        share_url: manusData.share_url,
+        message: 'המשימה נשלחה ל-Manus AI ורצה ברקע. תוכל לעקוב אחריה בהגדרות Manus.',
+      }
+    }
+
+    case 'send_message_to_manus': {
+      const manusApiUrl = `${SUPABASE_URL}/functions/v1/manus-api`
+      const msgBody: any = {
+        action: 'send_message',
+        tenantId,
+        message: args.message,
+      }
+      if (args.task_id) msgBody.task_id = args.task_id
+      const msgRes = await fetch(manusApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify(msgBody),
+      })
+      if (!msgRes.ok) {
+        const errText = await msgRes.text()
+        throw new Error(`Manus send_message error [${msgRes.status}]: ${errText}`)
+      }
+      const msgData = await msgRes.json()
+      return {
+        success: true,
+        task_id: msgData.task_id,
+        message: 'ההודעה נשלחה ל-Manus בהצלחה.',
+      }
+    }
+
+    case 'get_facebook_campaign_data': {
+      if (args.client_id) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const daysBack = args.days || 30
+      const sinceDate = new Date()
+      sinceDate.setDate(sinceDate.getDate() - daysBack)
+      const sinceDateStr = sinceDate.toISOString().split('T')[0]
+
+      if (!args.client_id) {
+        return { error: 'client_id_required', message: 'יש להעביר client_id' }
+      }
+
+      // LIVE first: pull campaign-level insights straight from Meta (synced tables can lag days/weeks).
+      const liveInsights = await fbLiveCampaignInsights(supabase, accessibleTenantIds[0], args.client_id, daysBack)
+      if (liveInsights) {
+        return { count: liveInsights.length, campaigns: liveInsights, period: `${daysBack} days`, source: 'live_meta' }
+      }
+
+      // Fallback: CRM dynamic tables that hold synced FB insights.
+      const { data: campaignTables, error: rpcErr } = await supabase
+        .rpc('find_campaign_tables', { p_client_ids: [args.client_id] })
+      if (rpcErr) throw rpcErr
+      const tableIds = (campaignTables || []).map((t: any) => t.table_id)
+      if (tableIds.length === 0) {
+        return { count: 0, campaigns: [], period: `${daysBack} days`, note: 'no_campaign_table_for_client' }
+      }
+
+      const { data: records, error } = await supabase
+        .from('crm_records').select('data')
+        .in('table_id', tableIds)
+        .in('tenant_id', accessibleTenantIds)
+      if (error) throw error
+
+      const rows = (records || [])
+        .map((r: any) => r.data || {})
+        .filter((d: any) => d.date && d.date >= sinceDateStr)
+        .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''))
+        .slice(0, 500)
+        .map((d: any) => ({
+          campaign_id: d.campaign_id ?? null,
+          campaign_name: d.campaign_name ?? null,
+          date: d.date ?? null,
+          impressions: d.impressions ?? null,
+          clicks: d.clicks ?? null,
+          spend: d.spend ?? d.cost ?? null,
+          leads_count: d.leads ?? d.leads_count ?? d.form_leads ?? null,
+          reach: d.reach ?? null,
+          cpc: d.cpc ?? null,
+          cpm: d.cpm ?? null,
+          ctr: d.ctr ?? null,
+          cost_per_lead: d.cost_per_lead ?? d.cpl ?? null,
+          campaign_status: d.effective_status ?? d.campaign_status ?? d.configured_status ?? null,
+        }))
+      return { count: rows.length, campaigns: rows, period: `${daysBack} days` }
+    }
+    case 'list_facebook_campaigns': {
+      if (args.client_id) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      if (!args.client_id) {
+        return { error: 'client_id_required', message: 'יש להעביר client_id' }
+      }
+      // LIVE first: read campaign status straight from Meta (synced tables can lag).
+      const liveList = await fbLiveCampaignList(supabase, accessibleTenantIds[0], args.client_id)
+      if (liveList) {
+        const search = (args.name_search || '').toString().toLowerCase()
+        const campaigns = search ? liveList.filter((c: any) => String(c.campaign_name || '').toLowerCase().includes(search)) : liveList
+        return { count: campaigns.length, campaigns, source: 'live_meta' }
+      }
+      // Fallback: CRM dynamic tables that hold synced FB insights with status.
+      const { data: campaignTables, error: rpcErr } = await supabase
+        .rpc('find_campaign_tables', { p_client_ids: [args.client_id] })
+      if (rpcErr) throw rpcErr
+      const tableIds = (campaignTables || []).map((t: any) => t.table_id)
+      if (tableIds.length === 0) {
+        return { count: 0, campaigns: [], note: 'no_campaign_table_for_client — חבר טבלת קמפיינים ללקוח (Meta Ads sync).' }
+      }
+
+      const { data: records, error } = await supabase
+        .from('crm_records').select('data')
+        .in('table_id', tableIds)
+        .in('tenant_id', accessibleTenantIds)
+      if (error) throw error
+
+      const search = (args.name_search || '').toString().toLowerCase()
+      // Dedup by campaign_id, keep row with most recent date
+      const map = new Map<string, any>()
+      for (const r of (records || [])) {
+        const d = r.data || {}
+        const cid = d.campaign_id
+        if (!cid) continue
+        const name = d.campaign_name || ''
+        if (search && !String(name).toLowerCase().includes(search)) continue
+        const status = d.effective_status ?? d.campaign_status ?? d.configured_status ?? null
+        const date = d.date || ''
+        const existing = map.get(cid)
+        if (!existing || (date > (existing.last_date || ''))) {
+          map.set(cid, {
+            campaign_id: cid,
+            campaign_name: name,
+            status,
+            effective_status: d.effective_status ?? null,
+            configured_status: d.configured_status ?? null,
+            last_date: date || null,
+          })
+        }
+      }
+      const campaigns = Array.from(map.values()).sort((a, b) => (b.last_date || '').localeCompare(a.last_date || ''))
+      return { count: campaigns.length, campaigns }
+    }
+    case 'toggle_facebook_campaign': {
+      if (args.confirmed !== true) {
+        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש. שאל את המשתמש לפני קריאה לכלי הזה ושלח confirmed=true רק אחרי שהוא אישר.' }
+      }
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const targetTenantId = accessibleTenantIds[0]
+      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/toggle-facebook-campaign`
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          tenant_id: targetTenantId,
+          campaign_id: args.campaign_id,
+          status: args.status,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: 'toggle_failed', details: json }
+      return { success: true, campaign_id: args.campaign_id, new_status: args.status, fb: json }
+    }
+    case 'analyze_facebook_campaign': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const targetTenantId = accessibleTenantIds[0]
+      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-analyze`
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({ tenant_id: targetTenantId, campaign_id: args.campaign_id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: 'analyze_failed', details: json }
+      return json
+    }
+    case 'update_facebook_budget':
+    case 'duplicate_facebook_campaign': {
+      if (args.confirmed !== true) {
+        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש (confirmed=true).' }
+      }
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const targetTenantId = accessibleTenantIds[0]
+      const action = name === 'update_facebook_budget' ? 'update_budget' : 'duplicate'
+      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-control`
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({
+          tenant_id: targetTenantId,
+          action,
+          campaign_id: args.campaign_id,
+          daily_budget: args.daily_budget,
+          lifetime_budget: args.lifetime_budget,
+          name_suffix: args.name_suffix,
+          confirmed: true,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: `${action}_failed`, details: json }
+      return json
+    }
+    case 'get_campaign_alerts': {
+      let q = supabase.from('campaign_alerts')
+        .select('id, tenant_id, client_id, campaign_id, campaign_name, alert_type, severity, details, created_at, acknowledged_at, resolved_at')
+        .in('tenant_id', accessibleTenantIds)
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.severity) q = q.eq('severity', args.severity)
+      if (args.only_open !== false) q = q.is('resolved_at', null).is('acknowledged_at', null)
+      const { data, error } = await q
+      if (error) return { error: error.message }
+      return { count: data?.length || 0, alerts: data || [] }
+    }
+    case 'acknowledge_campaign_alert': {
+      const { error } = await supabase.from('campaign_alerts')
+        .update({ acknowledged_at: new Date().toISOString() })
+        .eq('id', args.alert_id)
+        .in('tenant_id', accessibleTenantIds)
+      if (error) return { error: error.message }
+      return { success: true, alert_id: args.alert_id }
+    }
+    case 'list_social_pages': {
+      let q = supabase.from('social_pages').select('id, platform, page_id, page_name, client_id, ig_business_id, picture_url, is_active')
+        .in('tenant_id', accessibleTenantIds).eq('is_active', true).order('page_name')
+      if (args.platform) q = q.eq('platform', args.platform)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      const { data, error } = await q
+      if (error) return { error: error.message }
+      return { count: data?.length || 0, pages: data || [] }
+    }
+    case 'sync_social_pages': {
+      const targetTenantId = accessibleTenantIds[0]
+      const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/social-pages-sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({ tenant_id: targetTenantId, client_id: args.client_id }),
+      })
+      return await r.json()
+    }
+    case 'publish_social_post': {
+      await assertCallerCanAccessEntityClient(supabase, 'social_pages', args.page_id, callerScope)
+      if (args.confirmed !== true) return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש (confirmed=true)' }
+      const targetTenantId = accessibleTenantIds[0]
+      const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/social-publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({ tenant_id: targetTenantId, page_id: args.page_id, post_type: args.post_type, caption: args.caption, media_url: args.media_url, link: args.link }),
+      })
+      return await r.json()
+    }
+    case 'fetch_social_comments': {
+      const targetTenantId = accessibleTenantIds[0]
+      const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/social-comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({ action: 'fetch', tenant_id: targetTenantId, page_id: args.page_id }),
+      })
+      return await r.json()
+    }
+    case 'list_social_comments': {
+      let q = supabase.from('social_comments')
+        .select('id, platform, author_name, message, external_post_id, replied_at, hidden_at, created_at_external, page_id, client_id')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('is_from_page', false)
+        .order('created_at_external', { ascending: false, nullsFirst: false })
+        .limit(100)
+      if (args.page_id) q = q.eq('page_id', args.page_id)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.only_unreplied !== false) q = q.is('replied_at', null).is('hidden_at', null)
+      const { data, error } = await q
+      if (error) return { error: error.message }
+      return { count: data?.length || 0, comments: data || [] }
+    }
+    case 'reply_to_social_comment':
+    case 'hide_social_comment': {
+      await assertCallerCanAccessEntityClient(supabase, 'social_comments', args.comment_row_id, callerScope)
+      if (args.confirmed !== true) return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש' }
+      const targetTenantId = accessibleTenantIds[0]
+      const action = name === 'reply_to_social_comment' ? 'reply' : 'hide'
+      const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/social-comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+        body: JSON.stringify({ action, tenant_id: targetTenantId, comment_row_id: args.comment_row_id, message: args.message }),
+      })
+      return await r.json()
+    }
+    case 'get_latest_campaign_pulse': {
+      const loadPulse = async () => {
+        let query = supabase
+          .from('campaign_pulse_snapshots')
+          .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, client_id, agency_id, clients(name), agencies(name)')
+          .eq('tenant_id', tenantId)
+          .order('calculated_at', { ascending: false })
+        if (args.client_id) query = query.eq('client_id', args.client_id)
+        if (args.agency_id) query = query.eq('agency_id', args.agency_id)
+        if (args.status) query = query.eq('status', args.status)
+        if (callerManagedAgencyIds && callerManagedAgencyIds.length > 0) {
+          query = query.in('agency_id', callerManagedAgencyIds)
+        }
+        return await query
+      }
+      let { data, error } = await loadPulse()
+      if (error) throw error
+      let rows = data || []
+      if (args.client_name) {
+        const needle = String(args.client_name).toLocaleLowerCase('he')
+        rows = rows.filter((row: any) => String(row.clients?.name || '').toLocaleLowerCase('he').includes(needle))
+      }
+      if (args.agency_name) {
+        const needle = String(args.agency_name).toLocaleLowerCase('he')
+        rows = rows.filter((row: any) => String(row.agencies?.name || '').toLocaleLowerCase('he').includes(needle))
+      }
+      return {
+        data_source: 'deterministic_campaign_pulse_cache',
+        external_api_called: false,
+        ai_used_to_calculate: false,
+        auto_refreshed: false,
+        count: rows.length,
+        freshness: rows[0]?.calculated_at || null,
+        rows: rows.map((row: any) => ({
+          ...row,
+          client_name: row.clients?.name || null,
+          agency_name: row.agencies?.name || null,
+          clients: undefined,
+          agencies: undefined,
+        })),
+        instructions_to_agent: rows.length
+          ? 'הציגי את הנתונים בטבלה מסודרת המקובצת לפי סוכנות וצייני מתי חושבו. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.'
+          : 'לא נמצא Snapshot שמור. אמרי שאין בדיקת דופק זמינה. אסור ליצור בדיקה חדשה, להריץ כלי חלופי או להמציא נתונים.',
+      }
+    }
+    case 'analyze_campaign_performance': {
+      // 1. Resolve scope -> list of target clients (active+onboarding)
+      let agencyIdsFilter: string[] | null = null
+      let agencyNameLabel: string | null = null
+      if (args.agency_id) {
+        agencyIdsFilter = [args.agency_id]
+      } else if (args.agency_name) {
+        const { data: ags } = await supabase
+          .from('agencies').select('id, name')
+          .in('tenant_id', accessibleTenantIds)
+          .ilike('name', `%${args.agency_name}%`)
+        agencyIdsFilter = (ags || []).map((a: any) => a.id)
+        agencyNameLabel = (ags || []).map((a: any) => a.name).join(', ') || args.agency_name
+        if (agencyIdsFilter.length === 0) {
+          return { scope: { agency_name: args.agency_name }, coverage_summary: { synced: 0, not_connected: 0 }, synced_clients: [], not_connected_clients: [], note: `no agency matched "${args.agency_name}"` }
+        }
+      }
+
+      // Own tenant's clients + shared-tenant clients ONLY within agencies shared via
+      // agency_tenant_access. A tenant-wide scope here floods the report with the
+      // partner tenant's entire client base and scrambles the per-agency grouping.
+      const perfSel = 'id, name, agency_id, is_ecommerce, agencies(name)'
+      const perfFilters = (q: any) => {
+        q = q.in('status', ['active'])  // pulse/health reports must exclude paused/ended/onboarding clients
+        if (args.client_id) q = q.eq('id', args.client_id)
+        if (agencyIdsFilter) q = q.in('agency_id', agencyIdsFilter)
+        return q
+      }
+      const { data: perfOwn, error: clientsErr } = await perfFilters(
+        supabase.from('clients').select(perfSel).eq('tenant_id', tenantId)).order('name')
+      if (clientsErr) throw clientsErr
+      let targetClients: any[] = perfOwn || []
+      const { data: perfShares } = await supabase.from('agency_tenant_access')
+        .select('source_tenant_id, agency_id').eq('accessing_tenant_id', tenantId)
+      // Reports pull cross-tenant clients only for agencies the reporting tenant
+      // OWNS (its own agency's clients parked in a partner tenant) — not the
+      // partner's agencies, whose clients belong in the partner's own report.
+      const perfShareAgencyIds = [...new Set((perfShares || []).map((s: any) => s.agency_id).filter(Boolean))]
+      const perfOwnedAgencies = new Set<string>()
+      if (perfShareAgencyIds.length > 0) {
+        const { data: ags } = await supabase.from('agencies')
+          .select('id').eq('tenant_id', tenantId).in('id', perfShareAgencyIds)
+        for (const a of (ags || [])) perfOwnedAgencies.add(a.id)
+      }
+      for (const sh of (perfShares || [])) {
+        if (!sh.source_tenant_id || sh.source_tenant_id === tenantId || !sh.agency_id) continue
+        if (!perfOwnedAgencies.has(sh.agency_id)) continue
+        const { data: sharedClients } = await perfFilters(
+          supabase.from('clients').select(perfSel).eq('tenant_id', sh.source_tenant_id).eq('agency_id', sh.agency_id))
+        if (sharedClients?.length) targetClients = targetClients.concat(sharedClients)
+      }
+
+      const clientIds = (targetClients || []).map((c: any) => c.id)
+      if (clientIds.length === 0) {
+        return { scope: { agency_name: agencyNameLabel, total_active_clients: 0 }, coverage_summary: { synced: 0, not_connected: 0 }, synced_clients: [], not_connected_clients: [] }
+      }
+
+      // 2. Find campaign tables by SCHEMA (spend + campaign_name/id), not by slug
+      const { data: campaignTables, error: rpcErr } = await supabase
+        .rpc('find_campaign_tables', { p_client_ids: clientIds })
+      if (rpcErr) throw rpcErr
+
+      const tablesByClient = new Map<string, any[]>()
+      for (const t of (campaignTables || [])) {
+        const arr = tablesByClient.get(t.client_id) || []
+        arr.push(t)
+        tablesByClient.set(t.client_id, arr)
+      }
+
+      // 3. Compute metrics for each client that has tables
+      const now = new Date()
+      const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
+      const d30 = new Date(now); d30.setDate(d30.getDate() - 30)
+      const d7Str = d7.toISOString().split('T')[0]
+      const d30Str = d30.toISOString().split('T')[0]
+
+      const synced_clients: any[] = []
+      const not_connected_clients: any[] = []
+
+      for (const client of (targetClients || [])) {
+        const tables = tablesByClient.get(client.id) || []
+        if (tables.length === 0) {
+          not_connected_clients.push({ client_id: client.id, client_name: client.name, reason: 'no_campaign_table' })
+          continue
+        }
+
+        const tableIds = tables.map((t: any) => t.table_id)
+        const { data: records } = await supabase
+          .from('crm_records').select('data')
+          .in('table_id', tableIds)
+          .in('tenant_id', accessibleTenantIds)
+
+        if (!records || records.length === 0) {
+          not_connected_clients.push({ client_id: client.id, client_name: client.name, reason: 'empty_table' })
+          continue
+        }
+
+        const last30d = records.filter((r: any) => r.data?.date && r.data.date >= d30Str)
+        if (last30d.length === 0) {
+          not_connected_clients.push({ client_id: client.id, client_name: client.name, reason: 'no_recent_data_30d' })
+          continue
+        }
+
+        const last7d = last30d.filter((r: any) => r.data?.date >= d7Str)
+        const older = last30d.filter((r: any) => r.data?.date < d7Str)
+
+        const sum = (arr: any[], field: string) => arr.reduce((s: number, r: any) => s + (parseFloat(r.data?.[field]) || 0), 0)
+        const spend7 = sum(last7d, 'spend')
+        const spendOlder = sum(older, 'spend')
+        const leads7 = sum(last7d, 'leads')
+        const leadsOlder = sum(older, 'leads')
+
+        const days7 = Math.max(last7d.length, 1)
+        const daysOlder = Math.max(older.length, 1)
+        const dailySpend7 = spend7 / days7
+        const dailySpendOlder = spendOlder / daysOlder
+        const spendChangePct = dailySpendOlder > 0 ? ((dailySpend7 - dailySpendOlder) / dailySpendOlder * 100) : null
+
+        const cpl7 = leads7 > 0 ? spend7 / leads7 : null
+        const cplOlder = leadsOlder > 0 ? spendOlder / leadsOlder : null
+        const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null
+
+        // Ecommerce metrics (purchases / purchase_value / roas)
+        const purchases7 = sum(last7d, 'purchases')
+        const purchasesOlder = sum(older, 'purchases')
+        const purchaseValue7 = sum(last7d, 'purchase_value')
+        const purchaseValueOlder = sum(older, 'purchase_value')
+        const cpp7 = purchases7 > 0 ? spend7 / purchases7 : null
+        const cppOlder = purchasesOlder > 0 ? spendOlder / purchasesOlder : null
+        const cppChangePct = cppOlder && cpp7 ? ((cpp7 - cppOlder) / cppOlder * 100) : null
+        const roas7 = spend7 > 0 ? purchaseValue7 / spend7 : null
+        const profit7 = purchaseValue7 - spend7
+
+        const updatedTimes = last30d.map((r: any) => r.data?.updated_time).filter((t: any) => t).sort().reverse()
+        const lastCampaignUpdate = updatedTimes[0] || null
+        const daysSinceLastCampaignTouch = lastCampaignUpdate
+          ? Math.floor((now.getTime() - new Date(lastCampaignUpdate).getTime()) / (1000 * 60 * 60 * 24))
+          : null
+
+        const lastDataDate = last30d.map((r: any) => r.data?.date).filter(Boolean).sort().reverse()[0] || null
+
+        const isEcom = !!client.is_ecommerce
+        const ecomAlert = isEcom
+          ? (roas7 !== null && roas7 < 1 ? '🔴 ROAS<1 הפסד'
+            : purchases7 === 0 && spend7 > 0 ? '🔴 אין רכישות'
+            : roas7 !== null && roas7 < 1.5 ? '🟠 ROAS נמוך'
+            : (cppChangePct !== null && cppChangePct > 25) ? '🟠 CPP עלה'
+            : '🟢 תקין')
+          : null
+
+        synced_clients.push({
+          client_id: client.id,
+          client_name: client.name,
+          agency_name: client.agencies?.name ?? null,
+          is_ecommerce: isEcom,
+          spend_7d: Math.round(spend7 * 100) / 100,
+          spend_30d: Math.round((spend7 + spendOlder) * 100) / 100,
+          leads_7d: leads7,
+          leads_30d: leads7 + leadsOlder,
+          cpl_7d: cpl7 ? Math.round(cpl7 * 100) / 100 : null,
+          cpl_30d_avg: cplOlder ? Math.round(cplOlder * 100) / 100 : null,
+          // Ecommerce metrics — present for all clients but the skill only uses them when is_ecommerce=true
+          purchases_7d: purchases7,
+          purchases_30d: purchases7 + purchasesOlder,
+          revenue_7d: Math.round(purchaseValue7 * 100) / 100,
+          revenue_30d: Math.round((purchaseValue7 + purchaseValueOlder) * 100) / 100,
+          cpp_7d: cpp7 ? Math.round(cpp7 * 100) / 100 : null,
+          cpp_change_pct: cppChangePct !== null ? Math.round(cppChangePct * 10) / 10 : null,
+          roas_7d: roas7 !== null ? Math.round(roas7 * 100) / 100 : null,
+          profit_7d: Math.round(profit7 * 100) / 100,
+          spend_change_pct: spendChangePct !== null ? Math.round(spendChangePct * 10) / 10 : null,
+          cpl_change_pct: cplChangePct !== null ? Math.round(cplChangePct * 10) / 10 : null,
+          last_data_date: lastDataDate,
+          last_campaign_update: lastCampaignUpdate,
+          days_since_last_campaign_touch: daysSinceLastCampaignTouch,
+          alert: isEcom ? ecomAlert : (spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין')),
+        })
+      }
+
+
+      synced_clients.sort((a: any, b: any) => (b.spend_change_pct || 0) - (a.spend_change_pct || 0))
+
+      // Try-to-connect pass: for every client we couldn't report from synced data,
+      // attempt a LIVE pull straight from Meta. Connects mapped-but-stale clients via
+      // their config and truly-unmapped clients via a strong name match — so "not
+      // connected" becomes real live numbers wherever possible, and whatever still
+      // can't connect is surfaced explicitly (never silently dropped, never faked).
+      const { connected: newly_connected_clients, stillNotConnected: still_not_connected_clients } =
+        not_connected_clients.length > 0
+          ? await fbTryConnectClients(supabase, accessibleTenantIds[0], not_connected_clients, 7)
+          : { connected: [], stillNotConnected: [] }
+
+      const hasNameMatch = newly_connected_clients.some((c: any) => c.matched_by === 'name')
+
+      return {
+        scope: {
+          agency_name: agencyNameLabel,
+          agency_ids: agencyIdsFilter,
+          client_id: args.client_id || null,
+          total_active_clients: targetClients?.length || 0,
+        },
+        coverage_summary: {
+          synced: synced_clients.length,
+          connected_live: newly_connected_clients.length,
+          still_not_connected: still_not_connected_clients.length,
+        },
+        // Portfolio trend scan runs off the synced CRM tables (needs the daily history for the
+        // 7d-vs-prior comparison). For live, up-to-the-minute status/leads on a single client use
+        // get_facebook_campaign_data / list_facebook_campaigns (source: 'live_meta'). Per-client
+        // `last_data_date` shows how fresh each row is.
+        data_source: 'synced_crm+live_meta',
+        synced_clients,
+        // Clients that had no synced data but we connected LIVE this run (7d window).
+        // matched_by:'name' means auto-matched by name — needs human verification.
+        newly_connected_clients,
+        // Clients we still couldn't connect — these need manual linking; tell the user.
+        still_not_connected_clients,
+        instructions_to_agent:
+          'דווחי על שלושת הסלוטים: synced_clients (היסטורי), newly_connected_clients (משכתי חי עכשיו) ו-still_not_connected_clients. ' +
+          'אסור לטעון "אין נתונים" כשיש נתונים. עבור newly_connected_clients הציגי את המספרים החיים (spend/leads/CPL ל-7 ימים). ' +
+          (hasNameMatch
+            ? 'חלק מהלקוחות חוברו לפי התאמת שם (matched_by="name") — ציַני זאת במפורש לדויד ובקשי אישור שהחשבון נכון לפני שמסתמכים על המספרים. '
+            : '') +
+          (still_not_connected_clients.length > 0
+            ? 'עבור still_not_connected_clients — נסיתי לחבר אוטומטית ולא הצלחתי; אמרי לדויד במפורש אילו לקוחות לא הצלחתי לחבר ומה הסיבה (connect_attempt), והציעי חיבור ידני. אל תמציאי מספרים עבורם.'
+            : 'כל הלקוחות חוברו (מסונכרן או חי).'),
+      }
+    }
+    case 'update_client_health': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      // Resolve an actor user for audit/update visibility even in background "system" runs
+      let effectiveUserId = userId !== 'system' ? userId : null
+      if (!effectiveUserId) {
+        const { data: ownerRole } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('tenant_id', accessibleTenantIds)
+          .eq('role', 'owner')
+          .limit(1)
+          .maybeSingle()
+
+        effectiveUserId = ownerRole?.user_id || null
+      }
+
+      // 1. Update mood_status on client
+      const updateData: any = { mood_status: args.mood_status }
+      const { error: clientErr } = await supabase
+        .from('clients')
+        .update(updateData)
+        .eq('id', args.client_id)
+        .in('tenant_id', accessibleTenantIds)
+      if (clientErr) throw clientErr
+
+      // 2. Create communication_log entry
+      const commStatus = args.communication_status || (args.mood_status === 'happy' ? 'normal' : args.mood_status === 'wavering' ? 'sensitive' : 'complaint')
+      const { error: logErr } = await supabase
+        .from('communication_logs')
+        .insert({
+          client_id: args.client_id,
+          tenant_id: tenantId,
+          status: commStatus,
+          interaction_type: 'system_alert',
+          note: args.note,
+          updated_by: effectiveUserId,
+        })
+      if (logErr) throw logErr
+
+      // 3. Also create a client_update so it's visible in the client updates tab
+      if (effectiveUserId) {
+        const { error: clientUpdateErr } = await supabase
+          .from('client_updates')
+          .insert({
+            client_id: args.client_id,
+            tenant_id: tenantId,
+            user_id: effectiveUserId,
+            content: `[עדכון אוטומטי - כרמן] ${args.note}`,
+          })
+
+        if (clientUpdateErr) throw clientUpdateErr
+      }
+
+      return { success: true, client_id: args.client_id, mood_status: args.mood_status, communication_status: commStatus, user_id: effectiveUserId }
+    }
+    case 'create_social_post': {
+      // Insert into both social_media_posts (for publishing) and social_gantt_posts (for planning view)
+      const postData = {
+        tenant_id: tenantId,
+        title: args.title,
+        content: args.content,
+        post_type: args.post_type || 'image',
+        media_urls: args.media_urls || [],
+        status: 'draft',
+        created_by: userId !== 'system' ? userId : null,
+      }
+      const { data, error } = await supabase.from('social_media_posts').insert(postData).select('id, title, content, post_type, media_urls, status').single()
+      if (error) throw error
+      // Also create in gantt for visibility in the content calendar
+      const today = new Date().toISOString().split('T')[0]
+      try {
+        await supabase.from('social_gantt_posts').insert({
+          tenant_id: tenantId,
+          topic: args.title,
+          copy_text: args.content,
+          platform: 'facebook',
+          status: 'draft',
+          scheduled_date: today,
+          creative_url: args.media_urls?.[0] || null,
+        })
+      } catch (_e) { /* non-critical */ }
+      return { success: true, post_id: data.id, title: data.title, content: data.content, media_urls: data.media_urls, status: 'draft', message: 'הפוסט נוצר בהצלחה כטיוטה במודול סושיאל מדיה' }
+    }
+    case 'generate_ad_image': {
+      const imagePrompt = args.prompt
+
+      const openaiKey = await resolveOpenAIKey()
+      if (!openaiKey) {
+        return { error: 'מפתח OpenAI לא מוגדר. יש להגדיר OPENAI_API_KEY בסודות Supabase, או להוסיף מפתח OpenAI בהגדרות האינטגרציות (LLM).', suggestion: 'פנה למנהל המערכת להגדרת המפתח.' }
+      }
+
+      const imageRes = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-image-1',
+          prompt: `${imagePrompt}. Professional, high quality, suitable for a social media advertisement.`,
+          n: 1,
+          size: '1024x1024',
+          output_format: 'png',
+        }),
+      })
+      
+      if (!imageRes.ok) {
+        const errText = await imageRes.text()
+        throw new Error(`Image generation error: ${errText}`)
+      }
+      
+      const imageData = await imageRes.json()
+      const content = imageData.choices?.[0]?.message?.content || ''
+      
+      // OpenAI Images API returns base64 PNG; adapt to the downstream extractor.
+      const b64 = imageData?.data?.[0]?.b64_json || ''
+      const images = b64 ? [{ image_url: { url: `data:image/png;base64,${b64}` } }] : []
+      let imageUrl = ''
+      
+      if (images.length > 0 && images[0]?.image_url?.url) {
+        const dataUrl = images[0].image_url.url
+        // Extract base64 data from data URL
+        const base64Match = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/)
+        if (base64Match) {
+          const mimeType = `image/${base64Match[1]}`
+          const base64 = base64Match[2]
+          const ext = base64Match[1] === 'jpeg' ? 'jpg' : base64Match[1]
+          const fileName = `agent-generated/${tenantId}/${crypto.randomUUID()}.${ext}`
+          
+          const binaryData = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+          
+          // Ensure bucket exists
+          await supabase.storage.createBucket('social-media', { public: true }).catch(() => {})
+          
+          const { error: uploadError } = await supabase.storage
+            .from('social-media')
+            .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
+          
+          if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
+          
+          const { data: urlData } = supabase.storage.from('social-media').getPublicUrl(fileName)
+          imageUrl = urlData.publicUrl
+        }
+      }
+      
+      // Fallback: check inline_data in parts
+      if (!imageUrl) {
+        const parts = imageData.choices?.[0]?.message?.parts || []
+        for (const part of parts) {
+          if (part.inline_data) {
+            const base64 = part.inline_data.data
+            const mimeType = part.inline_data.mime_type || 'image/png'
+            const ext = mimeType.includes('jpeg') ? 'jpg' : 'png'
+            const fileName = `agent-generated/${tenantId}/${crypto.randomUUID()}.${ext}`
+            const binaryData = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+            await supabase.storage.createBucket('social-media', { public: true }).catch(() => {})
+            const { error: uploadError } = await supabase.storage
+              .from('social-media')
+              .upload(fileName, binaryData, { contentType: mimeType, upsert: true })
+            if (uploadError) throw uploadError
+            const { data: urlData } = supabase.storage.from('social-media').getPublicUrl(fileName)
+            imageUrl = urlData.publicUrl
+            break
+          }
+        }
+      }
+      
+      if (!imageUrl) {
+        return { success: false, error: 'לא הצלחתי ליצור תמונה. נסה שוב עם תיאור אחר.', raw_content: content }
+      }
+      
+      return { success: true, image_url: imageUrl, message: 'התמונה נוצרה בהצלחה. השתמש בה ביצירת הפוסט.' }
+    }
+    // CLIENTS - full CRUD
+    case 'create_client': {
+      const { data: defaultAgency } = await supabase.from('agencies').select('id').in('tenant_id', accessibleTenantIds).limit(1).single()
+      const { data, error } = await supabase.from('clients').insert({
+        name: args.name, contact_name: args.contact_name || null, phone: args.phone || null,
+        email: args.email || null, notes: args.notes || null, tenant_id: tenantId,
+        agency_id: args.agency_id || defaultAgency?.id, status: 'active',
+      }).select('id, name, status').single()
+      if (error) throw error
+      return { client_id: data.id, name: data.name, status: data.status }
+    }
+    case 'update_client': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const updates: Record<string, any> = {}
+      if (args.name) updates.name = args.name
+      if (args.contact_name !== undefined) updates.contact_name = args.contact_name
+      if (args.phone !== undefined) updates.phone = args.phone
+      if (args.email !== undefined) updates.email = args.email
+      if (args.status) updates.status = args.status
+      if (args.notes !== undefined) updates.notes = args.notes
+      const { data, error } = await supabase.from('clients').update(updates).eq('id', args.client_id).in('tenant_id', accessibleTenantIds).select('id, name, status').single()
+      if (error) throw error
+      return data
+    }
+    case 'update_client_status': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const { data, error } = await supabase.from('clients').update({ status: args.status }).eq('id', args.client_id).in('tenant_id', accessibleTenantIds).select('id, name, status').single()
+      if (error) throw error
+      return data
+    }
+    case 'set_campaign_table_active': {
+      if (!args.table_id && !args.client_id && !args.table_name) throw new Error('נדרש client_id, table_id או table_name')
+      if (args.client_id) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      let q = supabase.from('crm_tables').update({ campaign_active: !!args.active }).in('tenant_id', accessibleTenantIds)
+      if (args.table_id) q = q.eq('id', args.table_id)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.table_name) q = q.or(`name.ilike.%${String(args.table_name).replace(/[%,]/g, '')}%,slug.ilike.%${String(args.table_name).replace(/[%,]/g, '')}%`)
+      const { data, error } = await q.select('id, name, client_id, campaign_active')
+      if (error) throw error
+      if (!data?.length) throw new Error('לא נמצאה טבלת קמפיין תואמת')
+      return { updated: data.length, campaign_active: !!args.active, tables: data.map((t: any) => t.name) }
+    }
+    // LEADS - full CRUD
+    case 'update_lead': {
+      const updates: Record<string, any> = {}
+      if (args.company_name) updates.company_name = args.company_name
+      if (args.contact_name !== undefined) updates.contact_name = args.contact_name
+      if (args.phone !== undefined) updates.phone = args.phone
+      if (args.email !== undefined) updates.email = args.email
+      if (args.source !== undefined) updates.source = args.source
+      if (args.notes !== undefined) updates.notes = args.notes
+      if (args.follow_up_date !== undefined) updates.follow_up_date = args.follow_up_date
+      const { data, error } = await supabase.from('leads').update(updates).eq('id', args.lead_id).in('tenant_id', accessibleTenantIds).select('id, company_name, status').single()
+      if (error) throw error
+      return data
+    }
+    case 'delete_lead': {
+      const { error } = await supabase.from('leads').delete().eq('id', args.lead_id).in('tenant_id', accessibleTenantIds)
+      if (error) throw error
+      return { success: true, deleted_id: args.lead_id }
+    }
+    // TASKS - full CRUD
+    case 'update_task': {
+      await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
+      const updates: Record<string, any> = {}
+      if (args.title) updates.title = args.title
+      if (args.due_date !== undefined) updates.due_date = args.due_date
+      if (args.due_time !== undefined) updates.due_time = args.due_time
+      if (args.priority !== undefined) updates.priority = args.priority
+      if (args.notes !== undefined) updates.notes = args.notes
+      if (args.client_id !== undefined) updates.client_id = args.client_id
+      if (args.lead_id !== undefined) updates.lead_id = args.lead_id
+      if (args.campaigner_id !== undefined) updates.campaigner_id = args.campaigner_id
+      if (args.duration_minutes !== undefined) updates.duration_minutes = args.duration_minutes
+      if (args.status) updates.status = args.status
+      const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
+      if (error) throw error
+      return data
+    }
+    case 'delete_task': {
+      await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
+      const { error } = await supabase.from('tasks').delete().eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
+      if (error) throw error
+      return { success: true, deleted_id: args.task_id }
+    }
+    case 'add_task_update': {
+      await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
+      const { data, error } = await supabase.from('task_updates').insert({ task_id: args.task_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
+      if (error) throw error
+      return { update_id: data.id }
+    }
+    case 'manage_task_collaborators': {
+      if (args.action === 'add') {
+        const { data, error } = await supabase.from('task_collaborators').insert({
+          task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: tenantId,
+        }).select('id').single()
+        if (error) throw error
+        return { success: true, action: 'added', collaborator_id: data.id }
+      } else {
+        const { error } = await supabase.from('task_collaborators').delete()
+          .eq('task_id', args.task_id).eq('campaigner_id', args.campaigner_id).in('tenant_id', accessibleTenantIds)
+        if (error) throw error
+        return { success: true, action: 'removed' }
+      }
+    }
+    // CLIENT ONBOARDING
+    case 'create_onboarding': {
+      const { data, error } = await supabase.from('client_onboarding').insert({
+        title: args.title, client_id: args.client_id, campaigner_id: args.campaigner_id || null,
+        notes: args.notes || null, tenant_id: tenantId, status: 'pending',
+      }).select('id, title, status').single()
+      if (error) throw error
+      return { onboarding_id: data.id, title: data.title, status: data.status }
+    }
+    case 'list_onboarding': {
+      let query = supabase.from('client_onboarding').select('id, title, status, clients(name)').in('tenant_id', accessibleTenantIds).order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (args.status) query = query.eq('status', args.status)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, onboarding: data.map((o: any) => ({ ...o, client_name: o.clients?.name })) }
+    }
+    case 'update_onboarding_status': {
+      const { data, error } = await supabase.from('client_onboarding').update({ status: args.status }).eq('id', args.onboarding_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
+      if (error) throw error
+      return data
+    }
+    // CAMPAIGNERS
+    case 'list_campaigners': {
+      const { data, error } = await supabase.from('campaigners').select('id, full_name, phone, email, role').in('tenant_id', accessibleTenantIds).order('full_name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, campaigners: data }
+    }
+    case 'create_campaigner': {
+      const { data, error } = await supabase.from('campaigners').insert({
+        full_name: args.full_name, phone: args.phone || null, email: args.email || null,
+        role: args.role || null, tenant_id: tenantId,
+      }).select('id, full_name').single()
+      if (error) throw error
+      return { campaigner_id: data.id, full_name: data.full_name }
+    }
+    // SALES PEOPLE
+    case 'list_sales_people': {
+      const { data, error } = await supabase.from('sales_people').select('id, full_name, phone, email').in('tenant_id', accessibleTenantIds).order('full_name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, sales_people: data }
+    }
+    case 'create_sales_person': {
+      const { data, error } = await supabase.from('sales_people').insert({
+        full_name: args.full_name, phone: args.phone || null, email: args.email || null, tenant_id: tenantId,
+      }).select('id, full_name').single()
+      if (error) throw error
+      return { sales_person_id: data.id, full_name: data.full_name }
+    }
+    // AGENCIES
+    case 'list_agencies': {
+      const { data, error } = await supabase.from('agencies').select('id, name, contact_name, phone, email').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, agencies: data }
+    }
+    case 'create_agency': {
+      const { data, error } = await supabase.from('agencies').insert({
+        name: args.name, contact_name: args.contact_name || null, phone: args.phone || null,
+        email: args.email || null, tenant_id: tenantId,
+      }).select('id, name').single()
+      if (error) throw error
+      return { agency_id: data.id, name: data.name }
+    }
+    // SUPPLIERS
+    case 'list_suppliers': {
+      const { data, error } = await supabase.from('suppliers').select('id, name, type, phone, email').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, suppliers: data }
+    }
+    case 'create_supplier': {
+      const { data, error } = await supabase.from('suppliers').insert({
+        name: args.name, type: args.type || 'other', phone: args.phone || null,
+        email: args.email || null, tenant_id: tenantId,
+      }).select('id, name').single()
+      if (error) throw error
+      return { supplier_id: data.id, name: data.name }
+    }
+    // PRODUCTS
+    case 'list_products': {
+      const { data, error } = await supabase.from('products').select('id, name, description, price, active').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, products: data }
+    }
+    case 'create_product': {
+      const { data, error } = await supabase.from('products').insert({
+        name: args.name, description: args.description || null, price: args.price, active: true, tenant_id: tenantId,
+      }).select('id, name, price').single()
+      if (error) throw error
+      return { product_id: data.id, name: data.name, price: data.price }
+    }
+    // AUTOMATIONS
+    case 'list_automations': {
+      const { data, error } = await supabase.from('automations').select('id, name, active, trigger_type').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, automations: data }
+    }
+    case 'toggle_automation': {
+      const { data, error } = await supabase.from('automations').update({ active: args.active }).eq('id', args.automation_id).in('tenant_id', accessibleTenantIds).select('id, name, active').single()
+      if (error) throw error
+      return { automation_id: data.id, name: data.name, active: data.active }
+    }
+    // DASHBOARD STATS
+    case 'get_dashboard_stats': {
+      const [leadsRes, clientsRes, tasksRes, onboardingRes] = await Promise.all([
+        supabase.from('leads').select('status', { count: 'exact', head: false }).in('tenant_id', accessibleTenantIds),
+        supabase.from('clients').select('status', { count: 'exact', head: false }).in('tenant_id', accessibleTenantIds),
+        supabase.from('tasks').select('status', { count: 'exact', head: false }).in('tenant_id', accessibleTenantIds).eq('status', 'open'),
+        supabase.from('client_onboarding').select('status', { count: 'exact', head: false }).in('tenant_id', accessibleTenantIds).eq('status', 'in_progress'),
+      ])
+      const leadsByStatus = (leadsRes.data || []).reduce((acc: any, l: any) => { acc[l.status] = (acc[l.status] || 0) + 1; return acc }, {})
+      const clientsByStatus = (clientsRes.data || []).reduce((acc: any, c: any) => { acc[c.status] = (acc[c.status] || 0) + 1; return acc }, {})
+      return {
+        leads: { total: leadsRes.data?.length || 0, by_status: leadsByStatus },
+        clients: { total: clientsRes.data?.length || 0, by_status: clientsByStatus },
+        open_tasks: tasksRes.data?.length || 0,
+        active_onboarding: onboardingRes.data?.length || 0,
+      }
+    }
+    // MEMORY
+    case 'save_memory': {
+      const cat = args.category || 'general'
+      const { data, error } = await supabase.from('ai_memory').upsert({
+        tenant_id: tenantId, user_id: (userId && userId !== 'system') ? userId : null, key: args.key, content: args.content, category: cat,
+      }, { onConflict: 'user_id,tenant_id,category,key', ignoreDuplicates: false }).select('key, category').single()
+      if (error) throw error
+      // Mirror to agent_memory (Hermes FTS layer) for cross-conversation recall
+      const importanceMap: Record<string, number> = {
+        instructions: 95, preferences: 85, personal: 80, projects: 70, clients: 70, workflows: 65, general: 50,
+      }
+      saveAgentMemory({
+        supabase, tenant_id: tenantId, agent_id,
+        category: cat,
+        title: args.key,
+        summary: args.content,
+        importance: importanceMap[cat] ?? 60,
+        metadata: { source: 'save_memory', key: args.key, user_id: userId || 'system' },
+      }).catch(() => {})
+      return { saved: true, key: data.key, category: data.category }
+    }
+    case 'recall_memory': {
+      let query = supabase.from('ai_memory').select('key, content, category, updated_at').in('tenant_id', accessibleTenantIds)
+      if (args.category) query = query.eq('category', args.category)
+      if (args.search) query = query.ilike('content', `%${args.search}%`)
+      const { data, error } = await query.order('updated_at', { ascending: false }).limit(20)
+      if (error) throw error
+      return { count: data.length, memories: data }
+    }
+    case 'recall_memory_fts': {
+      // Hermes-style FTS recall across agent_memory (cross-session, importance-aware)
+      const items = await recallAgentMemoryFTS(supabase, {
+        tenant_id: tenantId,
+        agent_id,
+        query_text: args.query || '',
+        limit: args.limit || 5,
+        min_importance: args.min_importance || 0,
+      })
+      return { count: items.length, memories: items }
+    }
+    case 'delete_memory': {
+      const { error } = await supabase.from('ai_memory').delete().in('tenant_id', accessibleTenantIds).eq('key', args.key)
+      if (error) throw error
+      return { deleted: true, key: args.key }
+    }
+    // KNOWLEDGE BASE
+    case 'kb_list_folder': {
+      let q = supabase.from('carmen_memory_pointers')
+        .select('id, category, subcategory, path, entity_type, entity_id, title, summary, ref_date, importance')
+        .in('tenant_id', accessibleTenantIds)
+      if (args.category) q = q.eq('category', args.category)
+      if (args.subcategory) q = q.eq('subcategory', args.subcategory)
+      if (args.path_prefix) q = q.like('path', `${args.path_prefix}%`)
+      const { data, error } = await q.order('ref_date', { ascending: false, nullsFirst: false }).limit(args.limit || 50)
+      if (error) throw error
+      return { count: data.length, pointers: data }
+    }
+    case 'kb_search': {
+      // Try semantic via embedding; fall back to text ILIKE on title/summary
+      try {
+        const vec = await aiEmbed(args.query)
+        if (vec) {
+          const { data, error } = await supabase.rpc('kb_match_pointers', {
+            p_tenant_id: tenantId,
+            p_query_embedding: vec,
+            p_category: args.category || null,
+            p_since_days: args.since_days || null,
+            p_limit: args.limit || 20,
+          })
+          if (!error && data) return { count: data.length, results: data, mode: 'semantic' }
+        }
+      } catch (_) {/* fall through */}
+      // Fallback text search
+      let q = supabase.from('carmen_memory_pointers')
+        .select('id, category, subcategory, path, entity_type, entity_id, title, summary, ref_date')
+        .in('tenant_id', accessibleTenantIds)
+        .or(`title.ilike.%${args.query}%,summary.ilike.%${args.query}%`)
+      if (args.category) q = q.eq('category', args.category)
+      if (args.since_days) q = q.gte('ref_date', new Date(Date.now() - args.since_days*86400000).toISOString())
+      const { data, error } = await q.order('ref_date', { ascending: false, nullsFirst: false }).limit(args.limit || 20)
+      if (error) throw error
+      return { count: data.length, results: data, mode: 'text' }
+    }
+    case 'kb_open': {
+      const { data: ptr, error: pErr } = await supabase.from('carmen_memory_pointers')
+        .select('*').eq('id', args.pointer_id).in('tenant_id', accessibleTenantIds).maybeSingle()
+      if (pErr) throw pErr
+      if (!ptr) return { error: 'pointer not found' }
+      // Fetch live row from source
+      let live: any = null
+      try {
+        const tableMap: Record<string,string> = { client: 'clients', campaigner: 'campaigners', task: 'tasks', message: 'chat_messages', lead: 'leads', report: 'seo_reports', system: '' }
+        const table = tableMap[ptr.entity_type] ?? ptr.entity_type
+        if (table) {
+          const { data } = await supabase.from(table).select('*').eq('id', ptr.entity_id).maybeSingle()
+          live = data
+        }
+      } catch (_) {/* ignore */}
+      // Bump access count async
+      supabase.from('carmen_memory_pointers').update({ updated_at: new Date().toISOString() }).eq('id', ptr.id).then(()=>{})
+      return { pointer: ptr, live }
+    }
+    case 'kb_recall_conversation': {
+      let q = supabase.from('carmen_memory_episodes')
+        .select('id, topic, topic_tags, summary, source_table, source_ids, ref_date, importance, retention_score')
+        .in('tenant_id', accessibleTenantIds)
+      if (args.topic) q = q.ilike('topic', `%${args.topic}%`)
+      if (args.query) q = q.or(`topic.ilike.%${args.query}%,summary.ilike.%${args.query}%`)
+      if (args.since_days) q = q.gte('ref_date', new Date(Date.now() - args.since_days*86400000).toISOString())
+      const { data, error } = await q.order('ref_date', { ascending: false, nullsFirst: false }).limit(args.limit || 10)
+      if (error) throw error
+      // Bump access count on returned episodes (non-blocking)
+      if (data?.length) {
+        supabase.from('carmen_memory_episodes')
+          .update({ last_accessed_at: new Date().toISOString() })
+          .in('id', data.map((d: any) => d.id)).then(()=>{})
+      }
+      return { count: data.length, episodes: data }
+    }
+    case 'kb_learn': {
+      // Generate embedding (best-effort)
+      let embedding: number[] | null = null
+      try {
+        embedding = await aiEmbed(`${args.topic}\n\n${args.summary}`)
+      } catch (_) {/* ignore */}
+      const { data, error } = await supabase.from('carmen_memory_episodes').insert({
+        tenant_id: tenantId,
+        topic: args.topic,
+        topic_tags: args.topic_tags || [],
+        summary: args.summary,
+        summary_embedding: embedding,
+        source_table: args.source_table || null,
+        source_ids: args.source_ids || [],
+        importance: Math.max(1, Math.min(10, args.importance || 5)),
+        retention_score: 1.0,
+        ref_date: new Date().toISOString(),
+      }).select('id, topic').single()
+      if (error) throw error
+      return { learned: true, episode_id: data.id, topic: data.topic }
+    }
+    // CHAT HISTORY
+    case 'get_chat_history': {
+      const filterCol = args.contact_type === 'client' ? 'client_id' : 'lead_id'
+      const { data, error } = await supabase.from('chat_messages').select('id, message_text, direction, sender_name, created_at')
+        .in('tenant_id', accessibleTenantIds).eq(filterCol, args.contact_id)
+        .order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (error) throw error
+      return { count: data.length, messages: data.reverse() }
+    }
+    case 'search_conversation_history': {
+      const rawQuery = String(args.query || '').trim()
+      // AND semantics: every token must appear in the message. Up to 4 tokens.
+      // No query = browse mode: chronological slice of the window, which then
+      // MUST be narrowed (Carmen channel / specific phone) or the whole tenant's
+      // WhatsApp traffic floods the result.
+      const tokens = rawQuery.split(/\s+/).filter(Boolean).slice(0, 4)
+      const browseMode = tokens.length === 0
+      const daysBack = Math.min(Number(args.days_back) > 0 ? Number(args.days_back) : 180, 730)
+      const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString()
+      const defaultLimit = browseMode ? 40 : 20
+      const withPhone = String(args.with_phone || '').replace(/\D/g, '')
+      const onlyCarmen = args.only_carmen_chats === true || (browseMode && args.only_carmen_chats !== false)
+      let q = supabase.from('chat_messages')
+        .select('message_text, direction, sender_name, sender_phone, created_at, group_id, provider, clients(name)')
+        .in('tenant_id', accessibleTenantIds)
+        .gte('created_at', since)
+        .not('message_text', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(Number(args.limit) > 0 ? Number(args.limit) : defaultLimit, 60))
+      for (const t of tokens) q = q.ilike('message_text', `%${t}%`)
+      if (onlyCarmen) q = q.eq('provider', 'manus_wa')
+      if (withPhone) q = q.ilike('sender_phone', `%${withPhone}%`)
+      const { data, error } = await q
+      if (error) throw error
+      const fmt = (iso: string) => new Date(iso).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
+      return {
+        count: data.length,
+        mode: browseMode ? 'browse' : 'keyword_search',
+        note: data.length === 0
+          ? (browseMode
+              ? 'אין הודעות בחלון הזמן — נסי days_back גדול יותר או only_carmen_chats=false.'
+              : 'אין תוצאות — נסי מילת תוכן אחרת (שם פרטי בלבד, חלק מהמייל, מילה נרדפת) או דפדוף בלי query.')
+          : undefined,
+        messages: data.reverse().map((m: any) => ({
+          when_israel: fmt(m.created_at),
+          direction: m.direction,
+          from: m.sender_name || m.sender_phone || '',
+          client: m.clients?.name || null,
+          in_group: !!m.group_id,
+          text: String(m.message_text).slice(0, 400),
+        })),
+      }
+    }
+    case 'get_recent_inbound_messages': {
+      const hoursAgo = args.hours || 24
+      const since = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString()
+      const { data, error } = await supabase.from('chat_messages')
+        .select('id, message_text, sender_name, sender_phone, created_at, client_id, lead_id, clients(name), leads(company_name)')
+        .in('tenant_id', accessibleTenantIds).eq('direction', 'inbound').gte('created_at', since)
+        .order('created_at', { ascending: false }).limit(args.limit || 30)
+      if (error) throw error
+      return { count: data.length, messages: data.map((m: any) => ({ ...m, contact_name: m.clients?.name || m.leads?.company_name || m.sender_name || m.sender_phone })) }
+    }
+    // FINANCE
+    case 'list_finance': {
+      let query = supabase.from('finance').select('id, amount, type, description, date, client_id, clients(name)').in('tenant_id', accessibleTenantIds).order('date', { ascending: false }).limit(args.limit || 20)
+      if (args.client_id) query = query.eq('client_id', args.client_id)
+      if (args.type) query = query.eq('type', args.type)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, entries: data.map((f: any) => ({ ...f, client_name: f.clients?.name })) }
+    }
+    case 'create_finance_entry': {
+      const { data, error } = await supabase.from('finance').insert({
+        amount: args.amount, type: args.type, description: args.description,
+        date: args.date || new Date().toISOString().split('T')[0],
+        client_id: args.client_id || null, tenant_id: tenantId,
+      }).select('id, amount, type, description').single()
+      if (error) throw error
+      return { finance_id: data.id, amount: data.amount, type: data.type }
+    }
+    case 'get_finance_summary': {
+      const month = args.month || new Date().toISOString().slice(0, 7)
+      const startDate = `${month}-01`
+      const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0).toISOString().split('T')[0]
+      const { data, error } = await supabase.from('finance').select('amount, type').in('tenant_id', accessibleTenantIds).gte('date', startDate).lte('date', endDate)
+      if (error) throw error
+      const income = (data || []).filter((f: any) => f.type === 'income').reduce((s: number, f: any) => s + (f.amount || 0), 0)
+      const expense = (data || []).filter((f: any) => f.type === 'expense').reduce((s: number, f: any) => s + (f.amount || 0), 0)
+      return { month, income, expense, profit: income - expense, entries_count: data.length }
+    }
+    // UPDATES
+    case 'list_updates': {
+      const table = args.entity_type === 'client' ? 'client_updates' : 'lead_updates'
+      const idCol = args.entity_type === 'client' ? 'client_id' : 'lead_id'
+      const { data, error } = await supabase.from(table).select('id, content, created_at').eq(idCol, args.entity_id).order('created_at', { ascending: false }).limit(args.limit || 10)
+      if (error) throw error
+      return { count: data.length, updates: data }
+    }
+    // GOALS
+    case 'create_goal': {
+      const { data, error } = await supabase.from('goals').insert({
+        tenant_id: tenantId,
+        title: args.title,
+        description: args.description || null,
+        parent_goal_id: args.parent_goal_id || null,
+        due_date: args.due_date || null,
+        owner_type: args.owner_type || 'agent',
+        owner_id: args.owner_id || null,
+        status: 'active',
+        progress_percent: 0,
+      }).select('id, title, status').single()
+      if (error) throw error
+      return { goal_id: data.id, title: data.title, status: data.status }
+    }
+    case 'list_goals': {
+      let query = supabase.from('goals').select('id, title, description, status, progress_percent, parent_goal_id, due_date, owner_type, owner_id, created_at')
+        .in('tenant_id', accessibleTenantIds).order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (args.status) query = query.eq('status', args.status)
+      const { data, error } = await query
+      if (error) throw error
+      return { count: data.length, goals: data }
+    }
+    // AGENT TASK OWNERSHIP
+    case 'take_task': {
+      const agentName = args.agent_name || 'carmen'
+      const { data, error } = await supabase.from('tasks')
+        .update({ assigned_agent: agentName, status: 'in_progress' })
+        .eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
+        .select('id, title, status, assigned_agent').single()
+      if (error) throw error
+      // Log the action
+      await supabase.from('task_updates').insert({
+        task_id: args.task_id, user_id: userId, tenant_id: tenantId,
+        content: `הסוכן ${agentName} לקח בעלות על המשימה`,
+        update_type: 'agent_action',
+      })
+      return { success: true, task: data }
+    }
+    case 'complete_task_step': {
+      // Add agent_action update
+      await supabase.from('task_updates').insert({
+        task_id: args.task_id, user_id: userId, tenant_id: tenantId,
+        content: args.step_description,
+        update_type: 'agent_action',
+      })
+      // Optionally mark as complete
+      if (args.mark_complete) {
+        await supabase.from('tasks')
+          .update({ status: 'done', assigned_agent: null })
+          .eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
+      }
+      return { success: true, task_id: args.task_id, completed: !!args.mark_complete }
+    }
+    case 'prioritize_tasks': {
+      // Fetch open tasks with their goals
+      const { data: openTasks, error } = await supabase.from('tasks')
+        .select('id, title, status, priority, due_date, due_time, assigned_agent, goal_id, clients(name), leads(company_name), campaigners(full_name)')
+        .in('tenant_id', accessibleTenantIds)
+        .in('status', ['open', 'in_progress'])
+        .order('priority', { ascending: false })
+        .limit(args.limit || 30)
+      if (error) throw error
+      // Score each task
+      const now = new Date()
+      const scored = (openTasks || []).map((t: any) => {
+        let score = t.priority || 5
+        if (t.due_date) {
+          const due = new Date(t.due_date)
+          const daysLeft = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+          if (daysLeft < 0) score += 10 // overdue
+          else if (daysLeft < 1) score += 7
+          else if (daysLeft < 3) score += 4
+          else if (daysLeft < 7) score += 2
+        }
+        if (t.goal_id) score += 2 // goal-linked tasks get a boost
+        if (t.assigned_agent) score -= 3 // already being worked on
+        return { ...t, urgency_score: score, client_name: t.clients?.name, lead_name: t.leads?.company_name, campaigner_name: t.campaigners?.full_name }
+      }).sort((a: any, b: any) => b.urgency_score - a.urgency_score)
+      return { count: scored.length, prioritized_tasks: scored }
+    }
+    // FACEBOOK AD ACCOUNTS
+    case 'list_facebook_ad_accounts': {
+      // Get Facebook access token from tenant_integrations (including shared)
+      let { data: integration } = await supabase
+        .from('tenant_integrations')
+        .select('api_key, settings, shared_from_integration_id')
+        .in('tenant_id', accessibleTenantIds)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle()
+
+      if (integration?.shared_from_integration_id && !integration?.api_key) {
+        const { data: sourceIntegration } = await supabase
+          .from('tenant_integrations')
+          .select('api_key, settings')
+          .eq('id', integration.shared_from_integration_id)
+          .eq('is_active', true)
+          .maybeSingle()
+        if (sourceIntegration?.api_key) {
+          integration = { ...integration, api_key: sourceIntegration.api_key }
+        }
+      }
+
+      if (!integration?.api_key) {
+        return { error: 'אין אינטגרציית פייסבוק מוגדרת לטננט הזה. יש להגדיר קודם.' }
+      }
+
+      const accessToken = integration.api_key
+      let allAccounts: any[] = []
+      let nextUrl = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_status,currency&limit=100&access_token=${accessToken}`
+      while (nextUrl) {
+        const resp = await fetch(nextUrl)
+        const data = await resp.json()
+        if (data.error) return { error: `Facebook API: ${data.error.message}` }
+        if (data.data) allAccounts = [...allAccounts, ...data.data]
+        nextUrl = data.paging?.next || null
+      }
+      return { count: allAccounts.length, ad_accounts: allAccounts.map((a: any) => ({ id: a.id, name: a.name, status: a.account_status, currency: a.currency })) }
+    }
+    case 'create_facebook_report_table': {
+      const { client_id, ad_account_id, ad_account_name } = args
+      // Check if table already exists for this client
+      const { data: existing } = await supabase
+        .from('crm_tables')
+        .select('id, name')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('client_id', client_id)
+        .eq('integration_type', 'facebook_insights')
+        .maybeSingle()
+      if (existing) {
+        return { already_exists: true, table_id: existing.id, name: existing.name, message: `כבר קיימת טבלת דוח פייסבוק ללקוח זה: ${existing.name}` }
+      }
+      // Get client name for the table name
+      const { data: client } = await supabase.from('clients').select('name, agency_id').eq('id', client_id).single()
+      if (!client) return { error: 'לקוח לא נמצא' }
+
+      const tableName = client.name
+      const slug = `facebook-${client_id.substring(0, 8)}`
+      const { data: table, error } = await supabase.from('crm_tables').insert({
+        tenant_id: tenantId,
+        name: tableName,
+        slug,
+        description: `דוח ביצועי מודעות פייסבוק עבור ${client.name} (${ad_account_name})`,
+        icon: 'BarChart3',
+        category: 'דוחות',
+        integration_type: 'facebook_insights',
+        integration_settings: { ad_account_id, ad_account_name },
+        agency_id: client.agency_id || null,
+        client_id,
+        created_by: userId !== 'system' ? userId : null,
+      }).select('id, name, slug').single()
+      if (error) throw error
+      return { success: true, table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name }
+    }
+    case 'check_ad_accounts_health': {
+      // 1. Resolve client scope: own tenant + shared-agency clients only (see
+      // analyze_campaign_performance — same cross-tenant flooding hazard).
+      const healthSel = 'id, name, agency_id, meta_ads_account_id, agencies(name)'
+      const healthFilters = (q: any) => {
+        q = q.in('status', ['active'])  // pulse/health reports must exclude paused/ended/onboarding clients
+        if (args.client_id) q = q.eq('id', args.client_id)
+        if (args.agency_id) q = q.eq('agency_id', args.agency_id)
+        return q
+      }
+      const { data: healthOwn } = await healthFilters(
+        supabase.from('clients').select(healthSel).eq('tenant_id', tenantId)).order('name')
+      let scopeClients: any[] = healthOwn || []
+      const { data: healthShares } = await supabase.from('agency_tenant_access')
+        .select('source_tenant_id, agency_id').eq('accessing_tenant_id', tenantId)
+      // Same ownership rule as analyze_campaign_performance above.
+      const healthShareAgencyIds = [...new Set((healthShares || []).map((s: any) => s.agency_id).filter(Boolean))]
+      const healthOwnedAgencies = new Set<string>()
+      if (healthShareAgencyIds.length > 0) {
+        const { data: ags } = await supabase.from('agencies')
+          .select('id').eq('tenant_id', tenantId).in('id', healthShareAgencyIds)
+        for (const a of (ags || [])) healthOwnedAgencies.add(a.id)
+      }
+      for (const sh of (healthShares || [])) {
+        if (!sh.source_tenant_id || sh.source_tenant_id === tenantId || !sh.agency_id) continue
+        if (!healthOwnedAgencies.has(sh.agency_id)) continue
+        const { data: sharedClients } = await healthFilters(
+          supabase.from('clients').select(healthSel).eq('tenant_id', sh.source_tenant_id).eq('agency_id', sh.agency_id))
+        if (sharedClients?.length) scopeClients = scopeClients.concat(sharedClients)
+      }
+      const clientIds = (scopeClients || []).map((c: any) => c.id)
+      if (clientIds.length === 0) return { count: 0, healthy: 0, unhealthy: [], note: 'no clients in scope' }
+
+      // 2. Find facebook_insights tables (which contain ad_account_id) for these clients
+      const { data: fbTables } = await supabase
+        .from('crm_tables')
+        .select('client_id, integration_settings')
+        .in('tenant_id', accessibleTenantIds)
+        .in('client_id', clientIds)
+        .eq('integration_type', 'facebook_insights')
+
+      const fbTableByClient = new Map<string, any>()
+      for (const t of (fbTables || [])) fbTableByClient.set(t.client_id, t.integration_settings)
+
+      // 3. Fetch Facebook access token (tenant integration)
+      let { data: integration } = await supabase
+        .from('tenant_integrations')
+        .select('api_key, shared_from_integration_id')
+        .in('tenant_id', accessibleTenantIds)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle()
+      if (integration?.shared_from_integration_id && !integration?.api_key) {
+        const { data: src } = await supabase
+          .from('tenant_integrations').select('api_key')
+          .eq('id', integration.shared_from_integration_id).eq('is_active', true).maybeSingle()
+        if (src?.api_key) integration = { ...integration, api_key: src.api_key }
+      }
+      const accessToken = integration?.api_key || null
+
+      // 4. Fetch all ad accounts in one shot (status + spend_cap)
+      const accountStatusById = new Map<string, { status: number; name: string; disable_reason?: number }>()
+      let tokenOk = !!accessToken
+      if (accessToken) {
+        try {
+          let url: string | null = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,account_id,name,account_status,disable_reason&limit=200&access_token=${accessToken}`
+          while (url) {
+            const r: any = await fetch(url)
+            const j: any = await r.json()
+            if (j.error) { tokenOk = false; break }
+            for (const a of (j.data || [])) {
+              accountStatusById.set(String(a.id), { status: a.account_status, name: a.name, disable_reason: a.disable_reason })
+              accountStatusById.set(`act_${a.account_id}`, { status: a.account_status, name: a.name, disable_reason: a.disable_reason })
+            }
+            url = j.paging?.next || null
+          }
+        } catch (_) { tokenOk = false }
+      }
+
+      // 5. Compute spend_7d per client from facebook_insights records
+      const now = new Date()
+      const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
+      const d7Str = d7.toISOString().split('T')[0]
+      const fbTableIds = (fbTables || []).map((t: any) => t).filter(Boolean)
+      const tableIdsForRecords = await supabase
+        .from('crm_tables').select('id, client_id, integration_settings')
+        .in('client_id', clientIds).in('tenant_id', accessibleTenantIds).eq('integration_type', 'facebook_insights')
+      const tableIdToClient = new Map<string, string>()
+      const settingsByClient = new Map<string, any>()
+      for (const t of (tableIdsForRecords.data || [])) {
+        tableIdToClient.set(t.id, t.client_id)
+        settingsByClient.set(t.client_id, t.integration_settings)
+      }
+      const tableIds = Array.from(tableIdToClient.keys())
+      const spendByClient = new Map<string, { spend7: number; activeCount: number; pausedCount: number }>()
+      if (tableIds.length > 0) {
+        const { data: recs } = await supabase
+          .from('crm_records').select('table_id, data')
+          .in('table_id', tableIds).in('tenant_id', accessibleTenantIds)
+        for (const r of (recs || [])) {
+          const cid = tableIdToClient.get(r.table_id)
+          if (!cid) continue
+          const cur = spendByClient.get(cid) || { spend7: 0, activeCount: 0, pausedCount: 0 }
+          if (r.data?.date && r.data.date >= d7Str) cur.spend7 += parseFloat(r.data?.spend) || 0
+          const eff = String(r.data?.effective_status || '').toUpperCase()
+          if (eff === 'ACTIVE') cur.activeCount += 1
+          else if (eff === 'PAUSED' || eff === 'OFF') cur.pausedCount += 1
+          spendByClient.set(cid, cur)
+        }
+      }
+
+      const unhealthy: any[] = []
+      let healthy = 0
+      for (const c of (scopeClients || [])) {
+        const settings = settingsByClient.get(c.id)
+        const adAccountId = settings?.ad_account_id
+          || (c.meta_ads_account_id ? String(c.meta_ads_account_id).replace(/^act_/, '') : null)
+        const flags: string[] = []
+        let status: string = 'unknown'
+        let hasSpend7 = false
+        let allPaused = false
+        const sb = spendByClient.get(c.id)
+        if (sb) {
+          hasSpend7 = sb.spend7 > 0
+          allPaused = sb.activeCount === 0 && sb.pausedCount > 0
+        }
+        if (!adAccountId) {
+          flags.push('not_connected')
+        } else if (!tokenOk) {
+          flags.push('fb_token_expired')
+          status = 'token_expired'
+        } else {
+          const acct = accountStatusById.get(String(adAccountId)) || accountStatusById.get(`act_${String(adAccountId).replace(/^act_/, '')}`)
+          if (!acct) {
+            flags.push('account_not_found')
+            status = 'not_found'
+          } else {
+            // Meta: 1=ACTIVE, 2=DISABLED, 3=UNSETTLED, 7=PENDING_RISK_REVIEW, 8=PENDING_SETTLEMENT, 9=IN_GRACE_PERIOD, 100=PENDING_CLOSURE, 101=CLOSED, 102=PENDING_REVIEW, 201=ANY_ACTIVE
+            const s = acct.status
+            status = s === 1 ? 'active' : s === 2 ? 'disabled' : s === 101 ? 'closed' : s === 7 || s === 102 ? 'pending_review' : `status_${s}`
+            if (s !== 1) flags.push(`fb_${status}`)
+          }
+        }
+        if (status === 'active' && !hasSpend7) flags.push('no_spend_7d')
+        if (status === 'active' && allPaused) flags.push('all_campaigns_paused')
+
+        if (flags.length === 0) healthy += 1
+        else unhealthy.push({
+          client_id: c.id,
+          client_name: c.name,
+          agency_name: c.agencies?.name ?? null,
+          ad_account_id: adAccountId,
+          fb: { status, has_spend_7d: hasSpend7, all_paused: allPaused, token_ok: tokenOk },
+          flags,
+        })
+      }
+
+      return {
+        count: scopeClients?.length || 0,
+        healthy,
+        unhealthy_count: unhealthy.length,
+        token_ok: tokenOk,
+        unhealthy,
+        instructions_to_agent: unhealthy.length > 0
+          ? 'דווחי על כל הלקוחות הבעייתיים בבלוק "🚨 חשבונות מודעות לא תקינים". לכל אחד פרטי בעברית את ה-flag הראשי. אם token_ok=false — ציינו בנפרד שצריך לחבר מחדש את אינטגרציית פייסבוק.'
+          : 'כל החשבונות תקינים. החזירי משפט קצר אחד.',
+      }
+    }
+    case 'list_unconnected_clients': {
+      // Get active clients that don't have a facebook_insights table
+      const { data: allClients, error: clientsErr } = await supabase
+        .from('clients')
+        .select('id, name, agency_id, agencies(name)')
+        .in('tenant_id', accessibleTenantIds)
+        .in('status', ['active', 'onboarding'])
+        .order('name')
+      if (clientsErr) throw clientsErr
+
+      const { data: connectedTables } = await supabase
+        .from('crm_tables')
+        .select('client_id')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('integration_type', 'facebook_insights')
+        .not('client_id', 'is', null)
+
+      const connectedClientIds = new Set((connectedTables || []).map((t: any) => t.client_id))
+      const unconnected = (allClients || []).filter((c: any) => !connectedClientIds.has(c.id))
+        .map((c: any) => ({ id: c.id, name: c.name, agency_name: c.agencies?.name }))
+
+      return { count: unconnected.length, unconnected_clients: unconnected }
+    }
+    case 'list_integrations': {
+      let q = supabase.from('tenant_integrations').select('id, integration_type, is_active, settings, last_sync_at, created_at').in('tenant_id', accessibleTenantIds)
+      if (args.type) q = q.eq('integration_type', args.type)
+      if (args.only_active) q = q.eq('is_active', true)
+      const { data, error } = await q.order('integration_type')
+      if (error) throw error
+      return { count: data?.length || 0, integrations: (data || []).map((i: any) => ({ id: i.id, type: i.integration_type, is_active: i.is_active, last_sync_at: i.last_sync_at })) }
+    }
+    case 'toggle_integration': {
+      const { data, error } = await supabase.from('tenant_integrations').update({ is_active: args.is_active }).eq('id', args.integration_id).in('tenant_id', accessibleTenantIds).select('id, integration_type, is_active').single()
+      if (error) throw error
+      return data
+    }
+    case 'list_agents': {
+      let q = supabase.from('ai_agents').select('id, name, talent, engine, active').in('tenant_id', accessibleTenantIds)
+      if (args.only_active) q = q.eq('active', true)
+      const { data, error } = await q.order('name')
+      if (error) throw error
+      return { count: data?.length || 0, agents: data }
+    }
+    case 'create_agent': {
+      const { data, error } = await supabase.from('ai_agents').insert({
+        tenant_id: tenantId,
+        name: args.name,
+        talent: args.talent,
+        personality: args.personality || null,
+        soul: args.soul || null,
+        engine: args.engine || 'gemini-3-flash',
+        active: true,
+      }).select('id, name').single()
+      if (error) throw error
+      return { agent_id: data.id, name: data.name, message: `סוכן ${data.name} נוצר בהצלחה תחת כרמן` }
+    }
+    case 'update_agent': {
+      const updates: any = {}
+      for (const k of ['name', 'talent', 'personality', 'soul', 'engine', 'active']) {
+        if (args[k] !== undefined) updates[k] = args[k]
+      }
+      const { data, error } = await supabase.from('ai_agents').update(updates).eq('id', args.agent_id).in('tenant_id', accessibleTenantIds).select('id, name, active').single()
+      if (error) throw error
+      return data
+    }
+    case 'delegate_to_github_agent': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/github-agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: args.action || 'chat_support', tenant_id: tenantId, message: args.message }),
+      })
+      const txt = await res.text()
+      if (!res.ok) return { error: `github-agent failed [${res.status}]: ${txt}` }
+      try { return JSON.parse(txt) } catch { return { response: txt } }
+    }
+    case 'create_whatsapp_instance': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: 'create_instance', tenantId, displayName: args.displayName, countryCode: args.countryCode }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `create_instance failed [${res.status}]` }
+      return data
+    }
+    case 'get_whatsapp_qr_link': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: 'get_qr_link', integrationId: args.integrationId }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `get_qr_link failed [${res.status}]` }
+      return data
+    }
+    case 'get_whatsapp_status': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: 'get_status', integrationId: args.integrationId }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `get_status failed [${res.status}]` }
+      return data
+    }
+    case 'send_whatsapp_via_gateway': {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+        body: JSON.stringify({ action: 'send_message', integrationId: args.integrationId, phone: args.phone, message: args.message }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `send_whatsapp_via_gateway failed [${res.status}]` }
+      return data
+    }
+    // ===========================
+    // HERMES SKILLS SYSTEM
+    // ===========================
+    case 'recall_skills': {
+      const limit = Math.min(args.limit || 5, 20)
+      const q = String(args.query || '').trim()
+      // Try FTS first; fall back to ILIKE
+      let { data, error } = await supabase
+        .from('ai_skills')
+        .select('id, name, description, steps, trigger_phrases, usage_count, version, last_used_at')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .textSearch('search_vector', q.split(/\s+/).filter(Boolean).join(' | '), { type: 'websearch', config: 'simple' })
+        .limit(limit)
+      if (error || !data || data.length === 0) {
+        const { data: fb } = await supabase
+          .from('ai_skills')
+          .select('id, name, description, steps, trigger_phrases, usage_count, version, last_used_at')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .or(`name.ilike.%${q}%,description.ilike.%${q}%`)
+          .limit(limit)
+        data = fb || []
+      }
+      return { count: data?.length || 0, skills: data || [] }
+    }
+    case 'create_skill': {
+      const { data, error } = await supabase.from('ai_skills').insert({
+        tenant_id: tenantId,
+        user_id: userId !== 'system' ? userId : null,
+        name: args.name,
+        description: args.description,
+        steps: args.body,
+        trigger_phrases: Array.isArray(args.trigger_phrases) ? args.trigger_phrases : [],
+        created_by_agent: true,
+        is_active: true,
+        version: 1,
+      }).select('id, name, version').single()
+      if (error) throw error
+      console.log(`[Hermes] Skill created by Carmen: ${data.name} (id=${data.id})`)
+      return { skill_id: data.id, name: data.name, version: data.version, message: 'הסקיל נשמר. אשתמש בו אוטומטית במשימות דומות בעתיד.' }
+    }
+    case 'update_skill': {
+      const { data: current } = await supabase
+        .from('ai_skills')
+        .select('id, version, name')
+        .eq('id', args.skill_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (!current) return { error: 'Skill not found' }
+      const updates: any = {
+        steps: args.body,
+        version: (current.version || 1) + 1,
+        updated_at: new Date().toISOString(),
+      }
+      if (args.description) updates.description = args.description
+      const { data, error } = await supabase
+        .from('ai_skills')
+        .update(updates)
+        .eq('id', args.skill_id)
+        .eq('tenant_id', tenantId)
+        .select('id, name, version')
+        .single()
+      if (error) throw error
+      console.log(`[Hermes] Skill updated: ${data.name} v${data.version} - ${args.change_note || ''}`)
+      return { skill_id: data.id, name: data.name, version: data.version, message: 'הסקיל עודכן.' }
+    }
+    case 'delegate_to_subagent': {
+      if (!args.title || !args.prompt) throw new Error('title and prompt are required')
+      return await spawnSubagent(supabase, {
+        parentAgentId: agentId || null,
+        tenantId,
+        title: args.title,
+        prompt: args.prompt,
+        taskMode: args.task_mode || 'background',
+        taskSkills: Array.isArray(args.task_skills) ? args.task_skills : undefined,
+        priority: typeof args.priority === 'number' ? args.priority : undefined,
+        createdBy: userId !== 'system' ? userId : null,
+        // When the caller is on WhatsApp, propagate the chat target so the
+        // subagent can deliver its final result back to the same WA chat
+        // instead of dying silently.
+        notify: waNotify && waNotify.surface === 'whatsapp' ? waNotify : null,
+      })
+    }
+
+    case 'get_subagent_result': {
+      if (!args.sub_task_id) throw new Error('sub_task_id is required')
+      return await getSubagentResult(supabase, tenantId, args.sub_task_id)
+    }
+
+    case 'delegate_parallel': {
+      const items = Array.isArray(args.tasks) ? args.tasks : []
+      if (items.length === 0) throw new Error('tasks (array of {title, prompt}) is required')
+      if (items.length > 8) throw new Error('עד 8 תת-משימות מקבילות בבת אחת')
+      const cleaned = items
+        .filter((it: any) => it && it.title && it.prompt)
+        .map((it: any) => ({
+          title: String(it.title),
+          prompt: String(it.prompt),
+          taskSkills: Array.isArray(it.task_skills) ? it.task_skills : undefined,
+          // Routing: read-only subtasks (side_effects:false) run in parallel;
+          // mutating ones (default) run one-at-a-time in the serial lane.
+          sideEffects: typeof it.side_effects === 'boolean' ? it.side_effects : undefined,
+        }))
+      if (cleaned.length === 0) throw new Error('כל תת-משימה חייבת title ו-prompt')
+      const batchId = crypto.randomUUID()
+      return await spawnSubagentBatch(
+        supabase,
+        {
+          parentAgentId: agentId || null,
+          tenantId,
+          taskMode: 'background',
+          createdBy: userId !== 'system' ? userId : null,
+          notify: waNotify && waNotify.surface === 'whatsapp' ? waNotify : null,
+        },
+        cleaned,
+        batchId,
+      )
+    }
+
+    case 'get_batch_results': {
+      if (!args.batch_id) throw new Error('batch_id is required')
+      return await getBatchResults(supabase, tenantId, args.batch_id)
+    }
+
+    case 'propose_automation': {
+      if (!args.name || !args.trigger_type || !Array.isArray(args.steps) || args.steps.length === 0) {
+        throw new Error('name, trigger_type ו-steps (מערך לא ריק) נדרשים')
+      }
+      const spec = {
+        name: String(args.name),
+        description: args.description ? String(args.description) : null,
+        trigger_type: String(args.trigger_type),
+        trigger_config: (args.trigger_config && typeof args.trigger_config === 'object') ? args.trigger_config : {},
+        steps: (args.steps as any[]).slice(0, 20).map((s) => ({
+          type: String(s.type || 'agent'),
+          skin: s.skin ? String(s.skin) : null,
+          instruction: s.instruction ? String(s.instruction) : null,
+          action_type: s.action_type ? String(s.action_type) : null,
+          config: (s.config && typeof s.config === 'object') ? s.config : {},
+          label: s.label ? String(s.label) : null,
+        })),
+      }
+      const stepSummary = spec.steps
+        .map((s, i) => `${i + 1}. ${s.label || s.type}${s.skin ? ` [${s.skin}]` : ''}`)
+        .join('  ·  ')
+      const { data, error } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'create_automation',
+        title: `בניית אוטומציה: ${spec.name}`,
+        description: `טריגר: ${spec.trigger_type} | שלבים: ${stepSummary}`,
+        tool_name: 'create_automation',
+        tool_input: spec,
+        context: { caller_role: callerRole, caller_phone: callerPhone },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: data.id,
+        summary: `אוטומציה "${spec.name}" — ${spec.steps.length} שלבים`,
+        instruction_for_carmen: 'הצג למשתמש את התכנון (טריגר + שלבים) ובקש אישור. האוטומציה תיווצר כבויה רק לאחר אישור; אל תפעילי אותה — המשתמש יבדוק ויפעיל בעצמו.',
+      }
+    }
+
+    // ============ MEDIA LIBRARY ============
+    case 'save_media_from_chat': {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-save-media`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY },
+        body: JSON.stringify({ tenant_id: tenantId, created_by: userId, ...args }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j?.error || 'save_media_failed')
+      return j
+    }
+    case 'list_client_media': {
+      let q = supabase.from('marketing_media_library').select('id, mime_type, file_size, ad_ready, caption, tags, created_at, client_id, lead_id').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 20)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.lead_id) q = q.eq('lead_id', args.lead_id)
+      if (args.only_ad_ready) q = q.eq('ad_ready', true)
+      if (Array.isArray(args.tags) && args.tags.length) q = q.contains('tags', args.tags)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, media: data }
+    }
+
+    // ============ APPROVAL HELPERS ============
+    case 'list_pending_approvals': {
+      const { data, error } = await supabase.from('agent_approval_queue')
+        .select('id, action_type, title, description, tool_name, tool_input, created_at, status, requested_by')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(args.limit || 10)
+      if (error) throw error
+      return { count: data.length, approvals: data }
+    }
+    case 'execute_pending_approval': {
+      let approvalId = args.approval_id
+      if (!approvalId) {
+        const { data } = await supabase.from('agent_approval_queue').select('id').eq('tenant_id', tenantId).eq('status', 'pending').order('created_at', { ascending: false }).limit(1).maybeSingle()
+        approvalId = data?.id
+      }
+      if (!approvalId) return { success: false, error: 'no_pending_approval' }
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-approval-execute`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY },
+        body: JSON.stringify({ approval_id: approvalId, approved_by: userId }),
+      })
+      const j = await r.json()
+      return j
+    }
+    case 'reject_pending_approval': {
+      const { error } = await supabase.from('agent_approval_queue').update({ status: 'rejected', approved_by: userId, approved_at: new Date().toISOString(), execution_result: { reason: args.reason || null } }).eq('id', args.approval_id).eq('tenant_id', tenantId)
+      if (error) throw error
+      return { success: true, approval_id: args.approval_id, status: 'rejected' }
+    }
+
+    // ============ FB ADS — all create approval rows, return pending ============
+    case 'fb_create_campaign':
+    case 'fb_create_adset':
+    case 'fb_create_ad':
+    case 'fb_create_creative_from_media':
+    case 'fb_replace_lead_form':
+    case 'fb_update_budget':
+    case 'fb_pause':
+    case 'fb_resume':
+    case 'gads_pause':
+    case 'gads_resume':
+    case 'gads_update_budget': {
+      const titles: Record<string, string> = {
+        fb_create_campaign: `יצירת קמפיין FB: ${args.name || ''}`,
+        fb_create_adset: `יצירת ad set: ${args.name || ''}`,
+        fb_create_ad: `יצירת מודעה: ${args.name || ''}`,
+        fb_create_creative_from_media: `בניית קריאייטיב חדש מ-media`,
+        fb_replace_lead_form: `החלפת טופס לידים במודעה ${args.ad_id}`,
+        fb_update_budget: `שינוי תקציב ${args.entity_id} → ${args.daily_budget ?? args.lifetime_budget}`,
+        fb_pause: `כיבוי ${args.entity_id}`,
+        fb_resume: `הדלקה ${args.entity_id}`,
+        gads_pause: `Google Ads — כיבוי ${args.campaign_id}`,
+        gads_resume: `Google Ads — הדלקה ${args.campaign_id}`,
+        gads_update_budget: `Google Ads — תקציב ${args.campaign_id} → ${args.daily_budget}`,
+      }
+      const { data, error } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: name,
+        title: titles[name] || name,
+        description: 'פעולת mutating שדורשת אישור משתמש בוואטסאפ',
+        tool_name: name,
+        tool_input: args,
+        context: { caller_role: callerRole, caller_phone: callerPhone },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: data.id,
+        action: name,
+        summary: titles[name] || name,
+        instruction_for_carmen: 'הצג למשתמש בקצרה מה את עומדת לעשות ובקש אישור: "לאשר? (כן/לא)". אל תבצעי כלום עד שיגיע אישור — קוראת ל-execute_pending_approval רק אחרי תשובה חיובית.',
+      }
+    }
+
+    // ============ GOOGLE ADS — READ TOOLS ============
+    case 'list_google_ad_accounts': {
+      const { data: gadsInteg } = await supabase
+        .from('tenant_integrations')
+        .select('settings')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('integration_type', 'google_ads')
+        .eq('is_active', true)
+        .limit(1).maybeSingle()
+
+      if (!gadsInteg?.settings?.refresh_token) {
+        return { error: 'אין חיבור Google Ads פעיל לטננט הזה. יש לחבר תחילה דרך הגדרות האינטגרציות.' }
+      }
+
+      const gClientId = Deno.env.get('GOOGLE_CLIENT_ID')
+      const gClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+      const gDevToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')
+      if (!gClientId || !gClientSecret || !gDevToken) {
+        return { error: 'חסרות הגדרות סביבה של Google Ads (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN)' }
+      }
+
+      const tokResp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        body: new URLSearchParams({
+          refresh_token: gadsInteg.settings.refresh_token,
+          client_id: gClientId,
+          client_secret: gClientSecret,
+          grant_type: 'refresh_token',
+        }),
+      })
+      const tokData = await tokResp.json()
+      if (!tokData.access_token) {
+        return { error: 'כישלון בחידוש טוקן Google Ads', details: tokData?.error_description }
+      }
+      const gAccessToken = tokData.access_token
+
+      const gadsHeaders: Record<string, string> = {
+        'Authorization': `Bearer ${gAccessToken}`,
+        'developer-token': gDevToken,
+      }
+
+      // List all customers this token can access
+      const listResp = await fetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+        headers: gadsHeaders,
+      })
+      const listData = await listResp.json()
+      if (listData.error) {
+        return { error: `Google Ads API: ${listData.error?.message || JSON.stringify(listData.error)}` }
+      }
+
+      const resourceNames: string[] = listData.resourceNames || []
+      const customerIds = resourceNames.map((r: string) => r.replace('customers/', ''))
+
+      // Fetch name+status for each customer in parallel
+      const accounts = await Promise.all(customerIds.map(async (cid: string) => {
+        try {
+          const r = await fetch(`https://googleads.googleapis.com/v23/customers/${cid}/googleAds:search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...gadsHeaders },
+            body: JSON.stringify({ query: 'SELECT customer.id, customer.descriptive_name, customer.status, customer.manager FROM customer LIMIT 1' }),
+          })
+          const d = await r.json()
+          const row = d.results?.[0]?.customer
+          if (!row) return { customer_id: cid, name: null, status: null, is_manager: false }
+          return { customer_id: cid, name: row.descriptiveName ?? null, status: row.status ?? null, is_manager: row.manager ?? false }
+        } catch {
+          return { customer_id: cid, name: null, status: null, is_manager: false }
+        }
+      }))
+
+      // Look up which clients already have a google_ads_account_id set
+      const { data: linkedClients } = await supabase
+        .from('clients')
+        .select('id, name, google_ads_account_id')
+        .in('tenant_id', accessibleTenantIds)
+        .not('google_ads_account_id', 'is', null)
+
+      const clientByAccountId = new Map<string, { id: string; name: string }>()
+      for (const c of (linkedClients || [])) {
+        if (c.google_ads_account_id) {
+          clientByAccountId.set(String(c.google_ads_account_id).replace(/-/g, ''), { id: c.id, name: c.name })
+        }
+      }
+
+      let result = accounts.map((a: any) => ({
+        customer_id: a.customer_id,
+        name: a.name,
+        status: a.status,
+        is_manager: a.is_manager,
+        client_id: clientByAccountId.get(a.customer_id)?.id ?? null,
+        client_name: clientByAccountId.get(a.customer_id)?.name ?? null,
+      }))
+
+      if (args.client_id) {
+        result = result.filter((a: any) => a.client_id === args.client_id)
+      }
+
+      return { count: result.length, accounts: result }
+    }
+
+    case 'connect_google_ads_account': {
+      const { client_id, customer_id } = args
+      if (!client_id || !customer_id) return { error: 'client_id ו-customer_id נדרשים' }
+
+      const cleanId = String(customer_id).replace(/-/g, '')
+
+      const { data: client } = await supabase
+        .from('clients')
+        .select('id, name, google_ads_account_id')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('id', client_id)
+        .maybeSingle()
+
+      if (!client) return { error: 'לקוח לא נמצא' }
+
+      const { error: updateErr } = await supabase
+        .from('clients')
+        .update({ google_ads_account_id: cleanId })
+        .eq('id', client_id)
+
+      if (updateErr) throw updateErr
+
+      await supabase.from('agent_action_log').insert({
+        tenant_id: tenantId,
+        action_type: 'connect_google_ads_account',
+        status: 'success',
+        action_details: { client_id, client_name: client.name, customer_id: cleanId, previous_id: client.google_ads_account_id ?? null },
+      }).then(() => {}, () => {})
+
+      return { success: true, client_id, client_name: client.name, customer_id: cleanId }
+    }
+
+    // ============ SCHEDULES ============
+    case 'schedule_campaign_toggle': {
+      const nextRun = args.run_at || (args.cron_expression ? new Date(Date.now() + 60_000).toISOString() : null)
+      const { data, error } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'schedule_campaign_toggle',
+        title: `תזמון ${args.action} ל-${args.entity_id}`,
+        description: args.cron_expression ? `cron: ${args.cron_expression} (${args.timezone || 'Asia/Jerusalem'})` : `חד-פעמי: ${args.run_at}`,
+        tool_name: 'schedule_campaign_toggle',
+        tool_input: { ...args, next_run_at: nextRun },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: data.id,
+        action: 'schedule_campaign_toggle',
+        summary: `תזמון ${args.action} ל-${args.entity_id}: ${args.cron_expression || args.run_at}`,
+        instruction_for_carmen: 'הצג את התזמון ובקש אישור. רק אחרי "כן" קוראת ל-execute_pending_approval — והוא ייצור את הרשומה ב-campaign_schedules.',
+      }
+    }
+    case 'list_campaign_schedules': {
+      let q = supabase.from('campaign_schedules').select('id, entity_id, entity_type, action, cron_expression, run_at, timezone, enabled, next_run_at, last_run_at, last_run_status, notes').eq('tenant_id', tenantId).order('next_run_at', { ascending: true }).limit(args.limit || 50)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.only_enabled) q = q.eq('enabled', true)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, schedules: data }
+    }
+    case 'cancel_campaign_schedule': {
+      const { error } = await supabase.from('campaign_schedules').update({ enabled: false }).eq('id', args.schedule_id).eq('tenant_id', tenantId)
+      if (error) throw error
+      return { success: true, schedule_id: args.schedule_id, enabled: false }
+    }
+
+    // ===========================
+    // BROADCAST (דיוור)
+    // ===========================
+    case 'list_broadcasts': {
+      let q = supabase
+        .from('broadcasts')
+        .select('id, name, channel, status, scheduled_at, stats, created_at, body_text')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(args.limit || 20)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, broadcasts: data }
+    }
+    case 'create_broadcast': {
+      // Build audience_filter from source + extra filter
+      const audience_filter: Record<string, any> = {
+        source: args.audience_source,
+        ...(args.audience_filter || {}),
+      }
+      // Determine provider from tenant's default WA integration
+      let provider = 'green_api'
+      let integration_id = args.integration_id || null
+      if (!integration_id) {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('id, integration_type')
+          .eq('tenant_id', tenantId)
+          .in('integration_type', ['green_api', 'manus_wa'])
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (integ) {
+          integration_id = integ.id
+          provider = integ.integration_type
+        }
+      } else {
+        const { data: integ } = await supabase
+          .from('tenant_integrations')
+          .select('integration_type')
+          .eq('id', integration_id)
+          .maybeSingle()
+        if (integ) provider = integ.integration_type
+      }
+      const insertData: Record<string, any> = {
+        tenant_id: tenantId,
+        created_by: callerId || null,
+        name: args.name,
+        channel: 'whatsapp',
+        provider,
+        integration_id,
+        body_text: args.body_text,
+        audience_filter,
+        status: 'draft',
+      }
+      if (args.scheduled_at) {
+        insertData.scheduled_at = args.scheduled_at
+        insertData.status = 'scheduled'
+      }
+      const { data: bc, error } = await supabase.from('broadcasts').insert(insertData).select('id, name, status, scheduled_at').single()
+      if (error) throw error
+      return {
+        pending_approval: true,
+        approval_id: null,
+        broadcast_id: bc.id,
+        summary: `דיוור חדש "${bc.name}" נוצר (${bc.status}). קהל: ${args.audience_source}. ${args.scheduled_at ? 'מתוזמן ל-' + args.scheduled_at : 'טרם נשלח — שאל את המשתמש לאישור ושליחה.'}`,
+        instruction_for_carmen: 'הצג סיכום של הדיוור (שם, קהל, תוכן) ושאל "לשלוח עכשיו או לתזמן למועד מסוים?". אסור לשלוח בלי אישור מפורש.',
+      }
+    }
+    case 'send_broadcast_now': {
+      const { data: bc, error: bcErr } = await supabase
+        .from('broadcasts')
+        .select('id, name, status, tenant_id')
+        .eq('id', args.broadcast_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (bcErr || !bc) throw new Error('דיוור לא נמצא')
+      if (!['draft','scheduled'].includes(bc.status)) throw new Error(`אי אפשר לשלוח דיוור בסטטוס ${bc.status}`)
+      const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'send_broadcast_now',
+        title: `שליחת דיוור: ${bc.name}`,
+        description: 'שליחת דיוור WhatsApp מיידית',
+        tool_name: 'send_broadcast_now',
+        tool_input: { broadcast_id: bc.id },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aq.id,
+        summary: `שליחת דיוור "${bc.name}" מיידית לכל הנמענים.`,
+        instruction_for_carmen: 'הצג סיכום ובקש אישור. אחרי אישור — קרא ל-execute_pending_approval.',
+      }
+    }
+    case 'schedule_broadcast': {
+      const { data: bc, error: bcErr } = await supabase
+        .from('broadcasts')
+        .select('id, name, status')
+        .eq('id', args.broadcast_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (bcErr || !bc) throw new Error('דיוור לא נמצא')
+      const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'schedule_broadcast',
+        title: `תזמון דיוור: ${bc.name}`,
+        description: `תזמון ל-${args.scheduled_at}`,
+        tool_name: 'schedule_broadcast',
+        tool_input: { broadcast_id: bc.id, scheduled_at: args.scheduled_at },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aq.id,
+        summary: `תזמון דיוור "${bc.name}" ל-${args.scheduled_at}.`,
+        instruction_for_carmen: 'הצג סיכום ובקש אישור. אחרי אישור — קרא ל-execute_pending_approval.',
+      }
+    }
+    case 'cancel_broadcast': {
+      const { data: bc, error: bcErr } = await supabase
+        .from('broadcasts')
+        .select('id, name, status')
+        .eq('id', args.broadcast_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (bcErr || !bc) throw new Error('דיוור לא נמצא')
+      const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: 'cancel_broadcast',
+        title: `ביטול דיוור: ${bc.name}`,
+        description: `ביטול דיוור בסטטוס ${bc.status}`,
+        tool_name: 'cancel_broadcast',
+        tool_input: { broadcast_id: bc.id },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aq.id,
+        summary: `ביטול דיוור "${bc.name}" (${bc.status}).`,
+        instruction_for_carmen: 'הצג סיכום ובקש אישור. אחרי אישור — קרא ל-execute_pending_approval.',
+      }
+    }
+    case 'list_wa_groups': {
+      let q = supabase
+        .from('whatsapp_groups')
+        .select('id, group_name, group_chat_id, created_at')
+        .eq('tenant_id', tenantId)
+        .eq('is_blocked', false)
+        .order('group_name', { ascending: true })
+        .limit(args.limit || 50)
+      if (args.name_search) q = q.ilike('group_name', `%${args.name_search}%`)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data.length, groups: data }
+    }
+
+    // ============ CALENDAR INVITES ============
+    case 'send_calendar_invite': {
+      const { attendee_email, attendee_name, title, date, time, duration_minutes, notes } = args
       if (!attendee_email || !title || !date || !time) return { error: 'attendee_email, title, date, time נדרשים' }
 
       const cal = await resolveCalendarAccessToken(supabase, tenantId, callerCampaignerId, userId)
