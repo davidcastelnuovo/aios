@@ -1471,19 +1471,40 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return await r.json()
     }
     case 'get_latest_campaign_pulse': {
-      let query = supabase
-        .from('campaign_pulse_snapshots')
-        .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, client_id, agency_id, clients(name), agencies(name)')
-        .in('tenant_id', accessibleTenantIds)
-        .order('calculated_at', { ascending: false })
-      if (args.client_id) query = query.eq('client_id', args.client_id)
-      if (args.agency_id) query = query.eq('agency_id', args.agency_id)
-      if (args.status) query = query.eq('status', args.status)
-      if (callerManagedAgencyIds && callerManagedAgencyIds.length > 0) {
-        query = query.in('agency_id', callerManagedAgencyIds)
+      const loadPulse = async () => {
+        let query = supabase
+          .from('campaign_pulse_snapshots')
+          .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, client_id, agency_id, clients(name), agencies(name)')
+          .eq('tenant_id', tenantId)
+          .order('calculated_at', { ascending: false })
+        if (args.client_id) query = query.eq('client_id', args.client_id)
+        if (args.agency_id) query = query.eq('agency_id', args.agency_id)
+        if (args.status) query = query.eq('status', args.status)
+        if (callerManagedAgencyIds && callerManagedAgencyIds.length > 0) {
+          query = query.in('agency_id', callerManagedAgencyIds)
+        }
+        return await query
       }
-      const { data, error } = await query
+      let { data, error } = await loadPulse()
       if (error) throw error
+      let autoRefreshed = false
+      if (!data?.length) {
+        const refresh = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/campaign-pulse-snapshot`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ tenant_id: tenantId }),
+        })
+        if (refresh.ok) {
+          autoRefreshed = true
+          const reloaded = await loadPulse()
+          data = reloaded.data
+          error = reloaded.error
+          if (error) throw error
+        }
+      }
       let rows = data || []
       if (args.client_name) {
         const needle = String(args.client_name).toLocaleLowerCase('he')
@@ -1497,6 +1518,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         data_source: 'deterministic_campaign_pulse_cache',
         external_api_called: false,
         ai_used_to_calculate: false,
+        auto_refreshed: autoRefreshed,
         count: rows.length,
         freshness: rows[0]?.calculated_at || null,
         rows: rows.map((row: any) => ({
@@ -1507,8 +1529,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           agencies: undefined,
         })),
         instructions_to_agent: rows.length
-          ? 'הציגי את הנתונים הקיימים וצייני מתי חושבו. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.'
-          : 'אין עדיין snapshot. אמרי זאת והציעי להריץ את מנוע הדופק; אל תטעני שאין קמפיינים.',
+          ? 'הציגי את הנתונים בטבלה מסודרת המקובצת לפי סוכנות וצייני מתי חושבו. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.'
+          : 'מנוע הדופק הופעל אוטומטית אך לא החזיר snapshot. אמרי שלא נמצאו נתונים מחושבים; אל תטעני שאין קמפיינים.',
       }
     }
     case 'analyze_campaign_performance': {
