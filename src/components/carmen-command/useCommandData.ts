@@ -40,7 +40,7 @@ export function useCoreOverview(tenantId: string | null) {
       const todayStart = `${todayStr()}T00:00:00Z`;
       const [agentRes, memRes, sessRes, llmRes, agentsCount, inToday, outToday] = await Promise.all([
         sb.from("ai_agents").select("id, name, mood, voice, engine").eq("tenant_id", tenantId).limit(1).maybeSingle(),
-        sb.from("carmen_memory_pointers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+        sb.rpc("get_carmen_memory_counts", { p_tenant_id: tenantId }).maybeSingle(),
         sb.from("carmen_whatsapp_sessions").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "active"),
         sb.from("tenant_integrations").select("id, is_active").eq("tenant_id", tenantId).eq("integration_type", "llm").maybeSingle(),
         sb.from("ai_agents").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
@@ -51,7 +51,7 @@ export function useCoreOverview(tenantId: string | null) {
         inboundToday: inToday.count ?? 0,
         outboundToday: outToday.count ?? 0,
         agent: agentRes.data as { id: string; name: string; mood: string | null; voice: string | null; engine: string | null } | null,
-        memoryCount: memRes.count ?? 0,
+        memoryCount: Number(memRes.data?.total_count ?? 0),
         activeSessions: sessRes.count ?? 0,
         llmConfigured: !!llmRes.data,
         llmActive: llmRes.data?.is_active ?? false,
