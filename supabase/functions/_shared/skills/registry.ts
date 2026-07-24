@@ -43,8 +43,8 @@ interface DbSkillRow {
 const FALLBACK_PULSE_CHECK: CarmenSkill = {
   id: 'pulse_check',
   triggers: [/בדיקת\s*דופק/, /בדיקת\s*דוח/, /סיכום\s*קמפיינים/, /מצב\s*קמפיינים/, /\bpulse\s*check\b/i],
-  tools: ['analyze_campaign_performance', 'check_ad_accounts_health'],
-  prompt: '=== סקיל: בדיקת דופק ===\nהריצי analyze_campaign_performance + check_ad_accounts_health, הציגי לפי סוכנות עם 🔴/🟠/🟢 וסיכום מהיר.',
+  tools: ['get_latest_campaign_pulse'],
+  prompt: '=== סקיל: בדיקת דופק ===\nחובה לקרוא ל-get_latest_campaign_pulse ולהציג רק את ה-Snapshot האחרון שנשמר. אסור לחשב בדיקה חדשה, להריץ ניתוח חלופי או להשלים נתונים מהזיכרון. אם אין Snapshot שמור, אמרי שאין בדיקת דופק זמינה.',
   source: 'fallback',
 }
 const FALLBACK_ECOMMERCE: CarmenSkill = {
