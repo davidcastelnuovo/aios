@@ -39,6 +39,8 @@ Deno.serve(async (request) => {
   const datedArticles = (articles ?? []).map((article) => ({
     ...article,
     article_date: article.source_month ?? article.published_at,
+    actual_published_at: article.published_at,
+    published_at: article.source_month ?? article.published_at,
   }));
 
   return new Response(JSON.stringify({ site, articles: datedArticles, generatedAt: new Date().toISOString() }), { status: 200, headers: jsonHeaders });
