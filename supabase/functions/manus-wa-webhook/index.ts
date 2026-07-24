@@ -52,6 +52,32 @@ async function resolveMessageText(payload: any, msgContainer: any): Promise<stri
   return '[מדיה]';
 }
 
+// Was the inbound message a voice note? (drives Carmen's voice-out mirroring)
+function messageIsVoice(payload: any, msgContainer: any): boolean {
+  if (!payload?.hasMedia) return false;
+  const url = pickAudioUrl(payload, msgContainer);
+  return !!(url && looksAudio(payload, msgContainer, url));
+}
+
+// Send Carmen's reply as a voice note too (best-effort, via send-manus-wa-voice)
+function makeVoiceSender(tenantId: string): (chatId: string, text: string) => Promise<boolean> {
+  return async (toChatId: string, text: string): Promise<boolean> => {
+    try {
+      const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-voice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({ tenant_id: tenantId, to: toChatId, text }),
+      });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  };
+}
+
 function ok(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -753,6 +779,8 @@ Deno.serve(async (req) => {
           isManualOutgoing: isOutgoingFromPhone,
           isGroup: true,
           sourceChannel: 'own_instance',
+          isVoiceMessage: messageIsVoice(payload, msgContainer),
+          sendVoice: makeVoiceSender(groupTenantId),
           sendMessage: async (_chatId: string, message: string) => {
             const settingsAny = (integ.settings as any) || {};
             const baseUrl = settingsAny.gateway_url || 'https://whatsappgw-pzpyrrww.manus.space';
@@ -899,6 +927,8 @@ Deno.serve(async (req) => {
         isManualOutgoing: isOutgoingFromPhone,
         isGroup: false,
         sourceChannel: 'own_instance',
+        isVoiceMessage: messageIsVoice(payload, msgContainer),
+        sendVoice: makeVoiceSender(tenantId),
         sendMessage: async (_chatId: string, message: string) => {
           try {
             const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
