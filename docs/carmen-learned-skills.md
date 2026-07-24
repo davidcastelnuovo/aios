@@ -328,3 +328,8 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - `maskyoo_settings` — הגדרות API לטננט (base_url + api_token)
 
 **Commits:** see branch `claude/masquio-reports-integration-d006h5`
+
+## set_campaign_table_active + בדיקת דופק ממוקדת (2026-07-24)
+- **כלי חדש ב-run-ai-agent:** `set_campaign_table_active` — מדליק/מכבה את `crm_tables.campaign_active` לפי client_id/table_id/table_name (מוגבל טננט + הרשאות caller). כשאומרים לכרמן שקמפיין הופסק/חזר — היא מעדכנת את הדגל בעצמה, ובדיקות הדופק מדווחות רק על טבלאות פעילות. יש גם Badge לחיץ בעמוד הטבלאות.
+- **skins "בדיקת דופק" (שני הטננטים) סונכרנו:** סעיף 0 חדש — בידוד טננטים (רק לקוחות הטננט הנוכחי), פטור ללקוחות is_seo_client ללא שירות קמפיינים מדיווחי "חסר חיבור לטבלה", דילוג על טבלאות campaign_active=false, ו-list_clients(status="active") בלבד + סינון תוצאות check_ad_accounts_health לפי הרשימה הפעילה (הבלוק הזה היה חסר ב-MarketingCaptain).
+- **carmen-realtime-session:** ההנחיות מזהות את המתקשר בשמו, מצהירות ש-ask_carmen הוא המוח של כרמן עצמה (scoping אוטומטי לפי הרשאות), ודוחות שיחות לא-עבודה ("אני באמצע ניהול עסק").
