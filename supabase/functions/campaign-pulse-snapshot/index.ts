@@ -10,17 +10,31 @@ const round = (value: number | null, digits = 2) =>
 
 function buildDigest(rows: any[]): string {
   const count = (status: string) => rows.filter((row) => row.status === status).length
+  const statusLabel: Record<string, string> = {
+    healthy: 'תקין',
+    warning: 'אזהרה',
+    critical: 'קריטי',
+    no_data: 'אין נתונים',
+  }
   const lines = [
     'עדכון קמפיינים אוטומטי',
     `נבדקו ${rows.length} לקוחות פעילים: ${count('healthy')} תקינים, ${count('warning')} דורשים תשומת לב, ${count('critical')} קריטיים, ${count('no_data')} ללא נתונים.`,
   ]
-  const noteworthy = rows.filter((row) => row.status !== 'healthy').slice(0, 12)
-  for (const row of noteworthy) {
-    const metric = row.is_ecommerce ? `ROAS ${row.roas_7d ?? '—'}` : `CPL ₪${row.cpl_7d ?? '—'}`
-    lines.push(`• ${row.client_name} (${row.agency_name || 'ללא סוכנות'}): ${metric} — ${(row.flags || []).join(', ')}`)
+  const agencies = new Map<string, any[]>()
+  for (const row of rows) {
+    const agency = row.agency_name || 'ללא סוכנות'
+    agencies.set(agency, [...(agencies.get(agency) || []), row])
   }
-  const hidden = rows.filter((row) => row.status !== 'healthy').length - noteworthy.length
-  if (hidden > 0) lines.push(`ועוד ${hidden} לקוחות במרכז הבקרה.`)
+  for (const [agency, agencyRows] of agencies) {
+    lines.push('', `*${agency}*`, 'לקוח | מדד 7 ימים | מצב')
+    for (const row of agencyRows) {
+      const metric = row.is_ecommerce
+        ? `ROAS ${row.roas_7d ?? '—'}`
+        : `CPL ₪${row.cpl_7d ?? '—'}`
+      lines.push(`${row.client_name} | ${metric} | ${statusLabel[row.status] || row.status}`)
+      if ((row.flags || []).length) lines.push(`↳ ${(row.flags || []).join(', ')}`)
+    }
+  }
   lines.push('מקור: הנתונים המסונכרנים ב-AIOS. ללא הפעלת כרמן וללא קריאת API נוספת.')
   return lines.join('\n')
 }
@@ -45,9 +59,23 @@ Deno.serve(async (req) => {
   for (const setting of settings || []) {
     const started = Date.now()
     const tenantId = setting.tenant_id
+    const [{ data: ownedAgencies, error: ownedAgenciesError }, { data: sharedAgencies, error: sharedAgenciesError }] =
+      await Promise.all([
+        supabase.from('agencies').select('id').eq('tenant_id', tenantId),
+        supabase.from('agency_tenant_access').select('agency_id').eq('accessing_tenant_id', tenantId),
+      ])
+    if (ownedAgenciesError || sharedAgenciesError) {
+      results.push({ tenant_id: tenantId, error: ownedAgenciesError?.message || sharedAgenciesError?.message })
+      continue
+    }
+    const agencyIds = Array.from(new Set([
+      ...(ownedAgencies || []).map((agency: any) => agency.id),
+      ...(sharedAgencies || []).map((agency: any) => agency.agency_id),
+    ]))
     const { data: clients, error: clientsError } = await supabase.from('clients')
-      .select('id, name, agency_id, is_ecommerce, agencies(name)')
-      .eq('tenant_id', tenantId).eq('status', 'active').order('name')
+      .select('id, name, tenant_id, agency_id, is_ecommerce, agencies(name)')
+      .in('agency_id', agencyIds.length ? agencyIds : ['00000000-0000-0000-0000-000000000000'])
+      .eq('status', 'active').order('name')
     if (clientsError) { results.push({ tenant_id: tenantId, error: clientsError.message }); continue }
     const clientIds = (clients || []).map((client: any) => client.id)
     const tableResult = clientIds.length
@@ -73,7 +101,7 @@ Deno.serve(async (req) => {
       let records: any[] = []
       if (tableIds.length) {
         const response = await supabase.from('crm_records').select('data')
-          .in('table_id', tableIds).eq('tenant_id', tenantId)
+          .in('table_id', tableIds)
         records = response.data || []
       }
       const recent = records.filter((row: any) => row.data?.date && row.data.date >= d30Str)
