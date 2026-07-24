@@ -17,7 +17,7 @@ import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, P
 
 type PublishingSite = { id: string; site_key: string; name: string; destination_type: "pbn" | "wordpress" | "custom_api"; client_id: string | null; connection_id: string | null; base_url: string | null; categories: string[]; status: string; is_hidden: boolean };
 type WordPressSite = { id: string; site_url: string; site_name: string | null; client_id: string | null; is_active: boolean };
-type PublishingArticle = { id: string; client_id: string | null; customer_name: string | null; primary_keyword: string; proposed_topic: string | null; target_url: string | null; category: string | null; status: string; site_id: string | null; live_url: string | null; source_month: string | null; source_sheet: string | null; source_row: number | null; title: string | null; excerpt: string | null; content: string[]; updated_at: string };
+type PublishingArticle = { id: string; client_id: string | null; customer_name: string | null; primary_keyword: string; proposed_topic: string | null; target_url: string | null; category: string | null; status: string; site_id: string | null; slug: string | null; live_url: string | null; published_at: string | null; source_month: string | null; source_sheet: string | null; source_row: number | null; title: string | null; excerpt: string | null; content: string[]; updated_at: string };
 type ImportRow = { customerName: string; primaryKeyword: string; topic: string; targetUrl: string; siteKey: string; category: string; sheetName: string; rowNumber: number; sourceMonth: string; errors: string[] };
 type ClientOption = { id: string; name: string };
 type VercelProject = { id: string; name: string; framework: string | null; updated_at?: number; domains: Array<{ name: string; verified: boolean }>; deployment: { id: string; url: string; state: string; created_at: number } | null };
@@ -74,6 +74,23 @@ function readCell(record: Record<string, unknown>, aliases: string[]) {
 
 function isValidHttpUrl(value: string) {
   try { const url = new URL(value); return url.protocol === "http:" || url.protocol === "https:"; } catch { return false; }
+}
+
+function createArticleSlug(title: string, articleId: string) {
+  const normalized = title
+    .trim()
+    .toLowerCase()
+    .replace(/['"׳״]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .replace(/-+$/g, "");
+  return `${normalized || "article"}-${articleId.slice(0, 8)}`;
+}
+
+function articleLiveUrl(site: PublishingSite | undefined, slug: string) {
+  const baseUrl = site?.base_url?.replace(/\/+$/, "");
+  return baseUrl ? `${baseUrl}/articles/${encodeURIComponent(slug)}` : null;
 }
 
 export function PublishingStudio({ tenantId, clientId }: { tenantId: string; clientId?: string }) {
@@ -147,7 +164,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const { data: articles = [], isLoading: loadingArticles } = useQuery({
     queryKey: ["publishing-articles", tenantId],
     queryFn: async () => {
-      const { data, error } = await db.from("publishing_articles").select("id,client_id,customer_name,primary_keyword,proposed_topic,target_url,category,status,site_id,live_url,source_month,source_sheet,source_row,title,excerpt,content,updated_at").eq("tenant_id", tenantId).order("source_month", { ascending: false, nullsFirst: false }).order("customer_name").limit(500);
+      const { data, error } = await db.from("publishing_articles").select("id,client_id,customer_name,primary_keyword,proposed_topic,target_url,category,status,site_id,slug,live_url,published_at,source_month,source_sheet,source_row,title,excerpt,content,updated_at").eq("tenant_id", tenantId).order("source_month", { ascending: false, nullsFirst: false }).order("customer_name").limit(500);
       if (error) throw error;
       return (data ?? []) as PublishingArticle[];
     },
@@ -164,6 +181,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     return { project, site, primaryDomain };
   }), [sites, vercelProjects]);
   const visiblePbnSites = useMemo(() => sites.filter((site) => site.destination_type === "pbn" && !site.is_hidden), [sites]);
+  const publishedArticles = useMemo(() => articles.filter((article) => article.status === "published"), [articles]);
   const pbnRows = useMemo(() => visiblePbnSites.map((site) => {
     const project = vercelProjects.find((candidate) => candidate.id === site.connection_id || candidate.name.toLowerCase().endsWith(site.site_key.toLowerCase()));
     const primaryDomain = project?.domains.find((domain) => domain.verified)?.name ?? project?.domains[0]?.name ?? null;
@@ -455,15 +473,24 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     if (invalid.length) return toast.error(`${invalid.length} מאמרים חסרים תוכן, אתר או קישור יעד`);
     setPublishingSelected(true);
     try {
-      const { error } = await db.from("publishing_articles").update({
-        status: "published",
-        published_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).in("id", selected.map((article) => article.id)).eq("tenant_id", tenantId);
-      if (error) throw error;
+      const publishedAt = new Date().toISOString();
+      const results = await Promise.all(selected.map((article) => {
+        const slug = article.slug || createArticleSlug(article.title!, article.id);
+        const liveUrl = articleLiveUrl(siteById.get(article.site_id!), slug);
+        if (!liveUrl) throw new Error(`לאתר של המאמר "${article.title}" אין כתובת פעילה`);
+        return db.from("publishing_articles").update({
+          status: "published",
+          slug,
+          live_url: liveUrl,
+          published_at: publishedAt,
+          updated_at: publishedAt,
+        }).eq("id", article.id).eq("tenant_id", tenantId);
+      }));
+      const failed = results.find((result) => result.error);
+      if (failed?.error) throw failed.error;
       await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
       setSelectedArticleIds([]);
-      toast.success(`${selected.length} מאמרים אושרו ונשלחו ל־Feed של האתרים`);
+      toast.success(`${selected.length} מאמרים פורסמו; הקישורים זמינים בלשונית "פורסמו"`);
     } catch (error: unknown) {
       toast.error(errorMessage(error, "אישור המאמרים נכשל"));
     } finally {
@@ -481,7 +508,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         <SelectContent>{articles.map((article) => <SelectItem key={article.id} value={article.id}>{formatSourceMonth(article.source_month)} · {article.customer_name || "מערכתי"} · {article.title || article.proposed_topic || article.primary_keyword}</SelectItem>)}</SelectContent>
       </Select>
     </div>
-    <Tabs defaultValue="imports" className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-5 pt-2"><TabsList><TabsTrigger value="imports">ייבוא Excel</TabsTrigger><TabsTrigger value="articles">מאמרים ({articles.length})</TabsTrigger><TabsTrigger value="sites">אתרים ({visiblePbnSites.length})</TabsTrigger></TabsList></div>
+    <Tabs defaultValue="imports" className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-5 pt-2"><TabsList><TabsTrigger value="imports">ייבוא Excel</TabsTrigger><TabsTrigger value="articles">מאמרים ({articles.length})</TabsTrigger><TabsTrigger value="published">פורסמו ({publishedArticles.length})</TabsTrigger><TabsTrigger value="sites">אתרים ({visiblePbnSites.length})</TabsTrigger></TabsList></div>
       <TabsContent value="imports" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="space-y-4 p-5">
         {!sites.some((site) => site.destination_type === "pbn") && !loadingSites && <Card className="flex items-center gap-4 border-amber-300 bg-amber-50 p-4"><Globe2 className="h-8 w-8 text-amber-600" /><div className="flex-1"><h3 className="font-bold">הוספת רשת המגזינים</h3><p className="text-xs text-muted-foreground">הפעולה יוצרת עשרה יעדי PBN במצב טיוטה. היא לא פורסת דומיינים.</p></div><Button onClick={createDefaultSites} disabled={busy}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}יצירת 10 מגזינים</Button></Card>}
         <Card className="p-5"><div className="flex items-center gap-4"><div className="grid h-12 w-12 place-items-center rounded-xl bg-emerald-100"><FileSpreadsheet className="h-6 w-6 text-emerald-700" /></div><div className="flex-1"><h3 className="font-bold">העלאת טבלת קישורים</h3><p className="text-xs text-muted-foreground">המערכת קוראת את כל הגיליונות ומזהה לקוח, ביטוי, נושא ו-URL.</p></div><Input ref={inputRef} className="hidden" type="file" accept=".xlsx,.xls" onChange={(event) => event.target.files?.[0] && parseWorkbook(event.target.files[0])} /><Button variant="outline" onClick={() => inputRef.current?.click()} disabled={busy}><Upload className="ml-2 h-4 w-4" />בחר Excel</Button></div></Card>
@@ -520,6 +547,29 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
                         <Button size="sm" variant="outline" onClick={() => generateArticles([article.id])} disabled={Boolean(generatingArticleIds.length)}>{isGenerating ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="ml-1 h-3.5 w-3.5" />}כתיבה</Button>
                         <Button size="sm" variant="outline" onClick={() => openArticleEditor(article)}><Pencil className="ml-1 h-3.5 w-3.5" />צפייה ועריכה</Button>
                       </div></td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>}
+            </Card>
+          </div>
+        </ScrollArea>
+      </TabsContent>
+      <TabsContent value="published" className="min-h-0 flex-1 mt-0">
+        <ScrollArea className="h-full">
+          <div className="p-5">
+            <Card className="overflow-hidden">
+              {publishedArticles.length === 0 ? <div className="p-10 text-center text-sm text-muted-foreground">עדיין אין מאמרים שפורסמו בפועל.</div> : <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50"><tr><th className="p-3 text-right">תאריך פרסום</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">מאמר</th><th className="p-3 text-right">האתר שבו פורסם</th><th className="p-3 text-right">קישור חי</th></tr></thead>
+                  <tbody>{publishedArticles.map((article) => {
+                    const site = siteById.get(article.site_id ?? "");
+                    return <tr key={article.id} className="border-t">
+                      <td className="whitespace-nowrap p-3">{article.published_at ? new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" }).format(new Date(article.published_at)) : "—"}</td>
+                      <td className="p-3 font-medium">{article.customer_name || "מערכתי"}</td>
+                      <td className="max-w-sm p-3"><div className="font-medium">{article.title || article.proposed_topic}</div><div className="mt-1 text-[10px] text-muted-foreground">{article.primary_keyword}</div></td>
+                      <td className="p-3"><div className="font-medium">{site?.name ?? "אתר לא ידוע"}</div><div className="max-w-52 truncate text-[10px] text-muted-foreground" dir="ltr">{site?.base_url ?? ""}</div></td>
+                      <td className="p-3">{article.live_url ? <Button size="sm" variant="outline" asChild><a href={article.live_url} target="_blank" rel="noreferrer"><ExternalLink className="ml-1 h-3.5 w-3.5" />למאמר באתר</a></Button> : <Badge variant="outline" className="border-amber-300 text-amber-700">חסר קישור חי</Badge>}</td>
                     </tr>;
                   })}</tbody>
                 </table>
