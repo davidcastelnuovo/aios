@@ -823,6 +823,11 @@ export interface CarmenContext {
   sourceChannel?: 'own_instance' | 'operator_mirror' | null;
   /** Transport-specific send function. Returns true on success. */
   sendMessage: (chatId: string, message: string) => Promise<boolean>;
+  /** True when the inbound message was a voice note (transcribed audio). */
+  isVoiceMessage?: boolean;
+  /** Optional transport voice sender — when set and the inbound was voice,
+   * Carmen's replies are mirrored as voice notes (text is always sent too). */
+  sendVoice?: (chatId: string, text: string) => Promise<boolean>;
 }
 
 export type CarmenHandleResult =
@@ -927,8 +932,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // sendMessage when no action step exists or the dispatch fails.
   const routingAutomationId = activeSession?.automation_id || earlyAutomation?.id || null;
   const routedSend = async (toChatId: string, message: string): Promise<boolean> => {
+    let sent = false;
     if (routingAutomationId) {
-      const ok = await sendCarmenReplyViaActionStep({
+      sent = await sendCarmenReplyViaActionStep({
         supabase,
         automationId: routingAutomationId,
         tenantId,
@@ -938,9 +944,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         isGroup,
         message,
       });
-      if (ok) return true;
     }
-    return sendMessage(toChatId, message);
+    if (!sent) sent = await sendMessage(toChatId, message);
+    // Voice-in → voice-out: when the user spoke, Carmen also answers in a
+    // voice note (fire-and-forget; the text reply above is the reliable path).
+    if (sent && ctx.isVoiceMessage && ctx.sendVoice) {
+      ctx.sendVoice(toChatId, message).catch((e: unknown) =>
+        console.error('[carmen] voice reply failed (text was sent)', String(e)));
+    }
+    return sent;
   };
 
   // Built once and passed to runCarmenAI so any subagent that Carmen spawns
