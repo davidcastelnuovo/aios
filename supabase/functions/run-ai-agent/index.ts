@@ -13,7 +13,7 @@ import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
 import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
-import { aiEmbed, resolveOpenAIKey } from '../_shared/ai.ts'
+import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 
 
 const corsHeaders = {
@@ -140,6 +140,71 @@ async function recordProviderFailover(supabase: any, tenantId: string, fromLabel
       p_message: `♻️ כרמן המשיכה לעבוד ללא הפרעה: הספק ${fromLabel} נגמר/נחסם ועברתי אוטומטית ל-${toLabel}. כדאי לטעון קרדיט לספק המקורי.`,
     }).then(() => {}, () => {})
   } catch { /* reporting must never break the reply */ }
+}
+
+// ─── Tool router (embedding-backed) ───
+// Carmen has ~140 tools; sending all of them every request wastes tokens,
+// dilutes tool selection, and collides with OpenAI's 128-tool cap. The router
+// embeds the user's message and keeps only the most relevant tools plus an
+// always-on core set, so each request carries a small, focused toolset. Fully
+// best-effort: any failure falls back to the full set (capToolsForTarget stays
+// as the final backstop for OpenAI's limit).
+const ROUTER_ACTIVATE_MIN = 90   // only route when the agent actually has a large toolset
+const ROUTER_MATCH_COUNT = 55    // relevant tools to pull by similarity
+// Reflex tools Carmen must always be able to reach regardless of the message.
+const CORE_TOOLS = new Set([
+  'save_memory', 'recall_memory', 'recall_memory_fts', 'delete_memory',
+  'kb_search', 'kb_open', 'kb_list_folder', 'kb_recall_conversation', 'kb_learn',
+  'list_clients', 'get_client_info', 'list_leads', 'search_entities',
+  'create_task', 'list_tasks', 'list_my_agent_tasks', 'create_agent_task',
+  'send_message', 'get_dashboard_stats', 'recall_recent_action', 'record_action_episode',
+])
+
+// Cheap, stable signature of a tool description so embeddings refresh when the
+// description changes (djb2 — deterministic, no async crypto needed).
+function toolSig(s: string): string {
+  let h = 5381
+  const str = s || ''
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
+
+// Lazily populate/refresh tool embeddings. First call after deploy embeds the
+// whole set in one batch (~1-2s, one-time); later calls embed only tools whose
+// description signature changed.
+async function ensureToolEmbeddings(supabase: any, toolDefs: any[]): Promise<void> {
+  const { data: existing } = await supabase.from('agent_tool_embeddings').select('tool_name, sig')
+  const have = new Map<string, string>((existing || []).map((r: any) => [r.tool_name, r.sig]))
+  const missing = toolDefs.filter((t) => have.get(t.name) !== toolSig(t.description || ''))
+  if (missing.length === 0) return
+  const vectors = await aiEmbedBatch(missing.map((t) => `${t.name}: ${t.description || ''}`))
+  if (!vectors) return
+  const rows = missing.map((t, i) => ({
+    tool_name: t.name, sig: toolSig(t.description || ''), embedding: vectors[i], updated_at: new Date().toISOString(),
+  }))
+  await supabase.from('agent_tool_embeddings').upsert(rows, { onConflict: 'tool_name' })
+}
+
+// Focused subset of toolDefs relevant to userText, unioned with the always-on
+// core set. Returns the full list unchanged on any failure or small toolset.
+async function selectRelevantTools(supabase: any, userText: string, toolDefs: any[]): Promise<any[]> {
+  try {
+    if (!userText?.trim() || toolDefs.length <= ROUTER_ACTIVATE_MIN) return toolDefs
+    await ensureToolEmbeddings(supabase, toolDefs)
+    const qvec = await aiEmbed(userText)
+    if (!qvec) return toolDefs
+    const { data } = await supabase.rpc('match_agent_tools', { query_embedding: qvec, match_count: ROUTER_MATCH_COUNT })
+    if (!data?.length) return toolDefs
+    const picked = new Set<string>(data.map((r: any) => r.tool_name))
+    for (const c of CORE_TOOLS) picked.add(c)
+    const result = toolDefs.filter((t) => picked.has(t.name))
+    if (result.length < 10) return toolDefs // guard against an empty/bad match wiping the toolset
+    console.log(`[AGENT] tool router: ${toolDefs.length} → ${result.length} relevant tools`)
+    return result
+  } catch (e: any) {
+    console.error('[AGENT] tool router failed, using full set:', e?.message)
+    return toolDefs
+  }
 }
 
 // Rough per-model pricing (USD per 1M tokens in/out) for the usage panel.
@@ -4526,6 +4591,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     }
 
 
+
+    // 4a-router. For Carmen's large toolset, keep only the tools relevant to this
+    // message (+ the always-on core). Best-effort — falls back to the full set;
+    // capToolsForTarget remains the final backstop for OpenAI's 128-tool limit.
+    if (isCarmen) {
+      filteredTools = await selectRelevantTools(supabase, String(command_text || ''), filteredTools)
+    }
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
 

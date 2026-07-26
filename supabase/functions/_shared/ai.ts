@@ -80,6 +80,37 @@ export async function aiEmbed(text: string): Promise<number[] | null> {
   }
 }
 
+/** Embed many texts in one call (order preserved). Used by the tool router to
+ *  populate tool embeddings cheaply. Returns null on any failure. */
+export async function aiEmbedBatch(texts: string[]): Promise<number[][] | null> {
+  const key = await resolveOpenAIKey();
+  if (!key || !texts?.length) return null;
+  try {
+    const r = await fetch(`${OPENAI_BASE}/embeddings`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: AI_EMBED_MODEL,
+        input: texts.map((t) => (t || "").slice(0, 8000)),
+        dimensions: 1536,
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    logAiUsage({
+      source: "aiEmbedBatch", model: AI_EMBED_MODEL,
+      tokens_in: j?.usage?.prompt_tokens ?? null,
+      cost_usd: estimateOpenAICostUSD(AI_EMBED_MODEL, j?.usage?.prompt_tokens ?? 0, 0),
+    });
+    const out: number[][] = (j?.data ?? [])
+      .sort((a: any, b: any) => (a.index ?? 0) - (b.index ?? 0))
+      .map((d: any) => d.embedding);
+    return out.length === texts.length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Single-prompt chat completion → raw assistant string, or null. */
 /* ---------- Usage metering (additive, best-effort) ----------
    Every helper logs its OpenAI usage to ai_usage_log so the Command Center
