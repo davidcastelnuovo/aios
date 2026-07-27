@@ -23,6 +23,105 @@ interface CheckRow {
   detail: string;
 }
 
+const CAMPAIGN_TABLE_TYPES = ['facebook_insights', 'facebook_ecommerce', 'google_ads'];
+
+function campaignServices(client: any): Set<string> {
+  return new Set(
+    (Array.isArray(client?.services) ? client.services : [])
+      .map((service: unknown) => String(service))
+      .filter((service: string) => service === 'ppc_meta' || service === 'ppc_google'),
+  );
+}
+
+function platformTables(tables: any[], platform: 'meta' | 'google'): any[] {
+  return tables.filter((table) => platform === 'google'
+    ? table.integration_type === 'google_ads'
+    : table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce');
+}
+
+function isAccountConnected(table: any): boolean {
+  const settings = table.integration_settings || {};
+  if (table.integration_type === 'google_ads') {
+    return !!(settings.customer_id || settings.ad_account_id);
+  }
+  return !!(settings.ad_account_id || settings.account_id || settings.meta_account_id);
+}
+
+async function buildTenantHealthDigest(supabase: any, tenantId: string, checks: CheckRow[]): Promise<string> {
+  const [{ data: ownedAgencies }, { data: sharedAgencies }] = await Promise.all([
+    supabase.from('agencies').select('id').eq('tenant_id', tenantId),
+    supabase.from('agency_tenant_access').select('agency_id').eq('accessing_tenant_id', tenantId),
+  ]);
+  const agencyIds = Array.from(new Set([
+    ...(ownedAgencies || []).map((agency: any) => agency.id),
+    ...(sharedAgencies || []).map((agency: any) => agency.agency_id),
+  ]));
+  const { data: allClients } = await supabase.from('clients')
+    .select('id, name, services, agency_id, agencies(name)')
+    .in('agency_id', agencyIds.length ? agencyIds : ['00000000-0000-0000-0000-000000000000'])
+    .eq('status', 'active')
+    .order('name');
+  const clients = (allClients || []).filter((client: any) => campaignServices(client).size > 0);
+  const clientIds = clients.map((client: any) => client.id);
+  const { data: allTables } = clientIds.length
+    ? await supabase.from('crm_tables')
+        .select('id, name, client_id, integration_type, integration_settings, campaign_active, last_sync_at')
+        .in('client_id', clientIds)
+        .in('integration_type', CAMPAIGN_TABLE_TYPES)
+    : { data: [] };
+
+  const issues: string[] = [];
+  let activeConnections = 0;
+  for (const client of clients) {
+    const services = campaignServices(client);
+    const clientTables = (allTables || []).filter((table: any) => table.client_id === client.id);
+    for (const platform of ['meta', 'google'] as const) {
+      const expected = platform === 'meta' ? services.has('ppc_meta') : services.has('ppc_google');
+      if (!expected) continue;
+      const configured = platformTables(clientTables, platform);
+      // Existing tables that were explicitly switched off represent a paused
+      // campaign and are excluded from both the health and performance reports.
+      const active = configured.filter((table: any) => table.campaign_active !== false);
+      if (configured.length > 0 && active.length === 0) continue;
+      const platformLabel = platform === 'meta' ? 'Meta' : 'Google';
+      if (active.length === 0) {
+        issues.push(`🔴 *${client.name}* — ${platformLabel}: אין דוח קמפיין מחובר`);
+        continue;
+      }
+      activeConnections += active.length;
+      for (const table of active) {
+        if (!isAccountConnected(table)) {
+          issues.push(`🔴 *${client.name}* — ${platformLabel}: חסר חשבון מודעות בדוח ${table.name}`);
+          continue;
+        }
+        const lastSync = table.last_sync_at || table.integration_settings?.last_sync_at;
+        const stale = !lastSync || Date.now() - new Date(lastSync).getTime() > 18 * 60 * 60 * 1000;
+        if (stale) {
+          issues.push(`🟡 *${client.name}* — ${platformLabel}: הסנכרון האחרון ישן או חסר`);
+        }
+      }
+    }
+  }
+
+  const relevantChecks = checks.filter((check) => check.tenant_id === null || check.tenant_id === tenantId);
+  for (const check of relevantChecks.filter((item) => item.status !== 'ok')) {
+    const icon = check.status === 'down' ? '🔴' : '🟡';
+    issues.unshift(`${icon} *${check.service}* — ${check.detail}`);
+  }
+  const okChecks = relevantChecks.filter((item) => item.status === 'ok').length;
+  const lines = [
+    '*בדיקת תקינות מערכות וקמפיינים*',
+    `נבדקו ${activeConnections} חיבורי קמפיינים פעילים ו-${relevantChecks.length} שירותי מערכת.`,
+  ];
+  if (issues.length === 0) {
+    lines.push(`🟢 הכול תקין — ${activeConnections} חיבורי קמפיינים פעילים ו-${okChecks} שירותים מחוברים ללא שגיאות.`);
+  } else {
+    lines.push(`נמצאו ${issues.length} נקודות לטיפול:`, '', ...issues);
+  }
+  lines.push('', 'לקוחות SEO בלבד וקמפיינים שסומנו כבויים אינם נכללים בבדיקה.');
+  return lines.join('\n');
+}
+
 async function timedFetch(url: string, init: RequestInit = {}, timeoutMs = 8000): Promise<{ status: number | null; latency: number; error?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -302,12 +401,48 @@ Deno.serve(async (req) => {
 
   const { error: insertError } = await supabase.from('service_health_checks').insert(rows);
 
+  const deliveries: Array<{ tenant_id: string; sent: boolean; error?: string }> = [];
+  const { data: deliverySettings } = await supabase.from('tenant_heartbeat_settings')
+    .select('tenant_id')
+    .eq('campaign_pulse_enabled', true);
+  for (const setting of deliverySettings || []) {
+    const claim = await supabase.rpc('claim_health_digest_delivery', { p_tenant_id: setting.tenant_id });
+    if (claim.error || claim.data !== true) continue;
+    try {
+      const digest = await buildTenantHealthDigest(supabase, setting.tenant_id, rows);
+      const delivery = await supabase.rpc('claude_notify_david', {
+        p_message: digest,
+        p_tenant: setting.tenant_id,
+      });
+      const sent = !delivery.error && delivery.data?.queued === true;
+      deliveries.push({
+        tenant_id: setting.tenant_id,
+        sent,
+        ...(delivery.error ? { error: delivery.error.message } : {}),
+      });
+      if (!sent) {
+        await supabase.from('tenant_heartbeat_settings')
+          .update({ health_digest_last_sent_at: null })
+          .eq('tenant_id', setting.tenant_id);
+      }
+    } catch (error) {
+      await supabase.from('tenant_heartbeat_settings')
+        .update({ health_digest_last_sent_at: null })
+        .eq('tenant_id', setting.tenant_id);
+      deliveries.push({
+        tenant_id: setting.tenant_id,
+        sent: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   // Retention: this table only, precise WHERE on checked_at
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 86400000).toISOString();
   await supabase.from('service_health_checks').delete().lt('checked_at', cutoff);
 
   return new Response(
-    JSON.stringify({ success: !insertError, checks: rows.length, error: insertError?.message }),
+    JSON.stringify({ success: !insertError, checks: rows.length, deliveries, error: insertError?.message }),
     { status: insertError ? 500 : 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   );
 });

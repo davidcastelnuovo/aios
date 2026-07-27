@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-import { FileSpreadsheet, ExternalLink, LayoutDashboard, X, Plus, Maximize2, ChevronDown, Settings } from "lucide-react";
+import { FileSpreadsheet, ExternalLink, LayoutDashboard, X, Plus, Maximize2, ChevronDown, Settings, Power } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -132,6 +132,22 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     });
     if (error) { toast.error(await serverErrorMessage(error, "שגיאה בהסרת השיוך")); return; }
     toast.success("שיוך הטבלה הוסר");
+    queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
+  };
+
+  const toggleCampaignActive = async (table: any) => {
+    const next = !(table.campaign_active ?? true);
+    const { error } = await supabase.functions.invoke("crm-tables", {
+      method: "PATCH",
+      body: { table_id: table.id, campaign_active: next },
+    });
+    if (error) {
+      toast.error(await serverErrorMessage(error, "עדכון מצב הקמפיין נכשל"));
+      return;
+    }
+    toast.success(next
+      ? "הקמפיין דלוק — כרמן תכלול אותו בדיווחים"
+      : "הקמפיין כבוי — כרמן לא תדווח עליו");
     queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
   };
 
@@ -331,6 +347,21 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
         <div className="border rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
             <div className="flex items-center gap-2">
+              {(activeItem.raw.integration_type === "facebook_insights" ||
+                activeItem.raw.integration_type === "facebook_ecommerce" ||
+                activeItem.raw.integration_type === "google_ads") && (
+                <Button
+                  type="button"
+                  variant={(activeItem.raw.campaign_active ?? true) ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 gap-1.5"
+                  onClick={() => toggleCampaignActive(activeItem.raw)}
+                  title="קובע אם כרמן תכלול את הקמפיין בעדכונים ובבדיקות התקינות"
+                >
+                  <Power className="h-3.5 w-3.5" />
+                  {(activeItem.raw.campaign_active ?? true) ? "קמפיין דלוק" : "קמפיין כבוי"}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

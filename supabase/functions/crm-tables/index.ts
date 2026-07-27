@@ -350,7 +350,7 @@ serve(async (req) => {
 
       case 'PATCH': {
         const body = await req.json();
-        const { name, slug, description, icon, category, integration_settings } = body;
+        const { name, slug, description, icon, category, integration_settings, campaign_active } = body;
         const table_id = body.table_id ?? body.tableId;
         const agency_id = body.agency_id ?? body.agencyId;
         const client_id = body.client_id ?? body.clientId;
@@ -370,6 +370,7 @@ serve(async (req) => {
         if (category !== undefined) updateData.category = category;
         if (agency_id !== undefined) updateData.agency_id = agency_id || null;
         if (client_id !== undefined) updateData.client_id = client_id || null;
+        if (campaign_active !== undefined) updateData.campaign_active = !!campaign_active;
         if (integration_settings !== undefined) {
           // Merge with existing integration_settings to avoid overwriting
           const { data: existingTable } = await supabase
@@ -400,11 +401,11 @@ serve(async (req) => {
         }
 
         // RLS matched no rows (crm_tables has no UPDATE policy for campaigners).
-        // If this request only changes the client link, a campaigner may still be
-        // allowed within their own agency/client scope — verify explicitly and
-        // apply with the service role.
-        const isClientLinkOnly =
-          client_id !== undefined &&
+        // Client-link and campaign-state changes may still be allowed within a
+        // campaigner's own agency/client scope. Verify that scope explicitly
+        // before applying the narrow update with the service role.
+        const isScopedTableUpdate =
+          (client_id !== undefined || campaign_active !== undefined) &&
           name === undefined && slug === undefined && description === undefined &&
           icon === undefined && category === undefined &&
           integration_settings === undefined && agency_id === undefined;
@@ -415,7 +416,7 @@ serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
 
-        if (!isClientLinkOnly) {
+        if (!isScopedTableUpdate) {
           return forbidden('אין לך הרשאה לעדכן את הטבלה הזו');
         }
 
@@ -436,7 +437,7 @@ serve(async (req) => {
 
         const scope = await getCampaignerScope(admin, user.id);
         if (!scope) {
-          return forbidden('אין לך הרשאה לשנות שיוך של הטבלה הזו');
+          return forbidden('אין לך הרשאה לעדכן את הטבלה הזו');
         }
 
         // The table itself must be within the campaigner's scope:
@@ -449,19 +450,19 @@ serve(async (req) => {
           (!tableRow.client_id && !tableRow.agency_id);
 
         // When linking, the target client must also be within their scope.
-        const newClientId = client_id || null;
+        const newClientId = client_id === undefined ? tableRow.client_id : (client_id || null);
         let canTouchTarget = true;
-        if (newClientId) {
+        if (client_id !== undefined && newClientId) {
           canTouchTarget = await isClientInCampaignerScope(admin, newClientId, scope);
         }
 
         if (!canTouchTable || !canTouchTarget) {
-          return forbidden('אין לך הרשאה לשנות שיוך של הטבלה הזו');
+          return forbidden('אין לך הרשאה לעדכן את הטבלה הזו');
         }
 
         const { data: linkedTable, error: linkErr } = await admin
           .from('crm_tables')
-          .update({ client_id: newClientId, updated_at: new Date().toISOString() })
+          .update(updateData)
           .eq('id', table_id)
           .select()
           .single();
