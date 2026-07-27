@@ -1,22 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
-const jsonHeaders = { "Content-Type": "application/json", "Cache-Control": "private, no-store" };
-
-function safeEqual(left: string, right: string) {
-  if (left.length !== right.length) return false;
-  let result = 0;
-  for (let index = 0; index < left.length; index += 1) result |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  return result === 0;
-}
+const jsonHeaders = {
+  "Content-Type": "application/json",
+  "Cache-Control": "public, max-age=60, s-maxage=300",
+  "Access-Control-Allow-Origin": "*",
+};
 
 Deno.serve(async (request) => {
   if (request.method !== "GET") return new Response(JSON.stringify({ error: "method_not_allowed" }), { status: 405, headers: jsonHeaders });
-
-  const expectedToken = Deno.env.get("PUBLISHING_FEED_TOKEN") ?? "";
-  const suppliedToken = request.headers.get("x-publishing-token") ?? "";
-  if (!expectedToken || !safeEqual(suppliedToken, expectedToken)) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: jsonHeaders });
-  }
 
   const siteId = new URL(request.url).searchParams.get("site_id");
   if (!siteId) return new Response(JSON.stringify({ error: "site_id_required" }), { status: 400, headers: jsonHeaders });
@@ -31,7 +22,7 @@ Deno.serve(async (request) => {
   if (!site) return new Response(JSON.stringify({ error: "site_not_found" }), { status: 404, headers: jsonHeaders });
 
   const { data: articles, error } = await admin.from("publishing_articles")
-    .select("id,slug,title,excerpt,category,source_month,published_at,content,sources,internal_links,target_url,anchor_text")
+    .select("id,slug,title,excerpt,category,source_month,published_at,content,sources,internal_links,target_url,anchor_text,hero_image_url,inline_image_url,image_alt,faq,infographic")
     .eq("site_id", site.id).eq("status", "published").not("slug", "is", null).not("title", "is", null)
     .order("source_month", { ascending: false, nullsFirst: false });
   if (error) return new Response(JSON.stringify({ error: "article_lookup_failed" }), { status: 500, headers: jsonHeaders });
