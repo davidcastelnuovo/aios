@@ -17,7 +17,7 @@ import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, P
 
 type PublishingSite = { id: string; site_key: string; name: string; destination_type: "pbn" | "wordpress" | "custom_api"; client_id: string | null; connection_id: string | null; base_url: string | null; categories: string[]; status: string; is_hidden: boolean };
 type WordPressSite = { id: string; site_url: string; site_name: string | null; client_id: string | null; is_active: boolean };
-type PublishingArticle = { id: string; client_id: string | null; customer_name: string | null; primary_keyword: string; proposed_topic: string | null; target_url: string | null; category: string | null; status: string; site_id: string | null; slug: string | null; live_url: string | null; published_at: string | null; source_month: string | null; source_sheet: string | null; source_row: number | null; title: string | null; excerpt: string | null; content: string[]; updated_at: string };
+type PublishingArticle = { id: string; client_id: string | null; customer_name: string | null; primary_keyword: string; proposed_topic: string | null; target_url: string | null; anchor_text: string | null; category: string | null; status: string; site_id: string | null; slug: string | null; live_url: string | null; published_at: string | null; source_month: string | null; source_sheet: string | null; source_row: number | null; title: string | null; excerpt: string | null; content: string[]; updated_at: string };
 type ImportRow = { customerName: string; primaryKeyword: string; topic: string; targetUrl: string; siteKey: string; category: string; sheetName: string; rowNumber: number; sourceMonth: string; errors: string[] };
 type ClientOption = { id: string; name: string };
 type VercelProject = { id: string; name: string; framework: string | null; updated_at?: number; domains: Array<{ name: string; verified: boolean }>; deployment: { id: string; url: string; state: string; created_at: number } | null };
@@ -164,7 +164,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const { data: articles = [], isLoading: loadingArticles } = useQuery({
     queryKey: ["publishing-articles", tenantId],
     queryFn: async () => {
-      const { data, error } = await db.from("publishing_articles").select("id,client_id,customer_name,primary_keyword,proposed_topic,target_url,category,status,site_id,slug,live_url,published_at,source_month,source_sheet,source_row,title,excerpt,content,updated_at").eq("tenant_id", tenantId).order("source_month", { ascending: false, nullsFirst: false }).order("customer_name").limit(500);
+      const { data, error } = await db.from("publishing_articles").select("id,client_id,customer_name,primary_keyword,proposed_topic,target_url,anchor_text,category,status,site_id,slug,live_url,published_at,source_month,source_sheet,source_row,title,excerpt,content,updated_at").eq("tenant_id", tenantId).order("source_month", { ascending: false, nullsFirst: false }).order("customer_name").limit(500);
       if (error) throw error;
       return (data ?? []) as PublishingArticle[];
     },
@@ -561,15 +561,16 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
             <Card className="overflow-hidden">
               {publishedArticles.length === 0 ? <div className="p-10 text-center text-sm text-muted-foreground">עדיין אין מאמרים שפורסמו בפועל.</div> : <div className="overflow-x-auto">
                 <table className="w-full text-xs">
-                  <thead className="bg-muted/50"><tr><th className="p-3 text-right">תאריך פרסום</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">מאמר</th><th className="p-3 text-right">האתר שבו פורסם</th><th className="p-3 text-right">קישור חי</th></tr></thead>
+                  <thead className="bg-muted/50"><tr><th className="p-3 text-right">תאריך שיוך</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">מאמר</th><th className="p-3 text-right">האתר שבו פורסם</th><th className="p-3 text-right">קישור המאמר</th><th className="p-3 text-right">הקישור במאמר</th></tr></thead>
                   <tbody>{publishedArticles.map((article) => {
                     const site = siteById.get(article.site_id ?? "");
                     return <tr key={article.id} className="border-t">
-                      <td className="whitespace-nowrap p-3">{article.published_at ? new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short" }).format(new Date(article.published_at)) : "—"}</td>
+                      <td className="whitespace-nowrap p-3">{formatSourceMonth(article.source_month)}</td>
                       <td className="p-3 font-medium">{article.customer_name || "מערכתי"}</td>
                       <td className="max-w-sm p-3"><div className="font-medium">{article.title || article.proposed_topic}</div><div className="mt-1 text-[10px] text-muted-foreground">{article.primary_keyword}</div></td>
                       <td className="p-3"><div className="font-medium">{site?.name ?? "אתר לא ידוע"}</div><div className="max-w-52 truncate text-[10px] text-muted-foreground" dir="ltr">{site?.base_url ?? ""}</div></td>
                       <td className="p-3">{article.live_url ? <Button size="sm" variant="outline" asChild><a href={article.live_url} target="_blank" rel="noreferrer"><ExternalLink className="ml-1 h-3.5 w-3.5" />למאמר באתר</a></Button> : <Badge variant="outline" className="border-amber-300 text-amber-700">חסר קישור חי</Badge>}</td>
+                      <td className="max-w-xs p-3"><div className="font-medium">{article.anchor_text || article.primary_keyword}</div>{article.target_url ? <a className="block max-w-64 truncate text-[10px] text-blue-600 hover:underline" href={article.target_url} target="_blank" rel="noreferrer">{article.target_url}</a> : "—"}</td>
                     </tr>;
                   })}</tbody>
                 </table>
