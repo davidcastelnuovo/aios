@@ -10,6 +10,24 @@ const round = (value: number | null, digits = 2) =>
 
 const META_GRAPH_VERSION = 'v21.0'
 const META_ACTIVITY_OBJECTS = new Set(['CAMPAIGN', 'AD_SET', 'AD'])
+const CAMPAIGN_SERVICES = new Set(['ppc_meta', 'ppc_google'])
+const CAMPAIGN_TABLE_TYPES = ['facebook_insights', 'facebook_ecommerce', 'google_ads']
+
+function clientCampaignServices(client: any): Set<string> {
+  return new Set(
+    (Array.isArray(client?.services) ? client.services : [])
+      .map((service: unknown) => String(service))
+      .filter((service: string) => CAMPAIGN_SERVICES.has(service)),
+  )
+}
+
+function tableMatchesServices(table: any, services: Set<string>): boolean {
+  if (table.integration_type === 'google_ads') return services.has('ppc_google')
+  if (table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce') {
+    return services.has('ppc_meta')
+  }
+  return false
+}
 
 async function getMetaToken(supabase: any, tenantId: string): Promise<string | null> {
   let { data } = await supabase.from('tenant_integrations')
@@ -94,9 +112,11 @@ function buildDigest(rows: any[]): string {
         ? `ROAS ${row.roas_7d ?? '—'}`
         : `CPL ₪${row.cpl_7d ?? '—'}`
       const detail = (row.flags || []).length ? ` — ${(row.flags || []).join(', ')}` : ''
-      const metaChange = row.last_meta_change_at
-        ? ` — שינוי Meta אחרון: ${new Date(row.last_meta_change_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`
-        : ` — שינוי Meta אחרון: ${row.meta_change_availability === 'no_campaign_change_in_30d' ? 'לא נמצא ב-30 יום' : 'לא זמין'}`
+      const metaChange = row.meta_change_availability === 'not_applicable'
+        ? ''
+        : row.last_meta_change_at
+          ? ` — שינוי Meta אחרון: ${new Date(row.last_meta_change_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`
+          : ` — שינוי Meta אחרון: ${row.meta_change_availability === 'no_campaign_change_in_30d' ? 'לא נמצא ב-30 יום' : 'לא זמין'}`
       lines.push(`${display.icon} *${row.client_name}* — ${display.label} — ${metric}${metaChange}${detail}`)
     }
   }
@@ -139,33 +159,47 @@ Deno.serve(async (req) => {
       ...(sharedAgencies || []).map((agency: any) => agency.agency_id),
     ]))
     const { data: clients, error: clientsError } = await supabase.from('clients')
-      .select('id, name, tenant_id, agency_id, is_ecommerce, agencies(name)')
+      .select('id, name, tenant_id, agency_id, is_ecommerce, services, agencies(name)')
       .in('agency_id', agencyIds.length ? agencyIds : ['00000000-0000-0000-0000-000000000000'])
       .eq('status', 'active').order('name')
     if (clientsError) { results.push({ tenant_id: tenantId, error: clientsError.message }); continue }
-    const clientIds = (clients || []).map((client: any) => client.id)
+    const campaignClients = (clients || []).filter((client: any) => clientCampaignServices(client).size > 0)
+    const clientIds = campaignClients.map((client: any) => client.id)
     const tableResult = clientIds.length
-      ? await supabase.rpc('find_campaign_tables', { p_client_ids: clientIds })
+      ? await supabase.from('crm_tables')
+          .select('id, client_id, integration_type, integration_settings, campaign_active')
+          .in('client_id', clientIds)
+          .in('integration_type', CAMPAIGN_TABLE_TYPES)
       : { data: [], error: null }
     if (tableResult.error) { results.push({ tenant_id: tenantId, error: tableResult.error.message }); continue }
-    const tablesByClient = new Map<string, string[]>()
+    const activeTablesByClient = new Map<string, any[]>()
     for (const table of tableResult.data || []) {
-      const ids = tablesByClient.get(table.client_id) || []
-      ids.push(table.table_id); tablesByClient.set(table.client_id, ids)
+      const client = campaignClients.find((item: any) => item.id === table.client_id)
+      if (!client || !tableMatchesServices(table, clientCampaignServices(client))) continue
+      if (table.campaign_active === false) continue
+      const tables = activeTablesByClient.get(table.client_id) || []
+      tables.push(table)
+      activeTablesByClient.set(table.client_id, tables)
     }
-    const allTableIds = [...tablesByClient.values()].flat()
-    const tableSettingsByClient = new Map<string, any>()
-    if (allTableIds.length) {
-      const { data: configuredTables } = await supabase.from('crm_tables')
-        .select('id, client_id, integration_settings')
-        .in('id', allTableIds)
-      for (const table of configuredTables || []) {
-        const settings = table.integration_settings || {}
-        if (!tableSettingsByClient.has(table.client_id) && (settings.ad_account_id || settings.account_id || settings.meta_account_id)) {
-          tableSettingsByClient.set(table.client_id, settings)
-        }
-      }
-    }
+    // A client with campaign services but no report table must be surfaced as a
+    // missing connection. A client whose existing campaign tables are all
+    // explicitly switched off is intentionally excluded from Carmen's report.
+    const reportableClients = campaignClients.filter((client: any) => {
+      const services = clientCampaignServices(client)
+      const configured = (tableResult.data || []).filter((table: any) =>
+        table.client_id === client.id && tableMatchesServices(table, services)
+      )
+      const expectedPlatforms = [
+        ...(services.has('ppc_meta') ? ['meta'] : []),
+        ...(services.has('ppc_google') ? ['google'] : []),
+      ]
+      return expectedPlatforms.some((platform) => {
+        const platformConfigured = configured.filter((table: any) => platform === 'google'
+          ? table.integration_type === 'google_ads'
+          : table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce')
+        return platformConfigured.length === 0 || platformConfigured.some((table: any) => table.campaign_active !== false)
+      })
+    })
     const metaToken = await getMetaToken(supabase, tenantId)
     let metaActivityCalls = 0
 
@@ -177,12 +211,18 @@ Deno.serve(async (req) => {
     const d14Str = d14.toISOString().slice(0, 10)
     const d30Str = d30.toISOString().slice(0, 10)
     const snapshots: any[] = []
-    for (const client of clients || []) {
-      const tableIds = tablesByClient.get(client.id) || []
-      const tableSettings = tableSettingsByClient.get(client.id) || {}
+    for (const client of reportableClients) {
+      const activeTables = activeTablesByClient.get(client.id) || []
+      const tableIds = activeTables.map((table: any) => table.id)
+      const metaTable = activeTables.find((table: any) =>
+        table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce'
+      )
+      const tableSettings = metaTable?.integration_settings || {}
       const adAccountId = tableSettings.ad_account_id || tableSettings.account_id || tableSettings.meta_account_id || null
       if (adAccountId && metaToken) metaActivityCalls += 1
-      const lastMetaChange = await getLastMetaCampaignChange(metaToken, adAccountId)
+      const lastMetaChange = metaTable
+        ? await getLastMetaCampaignChange(metaToken, adAccountId)
+        : { at: null, type: null, actor: null, object: null, availability: 'not_applicable' }
       let records: any[] = []
       if (tableIds.length) {
         const response = await supabase.from('crm_records').select('data')
