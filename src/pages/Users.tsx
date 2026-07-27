@@ -9,6 +9,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useViewAs } from "@/contexts/ViewAsContext";
+import { useAgency } from "@/contexts/AgencyContext";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import {
@@ -84,6 +85,7 @@ export default function Users() {
   const isMobile = useIsMobile();
   const { t } = useTerminology();
   const { setViewAs } = useViewAs();
+  const { setSelectedAgency } = useAgency();
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   // Helper function to get role label using terminology
@@ -1540,15 +1542,17 @@ export default function Users() {
                         >
                           <Shield className="h-4 w-4" />
                         </Button>
-                        {/* View As button - only for sales_person role */}
-                        {(isOwner || isSuperAdmin) && user.sales_person_id && (
+                        {/* Super admins can preview the effective UI of any user.
+                            Owners keep the legacy sales-person preview only. */}
+                        {(isSuperAdmin || (isOwner && user.sales_person_id)) && user.id !== currentUserId && (
                           <Button
                             variant="outline"
                             size="icon"
                             onClick={() => {
-                              setViewAs(user.id, user.sales_person_id, user.full_name || user.email);
+                              setViewAs(user.id, user.sales_person_id || null, user.full_name || user.email);
+                              setSelectedAgency("all");
                               toast.success(`עובר למצב צפייה בתור ${user.full_name || user.email}`);
-                              navigate(buildPath('leads'));
+                              navigate(buildPath(user.sales_person_id && !user.campaigner_id ? 'leads' : 'clients'));
                             }}
                             title="צפה בתור משתמש זה"
                             className="border-warning text-warning hover:bg-warning/10"
