@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser } from "./useCurrentUser";
 import { useUserRole } from "./useUserRole";
 
 /**
@@ -13,18 +12,17 @@ import { useUserRole } from "./useUserRole";
 export type ModulePermission = string;
 
 export function useUserPermissions() {
-  const { user } = useCurrentUser();
-  const { isOwner, isSuperAdmin } = useUserRole();
+  const { isOwner, isSuperAdmin, userId } = useUserRole();
 
   const { data: permissionsData, isLoading: queryLoading } = useQuery({
-    queryKey: ["user-permissions", user?.id],
+    queryKey: ["user-permissions", userId],
     queryFn: async () => {
-      if (!user?.id) return { permissions: null, hasAnyPermissions: false };
+      if (!userId) return { permissions: null, hasAnyPermissions: false };
 
       const { data, error } = await supabase
         .from("user_permissions")
         .select("module, can_access")
-        .eq("user_id", user.id);
+        .eq("user_id", userId);
 
       if (error) {
         console.error("Error fetching permissions:", error);
@@ -41,11 +39,11 @@ export function useUserPermissions() {
         hasAnyPermissions: !!data && data.length > 0,
       };
     },
-    enabled: !!user?.id,
+    enabled: !!userId,
   });
 
   // Global loading: until we know the user id OR query finished
-  const isLoading = !user?.id || queryLoading;
+  const isLoading = !userId || queryLoading;
 
   const hasPermission = (module: ModulePermission): boolean => {
     // While loading or user unknown, do NOT allow (prevents leaks)
