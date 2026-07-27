@@ -281,7 +281,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   };
 
   const createMissingPbnSites = async () => {
-    const missing = pbnRows.filter((row) => !row.project?.deployment);
+    const missing = pbnRows.filter((row) => row.project?.deployment?.state !== "READY");
     if (!missing.length) return toast.success("כל אתרי ה-PBN כבר קיימים ב-Vercel");
     setBusy(true);
     const failed: string[] = [];
@@ -303,6 +303,37 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
       if (failed.length) toast.error(`${failed.length} אתרים לא נוצרו: ${failed.join(", ")}`);
       else { toast.success(`${missing.length} אתרים נוצרו ב-Vercel ונקשרו ל-AIOS`); setSiteDialogOpen(false); }
     } finally { setBusy(false); setNetworkProgress(null); }
+  };
+
+  const refreshPbnDesign = async () => {
+    if (!pbnRows.length) return;
+    setBusy(true);
+    const failed: string[] = [];
+    try {
+      for (let index = 0; index < pbnRows.length; index += 1) {
+        const { site, project } = pbnRows[index];
+        const projectName = project?.name || `aios-magazine-${site.site_key}`;
+        setNetworkProgress({ current: index + 1, total: pbnRows.length, name: site.name });
+        try {
+          const { data, error } = await supabase.functions.invoke("domain-connections", {
+            body: { tenant_id: tenantId, action: "create_site", name: projectName },
+          });
+          if (error) throw error;
+          if (!data?.success) throw new Error(data?.detail || data?.error || "שדרוג האתר נכשל");
+        } catch {
+          failed.push(site.name);
+        }
+      }
+      await refetchVercel();
+      if (failed.length) toast.error(`${failed.length} אתרים לא שודרגו: ${failed.join(", ")}`);
+      else {
+        toast.success("העיצוב החדש נפרס בכל אתרי ה-PBN");
+        setSiteDialogOpen(false);
+      }
+    } finally {
+      setBusy(false);
+      setNetworkProgress(null);
+    }
   };
 
   const hideVercelProject = async (project: VercelProject, site?: PublishingSite) => {
@@ -488,6 +519,19 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
       }));
       const failed = results.find((result) => result.error);
       if (failed?.error) throw failed.error;
+      const checks = await Promise.all(selected.map(async (article) => {
+        const slug = article.slug || createArticleSlug(article.title!, article.id);
+        const liveUrl = articleLiveUrl(siteById.get(article.site_id!), slug)!;
+        const response = await fetch(liveUrl, { cache: "no-store" });
+        const html = await response.text();
+        return response.ok && Boolean(article.target_url) && html.includes(`href="${article.target_url}"`);
+      }));
+      if (checks.some((check) => !check)) {
+        await db.from("publishing_articles").update({
+          status: "review", live_url: null, published_at: null, updated_at: new Date().toISOString(),
+        }).in("id", selected.map((article) => article.id)).eq("tenant_id", tenantId);
+        throw new Error("הפרסום לא אומת: לפחות עמוד אחד או קישור פנימי אחד אינו נגיש");
+      }
       await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
       setSelectedArticleIds([]);
       toast.success(`${selected.length} מאמרים פורסמו; הקישורים זמינים בלשונית "פורסמו"`);
@@ -599,7 +643,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         </div>}
       </DialogContent>
     </Dialog>
-    <Dialog open={siteDialogOpen} onOpenChange={setSiteDialogOpen}><DialogContent dir="rtl" className="max-w-md"><DialogHeader><DialogTitle>יצירת אתר חדש</DialogTitle></DialogHeader><div className="space-y-4"><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div className="font-semibold">השלמת רשת ה-PBN</div><p className="mt-1 text-xs text-muted-foreground">ייווצרו ב-Vercel רק האתרים שחסר להם בילד פעיל, וכל אחד יקושר לשורה המתאימה.</p>{networkProgress && <div className="mt-3 text-xs font-medium">{networkProgress.current} מתוך {networkProgress.total} · {networkProgress.name}</div>}<Button className="mt-3 w-full" onClick={createMissingPbnSites} disabled={busy || !pbnRows.some((row) => !row.project?.deployment)}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}פרסם {pbnRows.filter((row) => !row.project?.deployment).length} אתרים</Button></div><div className="border-t pt-4"><Label>או צור אתר בודד</Label><div className="mt-2"><Label>שם האתר</Label><Input className="mt-1" value={newSiteName} onChange={(event) => setNewSiteName(event.target.value)} placeholder="לדוגמה: מגזין חדשנות" /></div></div><p className="text-xs text-muted-foreground">האתר ישוכפל מתבנית המגזין ויופיע אוטומטית ב־Vercel.</p><Button className="w-full" onClick={createVercelSite} disabled={busy || !newSiteName.trim()}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}צור אתר</Button></div></DialogContent></Dialog>
+    <Dialog open={siteDialogOpen} onOpenChange={setSiteDialogOpen}><DialogContent dir="rtl" className="max-w-md"><DialogHeader><DialogTitle>ניהול פריסת האתרים</DialogTitle></DialogHeader><div className="space-y-4"><div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><div className="font-semibold">רשת אתרי ה־PBN</div><p className="mt-1 text-xs text-muted-foreground">אפשר להשלים אתרים חסרים או לפרוס מחדש את עיצוב המגזין בכל האתרים הקיימים.</p>{networkProgress && <div className="mt-3 text-xs font-medium">{networkProgress.current} מתוך {networkProgress.total} · {networkProgress.name}</div>}<Button className="mt-3 w-full" onClick={createMissingPbnSites} disabled={busy || !pbnRows.some((row) => row.project?.deployment?.state !== "READY")}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}פרסם {pbnRows.filter((row) => row.project?.deployment?.state !== "READY").length} אתרים חסרים</Button><Button className="mt-2 w-full" variant="outline" onClick={refreshPbnDesign} disabled={busy || !pbnRows.length}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}שדרג עיצוב בכל {pbnRows.length} האתרים</Button></div><div className="border-t pt-4"><Label>או צור אתר בודד</Label><div className="mt-2"><Label>שם האתר</Label><Input className="mt-1" value={newSiteName} onChange={(event) => setNewSiteName(event.target.value)} placeholder="לדוגמה: מגזין חדשנות" /></div></div><p className="text-xs text-muted-foreground">האתר ישוכפל מתבנית המגזין ויופיע אוטומטית ב־Vercel.</p><Button className="w-full" onClick={createVercelSite} disabled={busy || !newSiteName.trim()}>{busy && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}צור אתר</Button></div></DialogContent></Dialog>
     <Dialog open={domainDialogOpen} onOpenChange={setDomainDialogOpen}><DialogContent dir="rtl" className="max-w-md"><DialogHeader><DialogTitle>דומיין עבור {selectedProject?.name}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>שם הדומיין</Label><Input dir="ltr" className="mt-1 text-left" value={domainName} onChange={(event) => setDomainName(event.target.value)} placeholder="example.com" /></div><p className="text-xs text-muted-foreground">המערכת תחבר את הדומיין ל־Vercel ותעדכן את ה־DNS ב־IONOS.</p><Button className="w-full" onClick={assignDomain} disabled={connectingDomain || !domainName.trim()}>{connectingDomain && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}שייך דומיין</Button></div></DialogContent></Dialog>
   </div>;
 }
