@@ -55,7 +55,12 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${SERVICE_KEY}`,
       },
-      body: JSON.stringify({ tenant_id: tenantId, deliver: true, source: 'approved_manual_trigger' }),
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        deliver: true,
+        force_delivery: true,
+        source: 'approved_manual_trigger',
+      }),
     })
     const payload = await response.json().catch(() => ({ error: 'Invalid response' }))
     results.push({ tenant_id: tenantId, ok: response.ok, payload })
