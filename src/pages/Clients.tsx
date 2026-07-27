@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,10 +63,19 @@ import {
 } from "@/components/ui/dialog";
 
 export default function Clients() {
-  const { selectedAgency } = useAgency();
+  const { selectedAgency, setSelectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
+  // Owners need an organization-wide starting view. A previously selected
+  // agency can otherwise make a complete client list look like an access bug.
+  // This runs once when the elevated role resolves; agency filtering remains
+  // available afterwards.
+  useEffect(() => {
+    if (isOwner || isSuperAdmin) {
+      setSelectedAgency("all");
+    }
+  }, [isOwner, isSuperAdmin, setSelectedAgency]);
   // SEO viewer takes precedence over campaigner: any user with SEO role sees all SEO-tagged clients
   // (unless they're also team_manager / owner / super_admin who already see everything)
   const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
