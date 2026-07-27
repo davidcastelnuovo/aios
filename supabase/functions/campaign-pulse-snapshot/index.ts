@@ -83,7 +83,19 @@ async function getLastMetaCampaignChange(
   }
 }
 
-function buildDigest(rows: any[]): string {
+const ONBOARDING_STATUS_LABELS: Record<string, string> = {
+  research_meeting: 'פגישת מחקר',
+  receiving_access: 'קבלת גישות',
+  setup_and_content: 'הקמה ותוכן',
+  campaign_live: 'הקמפיין עלה לאוויר',
+}
+
+function formatTaskDueDate(value: string | null): string {
+  if (!value) return ''
+  return `, יעד ${new Date(`${value}T12:00:00Z`).toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem' })}`
+}
+
+function buildDigest(rows: any[], onboardingClients: any[]): string {
   const count = (status: string) => rows.filter((row) => row.status === status).length
   const statusDisplay: Record<string, { icon: string; label: string; priority: number }> = {
     critical: { icon: '🔴', label: 'קריטי', priority: 0 },
@@ -120,6 +132,33 @@ function buildDigest(rows: any[]): string {
       lines.push(`${display.icon} *${row.client_name}* — ${display.label} — ${metric}${metaChange}${detail}`)
     }
   }
+  lines.push('', '*לקוחות בקליטה*')
+  if (!onboardingClients.length) {
+    lines.push('אין כרגע לקוחות בקליטה.')
+  } else {
+    const onboardingAgencies = new Map<string, any[]>()
+    for (const client of onboardingClients) {
+      const agency = client.agency_name || 'ללא סוכנות'
+      onboardingAgencies.set(agency, [...(onboardingAgencies.get(agency) || []), client])
+    }
+    for (const [agency, clients] of onboardingAgencies) {
+      lines.push(`_${agency}_`)
+      for (const client of [...clients].sort((a, b) =>
+        String(a.client_name).localeCompare(String(b.client_name), 'he')
+      )) {
+        const stage = ONBOARDING_STATUS_LABELS[client.onboarding_status] || 'שלב לא הוגדר'
+        lines.push(`• *${client.client_name}* — ${stage}`)
+        if (!client.open_tasks.length) {
+          lines.push('  אין משימות פתוחות')
+          continue
+        }
+        for (const task of client.open_tasks) {
+          const progress = task.status === 'in_progress' ? 'בתהליך' : 'פתוחה'
+          lines.push(`  ↳ ${task.title} (${progress}${formatTaskDueDate(task.due_date)})`)
+        }
+      }
+    }
+  }
   lines.push('מקור: הנתונים המסונכרנים ב-AIOS. ללא הפעלת כרמן וללא קריאת API נוספת.')
   return lines.join('\n')
 }
@@ -135,6 +174,7 @@ Deno.serve(async (req) => {
   let body: any = {}
   try { body = await req.json() } catch { /* empty cron body */ }
   const deliveryRequested = body.deliver !== false
+  const forceDelivery = body.force_delivery === true && body.source === 'approved_manual_trigger'
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
     .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
@@ -163,6 +203,49 @@ Deno.serve(async (req) => {
       .in('agency_id', agencyIds.length ? agencyIds : ['00000000-0000-0000-0000-000000000000'])
       .eq('status', 'active').order('name')
     if (clientsError) { results.push({ tenant_id: tenantId, error: clientsError.message }); continue }
+    const { data: onboardingClientsRaw, error: onboardingClientsError } = await supabase.from('clients')
+      .select('id, name, agency_id, agencies(name)')
+      .in('agency_id', agencyIds.length ? agencyIds : ['00000000-0000-0000-0000-000000000000'])
+      .eq('status', 'onboarding').order('name')
+    if (onboardingClientsError) {
+      results.push({ tenant_id: tenantId, error: onboardingClientsError.message })
+      continue
+    }
+    const onboardingClientIds = (onboardingClientsRaw || []).map((client: any) => client.id)
+    const [onboardingResult, tasksResult] = onboardingClientIds.length
+      ? await Promise.all([
+          supabase.from('client_onboarding')
+            .select('client_id, status, updated_at')
+            .in('client_id', onboardingClientIds)
+            .order('updated_at', { ascending: false }),
+          supabase.from('tasks')
+            .select('client_id, title, status, due_date, created_at')
+            .in('client_id', onboardingClientIds)
+            .in('status', ['open', 'in_progress'])
+            .order('due_date', { ascending: true, nullsFirst: false })
+            .order('created_at', { ascending: true }),
+        ])
+      : [{ data: [], error: null }, { data: [], error: null }]
+    if (onboardingResult.error || tasksResult.error) {
+      results.push({ tenant_id: tenantId, error: onboardingResult.error?.message || tasksResult.error?.message })
+      continue
+    }
+    const latestOnboardingByClient = new Map<string, any>()
+    for (const onboarding of onboardingResult.data || []) {
+      if (!latestOnboardingByClient.has(onboarding.client_id)) {
+        latestOnboardingByClient.set(onboarding.client_id, onboarding)
+      }
+    }
+    const openTasksByClient = new Map<string, any[]>()
+    for (const task of tasksResult.data || []) {
+      openTasksByClient.set(task.client_id, [...(openTasksByClient.get(task.client_id) || []), task])
+    }
+    const onboardingClients = (onboardingClientsRaw || []).map((client: any) => ({
+      client_name: client.name,
+      agency_name: (client.agencies as any)?.name || null,
+      onboarding_status: latestOnboardingByClient.get(client.id)?.status || null,
+      open_tasks: openTasksByClient.get(client.id) || [],
+    }))
     const campaignClients = (clients || []).filter((client: any) => clientCampaignServices(client).size > 0)
     const clientIds = campaignClients.map((client: any) => client.id)
     const tableResult = clientIds.length
@@ -292,10 +375,12 @@ Deno.serve(async (req) => {
         .upsert(rows, { onConflict: 'tenant_id,client_id' })
       if (error) { results.push({ tenant_id: tenantId, error: error.message }); continue }
     }
-    const digest = buildDigest(snapshots)
+    const digest = buildDigest(snapshots, onboardingClients)
     let sent = false
     let deliveryClaimed = false
-    if (deliveryRequested && setting.campaign_pulse_enabled) {
+    if (deliveryRequested && setting.campaign_pulse_enabled && forceDelivery) {
+      deliveryClaimed = true
+    } else if (deliveryRequested && setting.campaign_pulse_enabled) {
       const claim = await supabase.rpc('claim_campaign_pulse_delivery', { p_tenant_id: tenantId })
       deliveryClaimed = claim.data === true && !claim.error
       if (claim.error) console.error('Failed to claim campaign pulse delivery:', claim.error.message)
@@ -323,10 +408,12 @@ Deno.serve(async (req) => {
     results.push({
       tenant_id: tenantId,
       clients: snapshots.length,
+      onboarding_clients: onboardingClients.length,
+      onboarding_open_tasks: onboardingClients.reduce((total: number, client: any) => total + client.open_tasks.length, 0),
       sent,
       delivery_channel: 'carmen_direct',
       delivery_requested: deliveryRequested,
-      skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !deliveryClaimed,
+      skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !forceDelivery && !deliveryClaimed,
       ai_used: false,
       external_api_calls: metaActivityCalls,
     })
