@@ -19,6 +19,9 @@ function normalizePhone(p: string): string {
 // Graceful: any failure falls back to the '[מדיה]' placeholder, so behaviour
 // never regresses for non-audio media or when transcription is unavailable.
 type MediaAuth = { apiKey?: string; gateway?: string; supabase?: any; tenantId?: string };
+// Tracks URL-less Manus payloads that were positively matched to a Green API voice transcript.
+// WeakSet keeps the classification request-local without mutating the payload persisted to the database.
+const pairedVoicePayloads = new WeakSet<object>();
 const _AUDIO_URL_FIELDS = ['media_url', 'mediaUrl', 'url', 'fileUrl', 'file_url', 'downloadUrl', 'downloadURL', 'mediaLink', 'media_link', 'link'];
 function pickAudioUrl(payload: any, msgContainer: any): string | null {
   // Manus wraps media differently across message types; scan the common containers.
@@ -54,6 +57,39 @@ async function fetchMedia(url: string, auth?: MediaAuth): Promise<Blob | null> {
       const r = await fetch(url, { headers: { 'X-Api-Key': auth.apiKey } });
       if (r.ok) return await r.blob();
     } catch (_) { /* give up */ }
+  }
+  return null;
+}
+// The Manus gateway currently emits hasMedia=true for voice notes without a URL,
+// MIME type, or media object. The same WhatsApp message is also delivered to the
+// connected Green API webhook, which downloads and transcribes it. Reuse that
+// transcript by the provider message id instead of degrading the Carmen request
+// to "[מדיה]". Green API transcription includes media download plus two AI calls,
+// so allow enough time for the canonical chat_messages row to be committed.
+async function findPairedGreenTranscript(
+  payload: any,
+  auth?: MediaAuth,
+): Promise<string | null> {
+  if (!auth?.supabase || !auth.tenantId) return null;
+  const messageId = String(payload?.messageId || payload?.id || '').trim();
+  if (!messageId) return null;
+
+  for (let attempt = 0; attempt < 21; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 1000));
+    const { data } = await auth.supabase
+      .from('chat_messages')
+      .select('message_text')
+      .eq('tenant_id', auth.tenantId)
+      .eq('provider', 'green_api')
+      .eq('raw_provider_data->>idMessage', messageId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const text = String(data?.message_text || '').replace(/^🎤\s*/, '').trim();
+    if (text && !/^\[(?:הודעת קול|מדיה|קובץ מדיה|הודעה)\]$/.test(text)) {
+      if (payload && typeof payload === 'object') pairedVoicePayloads.add(payload);
+      return text;
+    }
   }
   return null;
 }
@@ -94,6 +130,8 @@ async function resolveMessageText(payload: any, msgContainer: any, auth?: MediaA
       }
     }
   } catch (_) { /* fall through to placeholder */ }
+  const pairedTranscript = await findPairedGreenTranscript(payload, auth);
+  if (pairedTranscript) return pairedTranscript;
   // Couldn't turn media into text — capture the shape so we can fix it precisely.
   logMediaDebug(auth, payload, msgContainer, url, isAudio);
   return '[מדיה]';
@@ -101,6 +139,7 @@ async function resolveMessageText(payload: any, msgContainer: any, auth?: MediaA
 
 // Was the inbound message a voice note? (drives Carmen's voice-out mirroring)
 function messageIsVoice(payload: any, msgContainer: any): boolean {
+  if (payload && typeof payload === 'object' && pairedVoicePayloads.has(payload)) return true;
   if (!payload?.hasMedia) return false;
   const url = pickAudioUrl(payload, msgContainer);
   return !!(url && looksAudio(payload, msgContainer, url));
@@ -752,7 +791,7 @@ Deno.serve(async (req) => {
         console.log('[manus-wa group] routed by group → tenant', { groupChatId, botTenant: tenantId, groupTenant: groupTenantId });
       }
 
-      const messageText = await resolveMessageText(payload, msgContainer, mediaAuth);
+      const messageText = await resolveMessageText(payload, msgContainer, { ...mediaAuth, tenantId: groupTenantId });
       const senderName = (payload.senderName || payload.fromName || payload.authorName || null) as string | null;
 
       // Extract the REAL sender phone from author/participant fields.
