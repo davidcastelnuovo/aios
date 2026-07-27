@@ -117,6 +117,7 @@ export default function DynamicTables() {
   const [editMaskyooNumber, setEditMaskyooNumber] = useState<string>("");
   const [clientSearch, setClientSearch] = useState<string>("");
   const [dashboardSearch, setDashboardSearch] = useState<string>("");
+  const [reportStatusFilter, setReportStatusFilter] = useState<"active" | "inactive" | "all">("active");
 
   // For campaigners: fetch their assigned client IDs
   const { data: assignedClientIds } = useQuery({
@@ -273,6 +274,15 @@ export default function DynamicTables() {
         table.agency_id === null || table.agency_id === selectedAgency
       );
     }
+
+    // Keep inactive campaign reports out of the default view. They remain
+    // available through the filter so pausing a client never hides or deletes
+    // historical report data.
+    if (reportStatusFilter === 'active') {
+      result = result.filter(table => table.campaign_active ?? true);
+    } else if (reportStatusFilter === 'inactive') {
+      result = result.filter(table => !(table.campaign_active ?? true));
+    }
     
     // Filter by table name OR client name search
     if (clientSearch.trim()) {
@@ -288,7 +298,7 @@ export default function DynamicTables() {
     }
 
     return result;
-  }, [tables, selectedAgency, isRestrictedClientViewer, assignedClientIds, clientSearch, clients]);
+  }, [tables, selectedAgency, isRestrictedClientViewer, assignedClientIds, clientSearch, clients, reportStatusFilter]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
@@ -646,14 +656,27 @@ export default function DynamicTables() {
 
         {/* Tables Tab Content */}
         <TabsContent value="tables">
-          {/* Client name search */}
-          <div className="mb-4 max-w-sm">
+          {/* Report visibility and client name search */}
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <Input
               placeholder="חיפוש לפי שם טבלה או לקוח..."
               value={clientSearch}
               onChange={(e) => setClientSearch(e.target.value)}
-              className="text-right"
+              className="max-w-sm text-right"
             />
+            <Select
+              value={reportStatusFilter}
+              onValueChange={(value: "active" | "inactive" | "all") => setReportStatusFilter(value)}
+            >
+              <SelectTrigger className="w-[190px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">דוחות פעילים בלבד</SelectItem>
+                <SelectItem value="inactive">דוחות לא פעילים בלבד</SelectItem>
+                <SelectItem value="all">כל הדוחות</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {isLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
