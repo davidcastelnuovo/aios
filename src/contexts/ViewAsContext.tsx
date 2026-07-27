@@ -5,7 +5,7 @@ interface ViewAsContextType {
   viewAsSalesPersonId: string | null;
   viewAsUserName: string | null;
   isViewingAs: boolean;
-  setViewAs: (userId: string, salesPersonId: string, userName: string) => void;
+  setViewAs: (userId: string, salesPersonId: string | null, userName: string) => void;
   clearViewAs: () => void;
 }
 
@@ -18,7 +18,7 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
 
   const isViewingAs = viewAsUserId !== null;
 
-  const setViewAs = (userId: string, salesPersonId: string, userName: string) => {
+  const setViewAs = (userId: string, salesPersonId: string | null, userName: string) => {
     setViewAsUserId(userId);
     setViewAsSalesPersonId(salesPersonId);
     setViewAsUserName(userName);
@@ -49,7 +49,16 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
 export function useViewAs() {
   const context = useContext(ViewAsContext);
   if (context === undefined) {
-    throw new Error("useViewAs must be used within a ViewAsProvider");
+    // Some layout-level access hooks run immediately before AppLayout mounts
+    // the provider. Treat those callers as the authenticated user.
+    return {
+      viewAsUserId: null,
+      viewAsSalesPersonId: null,
+      viewAsUserName: null,
+      isViewingAs: false,
+      setViewAs: () => {},
+      clearViewAs: () => {},
+    };
   }
   return context;
 }
