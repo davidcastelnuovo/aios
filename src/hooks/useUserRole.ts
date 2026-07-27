@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "./useCurrentTenant";
+import { useViewAs } from "@/contexts/ViewAsContext";
 
 export type UserRole = "owner" | "team_manager" | "campaigner" | "sales_person" | "super_admin" | "seo";
 
 export function useUserRole() {
   const { tenantId } = useCurrentTenant();
+  const { isViewingAs, viewAsUserId } = useViewAs();
   
   const { data: session } = useQuery({
     queryKey: ["session"],
@@ -17,21 +19,23 @@ export function useUserRole() {
     refetchOnWindowFocus: false,
   });
 
+  const effectiveUserId = isViewingAs ? viewAsUserId : session?.user?.id;
+
   const { data: roles, isLoading } = useQuery({
-    queryKey: ["user-roles", session?.user?.id, tenantId],
+    queryKey: ["user-roles", effectiveUserId, tenantId, isViewingAs],
     queryFn: async () => {
-      if (!session?.user?.id) return [];
+      if (!effectiveUserId) return [];
       
       const { data, error } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", session.user.id)
+        .eq("user_id", effectiveUserId)
         .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
 
       if (error) throw error;
       return (data || []).map((r) => r.role as UserRole);
     },
-    enabled: !!session?.user?.id && !!tenantId,
+    enabled: !!effectiveUserId && !!tenantId,
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
     refetchOnWindowFocus: false,
   });
@@ -41,17 +45,17 @@ export function useUserRole() {
   const isCampaignerRole = roles?.includes("campaigner") || false;
   const isSeoRole = roles?.includes("seo") || false;
   const { data: campaignerId } = useQuery({
-    queryKey: ["user-campaigner-id", session?.user?.id],
+    queryKey: ["user-campaigner-id", effectiveUserId],
     queryFn: async () => {
-      if (!session?.user?.id) return null;
+      if (!effectiveUserId) return null;
       const { data } = await supabase
         .from("profiles")
         .select("campaigner_id")
-        .eq("id", session.user.id)
+        .eq("id", effectiveUserId)
         .maybeSingle();
       return data?.campaigner_id || null;
     },
-    enabled: !!session?.user?.id && (isCampaignerRole || isSeoRole),
+    enabled: !!effectiveUserId && (isCampaignerRole || isSeoRole),
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
@@ -59,13 +63,13 @@ export function useUserRole() {
   // Lazy-load sales person agencies only when user has sales_person role
   const isSalesPersonRole = roles?.includes("sales_person") || false;
   const { data: salesPersonAgencyIds } = useQuery({
-    queryKey: ["user-sales-person-agency-ids", session?.user?.id],
+    queryKey: ["user-sales-person-agency-ids", effectiveUserId],
     queryFn: async () => {
-      if (!session?.user?.id) return null;
+      if (!effectiveUserId) return null;
       const { data: profile } = await supabase
         .from("profiles")
         .select("sales_person_id")
-        .eq("id", session.user.id)
+        .eq("id", effectiveUserId)
         .maybeSingle();
       
       if (!profile?.sales_person_id) return null;
@@ -77,7 +81,7 @@ export function useUserRole() {
       
       return agencies?.map(a => a.agency_id) || null;
     },
-    enabled: !!session?.user?.id && isSalesPersonRole,
+    enabled: !!effectiveUserId && isSalesPersonRole,
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
@@ -93,7 +97,8 @@ export function useUserRole() {
     isSuperAdmin: hasRole("super_admin"),
     isSeo: hasRole("seo"),
     isLoading,
-    userId: session?.user?.id,
+    userId: effectiveUserId,
+    authenticatedUserId: session?.user?.id,
     userEmail: session?.user?.email,
     campaignerId,
     salesPersonAgencyIds,
