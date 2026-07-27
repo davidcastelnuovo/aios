@@ -23,6 +23,162 @@ const toBase64 = (bytes: Uint8Array) => {
   return btoa(binary);
 };
 
+const homeFunction = (siteId: string) => `
+const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+}[char]));
+const articleUrl = (slug) => "/articles/" + encodeURIComponent(slug);
+
+module.exports = async (request, response) => {
+  const feedUrl = process.env.PUBLISHING_FEED_URL ||
+    "https://zvoijyneresvkadpprel.supabase.co/functions/v1/publishing-feed";
+  const feedResponse = await fetch(feedUrl + "?site_id=${siteId}", {
+    headers: process.env.PUBLISHING_FEED_TOKEN ? { "x-publishing-token": process.env.PUBLISHING_FEED_TOKEN } : {}
+  });
+  if (!feedResponse.ok) return response.status(502).send("Magazine feed unavailable");
+  const payload = await feedResponse.json();
+  const site = payload.site || {};
+  const articles = payload.articles || [];
+  const featured = articles[0];
+  const cards = articles.slice(featured ? 1 : 0).map((article) => \`
+    <article class="card">
+      <a class="image" href="\${articleUrl(article.slug)}">
+        \${article.hero_image_url ? '<img src="' + escapeHtml(article.hero_image_url) + '" alt="' + escapeHtml(article.image_alt || article.title) + '" loading="lazy">' : '<span class="placeholder"></span>'}
+      </a>
+      <div class="card-copy"><span class="category">\${escapeHtml(article.category || "מגזין")}</span>
+      <h2><a href="\${articleUrl(article.slug)}">\${escapeHtml(article.title)}</a></h2>
+      <p>\${escapeHtml(article.excerpt || "")}</p><a class="read" href="\${articleUrl(article.slug)}">לקריאת הכתבה ←</a></div>
+    </article>\`).join("");
+  response.setHeader("Content-Type", "text/html; charset=utf-8");
+  response.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+  return response.status(200).send(\`<!doctype html><html lang="he" dir="rtl"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>\${escapeHtml(site.name || "מגזין")}</title>
+  <meta name="description" content="כתבות, מדריכים ותוכן שימושי מבית \${escapeHtml(site.name || "המגזין")}">
+  <style>
+  *{box-sizing:border-box}body{margin:0;background:#f6f4ef;color:#172033;font-family:Arial,sans-serif}
+  header{background:#fff;border-bottom:1px solid #dedbd2}.nav{max-width:1180px;margin:auto;padding:24px;display:flex;align-items:center;justify-content:space-between}
+  .brand{font-size:clamp(24px,4vw,36px);font-weight:900;color:#172033;text-decoration:none}.tag{color:#64748b}
+  main{max-width:1180px;margin:auto;padding:34px 24px 70px}.eyebrow,.category{color:#0f766e;font-size:13px;font-weight:800;letter-spacing:.04em}
+  .featured{display:grid;grid-template-columns:1.25fr 1fr;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 12px 45px #17203312;margin-bottom:34px}
+  .featured img{width:100%;height:100%;min-height:390px;object-fit:cover}.featured-copy{padding:clamp(28px,5vw,64px);align-self:center}
+  h1{font-size:clamp(34px,5vw,60px);line-height:1.12;margin:.25em 0}h1 a,h2 a{color:inherit;text-decoration:none}
+  .featured p,.card p{color:#526071;line-height:1.75}.read{display:inline-block;margin-top:14px;color:#0f766e;font-weight:800;text-decoration:none}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}.card{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 8px 28px #1720330d}
+  .image{display:block;aspect-ratio:16/10;background:linear-gradient(135deg,#d8eee8,#e7e1d2)}.image img{width:100%;height:100%;object-fit:cover}.placeholder{display:block;width:100%;height:100%}
+  .card-copy{padding:22px}.card h2{font-size:22px;line-height:1.35;margin:.35em 0}.empty{text-align:center;padding:90px 20px;color:#64748b}
+  footer{border-top:1px solid #dedbd2;padding:28px;text-align:center;color:#64748b}
+  @media(max-width:800px){.featured{grid-template-columns:1fr}.featured img{min-height:240px}.grid{grid-template-columns:1fr}.tag{display:none}}
+  </style></head><body><header><div class="nav"><a class="brand" href="/">\${escapeHtml(site.name || "מגזין")}</a><span class="tag">תוכן, רעיונות ומדריכים שימושיים</span></div></header>
+  <main>\${featured ? \`<section class="featured">
+    \${featured.hero_image_url ? '<a href="' + articleUrl(featured.slug) + '"><img src="' + escapeHtml(featured.hero_image_url) + '" alt="' + escapeHtml(featured.image_alt || featured.title) + '"></a>' : ''}
+    <div class="featured-copy"><span class="eyebrow">\${escapeHtml(featured.category || "כתבה נבחרת")}</span>
+    <h1><a href="\${articleUrl(featured.slug)}">\${escapeHtml(featured.title)}</a></h1><p>\${escapeHtml(featured.excerpt || "")}</p>
+    <a class="read" href="\${articleUrl(featured.slug)}">לקריאת הכתבה ←</a></div></section><section class="grid">\${cards}</section>\` : '<div class="empty"><h1>בקרוב כאן</h1><p>כתבות חדשות נמצאות בעריכה ויעלו בקרוב.</p></div>'}</main>
+  <footer>© \${new Date().getFullYear()} \${escapeHtml(site.name || "")}</footer></body></html>\`);
+};`;
+
+const articleFunction = (siteId: string) => `
+const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+}[char]));
+
+module.exports = async (request, response) => {
+  const slug = String(request.query?.slug ?? "").replace(/^\\/+|\\/+$/g, "");
+  const feedUrl = process.env.PUBLISHING_FEED_URL ||
+    "https://zvoijyneresvkadpprel.supabase.co/functions/v1/publishing-feed";
+  const feedResponse = await fetch(feedUrl + "?site_id=${siteId}", {
+    headers: process.env.PUBLISHING_FEED_TOKEN ? { "x-publishing-token": process.env.PUBLISHING_FEED_TOKEN } : {}
+  });
+  if (!feedResponse.ok) return response.status(502).send("Article feed unavailable");
+  const payload = await feedResponse.json();
+  const article = (payload.articles || []).find((item) => item.slug === slug);
+  if (!article) return response.status(404).send("Article not found");
+  const site = payload.site || {};
+  const published = article.article_date || article.published_at;
+  const date = published ? new Intl.DateTimeFormat("he-IL", { dateStyle: "long" }).format(new Date(published)) : "";
+  const linked = { used: false };
+  const content = article.content || [];
+  let imageInserted = false;
+  let parts = content.map((part, index) => {
+    const text = String(part);
+    if (text.startsWith("## ")) return "<h2>" + escapeHtml(text.slice(3)) + "</h2>";
+    if (text.startsWith("LIST: ")) return '<ul>' + text.slice(6).split("|").map((item) => '<li>' + escapeHtml(item.trim()) + '</li>').join("") + '</ul>';
+    if (text.startsWith("TIP: ")) return '<aside class="tip"><strong>כדאי לדעת</strong><p>' + escapeHtml(text.slice(5).trim()) + '</p></aside>';
+    let html = escapeHtml(text);
+    if (!linked.used && article.anchor_text && article.target_url) {
+      const escapedAnchor = escapeHtml(article.anchor_text);
+      if (html.includes(escapedAnchor)) {
+        html = html.replace(escapedAnchor, '<a href="' + escapeHtml(article.target_url) +
+          '" target="_blank" rel="noopener">' + escapedAnchor + "</a>");
+        linked.used = true;
+      }
+    }
+    let result = "<p>" + html + "</p>";
+    if (!imageInserted && article.inline_image_url && index >= Math.floor(content.length / 2)) {
+      result += '<figure><img src="' + escapeHtml(article.inline_image_url) + '" alt="' +
+        escapeHtml(article.image_alt || article.title) + '" loading="lazy"></figure>';
+      imageInserted = true;
+    }
+    return result;
+  }).join("");
+  if (!linked.used && article.anchor_text && article.target_url) {
+    parts += '<p><a href="' + escapeHtml(article.target_url) + '" target="_blank" rel="noopener">' +
+      escapeHtml(article.anchor_text) + "</a></p>";
+  }
+  const infographic = article.infographic || {};
+  const infoItems = Array.isArray(infographic.items) ? infographic.items : [];
+  const infographicHtml = infoItems.length ? '<section class="infographic"><h2>' + escapeHtml(infographic.title || "הדברים החשובים בקצרה") +
+    '</h2><div class="info-grid">' + infoItems.map((item) => '<div class="info-item"><span>' +
+    escapeHtml(item.value || "•") + '</span><h3>' + escapeHtml(item.label || "") + '</h3><p>' +
+    escapeHtml(item.description || "") + '</p></div>').join("") + '</div></section>' : "";
+  const faq = Array.isArray(article.faq) ? article.faq : [];
+  const faqHtml = faq.length ? '<section class="faq"><h2>שאלות נפוצות</h2>' + faq.map((item) =>
+    '<details><summary>' + escapeHtml(item.question || "") + '</summary><p>' + escapeHtml(item.answer || "") + '</p></details>'
+  ).join("") + '</section>' : "";
+  const faqSchema = faq.length ? '<script type="application/ld+json">' + JSON.stringify({
+    "@context": "https://schema.org", "@type": "FAQPage",
+    mainEntity: faq.map((item) => ({ "@type": "Question", name: item.question, acceptedAnswer: { "@type": "Answer", text: item.answer } }))
+  }).replace(/</g, "\\\\u003c") + '</script>' : "";
+  const canonical = "https://" + request.headers.host + "/articles/" + encodeURIComponent(slug);
+  response.setHeader("Content-Type", "text/html; charset=utf-8");
+  response.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+  return response.status(200).send(\`<!doctype html><html lang="he" dir="rtl"><head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>\${escapeHtml(article.title)} | \${escapeHtml(site.name)}</title>
+    <meta name="description" content="\${escapeHtml(article.excerpt || "")}">
+    <meta name="robots" content="index,follow"><link rel="canonical" href="\${canonical}">
+    \${article.hero_image_url ? '<meta property="og:image" content="' + escapeHtml(article.hero_image_url) + '">' : ''}
+    \${faqSchema}
+    <style>*{box-sizing:border-box}body{margin:0;background:#f6f4ef;color:#172033;font-family:Arial,sans-serif;line-height:1.8}
+    header,main,footer{max-width:940px;margin:auto;padding:24px}header{border-bottom:1px solid #dbe3ea}
+    header a{color:#0f766e;text-decoration:none;font-size:24px;font-weight:800}main{background:#fff;margin-top:32px;
+    margin-bottom:32px;border-radius:18px;box-shadow:0 8px 30px #0f172a12;padding:clamp(24px,5vw,58px)}
+    h1{font-size:clamp(30px,5vw,48px);line-height:1.2;margin:.3em 0}h2{font-size:26px;margin-top:1.6em}
+    .meta{color:#64748b}.lead{font-size:20px;color:#334155}p,li{font-size:17px}a{color:#0f766e;font-weight:700}
+    .hero{width:calc(100% + clamp(48px,10vw,116px));margin:28px calc(clamp(24px,5vw,58px)*-1) 34px;max-height:520px;object-fit:cover}
+    figure{margin:38px 0}figure img{width:100%;border-radius:16px;max-height:480px;object-fit:cover}
+    ul{background:#f3f7f5;border-radius:14px;padding:20px 42px}.tip{margin:30px 0;padding:22px 26px;border-right:5px solid #0f766e;background:#eef8f5;border-radius:14px}.tip p{margin:.3em 0}
+    .infographic{margin:42px 0;padding:30px;background:#172033;color:#fff;border-radius:20px}.infographic h2{margin-top:0}.info-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+    .info-item{padding:18px;background:#ffffff10;border:1px solid #ffffff1f;border-radius:14px}.info-item span{font-size:30px;font-weight:900;color:#5eead4}.info-item h3{margin:.15em 0}.info-item p{font-size:14px;color:#dbe5ee;margin:0}
+    .faq{margin-top:46px;border-top:1px solid #dbe3ea}.faq details{border-bottom:1px solid #dbe3ea;padding:16px 0}.faq summary{cursor:pointer;font-size:18px;font-weight:800}.faq details p{color:#526071}
+    @media(max-width:650px){.info-grid{grid-template-columns:1fr}.hero{max-height:300px}}
+    footer{color:#64748b;border-top:1px solid #dbe3ea}</style></head><body>
+    <header><a href="/">\${escapeHtml(site.name || "מגזין")}</a></header><main><div class="meta">\${escapeHtml(article.category || "")}
+    \${date ? " · " + escapeHtml(date) : ""}</div><h1>\${escapeHtml(article.title)}</h1>
+    <p class="lead">\${escapeHtml(article.excerpt || "")}</p>
+    \${article.hero_image_url ? '<img class="hero" src="' + escapeHtml(article.hero_image_url) + '" alt="' + escapeHtml(article.image_alt || article.title) + '">' : ''}
+    \${parts}\${infographicHtml}\${faqHtml}</main>
+    <footer>© \${new Date().getFullYear()} \${escapeHtml(site.name || "")}</footer></body></html>\`);
+};`;
+
+const articleRouting = {
+  rewrites: [
+    { source: "/", destination: "/api/home" },
+    { source: "/articles/:slug", destination: "/api/article?slug=:slug" },
+  ],
+};
+
 Deno.serve(async (request) => {
   try {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -131,14 +287,33 @@ Deno.serve(async (request) => {
     const existingResponse = await fetch(`https://api.vercel.com/v9/projects/${requestedName}?teamId=${teamId}`, { headers });
     let project = existingResponse.ok ? await existingResponse.json().catch(() => ({})) : null;
     if (!project) {
-      const projectResponse = await fetch(`https://api.vercel.com/v10/projects?teamId=${teamId}`, { method: "POST", headers, body: JSON.stringify({ name: requestedName, framework: "astro" }) });
+      // The template deployment contains the already-built static output. These
+      // projects must not run Astro again: the deployment file API returns the
+      // template artifacts, not an installable Astro source checkout.
+      const projectResponse = await fetch(`https://api.vercel.com/v10/projects?teamId=${teamId}`, { method: "POST", headers, body: JSON.stringify({ name: requestedName, framework: null }) });
       project = await projectResponse.json().catch(() => ({}));
       if (!projectResponse.ok) return reply({ success: false, error: "vercel_create_project_failed", status: projectResponse.status, detail: project?.error?.message }, 400);
     }
-    const currentDeploymentsResponse = await fetch(`https://api.vercel.com/v6/deployments?projectId=${project.id}&teamId=${teamId}&limit=1&state=READY`, { headers });
-    const currentDeployments = await currentDeploymentsResponse.json().catch(() => ({}));
-    const currentDeployment = currentDeployments?.deployments?.[0];
-    if (currentDeployment) return reply({ success: true, existing: true, project: { id: project.id, name: project.name }, deployment: { id: currentDeployment.uid, url: currentDeployment.url, status: currentDeployment.state } });
+    if (project.framework !== null) {
+      const updateProjectResponse = await fetch(`https://api.vercel.com/v9/projects/${project.id}?teamId=${teamId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ framework: null }),
+      });
+      const updatedProject = await updateProjectResponse.json().catch(() => ({}));
+      if (!updateProjectResponse.ok) {
+        return reply({
+          success: false,
+          error: "vercel_update_project_failed",
+          status: updateProjectResponse.status,
+          detail: updatedProject?.error?.message,
+        }, 400);
+      }
+      project = updatedProject;
+    }
+    const { data: publishingSite } = await admin.from("publishing_sites")
+      .select("id").eq("tenant_id", tenantId).eq("connection_id", project.id).maybeSingle();
+    if (!publishingSite?.id) return reply({ success: false, error: "publishing_site_not_found", project_id: project.id }, 404);
     const deploymentsResponse = await fetch(`https://api.vercel.com/v6/deployments?projectId=${templateProjectId}&teamId=${teamId}&limit=1&state=READY`, { headers });
     const deployments = await deploymentsResponse.json().catch(() => ({}));
     const templateDeploymentId = deployments?.deployments?.[0]?.uid;
@@ -148,14 +323,42 @@ Deno.serve(async (request) => {
     if (!filesResponse.ok || !Array.isArray(fileTree)) return reply({ success: false, error: "template_files_failed", status: filesResponse.status }, 400);
     const templateFiles = flattenDeploymentFiles(fileTree);
     if (!templateFiles.length) return reply({ success: false, error: "template_files_missing" }, 400);
-    const files = await Promise.all(templateFiles.map(async ({ file, uid }) => {
+    const files = await Promise.all(templateFiles
+      .filter(({ file }) => file !== "api/article.js" && file !== "api/home.js" && file !== "vercel.json")
+      .map(async ({ file, uid }) => {
       const contentResponse = await fetch(`https://api.vercel.com/v8/deployments/${templateDeploymentId}/files/${uid}?teamId=${teamId}`, { headers });
       if (!contentResponse.ok) throw new Error(`template_file_read_failed:${file}:${contentResponse.status}`);
       return { file, data: toBase64(new Uint8Array(await contentResponse.arrayBuffer())), encoding: "base64" };
     }));
-    const deployResponse = await fetch(`https://api.vercel.com/v13/deployments?teamId=${teamId}&forceNew=1`, { method: "POST", headers, body: JSON.stringify({ name: requestedName, project: project.id, files, target: "production" }) });
+    files.push(
+      { file: "api/home.js", data: btoa(unescape(encodeURIComponent(homeFunction(publishingSite.id)))), encoding: "base64" },
+      { file: "api/article.js", data: btoa(unescape(encodeURIComponent(articleFunction(publishingSite.id)))), encoding: "base64" },
+      { file: "vercel.json", data: btoa(JSON.stringify(articleRouting)), encoding: "base64" },
+    );
+    // Vercel associates a deployment to an existing project by `name`.
+    // Sending the response-only `project` field causes the API to retain the
+    // source/template project association even when `name` is different.
+    const deployResponse = await fetch(`https://api.vercel.com/v13/deployments?teamId=${teamId}&forceNew=1`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: requestedName,
+        files,
+        target: "production",
+        projectSettings: { framework: null },
+      }),
+    });
     const deployment = await deployResponse.json().catch(() => ({}));
     if (!deployResponse.ok) return reply({ success: false, error: "vercel_deploy_site_failed", status: deployResponse.status, detail: deployment?.error?.message, project }, 400);
+    if (deployment?.projectId !== project.id) {
+      return reply({
+        success: false,
+        error: "vercel_deployment_project_mismatch",
+        expected_project_id: project.id,
+        actual_project_id: deployment?.projectId ?? null,
+        deployment_id: deployment?.id ?? null,
+      }, 502);
+    }
     return reply({ success: true, existing: false, project: { id: project.id, name: project.name }, deployment: { id: deployment.id, url: deployment.url, status: deployment.status ?? deployment.readyState } });
   }
 
