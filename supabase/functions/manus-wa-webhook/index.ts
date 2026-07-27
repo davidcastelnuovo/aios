@@ -57,6 +57,35 @@ async function fetchMedia(url: string, auth?: MediaAuth): Promise<Blob | null> {
   }
   return null;
 }
+// The Manus gateway currently emits hasMedia=true for voice notes without a URL,
+// MIME type, or media object. The same WhatsApp message is also delivered to the
+// connected Green API webhook, which downloads and transcribes it. Reuse that
+// transcript by the provider message id instead of degrading the Carmen request
+// to "[מדיה]". Green API can arrive a moment after Manus, so retry briefly.
+async function findPairedGreenTranscript(
+  payload: any,
+  auth?: MediaAuth,
+): Promise<string | null> {
+  if (!auth?.supabase || !auth.tenantId) return null;
+  const messageId = String(payload?.messageId || payload?.id || '').trim();
+  if (!messageId) return null;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 700));
+    const { data } = await auth.supabase
+      .from('chat_messages')
+      .select('message_text')
+      .eq('tenant_id', auth.tenantId)
+      .eq('provider', 'green_api')
+      .eq('raw_provider_data->>idMessage', messageId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const text = String(data?.message_text || '').replace(/^🎤\s*/, '').trim();
+    if (text && !/^\[(?:הודעת קול|מדיה|קובץ מדיה|הודעה)\]$/.test(text)) return text;
+  }
+  return null;
+}
 // Diagnostic: when a media message can't be transcribed, persist the payload
 // shape so the exact Manus voice-note format can be pinned down. Best-effort.
 function logMediaDebug(auth: MediaAuth | undefined, payload: any, msgContainer: any, url: string | null, isAudio: boolean) {
@@ -94,6 +123,8 @@ async function resolveMessageText(payload: any, msgContainer: any, auth?: MediaA
       }
     }
   } catch (_) { /* fall through to placeholder */ }
+  const pairedTranscript = await findPairedGreenTranscript(payload, auth);
+  if (pairedTranscript) return pairedTranscript;
   // Couldn't turn media into text — capture the shape so we can fix it precisely.
   logMediaDebug(auth, payload, msgContainer, url, isAudio);
   return '[מדיה]';
