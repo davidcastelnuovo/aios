@@ -9,6 +9,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTerminology } from "@/hooks/useTerminology";
+import { useViewAs } from "@/contexts/ViewAsContext";
 import { useAgencies, useCampaigners, useSalesPeople } from "@/hooks/useEntityLists";
 import {
   Form,
@@ -112,6 +113,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
   const { tenantId: currentTenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('task');
   const { isCampaigner, isTeamManager, isOwner, isSuperAdmin, campaignerId: userCampaignerId } = useUserRole();
+  const { isViewingAs, viewAsUserId, viewAsUserName } = useViewAs();
   const { t } = useTerminology();
 
   // Determine default campaigner - any user with a linked campaigner_id gets themselves as default
@@ -301,8 +303,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       // Get current user ID for created_by field
       const { data: sessionData } = await supabase.auth.getSession();
       const currentUserId = sessionData?.session?.user?.id;
+      const effectiveCreatorId = isViewingAs && viewAsUserId ? viewAsUserId : currentUserId;
 
-      const { error } = await supabase.from("tasks").insert([{
+      const taskPayload = {
         title: values.title,
         notes: values.notes || null,
         campaigner_id: finalCampaignerId || null,
@@ -315,8 +318,15 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         priority: values.priority,
         task_type: "other",
         tenant_id: tenantId,
-        created_by: currentUserId,
-      }]);
+        // In super-admin preview mode, business behavior (including the
+        // assignment notification's actor/self-assignment logic) must match
+        // the selected user. Keep the authenticated admin separately so the
+        // operation remains fully auditable.
+        created_by: effectiveCreatorId,
+        impersonated_by: isViewingAs ? currentUserId : null,
+      };
+
+      const { error } = await supabase.from("tasks").insert([taskPayload]);
       if (error) throw error;
 
       // Note: task_assigned automation is fired by DB trigger trg_notify_task_assigned
@@ -326,7 +336,11 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", currentTenantId] });
       queryClient.invalidateQueries({ queryKey: ["client-onboarding", currentTenantId] });
-      toast.success("המשימה נוספה בהצלחה ותופיע במודול משימות");
+      toast.success(
+        isViewingAs
+          ? `המשימה נוספה כ-${viewAsUserName || "המשתמש הנבחר"} ותופיע במודול משימות`
+          : "המשימה נוספה בהצלחה ותופיע במודול משימות"
+      );
       form.reset();
       setOpen(false);
     },
