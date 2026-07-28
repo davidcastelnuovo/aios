@@ -64,6 +64,8 @@ const formSchema = z.object({
   lead_id: z.string().optional(),
   agency_id: z.string().optional(),
   due_date: z.string().optional(),
+  self_reminder_enabled: z.boolean().default(false),
+  self_reminder_at: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.number().min(1).max(10),
 }).refine((data) => {
@@ -93,6 +95,11 @@ const formSchema = z.object({
 }, {
   message: "יש לבחור איש צוות אחראי",
   path: ["campaigner_id"],
+}).refine((data) => {
+  return !data.self_reminder_enabled || Boolean(data.self_reminder_at);
+}, {
+  message: "יש לבחור תאריך ושעה לתזכורת",
+  path: ["self_reminder_at"],
 });
 
 interface AddTaskFormProps {
@@ -132,6 +139,8 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       lead_id: leadId || "",
       agency_id: agencyId || "",
       due_date: "",
+      self_reminder_enabled: false,
+      self_reminder_at: "",
       status: "open",
       priority: 5,
     },
@@ -161,6 +170,18 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     control: form.control,
     name: "campaigner_id",
   });
+  const selfReminderEnabled = useWatch({
+    control: form.control,
+    name: "self_reminder_enabled",
+  });
+  const isSelfAssigned = Boolean(userCampaignerId && selectedCampaignerId === userCampaignerId);
+
+  useEffect(() => {
+    if (!isSelfAssigned) {
+      form.setValue("self_reminder_enabled", false);
+      form.setValue("self_reminder_at", "");
+    }
+  }, [form, isSelfAssigned]);
 
   // Filter campaigners - campaigners only see themselves, team_manager+ sees all
   const canSelectAnyCampaigner = isOwner || isTeamManager || isSuperAdmin;
@@ -355,6 +376,10 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         lead_id: values.task_category === "lead" ? values.lead_id : null,
         agency_id: finalAgencyId,
         due_date: values.due_date || null,
+        self_reminder_at:
+          isSelfAssigned && values.self_reminder_enabled && values.self_reminder_at
+            ? new Date(values.self_reminder_at).toISOString()
+            : null,
         status: values.status,
         priority: values.priority,
         task_type: "other",
@@ -795,6 +820,38 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
             {taskCategory === "quick" && (
               <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
                 משימה מהירה תשויך אליך אוטומטית עם דחיפות בינונית
+              </div>
+            )}
+
+            {isSelfAssigned && (
+              <div className="space-y-3 rounded-md border p-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selfReminderEnabled)}
+                    onChange={(event) => form.setValue("self_reminder_enabled", event.target.checked)}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  הזכר לי על המשימה
+                </label>
+                {selfReminderEnabled && (
+                  <FormField
+                    control={form.control}
+                    name="self_reminder_at"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>מתי לשלוח את התזכורת?</FormLabel>
+                        <FormControl>
+                          <Input type="datetime-local" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  משימה עצמית לא שולחת התראות אוטומטיות. כרמן תזכיר לך רק אם תבחר מועד.
+                </p>
               </div>
             )}
 
