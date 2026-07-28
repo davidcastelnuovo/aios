@@ -335,15 +335,24 @@ export default function Clients() {
 
 
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners", tenantId],
+    queryKey: ["campaigners", tenantId, isSuperAdmin],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      const { data, error } = await supabase
+      let query = supabase
         .from("campaigners")
         .select("id, full_name")
-        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
+
+      // Owners and team managers may see clients from another tenant through
+      // shared agencies. Let RLS include only the campaigners assigned to those
+      // accessible clients. Super admins remain scoped to the selected tenant
+      // so the picker does not contain every campaigner in the system.
+      if (isSuperAdmin) {
+        query = query.eq("tenant_id", tenantId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
