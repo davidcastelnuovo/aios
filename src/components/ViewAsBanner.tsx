@@ -12,7 +12,10 @@ export function ViewAsBanner() {
       <div className="flex items-center gap-2">
         <Eye className="h-4 w-4" />
         <span className="text-sm font-medium">
-          מצב תצוגה בלבד — צופה בתור: <strong>{viewAsUserName}</strong>
+          צופה בתור: <strong>{viewAsUserName}</strong>
+          <span className="mr-2 text-xs opacity-90">
+            יצירת משימה תירשם בשם המשתמש הנבחר וביומן הביקורת על שמך
+          </span>
         </span>
       </div>
       <Button
