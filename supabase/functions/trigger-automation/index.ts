@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { sendCarmenReplyViaActionStep } from '../_shared/carmen.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -171,6 +172,189 @@ interface AutomationPayload {
   source?: 'crm' | 'flow'
 }
 
+const TASK_NOTIFICATION_TENANT_NAMES = new Set(['dmm', 'marketing captain'])
+
+function formatTaskAssignmentMessage(task: any, clientName: string, campaignerName: string): string {
+  const details = [
+    `היי ${campaignerName || 'צוות'}, כאן כרמן 👋`,
+    '',
+    `משימה חדשה שויכה אליך עבור ${clientName}:`,
+    `*${task.title}*`,
+  ]
+  if (task.notes) details.push('', String(task.notes))
+  if (task.due_date) {
+    const due = task.due_time
+      ? `${task.due_date} בשעה ${String(task.due_time).slice(0, 5)}`
+      : task.due_date
+    details.push('', `תאריך יעד: ${due}`)
+  }
+  details.push('', 'לצפייה במשימות: https://after-lead.com/tasks')
+  return details.join('\n')
+}
+
+async function sendTaskAssignmentFromTenantCarmen(supabase: any, requestBody: any) {
+  const taskId = String(requestBody?.data?.task_id || '').trim()
+  if (!taskId) return { handled: false }
+
+  const { data: task, error: taskError } = await supabase
+    .from('tasks')
+    .select('id, title, notes, due_date, due_time, client_id, campaigner_id')
+    .eq('id', taskId)
+    .maybeSingle()
+  if (taskError) throw taskError
+  if (!task?.client_id) return { handled: false }
+
+  // The client is the source of truth for the Carmen identity. A task can be
+  // created while an owner is viewing another tenant, or for a cross-tenant
+  // agency, so tasks.tenant_id is not reliable enough for outbound routing.
+  const { data: client, error: clientError } = await supabase
+    .from('clients')
+    .select('id, name, tenant_id')
+    .eq('id', task.client_id)
+    .maybeSingle()
+  if (clientError) throw clientError
+  if (!client?.tenant_id) return { handled: false }
+
+  const { data: tenant, error: tenantError } = await supabase
+    .from('tenants')
+    .select('name')
+    .eq('id', client.tenant_id)
+    .maybeSingle()
+  if (tenantError) throw tenantError
+  const tenantName = String(tenant?.name || '').trim()
+  if (!TASK_NOTIFICATION_TENANT_NAMES.has(tenantName.toLowerCase())) {
+    return { handled: false }
+  }
+
+  let campaignerId = task.campaigner_id
+  if (!campaignerId) {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: team } = await supabase
+      .from('client_team')
+      .select('campaigner_id, role_on_account, start_date, end_date, created_at')
+      .eq('client_id', client.id)
+      .or(`start_date.is.null,start_date.lte.${today}`)
+      .or(`end_date.is.null,end_date.gte.${today}`)
+      .order('created_at', { ascending: true })
+    const preferred = (team || []).find((row: any) =>
+      /campaign|ppc|קמפיינ/i.test(String(row.role_on_account || '')))
+    campaignerId = preferred?.campaigner_id || team?.[0]?.campaigner_id || null
+  }
+  if (!campaignerId) {
+    return { handled: true, sent: false, reason: 'no campaigner assigned to client task', tenant_id: client.tenant_id }
+  }
+
+  const { data: campaigner, error: campaignerError } = await supabase
+    .from('campaigners')
+    .select('id, full_name, phone, active')
+    .eq('id', campaignerId)
+    .maybeSingle()
+  if (campaignerError) throw campaignerError
+  if (!campaigner?.active || !campaigner.phone) {
+    return {
+      handled: true,
+      sent: false,
+      reason: !campaigner?.active ? 'campaigner is missing or inactive' : 'campaigner phone is missing',
+      tenant_id: client.tenant_id,
+      campaigner_id: campaignerId,
+    }
+  }
+
+  // Select Carmen inside the client's tenant. Prefer the general tenant Carmen
+  // flow over phone/group-specific variants, then dispatch through that flow's
+  // own WhatsApp action step so DMM and Marketing Captain never share a sender.
+  const { data: triggerSteps, error: triggerStepsError } = await supabase
+    .from('automation_flow_steps')
+    .select('automation_id, configuration, created_at')
+    .eq('tenant_id', client.tenant_id)
+    .eq('step_type', 'trigger')
+    .eq('action_type', 'carmen_whatsapp_session')
+    .order('created_at', { ascending: true })
+  if (triggerStepsError) throw triggerStepsError
+
+  const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
+  if (!automationIds.length) {
+    return { handled: true, sent: false, reason: 'tenant Carmen flow is missing', tenant_id: client.tenant_id }
+  }
+  const { data: activeAutomations, error: automationsError } = await supabase
+    .from('automations')
+    .select('id, name')
+    .in('id', automationIds)
+    .eq('active', true)
+  if (automationsError) throw automationsError
+  const activeIds = new Set((activeAutomations || []).map((automation: any) => automation.id))
+  const rankedSteps = (triggerSteps || [])
+    .filter((step: any) => activeIds.has(step.automation_id))
+    .sort((a: any, b: any) => {
+      const aAll = (a.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
+      const bAll = (b.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
+      return aAll - bAll
+    })
+  const carmenStep = rankedSteps[0]
+  if (!carmenStep) {
+    return { handled: true, sent: false, reason: 'tenant Carmen flow is inactive', tenant_id: client.tenant_id }
+  }
+
+  const { data: actionStep, error: actionStepError } = await supabase
+    .from('automation_flow_steps')
+    .select('configuration')
+    .eq('automation_id', carmenStep.automation_id)
+    .eq('step_type', 'action')
+    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (actionStepError) throw actionStepError
+  const integrationId = actionStep?.configuration?.green_api_integration_id
+    || actionStep?.configuration?.integration_id
+    || carmenStep.configuration?.carmen_integration_id
+    || null
+
+  let integrationQuery = supabase
+    .from('tenant_integrations')
+    .select('id, user_id')
+    .eq('tenant_id', client.tenant_id)
+    .eq('is_active', true)
+  integrationQuery = integrationId
+    ? integrationQuery.eq('id', integrationId)
+    : integrationQuery.in('integration_type', ['green_api', 'greenapi', 'manus_wa', 'manuswa']).order('created_at', { ascending: false }).limit(1)
+  const { data: integrations, error: integrationError } = await integrationQuery
+  if (integrationError) throw integrationError
+  const integration = integrations?.[0]
+  if (!integration?.user_id) {
+    return { handled: true, sent: false, reason: 'tenant Carmen WhatsApp integration is missing', tenant_id: client.tenant_id }
+  }
+
+  const message = formatTaskAssignmentMessage(task, client.name || 'הלקוח', campaigner.full_name || '')
+  const sent = await sendCarmenReplyViaActionStep({
+    supabase,
+    automationId: carmenStep.automation_id,
+    tenantId: client.tenant_id,
+    connectionUserId: integration.user_id,
+    chatId: `${String(campaigner.phone).replace(/\D/g, '')}@c.us`,
+    phoneNumber: campaigner.phone,
+    isGroup: false,
+    message,
+  })
+
+  console.log('[task-assigned-carmen]', {
+    task_id: task.id,
+    client_id: client.id,
+    tenant_id: client.tenant_id,
+    tenant_name: tenantName,
+    campaigner_id: campaigner.id,
+    sent,
+  })
+  return {
+    handled: true,
+    sent,
+    task_id: task.id,
+    client_id: client.id,
+    tenant_id: client.tenant_id,
+    campaigner_id: campaigner.id,
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -189,6 +373,15 @@ Deno.serve(async (req) => {
       requestBody.trigger_type = 'ad_account_blocked'
     }
 
+    if (requestBody.trigger_type === 'task_assigned') {
+      const taskNotification = await sendTaskAssignmentFromTenantCarmen(supabase, requestBody)
+      if (taskNotification.handled) {
+        return new Response(JSON.stringify(taskNotification), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: taskNotification.sent ? 200 : 202,
+        })
+      }
+    }
 
     // ===== AUTOMATION SAFETY GUARDS =====
     const MAX_EXECUTION_DEPTH = 10
