@@ -268,7 +268,7 @@ verify_jwt = true
 # Called only by the task DB trigger and pg_cron. It validates task state from
 # the database and uses idempotency markers before dispatching any message.
 [functions.task-notification-worker]
-verify_jwt = false
+verify_jwt = true
 
 [functions.run-ai-agent-v2]
 verify_jwt = true
