@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { taskReminderAt } from './schedule.ts'
+import { taskNotificationScope, taskReminderAt } from './schedule.ts'
 
 test('high priority daytime task is reminded exactly five hours later', () => {
   const reminder = taskReminderAt({
@@ -40,4 +40,43 @@ test('night due time is reminded at 19:00 on the previous calendar day', () => {
     due_time: '02:00:00',
   })
   assert.equal(reminder?.toISOString(), '2026-07-29T16:00:00.000Z')
+})
+
+test('manager assignment to another campaigner enables managed notifications', () => {
+  assert.deepEqual(taskNotificationScope({
+    taskCampaignerId: 'campaigner-b',
+    taskSalesPersonId: null,
+    creatorCampaignerId: 'manager-a',
+    creatorSalesPersonId: null,
+    creatorRoles: ['team_manager'],
+  }), {
+    isSelfAssigned: false,
+    isManagedAssignment: true,
+  })
+})
+
+test('campaigner self-assignment is silent unless a self reminder is requested', () => {
+  assert.deepEqual(taskNotificationScope({
+    taskCampaignerId: 'campaigner-a',
+    taskSalesPersonId: null,
+    creatorCampaignerId: 'campaigner-a',
+    creatorSalesPersonId: null,
+    creatorRoles: ['campaigner'],
+  }), {
+    isSelfAssigned: true,
+    isManagedAssignment: false,
+  })
+})
+
+test('campaigner assignment to a colleague does not enable managerial notifications', () => {
+  assert.deepEqual(taskNotificationScope({
+    taskCampaignerId: 'campaigner-b',
+    taskSalesPersonId: null,
+    creatorCampaignerId: 'campaigner-a',
+    creatorSalesPersonId: null,
+    creatorRoles: ['campaigner'],
+  }), {
+    isSelfAssigned: false,
+    isManagedAssignment: false,
+  })
 })
