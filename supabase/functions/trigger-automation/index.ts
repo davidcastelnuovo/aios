@@ -173,52 +173,99 @@ interface AutomationPayload {
 }
 
 const TASK_NOTIFICATION_TENANT_NAMES = new Set(['dmm', 'marketing captain', 'marketingcaptain'])
+const TASK_NOTIFICATION_TYPES = new Set([
+  'task_assigned',
+  'task_high_priority_reminder',
+  'task_high_priority_reminder_sent',
+  'task_completed',
+])
+const AIOS_APP_URL = 'https://aios.co.il'
 
-function formatTaskAssignmentMessage(task: any, clientName: string, campaignerName: string): string {
-  const details = [
-    `היי ${campaignerName || 'צוות'}, כאן כרמן 👋`,
-    '',
-    `משימה חדשה שויכה אליך עבור ${clientName}:`,
-    `*${task.title}*`,
-  ]
+function formatTaskNotificationMessage(
+  notificationType: string,
+  task: any,
+  clientName: string,
+  assigneeName: string,
+  recipientName: string,
+): string {
+  const taskLink = `${AIOS_APP_URL}/tasks?task=${encodeURIComponent(task.id)}`
+  const details = [`היי ${recipientName || 'צוות'}, כאן כרמן 👋`, '']
+
+  if (notificationType === 'task_high_priority_reminder') {
+    details.push(
+      task.priority >= 8
+        ? 'תזכורת למשימה בדחיפות גבוהה שעדיין פתוחה:'
+        : 'תזכורת: המשימה עדיין פתוחה ומועד הביצוע שלה מתקרב:',
+      `*${task.title}*`,
+      `לקוח: ${clientName}`,
+    )
+  } else if (notificationType === 'task_high_priority_reminder_sent') {
+    details.push(
+      `נשלחה עכשיו תזכורת ל${assigneeName || 'קמפיינר'} על משימה שעדיין פתוחה:`,
+      `*${task.title}*`,
+      `לקוח: ${clientName}`,
+      '',
+      'אעדכן אותך כשהמשימה תסומן כבוצעה.',
+    )
+  } else if (notificationType === 'task_completed') {
+    details.push(
+      `המשימה שהגדרת ל${assigneeName || 'קמפיינר'} בוצעה ✅`,
+      `*${task.title}*`,
+      `לקוח: ${clientName}`,
+    )
+  } else {
+    details.push(
+      `משימה חדשה שויכה אליך עבור ${clientName}:`,
+      `*${task.title}*`,
+    )
+  }
+
   if (task.notes) details.push('', String(task.notes))
+  if (Number(task.priority) >= 8) details.push('', 'דחיפות: גבוהה')
   if (task.due_date) {
     const due = task.due_time
       ? `${task.due_date} בשעה ${String(task.due_time).slice(0, 5)}`
       : task.due_date
     details.push('', `תאריך יעד: ${due}`)
   }
-  details.push('', 'לצפייה במשימות: https://after-lead.com/tasks')
+  details.push('', `לצפייה במשימה: ${taskLink}`)
   return details.join('\n')
 }
 
-async function sendTaskAssignmentFromTenantCarmen(supabase: any, requestBody: any) {
+async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: any) {
   const taskId = String(requestBody?.data?.task_id || '').trim()
   if (!taskId) return { handled: false }
+  const notificationType = String(requestBody?.trigger_type || '')
+  if (!TASK_NOTIFICATION_TYPES.has(notificationType)) return { handled: false }
 
   const { data: task, error: taskError } = await supabase
     .from('tasks')
-    .select('id, title, notes, due_date, due_time, client_id, campaigner_id')
+    .select('id, title, notes, due_date, due_time, client_id, campaigner_id, tenant_id, created_by, priority, status')
     .eq('id', taskId)
     .maybeSingle()
   if (taskError) throw taskError
-  if (!task?.client_id) return { handled: false }
+  if (!task) return { handled: true, sent: false, reason: 'task not found' }
 
   // The client is the source of truth for the Carmen identity. A task can be
   // created while an owner is viewing another tenant, or for a cross-tenant
   // agency, so tasks.tenant_id is not reliable enough for outbound routing.
-  const { data: client, error: clientError } = await supabase
-    .from('clients')
-    .select('id, name, tenant_id')
-    .eq('id', task.client_id)
-    .maybeSingle()
-  if (clientError) throw clientError
-  if (!client?.tenant_id) return { handled: false }
+  let client: any = null
+  if (task.client_id) {
+    const { data, error: clientError } = await supabase
+      .from('clients')
+      .select('id, name, tenant_id')
+      .eq('id', task.client_id)
+      .maybeSingle()
+    if (clientError) throw clientError
+    client = data
+  }
+  const notificationTenantId = client?.tenant_id || task.tenant_id
+  if (!notificationTenantId) return { handled: true, sent: false, reason: 'task tenant is missing' }
 
   const { data: tenant, error: tenantError } = await supabase
     .from('tenants')
     .select('name')
-    .eq('id', client.tenant_id)
+    .eq('id', notificationTenantId)
     .maybeSingle()
   if (tenantError) throw tenantError
   const tenantName = String(tenant?.name || '').trim()
@@ -227,7 +274,7 @@ async function sendTaskAssignmentFromTenantCarmen(supabase: any, requestBody: an
   }
 
   let campaignerId = task.campaigner_id
-  if (!campaignerId) {
+  if (!campaignerId && client?.id) {
     const today = new Date().toISOString().slice(0, 10)
     const { data: team } = await supabase
       .from('client_team')
@@ -240,22 +287,60 @@ async function sendTaskAssignmentFromTenantCarmen(supabase: any, requestBody: an
       /campaign|ppc|קמפיינ/i.test(String(row.role_on_account || '')))
     campaignerId = preferred?.campaigner_id || team?.[0]?.campaigner_id || null
   }
-  if (!campaignerId) {
-    return { handled: true, sent: false, reason: 'no campaigner assigned to client task', tenant_id: client.tenant_id }
+
+  let campaigner: any = null
+  if (campaignerId) {
+    const { data, error: campaignerError } = await supabase
+      .from('campaigners')
+      .select('id, full_name, phone, active')
+      .eq('id', campaignerId)
+      .maybeSingle()
+    if (campaignerError) throw campaignerError
+    campaigner = data
   }
 
-  const { data: campaigner, error: campaignerError } = await supabase
-    .from('campaigners')
-    .select('id, full_name, phone, active')
-    .eq('id', campaignerId)
-    .maybeSingle()
-  if (campaignerError) throw campaignerError
-  if (!campaigner?.active || !campaigner.phone) {
+  const notifyCreator = ['task_high_priority_reminder_sent', 'task_completed'].includes(notificationType)
+  let recipient: { id: string | null; full_name: string; phone: string } | null = null
+  if (notifyCreator) {
+    if (!task.created_by) {
+      return { handled: true, sent: false, reason: 'task creator is missing', tenant_id: notificationTenantId }
+    }
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, full_name, phone, campaigner_id')
+      .eq('id', task.created_by)
+      .maybeSingle()
+    if (profileError) throw profileError
+
+    let creatorPhone = String(profile?.phone || '').trim()
+    let creatorName = String(profile?.full_name || '').trim()
+    if (!creatorPhone && profile?.campaigner_id) {
+      const { data: creatorCampaigner, error: creatorCampaignerError } = await supabase
+        .from('campaigners')
+        .select('full_name, phone')
+        .eq('id', profile.campaigner_id)
+        .maybeSingle()
+      if (creatorCampaignerError) throw creatorCampaignerError
+      creatorPhone = String(creatorCampaigner?.phone || '').trim()
+      creatorName = creatorName || String(creatorCampaigner?.full_name || '').trim()
+    }
+    if (creatorPhone) {
+      recipient = { id: profile?.id || task.created_by, full_name: creatorName, phone: creatorPhone }
+    }
+  } else if (campaigner?.active && campaigner?.phone) {
+    recipient = {
+      id: campaigner.id,
+      full_name: String(campaigner.full_name || ''),
+      phone: String(campaigner.phone),
+    }
+  }
+
+  if (!recipient) {
     return {
       handled: true,
       sent: false,
-      reason: !campaigner?.active ? 'campaigner is missing or inactive' : 'campaigner phone is missing',
-      tenant_id: client.tenant_id,
+      reason: notifyCreator ? 'task creator phone is missing' : 'campaigner is missing, inactive, or has no phone',
+      tenant_id: notificationTenantId,
       campaigner_id: campaignerId,
     }
   }
@@ -266,7 +351,7 @@ async function sendTaskAssignmentFromTenantCarmen(supabase: any, requestBody: an
   const { data: triggerSteps, error: triggerStepsError } = await supabase
     .from('automation_flow_steps')
     .select('automation_id, configuration, created_at')
-    .eq('tenant_id', client.tenant_id)
+    .eq('tenant_id', notificationTenantId)
     .eq('step_type', 'trigger')
     .eq('action_type', 'carmen_whatsapp_session')
     .order('created_at', { ascending: true })
@@ -274,7 +359,7 @@ async function sendTaskAssignmentFromTenantCarmen(supabase: any, requestBody: an
 
   const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
   if (!automationIds.length) {
-    return { handled: true, sent: false, reason: 'tenant Carmen flow is missing', tenant_id: client.tenant_id }
+    return { handled: true, sent: false, reason: 'tenant Carmen flow is missing', tenant_id: notificationTenantId }
   }
   const { data: activeAutomations, error: automationsError } = await supabase
     .from('automations')
@@ -292,7 +377,7 @@ async function sendTaskAssignmentFromTenantCarmen(supabase: any, requestBody: an
     })
   const carmenStep = rankedSteps[0]
   if (!carmenStep) {
-    return { handled: true, sent: false, reason: 'tenant Carmen flow is inactive', tenant_id: client.tenant_id }
+    return { handled: true, sent: false, reason: 'tenant Carmen flow is inactive', tenant_id: notificationTenantId }
   }
 
   const { data: actionStep, error: actionStepError } = await supabase
@@ -313,7 +398,7 @@ async function sendTaskAssignmentFromTenantCarmen(supabase: any, requestBody: an
   let integrationQuery = supabase
     .from('tenant_integrations')
     .select('id, user_id')
-    .eq('tenant_id', client.tenant_id)
+    .eq('tenant_id', notificationTenantId)
     .eq('is_active', true)
   integrationQuery = integrationId
     ? integrationQuery.eq('id', integrationId)
@@ -322,36 +407,46 @@ async function sendTaskAssignmentFromTenantCarmen(supabase: any, requestBody: an
   if (integrationError) throw integrationError
   const integration = integrations?.[0]
   if (!integration?.user_id) {
-    return { handled: true, sent: false, reason: 'tenant Carmen WhatsApp integration is missing', tenant_id: client.tenant_id }
+    return { handled: true, sent: false, reason: 'tenant Carmen WhatsApp integration is missing', tenant_id: notificationTenantId }
   }
 
-  const message = formatTaskAssignmentMessage(task, client.name || 'הלקוח', campaigner.full_name || '')
+  const message = formatTaskNotificationMessage(
+    notificationType,
+    task,
+    client?.name || 'משימה כללית',
+    campaigner?.full_name || '',
+    recipient.full_name,
+  )
   const sent = await sendCarmenReplyViaActionStep({
     supabase,
     automationId: carmenStep.automation_id,
-    tenantId: client.tenant_id,
+    tenantId: notificationTenantId,
     connectionUserId: integration.user_id,
-    chatId: `${String(campaigner.phone).replace(/\D/g, '')}@c.us`,
-    phoneNumber: campaigner.phone,
+    chatId: `${String(recipient.phone).replace(/\D/g, '')}@c.us`,
+    phoneNumber: recipient.phone,
     isGroup: false,
     message,
   })
 
-  console.log('[task-assigned-carmen]', {
+  console.log('[task-notification-carmen]', {
+    notification_type: notificationType,
     task_id: task.id,
-    client_id: client.id,
-    tenant_id: client.tenant_id,
+    client_id: client?.id || null,
+    tenant_id: notificationTenantId,
     tenant_name: tenantName,
-    campaigner_id: campaigner.id,
+    campaigner_id: campaigner?.id || null,
+    recipient_id: recipient.id,
     sent,
   })
   return {
     handled: true,
     sent,
     task_id: task.id,
-    client_id: client.id,
-    tenant_id: client.tenant_id,
-    campaigner_id: campaigner.id,
+    notification_type: notificationType,
+    client_id: client?.id || null,
+    tenant_id: notificationTenantId,
+    campaigner_id: campaigner?.id || null,
+    recipient_id: recipient.id,
   }
 }
 
@@ -373,8 +468,8 @@ Deno.serve(async (req) => {
       requestBody.trigger_type = 'ad_account_blocked'
     }
 
-    if (requestBody.trigger_type === 'task_assigned') {
-      const taskNotification = await sendTaskAssignmentFromTenantCarmen(supabase, requestBody)
+    if (TASK_NOTIFICATION_TYPES.has(requestBody.trigger_type)) {
+      const taskNotification = await sendTaskNotificationFromTenantCarmen(supabase, requestBody)
       if (taskNotification.handled) {
         return new Response(JSON.stringify(taskNotification), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

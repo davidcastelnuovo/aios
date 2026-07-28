@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -74,6 +75,7 @@ export type ViewMode = "daily" | "weekly" | "monthly";
 
 export function WeeklyTaskBoard() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
   const { state: sidebarState } = useSidebar();
@@ -151,6 +153,39 @@ export function WeeklyTaskBoard() {
     task_updates?: { id: string }[];
     task_collaborators?: { id: string }[];
   };
+
+  const linkedTaskId = searchParams.get("task");
+  useEffect(() => {
+    if (!linkedTaskId || !user?.id) return;
+    let cancelled = false;
+
+    const openLinkedTask = async () => {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select(`
+          *,
+          clients (name),
+          campaigners (full_name),
+          task_updates (id),
+          task_collaborators (id)
+        `)
+        .eq("id", linkedTaskId)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error || !data) {
+        toast.error("המשימה לא נמצאה או שאין לך הרשאה לצפות בה");
+        return;
+      }
+      setSelectedTask(data as FullTask);
+      setDialogOpen(true);
+    };
+
+    void openLinkedTask();
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedTaskId, user?.id]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -1452,7 +1487,14 @@ export function WeeklyTaskBoard() {
       <TaskDetailDialog
         task={selectedTask}
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open && linkedTaskId) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("task");
+            setSearchParams(next, { replace: true });
+          }
+        }}
         onDelete={(taskId) => deleteTask.mutate({ 
           taskId, 
           googleCalendarEventId: selectedTask?.google_calendar_event_id 

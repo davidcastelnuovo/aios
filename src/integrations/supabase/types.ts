@@ -8166,10 +8166,12 @@ export type Database = {
       tasks: {
         Row: {
           agency_id: string
+          assignment_notification_sent_at: string | null
           assigned_agent: string | null
           attachments: Json
           campaigner_id: string | null
           client_id: string | null
+          completion_creator_notified_at: string | null
           created_at: string
           created_by: string | null
           due_date: string | null
@@ -8177,6 +8179,8 @@ export type Database = {
           duration_minutes: number | null
           goal_id: string | null
           google_calendar_event_id: string | null
+          high_priority_creator_notified_at: string | null
+          high_priority_reminder_sent_at: string | null
           id: string
           lead_id: string | null
           notes: string | null
@@ -8192,10 +8196,12 @@ export type Database = {
         }
         Insert: {
           agency_id: string
+          assignment_notification_sent_at?: string | null
           assigned_agent?: string | null
           attachments?: Json
           campaigner_id?: string | null
           client_id?: string | null
+          completion_creator_notified_at?: string | null
           created_at?: string
           created_by?: string | null
           due_date?: string | null
@@ -8203,6 +8209,8 @@ export type Database = {
           duration_minutes?: number | null
           goal_id?: string | null
           google_calendar_event_id?: string | null
+          high_priority_creator_notified_at?: string | null
+          high_priority_reminder_sent_at?: string | null
           id?: string
           lead_id?: string | null
           notes?: string | null
@@ -8218,10 +8226,12 @@ export type Database = {
         }
         Update: {
           agency_id?: string
+          assignment_notification_sent_at?: string | null
           assigned_agent?: string | null
           attachments?: Json
           campaigner_id?: string | null
           client_id?: string | null
+          completion_creator_notified_at?: string | null
           created_at?: string
           created_by?: string | null
           due_date?: string | null
@@ -8229,6 +8239,8 @@ export type Database = {
           duration_minutes?: number | null
           goal_id?: string | null
           google_calendar_event_id?: string | null
+          high_priority_creator_notified_at?: string | null
+          high_priority_reminder_sent_at?: string | null
           id?: string
           lead_id?: string | null
           notes?: string | null
