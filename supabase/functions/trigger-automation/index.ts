@@ -172,7 +172,7 @@ interface AutomationPayload {
   source?: 'crm' | 'flow'
 }
 
-const TASK_NOTIFICATION_TENANT_NAMES = new Set(['dmm', 'marketing captain'])
+const TASK_NOTIFICATION_TENANT_NAMES = new Set(['dmm', 'marketing captain', 'marketingcaptain'])
 
 function formatTaskAssignmentMessage(task: any, clientName: string, campaignerName: string): string {
   const details = [
