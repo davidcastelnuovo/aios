@@ -178,6 +178,7 @@ const TASK_NOTIFICATION_TYPES = new Set([
   'task_high_priority_reminder',
   'task_high_priority_reminder_sent',
   'task_completed',
+  'task_self_reminder',
 ])
 const AIOS_APP_URL = 'https://aios.co.il'
 
@@ -191,7 +192,13 @@ function formatTaskNotificationMessage(
   const taskLink = `${AIOS_APP_URL}/tasks?task=${encodeURIComponent(task.id)}`
   const details = [`היי ${recipientName || 'צוות'}, כאן כרמן 👋`, '']
 
-  if (notificationType === 'task_high_priority_reminder') {
+  if (notificationType === 'task_self_reminder') {
+    details.push(
+      'התזכורת שביקשת למשימה:',
+      `*${task.title}*`,
+      `לקוח: ${clientName}`,
+    )
+  } else if (notificationType === 'task_high_priority_reminder') {
     details.push(
       task.priority >= 8
         ? 'תזכורת למשימה בדחיפות גבוהה שעדיין פתוחה:'
