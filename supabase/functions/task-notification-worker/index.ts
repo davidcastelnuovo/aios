@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
-import { taskReminderAt } from './schedule.ts'
+import { taskNotificationScope, taskReminderAt } from './schedule.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,9 +14,11 @@ type NotificationType =
   | 'task_high_priority_reminder'
   | 'task_high_priority_reminder_sent'
   | 'task_completed'
+  | 'task_self_reminder'
 
 type TaskRow = {
   id: string
+  tenant_id: string
   title: string
   status: string
   priority: number
@@ -25,6 +27,9 @@ type TaskRow = {
   due_time: string | null
   created_by: string | null
   campaigner_id: string | null
+  sales_person_id: string | null
+  self_reminder_at: string | null
+  self_reminder_sent_at: string | null
   assignment_notification_sent_at: string | null
   high_priority_reminder_sent_at: string | null
   high_priority_creator_notified_at: string | null
@@ -59,6 +64,7 @@ async function claimAndSend(
     | 'high_priority_reminder_sent_at'
     | 'high_priority_creator_notified_at'
     | 'completion_creator_notified_at'
+    | 'self_reminder_sent_at'
   >,
   triggerType: NotificationType,
 ) {
@@ -90,19 +96,70 @@ async function claimAndSend(
 async function fetchTask(supabase: ReturnType<typeof createClient>, taskId: string) {
   const { data, error } = await supabase
     .from('tasks')
-    .select('id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at')
+    .select('id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at')
     .eq('id', taskId)
     .maybeSingle()
   if (error) throw error
   return data as TaskRow | null
 }
 
+async function notificationScope(
+  supabase: ReturnType<typeof createClient>,
+  task: TaskRow,
+) {
+  if (!task.created_by) return { isSelfAssigned: false, isManagedAssignment: false }
+
+  const [{ data: creatorProfile, error: profileError }, { data: creatorRoles, error: rolesError }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('campaigner_id,sales_person_id')
+      .eq('id', task.created_by)
+      .maybeSingle(),
+    supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', task.created_by)
+      .or(`tenant_id.eq.${task.tenant_id},tenant_id.is.null`),
+  ])
+  if (profileError) throw profileError
+  if (rolesError) throw rolesError
+
+  return taskNotificationScope({
+    taskCampaignerId: task.campaigner_id,
+    taskSalesPersonId: task.sales_person_id,
+    creatorCampaignerId: creatorProfile?.campaigner_id || null,
+    creatorSalesPersonId: creatorProfile?.sales_person_id || null,
+    creatorRoles: (creatorRoles || []).map((row) => String(row.role)),
+  })
+}
+
 async function processTask(supabase: ReturnType<typeof createClient>, task: TaskRow) {
   const results: unknown[] = []
   const oneMinuteAgo = Date.now() - 60 * 1000
   const reminderAt = taskReminderAt(task)
+  const { isSelfAssigned, isManagedAssignment } = await notificationScope(supabase, task)
+
+  // Silent assignments must be marked as handled; otherwise the minute cron
+  // would select and re-evaluate the same self/non-manager task forever.
+  if (!isManagedAssignment) {
+    const handledAt = new Date().toISOString()
+    const silentMarkers: Record<string, string> = {}
+    if (!task.assignment_notification_sent_at) silentMarkers.assignment_notification_sent_at = handledAt
+    if (!task.high_priority_reminder_sent_at) silentMarkers.high_priority_reminder_sent_at = handledAt
+    if (!task.high_priority_creator_notified_at) silentMarkers.high_priority_creator_notified_at = handledAt
+    if (task.status === 'done' && !task.completion_creator_notified_at) {
+      silentMarkers.completion_creator_notified_at = handledAt
+    }
+    if (Object.keys(silentMarkers).length > 0) {
+      const { error } = await supabase.from('tasks').update(silentMarkers).eq('id', task.id)
+      if (error) throw error
+      Object.assign(task, silentMarkers)
+    }
+  }
 
   if (
+    isManagedAssignment
+    &&
     task.campaigner_id
     && task.status !== 'done'
     && !task.assignment_notification_sent_at
@@ -112,6 +169,8 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
   }
 
   if (
+    isManagedAssignment
+    &&
     task.campaigner_id
     && task.status === 'open'
     && reminderAt !== null
@@ -124,6 +183,8 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
   }
 
   if (
+    isManagedAssignment
+    &&
     task.created_by
     && task.high_priority_reminder_sent_at
     && Date.parse(task.high_priority_reminder_sent_at) <= oneMinuteAgo
@@ -134,12 +195,25 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
   }
 
   if (
+    isManagedAssignment
+    &&
     task.created_by
     && task.status === 'done'
     && !task.completion_creator_notified_at
   ) {
     results.push(await claimAndSend(supabase, task, 'completion_creator_notified_at', 'task_completed'))
     task.completion_creator_notified_at = new Date().toISOString()
+  }
+
+  if (
+    isSelfAssigned
+    && task.status !== 'done'
+    && task.self_reminder_at
+    && Date.parse(task.self_reminder_at) <= Date.now()
+    && !task.self_reminder_sent_at
+  ) {
+    results.push(await claimAndSend(supabase, task, 'self_reminder_sent_at', 'task_self_reminder'))
+    task.self_reminder_sent_at = new Date().toISOString()
   }
 
   return results
@@ -167,38 +241,47 @@ Deno.serve(async (req) => {
       if (task) tasks = [task]
     } else {
       const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString()
-      const [assignments, reminders, reminderReceipts, completions] = await Promise.all([
+      const taskColumns = 'id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at'
+      const [assignments, reminders, reminderReceipts, completions, selfReminders] = await Promise.all([
         supabase
           .from('tasks')
-          .select('id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at')
+          .select(taskColumns)
           .not('campaigner_id', 'is', null)
           .neq('status', 'done')
           .is('assignment_notification_sent_at', null)
           .limit(25),
         supabase
           .from('tasks')
-          .select('id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at')
+          .select(taskColumns)
           .not('campaigner_id', 'is', null)
           .eq('status', 'open')
           .is('high_priority_reminder_sent_at', null)
           .limit(100),
         supabase
           .from('tasks')
-          .select('id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at')
+          .select(taskColumns)
           .not('created_by', 'is', null)
           .lte('high_priority_reminder_sent_at', oneMinuteAgo)
           .is('high_priority_creator_notified_at', null)
           .limit(25),
         supabase
           .from('tasks')
-          .select('id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at')
+          .select(taskColumns)
           .not('created_by', 'is', null)
           .eq('status', 'done')
           .is('completion_creator_notified_at', null)
           .limit(25),
+        supabase
+          .from('tasks')
+          .select(taskColumns)
+          .not('self_reminder_at', 'is', null)
+          .lte('self_reminder_at', new Date().toISOString())
+          .neq('status', 'done')
+          .is('self_reminder_sent_at', null)
+          .limit(25),
       ])
 
-      const queryErrors = [assignments.error, reminders.error, reminderReceipts.error, completions.error].filter(Boolean)
+      const queryErrors = [assignments.error, reminders.error, reminderReceipts.error, completions.error, selfReminders.error].filter(Boolean)
       if (queryErrors.length) throw queryErrors[0]
 
       const unique = new Map<string, TaskRow>()
@@ -207,6 +290,7 @@ Deno.serve(async (req) => {
         ...(reminders.data || []),
         ...(reminderReceipts.data || []),
         ...(completions.data || []),
+        ...(selfReminders.data || []),
       ] as TaskRow[]) unique.set(task.id, task)
       tasks = [...unique.values()]
     }
