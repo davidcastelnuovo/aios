@@ -48,7 +48,14 @@ BEGIN
   IF TG_OP = 'INSERT' THEN
     PERFORM net.http_post(
       url := 'https://zvoijyneresvkadpprel.supabase.co/functions/v1/task-notification-worker',
-      headers := jsonb_build_object('Content-Type', 'application/json'),
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || (
+          SELECT decrypted_secret
+          FROM vault.decrypted_secrets
+          WHERE name = 'task_worker_anon_key'
+        )
+      ),
       body := jsonb_build_object('task_id', NEW.id),
       timeout_milliseconds := 5000
     );
@@ -56,7 +63,14 @@ BEGIN
      OR (OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'done') THEN
     PERFORM net.http_post(
       url := 'https://zvoijyneresvkadpprel.supabase.co/functions/v1/task-notification-worker',
-      headers := jsonb_build_object('Content-Type', 'application/json'),
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || (
+          SELECT decrypted_secret
+          FROM vault.decrypted_secrets
+          WHERE name = 'task_worker_anon_key'
+        )
+      ),
       body := jsonb_build_object('task_id', NEW.id),
       timeout_milliseconds := 5000
     );
@@ -95,7 +109,14 @@ BEGIN
     $cron$
       SELECT net.http_post(
         url := 'https://zvoijyneresvkadpprel.supabase.co/functions/v1/task-notification-worker',
-        headers := jsonb_build_object('Content-Type', 'application/json'),
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || (
+            SELECT decrypted_secret
+            FROM vault.decrypted_secrets
+            WHERE name = 'task_worker_anon_key'
+          )
+        ),
         body := '{}'::jsonb,
         timeout_milliseconds := 10000
       );
