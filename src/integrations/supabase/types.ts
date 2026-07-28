@@ -5066,6 +5066,8 @@ export type Database = {
           response_status: string | null
           sale_date: string | null
           sales_person_id: string | null
+          self_reminder_at: string | null
+          self_reminder_sent_at: string | null
           source: Database["public"]["Enums"]["lead_source"]
           status: string
           tenant_id: string | null
@@ -5111,6 +5113,8 @@ export type Database = {
           response_status?: string | null
           sale_date?: string | null
           sales_person_id?: string | null
+          self_reminder_at?: string | null
+          self_reminder_sent_at?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: string
           tenant_id?: string | null
@@ -5156,6 +5160,8 @@ export type Database = {
           response_status?: string | null
           sale_date?: string | null
           sales_person_id?: string | null
+          self_reminder_at?: string | null
+          self_reminder_sent_at?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: string
           tenant_id?: string | null

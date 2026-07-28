@@ -93,3 +93,23 @@ export function taskReminderAt(task: {
   }
   return israelLocalToUtc(previousDay)
 }
+
+export function taskNotificationScope(input: {
+  taskCampaignerId: string | null
+  taskSalesPersonId: string | null
+  creatorCampaignerId: string | null
+  creatorSalesPersonId: string | null
+  creatorRoles: string[]
+}) {
+  const isSelfAssigned = Boolean(
+    (input.taskCampaignerId && input.creatorCampaignerId === input.taskCampaignerId)
+    || (input.taskSalesPersonId && input.creatorSalesPersonId === input.taskSalesPersonId)
+  )
+  const managementRoles = new Set(['team_manager', 'owner', 'agency_owner', 'super_admin'])
+  const creatorCanManage = input.creatorRoles.some((role) => managementRoles.has(role))
+
+  return {
+    isSelfAssigned,
+    isManagedAssignment: creatorCanManage && !isSelfAssigned,
+  }
+}

@@ -26,6 +26,7 @@ import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, Extern
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
@@ -44,6 +45,7 @@ interface Task {
   agency_id: string | null;
   campaigner_id: string | null;
   tenant_id: string | null;
+  self_reminder_at?: string | null;
 }
 
 interface TaskDetailDialogProps {
@@ -64,6 +66,7 @@ export function TaskDetailDialog({
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
+  const { campaignerId: userCampaignerId } = useUserRole();
   
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -86,6 +89,8 @@ export function TaskDetailDialog({
   const [campaignerDropdownOpen, setCampaignerDropdownOpen] = useState(false);
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
   const [assignedCampaignerId, setAssignedCampaignerId] = useState("");
+  const [selfReminderEnabled, setSelfReminderEnabled] = useState(false);
+  const [selfReminderAt, setSelfReminderAt] = useState("");
   const [viewLeadOpen, setViewLeadOpen] = useState(false);
 
   // Fetch full lead data for viewing
@@ -124,6 +129,12 @@ export function TaskDetailDialog({
         setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
         setDurationMinutes((t as any).duration_minutes || 30);
         setAssignedCampaignerId(t.campaigner_id || "");
+        setSelfReminderEnabled(Boolean(t.self_reminder_at));
+        setSelfReminderAt(
+          t.self_reminder_at
+            ? format(new Date(t.self_reminder_at), "yyyy-MM-dd'T'HH:mm")
+            : ""
+        );
         setAttachments(Array.isArray((t as any).attachments) ? (t as any).attachments : []);
         setClientSearch("");
         setCampaignerSearch("");
@@ -255,6 +266,9 @@ export function TaskDetailDialog({
   // Update task mutation
   const updateTask = useMutation({
     mutationFn: async () => {
+      if (selfReminderEnabled && assignedCampaignerId === userCampaignerId && !selfReminderAt) {
+        throw new Error("יש לבחור תאריך ושעה לתזכורת");
+      }
       const { error } = await supabase
         .from("tasks")
         .update({
@@ -268,6 +282,10 @@ export function TaskDetailDialog({
           client_id: clientId || null,
           lead_id: leadId || null,
           campaigner_id: assignedCampaignerId || null,
+          self_reminder_at:
+            assignedCampaignerId === userCampaignerId && selfReminderEnabled && selfReminderAt
+              ? new Date(selfReminderAt).toISOString()
+              : null,
           attachments: attachments as any,
         })
         .eq("id", task!.id);
@@ -383,6 +401,33 @@ export function TaskDetailDialog({
                   placeholder="כותרת המשימה"
                 />
               </div>
+
+              {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
+                <div className="space-y-3 rounded-md border p-3">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={selfReminderEnabled}
+                      onChange={(event) => setSelfReminderEnabled(event.target.checked)}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    הזכר לי על המשימה
+                  </label>
+                  {selfReminderEnabled && (
+                    <div className="space-y-2">
+                      <Label>מתי לשלוח את התזכורת?</Label>
+                      <Input
+                        type="datetime-local"
+                        value={selfReminderAt}
+                        onChange={(event) => setSelfReminderAt(event.target.value)}
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    משימה עצמית לא שולחת התראות אוטומטיות. כרמן תזכיר לך רק במועד שתבחר.
+                  </p>
+                </div>
+              )}
 
               {/* Client, Lead and Campaigner associations - 3 columns */}
               <div className="grid grid-cols-3 gap-4">

@@ -40,10 +40,9 @@ export function useUserRole() {
     refetchOnWindowFocus: false,
   });
 
-  // Lazy-load campaigner_id when user has campaigner OR seo role
-  // (SEO users are also linked via profiles.campaigner_id -> client_team)
-  const isCampaignerRole = roles?.includes("campaigner") || false;
-  const isSeoRole = roles?.includes("seo") || false;
+  // Any role can be linked to a campaigner record (including owners/managers).
+  // Load it for every effective user so self-assigned tasks are identified
+  // consistently and can expose the opt-in reminder control.
   const { data: campaignerId } = useQuery({
     queryKey: ["user-campaigner-id", effectiveUserId],
     queryFn: async () => {
@@ -55,7 +54,7 @@ export function useUserRole() {
         .maybeSingle();
       return data?.campaigner_id || null;
     },
-    enabled: !!effectiveUserId && (isCampaignerRole || isSeoRole),
+    enabled: !!effectiveUserId,
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
