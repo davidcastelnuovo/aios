@@ -50,6 +50,7 @@ import { he } from "date-fns/locale";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
 import { useAgencies } from "@/hooks/useEntityLists";
+import { CampaignerAssignmentPicker } from "@/components/clients/CampaignerAssignmentPicker";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
   contact_name: z.string().optional(),
@@ -207,21 +208,6 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
   }, [client.email, client.contact_name, client.name, clientContacts]);
 
   const { data: agencies } = useAgencies();
-
-  const { data: campaigners } = useQuery({
-    queryKey: ["campaigners", tenantId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("active", true)
-        .eq("tenant_id", tenantId!)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tenantId,
-  });
 
   const { data: assignedCampaigners, refetch: refetchAssigned } = useQuery({
     queryKey: ["client-campaigners", client.id],
@@ -1038,20 +1024,15 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
 
               <div>
                 <FormLabel>הוסף {t('role_campaigner')}</FormLabel>
-                <Select
-                  onValueChange={(value) => assignCampaignerMutation.mutate(value)}
-                >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder={`בחר ${t('role_campaigner')}`} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    {campaigners?.map((campaigner) => (
-                      <SelectItem key={campaigner.id} value={campaigner.id}>
-                        {campaigner.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CampaignerAssignmentPicker
+                  assignedCampaignerIds={(assignedCampaigners || []).map(
+                    (assignment: any) => assignment.campaigner_id
+                  )}
+                  triggerClassName="mt-2 w-full"
+                  onAssign={(campaignerId) =>
+                    assignCampaignerMutation.mutateAsync(campaignerId)
+                  }
+                />
               </div>
             </div>
 

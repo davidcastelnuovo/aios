@@ -11,6 +11,8 @@ import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
+import { CampaignerAssignmentPicker } from "@/components/clients/CampaignerAssignmentPicker";
+import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
 import { ClientsChatView } from "@/components/clients/ClientsChatView";
 import { ClientsMultiSelectToolbar } from "@/components/clients/ClientsMultiSelectToolbar";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -334,30 +336,7 @@ export default function Clients() {
   }, [clients, tenantId, userAgencyIds, isOwner, isSuperAdmin]);
 
 
-  const { data: campaigners } = useQuery({
-    queryKey: ["campaigners", tenantId, isSuperAdmin],
-    queryFn: async () => {
-      if (!tenantId) return [] as any[];
-      let query = supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("active", true)
-        .order("full_name");
-
-      // Owners and team managers may see clients from another tenant through
-      // shared agencies. Let RLS include only the campaigners assigned to those
-      // accessible clients. Super admins remain scoped to the selected tenant
-      // so the picker does not contain every campaigner in the system.
-      if (isSuperAdmin) {
-        query = query.eq("tenant_id", tenantId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tenantId,
-  });
+  const { data: campaigners } = useAssignableCampaigners({ activeOnly: true });
 
   // Fetch client-team mapping for campaigner filter (for managers/owners)
   const { data: clientTeam } = useQuery({
@@ -1151,20 +1130,18 @@ export default function Clients() {
                 <div className="pt-2 border-t space-y-2">
                   <p className="text-sm text-muted-foreground">הוסף קמפיינר:</p>
                   <div onClick={(e) => e.stopPropagation()}>
-                    <Select
-                      onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="בחר קמפיינר" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background">
-                        {campaigners?.map((campaigner) => (
-                          <SelectItem key={campaigner.id} value={campaigner.id}>
-                            {campaigner.full_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <CampaignerAssignmentPicker
+                      assignedCampaignerIds={(client.client_team || []).map(
+                        (assignment: any) => assignment.campaigner_id
+                      )}
+                      triggerClassName="h-9 w-full"
+                      onAssign={(campaignerId) =>
+                        assignCampaignerMutation.mutateAsync({
+                          clientId: client.id,
+                          campaignerId,
+                        })
+                      }
+                    />
                   </div>
                 </div>
               )}
@@ -1435,20 +1412,18 @@ export default function Clients() {
                       )}
                       {/* Hide add campaigner option for pure campaigners */}
                       {!(isCampaigner && !isTeamManager && !isOwner) && (
-                        <Select
-                          onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
-                        >
-                          <SelectTrigger className="h-8 text-xs bg-background hover:bg-accent/10 transition-colors">
-                            <SelectValue placeholder="+ הוסף קמפיינר" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-background">
-                            {campaigners?.map((campaigner) => (
-                              <SelectItem key={campaigner.id} value={campaigner.id}>
-                                {campaigner.full_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <CampaignerAssignmentPicker
+                          assignedCampaignerIds={(client.client_team || []).map(
+                            (assignment: any) => assignment.campaigner_id
+                          )}
+                          triggerClassName="h-8 w-full text-xs"
+                          onAssign={(campaignerId) =>
+                            assignCampaignerMutation.mutateAsync({
+                              clientId: client.id,
+                              campaignerId,
+                            })
+                          }
+                        />
                       )}
                     </div>
                   </TableCell>

@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useState, useEffect, useMemo } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -10,7 +10,8 @@ import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useViewAs } from "@/contexts/ViewAsContext";
-import { useAgencies, useCampaigners, useSalesPeople } from "@/hooks/useEntityLists";
+import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
+import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
 import {
   Form,
   FormControl,
@@ -155,7 +156,11 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     }
   }, [clientId, leadId, defaultCampaignerId, userCampaignerId, isCampaigner, form]);
 
-  const { data: campaigners } = useCampaigners({ activeOnly: true });
+  const { data: campaigners } = useAssignableCampaigners({ activeOnly: true });
+  const selectedCampaignerId = useWatch({
+    control: form.control,
+    name: "campaigner_id",
+  });
 
   // Filter campaigners - campaigners only see themselves, team_manager+ sees all
   const canSelectAnyCampaigner = isOwner || isTeamManager || isSuperAdmin;
@@ -184,11 +189,29 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     enabled: !!currentTenantId,
   });
 
+  const { data: assignedClientIds = [] } = useQuery({
+    queryKey: ["task-client-ids-for-campaigner", selectedCampaignerId],
+    queryFn: async () => {
+      if (!selectedCampaignerId) return [];
+      const { data, error } = await supabase
+        .from("client_team")
+        .select("client_id")
+        .eq("campaigner_id", selectedCampaignerId);
+      if (error) throw error;
+      return Array.from(new Set((data || []).map((row) => row.client_id)));
+    },
+    enabled: !!selectedCampaignerId,
+  });
+
   const { data: clients } = useQuery({
     queryKey: ["clients", currentTenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      let query = supabase.from("clients").select("*").order("name");
+      let query = supabase
+        .from("clients")
+        .select("*")
+        .eq("status", "active")
+        .order("name");
       
       if (crossTenantAgencyIds && crossTenantAgencyIds.length > 0) {
         query = query.or(`tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
@@ -202,6 +225,24 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     },
     enabled: !!currentTenantId,
   });
+
+  const assignableClients = useMemo(() => {
+    if (!clients) return [];
+    if (!selectedCampaignerId) return clients;
+    const allowedIds = new Set(assignedClientIds);
+    return clients.filter((client) => allowedIds.has(client.id));
+  }, [clients, selectedCampaignerId, assignedClientIds]);
+
+  useEffect(() => {
+    if (clientId || !selectedCampaignerId) return;
+    const selectedClientId = form.getValues("client_id");
+    if (
+      selectedClientId &&
+      !assignableClients.some((client) => client.id === selectedClientId)
+    ) {
+      form.setValue("client_id", "");
+    }
+  }, [assignableClients, selectedCampaignerId, clientId, form]);
 
   const { data: agencies } = useAgencies();
 
@@ -594,7 +635,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                               )}
                             >
                               {field.value
-                                ? clients?.find((client) => client.id === field.value)?.name
+                                ? assignableClients.find((client) => client.id === field.value)?.name
                                 : "בחר לקוח"}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
@@ -606,7 +647,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                             <CommandList>
                               <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
                               <CommandGroup>
-                                {clients?.map((client) => (
+                                {assignableClients.map((client) => (
                                   <CommandItem
                                     key={client.id}
                                     value={client.name}

@@ -34,6 +34,7 @@ import { ClientRecordingsTab } from "@/components/clients/ClientRecordingsTab";
 import { CRMSettingsSection } from "@/components/clients/CRMSettingsSection";
 import { ChangeAgencyDialog } from "@/components/chat/ChangeAgencyDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
+import { CampaignerAssignmentPicker } from "@/components/clients/CampaignerAssignmentPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -109,23 +110,6 @@ export function ClientsChatView({
         .eq("tenant_id", tenantId)
         .eq("is_blocked", false)
         .order("group_name");
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!tenantId,
-  });
-
-  // Fetch all campaigners for assignment
-  const { data: allCampaigners = [] } = useQuery({
-    queryKey: ["campaigners-for-team", tenantId],
-    queryFn: async () => {
-      if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("tenant_id", tenantId)
-        .eq("active", true)
-        .order("full_name");
       if (error) throw error;
       return data || [];
     },
@@ -1198,39 +1182,28 @@ export function ClientsChatView({
                         </Badge>
                       ))}
                     </div>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-7 text-xs">
-                          <Plus className="h-3 w-3 ml-1" />
-                          הוסף קמפיינר
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-48 p-2" align="start" dir="rtl">
-                        <div className="space-y-1 max-h-48 overflow-y-auto">
-                          {allCampaigners
-                            .filter((c: any) => !selectedClient.client_team?.some((ct: any) => ct.campaigner_id === c.id))
-                            .map((c: any) => (
-                              <div
-                                key={c.id}
-                                className="p-2 rounded-md hover:bg-muted cursor-pointer text-sm"
-                                onClick={async () => {
-                                  const { error } = await supabase
-                                    .from("client_team")
-                                    .insert({ client_id: selectedClient.id, campaigner_id: c.id });
-                                  if (error) {
-                                    toast.error("שגיאה בשיוך קמפיינר");
-                                  } else {
-                                    toast.success("הקמפיינר שויך בהצלחה");
-                                    queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
-                                  }
-                                }}
-                              >
-                                {c.full_name}
-                              </div>
-                            ))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                    <CampaignerAssignmentPicker
+                      assignedCampaignerIds={(selectedClient.client_team || []).map(
+                        (assignment: any) => assignment.campaigner_id
+                      )}
+                      triggerClassName="h-7 text-xs"
+                      onAssign={async (campaignerId) => {
+                        const { error } = await supabase
+                          .from("client_team")
+                          .insert({
+                            client_id: selectedClient.id,
+                            campaigner_id: campaignerId,
+                          });
+                        if (error) {
+                          toast.error("שגיאה בשיוך קמפיינר");
+                          throw error;
+                        }
+                        toast.success("הקמפיינר שויך בהצלחה");
+                        await queryClient.invalidateQueries({
+                          queryKey: ["clients", tenantId],
+                        });
+                      }}
+                    />
                   </div>
 
                   {/* Notes */}
