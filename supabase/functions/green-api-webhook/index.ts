@@ -1452,13 +1452,45 @@ Deno.serve(async (req) => {
     // owns Carmen routing in that case to avoid duplicate replies from both providers.
     // ===========================
     let carmenOutcome: string | null = null;
+    let isKnownBotGroupMessage = false;
+    if (isGroup && isIncoming && sourcePhoneNumber) {
+      try {
+        const sourceTail = sourcePhoneNumber.slice(-9);
+        const { data: botIntegrations } = await supabaseClient
+          .from('tenant_integrations')
+          .select('id, settings')
+          .in('integration_type', ['manus_wa', 'green_api'])
+          .eq('is_active', true)
+          .limit(100);
+        isKnownBotGroupMessage = (botIntegrations || []).some((row: any) => {
+          const botPhone = String(row?.settings?.phone_number || '').replace(/\D/g, '');
+          return botPhone && botPhone.slice(-9) === sourceTail;
+        });
+        if (isKnownBotGroupMessage) {
+          console.log('[green-api] skipping Carmen for message sent by another connected bot', {
+            group: senderData.chatId,
+            sourceTail,
+          });
+        }
+      } catch (err) {
+        console.error('[green-api] bot sender check failed:', err);
+      }
+    }
     // Carmen runs per the automation pinned to THIS Green API integration.
     // Groups are supported — the internal `group_requires_explicit_scope` guard
     // ensures Carmen only replies in groups that the automation explicitly targets.
-    if (isIncoming || isManualOutgoing) {
+    if ((isIncoming || isManualOutgoing) && !isKnownBotGroupMessage) {
       try {
-        const carmenPhoneNumber = isManualOutgoing && sourcePhoneNumber ? sourcePhoneNumber : phoneNumber;
-        const carmenChatId = isManualOutgoing && sourcePhoneNumber ? `${sourcePhoneNumber}@c.us` : senderData.chatId;
+        // A manual outgoing message inside a group is still a GROUP turn. Keep
+        // the group chat id for scope/history, but pass the real participant
+        // phone for identity. Turning chatId into a private chat here made an
+        // authenticated owner look like an unknown group participant.
+        const carmenPhoneNumber = isGroup
+          ? (sourcePhoneNumber || phoneNumber)
+          : (isManualOutgoing && sourcePhoneNumber ? sourcePhoneNumber : phoneNumber);
+        const carmenChatId = isGroup
+          ? senderData.chatId
+          : (isManualOutgoing && sourcePhoneNumber ? `${sourcePhoneNumber}@c.us` : senderData.chatId);
         const result = await handleCarmenMessage({
           supabase: supabaseClient,
           tenantId,
