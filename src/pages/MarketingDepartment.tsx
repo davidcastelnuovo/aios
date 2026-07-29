@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,6 @@ import {
   BarChart3,
   Sparkles,
 } from "lucide-react";
-import { ClientSelector } from "@/components/marketing/ClientSelector";
 
 const CopyDepartment = lazy(() =>
   import("@/components/marketing/departments/CopyDepartment").then((module) => ({ default: module.CopyDepartment })),
@@ -85,16 +84,24 @@ export default function MarketingDepartment() {
     department?: DepartmentId;
   }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
+  const selectedClientId = searchParams.get("client") ?? clientId;
 
-  const selectClient = (id: string) => navigate(`/t/${tenantSlug}/marketing/${id}`);
+  useEffect(() => {
+    if (clientId && department) navigate(`/t/${tenantSlug}/marketing/department/${department}?client=${clientId}`, { replace: true });
+  }, [clientId, department, navigate, tenantSlug]);
+
+  const selectClient = (id: string | null) => department
+    ? navigate(`/t/${tenantSlug}/marketing/department/${department}${id ? `?client=${id}` : ""}`)
+    : navigate(`/t/${tenantSlug}/marketing${id ? `?client=${id}` : ""}`);
   const selectDepartment = (id: DepartmentId) => {
     if (id === "analytics") {
       navigate(`/t/${tenantSlug}/dynamic-tables`);
       return;
     }
-    navigate(`/t/${tenantSlug}/marketing/${clientId}/${id}`);
+    navigate(`/t/${tenantSlug}/marketing/department/${id}${selectedClientId ? `?client=${selectedClientId}` : ""}`);
   };
 
   return (
@@ -106,47 +113,34 @@ export default function MarketingDepartment() {
         </Button>
         <h1 className="text-base font-semibold">מחלקת שיווק</h1>
         <div className="mx-2 h-5 w-px bg-border" />
-        {tenantId && (
-          <ClientSelector tenantId={tenantId} value={clientId ?? null} onChange={selectClient} />
-        )}
-        {clientId && department && (
+        {department && (
           <Button
             variant="ghost"
             size="sm"
             className="mr-auto text-xs text-muted-foreground"
-            onClick={() => navigate(`/t/${tenantSlug}/marketing/${clientId}`)}
+            onClick={() => navigate(`/t/${tenantSlug}/marketing`)}
           >
             כל המחלקות
           </Button>
         )}
       </header>
 
-      {!clientId ? (
-        <div className="flex flex-1 items-center justify-center p-8 text-center">
-          <div>
-            <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-500 to-blue-600 shadow-xl">
-              <Sparkles className="h-10 w-10 text-white" />
-            </div>
-            <h2 className="text-3xl font-black">בחר לקוח כדי להתחיל</h2>
-            <p className="mt-2 text-sm text-muted-foreground">כל מחלקה מקבלת את הידע, הבריפים והתוצרים של הלקוח.</p>
-          </div>
-        </div>
-      ) : !department ? (
+      {!department ? (
         <DepartmentLanding onSelect={selectDepartment} />
       ) : department === "copy" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-violet-500" /></div>}>
-          <CopyDepartment clientId={clientId} tenantId={tenantId} />
+          <CopyDepartment clientId={selectedClientId ?? undefined} tenantId={tenantId} onClientChange={selectClient} />
         </Suspense>
       ) : department === "creative" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-pink-500" /></div>}>
-          <CreativeDepartment clientId={clientId} tenantId={tenantId} />
+          <CreativeDepartment clientId={selectedClientId ?? undefined} tenantId={tenantId} onClientChange={selectClient} />
         </Suspense>
       ) : department === "seo" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-emerald-500" /></div>}>
-          <SeoGeoDepartment clientId={clientId} tenantId={tenantId} />
+          <SeoGeoDepartment clientId={selectedClientId} tenantId={tenantId} onClientChange={selectClient} />
         </Suspense>
       ) : (
-        <ComingSoon department={department} onBack={() => navigate(`/t/${tenantSlug}/marketing/${clientId}`)} />
+        <ComingSoon department={department} onBack={() => navigate(`/t/${tenantSlug}/marketing`)} />
       )}
     </div>
   );

@@ -288,6 +288,12 @@ verify_jwt = false
 [functions.ingest-extension-recording]
 verify_jwt = true
 
+[functions.publishing-feed]
+verify_jwt = false
+
+[functions.domain-connections]
+verify_jwt = true
+
 # Cron-invoked health probe for the Command Center (called with the anon key).
 [functions.carmen-health-probe]
 verify_jwt = true

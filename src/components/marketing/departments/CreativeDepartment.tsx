@@ -13,6 +13,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
+import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -40,8 +41,9 @@ import {
 } from "lucide-react";
 
 interface Props {
-  clientId: string;
+  clientId?: string;
   tenantId: string;
+  onClientChange: (id: string | null) => void;
 }
 
 interface StoryboardFrame {
@@ -124,7 +126,7 @@ function StoryboardCard({ data, selected }: NodeProps<StoryboardNode>) {
 
 const nodeTypes = { storyboard: StoryboardCard };
 
-export function CreativeDepartment({ clientId, tenantId }: Props) {
+export function CreativeDepartment({ clientId, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
@@ -136,6 +138,7 @@ export function CreativeDepartment({ clientId, tenantId }: Props) {
   const { data: context, isLoading: loadingContext } = useQuery({
     queryKey: ["creative-department-context", clientId, tenantId],
     queryFn: async () => {
+      if (!clientId) return null;
       const pipeline = await ensurePipelineForClient({ clientId, tenantId, track: "campaigns" });
       if (!pipeline) throw new Error("לא ניתן לפתוח סביבת קריאייטיב");
       const { data: stages, error } = await supabase
@@ -149,23 +152,24 @@ export function CreativeDepartment({ clientId, tenantId }: Props) {
         creativeStage: stages?.find((stage) => stage.stage_type === "creative") ?? null,
         campaignStage: stages?.find((stage) => stage.stage_type === "target_paid") ?? null,
       };
-    },
+    }, enabled: !!clientId,
   });
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
     queryKey: ["creative-department-items", clientId, tenantId],
-    enabled: !!context?.pipeline.id,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("marketing_work_items")
         .select("id,title,status,payload,current_stage_id,target_channel,updated_at")
         .eq("tenant_id", tenantId)
-        .eq("client_id", clientId)
         .order("updated_at", { ascending: false });
+      if (clientId) query = query.eq("client_id", clientId);
+      else query = query.is("client_id", null);
+      const { data, error } = await query;
       if (error) throw error;
       return ((data ?? []) as CreativeItem[]).filter((item) => {
         const payload = item.payload ?? {};
-        return item.current_stage_id === context?.creativeStage?.id || payload.department === "creative" || Array.isArray(payload.storyboard) || !!payload.image_url;
+        return (!!context?.creativeStage?.id && item.current_stage_id === context.creativeStage.id) || payload.department === "creative" || Array.isArray(payload.storyboard) || !!payload.image_url;
       });
     },
   });
@@ -324,6 +328,8 @@ export function CreativeDepartment({ clientId, tenantId }: Props) {
   if (loadingContext) return <div className="flex flex-1 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-pink-500" /></div>;
 
   return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-3 border-b bg-background px-4 py-2"><span className="text-xs font-medium text-muted-foreground">תצוגה:</span><ClientSelector tenantId={tenantId} value={clientId ?? null} onChange={onClientChange} allowGeneral generalLabel="תוכן כללי" /></div>
     <div className="grid min-h-0 flex-1 grid-cols-[270px_minmax(0,1fr)_320px] bg-muted/10">
       <aside className="flex min-h-0 flex-col border-l bg-card/70">
         <div className="flex items-center justify-between border-b p-3">
@@ -381,8 +387,9 @@ export function CreativeDepartment({ clientId, tenantId }: Props) {
         </> : <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-muted-foreground"><Save className="ml-2 h-4 w-4" />בחר סצנה כדי לערוך אותה</div>}
       </aside>
 
-      <ManualCreativeDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenantId} clientId={clientId} pipelineId={context?.pipeline.id ?? ""} stageId={context?.creativeStage?.id ?? ""} onCreated={async (id) => { setSelectedId(id); setCreateOpen(false); await refresh(); }} />
+      <ManualCreativeDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenantId} defaultClientId={clientId} onCreated={async (id) => { setSelectedId(id); setCreateOpen(false); await refresh(); }} />
       {selected && <CreativeAIDialog open={aiOpen} onClose={() => setAiOpen(false)} item={selected} hasStoryboard={frames.length > 0} onCompleted={async () => { setAiOpen(false); setSelectedFrameId(null); await refresh(); }} />}
+    </div>
     </div>
   );
 }
@@ -410,21 +417,33 @@ function CreativeAIDialog({ open, onClose, item, hasStoryboard, onCompleted }: {
   return <Dialog open={open} onOpenChange={(value) => !value && onClose()}><DialogContent className="max-w-2xl" dir="rtl"><DialogHeader><DialogTitle className="flex items-center gap-2"><WandSparkles className="h-5 w-5 text-pink-500" />עבודה עם כרמן — Skin קריאייטיב</DialogTitle></DialogHeader><div className="grid gap-5 py-2"><div className="grid grid-cols-3 gap-2">{modes.map((option) => <button key={option.id} disabled={option.disabled} onClick={() => setMode(option.id)} className={cn("rounded-xl border p-3 text-right transition-all", mode === option.id ? "border-pink-500 bg-pink-50 ring-2 ring-pink-500/10 dark:bg-pink-950/20" : "hover:bg-muted/50", option.disabled && "cursor-not-allowed opacity-40")}><div className="text-xs font-bold">{option.title}</div><div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{option.description}</div></button>)}</div><div><Label>{mode === "autopilot" ? "מה אתה רוצה שכרמן תיצור?" : "הנחיות נוספות לכרמן (לא חובה)"}</Label><Textarea className="mt-1 min-h-32" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === "autopilot" ? "לדוגמה: סרטון UGC חד ומשעשע שמתחיל בכאב של בעל העסק, שובר ציפייה ומציג את המוצר כפתרון. אל תיראה כמו פרסומת AI גנרית." : "דגשים, השראות, דברים שחייבים להופיע או אסור להמציא"} /></div><div className="flex items-end gap-3"><div className="w-40"><Label>מספר סצנות</Label><Select value={frameCount} onValueChange={setFrameCount}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{[3,4,5,6,8].map((count) => <SelectItem key={count} value={String(count)}>{count} סצנות</SelectItem>)}</SelectContent></Select></div><div className="flex-1 rounded-lg bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">כרמן משתמשת בבריף, בקופי, במידע על הלקוח וב־Skin <b>social_media</b>. אחרי היצירה אפשר לערוך ידנית כל פרט וליצור פריימים.</div></div><Button onClick={run} disabled={running || (mode === "autopilot" && !prompt.trim())} className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600">{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}{running ? "כרמן בונה קונספט ו-storyboard..." : mode === "fill" ? "השלימי ושפרי את ה-storyboard" : "בני קונספט ו-storyboard מלא"}</Button></div></DialogContent></Dialog>;
 }
 
-function ManualCreativeDialog({ open, onClose, tenantId, clientId, pipelineId, stageId, onCreated }: { open: boolean; onClose: () => void; tenantId: string; clientId: string; pipelineId: string; stageId: string; onCreated: (id: string) => void }) {
+function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCreated }: { open: boolean; onClose: () => void; tenantId: string; defaultClientId?: string; onCreated: (id: string) => void }) {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [format, setFormat] = useState("9:16");
   const [saving, setSaving] = useState(false);
+  const [assignedClientId, setAssignedClientId] = useState<string | null>(defaultClientId ?? null);
+  useEffect(() => { if (open) setAssignedClientId(defaultClientId ?? null); }, [defaultClientId, open]);
   const create = async () => {
-    if (!title.trim() || !brief.trim() || !pipelineId || !stageId) return;
+    if (!title.trim() || !brief.trim()) return;
     setSaving(true);
     try {
-      const { data, error } = await supabase.from("marketing_work_items").insert({ tenant_id: tenantId, client_id: clientId, pipeline_id: pipelineId, current_stage_id: stageId, title: title.trim(), status: "draft", target_channel: "creative", payload: { brief_text: brief.trim(), format, department: "creative", intake_source: "manual" } }).select("id").single();
+      let pipelineId: string | null = null;
+      let stageId: string | null = null;
+      if (assignedClientId) {
+        const pipeline = await ensurePipelineForClient({ clientId: assignedClientId, tenantId, track: "campaigns" });
+        const { data: stages, error: stageError } = await supabase.from("marketing_pipeline_stages").select("id,stage_type").eq("pipeline_id", pipeline.id);
+        if (stageError) throw stageError;
+        pipelineId = pipeline.id;
+        stageId = stages?.find((stage) => stage.stage_type === "creative")?.id ?? null;
+        if (!stageId) throw new Error("שלב הקריאייטיב לא נמצא");
+      }
+      const { data, error } = await supabase.from("marketing_work_items").insert({ tenant_id: tenantId, client_id: assignedClientId, pipeline_id: pipelineId, current_stage_id: stageId, title: title.trim(), status: "draft", target_channel: "creative", payload: { brief_text: brief.trim(), format, department: "creative", intake_source: "manual" } }).select("id").single();
       if (error) throw error;
       toast.success("הבריף נכנס למחלקת הקריאייטיב");
       setTitle(""); setBrief("");
       onCreated(data.id);
     } catch (error: unknown) { toast.error(errorMessage(error, "יצירת הפרויקט נכשלה")); } finally { setSaving(false); }
   };
-  return <Dialog open={open} onOpenChange={(value) => !value && onClose()}><DialogContent className="max-w-xl" dir="rtl"><DialogHeader><DialogTitle>פרויקט קריאייטיב חדש</DialogTitle></DialogHeader><div className="grid gap-4 py-2"><div><Label>שם הפרויקט</Label><Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="לדוגמה: סרטון השקת השירות" /></div><div><Label>פורמט</Label><Select value={format} onValueChange={setFormat}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="9:16">סטורי / רילס 9:16</SelectItem><SelectItem value="1:1">פוסט מרובע 1:1</SelectItem><SelectItem value="4:5">פיד 4:5</SelectItem><SelectItem value="16:9">וידאו רחב 16:9</SelectItem></SelectContent></Select></div><div><Label>בריף ויזואלי</Label><Textarea className="mt-1 min-h-36" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, מסר, סגנון, רפרנסים, מגבלות ומה חייב להופיע" /></div><Button onClick={create} disabled={saving || !title.trim() || !brief.trim()} className="gap-2 bg-pink-600 hover:bg-pink-700">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}פתח פרויקט</Button></div></DialogContent></Dialog>;
+  return <Dialog open={open} onOpenChange={(value) => !value && onClose()}><DialogContent className="max-w-xl" dir="rtl"><DialogHeader><DialogTitle>פרויקט קריאייטיב חדש</DialogTitle></DialogHeader><div className="grid gap-4 py-2"><div><Label>שיוך</Label><div className="mt-1"><ClientSelector tenantId={tenantId} value={assignedClientId} onChange={setAssignedClientId} allowGeneral generalLabel="תוכן כללי — ללא לקוח" /></div></div><div><Label>שם הפרויקט</Label><Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="לדוגמה: סרטון השקת השירות" /></div><div><Label>פורמט</Label><Select value={format} onValueChange={setFormat}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="9:16">סטורי / רילס 9:16</SelectItem><SelectItem value="1:1">פוסט מרובע 1:1</SelectItem><SelectItem value="4:5">פיד 4:5</SelectItem><SelectItem value="16:9">וידאו רחב 16:9</SelectItem></SelectContent></Select></div><div><Label>בריף ויזואלי</Label><Textarea className="mt-1 min-h-36" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, מסר, סגנון, רפרנסים, מגבלות ומה חייב להופיע" /></div><Button onClick={create} disabled={saving || !title.trim() || !brief.trim()} className="gap-2 bg-pink-600 hover:bg-pink-700">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}פתח פרויקט</Button></div></DialogContent></Dialog>;
 }
