@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,12 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2, Facebook, Loader2, ShoppingCart } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { AlertCircle, CheckCircle2, Facebook, Globe, Loader2, Lock, ShoppingCart, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
+import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 
 interface FacebookEcommerceTableDialogProps {
   open: boolean;
@@ -51,7 +53,18 @@ const dateRangeOptions = [
   { value: "this_month", label: "החודש הנוכחי" },
 ];
 
-const normalizeAdAccountId = (value: string) => value.trim().replace(/^act_/i, "").replace(/\D/g, "");
+const visibilityIcon = (value: string | null) => {
+  if (value === "org") return <Globe className="h-3 w-3 text-blue-500" />;
+  if (value === "shared") return <Users className="h-3 w-3 text-violet-500" />;
+  return <Lock className="h-3 w-3 text-muted-foreground" />;
+};
+
+const normalizeAdAccountId = (value: string) => {
+  const trimmed = value.trim();
+  return /^(?:act_)?\d+$/i.test(trimmed) ? trimmed.replace(/^act_/i, "") : "";
+};
+
+const accountStatusLabel = (status?: number) => status === 1 ? "פעיל" : status ? `סטטוס ${status}` : "סטטוס לא זמין";
 
 export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClientIds }: FacebookEcommerceTableDialogProps) {
   const navigate = useNavigate();
@@ -69,35 +82,38 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
   const [agencyId, setAgencyId] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSearch, setClientSearch] = useState("");
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState("");
 
+  const { data: fbIntegrations = [], isLoading: loadingIntegrations } = useUserIntegrations(
+    tenantId,
+    "facebook_lead_ads",
+    { enabled: open },
+  );
   const { data: agencies = [] } = useTableDialogAgencies({ enabled: open });
   const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
   const clients = assignedClientIds ? rawClients.filter((client) => assignedClientIds.includes(client.id)) : rawClients;
+
+  useEffect(() => {
+    if (!open) return;
+    if (fbIntegrations.length === 0) {
+      setSelectedIntegrationId("");
+      return;
+    }
+    if (!selectedIntegrationId || !fbIntegrations.some((integration: any) => integration.id === selectedIntegrationId)) {
+      const preferred = (fbIntegrations as any[]).find((integration) => integration._isOwn) || fbIntegrations[0];
+      setSelectedIntegrationId((preferred as any).id);
+    }
+  }, [fbIntegrations, open, selectedIntegrationId]);
 
   useEffect(() => {
     setClientId("");
     setClientSearch("");
   }, [agencyId]);
 
-  const { data: facebookIntegration, isLoading: checkingFacebook } = useQuery({
-    queryKey: ["facebook-integration-status", tenantId],
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return null;
-      const { data: resolvedTenantId } = await supabase.rpc("get_user_tenant_id", { _user_id: session.user.id });
-      if (!resolvedTenantId) return null;
-      const { data } = await supabase
-        .from("tenant_integrations")
-        .select("id, is_active")
-        .eq("tenant_id", resolvedTenantId)
-        .in("integration_type", ["facebook", "facebook_lead_ads"])
-        .eq("is_active", true)
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    enabled: open,
-  });
+  useEffect(() => {
+    setValidatedAccount(null);
+    setValidationError("");
+  }, [selectedIntegrationId]);
 
   const validateAccount = async () => {
     const normalizedId = normalizeAdAccountId(adAccountInput);
@@ -106,8 +122,8 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
       setValidatedAccount(null);
       return;
     }
-    if (!facebookIntegration?.id) {
-      setValidationError("לא נמצא חיבור Facebook פעיל");
+    if (!selectedIntegrationId) {
+      setValidationError("יש לבחור חיבור Facebook");
       return;
     }
 
@@ -116,10 +132,13 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
     setValidatedAccount(null);
 
     try {
-      const response = await supabase.functions.invoke(
-        `get-facebook-ad-accounts?integration_id=${encodeURIComponent(facebookIntegration.id)}&ad_account_id=${encodeURIComponent(normalizedId)}`,
-        { method: "GET" },
-      );
+      const response = await supabase.functions.invoke("get-facebook-ad-accounts", {
+        method: "POST",
+        body: {
+          integration_id: selectedIntegrationId,
+          ad_account_id: normalizedId,
+        },
+      });
       if (response.error) throw response.error;
       if (response.data?.error) throw new Error(response.data.message || response.data.error);
       const account = response.data?.ad_account || response.data?.ad_accounts?.[0];
@@ -151,7 +170,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
             currency: validatedAccount.currency || "ILS",
             date_range: dateRange,
             sync_frequency: "daily",
-            integration_id: facebookIntegration?.id,
+            integration_id: selectedIntegrationId,
           },
           agency_id: agencyId || null,
           client_id: clientId || null,
@@ -198,8 +217,11 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
     setAgencyId("");
     setClientId("");
     setClientSearch("");
+    setSelectedIntegrationId("");
     onOpenChange(false);
   };
+
+  const isFacebookConfigured = fbIntegrations.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -213,9 +235,9 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
           <DialogDescription>הזן מזהה חשבון מודעות, אמת אותו וצור דוח מכירות בלי לטעון את כל החשבונות.</DialogDescription>
         </DialogHeader>
 
-        {checkingFacebook ? (
+        {loadingIntegrations ? (
           <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
-        ) : !facebookIntegration?.is_active ? (
+        ) : !isFacebookConfigured ? (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -227,6 +249,30 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
           </Alert>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {fbIntegrations.length > 1 && (
+              <div className="space-y-2">
+                <Label>חיבור Facebook לשימוש</Label>
+                <Select value={selectedIntegrationId} onValueChange={setSelectedIntegrationId}>
+                  <SelectTrigger><SelectValue placeholder="בחר חיבור" /></SelectTrigger>
+                  <SelectContent>
+                    {(fbIntegrations as any[]).map((integration) => {
+                      const settings = integration.settings as any;
+                      const visibility = integration.connection_visibility || (integration._isOwn ? "private" : null);
+                      return (
+                        <SelectItem key={integration.id} value={integration.id}>
+                          <div className="flex items-center gap-2">
+                            {visibilityIcon(visibility)}
+                            <span>{settings?.page_name || "Facebook"}</span>
+                            {integration._isOwn && <Badge variant="secondary" className="py-0 text-xs">שלי</Badge>}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="ecommerce-table-name">שם הטבלה</Label>
               <Input id="ecommerce-table-name" value={tableName} onChange={(event) => setTableName(event.target.value)} placeholder="למשל: מכירות בילבי Facebook" autoFocus />
@@ -242,7 +288,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
                   onChange={(event) => { setAdAccountInput(event.target.value); setValidatedAccount(null); setValidationError(""); }}
                   placeholder="act_123456789 או 123456789"
                 />
-                <Button type="button" variant="outline" onClick={validateAccount} disabled={isValidating}>
+                <Button type="button" variant="outline" onClick={validateAccount} disabled={isValidating || !selectedIntegrationId}>
                   {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "בדוק חשבון"}
                 </Button>
               </div>
@@ -254,6 +300,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
                   <AlertDescription>
                     <div className="font-medium">{validatedAccount.name}</div>
                     <div className="text-xs text-muted-foreground" dir="ltr">{validatedAccount.id} · {validatedAccount.currency || "ILS"}</div>
+                    <div className="text-xs text-muted-foreground">{accountStatusLabel(validatedAccount.account_status)}</div>
                     {validatedAccount.business_name && <div className="text-xs text-muted-foreground">Business Manager: {validatedAccount.business_name}</div>}
                   </AlertDescription>
                 </Alert>
