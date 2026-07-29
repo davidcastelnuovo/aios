@@ -362,6 +362,9 @@ const ALL_TOOLS = [
   // AUTOMATIONS
   { name: 'list_automations', description: 'רשימת אוטומציות', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
   { name: 'toggle_automation', description: 'הפעלה/כיבוי אוטומציה', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, active: { type: 'boolean' } }, required: ['automation_id', 'active'] } },
+  { name: 'inspect_meta_lead_forms', description: 'בדיקה חיה של טפסי לידים ב-Meta ושל הטופס המחובר לאוטומציה. מחזיר אוטומציות, Page/Form ID, שמות, סטטוס ושדות. השתמשי בכלי זה לפני החלפה או יצירה של טופס, וניתן לחפש לפי שם אוטומציה, עמוד או טופס.', parameters: { type: 'object', properties: { automation_name: { type: 'string', description: 'שם מלא או חלקי של האוטומציה' }, page_name: { type: 'string', description: 'שם מלא או חלקי של עמוד Meta' }, form_name: { type: 'string', description: 'שם מלא או חלקי של טופס הלידים' } } } },
+  { name: 'set_automation_meta_lead_form', description: 'החלפת טופס הלידים המחובר לטריגר של אוטומציה לפי שם הטופס ב-Meta. הכלי מאמת התאמה יחידה לעמוד, לטופס ולאוטומציה, מעדכן את Form ID ורושם את הטופס לסנכרון. דורש אישור מפורש של המשתמש.', parameters: { type: 'object', properties: { automation_id: { type: 'string', description: 'מזהה האוטומציה, אם ידוע' }, automation_name: { type: 'string', description: 'שם מלא או חלקי של האוטומציה' }, form_name: { type: 'string', description: 'שם טופס Meta המדויק או חלק ייחודי ממנו' }, page_name: { type: 'string', description: 'שם עמוד Meta; מומלץ כשיש טפסים בעלי שם זהה' }, confirmed: { type: 'boolean', description: 'חובה true ורק לאחר אישור מפורש של המשתמש' } }, required: ['form_name', 'confirmed'] } },
+  { name: 'create_meta_lead_form', description: 'יצירת Instant Form חדש בעמוד Meta. ניתן גם לחבר אותו מיד לאוטומציה. טופס שפורסם ב-Meta אינו ניתן לעריכה רגילה, לכן יש להציג למשתמש את השם, השדות, מדיניות הפרטיות והעמוד ולקבל אישור מפורש לפני הקריאה.', parameters: { type: 'object', properties: { page_name: { type: 'string', description: 'שם עמוד Meta המדויק או חלק ייחודי ממנו' }, form_name: { type: 'string', description: 'שם הטופס החדש' }, questions: { type: 'array', description: 'שדות הטופס לפי הסדר', items: { type: 'object', properties: { type: { type: 'string', description: 'סוג שדה Meta, למשל FULL_NAME, EMAIL, PHONE, CITY, CUSTOM' }, label: { type: 'string', description: 'חובה לשדה CUSTOM; אופציונלי לשדה רגיל' } }, required: ['type'] } }, privacy_policy_url: { type: 'string', description: 'קישור HTTPS למדיניות הפרטיות' }, privacy_policy_link_text: { type: 'string', description: 'טקסט קישור למדיניות, ברירת מחדל מדיניות פרטיות' }, follow_up_action_url: { type: 'string', description: 'קישור HTTPS למסך התודה/אתר לאחר השליחה' }, automation_id: { type: 'string', description: 'אוטומציה לחיבור מיידי, אם ידועה' }, automation_name: { type: 'string', description: 'שם אוטומציה לחיבור מיידי' }, confirmed: { type: 'boolean', description: 'חובה true ורק לאחר אישור מפורש של המשתמש' } }, required: ['page_name', 'form_name', 'questions', 'privacy_policy_url', 'follow_up_action_url', 'confirmed'] } },
   // REPORTS & ANALYTICS
   { name: 'get_dashboard_stats', description: 'שליפת נתוני דשבורד: כמה לידים, לקוחות, משימות פתוחות, ועוד', parameters: { type: 'object', properties: {} } },
   // SOCIAL MEDIA
@@ -550,6 +553,205 @@ async function fbGetToken(supabase: any, tenantId: string): Promise<string | nul
     if (src?.api_key) data = { ...data, api_key: src.api_key }
   }
   return data?.api_key || null
+}
+
+type MetaLeadPage = {
+  id: string
+  name: string
+  access_token: string
+  integration_id: string
+}
+
+type MetaLeadForm = {
+  id: string
+  name: string
+  status: string | null
+  fields: Array<{ key: string; label: string; type: string }>
+  page_id: string
+  page_name: string
+  integration_id: string
+}
+
+function metaNameMatches(value: unknown, query: unknown): boolean {
+  const normalize = (input: unknown) => String(input || '').trim().toLocaleLowerCase()
+    .replace(/[\s\-_–—"'׳״()[\]{}]+/g, '')
+  const v = normalize(value)
+  const q = normalize(query)
+  return !!v && !!q && (v === q || v.includes(q))
+}
+
+function assertHttpsUrl(value: unknown, field: string): string {
+  let url: URL
+  try { url = new URL(String(value || '')) } catch { throw new Error(`${field} חייב להיות קישור HTTPS תקין`) }
+  if (url.protocol !== 'https:') throw new Error(`${field} חייב להיות קישור HTTPS תקין`)
+  return url.toString()
+}
+
+async function metaLeadIntegrations(supabase: any, tenantId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('tenant_integrations')
+    .select('id, api_key, settings, shared_from_integration_id')
+    .eq('tenant_id', tenantId)
+    .eq('integration_type', 'facebook_lead_ads')
+    .eq('is_active', true)
+  if (error) throw error
+  const result: any[] = []
+  for (const row of (data || [])) {
+    let source = row
+    if ((!row.api_key || !Array.isArray(row.settings?.pages)) && row.shared_from_integration_id) {
+      const { data: shared } = await supabase
+        .from('tenant_integrations')
+        .select('id, api_key, settings')
+        .eq('id', row.shared_from_integration_id)
+        .maybeSingle()
+      if (shared) source = { ...shared, id: row.id }
+    }
+    if (source.api_key) result.push({ ...source, id: row.id })
+  }
+  return result
+}
+
+async function metaLeadPages(supabase: any, tenantId: string): Promise<MetaLeadPage[]> {
+  const integrations = await metaLeadIntegrations(supabase, tenantId)
+  const pages: MetaLeadPage[] = []
+  for (const integration of integrations) {
+    let sourcePages = Array.isArray(integration.settings?.pages) ? integration.settings.pages : []
+    if (sourcePages.length === 0) {
+      let next: string | null = `https://graph.facebook.com/${FB_GRAPH_VERSION}/me/accounts?fields=id,name,access_token&limit=100&access_token=${encodeURIComponent(integration.api_key)}`
+      while (next) {
+        const response = await fetch(next)
+        const json = await response.json()
+        if (!response.ok || json?.error) throw new Error(json?.error?.message || 'Meta pages request failed')
+        sourcePages = sourcePages.concat(json.data || [])
+        next = json.paging?.next || null
+      }
+    }
+    for (const page of sourcePages) {
+      if (page?.id && page?.access_token) {
+        pages.push({
+          id: String(page.id),
+          name: String(page.name || page.id),
+          access_token: String(page.access_token),
+          integration_id: integration.id,
+        })
+      }
+    }
+  }
+  return pages
+}
+
+async function metaLeadFormsForPage(page: MetaLeadPage): Promise<MetaLeadForm[]> {
+  const forms: MetaLeadForm[] = []
+  let next: string | null = `https://graph.facebook.com/${FB_GRAPH_VERSION}/${page.id}/leadgen_forms?fields=id,name,status,questions&limit=100&access_token=${encodeURIComponent(page.access_token)}`
+  while (next) {
+    const response = await fetch(next)
+    const json = await response.json()
+    if (!response.ok || json?.error) throw new Error(json?.error?.message || `Meta forms request failed for ${page.name}`)
+    for (const form of (json.data || [])) {
+      forms.push({
+        id: String(form.id),
+        name: String(form.name || form.id),
+        status: form.status ? String(form.status) : null,
+        fields: (form.questions || []).map((q: any) => ({
+          key: String(q.key || q.type || ''),
+          label: String(q.label || q.key || q.type || ''),
+          type: String(q.type || ''),
+        })),
+        page_id: page.id,
+        page_name: page.name,
+        integration_id: page.integration_id,
+      })
+    }
+    next = json.paging?.next || null
+  }
+  return forms
+}
+
+async function findAutomationForMetaForm(
+  supabase: any,
+  tenantIds: string[],
+  automationId?: unknown,
+  automationName?: unknown,
+): Promise<any> {
+  let query = supabase.from('automations')
+    .select('id, name, active, tenant_id')
+    .in('tenant_id', tenantIds)
+    .eq('is_flow', true)
+  if (automationId) query = query.eq('id', String(automationId))
+  const { data, error } = await query.order('name').limit(100)
+  if (error) throw error
+  let matches = data || []
+  if (automationName) matches = matches.filter((a: any) => metaNameMatches(a.name, automationName))
+  if (matches.length === 0) throw new Error('לא נמצאה אוטומציה תואמת בארגון')
+  if (matches.length > 1) {
+    throw new Error(`נמצאו כמה אוטומציות תואמות: ${matches.map((a: any) => `${a.name} (${a.id})`).join(', ')}. יש לציין שם מדויק או automation_id`)
+  }
+  return matches[0]
+}
+
+async function connectMetaFormToAutomation(
+  supabase: any,
+  automation: any,
+  form: MetaLeadForm,
+): Promise<any> {
+  const { data: steps, error: stepsError } = await supabase
+    .from('automation_flow_steps')
+    .select('id, action_type, configuration')
+    .eq('automation_id', automation.id)
+    .eq('tenant_id', automation.tenant_id)
+    .eq('step_type', 'trigger')
+  if (stepsError) throw stepsError
+  const candidates = (steps || []).filter((step: any) =>
+    step.action_type === 'lead_created' &&
+    (!step.configuration?.lead_source || ['any', 'facebook_form'].includes(step.configuration.lead_source))
+  )
+  if (candidates.length !== 1) {
+    throw new Error(candidates.length === 0
+      ? 'לא נמצא באוטומציה טריגר יחיד מסוג ליד חדש שניתן לחבר לטופס Meta'
+      : 'נמצאו כמה טריגרים מתאימים באוטומציה; יש לתקן את הזרימה לפני החלפת הטופס')
+  }
+  const step = candidates[0]
+  const configuration = {
+    ...(step.configuration || {}),
+    lead_source: 'facebook_form',
+    facebook_integration_id: form.integration_id,
+    facebook_page_id: form.page_id,
+    facebook_page_name: form.page_name,
+    facebook_form_id: form.id,
+    facebook_form_name: form.name,
+    facebook_form_fields: form.fields,
+  }
+  const { error: updateError } = await supabase.from('automation_flow_steps')
+    .update({ configuration })
+    .eq('id', step.id)
+    .eq('tenant_id', automation.tenant_id)
+  if (updateError) throw updateError
+
+  const { data: integration, error: integrationError } = await supabase
+    .from('tenant_integrations')
+    .select('settings')
+    .eq('id', form.integration_id)
+    .eq('tenant_id', automation.tenant_id)
+    .maybeSingle()
+  if (integrationError) throw integrationError
+  if (!integration) throw new Error('אינטגרציית Meta של הטופס אינה שייכת לארגון האוטומציה')
+  const settings = integration.settings || {}
+  const formMappings = { ...(settings.form_mappings || {}) }
+  formMappings[form.id] = {
+    ...(formMappings[form.id] || {}),
+    form_name: form.name,
+    page_id: form.page_id,
+    page_name: form.page_name,
+    agency_id: formMappings[form.id]?.agency_id || null,
+    sales_person_ids: formMappings[form.id]?.sales_person_ids || [],
+    fields: formMappings[form.id]?.fields || {},
+  }
+  const { error: mappingError } = await supabase.from('tenant_integrations')
+    .update({ settings: { ...settings, form_mappings: formMappings } })
+    .eq('id', form.integration_id)
+    .eq('tenant_id', automation.tenant_id)
+  if (mappingError) throw mappingError
+  return { automation_id: automation.id, automation_name: automation.name, trigger_step_id: step.id }
 }
 
 // Pull the lead count out of an insights row's `actions` array (Meta reports leads
@@ -815,6 +1017,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
   const managedAgencyIds = Array.isArray(callerManagedAgencyIds) ? callerManagedAgencyIds : []
   // Effective scope flag — true means "do not narrow to a single caller campaigner"
   const bypassCampaignerScope = isManagerRole || (isTeamManager && managedAgencyIds.length > 0)
+  const canManageAutomations = isManagerRole || isTeamManager
   // Caller-scope bundle for assertCallerCanAccessClient (client-scoped mutations).
   const callerScope = { callerCampaignerId, isManagerRole, isTeamManager, managedAgencyIds, accessibleTenantIds }
   switch (name) {
@@ -2206,6 +2409,155 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('automations').update({ active: args.active }).eq('id', args.automation_id).in('tenant_id', accessibleTenantIds).select('id, name, active').single()
       if (error) throw error
       return { automation_id: data.id, name: data.name, active: data.active }
+    }
+    case 'inspect_meta_lead_forms': {
+      const { data: automations, error: automationError } = await supabase
+        .from('automations')
+        .select('id, name, active, tenant_id')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('is_flow', true)
+        .order('name')
+      if (automationError) throw automationError
+      let matchingAutomations = automations || []
+      if (args.automation_name) {
+        matchingAutomations = matchingAutomations.filter((a: any) => metaNameMatches(a.name, args.automation_name))
+      }
+      const automationIds = matchingAutomations.map((a: any) => a.id)
+      const { data: triggerSteps, error: triggerError } = automationIds.length
+        ? await supabase.from('automation_flow_steps')
+          .select('automation_id, configuration')
+          .in('automation_id', automationIds)
+          .eq('step_type', 'trigger')
+        : { data: [], error: null }
+      if (triggerError) throw triggerError
+      const currentByAutomation = new Map((triggerSteps || [])
+        .filter((s: any) => s.configuration?.facebook_form_id)
+        .map((s: any) => [s.automation_id, s.configuration]))
+
+      let pages = await metaLeadPages(supabase, tenantId)
+      if (args.page_name) pages = pages.filter((p) => metaNameMatches(p.name, args.page_name))
+      const formsNested = await Promise.all(pages.map((page) => metaLeadFormsForPage(page)))
+      let forms = formsNested.flat()
+      if (args.form_name) forms = forms.filter((f) => metaNameMatches(f.name, args.form_name))
+      return {
+        automations: matchingAutomations.map((automation: any) => {
+          const current: any = currentByAutomation.get(automation.id)
+          return {
+            id: automation.id,
+            name: automation.name,
+            active: automation.active,
+            connected_form: current ? {
+              id: current.facebook_form_id,
+              name: current.facebook_form_name || null,
+              page_id: current.facebook_page_id || null,
+              page_name: current.facebook_page_name || null,
+              integration_id: current.facebook_integration_id || null,
+            } : null,
+          }
+        }),
+        pages: pages.map(({ access_token: _token, ...page }) => page),
+        forms,
+        count: forms.length,
+        live_from_meta: true,
+      }
+    }
+    case 'set_automation_meta_lead_form': {
+      if (!args.confirmed) throw new Error('נדרש אישור מפורש לפני החלפת טופס באוטומציה')
+      if (!canManageAutomations) throw new Error('רק מנהל צוות, בעלים או Super Admin רשאים לשנות טופס באוטומציה')
+      const automation = await findAutomationForMetaForm(
+        supabase, accessibleTenantIds, args.automation_id, args.automation_name,
+      )
+      let pages = await metaLeadPages(supabase, automation.tenant_id)
+      if (args.page_name) pages = pages.filter((p) => metaNameMatches(p.name, args.page_name))
+      const forms = (await Promise.all(pages.map((page) => metaLeadFormsForPage(page))))
+        .flat()
+        .filter((form) => metaNameMatches(form.name, args.form_name))
+      if (forms.length === 0) throw new Error(`לא נמצא ב-Meta טופס בשם "${args.form_name}"`)
+      if (forms.length > 1) {
+        throw new Error(`נמצאו כמה טפסים תואמים: ${forms.map((f) => `${f.name} — ${f.page_name} (${f.id})`).join(', ')}. יש לציין גם את שם העמוד`)
+      }
+      const form = forms[0]
+      const connected = await connectMetaFormToAutomation(supabase, automation, form)
+      return { success: true, ...connected, form, sync_registered: true }
+    }
+    case 'create_meta_lead_form': {
+      if (!args.confirmed) throw new Error('נדרש אישור מפורש לפני יצירת טופס חדש ב-Meta')
+      if (!canManageAutomations) throw new Error('רק מנהל צוות, בעלים או Super Admin רשאים ליצור טופס Meta')
+      const questions = Array.isArray(args.questions) ? args.questions.slice(0, 30) : []
+      if (questions.length === 0) throw new Error('יש להגדיר לפחות שדה אחד בטופס')
+      const allowedQuestionTypes = new Set([
+        'FULL_NAME', 'FIRST_NAME', 'LAST_NAME', 'EMAIL', 'PHONE', 'CITY',
+        'STATE', 'ZIP', 'COUNTRY', 'STREET_ADDRESS', 'DATE_OF_BIRTH',
+        'GENDER', 'MARITAL_STATUS', 'RELATIONSHIP_STATUS', 'MILITARY_STATUS',
+        'JOB_TITLE', 'WORK_PHONE_NUMBER', 'WORK_EMAIL', 'COMPANY_NAME', 'CUSTOM',
+      ])
+      const normalizedQuestions = questions.map((question: any) => {
+        const type = String(question?.type || '').trim().toUpperCase()
+        if (!allowedQuestionTypes.has(type)) throw new Error(`סוג שדה Meta אינו נתמך: ${type || 'ריק'}`)
+        if (type === 'CUSTOM' && !String(question?.label || '').trim()) {
+          throw new Error('שדה CUSTOM חייב לכלול label')
+        }
+        return question?.label ? { type, label: String(question.label).trim() } : { type }
+      })
+      const privacyUrl = assertHttpsUrl(args.privacy_policy_url, 'privacy_policy_url')
+      const followUpUrl = assertHttpsUrl(args.follow_up_action_url, 'follow_up_action_url')
+      const pages = (await metaLeadPages(supabase, tenantId))
+        .filter((page) => metaNameMatches(page.name, args.page_name))
+      if (pages.length === 0) throw new Error(`לא נמצא עמוד Meta בשם "${args.page_name}"`)
+      if (pages.length > 1) {
+        throw new Error(`נמצאו כמה עמודים תואמים: ${pages.map((p) => `${p.name} (${p.id})`).join(', ')}. יש לציין שם מדויק יותר`)
+      }
+      const page = pages[0]
+      const existingForms = await metaLeadFormsForPage(page)
+      if (existingForms.some((form) => form.name.trim().toLocaleLowerCase() === String(args.form_name).trim().toLocaleLowerCase())) {
+        throw new Error(`כבר קיים בעמוד "${page.name}" טופס בשם "${args.form_name}". השתמשי בכלי ההחלפה או בחרי שם חדש`)
+      }
+      const body = new URLSearchParams({
+        access_token: page.access_token,
+        name: String(args.form_name).trim(),
+        questions: JSON.stringify(normalizedQuestions),
+        privacy_policy: JSON.stringify({
+          url: privacyUrl,
+          link_text: String(args.privacy_policy_link_text || 'מדיניות פרטיות'),
+        }),
+        follow_up_action_url: followUpUrl,
+      })
+      const response = await fetch(
+        `https://graph.facebook.com/${FB_GRAPH_VERSION}/${page.id}/leadgen_forms`,
+        { method: 'POST', body },
+      )
+      const json = await response.json()
+      if (!response.ok || json?.error || !json?.id) {
+        throw new Error(json?.error?.message || 'Meta לא אפשרה ליצור את הטופס')
+      }
+      const createdForm: MetaLeadForm = {
+        id: String(json.id),
+        name: String(args.form_name).trim(),
+        status: 'DRAFT',
+        fields: normalizedQuestions.map((question: any, index: number) => ({
+          key: question.type === 'CUSTOM' ? `custom_${index + 1}` : question.type.toLocaleLowerCase(),
+          label: question.label || question.type,
+          type: question.type,
+        })),
+        page_id: page.id,
+        page_name: page.name,
+        integration_id: page.integration_id,
+      }
+      let connected = null
+      if (args.automation_id || args.automation_name) {
+        const automation = await findAutomationForMetaForm(
+          supabase, accessibleTenantIds, args.automation_id, args.automation_name,
+        )
+        connected = await connectMetaFormToAutomation(supabase, automation, createdForm)
+      }
+      return {
+        success: true,
+        form: createdForm,
+        connected_automation: connected,
+        note: connected
+          ? 'הטופס נוצר וחובר לאוטומציה. יש לפרסם/להפעיל אותו ב-Meta אם נוצר כטיוטה.'
+          : 'הטופס נוצר. יש לפרסם/להפעיל אותו ב-Meta ולחבר אותו לאוטומציה לפי הצורך.',
+      }
     }
     // DASHBOARD STATS
     case 'get_dashboard_stats': {
