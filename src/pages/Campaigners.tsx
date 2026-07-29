@@ -15,6 +15,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { CampaignersChatView } from "@/components/campaigners/CampaignersChatView";
+import { CarmenWhatsAppAccess } from "@/components/carmen/CarmenWhatsAppAccess";
 
 type ViewMode = "chat" | "grid";
 
@@ -217,6 +218,13 @@ export default function Campaigners() {
                       <span dir="ltr">{campaigner.phone}</span>
                     </div>
                   )}
+                  <CarmenWhatsAppAccess
+                    entityType="campaigner"
+                    entityId={campaigner.id}
+                    phone={campaigner.phone}
+                    displayName={campaigner.full_name}
+                    roleTitle={Array.isArray(campaigner.role) ? campaigner.role.join(", ") : campaigner.role}
+                  />
                   {campaigner.email && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Mail className="h-4 w-4" />
