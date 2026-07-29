@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, Plus, Rocket, Save, Sparkles, Upload } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, Plus, Rocket, Save, Sparkles, Square, Upload } from "lucide-react";
 
 type PublishingSite = { id: string; site_key: string; name: string; destination_type: "pbn" | "wordpress" | "custom_api"; client_id: string | null; connection_id: string | null; base_url: string | null; categories: string[]; status: string; is_hidden: boolean };
 type WordPressSite = { id: string; site_url: string; site_name: string | null; client_id: string | null; is_active: boolean };
@@ -115,6 +115,8 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const [savingArticle, setSavingArticle] = useState(false);
   const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([]);
   const [generatingArticleIds, setGeneratingArticleIds] = useState<string[]>([]);
+  const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number; stopping: boolean } | null>(null);
+  const stopGenerationRef = useRef(false);
   const [publishingSelected, setPublishingSelected] = useState(false);
   const [networkProgress, setNetworkProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   // The generated Supabase types will include these tables after the migration is applied.
@@ -477,23 +479,52 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     setSelectedArticleIds((current) => checked ? [...new Set([...current, articleId])] : current.filter((id) => id !== articleId));
   };
 
+  const stopArticleGeneration = () => {
+    stopGenerationRef.current = true;
+    setGenerationProgress((current) => current ? { ...current, stopping: true } : current);
+    toast.info("ההרצה תיעצר מיד לאחר סיום המאמר הנוכחי");
+  };
+
   const generateArticles = async (articleIds: string[]) => {
     const ids = articleIds.slice(0, 10);
-    if (!ids.length) return;
+    if (!ids.length || generatingArticleIds.length) return;
+    stopGenerationRef.current = false;
     setGeneratingArticleIds(ids);
+    setGenerationProgress({ current: 0, total: ids.length, stopping: false });
+    let generated = 0;
+    let failed = 0;
+    let completed = 0;
+
     try {
-      const { data, error } = await supabase.functions.invoke("generate-publishing-articles", { body: { article_ids: ids } });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
-      const generated = Number(data?.generated ?? 0);
-      const failed = Number(data?.failed ?? 0);
-      if (failed) toast.warning(`${generated} מאמרים נכתבו, ${failed} נכשלו`);
-      else toast.success(generated === 1 ? "כרמן כתבה את המאמר והוא ממתין לבדיקה" : `כרמן כתבה ${generated} מאמרים והם ממתינים לבדיקה`);
-    } catch (error: unknown) {
-      toast.error(errorMessage(error, "כתיבת המאמרים נכשלה"));
+      for (const id of ids) {
+        if (stopGenerationRef.current) break;
+        setGeneratingArticleIds(ids.slice(completed));
+        try {
+          const { data, error } = await supabase.functions.invoke("generate-publishing-articles", { body: { article_ids: [id] } });
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          generated += Number(data?.generated ?? 0);
+          failed += Number(data?.failed ?? 0);
+        } catch {
+          failed += 1;
+        } finally {
+          completed += 1;
+          setGenerationProgress({ current: completed, total: ids.length, stopping: stopGenerationRef.current });
+          await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
+        }
+      }
+
+      if (stopGenerationRef.current) {
+        toast.warning(`ההרצה נעצרה: ${generated} נכתבו, ${failed} נכשלו, ${ids.length - completed} לא התחילו`);
+      } else if (failed) {
+        toast.warning(`${generated} מאמרים נכתבו, ${failed} נכשלו`);
+      } else {
+        toast.success(generated === 1 ? "כרמן כתבה את המאמר והוא ממתין לבדיקה" : `כרמן כתבה ${generated} מאמרים והם ממתינים לבדיקה`);
+      }
     } finally {
+      stopGenerationRef.current = false;
       setGeneratingArticleIds([]);
+      setGenerationProgress(null);
     }
   };
 
@@ -562,10 +593,20 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         <ScrollArea className="h-full">
           <div className="space-y-3 p-5">
             <Card className="flex flex-wrap items-center gap-3 p-3">
-              <div className="flex-1 text-xs text-muted-foreground">{selectedArticleIds.length} מאמרים נבחרו · כתיבה מרובה מוגבלת ל־10 בכל הרצה</div>
-              <Button variant="outline" onClick={() => generateArticles(selectedArticleIds)} disabled={!selectedArticleIds.length || Boolean(generatingArticleIds.length)}>
-                {generatingArticleIds.length ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Sparkles className="ml-2 h-4 w-4" />}כתיבת נבחרים
-              </Button>
+              <div className="flex-1 text-xs text-muted-foreground">
+                {generationProgress
+                  ? `כותב מאמר ${Math.min(generationProgress.current + 1, generationProgress.total)} מתוך ${generationProgress.total}${generationProgress.stopping ? " · עוצר לאחר המאמר הנוכחי" : ""}`
+                  : `${selectedArticleIds.length} מאמרים נבחרו · כתיבה מרובה מוגבלת ל־10 בכל הרצה`}
+              </div>
+              {generatingArticleIds.length ? (
+                <Button variant="destructive" onClick={stopArticleGeneration} disabled={Boolean(generationProgress?.stopping)}>
+                  <Square className="ml-2 h-4 w-4" />{generationProgress?.stopping ? "עוצר..." : "עצור הרצה"}
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={() => generateArticles(selectedArticleIds)} disabled={!selectedArticleIds.length}>
+                  <Sparkles className="ml-2 h-4 w-4" />כתיבת נבחרים
+                </Button>
+              )}
               <Button onClick={approveAndPublishSelected} disabled={!selectedArticleIds.length || publishingSelected}>
                 {publishingSelected ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Rocket className="ml-2 h-4 w-4" />}אשר ופרסם נבחרים
               </Button>
