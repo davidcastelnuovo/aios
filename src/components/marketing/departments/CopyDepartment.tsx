@@ -6,6 +6,7 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
+import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -35,8 +36,9 @@ import {
 } from "lucide-react";
 
 interface Props {
-  clientId: string;
+  clientId?: string;
   tenantId: string;
+  onClientChange: (id: string | null) => void;
 }
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -73,7 +75,7 @@ const CONTENT_TYPES = [
 
 const CHANNELS = ["Facebook", "Instagram", "TikTok", "LinkedIn", "Google Ads", "YouTube", "כללי"];
 
-export function CopyDepartment({ clientId, tenantId }: Props) {
+export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -82,6 +84,7 @@ export function CopyDepartment({ clientId, tenantId }: Props) {
   const { data: context, isLoading: loadingContext } = useQuery({
     queryKey: ["copy-department-context", clientId, tenantId],
     queryFn: async () => {
+      if (!clientId) return null;
       const pipeline = await ensurePipelineForClient({ clientId, tenantId, track: "campaigns" });
       const { data: stages, error } = await supabase
         .from("marketing_pipeline_stages")
@@ -94,24 +97,25 @@ export function CopyDepartment({ clientId, tenantId }: Props) {
         copyStage: stages?.find((stage) => stage.stage_type === "copy") ?? null,
         creativeStage: stages?.find((stage) => stage.stage_type === "creative") ?? null,
       };
-    },
+    }, enabled: !!clientId,
   });
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
     queryKey: ["copy-department-items", clientId, tenantId],
-    enabled: !!context?.pipeline?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("marketing_work_items")
         .select("id,title,status,payload,current_stage_id,created_at,updated_at")
         .eq("tenant_id", tenantId)
-        .eq("client_id", clientId)
         .order("updated_at", { ascending: false });
+      if (clientId) query = query.eq("client_id", clientId);
+      else query = query.is("client_id", null);
+      const { data, error } = await query;
       if (error) throw error;
       return ((data ?? []) as CopyItem[]).filter((item) => {
         const payload = item.payload ?? {};
         return (
-          item.current_stage_id === context?.copyStage?.id ||
+          (!!context?.copyStage?.id && item.current_stage_id === context.copyStage.id) ||
           payload.department === "copy" ||
           !!payload.brief_text ||
           !!payload.copy_text
@@ -198,6 +202,8 @@ export function CopyDepartment({ clientId, tenantId }: Props) {
   }
 
   return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-3 border-b bg-background px-4 py-2"><span className="text-xs font-medium text-muted-foreground">תצוגה:</span><ClientSelector tenantId={tenantId} value={clientId ?? null} onChange={onClientChange} allowGeneral generalLabel="תוכן כללי" /></div>
     <div className="grid flex-1 min-h-0 grid-cols-[280px_minmax(0,1fr)_300px] bg-muted/10">
       <aside className="flex min-h-0 flex-col border-l bg-card/70">
         <div className="flex items-center justify-between border-b p-3">
@@ -300,11 +306,10 @@ export function CopyDepartment({ clientId, tenantId }: Props) {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         tenantId={tenantId}
-        clientId={clientId}
-        pipelineId={context?.pipeline?.id ?? ""}
-        stageId={context?.copyStage?.id ?? ""}
+        defaultClientId={clientId}
         onCreated={async (id) => { setSelectedId(id); setCreateOpen(false); await refresh(); }}
       />
+    </div>
     </div>
   );
 }
@@ -363,8 +368,8 @@ function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: str
   );
 }
 
-function ManualBriefDialog({ open, onClose, tenantId, clientId, pipelineId, stageId, onCreated }: {
-  open: boolean; onClose: () => void; tenantId: string; clientId: string; pipelineId: string; stageId: string; onCreated: (id: string) => void;
+function ManualBriefDialog({ open, onClose, tenantId, defaultClientId, onCreated }: {
+  open: boolean; onClose: () => void; tenantId: string; defaultClientId?: string; onCreated: (id: string) => void;
 }) {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
@@ -372,16 +377,27 @@ function ManualBriefDialog({ open, onClose, tenantId, clientId, pipelineId, stag
   const [contentType, setContentType] = useState("social_post");
   const [channel, setChannel] = useState("Facebook");
   const [saving, setSaving] = useState(false);
+  const [assignedClientId, setAssignedClientId] = useState<string | null>(defaultClientId ?? null);
 
   const create = async () => {
-    if (!title.trim() || !brief.trim() || !pipelineId || !stageId) return;
+    if (!title.trim() || !brief.trim()) return;
     setSaving(true);
     try {
       const typeLabel = CONTENT_TYPES.find((type) => type.value === contentType)?.label ?? contentType;
       const notes = [`סוג תוצר: ${typeLabel}`, `ערוץ: ${channel}`, instructions && `הנחיות: ${instructions}`].filter(Boolean).join("\n");
+      let pipelineId: string | null = null;
+      let stageId: string | null = null;
+      if (assignedClientId) {
+        const pipeline = await ensurePipelineForClient({ clientId: assignedClientId, tenantId, track: "campaigns" });
+        const { data: stages, error: stageError } = await supabase.from("marketing_pipeline_stages").select("id,stage_type").eq("pipeline_id", pipeline.id);
+        if (stageError) throw stageError;
+        pipelineId = pipeline.id;
+        stageId = stages?.find((stage) => stage.stage_type === "copy")?.id ?? null;
+        if (!stageId) throw new Error("שלב הקופי לא נמצא");
+      }
       const { data, error } = await supabase.from("marketing_work_items").insert({
         tenant_id: tenantId,
-        client_id: clientId,
+        client_id: assignedClientId,
         pipeline_id: pipelineId,
         current_stage_id: stageId,
         title: title.trim(),
@@ -403,6 +419,7 @@ function ManualBriefDialog({ open, onClose, tenantId, clientId, pipelineId, stag
       <DialogContent className="max-w-2xl" dir="rtl">
         <DialogHeader><DialogTitle>בריף חדש למחלקת קופי</DialogTitle></DialogHeader>
         <div className="grid gap-4 py-2">
+          <div><Label>שיוך</Label><div className="mt-1"><ClientSelector tenantId={tenantId} value={assignedClientId} onChange={setAssignedClientId} allowGeneral generalLabel="תוכן כללי — ללא לקוח" /></div></div>
           <div><Label>שם המשימה</Label><Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="לדוגמה: קמפיין השקת שירות חדש" /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>מה יוצרים?</Label><Select value={contentType} onValueChange={setContentType}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{CONTENT_TYPES.map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}</SelectContent></Select></div>
