@@ -837,6 +837,51 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Some Manus group events omit author/participant entirely. Green API sees
+      // the same WhatsApp message with senderData.sender, so reuse that canonical
+      // participant instead of passing the group id (or an empty phone) into the
+      // authorization layer. Prefer provider message id; fall back to the same
+      // body within a short window for gateways that use different ids.
+      if (!authorPhone || authorPhone === groupChatId.split('@')[0]) {
+        try {
+          const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+          let pairedQuery = supabase.from('chat_messages')
+            .select('sender_phone, raw_provider_data, created_at')
+            .eq('provider', 'green_api')
+            .gte('created_at', since)
+            .order('created_at', { ascending: false })
+            .limit(5);
+          pairedQuery = messageId
+            ? pairedQuery.eq('raw_provider_data->>idMessage', messageId)
+            : pairedQuery.eq('message_text', messageText);
+          let { data: paired } = await pairedQuery;
+          if ((!paired || paired.length === 0) && messageText) {
+            const fallback = await supabase.from('chat_messages')
+              .select('sender_phone, raw_provider_data, created_at')
+              .eq('provider', 'green_api')
+              .eq('message_text', messageText)
+              .gte('created_at', since)
+              .order('created_at', { ascending: false })
+              .limit(5);
+            paired = fallback.data;
+          }
+          for (const row of paired || []) {
+            const participant = String(
+              row?.raw_provider_data?.senderData?.sender || row?.sender_phone || '',
+            ).split('@')[0].replace(/\D/g, '');
+            if (participant && participant !== groupChatId.split('@')[0]) {
+              authorPhone = participant;
+              console.log('[manus-wa group] author resolved from paired Green API event', {
+                messageId, phone: authorPhone,
+              });
+              break;
+            }
+          }
+        } catch (err) {
+          console.error('[manus-wa group] paired author resolution failed:', err);
+        }
+      }
+
       // ECHO / OUTBOUND GUARD for groups: Manus mirrors our own outbound back as inbound.
       // If author's digits match our connected phone, OR if the body matches an outbound we
       // just sent to this same group within the last 2 minutes, drop it.
