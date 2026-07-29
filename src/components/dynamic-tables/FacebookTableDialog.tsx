@@ -60,7 +60,12 @@ const visibilityIcon = (value: string | null) => {
   return <Lock className="h-3 w-3 text-muted-foreground" />;
 };
 
-const normalizeAdAccountId = (value: string) => value.trim().replace(/^act_/i, "").replace(/\D/g, "");
+const normalizeAdAccountId = (value: string) => {
+  const trimmed = value.trim();
+  return /^(?:act_)?\d+$/i.test(trimmed) ? trimmed.replace(/^act_/i, "") : "";
+};
+
+const accountStatusLabel = (status?: number) => status === 1 ? "פעיל" : status ? `סטטוס ${status}` : "סטטוס לא זמין";
 
 export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: FacebookTableDialogProps) {
   const navigate = useNavigate();
@@ -128,10 +133,13 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
     setValidatedAccount(null);
 
     try {
-      const response = await supabase.functions.invoke(
-        `get-facebook-ad-accounts?integration_id=${encodeURIComponent(selectedIntegrationId)}&ad_account_id=${encodeURIComponent(normalizedId)}`,
-        { method: "GET" },
-      );
+      const response = await supabase.functions.invoke("get-facebook-ad-accounts", {
+        method: "POST",
+        body: {
+          integration_id: selectedIntegrationId,
+          ad_account_id: normalizedId,
+        },
+      });
       if (response.error) throw response.error;
       if (response.data?.error) throw new Error(response.data.message || response.data.error);
       const account = response.data?.ad_account || response.data?.ad_accounts?.[0];
@@ -291,6 +299,7 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
                   <AlertDescription>
                     <div className="font-medium">{validatedAccount.name}</div>
                     <div className="text-xs text-muted-foreground" dir="ltr">{validatedAccount.id} · {validatedAccount.currency}</div>
+                    <div className="text-xs text-muted-foreground">{accountStatusLabel(validatedAccount.account_status)}</div>
                     {validatedAccount.business_name && <div className="text-xs text-muted-foreground">Business Manager: {validatedAccount.business_name}</div>}
                   </AlertDescription>
                 </Alert>
