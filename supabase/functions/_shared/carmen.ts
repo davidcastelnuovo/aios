@@ -133,8 +133,8 @@ export async function fetchRecentChatContext(
   chatId: string,
   isGroup: boolean,
   phoneNumber?: string | null,
-  maxMessages = 60,
-  dayWindow = 3,
+  maxMessages = 120,
+  dayWindow = 30,
 ): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp: string }>> {
   try {
     const since = new Date(Date.now() - dayWindow * 24 * 60 * 60 * 1000).toISOString();
@@ -190,6 +190,30 @@ export async function fetchRecentChatContext(
     console.error('[carmen] fetchRecentChatContext error', String(err));
     return [];
   }
+}
+
+// fetchRecentChatContext runs after the webhook has persisted the inbound message,
+// so the current bare trigger is normally the newest "history" item. Remove that
+// one occurrence before deciding whether this is genuinely the first contact.
+// Otherwise every first "כרמן?" looks like a returning conversation.
+export function excludeCurrentTurnFromContext(
+  recentContext: Array<{ role: string; content: string; timestamp?: string }>,
+  currentMessage: string,
+): Array<{ role: string; content: string; timestamp?: string }> {
+  const needle = (currentMessage || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!needle) return recentContext;
+
+  let removed = false;
+  return [...recentContext].reverse().filter((message) => {
+    if (removed) return true;
+    const content = String(message?.content || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    // Group history prefixes the body with "sender: "; private history does not.
+    if (content === needle || content.endsWith(`: ${needle}`)) {
+      removed = true;
+      return false;
+    }
+    return true;
+  }).reverse();
 }
 
 // In groups the "כרמן" trigger comes from group MEMBERS, not from Carmen's own
@@ -1581,11 +1605,12 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     const recentContext = await fetchRecentChatContext(
       supabase, tenantId, chatId, isGroup, phoneNumber,
     );
-    const mergedHistory = buildCarmenMergedHistory(recentContext, []);
-    const hasPriorContext = recentContext.length > 0;
+    const priorContext = excludeCurrentTurnFromContext(recentContext, messageText);
+    const mergedHistory = buildCarmenMergedHistory(priorContext, []);
+    const hasPriorContext = priorContext.length > 0;
 
     const openerPrompt = hasPriorContext
-      ? `המשתמש פתח שיחה חדשה במילת הטריגר "${triggerKeyword}" בלי שאלה ספציפית. כבר היה איתו דיאלוג קודם (ראי בהיסטוריה). הגיבי בקצרה וטבעית בהמשך להקשר — אל תציגי את עצמך מחדש ואל תכתבי "היי, כרמן כאן". אם יש משהו פתוח מהשיחות הקודמות שכדאי לסגור — שאלי עליו ישירות. אחרת שאלי במשפט קצר במה לעזור. אל תזכירי את מילת הסיום אלא אם נשאלת.`
+      ? `המשתמש פנה אלייך שוב במילת הטריגר "${triggerKeyword}" בלי לחזור על הבקשה. קראי את היסטוריית השיחה המצורפת לפי הסדר לפני שאת עונה. זה אינו מפגש ראשון: אסור לענות תשובה כללית כמו "כן, מה צריך?", "במה לעזור?" או "איך אפשר לעזור?". זהי את הבקשה, השאלה או הפעולה האחרונה שעדיין פתוחה והמשיכי ממנה באופן ענייני. אם חסר פרט, שאלי שאלת המשך ספציפית שמוכיחה שהבנת את הנושא. אם הכול כבר נסגר, התייחסי במפורש לנושא האחרון ושאלי שאלה ספציפית לגביו. אל תציגי את עצמך מחדש ואל תזכירי את מילת הסיום אלא אם נשאלת.`
       : `המשתמש פתח שיחה חדשה במילת הטריגר "${triggerKeyword}" בלי שאלה ספציפית. אין היסטוריית שיחה איתו. ברכי אותו במשפט קצר וטבעי ושאלי במה לעזור. ציין את מילת הסיום "${endKeywordConfig}" פעם אחת בלבד.`;
 
     let opener: string;
@@ -1597,7 +1622,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     } catch (err) {
       console.error('[CARMEN] contextual opener failed, falling back:', err);
       opener = hasPriorContext
-        ? 'כאן, מה צריך?'
+        ? 'אני קוראת את ההודעות האחרונות וממשיכה מהבקשה הקודמת.'
         : `היי, ${agentName} כאן. מה תרצה לבדוק? (לסיום: "${endKeywordConfig}")`;
     }
 
