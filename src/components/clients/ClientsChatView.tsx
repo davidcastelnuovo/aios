@@ -1066,1061 +1066,293 @@ export function ClientsChatView({
                             } catch { toast.error("שגיאה בהוספת איש קשר"); }
                           }}>שמור</Button>
                         </div>
-              …28062 tokens truncated…: string; supabase?: any; tenantId?: string };
-// Tracks URL-less Manus payloads that were positively matched to a Green API voice transcript.
-// WeakSet keeps the classification request-local without mutating the payload persisted to the database.
-const pairedVoicePayloads = new WeakSet<object>();
-const _AUDIO_URL_FIELDS = ['media_url', 'mediaUrl', 'url', 'fileUrl', 'file_url', 'downloadUrl', 'downloadURL', 'mediaLink', 'media_link', 'link'];
-function pickAudioUrl(payload: any, msgContainer: any): string | null {
-  // Manus wraps media differently across message types; scan the common containers.
-  const containers = [payload, payload?.media, payload?.file, payload?.attachment, payload?.audio,
-    msgContainer, msgContainer?.audioMessage, msgContainer?.message];
-  for (const c of containers) {
-    if (!c || typeof c !== 'object') continue;
-    for (const f of _AUDIO_URL_FIELDS) {
-      const v = c[f];
-      if (typeof v === 'string' && /^https?:\/\//.test(v)) return v;
-    }
-  }
-  return null;
+                      </div>
+                    )}
+
+                    {clientContacts.length > 0 ? (
+                      <div className="space-y-2">
+                        {clientContacts.map((contact: any) => (
+                          <div key={contact.id} className="border border-border/60 rounded-lg p-3 group bg-muted/20 hover:bg-muted/40 transition-colors">
+                            {editingContactId === contact.id ? (
+                              <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <Input placeholder="שם" value={editContactData.contact_name} onChange={e => setEditContactData(p => ({ ...p, contact_name: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                                  <Input placeholder="תפקיד" value={editContactData.role} onChange={e => setEditContactData(p => ({ ...p, role: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                                  <Input placeholder="טלפון" value={editContactData.phone} onChange={e => setEditContactData(p => ({ ...p, phone: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                                  <Input placeholder="אימייל" value={editContactData.email} onChange={e => setEditContactData(p => ({ ...p, email: e.target.value }))} className="text-sm h-8 text-right" dir="rtl" />
+                                </div>
+                                <div className="flex gap-2 justify-end">
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingContactId(null)}>ביטול</Button>
+                                  <Button size="sm" className="h-7 text-xs" disabled={!editContactData.contact_name.trim()} onClick={async () => {
+                                    try {
+                                      const { error } = await supabase.from("client_contacts").update({
+                                        contact_name: editContactData.contact_name.trim(),
+                                        phone: editContactData.phone.trim() || null,
+                                        email: editContactData.email.trim() || null,
+                                        role: editContactData.role.trim() || null,
+                                      }).eq("id", contact.id);
+                                      if (error) throw error;
+                                      toast.success("איש קשר עודכן");
+                                      setEditingContactId(null);
+                                      queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id, tenantId] });
+                                    } catch { toast.error("שגיאה בעדכון איש קשר"); }
+                                  }}>שמור</Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive"
+                                    onClick={async () => {
+                                      try {
+                                        const { error } = await supabase.from("client_contacts").delete().eq("id", contact.id);
+                                        if (error) throw error;
+                                        toast.success("איש קשר נמחק");
+                                        queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id, tenantId] });
+                                      } catch { toast.error("שגיאה במחיקה"); }
+                                    }}>
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                    onClick={() => {
+                                      setEditingContactId(contact.id);
+                                      setEditContactData({
+                                        contact_name: contact.contact_name || "",
+                                        phone: contact.phone || "",
+                                        email: contact.email || "",
+                                        role: contact.role || "",
+                                      });
+                                    }}>
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                                <div className="text-sm space-y-1 text-right flex-1">
+                                  <div className="font-medium flex items-center gap-2 justify-end">
+                                    {contact.role && <Badge variant="outline" className="text-xs">{contact.role}</Badge>}
+                                    <CarmenWhatsAppAccess
+                                      entityType="client_contact"
+                                      entityId={contact.id}
+                                      phone={contact.phone}
+                                      displayName={contact.contact_name}
+                                      roleTitle={contact.role}
+                                      clientId={selectedClient.id}
+                                    />
+                                    {contact.contact_name}
+                                  </div>
+                                  {contact.phone && (
+                                    <div className="flex items-center gap-1 justify-end text-muted-foreground">
+                                      <a href={`tel:${contact.phone}`} className="text-primary hover:underline">{contact.phone}</a>
+                                      <Phone className="h-3 w-3" />
+                                    </div>
+                                  )}
+                                  {contact.email && (
+                                    <div className="flex items-center gap-1 justify-end text-muted-foreground">
+                                      <a href={`mailto:${contact.email}`} className="text-primary hover:underline truncate">{contact.email}</a>
+                                      <Mail className="h-3 w-3" />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : !addingContact && (
+                      <p className="text-sm text-muted-foreground">אין אנשי קשר נוספים</p>
+                    )}
+                  </div>
+
+                  {/* Team - editable */}
+                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
+                    <h3 className="font-semibold text-sm mb-2 flex items-center gap-2 justify-end">
+                      קמפיינרים משויכים
+                      <Users className="h-4 w-4 text-primary" />
+                    </h3>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {selectedClient.client_team?.map((ct: any, i: number) => (
+                        <Badge key={i} variant="secondary" className="flex items-center gap-1">
+                          {ct?.campaigners?.full_name ?? "—"}
+                          <X
+                            className="h-3 w-3 cursor-pointer hover:text-destructive"
+                            onClick={async () => {
+                              const { error } = await supabase
+                                .from("client_team")
+                                .delete()
+                                .eq("client_id", selectedClient.id)
+                                .eq("campaigner_id", ct.campaigner_id);
+                              if (error) {
+                                toast.error("שגיאה בהסרת קמפיינר");
+                              } else {
+                                toast.success("הקמפיינר הוסר");
+                                queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+                              }
+                            }}
+                          />
+                        </Badge>
+                      ))}
+                    </div>
+                    <CampaignerAssignmentPicker
+                      assignedCampaignerIds={(selectedClient.client_team || []).map(
+                        (assignment: any) => assignment.campaigner_id
+                      )}
+                      triggerClassName="h-7 text-xs"
+                      onAssign={async (campaignerId) => {
+                        const { error } = await supabase
+                          .from("client_team")
+                          .insert({
+                            client_id: selectedClient.id,
+                            campaigner_id: campaignerId,
+                          });
+                        if (error) {
+                          toast.error("שגיאה בשיוך קמפיינר");
+                          throw error;
+                        }
+                        toast.success("הקמפיינר שויך בהצלחה");
+                        await queryClient.invalidateQueries({
+                          queryKey: ["clients", tenantId],
+                        });
+                      }}
+                    />
+                  </div>
+
+                  {/* Notes */}
+                  <div className="bg-card border border-border/60 rounded-xl p-4 text-right shadow-sm">
+                    <h3 className="font-semibold text-sm mb-2">הערות</h3>
+                    <EditableField label="" value={selectedClient.notes} field="notes" clientId={selectedClient.id} type="textarea" />
+                  </div>
+
+                  {/* ── CRM Settings ──────────────────────────────────────────── */}
+                  <CRMSettingsSection client={selectedClient} onUpdate={() => queryClient.invalidateQueries({ queryKey: ["clients", tenantId] })} />
+
+                </TabsContent>
+
+                <TabsContent value="connections" className="mt-0">
+                  {tenantId && <ClientConnectionsTab clientId={selectedClient.id} tenantId={tenantId} onProvisioned={() => setActiveTab("report")} />}
+                </TabsContent>
+
+                {canViewFinance && (
+                  <TabsContent value="business" className="mt-0 space-y-6">
+                    <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
+                        מידע עסקי
+                        <DollarSign className="h-4 w-4 text-primary" />
+                      </h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setChangeAgencyOpen(true)}>
+                            <Edit className="h-3 w-3 ml-1" />
+                            שנה
+                          </Button>
+                          <span className="font-medium">{selectedClient.agencies?.name || "—"}</span>
+                          <span className="text-muted-foreground">:סוכנות</span>
+                        </div>
+                        <EditableField label=":ריטיינר" value={selectedClient.retainer?.toString() || ""} field="retainer" clientId={selectedClient.id} type="number" />
+                        <EditableField label=":תקציב חודשי" value={selectedClient.monthly_budget?.toString() || ""} field="monthly_budget" clientId={selectedClient.id} type="number" />
+                        <EditableField label=":הוצאות חודשיות קבועות" value={(selectedClient as any).monthly_fixed_expense?.toString() || "0"} field="monthly_fixed_expense" clientId={selectedClient.id} type="number" />
+                        <EditableField label=":תעשייה" value={selectedClient.industry} field="industry" clientId={selectedClient.id} />
+                      </div>
+                    </div>
+                  </TabsContent>
+                )}
+
+                <TabsContent value="docs" className="mt-0 space-y-4" dir="rtl">
+                  <ClientDocsEditor client={selectedClient} tenantId={tenantId || ""} />
+                </TabsContent>
+
+                <TabsContent value="credentials" className="mt-0">
+                  <ClientCredentialsTab clientId={selectedClient.id} tenantId={tenantId || ""} />
+                </TabsContent>
+
+                <TabsContent value="meeting" className="mt-0">
+                  <ClientMeetingTab client={selectedClient} tenantId={tenantId} />
+                </TabsContent>
+
+                <TabsContent value="recordings" className="mt-0">
+                  <ClientRecordingsTab clientId={selectedClient.id} tenantId={tenantId} />
+                </TabsContent>
+
+                <TabsContent value="report" className="mt-0">
+                  <ClientTablesTab clientId={selectedClient.id} clientName={selectedClientDisplayName || "לקוח"} />
+                </TabsContent>
+
+                <TabsContent value="updates" className="mt-0">
+                  <ClientUpdatesTab
+                    clientId={selectedClient.id}
+                    clientName={selectedClient.name || "לקוח"}
+                    currentMoodStatus={(selectedClient as any).mood_status}
+                  />
+                </TabsContent>
+
+                <TabsContent value="wordpress" className="mt-0">
+                  <ClientWordPressTab clientId={selectedClient.id} />
+                </TabsContent>
+              </ScrollArea>
+
+              {activeTab === "calls" && (
+                <div className="flex-1 min-h-0 overflow-hidden p-4">
+                  <CallHistoryTab clientId={selectedClient.id} />
+                </div>
+              )}
+
+              {activeTab === "whatsapp" && (
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  {selectedClient.phone ? (
+                    <ChatViewComponent
+                      contactId={selectedClient.id}
+                      contactType="client"
+                      senderPhone={selectedClient.phone}
+                      contactName={selectedClient.name || "לקוח"}
+                    />
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-3 py-8">
+                      <Phone className="h-10 w-10 text-muted-foreground/30" />
+                      <p className="text-sm text-muted-foreground">אין מספר טלפון ללקוח זה</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => setAssignPhoneDialogOpen(true)}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        חפש שיחה בוואטסאפ ושייך מספר
+                      </Button>
+                      <AssignPhoneFromWhatsAppDialog
+                        inline
+                        open={assignPhoneDialogOpen}
+                        onOpenChange={setAssignPhoneDialogOpen}
+                        clientId={selectedClient.id}
+                        clientName={selectedClient.name || "לקוח"}
+                        onSuccess={() => {
+                          queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </Tabs>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
+            <div className="text-center space-y-2">
+              <User className="h-12 w-12 mx-auto opacity-30" />
+              <p>בחר לקוח מהרשימה לצפייה בפרטים</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Call dialog */}
+      {selectedClient?.phone && (
+        <CallDialog
+          open={callDialogOpen}
+          onOpenChange={setCallDialogOpen}
+          phoneNumber={selectedClient.phone}
+          contactName={selectedClient.name || "לקוח"}
+          clientId={selectedClient.id}
+        />
+      )}
+
+    </div>
+  );
 }
-function looksAudio(payload: any, msgContainer: any, url: string | null): boolean {
-  if (msgContainer?.audioMessage) return true;
-  const t = (payload?.type ?? payload?.messageType ?? payload?.mediaType ?? msgContainer?.type ?? '').toString().toLowerCase();
-  if (/audio|ptt|voice/.test(t)) return true;
-  const mime = (payload?.mimeType || payload?.mime_type || payload?.media?.mimetype ||
-    msgContainer?.audioMessage?.mimetype || '').toString().toLowerCase();
-  if (/audio|ogg|opus|voice|ptt|mpeg|mp4a|amr/.test(mime)) return true;
-  return !!url && /\.(ogg|opus|mp3|m4a|wav|aac|amr)(\?|$)/i.test(url);
-}
-// Fetch the media bytes. Manus media URLs sometimes require the instance API key
-// (X-Api-Key), so retry with it if an anonymous fetch is rejected.
-async function fetchMedia(url: string, auth?: MediaAuth): Promise<Blob | null> {
-  try {
-    const r = await fetch(url);
-    if (r.ok) return await r.blob();
-  } catch (_) { /* try authed */ }
-  if (auth?.apiKey) {
-    try {
-      const r = await fetch(url, { headers: { 'X-Api-Key': auth.apiKey } });
-      if (r.ok) return await r.blob();
-    } catch (_) { /* give up */ }
-  }
-  return null;
-}
-// The Manus gateway currently emits hasMedia=true for voice notes without a URL,
-// MIME type, or media object. The same WhatsApp message is also delivered to the
-// connected Green API webhook, which downloads and transcribes it. Reuse that
-// transcript by the provider message id instead of degrading the Carmen request
-// to "[מדיה]". Green API transcription includes media download plus two AI calls,
-// so allow enough time for the canonical chat_messages row to be committed.
-async function findPairedGreenTranscript(
-  payload: any,
-  auth?: MediaAuth,
-): Promise<string | null> {
-  if (!auth?.supabase || !auth.tenantId) return null;
-  const messageId = String(payload?.messageId || payload?.id || '').trim();
-  if (!messageId) return null;
-
-  for (let attempt = 0; attempt < 21; attempt++) {
-    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 1000));
-    const { data } = await auth.supabase
-      .from('chat_messages')
-      .select('message_text')
-      .eq('tenant_id', auth.tenantId)
-      .eq('provider', 'green_api')
-      .eq('raw_provider_data->>idMessage', messageId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const text = String(data?.message_text || '').replace(/^🎤\s*/, '').trim();
-    if (text && !/^\[(?:הודעת קול|מדיה|קובץ מדיה|הודעה)\]$/.test(text)) {
-      if (payload && typeof payload === 'object') pairedVoicePayloads.add(payload);
-      return text;
-    }
-  }
-  return null;
-}
-// Diagnostic: when a media message can't be transcribed, persist the payload
-// shape so the exact Manus voice-note format can be pinned down. Best-effort.
-function logMediaDebug(auth: MediaAuth | undefined, payload: any, msgContainer: any, url: string | null, isAudio: boolean) {
-  if (!auth?.supabase) return;
-  try {
-    auth.supabase.from('error_logs').insert({
-      tenant_id: auth.tenantId ?? null,
-      source: 'manus-wa-media-debug',
-      error_message: 'voice/media message could not be transcribed → fell back to [מדיה]',
-      context: {
-        top_keys: Object.keys(payload || {}),
-        hasMedia: payload?.hasMedia ?? null,
-        type: payload?.type ?? payload?.messageType ?? payload?.mediaType ?? null,
-        mimeType: payload?.mimeType ?? payload?.mime_type ?? null,
-        picked_url: url,
-        looks_audio: isAudio,
-        msg_keys: msgContainer ? Object.keys(msgContainer) : null,
-        audioMessage_keys: msgContainer?.audioMessage ? Object.keys(msgContainer.audioMessage) : null,
-        preview: JSON.stringify(payload ?? {}).slice(0, 1500),
-      },
-    }).then(() => {}, () => {});
-  } catch (_) { /* never let diagnostics break the webhook */ }
-}
-async function resolveMessageText(payload: any, msgContainer: any, auth?: MediaAuth): Promise<string> {
-  if (payload?.body && String(payload.body).trim()) return String(payload.body);
-  if (!payload?.hasMedia) return '';
-  const url = pickAudioUrl(payload, msgContainer);
-  const isAudio = looksAudio(payload, msgContainer, url);
-  try {
-    if (url && isAudio) {
-      const blob = await fetchMedia(url, auth);
-      if (blob && blob.size > 0 && blob.size <= 25 * 1024 * 1024) {
-        const t = await aiTranscribe(blob, { language: 'he', filename: 'voice.ogg' });
-        if (t && t.trim()) return (await aiCleanTranscript(t)).trim();
-      }
-    }
-  } catch (_) { /* fall through to placeholder */ }
-  const pairedTranscript = await findPairedGreenTranscript(payload, auth);
-  if (pairedTranscript) return pairedTranscript;
-  // Couldn't turn media into text — capture the shape so we can fix it precisely.
-  logMediaDebug(auth, payload, msgContainer, url, isAudio);
-  return '[מדיה]';
-}
-
-// Was the inbound message a voice note? (drives Carmen's voice-out mirroring)
-function messageIsVoice(payload: any, msgContainer: any): boolean {
-  if (payload && typeof payload === 'object' && pairedVoicePayloads.has(payload)) return true;
-  if (!payload?.hasMedia) return false;
-  const url = pickAudioUrl(payload, msgContainer);
-  return !!(url && looksAudio(payload, msgContainer, url));
-}
-
-// Send Carmen's reply as a voice note too (best-effort, via send-manus-wa-voice)
-function makeVoiceSender(tenantId: string): (chatId: string, text: string) => Promise<boolean> {
-  return async (toChatId: string, text: string): Promise<boolean> => {
-    try {
-      const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-voice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({ tenant_id: tenantId, to: toChatId, text }),
-      });
-      return r.ok;
-    } catch {
-      return false;
-    }
-  };
-}
-
-function ok(body: Record<string, unknown>, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-  });
-}
-
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    const url = new URL(req.url);
-    const rawPayload = await req.json();
-
-    // Diagnostic: log top-level shape so we can see exactly what Manus sends
-    try {
-      console.log('[manus-wa] raw keys=', Object.keys(rawPayload || {}).join(','), 'preview=', JSON.stringify(rawPayload).slice(0, 800));
-    } catch {}
-
-    // Normalize Manus WA Gateway payload — it may be flat, or wrapped in
-    // { data }, { message }, { payload }, { event, data: {...} }, etc.
-    function pickObj(...candidates: unknown[]): Record<string, any> | null {
-      for (const c of candidates) {
-        if (c && typeof c === 'object' && !Array.isArray(c)) return c as Record<string, any>;
-      }
-      return null;
-    }
-    const outer = rawPayload as Record<string, any>;
-    const inner = pickObj(outer.data, outer.message, outer.payload, outer.body) || {};
-    const key = pickObj(inner.key, outer.key) || {};
-    const msgContainer = pickObj(inner.message, outer.message) || {};
-
-    // Only treat as 'message' when there is actual message content (from/body/key).
-    // Otherwise keep the raw event (or 'ping' / 'unknown') so we don't falsely trigger Carmen.
-    const rawEventField =
-      outer.event ?? inner.event ?? outer.type ?? inner.type ?? outer.messageType ?? inner.messageType ?? null;
-    const looksLikeMessage =
-      !!(outer.from || inner.from || inner.chatId || outer.chatId || outer.body || inner.body || inner.text || outer.text ||
-         (pickObj(inner.message, outer.message)));
-    const normalizedEvent =
-      (rawEventField === 'chat' || rawEventField === 'text' || rawEventField === 'message') && looksLikeMessage
-        ? 'message'
-        : rawEventField ?? (looksLikeMessage ? 'message' : 'ping');
-    const fromField =
-      outer.from ?? inner.from ?? inner.chatId ?? outer.chatId ?? key.remoteJid ?? inner.remoteJid ?? '';
-    const toField =
-      outer.to ?? inner.to ?? inner.recipientId ?? outer.recipientId ?? '';
-    const bodyField =
-      outer.body ?? inner.body ?? inner.text ?? outer.text ?? inner.content ?? outer.content ??
-      msgContainer.conversation ?? msgContainer.text ?? msgContainer.body ?? '';
-    const fromMeField =
-      outer.fromMe ?? inner.fromMe ?? key.fromMe ?? (outer.direction === 'outgoing' || inner.direction === 'outgoing');
-    const directionField = outer.direction ?? inner.direction;
-    const idField = outer.id ?? inner.id ?? outer.messageId ?? inner.messageId ?? key.id;
-    const senderNameField = outer.senderName ?? inner.senderName ?? outer.fromName ?? inner.fromName ?? outer.pushName ?? inner.pushName ?? null;
-    const authorField = outer.author ?? inner.author ?? outer.participant ?? inner.participant ?? key.participant ?? null;
-    const hasMediaField = outer.hasMedia ?? inner.hasMedia ?? !!(msgContainer.imageMessage || msgContainer.audioMessage || msgContainer.videoMessage || msgContainer.documentMessage);
-
-    // Build a unified payload object that the rest of the code uses
-    const payload: Record<string, any> = {
-      ...outer,
-      ...inner,
-      event: normalizedEvent,
-      from: fromField,
-      to: toField,
-      body: typeof bodyField === 'string' ? bodyField : (bodyField?.text ?? ''),
-      fromMe: fromMeField,
-      direction: directionField,
-      id: idField,
-      messageId: outer.messageId ?? inner.messageId ?? idField,
-      senderName: senderNameField,
-      author: authorField,
-      hasMedia: hasMediaField,
-    };
-
-    // Collect every possible secret source Manus may use
-    const headerSecret =
-      req.headers.get('x-wa-gateway-secret') ||
-      req.headers.get('x-webhook-secret') ||
-      req.headers.get('x-manus-secret') ||
-      req.headers.get('x-webhook-signature') ||
-      url.searchParams.get('secret') ||
-      (outer?.secret as string | undefined) ||
-      (inner?.secret as string | undefined) ||
-      '';
-
-    const headerInstanceId = req.headers.get('x-wa-gateway-instance') || '';
-    const instanceId =
-      outer.instanceId || inner.instanceId || outer.instance_id || inner.instance_id ||
-      headerInstanceId || url.searchParams.get('instanceId') || '';
-
-    if (!instanceId) {
-      console.error('Missing instanceId. Headers:', JSON.stringify(Object.fromEntries(req.headers)));
-      return ok({ error: 'Missing instanceId' }, 400);
-    }
-
-    // Find integration by instance ID
-    const { data: integrations } = await supabase
-      .from('tenant_integrations')
-      .select('id, tenant_id, user_id, settings, api_key')
-      .eq('integration_type', 'manus_wa')
-      .eq('is_active', true)
-      .filter('settings->>instance_id', 'eq', String(instanceId))
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    const integ = integrations?.[0];
-    if (!integ) {
-      console.error('No active manus_wa integration for instance', instanceId);
-      return ok({ error: 'No active integration' }, 404);
-    }
-
-    const settings = (integ.settings as any) || {};
-    const expectedSecret: string = settings.webhook_secret || '';
-
-    // Auto-heal: if DB has no secret yet, accept the first webhook secret we see and persist it.
-    if (!expectedSecret && headerSecret) {
-      const merged = { ...settings, webhook_secret: headerSecret };
-      await supabase.from('tenant_integrations').update({ settings: merged }).eq('id', integ.id);
-      console.log('Auto-healed webhook_secret for instance', instanceId);
-    } else if (expectedSecret && expectedSecret !== headerSecret) {
-      // Log diagnostic info so we can see exactly what Manus sends, then ACK 200 so Manus doesn't disable the webhook.
-      console.error(
-        'Webhook secret mismatch for instance', instanceId,
-        '— received headers:', JSON.stringify(Object.fromEntries(req.headers)),
-        'received secret:', headerSecret ? `${headerSecret.slice(0, 6)}…` : '(none)'
-      );
-      return ok({ received: true, ignored: 'secret_mismatch' }, 200);
-    }
-
-    const tenantId = integ.tenant_id;
-    const connectionUserId = integ.user_id;
-    const event = payload.event;
-
-    // Credentials + diagnostics for resolving inbound voice-note media.
-    const mediaAuth: MediaAuth = {
-      apiKey: integ.api_key as string | undefined,
-      gateway: (settings.gateway_url as string) || 'https://whatsappgw-pzpyrrww.manus.space',
-      supabase,
-      tenantId,
-    };
-
-    // ===== Message ACK (delivery receipt) =====
-    if (event === 'message_ack') {
-      const messageId = payload.messageId;
-      const ack = Number(payload.ack);
-      if (!messageId) return ok({ received: true });
-
-      const { data: msg } = await supabase
-        .from('chat_messages')
-        .select('id, read_at')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'manus_wa')
-        .eq('raw_provider_data->>messageId', String(messageId))
-        .maybeSingle();
-
-      if (msg) {
-        const update: Record<string, unknown> = {};
-        if (ack >= 3 && !msg.read_at) update.read_at = new Date().toISOString();
-        if (Object.keys(update).length > 0) {
-          await supabase.from('chat_messages').update(update).eq('id', msg.id);
-        }
-      }
-
-      return ok({ received: true });
-    }
-
-    // ===== Incoming message =====
-    console.log('[manus-wa] event=', event, 'instance=', instanceId, 'from=', payload.from, 'to=', payload.to, 'fromMe=', payload.fromMe, 'direction=', payload.direction, 'bodyPreview=', String(payload.body || '').slice(0, 80));
-    if (event !== 'message') return ok({ received: true, ignored: event });
-
-    const fromRaw = String(payload.from || '');
-    const toRaw = String(payload.to || '');
-    const chatIdRaw = String(payload.chatId || '');
-    const senderLidRaw = String(payload.senderLid || '');
-    const isGroup = fromRaw.endsWith('@g.us') || toRaw.endsWith('@g.us') || chatIdRaw.endsWith('@g.us');
-
-    // LID detection: Manus often delivers `from` as bare digits but flags the chat as
-    // `@lid` via `chatId` (or includes a `senderLid`). Treat any of these as LID so the
-    // pairing/resolution blocks below actually fire.
-    const isLidEvent =
-      fromRaw.endsWith('@lid') ||
-      chatIdRaw.endsWith('@lid') ||
-      (!!senderLidRaw && senderLidRaw.replace(/\D/g, '') === fromRaw.replace(/\D/g, ''));
-
-    // Outbound detection: prefer explicit flags from Manus, then fall back to phone comparison
-    const myPhone = (settings.phone_number || '').toString().replace(/\D/g, '');
-    const fromDigits = fromRaw.split('@')[0].replace(/\D/g, '');
-    const fromMeFlag = payload.fromMe === true || payload.fromMe === 'true' ||
-                       payload.direction === 'outgoing' || payload.direction === 'outbound';
-    let isOutgoingFromPhone = fromMeFlag || (!!myPhone && fromDigits === myPhone);
-    let sourcePhoneNumber = isOutgoingFromPhone ? fromDigits : myPhone;
-
-    let counterpartRaw = isOutgoingFromPhone ? toRaw : fromRaw;
-    let counterpartPhone = counterpartRaw.split('@')[0];
-    let normalized = normalizePhone(counterpartPhone);
-    const messageText = await resolveMessageText(payload, msgContainer, mediaAuth);
-    const messageId = String(payload.id || '');
-
-    // AUTO LID RESOLUTION 1/2 — real phone in the payload. Newer Baileys exposes the
-    // sender's actual number alongside the LID (senderPn / participantPn); if the
-    // gateway forwards any real-phone field that differs from the LID digits, use it
-    // directly — no aliases or pairing needed.
-    let lidAutoResolved = false;
-    if (isLidEvent && !isOutgoingFromPhone && !isGroup) {
-      const lidDigits = counterpartPhone.replace(/\D/g, '');
-      const candidates = [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber]
-        .map((v: unknown) => String(v || '').split('@')[0].replace(/\D/g, ''))
-        .filter((d: string) => d && d.length >= 9 && d.length <= 15 && d !== lidDigits);
-      if (candidates.length > 0) {
-        counterpartPhone = candidates[0];
-        counterpartRaw = `${counterpartPhone}@c.us`;
-        normalized = normalizePhone(counterpartPhone);
-        lidAutoResolved = true;
-        console.log('[manus-wa] LID auto-resolved from payload real-phone field', { lid: lidDigits, phone: counterpartPhone });
-        // Persist the mapping so future events resolve even without the payload field.
-        supabase.from('wa_lid_map')
-          .upsert({ lid: lidDigits, phone: counterpartPhone, connection_user_id: connectionUserId, source: 'payload' }, { onConflict: 'lid' })
-          .then(() => {}, () => {});
-      } else if (lidDigits) {
-        // AUTO LID RESOLUTION 2/2 — learned map. Any previously learned lid→phone pair
-        // (from payload fields or Green-API pairing, across all tenants on this system)
-        // resolves deterministically with zero configuration.
-        const { data: known } = await supabase
-          .from('wa_lid_map')
-          .select('phone')
-          .eq('lid', lidDigits)
-          .maybeSingle();
-        if (known?.phone) {
-          counterpartPhone = String(known.phone);
-          counterpartRaw = `${counterpartPhone}@c.us`;
-          normalized = normalizePhone(counterpartPhone);
-          lidAutoResolved = true;
-          console.log('[manus-wa] LID auto-resolved from learned map', { lid: lidDigits, phone: counterpartPhone });
-        }
-      }
-    }
-
-    // ===== ATOMIC DEDUP =====
-    // Manus occasionally delivers the same webhook twice. Without this guard
-    // Carmen would run twice and reply twice (esp. in groups, which had no
-    // chat_messages-based dedup). We atomically claim the messageId here,
-    // BEFORE any branching (group vs private), so duplicates exit immediately.
-    if (messageId) {
-      const { error: claimErr } = await supabase
-        .from('processed_webhook_messages')
-        .insert({
-          provider: 'manus_wa',
-          tenant_id: tenantId,
-          external_message_id: messageId,
-        });
-      if (claimErr) {
-        // 23505 = unique_violation → another invocation already processing this msg
-        if ((claimErr as any).code === '23505') {
-          console.log('[manus-wa] duplicate webhook dropped', { messageId, bodyPreview: String(messageText).slice(0, 60) });
-          return ok({ received: true, duplicate: true });
-        }
-        // Any other error: log but continue (don't lose messages on transient DB issues)
-        console.error('[manus-wa] dedup insert failed (continuing):', claimErr);
-      }
-    }
-
-
-    // ACTIVATION HANDSHAKE: an unresolved-LID private message may be the reply to
-    // a "you were authorized" activation message (sent by carmen-activate-phone
-    // when a phone is added to carmen_allowed_phones). A reply carrying the
-    // one-time code — or quoting the activation message — proves the sender owns
-    // the allow-listed number, so we learn the LID→phone mapping permanently.
-    if (!isGroup && isLidEvent && !isOutgoingFromPhone && !lidAutoResolved && messageText.trim()) {
-      try {
-        const { data: pendings } = await supabase
-          .from('wa_pending_activations')
-          .select('id, phone, code, activation_message_id')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'pending')
-          .gte('created_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
-          .limit(10);
-        if (pendings && pendings.length > 0) {
-          const quotedId = String(
-            (payload as any).quotedMsgId || (payload as any).quotedMessageId ||
-            (payload as any)?.quotedMsg?.id || (msgContainer as any)?.contextInfo?.stanzaId || '',
-          );
-          const hit = pendings.find((p: any) =>
-            (p.code && new RegExp(`(^|\\D)${p.code}(\\D|$)`).test(messageText)) ||
-            (p.activation_message_id && quotedId && p.activation_message_id === quotedId));
-          if (hit) {
-            const lidDigits = counterpartPhone.replace(/\D/g, '');
-            const realPhone = String(hit.phone).replace(/\D/g, '');
-            await supabase.from('wa_lid_map')
-              .upsert({ lid: lidDigits, phone: realPhone, connection_user_id: connectionUserId, source: 'activation' }, { onConflict: 'lid' });
-            await supabase.from('wa_pending_activations')
-              .update({ status: 'completed', completed_at: new Date().toISOString(), completed_lid: lidDigits })
-              .eq('id', hit.id);
-            await supabase.from('carmen_whatsapp_identities')
-              .update({ verified_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-              .eq('tenant_id', tenantId)
-              .eq('phone', realPhone)
-              .eq('status', 'approved');
-            console.log('[manus-wa] activation completed — LID mapped', { lid: lidDigits, phone: realPhone });
-            // Confirm to the user through the standard send path (to the real phone).
-            fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-              },
-              body: JSON.stringify({
-                integrationId: integ.id, tenantId, phoneNumber: realPhone,
-                senderUserId: connectionUserId,
-                message: 'מעולה, זיהיתי אותך ✅ מעכשיו אפשר לדבר איתי — פשוט תתחיל הודעה במילה "כרמן".',
-              }),
-            }).catch((e) => console.error('[manus-wa] activation confirm send failed:', e?.message));
-            return ok({ received: true, activation: 'completed' });
-          }
-        }
-      } catch (e) {
-        console.error('[manus-wa] activation check failed (continuing):', String(e));
-      }
-    }
-
-    // ECHO GUARD: Manus mirrors EVERY message (in and out) as inbound @lid events.
-    // If we just sent this exact text via Manus or Green API in the last 2 minutes, drop it.
-    if (!isOutgoingFromPhone && isLidEvent && messageText.trim()) {
-      const { data: ownOutbound } = await supabase
-        .from('chat_messages')
-        .select('id, provider, created_at')
-        .eq('tenant_id', tenantId)
-        .eq('direction', 'outbound')
-        .in('provider', ['manus_wa', 'green_api'])
-        .eq('message_text', messageText)
-        .gte('created_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (ownOutbound && ownOutbound.length > 0) {
-        const allowGreenApiCarmenKickoff =
-          ownOutbound[0].provider === 'green_api' && /כרמן|carmen/i.test(messageText);
-        if (!allowGreenApiCarmenKickoff) {
-          console.log('[manus-wa] echo dropped — matches our own outbound', { provider: ownOutbound[0].provider, messageId, bodyPreview: messageText.slice(0, 60) });
-          return ok({ received: true, ignored: 'self_echo' });
-        }
-        console.log('[manus-wa] keeping Green API Carmen kickoff mirrored by Manus', { messageId, bodyPreview: messageText.slice(0, 60) });
-      }
-    }
-
-    // Manus sometimes reports manual outgoing phone messages as inbound @lid events.
-    // If Green API receives the same WhatsApp message as outbound moments later, use it
-    // as the direction/contact source AND route Carmen replies through Green API
-    // (so the reply comes from the same WhatsApp number the operator actually used).
-    let pairedFromGreenApi = false;
-    // When the LID was already deterministically resolved (payload field / learned map),
-    // the 2.6s pairing wait is pure latency — skip it. Pairing remains for unresolved LIDs
-    // (it both fixes direction for own-outbound mirrors and feeds the learned map).
-    if (!isOutgoingFromPhone && !isGroup && isLidEvent && messageText.trim() && !lidAutoResolved) {
-      await new Promise((resolve) => setTimeout(resolve, 2600));
-      const { data: greenMatches } = await supabase
-        .from('chat_messages')
-        .select('sender_phone, raw_provider_data, created_at, connection_user_id')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'green_api')
-        .eq('direction', 'outbound')
-        .eq('message_text', messageText)
-        .gte('created_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(5);
-      const pairedOutgoing = (greenMatches || []).find((m: any) =>
-        !messageId || String(m.raw_provider_data?.idMessage || '') === messageId
-      ) || greenMatches?.[0];
-      if (pairedOutgoing?.sender_phone) {
-        isOutgoingFromPhone = true;
-        counterpartPhone = String(pairedOutgoing.sender_phone);
-        counterpartRaw = `${counterpartPhone}@c.us`;
-        normalized = normalizePhone(counterpartPhone);
-        sourcePhoneNumber = String(
-          pairedOutgoing.raw_provider_data?.senderData?.sender ||
-          pairedOutgoing.raw_provider_data?.instanceData?.wid ||
-          ''
-        ).split('@')[0].replace(/[^0-9]/g, '');
-        pairedFromGreenApi = true;
-        console.log('[manus-wa] paired LID event with Green API outbound', { messageId, counterpartPhone, sourcePhoneNumber });
-        // AUTO LID LEARNING — a successful pairing proves lid↔phone; persist it so
-        // future events (any tenant on this system) resolve without pairing or config.
-        const learnedLid = fromRaw.split('@')[0].replace(/\D/g, '');
-        if (learnedLid && learnedLid !== counterpartPhone.replace(/\D/g, '')) {
-          supabase.from('wa_lid_map')
-            .upsert({ lid: learnedLid, phone: counterpartPhone.replace(/\D/g, ''), connection_user_id: connectionUserId, source: 'green_api_pairing' }, { onConflict: 'lid' })
-            .then(() => {}, () => {});
-        }
-      }
-    }
-
-    // Manus can emit phone-app messages as opaque @lid IDs instead of the real phone.
-    // For a direct Carmen flow pinned to this Manus integration and scoped to exactly
-    // one phone, resolve the LID to that configured phone so the Carmen trigger/session
-    // can match instead of being blocked by the random LID number.
-    // fromMeFlag guard: when David sends OUTBOUND to a third party (e.g. Ana), the
-    // to-field is already a real phone and the LID resolver must NOT overwrite it with
-    // a Carmen session phone — that is the root cause of Carmen responding to "Hi Ana".
-    if (!isGroup && !pairedFromGreenApi && isLidEvent && !fromMeFlag && !lidAutoResolved) {
-      try {
-        const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
-          isGroup: false,
-          chatId: `${counterpartPhone}@c.us`,
-          phoneNumber: counterpartPhone,
-        });
-        const cfg = carmenAutomation?.configuration || {};
-        const scopeMode = cfg.carmen_scope_mode || 'all';
-        const allowedPhones = Array.isArray(cfg.carmen_allowed_phones)
-          ? [...new Set(cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, '')).filter(Boolean))]
-          : [];
-        const idleMin = Number(cfg.session_timeout_minutes) > 0 ? Number(cfg.session_timeout_minutes) : 5;
-        const since = new Date(Date.now() - idleMin * 60 * 1000).toISOString();
-
-        // Resolution priority for LID events on private Carmen flows:
-        // 0) Explicit LID→phone map in the automation config (carmen_lid_aliases) — the only
-        //    deterministic option on a cold start when several phones are allowed.
-        // 1) Explicit allowed phones (specific_phone scope) — pick fresh session phone, else single allowed phone.
-        // 2) Otherwise (scope=all or no allowed list) — pick the unique fresh active Carmen session
-        //    on this connection. This is what enables continuation messages without re-saying "כרמן".
-        let aliasPhone: string | null = null;
-        let aliasReason = '';
-
-        const lidAliases: Record<string, string> = (cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === 'object')
-          ? cfg.carmen_lid_aliases
-          : {};
-        const lidKey = String(counterpartPhone || '').replace(/\D/g, '');
-        if (lidKey && lidAliases[lidKey]) {
-          aliasPhone = String(lidAliases[lidKey]).replace(/\D/g, '');
-          aliasReason = 'configured_lid_alias';
-        }
-
-        if (!aliasPhone && scopeMode === 'specific_phone' && allowedPhones.length >= 1) {
-          if (allowedPhones.length === 1) {
-            aliasPhone = allowedPhones[0] as string;
-            aliasReason = 'single_allowed_phone';
-          } else {
-            const { data: recentSessions } = await supabase
-              .from('carmen_whatsapp_sessions')
-              .select('phone, last_message_at, created_at')
-              .eq('tenant_id', tenantId)
-              .eq('status', 'active')
-              .eq('connection_user_id', connectionUserId)
-              .in('phone', allowedPhones)
-              .gte('last_message_at', since)
-              .order('last_message_at', { ascending: false })
-              .limit(1);
-            if (recentSessions && recentSessions.length > 0) {
-              aliasPhone = String(recentSessions[0].phone);
-              aliasReason = 'fresh_session_within_allowed';
-            }
-          }
-        }
-
-        // Generic resolver: even without specific_phone scope, if exactly one fresh
-        // active Carmen session exists on this connection, attribute the @lid event
-        // to it. This makes continuation messages work in "כרמן ישיר" flows.
-        if (!aliasPhone) {
-          const { data: freshSessions } = await supabase
-            .from('carmen_whatsapp_sessions')
-            .select('phone, last_message_at, created_at, automation_id')
-            .eq('tenant_id', tenantId)
-            .eq('status', 'active')
-            .eq('connection_user_id', connectionUserId)
-            .gte('last_message_at', since)
-            .order('last_message_at', { ascending: false })
-            .limit(2);
-          if (freshSessions && freshSessions.length === 1) {
-            aliasPhone = String(freshSessions[0].phone);
-            aliasReason = 'unique_fresh_session';
-          } else if (freshSessions && freshSessions.length > 1 && carmenAutomation?.id) {
-            // Prefer a session bound to the same Carmen automation we matched.
-            const preferred = freshSessions.find((s: any) => s.automation_id === carmenAutomation.id);
-            if (preferred) {
-              aliasPhone = String(preferred.phone);
-              aliasReason = 'fresh_session_matching_automation';
-            } else {
-              console.log('[manus-wa] LID resolution skipped — multiple fresh sessions, no clear owner', {
-                count: freshSessions.length,
-                preview: messageText.slice(0, 60),
-              });
-            }
-          }
-        }
-
-        if (aliasPhone) {
-          const aliasChatId = `${aliasPhone}@c.us`;
-          const { data: activeAliasSession } = await supabase
-            .from('carmen_whatsapp_sessions')
-            .select('id, last_message_at, created_at')
-            .eq('tenant_id', tenantId)
-            .eq('status', 'active')
-            .eq('connection_user_id', connectionUserId)
-            .eq('chat_id', aliasChatId)
-            .eq('phone', aliasPhone)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          const lastActivity = activeAliasSession
-            ? new Date(activeAliasSession.last_message_at || activeAliasSession.created_at).getTime()
-            : 0;
-          const hasFreshAliasSession = !!activeAliasSession && (Date.now() - lastActivity) <= idleMin * 60 * 1000;
-          // Support multiple configured wake-words + Whisper spelling variants of "כרמן".
-          const triggerKeywords = (Array.isArray(cfg.trigger_keywords) && cfg.trigger_keywords.length
-            ? cfg.trigger_keywords
-            : [cfg.trigger_keyword || 'כרמן']).map((k: any) => String(k || '').toLowerCase()).filter(Boolean);
-          const lowerMsg = String(messageText || '').toLowerCase();
-          const hasTriggerKeyword = triggerKeywords.some((k: string) => lowerMsg.includes(k)) || /[כק]א?רמן/.test(lowerMsg);
-
-          counterpartPhone = aliasPhone;
-          counterpartRaw = aliasChatId;
-          normalized = normalizePhone(aliasPhone);
-
-          if (hasFreshAliasSession || hasTriggerKeyword) {
-            isOutgoingFromPhone = true;
-            sourcePhoneNumber = aliasPhone;
-          }
-
-          console.log('[manus-wa] resolved LID for Carmen direct flow', {
-            fromRaw,
-            aliasPhone,
-            aliasReason,
-            scopeMode,
-            manualLike: isOutgoingFromPhone,
-            hasFreshAliasSession,
-            hasTriggerKeyword,
-          });
-        }
-      } catch (err) {
-        console.error('[manus-wa] LID Carmen resolution failed:', err);
-      }
-    }
-
-    // FALLBACK LID RESOLUTION: when an inbound @lid event arrives and the counterpart
-    // phone is unresolvable (empty OR equals the raw LID number which is NOT a real
-    // phone), but there is an ACTIVE Carmen session on this connection within the
-    // idle window, attribute the message to that session's phone. Without this,
-    // mid-conversation replies (which Manus often delivers as pure LID events) get
-    // dropped by scope filtering and Carmen goes silent until the user types "כרמן" again.
-    const counterpartLooksLikeLid =
-      !counterpartPhone ||
-      counterpartPhone.replace(/\D/g, '') === fromDigits ||
-      counterpartPhone.replace(/\D/g, '').length > 14; // real phones ≤ 15 digits, LIDs are typically 15+
-    if (!isGroup && isLidEvent && counterpartLooksLikeLid && messageText.trim()) {
-      try {
-        const { data: freshSessions } = await supabase
-          .from('carmen_whatsapp_sessions')
-          .select('phone, chat_id, last_message_at, automation_id')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'active')
-          .eq('connection_user_id', connectionUserId)
-          .gte('last_message_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
-          .order('last_message_at', { ascending: false })
-          .limit(2);
-        if (freshSessions && freshSessions.length === 1) {
-          const aliasPhone = String(freshSessions[0].phone);
-          counterpartPhone = aliasPhone;
-          counterpartRaw = `${aliasPhone}@c.us`;
-          normalized = normalizePhone(aliasPhone);
-          isOutgoingFromPhone = true;
-          sourcePhoneNumber = aliasPhone;
-          console.log('[manus-wa] LID fallback → resolved via active Carmen session', {
-            aliasPhone, body: messageText.slice(0, 60),
-          });
-        } else if (freshSessions && freshSessions.length > 1) {
-          console.log('[manus-wa] LID fallback skipped — multiple fresh sessions', {
-            count: freshSessions.length,
-            preview: messageText.slice(0, 60),
-          });
-        } else {
-          console.log('[manus-wa] LID fallback found no active Carmen session', {
-            counterpartPhone, fromDigits, preview: messageText.slice(0, 60),
-          });
-        }
-      } catch (err) {
-        console.error('[manus-wa] LID fallback resolution failed:', err);
-      }
-    }
-
-    // Group messages: skip client/lead matching & chat_messages insert, but still let Carmen respond in-group.
-    if (isGroup) {
-      // Prefer explicit group fields. `from` is often the sender's personal phone in groups,
-      // and `to` may be empty — in which case we must fall back to chatId/groupId from the payload.
-      const groupIdRaw = String((payload as any).groupId || '');
-      const groupChatId = (
-        fromRaw.endsWith('@g.us') ? fromRaw :
-        toRaw.endsWith('@g.us') ? toRaw :
-        chatIdRaw.endsWith('@g.us') ? chatIdRaw :
-        groupIdRaw.endsWith('@g.us') ? groupIdRaw :
-        (chatIdRaw || groupIdRaw || toRaw)
-      );
-
-      // Per-group tenant routing (shared bot): a single WhatsApp bot may sit in groups
-      // that belong to DIFFERENT organizations. Resolve the owning tenant from the
-      // group's chat id so Carmen answers for the right org (and scopes to its clients).
-      // Falls back to the bot's own tenant when the group isn't registered.
-      let groupTenantId = tenantId;
-      try {
-        const { data: wgRows } = await supabase
-          .from('whatsapp_groups')
-          .select('tenant_id')
-          .eq('group_chat_id', groupChatId)
-          .limit(10);
-        const rows = wgRows || [];
-        const ownRegistered = rows.some((r: any) => r.tenant_id === tenantId);
-        if (!ownRegistered && rows.length > 0) {
-          // The bot's own tenant has no whatsapp_groups claim here. A group is
-          // often registered under ANOTHER tenant just because the operator's
-          // green_api phone synced it (e.g. "דוד ואנה DMM" under MC) — that must
-          // NOT steal events from a Carmen whose own tenant runs in
-          // open-member-groups mode, where membership itself is the claim.
-          // Route to the registered tenant only in the legacy shared-bot case.
-          const { data: ownSteps } = await supabase
-            .from('automation_flow_steps')
-            .select('configuration')
-            .eq('tenant_id', tenantId)
-            .eq('step_type', 'trigger')
-            .eq('action_type', 'carmen_whatsapp_session')
-            .limit(10);
-          const ownHasOpenMode = (ownSteps || []).some(
-            (s: any) => s?.configuration?.carmen_open_member_groups === true,
-          );
-          if (!ownHasOpenMode) groupTenantId = rows[0].tenant_id as string;
-        }
-      } catch (_e) { /* fall back to bot tenant */ }
-      if (groupTenantId !== tenantId) {
-        console.log('[manus-wa group] routed by group → tenant', { groupChatId, botTenant: tenantId, groupTenant: groupTenantId });
-      }
-
-      const messageText = await resolveMessageText(payload, msgContainer, { ...mediaAuth, tenantId: groupTenantId });
-      const senderName = (payload.senderName || payload.fromName || payload.authorName || null) as string | null;
-
-      // Extract the REAL sender phone from author/participant fields.
-      // Falling back to fromRaw inside a group gives the group id (120363...@g.us) which is useless.
-      const authorCandidates = [
-        payload.author, payload.participant, key.participant,
-        (msgContainer as any)?.participant, (msgContainer as any)?.author,
-      ].filter((v: any) => typeof v === 'string' && v.includes('@')) as string[];
-      const authorRaw = authorCandidates[0] || '';
-      let authorPhone = authorRaw ? authorRaw.split('@')[0].replace(/\D/g, '') : '';
-
-      // GROUP AUTHOR LID RESOLUTION — same layers as the private branch above.
-      // The "כרמן" trigger comes from group MEMBERS, and members often arrive as
-      // anonymous @lid authors; without resolution Carmen can't tell WHO in the
-      // group is speaking. 1) real-phone payload fields → 2) learned wa_lid_map.
-      // Payload resolutions are persisted so group traffic keeps teaching the map.
-      if (/@lid/i.test(authorRaw) && authorPhone) {
-        const lidDigits = authorPhone;
-        const realCandidates = [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber]
-          .map((v: unknown) => String(v || '').split('@')[0].replace(/\D/g, ''))
-          .filter((d: string) => d && d.length >= 9 && d.length <= 15 && d !== lidDigits);
-        if (realCandidates.length > 0) {
-          authorPhone = realCandidates[0];
-          console.log('[manus-wa group] author LID resolved from payload field', { lid: lidDigits, phone: authorPhone });
-          supabase.from('wa_lid_map')
-            .upsert({ lid: lidDigits, phone: authorPhone, connection_user_id: connectionUserId, source: 'payload' }, { onConflict: 'lid' })
-            .then(() => {}, () => {});
-        } else {
-          const { data: knownLid } = await supabase
-            .from('wa_lid_map')
-            .select('phone')
-            .eq('lid', lidDigits)
-            .maybeSingle();
-          if (knownLid?.phone) {
-            authorPhone = String(knownLid.phone).replace(/\D/g, '');
-            console.log('[manus-wa group] author LID resolved from learned map', { lid: lidDigits, phone: authorPhone });
-          }
-        }
-      }
-
-      // ECHO / OUTBOUND GUARD for groups: Manus mirrors our own outbound back as inbound.
-      // If author's digits match our connected phone, OR if the body matches an outbound we
-      // just sent to this same group within the last 2 minutes, drop it.
-      const myDigits = (settings.phone_number || '').toString().replace(/\D/g, '');
-      const looksLikeOurOwn = !!authorPhone && !!myDigits && (authorPhone === myDigits || authorPhone.endsWith(myDigits) || myDigits.endsWith(authorPhone));
-      if (looksLikeOurOwn || isOutgoingFromPhone) {
-        console.log('[manus-wa group] dropping own outbound mirror', { groupChatId, authorPhone, myDigits, isOutgoingFromPhone });
-        return ok({ received: true, ignored: 'group_self_echo' });
-      }
-      if (messageText && messageText.trim()) {
-        const { data: recentOwn } = await supabase
-          .from('chat_messages')
-          .select('id, created_at')
-          .eq('tenant_id', tenantId)
-          .eq('direction', 'outbound')
-          .eq('group_id', null as any)
-          .in('provider', ['manus_wa', 'green_api'])
-          .eq('message_text', messageText)
-          .gte('created_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
-          .limit(1);
-        if (recentOwn && recentOwn.length > 0) {
-          console.log('[manus-wa group] dropping echoed body of our own outbound', { groupChatId, bodyPreview: messageText.slice(0, 60) });
-          return ok({ received: true, ignored: 'group_body_echo' });
-        }
-      }
-
-      let carmenOutcome: string | null = null;
-      try {
-        const result = await handleCarmenMessage({
-          supabase,
-          tenantId: groupTenantId,
-          integrationId: integ.id,
-          connectionUserId,
-          chatId: groupChatId,
-          phoneNumber: authorPhone || '',
-          senderName,
-          messageText,
-          isIncoming: !isOutgoingFromPhone,
-          isManualOutgoing: isOutgoingFromPhone,
-          isGroup: true,
-          sourceChannel: 'own_instance',
-          isVoiceMessage: messageIsVoice(payload, msgContainer),
-          sendVoice: makeVoiceSender(groupTenantId),
-          sendMessage: async (_chatId: string, message: string) => {
-            const settingsAny = (integ.settings as any) || {};
-            const baseUrl = settingsAny.gateway_url || 'https://whatsappgw-pzpyrrww.manus.space';
-            const instanceId = settingsAny.instance_id;
-            const apiKey = integ.api_key;
-            if (!instanceId || !apiKey) return false;
-            // IMPORTANT: bound the gateway call with a timeout. Without it, a stalled Manus
-            // connection hangs this whole function and the WhatsApp message is stuck on "sending".
-            // No retry on abort: the message may already have been delivered, so a retry risks a duplicate.
-            const FETCH_TIMEOUT_MS = 60000;
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-            const started = Date.now();
-            try {
-              const res = await fetch(`${baseUrl}/api/v1/instances/${instanceId}/send/group`, {
-                method: 'POST',
-                headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ groupId: groupChatId, body: message }),
-                signal: controller.signal,
-              });
-              clearTimeout(timer);
-              console.log('[manus-wa Carmen group send]', { groupChatId, status: res.status, ok: res.ok, elapsedMs: Date.now() - started });
-              return res.ok;
-            } catch (err: any) {
-              clearTimeout(timer);
-              const isAbort = err?.name === 'AbortError';
-              console.error('manus-wa Carmen group sendMessage error:', isAbort
-                ? `aborted after ${Date.now() - started}ms (gateway timeout) — not retried to avoid duplicate delivery`
-                : err);
-              return false;
-            }
-          },
-        });
-        if (result.handled) carmenOutcome = result.outcome;
-        console.log('[carmen-group]', { groupChatId, authorPhone, isOutgoingFromPhone, handled: result.handled, outcome: (result as any).outcome, reason: (result as any).reason, body: String(messageText).slice(0, 60) });
-      } catch (err) {
-        console.error('manus-wa Carmen group handler error:', err);
-      }
-
-      return ok({ received: true, group: true, carmen: carmenOutcome });
-    }
-
-    // Dedup by message id
-    if (messageId) {
-      const { data: existing } = await supabase
-        .from('chat_messages')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'manus_wa')
-        .eq('raw_provider_data->>id', messageId)
-        .maybeSingle();
-      if (existing) return ok({ received: true, duplicate: true });
-    }
-
-    // Look up client/lead by phone (last 9 digits)
-    let clientId: string | null = null;
-    let leadId: string | null = null;
-
-    const { data: client } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('tenant_id', tenantId)
-      .or(`phone.ilike.%${normalized}%,phone.ilike.%${counterpartPhone}%`)
-      .maybeSingle();
-    if (client) clientId = client.id;
-
-    if (!clientId) {
-      const { data: lead } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .or(`phone.ilike.%${normalized}%,phone.ilike.%${counterpartPhone}%`)
-        .maybeSingle();
-      if (lead) leadId = lead.id;
-    }
-
-    const { error: insertError } = await supabase.from('chat_messages').insert({
-      client_id: clientId,
-      lead_id: leadId,
-      tenant_id: tenantId,
-      connection_user_id: connectionUserId,
-      message_text: messageText,
-      direction: isOutgoingFromPhone ? 'outbound' : 'inbound',
-      channel: 'whatsapp',
-      provider: 'manus_wa',
-      sender_phone: counterpartPhone,
-      raw_provider_data: payload,
-    });
-
-    if (insertError) {
-      console.error('Failed to insert chat_messages:', insertError);
-      throw insertError;
-    }
-
-    // ===== Carmen WhatsApp session handling =====
-    // If this came from the operator's personal phone (paired via Green API),
-    // Carmen should reply BACK to the operator's phone — NOT to the device itself.
-    const carmenTargetPhone = pairedFromGreenApi && sourcePhoneNumber
-      ? sourcePhoneNumber
-      : counterpartPhone;
-    const chatIdForCarmen = `${carmenTargetPhone}@c.us`;
-    const senderName = (payload.senderName || payload.fromName || null) as string | null;
-
-    // OUTBOUND-TO-THIRD-PARTY GUARD: David's phone is the Manus gateway, so every
-    // outbound message he sends to any contact flows through this webhook. If the
-    // message is outbound, has no trigger keyword, and there is no existing Carmen
-    // session for this specific chat, Carmen must not respond. The LID resolver above
-    // may have already (incorrectly) attributed the message to Carmen's chat_id before
-    // this guard was added; this check is the definitive safety net.
-    if (isOutgoingFromPhone && !pairedFromGreenApi && !isGroup) {
-      const msgPrefix = String(messageText || '').toLowerCase().replace(/^\s*🎤\s*/, '').trim().slice(0, 80);
-      const hasOwnerTrigger = /[כק]א?רמן|carmen|קלוד|claude/i.test(msgPrefix);
-      if (!hasOwnerTrigger) {
-        const { data: existingCarmenSession } = await supabase
-          .from('carmen_whatsapp_sessions')
-          .select('id')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'active')
-          .eq('connection_user_id', connectionUserId)
-          .eq('chat_id', chatIdForCarmen)
-          .maybeSingle();
-        if (!existingCarmenSession) {
-          console.log('[manus-wa] outbound-to-third-party: no trigger keyword + no active carmen session → skip', {
-            chatIdForCarmen, carmenTargetPhone, bodyPreview: String(messageText).slice(0, 60),
-          });
-          return ok({ received: true, ignored: 'outbound_third_party' });
-        }
-      }
-    }
-
-    let carmenOutcome: string | null = null;
-    try {
-      const result = await handleCarmenMessage({
-        supabase,
-        tenantId,
-        integrationId: integ.id,
-        connectionUserId,
-        chatId: chatIdForCarmen,
-        phoneNumber: carmenTargetPhone,
-          sourcePhoneNumber,
-        senderName,
-        messageText,
-        isIncoming: !isOutgoingFromPhone,
-        isManualOutgoing: isOutgoingFromPhone,
-        isGroup: false,
-        sourceChannel: 'own_instance',
-        isVoiceMessage: messageIsVoice(payload, msgContainer),
-        sendVoice: makeVoiceSender(tenantId),
-        sendMessage: async (_chatId: string, message: string) => {
-          try {
-            const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-            const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-            console.log('[carmen->manus] sending', { integrationId: integ.id, tenantId, phoneNumber: carmenTargetPhone, connectionUserId, messageLen: message.length });
-            const res = await fetch(`${supabaseUrl}/functions/v1/send-manus-wa-message`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${serviceKey}`,
-              },
-              body: JSON.stringify({
-                integrationId: integ.id,
-                tenantId,
-                phoneNumber: carmenTargetPhone,
-                senderUserId: connectionUserId,
-                message,
-              }),
-            });
-            const txt = await res.text();
-            console.log('[carmen->manus] result', { status: res.status, body: txt.slice(0, 500) });
-            return res.ok;
-          } catch (err) {
-            console.error('manus-wa Carmen sendMessage error:', err);
-            return false;
-          }
-        },
-      });
-      if (result.handled) carmenOutcome = result.outcome;
-      console.log('[carmen-private]', { chatId: chatIdForCarmen, carmenTargetPhone, counterpartPhone, sourcePhoneNumber, pairedFromGreenApi, isOutgoingFromPhone, handled: result.handled, outcome: (result as any).outcome, reason: (result as any).reason, body: String(messageText).slice(0, 60) });
-    } catch (err) {
-      console.error('manus-wa Carmen handler error:', err);
-    }
-
-    return ok({
-      success: true,
-      direction: isOutgoingFromPhone ? 'outbound' : 'inbound',
-      contactType: clientId ? 'client' : leadId ? 'lead' : 'unknown',
-      contactId: clientId || leadId || null,
-      carmen: carmenOutcome,
-    });
-
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    console.error('manus-wa-webhook error:', msg);
-    return ok({ error: msg }, 500);
-  }
-});
