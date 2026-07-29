@@ -6,86 +6,71 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 };
 
+const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+});
+
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
     );
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    if (authError || !user) return jsonResponse({ error: 'Unauthorized' }, 401);
 
     const { data: tenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: user.id });
-    if (!tenantId) {
-      return new Response(JSON.stringify({ error: 'No tenant found' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    if (!tenantId) return jsonResponse({ error: 'No tenant found' }, 403);
 
-    // Optional: caller can specify a specific integration_id to use
     const url = new URL(req.url);
     const requestedIntegrationId = url.searchParams.get('integration_id') || null;
+    const rawAdAccountId = url.searchParams.get('ad_account_id')?.trim() || '';
+    const requestedAdAccountId = rawAdAccountId.replace(/^act_/i, '').replace(/\D/g, '');
 
-    // Use service role to bypass RLS for reliable token retrieval
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
+    const integrationFields = 'id, api_key, settings, shared_from_integration_id, user_id, connection_visibility, tenant_id';
     let integration: any = null;
 
     if (requestedIntegrationId) {
-      // Fetch the specific integration and verify the user has access
       const { data: specific } = await supabaseAdmin
         .from('tenant_integrations')
-        .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility, tenant_id')
+        .select(integrationFields)
         .eq('id', requestedIntegrationId)
         .eq('is_active', true)
         .maybeSingle();
 
       if (specific) {
-        const canAccess =
-          specific.user_id === user.id ||
-          specific.connection_visibility === 'org' ||
-          specific.user_id === null;
+        const sameTenant = specific.tenant_id === tenantId;
+        const directlyAccessible = specific.user_id === user.id || specific.connection_visibility === 'org' || specific.user_id === null;
+        let sharedPermission = false;
 
-        if (!canAccess && specific.connection_visibility === 'shared') {
-          const { data: perm } = await supabaseAdmin
+        if (specific.connection_visibility === 'shared') {
+          const { data: permission } = await supabaseAdmin
             .from('integration_user_permissions')
             .select('id')
             .eq('integration_id', requestedIntegrationId)
             .eq('user_id', user.id)
             .maybeSingle();
-          if (perm) integration = specific;
-        } else if (canAccess) {
-          integration = specific;
+          sharedPermission = !!permission;
         }
+
+        if (sameTenant && (directlyAccessible || sharedPermission)) integration = specific;
       }
 
-      if (!integration) {
-        return new Response(JSON.stringify({
-          error: 'Integration not found or access denied',
-          message: 'אין גישה לחיבור המבוקש',
-        }), {
-          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
+      if (!integration) return jsonResponse({ error: 'Integration not found or access denied', message: 'אין גישה לחיבור המבוקש' }, 403);
     } else {
-      // Auto-select: prefer the user's own connection, then org-visible, then shared
-      // 1. User's own connection
       const { data: ownIntegration } = await supabaseAdmin
         .from('tenant_integrations')
-        .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility')
+        .select(integrationFields)
         .eq('tenant_id', tenantId)
         .in('integration_type', ['facebook', 'facebook_lead_ads'])
         .eq('is_active', true)
@@ -94,13 +79,12 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
 
-      if (ownIntegration?.api_key) {
-        integration = ownIntegration;
-      } else {
-        // 2. Org-visible connections
+      integration = ownIntegration;
+
+      if (!integration?.api_key) {
         const { data: orgIntegration } = await supabaseAdmin
           .from('tenant_integrations')
-          .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility')
+          .select(integrationFields)
           .eq('tenant_id', tenantId)
           .in('integration_type', ['facebook', 'facebook_lead_ads'])
           .eq('is_active', true)
@@ -108,156 +92,127 @@ Deno.serve(async (req) => {
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+        integration = orgIntegration;
+      }
 
-        if (orgIntegration?.api_key) {
-          integration = orgIntegration;
-        } else {
-          // 3. Shared with this specific user
-          const { data: permissions } = await supabaseAdmin
-            .from('integration_user_permissions')
-            .select('integration_id')
-            .eq('user_id', user.id);
-
-          const sharedIds = (permissions || []).map((p: any) => p.integration_id);
-
-          if (sharedIds.length > 0) {
-            const { data: sharedIntegration } = await supabaseAdmin
-              .from('tenant_integrations')
-              .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility')
-              .eq('tenant_id', tenantId)
-              .in('integration_type', ['facebook', 'facebook_lead_ads'])
-              .eq('is_active', true)
-              .in('id', sharedIds)
-              .order('updated_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            if (sharedIntegration?.api_key) {
-              integration = sharedIntegration;
-            }
-          }
-
-          // 4. Fallback: any active integration for this tenant (legacy behaviour)
-          if (!integration) {
-            const { data: fallback } = await supabaseAdmin
-              .from('tenant_integrations')
-              .select('id, api_key, settings, shared_from_integration_id, user_id, connection_visibility')
-              .eq('tenant_id', tenantId)
-              .in('integration_type', ['facebook', 'facebook_lead_ads'])
-              .eq('is_active', true)
-              .order('updated_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            integration = fallback;
-          }
-        }
+      if (!integration?.api_key) {
+        const { data: fallback } = await supabaseAdmin
+          .from('tenant_integrations')
+          .select(integrationFields)
+          .eq('tenant_id', tenantId)
+          .in('integration_type', ['facebook', 'facebook_lead_ads'])
+          .eq('is_active', true)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        integration = fallback;
       }
     }
 
-    console.log('Facebook integration lookup:', {
-      tenantId,
-      userId: user.id,
-      requestedId: requestedIntegrationId,
-      found: !!integration,
-      hasToken: !!integration?.api_key,
-      visibility: integration?.connection_visibility,
-      sharedFrom: integration?.shared_from_integration_id,
-    });
-
-    // If this is a cross-tenant shared integration, fetch the source token
     if (integration?.shared_from_integration_id && !integration?.api_key) {
       const { data: sourceIntegration } = await supabaseAdmin
         .from('tenant_integrations')
         .select('api_key, settings')
         .eq('id', integration.shared_from_integration_id)
         .maybeSingle();
-
-      console.log('Shared source lookup:', { sourceId: integration.shared_from_integration_id, hasToken: !!sourceIntegration?.api_key });
-      if (sourceIntegration?.api_key) {
-        integration = { ...integration, api_key: sourceIntegration.api_key };
-      }
+      if (sourceIntegration?.api_key) integration = { ...integration, api_key: sourceIntegration.api_key };
     }
 
     if (!integration?.api_key) {
-      return new Response(JSON.stringify({
-        error: 'Facebook not configured',
-        message: 'יש להגדיר תחילה את האינטגרציה עם פייסבוק',
-        debug: { tenantId, foundIntegration: !!integration }
-      }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return jsonResponse({ error: 'Facebook not configured', message: 'יש להגדיר תחילה את האינטגרציה עם פייסבוק' }, 400);
     }
 
     const accessToken = integration.api_key;
-    const FIELDS = 'id,name,account_status,currency,amount_spent';
+    const fields = 'id,name,account_status,currency,amount_spent,business';
 
-    // Paginate a Graph edge, returning all rows. Never throws.
-    const fetchEdge = async (url: string): Promise<any[]> => {
-      const out: any[] = [];
-      let next: string | null = url;
+    // Fast path: validate exactly one account. This avoids enumerating every Business Manager account.
+    if (rawAdAccountId) {
+      if (!requestedAdAccountId) return jsonResponse({ error: 'Invalid ad account id', message: 'מזהה חשבון המודעות אינו תקין' }, 400);
+
+      const graphUrl = new URL(`https://graph.facebook.com/v21.0/act_${requestedAdAccountId}`);
+      graphUrl.searchParams.set('fields', fields);
+      graphUrl.searchParams.set('access_token', accessToken);
+
+      const graphResponse = await fetch(graphUrl);
+      const graphData: any = await graphResponse.json();
+
+      if (!graphResponse.ok || graphData.error) {
+        const message = graphData?.error?.message || 'Facebook account validation failed';
+        console.warn('Facebook direct account validation failed', { requestedAdAccountId, message });
+        return jsonResponse({ error: 'Ad account validation failed', message: 'לא ניתן לגשת לחשבון המודעות. בדוק את המזהה ואת הרשאות החיבור.', facebook_message: message }, graphResponse.status === 404 ? 404 : 400);
+      }
+
+      const business = graphData.business || null;
+      const account = {
+        id: graphData.id || `act_${requestedAdAccountId}`,
+        name: graphData.name || `act_${requestedAdAccountId}`,
+        account_status: graphData.account_status,
+        currency: graphData.currency || 'ILS',
+        amount_spent: graphData.amount_spent,
+        business_id: business?.id || null,
+        business_name: business?.name || null,
+      };
+
+      return jsonResponse({
+        ad_account: account,
+        ad_accounts: [account],
+        integration_id: integration.id,
+        integration_visibility: integration.connection_visibility || 'private',
+      });
+    }
+
+    // Compatibility fallback for older callers that still expect enumeration.
+    const fetchEdge = async (edgeUrl: string): Promise<any[]> => {
+      const rows: any[] = [];
+      let next: string | null = edgeUrl;
       try {
         while (next) {
-          const r = await fetch(next);
-          if (!(r.headers.get('content-type') || '').includes('application/json')) break;
-          const d: any = await r.json();
-          if (d.error) { console.warn('FB edge error:', d.error?.message); break; }
-          if (Array.isArray(d.data)) out.push(...d.data);
-          next = d.paging?.next || null;
+          const response = await fetch(next);
+          const data: any = await response.json();
+          if (!response.ok || data.error) break;
+          if (Array.isArray(data.data)) rows.push(...data.data);
+          next = data.paging?.next || null;
         }
-      } catch (e: any) { console.warn('FB edge fetch failed:', e?.message); }
-      return out;
+      } catch (error: any) {
+        console.warn('Facebook edge fetch failed', error?.message);
+      }
+      return rows;
     };
 
-    // 1) Ad accounts the token user OWNS directly.
-    const owned = await fetchEdge(`https://graph.facebook.com/v21.0/me/adaccounts?fields=${FIELDS}&limit=100&access_token=${accessToken}`);
-
-    // 2) Agency case: accounts shared via Business Manager.
+    const owned = await fetchEdge(`https://graph.facebook.com/v21.0/me/adaccounts?fields=${fields}&limit=100&access_token=${accessToken}`);
     const businesses = await fetchEdge(`https://graph.facebook.com/v21.0/me/businesses?fields=id,name&limit=100&access_token=${accessToken}`);
-    const bmAccounts: any[] = [];
-    for (const biz of businesses) {
-      const [clientAcc, ownedAcc] = await Promise.all([
-        fetchEdge(`https://graph.facebook.com/v21.0/${biz.id}/client_ad_accounts?fields=${FIELDS}&limit=200&access_token=${accessToken}`),
-        fetchEdge(`https://graph.facebook.com/v21.0/${biz.id}/owned_ad_accounts?fields=${FIELDS}&limit=200&access_token=${accessToken}`),
+    const businessAccounts: any[] = [];
+
+    for (const business of businesses) {
+      const [clientAccounts, ownedAccounts] = await Promise.all([
+        fetchEdge(`https://graph.facebook.com/v21.0/${business.id}/client_ad_accounts?fields=${fields}&limit=200&access_token=${accessToken}`),
+        fetchEdge(`https://graph.facebook.com/v21.0/${business.id}/owned_ad_accounts?fields=${fields}&limit=200&access_token=${accessToken}`),
       ]);
-      for (const a of [...clientAcc, ...ownedAcc]) bmAccounts.push({ ...a, business_id: biz.id, business_name: biz.name });
+      for (const account of [...clientAccounts, ...ownedAccounts]) {
+        businessAccounts.push({ ...account, business_id: business.id, business_name: business.name });
+      }
     }
 
-    // Merge + dedupe by account id
     const byId = new Map<string, any>();
-    for (const a of [...owned, ...bmAccounts]) {
-      if (!a?.id) continue;
-      if (!byId.has(a.id)) byId.set(a.id, a);
+    for (const account of [...owned, ...businessAccounts]) {
+      if (account?.id && !byId.has(account.id)) byId.set(account.id, account);
     }
-    const allAdAccounts = [...byId.values()];
 
-    console.log('FB ad-account discovery:', {
-      owned: owned.length,
-      businesses: businesses.length,
-      viaBusinessManager: bmAccounts.length,
-      total: allAdAccounts.length,
-      integrationId: integration.id,
-    });
-
-    return new Response(JSON.stringify({
-      ad_accounts: allAdAccounts.map(acc => ({
-        id: acc.id,
-        name: acc.name,
-        account_status: acc.account_status,
-        currency: acc.currency,
-        amount_spent: acc.amount_spent,
-        business_id: acc.business_id || null,
-        business_name: acc.business_name || null,
+    return jsonResponse({
+      ad_accounts: [...byId.values()].map((account) => ({
+        id: account.id,
+        name: account.name,
+        account_status: account.account_status,
+        currency: account.currency,
+        amount_spent: account.amount_spent,
+        business_id: account.business_id || account.business?.id || null,
+        business_name: account.business_name || account.business?.name || null,
       })),
       integration_id: integration.id,
       integration_visibility: integration.connection_visibility || 'private',
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
-
   } catch (error: any) {
     console.error('Error in get-facebook-ad-accounts:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return jsonResponse({ error: error.message }, 500);
   }
 });
