@@ -243,52 +243,88 @@ ${JSON.stringify(context)}
 ${JSON.stringify(draft)}
 
 החזירי את אותה סכמת JSON לאחר עריכה מהותית. אורך גוף הכתבה: 850–1400 מילים.`;
-        const generated = await requestArticleJson(
+        let generated = await requestArticleJson(
           settings.openai_api_key,
           editorSystem,
           editorUser,
           0.35,
         );
-        const title = String(generated.title ?? "").trim();
-        const excerpt = String(generated.excerpt ?? "").trim();
-        const content = Array.isArray(generated.content)
-          ? generated.content.map((part) => String(part).trim()).filter(Boolean)
-          : [];
-        const faq = Array.isArray(generated.faq)
-          ? generated.faq.slice(0, 6).map((item) => ({
-            question: String((item as Record<string, unknown>)?.question ?? "").trim(),
-            answer: String((item as Record<string, unknown>)?.answer ?? "").trim(),
-          })).filter((item) => item.question && item.answer)
-          : [];
-        const rawInfographic = generated.infographic as Record<string, unknown> | null;
-        const infographicItems = Array.isArray(rawInfographic?.items)
-          ? rawInfographic.items.slice(0, 5).map((item) => ({
-            value: String((item as Record<string, unknown>)?.value ?? "").trim(),
-            label: String((item as Record<string, unknown>)?.label ?? "").trim(),
-            description: String((item as Record<string, unknown>)?.description ?? "").trim(),
-          })).filter((item) => item.label && item.description)
-          : [];
-        const infographic = {
-          title: String(rawInfographic?.title ?? "").trim(),
-          items: infographicItems,
-        };
-        const articleBody = content.join(" ");
-        const wordCount = articleBody.split(/\s+/).filter(Boolean).length;
-        const headingCount = content.filter((part) => part.startsWith("## ")).length;
-        const hasList = content.some((part) => part.startsWith("LIST: "));
-        const hasTip = content.some((part) => part.startsWith("TIP: "));
-        const keywordCount = countPhrase(articleBody, String(article.primary_keyword ?? ""));
-        const uniqueParts = new Set(content.map(normalizeText));
         const boilerplate = ["בעולם המודרני", "בעידן הדיגיטלי", "אין ספק ש", "במאמר זה", "לסיכום, ניתן לומר"];
-        const containsBoilerplate = boilerplate.some((phrase) => normalizeText(articleBody).includes(normalizeText(phrase)));
-        if (
-          !title || !excerpt || content.length < 10 || wordCount < 700 || headingCount < 4 ||
-          !hasList || !hasTip || faq.length < 4 || infographicItems.length < 3 ||
-          uniqueParts.size !== content.length || containsBoilerplate ||
-          (String(article.primary_keyword ?? "").trim() && keywordCount !== 1)
-        ) {
-          throw new Error("כרמן לא החזירה מאמר מלא ותקין");
+        const inspectArticle = (candidate: GeneratedArticle) => {
+          const title = String(candidate.title ?? "").trim();
+          const excerpt = String(candidate.excerpt ?? "").trim();
+          const content = Array.isArray(candidate.content)
+            ? candidate.content.map((part) => String(part).trim()).filter(Boolean)
+            : [];
+          const faq = Array.isArray(candidate.faq)
+            ? candidate.faq.slice(0, 6).map((item) => ({
+              question: String((item as Record<string, unknown>)?.question ?? "").trim(),
+              answer: String((item as Record<string, unknown>)?.answer ?? "").trim(),
+            })).filter((item) => item.question && item.answer)
+            : [];
+          const rawInfographic = candidate.infographic as Record<string, unknown> | null;
+          const infographicItems = Array.isArray(rawInfographic?.items)
+            ? rawInfographic.items.slice(0, 5).map((item) => ({
+              value: String((item as Record<string, unknown>)?.value ?? "").trim(),
+              label: String((item as Record<string, unknown>)?.label ?? "").trim(),
+              description: String((item as Record<string, unknown>)?.description ?? "").trim(),
+            })).filter((item) => item.label && item.description)
+            : [];
+          const contentBody = content.join(" ");
+          const wordCount = contentBody.split(/\s+/).filter(Boolean).length;
+          const headingCount = content.filter((part) => part.startsWith("## ")).length;
+          const keyword = String(article.primary_keyword ?? "").trim();
+          const failures = [
+            ...(!title ? ["title_missing"] : []),
+            ...(!excerpt ? ["excerpt_missing"] : []),
+            ...(content.length < 10 ? [`content_parts:${content.length}`] : []),
+            ...(wordCount < 700 ? [`word_count:${wordCount}`] : []),
+            ...(headingCount < 4 ? [`heading_count:${headingCount}`] : []),
+            ...(!content.some((part) => part.startsWith("LIST: ")) ? ["list_missing"] : []),
+            ...(!content.some((part) => part.startsWith("TIP: ")) ? ["tip_missing"] : []),
+            ...(faq.length < 4 ? [`faq_count:${faq.length}`] : []),
+            ...(infographicItems.length < 3 ? [`infographic_items:${infographicItems.length}`] : []),
+            ...(new Set(content.map(normalizeText)).size !== content.length ? ["duplicate_content_parts"] : []),
+            ...(boilerplate.some((phrase) => normalizeText(contentBody).includes(normalizeText(phrase))) ? ["boilerplate"] : []),
+            ...(keyword && countPhrase(contentBody, keyword) !== 1
+              ? [`keyword_count:${countPhrase(contentBody, keyword)}`]
+              : []),
+          ];
+          return {
+            title,
+            excerpt,
+            content,
+            faq,
+            infographic: {
+              title: String(rawInfographic?.title ?? "").trim(),
+              items: infographicItems,
+            },
+            failures,
+          };
+        };
+
+        let inspected = inspectArticle(generated);
+        if (inspected.failures.length) {
+          generated = await requestArticleJson(
+            settings.openai_api_key,
+            editorSystem,
+            `תקני רק את הליקויים הבאים בלי למחוק חלקים תקינים: ${inspected.failures.join(", ")}.
+הביטוי שחייב להופיע פעם אחת בדיוק בגוף הוא: ${String(article.primary_keyword ?? "")}.
+החזירי מאמר מלא, לא תיקון חלקי, באותה סכמת JSON.
+
+הקשר:
+${JSON.stringify(context)}
+
+הגרסה לתיקון:
+${JSON.stringify(generated)}`,
+            0.2,
+          );
+          inspected = inspectArticle(generated);
         }
+        if (inspected.failures.length) {
+          throw new Error(`כרמן לא החזירה מאמר מלא ותקין: ${inspected.failures.join(", ")}`);
+        }
+        const { title, excerpt, content, faq, infographic } = inspected;
         const heroPrompt = String(generated.hero_image_prompt ?? "").trim();
         const inlinePrompt = String(generated.inline_image_prompt ?? "").trim();
         const [heroImage, inlineImage] = await Promise.all([
