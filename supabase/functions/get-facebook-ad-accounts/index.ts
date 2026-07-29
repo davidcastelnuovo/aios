@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
 const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -28,9 +28,21 @@ Deno.serve(async (req) => {
     if (!tenantId) return jsonResponse({ error: 'No tenant found' }, 403);
 
     const url = new URL(req.url);
-    const requestedIntegrationId = url.searchParams.get('integration_id') || null;
-    const rawAdAccountId = url.searchParams.get('ad_account_id')?.trim() || '';
-    const requestedAdAccountId = rawAdAccountId.replace(/^act_/i, '').replace(/\D/g, '');
+    const requestBody = req.method === 'POST'
+      ? await req.json().catch(() => ({})) as Record<string, unknown>
+      : {};
+    const requestedIntegrationId = (
+      typeof requestBody.integration_id === 'string'
+        ? requestBody.integration_id
+        : url.searchParams.get('integration_id')
+    )?.trim() || null;
+    const rawAdAccountId = (
+      typeof requestBody.ad_account_id === 'string'
+        ? requestBody.ad_account_id
+        : url.searchParams.get('ad_account_id')
+    )?.trim() || '';
+    const validAdAccountId = /^(?:act_)?\d+$/i.test(rawAdAccountId);
+    const requestedAdAccountId = validAdAccountId ? rawAdAccountId.replace(/^act_/i, '') : '';
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -45,6 +57,7 @@ Deno.serve(async (req) => {
         .from('tenant_integrations')
         .select(integrationFields)
         .eq('id', requestedIntegrationId)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
         .eq('is_active', true)
         .maybeSingle();
 
@@ -127,7 +140,10 @@ Deno.serve(async (req) => {
 
     // Fast path: validate exactly one account. This avoids enumerating every Business Manager account.
     if (rawAdAccountId) {
-      if (!requestedAdAccountId) return jsonResponse({ error: 'Invalid ad account id', message: 'מזהה חשבון המודעות אינו תקין' }, 400);
+      if (!requestedAdAccountId) return jsonResponse({
+        error: 'Invalid ad account id',
+        message: 'מזהה חשבון המודעות אינו תקין',
+      }, 400);
 
       const graphUrl = new URL(`https://graph.facebook.com/v21.0/act_${requestedAdAccountId}`);
       graphUrl.searchParams.set('fields', fields);
@@ -137,9 +153,14 @@ Deno.serve(async (req) => {
       const graphData: any = await graphResponse.json();
 
       if (!graphResponse.ok || graphData.error) {
-        const message = graphData?.error?.message || 'Facebook account validation failed';
-        console.warn('Facebook direct account validation failed', { requestedAdAccountId, message });
-        return jsonResponse({ error: 'Ad account validation failed', message: 'לא ניתן לגשת לחשבון המודעות. בדוק את המזהה ואת הרשאות החיבור.', facebook_message: message }, graphResponse.status === 404 ? 404 : 400);
+        console.warn('Facebook direct account validation failed', {
+          status: graphResponse.status,
+          code: graphData?.error?.code ?? null,
+        });
+        return jsonResponse({
+          error: 'Ad account validation failed',
+          message: 'לא ניתן לגשת לחשבון המודעות. בדוק את המזהה ואת הרשאות החיבור.',
+        }, graphResponse.status === 404 ? 404 : 400);
       }
 
       const business = graphData.business || null;
@@ -156,6 +177,7 @@ Deno.serve(async (req) => {
       return jsonResponse({
         ad_account: account,
         ad_accounts: [account],
+        lookup_mode: 'direct',
         integration_id: integration.id,
         integration_visibility: integration.connection_visibility || 'private',
       });
@@ -199,6 +221,7 @@ Deno.serve(async (req) => {
     }
 
     return jsonResponse({
+      ad_account: null,
       ad_accounts: [...byId.values()].map((account) => ({
         id: account.id,
         name: account.name,
@@ -208,11 +231,15 @@ Deno.serve(async (req) => {
         business_id: account.business_id || account.business?.id || null,
         business_name: account.business_name || account.business?.name || null,
       })),
+      lookup_mode: 'fallback',
       integration_id: integration.id,
       integration_visibility: integration.connection_visibility || 'private',
     });
   } catch (error: any) {
-    console.error('Error in get-facebook-ad-accounts:', error);
-    return jsonResponse({ error: error.message }, 500);
+    console.error('Error in get-facebook-ad-accounts', {
+      name: error?.name || 'Error',
+      message: error?.message || 'Unknown error',
+    });
+    return jsonResponse({ error: 'Internal server error', message: 'אירעה שגיאה באימות חשבון המודעות' }, 500);
   }
 });
