@@ -482,13 +482,32 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     if (!ids.length) return;
     setGeneratingArticleIds(ids);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-publishing-articles", { body: { article_ids: ids } });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      // A rich article performs two LLM passes and creates two images. Sending
+      // ten articles through one Edge invocation makes the whole batch depend
+      // on a single request timeout. Keep each invocation independently
+      // retryable and limit concurrency so image generation is not flooded.
+      const results: Array<{ generated: number; failed: number; error?: string }> = [];
+      for (let index = 0; index < ids.length; index += 2) {
+        const pair = ids.slice(index, index + 2);
+        const pairResults = await Promise.all(pair.map(async (articleId) => {
+          const { data, error } = await supabase.functions.invoke("generate-publishing-articles", {
+            body: { article_ids: [articleId] },
+          });
+          if (error) return { generated: 0, failed: 1, error: error.message };
+          if (data?.error) return { generated: 0, failed: 1, error: String(data.error) };
+          return {
+            generated: Number(data?.generated ?? 0),
+            failed: Number(data?.failed ?? 0),
+            error: data?.results?.[0]?.error ? String(data.results[0].error) : undefined,
+          };
+        }));
+        results.push(...pairResults);
+      }
       await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
-      const generated = Number(data?.generated ?? 0);
-      const failed = Number(data?.failed ?? 0);
-      if (failed) toast.warning(`${generated} מאמרים נכתבו, ${failed} נכשלו`);
+      const generated = results.reduce((total, result) => total + result.generated, 0);
+      const failed = results.reduce((total, result) => total + result.failed, 0);
+      const firstError = results.find((result) => result.error)?.error;
+      if (failed) toast.warning(`${generated} מאמרים נכתבו, ${failed} נכשלו${firstError ? ` · ${firstError}` : ""}`);
       else toast.success(generated === 1 ? "כרמן כתבה את המאמר והוא ממתין לבדיקה" : `כרמן כתבה ${generated} מאמרים והם ממתינים לבדיקה`);
     } catch (error: unknown) {
       toast.error(errorMessage(error, "כתיבת המאמרים נכשלה"));
