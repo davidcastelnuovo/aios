@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,9 +8,9 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -20,15 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, CheckCircle2, Facebook, Globe, Loader2, Lock, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
-import { Loader2, Facebook, AlertCircle, Lock, Globe, Users } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface FacebookTableDialogProps {
   open: boolean;
@@ -39,8 +38,10 @@ interface FacebookTableDialogProps {
 interface AdAccount {
   id: string;
   name: string;
-  account_status: number;
+  account_status?: number;
   currency: string;
+  business_id?: string | null;
+  business_name?: string | null;
 }
 
 const dateRangeOptions = [
@@ -53,179 +54,169 @@ const dateRangeOptions = [
   { value: "this_month", label: "החודש הנוכחי" },
 ];
 
-const visibilityIcon = (v: string | null) => {
-  if (v === "org") return <Globe className="h-3 w-3 text-blue-500" />;
-  if (v === "shared") return <Users className="h-3 w-3 text-violet-500" />;
+const visibilityIcon = (value: string | null) => {
+  if (value === "org") return <Globe className="h-3 w-3 text-blue-500" />;
+  if (value === "shared") return <Users className="h-3 w-3 text-violet-500" />;
   return <Lock className="h-3 w-3 text-muted-foreground" />;
 };
 
-const visibilityLabel = (v: string | null) => {
-  if (v === "org") return "ארגוני";
-  if (v === "shared") return "משותף";
-  return "פרטי";
+const normalizeAdAccountId = (value: string) => {
+  const trimmed = value.trim();
+  return /^(?:act_)?\d+$/i.test(trimmed) ? trimmed.replace(/^act_/i, "") : "";
 };
+
+const accountStatusLabel = (status?: number) => status === 1 ? "פעיל" : status ? `סטטוס ${status}` : "סטטוס לא זמין";
 
 export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: FacebookTableDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
-  const { userId } = useCurrentUser();
 
   const [tableName, setTableName] = useState("");
-  const [selectedAdAccount, setSelectedAdAccount] = useState("");
+  const [adAccountInput, setAdAccountInput] = useState("");
+  const [validatedAccount, setValidatedAccount] = useState<AdAccount | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationError, setValidationError] = useState("");
   const [dateRange, setDateRange] = useState("last_30_days");
   const [category, setCategory] = useState("");
-  const [adAccountSearch, setAdAccountSearch] = useState("");
-  const [agencyId, setAgencyId] = useState<string>("");
-  const [clientId, setClientId] = useState<string>("");
+  const [agencyId, setAgencyId] = useState("");
+  const [clientId, setClientId] = useState("");
   const [clientSearch, setClientSearch] = useState("");
-  const [selectedIntegrationId, setSelectedIntegrationId] = useState<string>("");
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState("");
 
-  // Fetch all Facebook integrations accessible to this user (own + shared)
   const { data: fbIntegrations = [], isLoading: loadingIntegrations } = useUserIntegrations(
     tenantId,
-    'facebook_lead_ads',
-    { enabled: open }
+    "facebook_lead_ads",
+    { enabled: open },
   );
+  const { data: agencies = [] } = useTableDialogAgencies({ enabled: open });
+  const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
+  const clients = assignedClientIds ? rawClients.filter((client) => assignedClientIds.includes(client.id)) : rawClients;
 
-  // Auto-select first integration (prefer own)
   useEffect(() => {
     if (!open) return;
     if (fbIntegrations.length === 0) {
       setSelectedIntegrationId("");
       return;
     }
-    if (!selectedIntegrationId || !fbIntegrations.some((i: any) => i.id === selectedIntegrationId)) {
-      const ownFirst = (fbIntegrations as any[]).find((i) => i._isOwn) || fbIntegrations[0];
-      setSelectedIntegrationId((ownFirst as any).id);
+    if (!selectedIntegrationId || !fbIntegrations.some((integration: any) => integration.id === selectedIntegrationId)) {
+      const preferred = (fbIntegrations as any[]).find((integration) => integration._isOwn) || fbIntegrations[0];
+      setSelectedIntegrationId((preferred as any).id);
     }
-  }, [fbIntegrations, open]);
+  }, [fbIntegrations, open, selectedIntegrationId]);
 
-  // Fetch agencies
-  const { data: agencies = [] } = useTableDialogAgencies({ enabled: open });
-
-  // Fetch clients based on selected agency
-  const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
-
-  const clients = assignedClientIds
-    ? rawClients.filter(c => assignedClientIds.includes(c.id))
-    : rawClients;
-
-  // Reset client when agency changes
   useEffect(() => {
     setClientId("");
     setClientSearch("");
   }, [agencyId]);
 
-  // Reset ad account when integration changes
   useEffect(() => {
-    setSelectedAdAccount("");
-    setAdAccountSearch("");
+    setValidatedAccount(null);
+    setValidationError("");
   }, [selectedIntegrationId]);
 
-  // Fetch ad accounts for the selected integration
-  const { data: adAccountsData, isLoading: loadingAdAccounts, error: adAccountsError } = useQuery({
-    queryKey: ['facebook-ad-accounts', selectedIntegrationId],
-    queryFn: async () => {
-      const params = selectedIntegrationId ? `?integration_id=${selectedIntegrationId}` : '';
-      const response = await supabase.functions.invoke(`get-facebook-ad-accounts${params}`, {
-        method: 'GET',
+  const validateAccount = async () => {
+    const normalizedId = normalizeAdAccountId(adAccountInput);
+    if (!normalizedId) {
+      setValidationError("יש להזין מזהה חשבון מודעות תקין");
+      setValidatedAccount(null);
+      return;
+    }
+    if (!selectedIntegrationId) {
+      setValidationError("יש לבחור חיבור Facebook");
+      return;
+    }
+
+    setIsValidating(true);
+    setValidationError("");
+    setValidatedAccount(null);
+
+    try {
+      const response = await supabase.functions.invoke("get-facebook-ad-accounts", {
+        method: "POST",
+        body: {
+          integration_id: selectedIntegrationId,
+          ad_account_id: normalizedId,
+        },
       });
       if (response.error) throw response.error;
-      return response.data;
-    },
-    enabled: open && !!selectedIntegrationId,
-  });
-
-  const adAccounts: AdAccount[] = adAccountsData?.ad_accounts || [];
+      if (response.data?.error) throw new Error(response.data.message || response.data.error);
+      const account = response.data?.ad_account || response.data?.ad_accounts?.[0];
+      if (!account) throw new Error("לא התקבלו פרטי חשבון");
+      setValidatedAccount(account);
+      setAdAccountInput(account.id || `act_${normalizedId}`);
+      toast.success("חשבון המודעות אומת בהצלחה");
+    } catch (error: any) {
+      setValidationError(error?.message || "לא ניתן לאמת את חשבון המודעות");
+    } finally {
+      setIsValidating(false);
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const slug = tableName.toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9\u0590-\u05FF-]/g, '')
-        + '-' + Date.now().toString(36);
-
-      const selectedAccount = adAccounts.find(acc => acc.id === selectedAdAccount);
-
-      const response = await supabase.functions.invoke('crm-tables', {
-        method: 'POST',
+      if (!validatedAccount) throw new Error("יש לאמת את חשבון המודעות");
+      const slug = `${tableName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9\u0590-\u05FF-]/g, "")}-${Date.now().toString(36)}`;
+      const response = await supabase.functions.invoke("crm-tables", {
+        method: "POST",
         body: {
           name: tableName,
           slug,
-          category: category || 'Facebook Insights',
-          integration_type: 'facebook_insights',
+          category: category || "Facebook Insights",
+          integration_type: "facebook_insights",
           integration_settings: {
-            ad_account_id: selectedAdAccount,
-            ad_account_name: selectedAccount?.name || '',
-            currency: selectedAccount?.currency || 'ILS',
+            ad_account_id: validatedAccount.id,
+            ad_account_name: validatedAccount.name,
+            currency: validatedAccount.currency || "ILS",
             date_range: dateRange,
-            sync_frequency: 'daily',
-            // Store the integration_id so cron-sync uses the correct token
-            integration_id: selectedIntegrationId || null,
+            sync_frequency: "daily",
+            integration_id: selectedIntegrationId,
           },
           agency_id: agencyId || null,
           client_id: clientId || null,
         },
       });
-
       if (response.error) throw response.error;
       return response.data;
     },
     onSuccess: async (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      toast.success('טבלת Facebook Insights נוצרה בהצלחה');
-
-      // Trigger initial sync
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      toast.success("טבלת Facebook Insights נוצרה בהצלחה");
       try {
-        toast.info('מסנכרן נתונים מפייסבוק...');
-        await supabase.functions.invoke('sync-facebook-insights', {
-          method: 'POST',
+        await supabase.functions.invoke("sync-facebook-insights", {
+          method: "POST",
           body: { table_id: data.id },
         });
-        toast.success('הנתונים סונכרנו בהצלחה');
-      } catch (err) {
-        console.error('Initial sync failed:', err);
-        toast.error('הטבלה נוצרה אך הסנכרון נכשל - נסה לסנכרן ידנית');
+        toast.success("הנתונים סונכרנו בהצלחה");
+      } catch (error) {
+        console.error("Initial sync failed", error);
+        toast.error("הטבלה נוצרה אך הסנכרון הראשוני נכשל");
       }
-
       handleClose();
       navigate(buildPath(`/table/${data.slug}`));
     },
-    onError: (error: any) => {
-      toast.error('שגיאה ביצירת הטבלה: ' + error.message);
-    },
+    onError: (error: any) => toast.error(`שגיאה ביצירת הטבלה: ${error.message}`),
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tableName.trim()) {
-      toast.error('יש להזין שם לטבלה');
-      return;
-    }
-    if (!selectedAdAccount) {
-      toast.error('יש לבחור חשבון מודעות');
-      return;
-    }
-    if (assignedClientIds && !clientId) {
-      toast.error('יש לבחור לקוח');
-      return;
-    }
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!tableName.trim()) return toast.error("יש להזין שם לטבלה");
+    if (!validatedAccount) return toast.error("יש לאמת את חשבון המודעות");
+    if (assignedClientIds && !clientId) return toast.error("יש לבחור לקוח");
     createMutation.mutate();
   };
 
   const handleClose = () => {
     setTableName("");
-    setSelectedAdAccount("");
+    setAdAccountInput("");
+    setValidatedAccount(null);
+    setValidationError("");
     setDateRange("last_30_days");
     setCategory("");
-    setAdAccountSearch("");
     setAgencyId("");
     setClientId("");
+    setClientSearch("");
     setSelectedIntegrationId("");
     onOpenChange(false);
   };
@@ -234,229 +225,131 @@ export function FacebookTableDialog({ open, onOpenChange, assignedClientIds }: F
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent dir="rtl" className="sm:max-w-[500px]">
+      <DialogContent dir="rtl" className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Facebook className="h-5 w-5 text-blue-600" />
             יצירת טבלת Facebook Insights
           </DialogTitle>
-          <DialogDescription>
-            צור טבלה שתסנכרן אוטומטית נתוני קמפיינים מפייסבוק
-          </DialogDescription>
+          <DialogDescription>הזן מזהה חשבון מודעות, אמת אותו וצור דוח בלי לטעון את כל החשבונות.</DialogDescription>
         </DialogHeader>
 
         {loadingIntegrations ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
+          <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
         ) : !isFacebookConfigured ? (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              האינטגרציה עם פייסבוק לא מוגדרת. יש להגדיר תחילה את החיבור בדף{" "}
-              <Button
-                variant="link"
-                className="p-0 h-auto"
-                onClick={() => {
-                  handleClose();
-                  navigate(buildPath('/integrations/facebook'));
-                }}
-              >
+              האינטגרציה עם פייסבוק לא מוגדרת. עבור ל
+              <Button variant="link" className="h-auto p-0" onClick={() => { handleClose(); navigate(buildPath("/integrations/facebook")); }}>
                 הגדרות פייסבוק
               </Button>
             </AlertDescription>
           </Alert>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-
-            {/* Connection selector — only shown when more than one connection is available */}
             {fbIntegrations.length > 1 && (
               <div className="space-y-2">
                 <Label>חיבור Facebook לשימוש</Label>
                 <Select value={selectedIntegrationId} onValueChange={setSelectedIntegrationId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="בחר חיבור" />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="בחר חיבור" /></SelectTrigger>
                   <SelectContent>
-                    {(fbIntegrations as any[]).map((intg) => {
-                      const settings = intg.settings as any;
-                      const pageName = settings?.page_name || 'Facebook';
-                      const visibility = intg.connection_visibility || (intg._isOwn ? 'private' : null);
+                    {(fbIntegrations as any[]).map((integration) => {
+                      const settings = integration.settings as any;
+                      const visibility = integration.connection_visibility || (integration._isOwn ? "private" : null);
                       return (
-                        <SelectItem key={intg.id} value={intg.id}>
+                        <SelectItem key={integration.id} value={integration.id}>
                           <div className="flex items-center gap-2">
                             {visibilityIcon(visibility)}
-                            <span>{pageName}</span>
-                            {intg._isOwn && (
-                              <Badge variant="secondary" className="text-xs py-0">שלי</Badge>
-                            )}
-                            {intg._sharedByName && (
-                              <Badge variant="outline" className="text-xs py-0">
-                                של {intg._sharedByName}
-                              </Badge>
-                            )}
-                            <span className="text-xs text-muted-foreground">
-                              ({visibilityLabel(visibility)})
-                            </span>
+                            <span>{settings?.page_name || "Facebook"}</span>
+                            {integration._isOwn && <Badge variant="secondary" className="py-0 text-xs">שלי</Badge>}
                           </div>
                         </SelectItem>
                       );
                     })}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  חשבונות המודעות שיוצגו תלויים בחיבור שנבחר
-                </p>
               </div>
             )}
 
             <div className="space-y-2">
               <Label htmlFor="table-name">שם הטבלה</Label>
-              <Input
-                id="table-name"
-                value={tableName}
-                onChange={(e) => setTableName(e.target.value)}
-                placeholder="למשל: ניתוח קמפיינים דצמבר"
-                autoFocus
-              />
+              <Input id="table-name" value={tableName} onChange={(event) => setTableName(event.target.value)} placeholder="למשל: דוח בילבי Facebook" autoFocus />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="ad-account">חשבון מודעות</Label>
-              {loadingAdAccounts ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  טוען חשבונות מודעות...
-                </div>
-              ) : adAccountsError ? (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    שגיאה בטעינת חשבונות מודעות: {(adAccountsError as any)?.message}
-                  </AlertDescription>
-                </Alert>
-              ) : adAccounts.length === 0 ? (
+              <Label htmlFor="ad-account-id">מזהה חשבון מודעות</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="ad-account-id"
+                  dir="ltr"
+                  value={adAccountInput}
+                  onChange={(event) => { setAdAccountInput(event.target.value); setValidatedAccount(null); setValidationError(""); }}
+                  placeholder="act_123456789 או 123456789"
+                />
+                <Button type="button" variant="outline" onClick={validateAccount} disabled={isValidating || !selectedIntegrationId}>
+                  {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "בדוק חשבון"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">ניתן להדביק את המזהה עם או בלי התחילית act_.</p>
+              {validationError && <Alert variant="destructive"><AlertDescription>{validationError}</AlertDescription></Alert>}
+              {validatedAccount && (
                 <Alert>
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
                   <AlertDescription>
-                    לא נמצאו חשבונות מודעות. ודא שהטוקן מכיל הרשאת ads_read
+                    <div className="font-medium">{validatedAccount.name}</div>
+                    <div className="text-xs text-muted-foreground" dir="ltr">{validatedAccount.id} · {validatedAccount.currency}</div>
+                    <div className="text-xs text-muted-foreground">{accountStatusLabel(validatedAccount.account_status)}</div>
+                    {validatedAccount.business_name && <div className="text-xs text-muted-foreground">Business Manager: {validatedAccount.business_name}</div>}
                   </AlertDescription>
                 </Alert>
-              ) : (
-                <>
-                  <Input
-                    placeholder="חפש חשבון מודעות..."
-                    value={adAccountSearch}
-                    onChange={(e) => setAdAccountSearch(e.target.value)}
-                    className="mb-2"
-                  />
-                  <Select value={selectedAdAccount} onValueChange={setSelectedAdAccount}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחר חשבון מודעות" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {adAccounts
-                        .filter((account) =>
-                          account.name?.toLowerCase().includes(adAccountSearch.toLowerCase()) ||
-                          account.id?.includes(adAccountSearch)
-                        )
-                        .map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.name} ({account.currency})
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="date-range">טווח תאריכים לסנכרון</Label>
+              <Label>טווח תאריכים לסנכרון</Label>
               <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {dateRangeOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{dateRangeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="category">קטגוריה (אופציונלי)</Label>
-              <Input
-                id="category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Facebook Insights"
-              />
+              <Label>קטגוריה (אופציונלי)</Label>
+              <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Facebook Insights" />
             </div>
 
             <div className="space-y-2">
               <Label>שיוך לסוכנות (אופציונלי)</Label>
-              <Select value={agencyId || "__none__"} onValueChange={(v) => setAgencyId(v === "__none__" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
-                </SelectTrigger>
+              <Select value={agencyId || "__none__"} onValueChange={(value) => setAgencyId(value === "__none__" ? "" : value)}>
+                <SelectTrigger><SelectValue placeholder="ללא שיוך" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">ללא שיוך - כל הסוכנויות</SelectItem>
-                  {agencies.map((agency) => (
-                    <SelectItem key={agency.id} value={agency.id}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="__none__">ללא שיוך</SelectItem>
+                  {agencies.map((agency) => <SelectItem key={agency.id} value={agency.id}>{agency.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
 
             {agencyId && (
               <div className="space-y-2">
-                <Label>{assignedClientIds ? 'שיוך ללקוח' : 'שיוך ללקוח (אופציונלי)'}</Label>
-                <Input
-                  placeholder="חפש לקוח..."
-                  value={clientSearch}
-                  onChange={(e) => setClientSearch(e.target.value)}
-                  className="mb-2"
-                />
-                <Select value={clientId || "__none__"} onValueChange={(v) => setClientId(v === "__none__" ? "" : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
-                  </SelectTrigger>
+                <Label>{assignedClientIds ? "שיוך ללקוח" : "שיוך ללקוח (אופציונלי)"}</Label>
+                <Input value={clientSearch} onChange={(event) => setClientSearch(event.target.value)} placeholder="חפש לקוח..." />
+                <Select value={clientId || "__none__"} onValueChange={(value) => setClientId(value === "__none__" ? "" : value)}>
+                  <SelectTrigger><SelectValue placeholder="ללא שיוך" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">ללא שיוך - כל הלקוחות</SelectItem>
-                    {clients
-                      .filter((client) =>
-                        client.name?.toLowerCase().includes(clientSearch.toLowerCase())
-                      )
-                      .map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
+                    <SelectItem value="__none__">ללא שיוך</SelectItem>
+                    {clients.filter((client) => client.name?.toLowerCase().includes(clientSearch.toLowerCase())).map((client) => (
+                      <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose}>
-                ביטול
-              </Button>
-              <Button
-                type="submit"
-                disabled={createMutation.isPending || !selectedAdAccount}
-              >
-                {createMutation.isPending ? (
-                  <>
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    יוצר...
-                  </>
-                ) : (
-                  'צור טבלה'
-                )}
+              <Button type="button" variant="outline" onClick={handleClose}>ביטול</Button>
+              <Button type="submit" disabled={createMutation.isPending || !validatedAccount}>
+                {createMutation.isPending ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" />יוצר...</> : "צור טבלה"}
               </Button>
             </DialogFooter>
           </form>
