@@ -461,6 +461,11 @@ Deno.serve(async (req) => {
             await supabase.from('wa_pending_activations')
               .update({ status: 'completed', completed_at: new Date().toISOString(), completed_lid: lidDigits })
               .eq('id', hit.id);
+            await supabase.from('carmen_whatsapp_identities')
+              .update({ verified_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+              .eq('tenant_id', tenantId)
+              .eq('phone', realPhone)
+              .eq('status', 'approved');
             console.log('[manus-wa] activation completed — LID mapped', { lid: lidDigits, phone: realPhone });
             // Confirm to the user through the standard send path (to the real phone).
             fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`, {

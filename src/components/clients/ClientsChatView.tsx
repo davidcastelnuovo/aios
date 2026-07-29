@@ -41,6 +41,7 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { CarmenWhatsAppAccess } from "@/components/carmen/CarmenWhatsAppAccess";
 
 interface ClientsChatViewProps {
   clients: any[];
@@ -1128,6 +1129,14 @@ export function ClientsChatView({
                                 <div className="text-sm space-y-1 text-right flex-1">
                                   <div className="font-medium flex items-center gap-2 justify-end">
                                     {contact.role && <Badge variant="outline" className="text-xs">{contact.role}</Badge>}
+                                    <CarmenWhatsAppAccess
+                                      entityType="client_contact"
+                                      entityId={contact.id}
+                                      phone={contact.phone}
+                                      displayName={contact.contact_name}
+                                      roleTitle={contact.role}
+                                      clientId={selectedClient.id}
+                                    />
                                     {contact.contact_name}
                                   </div>
                                   {contact.phone && (
