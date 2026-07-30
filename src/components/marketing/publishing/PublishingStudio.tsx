@@ -17,7 +17,9 @@ import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, P
 
 type PublishingSite = { id: string; site_key: string; name: string; destination_type: "pbn" | "wordpress" | "custom_api"; client_id: string | null; connection_id: string | null; base_url: string | null; categories: string[]; status: string; is_hidden: boolean };
 type WordPressSite = { id: string; site_url: string; site_name: string | null; client_id: string | null; is_active: boolean };
-type PublishingArticle = { id: string; client_id: string | null; customer_name: string | null; primary_keyword: string; proposed_topic: string | null; target_url: string | null; anchor_text: string | null; category: string | null; status: string; site_id: string | null; slug: string | null; live_url: string | null; published_at: string | null; source_month: string | null; source_sheet: string | null; source_row: number | null; title: string | null; excerpt: string | null; content: string[]; updated_at: string };
+type PublishingFaqItem = { question?: string; answer?: string };
+type PublishingInfographicItem = { value?: string; label?: string; description?: string };
+type PublishingArticle = { id: string; client_id: string | null; customer_name: string | null; primary_keyword: string; proposed_topic: string | null; target_url: string | null; anchor_text: string | null; category: string | null; status: string; site_id: string | null; slug: string | null; live_url: string | null; published_at: string | null; source_month: string | null; source_sheet: string | null; source_row: number | null; title: string | null; excerpt: string | null; content: string[]; hero_image_url: string | null; inline_image_url: string | null; image_alt: string | null; faq: PublishingFaqItem[]; infographic: { title?: string; items?: PublishingInfographicItem[] } | null; updated_at: string };
 type ImportRow = { customerName: string; primaryKeyword: string; topic: string; targetUrl: string; siteKey: string; category: string; sheetName: string; rowNumber: number; sourceMonth: string; errors: string[] };
 type ClientOption = { id: string; name: string };
 type VercelProject = { id: string; name: string; framework: string | null; updated_at?: number; domains: Array<{ name: string; verified: boolean }>; deployment: { id: string; url: string; state: string; created_at: number } | null };
@@ -166,7 +168,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const { data: articles = [], isLoading: loadingArticles } = useQuery({
     queryKey: ["publishing-articles", tenantId],
     queryFn: async () => {
-      const { data, error } = await db.from("publishing_articles").select("id,client_id,customer_name,primary_keyword,proposed_topic,target_url,anchor_text,category,status,site_id,slug,live_url,published_at,source_month,source_sheet,source_row,title,excerpt,content,updated_at").eq("tenant_id", tenantId).order("source_month", { ascending: false, nullsFirst: false }).order("customer_name").limit(500);
+      const { data, error } = await db.from("publishing_articles").select("id,client_id,customer_name,primary_keyword,proposed_topic,target_url,anchor_text,category,status,site_id,slug,live_url,published_at,source_month,source_sheet,source_row,title,excerpt,content,hero_image_url,inline_image_url,image_alt,faq,infographic,updated_at").eq("tenant_id", tenantId).order("source_month", { ascending: false, nullsFirst: false }).order("customer_name").limit(500);
       if (error) throw error;
       return (data ?? []) as PublishingArticle[];
     },
@@ -667,9 +669,54 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
       <TabsContent value="sites" className="min-h-0 flex-1 mt-0"><ScrollArea className="h-full"><div className="p-5"><div className="mb-5 flex items-center justify-between"><div><h3 className="font-bold">אתרי PBN</h3><p className="text-xs text-muted-foreground">כל אתר במערכת מול פרויקט ה־Vercel, הבילד והדומיין שלו.</p></div><Button onClick={() => setSiteDialogOpen(true)}><Plus className="ml-2 h-4 w-4" />יצירת אתרים</Button></div>{loadingVercel || loadingSites ? <Loader2 className="mx-auto mt-12 h-6 w-6 animate-spin" /> : <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="p-3 text-right">אתר PBN</th><th className="p-3 text-right">פרויקט Vercel</th><th className="p-3 text-right">בילד אחרון</th><th className="p-3 text-right">דומיין</th><th className="p-3 text-right">פעולות</th></tr></thead><tbody>{pbnRows.map(({ site, project, primaryDomain }) => <tr key={site.id} className="border-t"><td className="p-3"><div className="font-semibold">{site.name}</div><div className="text-[11px] text-muted-foreground">{site.site_key}</div></td><td className="p-3">{project ? <><div className="font-medium" dir="ltr">{project.name}</div><div className="text-[10px] text-muted-foreground" dir="ltr">{project.id}</div></> : <Badge variant="outline" className="border-amber-300 text-amber-700">טרם נוצר ב-Vercel</Badge>}</td><td className="p-3"><Badge variant="outline" className={project?.deployment?.state === "READY" ? "border-emerald-300 text-emerald-700" : ""}>{project ? project.deployment?.state ?? "טרם פורסם" : "—"}</Badge>{project?.deployment?.url && <div className="mt-1 max-w-52 truncate text-[10px] text-muted-foreground" dir="ltr">{project.deployment.url}</div>}</td><td className="p-3">{primaryDomain && project?.deployment?.state === "READY" ? <a href={`https://${primaryDomain}`} target="_blank" rel="noreferrer" className="font-medium text-emerald-700 hover:underline" dir="ltr">{primaryDomain}</a> : <span className="text-muted-foreground">{project?.deployment ? "ללא דומיין" : "ממתין לפרסום"}</span>}</td><td className="p-3">{project?.deployment?.state === "READY" ? <Button size="sm" variant="outline" onClick={() => { setSelectedProject(project); setDomainName(primaryDomain ?? ""); setDomainDialogOpen(true); }}>דומיין</Button> : <span className="text-xs text-muted-foreground">נדרש פרסום</span>}</td></tr>)}{unrelatedProjects.map(({ project }) => <tr key={project.id} className="border-t bg-muted/20"><td className="p-3 text-muted-foreground">לא שויך ל-PBN</td><td className="p-3 font-medium" dir="ltr">{project.name}</td><td className="p-3"><Badge variant="outline">{project.deployment?.state ?? "—"}</Badge></td><td className="p-3 text-muted-foreground">—</td><td className="p-3"><Button size="sm" variant="ghost" onClick={() => hideVercelProject(project)}>הסתר</Button></td></tr>)}</tbody></table></div></Card>}</div></ScrollArea></TabsContent>
     </Tabs>
     <Dialog open={Boolean(editingArticle)} onOpenChange={(open) => !open && setEditingArticle(null)}>
-      <DialogContent dir="rtl" className="max-h-[92vh] max-w-4xl overflow-y-auto">
+      <DialogContent dir="rtl" className="max-h-[94vh] max-w-6xl overflow-y-auto p-0">
+        <div className="sticky top-0 z-10 border-b bg-background/95 px-6 py-4 backdrop-blur">
         <DialogHeader><DialogTitle>צפייה ועריכת מאמר</DialogTitle></DialogHeader>
+        </div>
         {editingArticle && <div className="space-y-5">
+          <article className="mx-auto w-full max-w-4xl px-6 pt-6">
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="outline">{editingArticle.category || "מגזין"}</Badge>
+              <span>{formatSourceMonth(editingArticle.source_month)}</span>
+              <span>·</span>
+              <span>{siteById.get(editingArticle.site_id ?? "")?.name ?? "לא משויך"}</span>
+            </div>
+            <h1 className="max-w-3xl text-3xl font-black leading-tight md:text-5xl">{editorTitle || editingArticle.proposed_topic || "ללא כותרת"}</h1>
+            {editorExcerpt && <p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground md:text-xl">{editorExcerpt}</p>}
+            {editingArticle.hero_image_url && <img src={editingArticle.hero_image_url} alt={editingArticle.image_alt || editorTitle} className="mt-7 aspect-[16/8] w-full rounded-2xl object-cover shadow-sm" />}
+            <div className="mx-auto mt-8 max-w-3xl space-y-5 text-base leading-8 md:text-lg">
+              {(Array.isArray(editingArticle.content) ? editingArticle.content : []).map((part, index) => {
+                if (part.startsWith("## ")) return <h2 key={index} className="pt-4 text-2xl font-black md:text-3xl">{part.slice(3)}</h2>;
+                if (part.startsWith("LIST: ")) return <ul key={index} className="list-disc space-y-2 rounded-xl bg-muted/50 px-9 py-5">{part.slice(6).split("|").map((item) => <li key={item}>{item.trim()}</li>)}</ul>;
+                if (part.startsWith("TIP: ")) return <aside key={index} className="rounded-xl border-r-4 border-primary bg-primary/5 p-5"><strong>כדאי לדעת</strong><p className="mt-1">{part.slice(5).trim()}</p></aside>;
+                return <div key={index}>
+                  <p>{part}</p>
+                  {editingArticle.inline_image_url && index === Math.floor(editingArticle.content.length / 2) && <img src={editingArticle.inline_image_url} alt={editingArticle.image_alt || editorTitle} className="my-8 aspect-[16/9] w-full rounded-2xl object-cover" loading="lazy" />}
+                </div>;
+              })}
+              {Array.isArray(editingArticle.infographic?.items) && editingArticle.infographic.items.length > 0 && <section className="my-10 rounded-2xl bg-slate-950 p-6 text-white md:p-8">
+                <h2 className="m-0 text-2xl font-black">{editingArticle.infographic.title || "הדברים החשובים בקצרה"}</h2>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {editingArticle.infographic.items.map((item, index) => <div key={`${item.label}-${index}`} className="rounded-xl border border-white/15 bg-white/5 p-4">
+                    <div className="text-3xl font-black text-emerald-300">{item.value || "•"}</div>
+                    <h3 className="mt-1 font-bold">{item.label}</h3>
+                    {item.description && <p className="mt-1 text-sm leading-6 text-slate-300">{item.description}</p>}
+                  </div>)}
+                </div>
+              </section>}
+              {Array.isArray(editingArticle.faq) && editingArticle.faq.length > 0 && <section className="my-10 border-t pt-8">
+                <h2 className="text-2xl font-black">שאלות נפוצות</h2>
+                <div className="mt-4 divide-y rounded-xl border px-5">
+                  {editingArticle.faq.map((item, index) => <details key={`${item.question}-${index}`} className="group py-4">
+                    <summary className="cursor-pointer font-bold">{item.question}</summary>
+                    <p className="mt-3 text-sm leading-7 text-muted-foreground">{item.answer}</p>
+                  </details>)}
+                </div>
+              </section>}
+            </div>
+          </article>
+          <div className="border-t bg-muted/20 px-6 py-6">
+          <div className="mx-auto max-w-4xl space-y-5">
           <div className="grid gap-3 rounded-xl border bg-muted/30 p-4 md:grid-cols-3">
             <div><div className="text-[10px] text-muted-foreground">חודש שיוך מהאקסל</div><div className="font-semibold">{formatSourceMonth(editingArticle.source_month)}</div></div>
             <div><div className="text-[10px] text-muted-foreground">ביטוי לקידום</div><div className="font-semibold">{editingArticle.primary_keyword}</div></div>
@@ -681,6 +728,8 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
           <div><Label>תקציר</Label><Textarea className="mt-1 min-h-24" value={editorExcerpt} onChange={(event) => setEditorExcerpt(event.target.value)} placeholder="תקציר קצר שיופיע בכרטיס המאמר" /></div>
           <div><Label>גוף המאמר</Label><Textarea className="mt-1 min-h-[360px] leading-7" value={editorContent} onChange={(event) => setEditorContent(event.target.value)} placeholder="המאמר עדיין לא נכתב. לאחר יצירת התוכן הוא יופיע כאן ויהיה ניתן לערוך אותו לפני אישור." /><div className="mt-1 text-[10px] text-muted-foreground">הפרד פסקאות באמצעות שורה ריקה. הקישור לביטוי העוגן יתווסף בפרסום.</div></div>
           <div className="flex items-center justify-between"><Badge variant="outline">{editingArticle.status}</Badge><Button onClick={saveArticle} disabled={savingArticle || !editorTitle.trim()}>{savingArticle ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}שמור מאמר</Button></div>
+          </div>
+          </div>
         </div>}
       </DialogContent>
     </Dialog>
