@@ -1137,6 +1137,18 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         task_mode: 'agent',
         enabled: true,
         created_by: userId !== 'system' ? userId : null,
+        // WhatsApp reminders must retain the exact originating destination.
+        // run-agent-task consumes this metadata deterministically at execution
+        // time, so a group reminder is sent back to the group rather than
+        // asking the model to infer a recipient (or create another reminder).
+        result: looksLikeReminder && waNotify
+          ? {
+              notify: waNotify,
+              reminder_delivery: {
+                message: descStr || titleStr,
+              },
+            }
+          : null,
       }
       const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type, scheduled_at').single()
       if (error) throw error
