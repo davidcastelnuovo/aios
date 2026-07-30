@@ -866,6 +866,77 @@ function phoneTail(value: string | null | undefined): string {
   return String(value || '').replace(/\D/g, '').slice(-9);
 }
 
+type CarmenTenantStaff = {
+  campaignerId: string;
+  displayName: string | null;
+  role: string;
+  isManager: boolean;
+};
+
+const CARMEN_MANAGER_ROLES = new Set(['owner', 'agency_owner', 'team_manager', 'super_admin']);
+
+/**
+ * A user may belong to several tenants while their profile points at one shared
+ * campaigner row. Resolve that relationship by phone instead of requiring a
+ * duplicate campaigner row in every tenant.
+ */
+async function findCarmenTenantStaffByPhone(
+  supabase: any,
+  tenantId: string,
+  phoneNumber: string,
+): Promise<CarmenTenantStaff | null> {
+  const tail = phoneTail(phoneNumber);
+  if (!tail) return null;
+
+  const { data: phoneCampaigners } = await supabase.from('campaigners')
+    .select('id, tenant_id, full_name, phone, active')
+    .eq('active', true)
+    .limit(500);
+  const matches = (phoneCampaigners || []).filter((row: any) => phoneTail(row.phone) === tail);
+  if (!matches.length) return null;
+
+  const direct = matches.find((row: any) => row.tenant_id === tenantId);
+  const campaignerIds = matches.map((row: any) => row.id);
+  const { data: profiles } = await supabase.from('profiles')
+    .select('id, full_name, campaigner_id')
+    .in('campaigner_id', campaignerIds)
+    .limit(20);
+  const profileIds = (profiles || []).map((row: any) => row.id);
+
+  let tenantRole: string | null = null;
+  let matchedProfile: any = null;
+  if (profileIds.length) {
+    const [{ data: tenantUsers }, { data: userRoles }] = await Promise.all([
+      supabase.from('tenant_users').select('user_id, role')
+        .eq('tenant_id', tenantId).in('user_id', profileIds),
+      supabase.from('user_roles').select('user_id, role')
+        .eq('tenant_id', tenantId).in('user_id', profileIds),
+    ]);
+    const memberships = [...(tenantUsers || []), ...(userRoles || [])];
+    const membership = memberships.find((row: any) => CARMEN_MANAGER_ROLES.has(String(row.role)))
+      || memberships.find((row: any) => String(row.role) === 'campaigner')
+      || memberships[0];
+    if (membership) {
+      matchedProfile = (profiles || []).find((row: any) => row.id === membership.user_id);
+      tenantRole = String(membership.role || 'campaigner');
+    }
+  }
+
+  // A tenant-local active campaigner is sufficient even when no login profile
+  // exists. Cross-tenant campaigner reuse requires an explicit tenant role.
+  if (!direct && (!matchedProfile || !tenantRole)) return null;
+  const campaigner = direct
+    || matches.find((row: any) => row.id === matchedProfile?.campaigner_id)
+    || matches[0];
+  const role = tenantRole || 'campaigner';
+  return {
+    campaignerId: campaigner.id,
+    displayName: matchedProfile?.full_name || campaigner.full_name || null,
+    role,
+    isManager: CARMEN_MANAGER_ROLES.has(role),
+  };
+}
+
 /**
  * Resolve the current group author. Client-group membership authorizes client
  * contacts for that client only; employees still require explicit approval and
@@ -878,6 +949,7 @@ async function resolveCarmenGroupIdentity(
   phoneNumber: string,
   senderName: string | null | undefined,
   messageText: string,
+  allowedPhones: unknown,
 ): Promise<CarmenIdentityAccess> {
   const tail = phoneTail(phoneNumber);
   const digits = String(phoneNumber || '').replace(/\D/g, '');
@@ -898,6 +970,45 @@ async function resolveCarmenGroupIdentity(
     };
   }
 
+  // The automation's private-chat allow-list is an existing explicit identity
+  // approval. Reuse it in groups handled by the same Carmen automation instead
+  // of forcing the same person through a second, group-only verification flow.
+  const explicitlyAllowed = Array.isArray(allowedPhones)
+    && allowedPhones.some((phone: unknown) => phoneTail(String(phone || '')) === tail);
+  if (explicitlyAllowed) {
+    const tenantStaff = await findCarmenTenantStaffByPhone(supabase, tenantId, digits);
+    if (tenantStaff) {
+      const now = new Date().toISOString();
+      await supabase.from('carmen_whatsapp_identities').upsert({
+        tenant_id: tenantId,
+        phone: digits,
+        entity_type: 'campaigner',
+        entity_id: tenantStaff.campaignerId,
+        client_id: null,
+        display_name: tenantStaff.displayName || senderName || null,
+        role_title: tenantStaff.role,
+        status: 'approved',
+        approved_at: now,
+        verified_at: now,
+      }, { onConflict: 'tenant_id,phone' });
+      await supabase.from('carmen_whatsapp_identity_candidates').update({
+        status: 'approved',
+        updated_at: now,
+      }).eq('tenant_id', tenantId).eq('group_chat_id', chatId).eq('phone', digits);
+      if (tenantStaff.isManager) {
+        return {
+          allowed: true,
+          context: `\n\n[הרשאת זהות מחייבת] הדובר כבר אומת בשיחה הפרטית והוא ${tenantStaff.displayName || senderName || 'מנהל'} בתפקיד ${tenantStaff.role} בארגון הנוכחי. מותר לענות במסגרת הארגון הנוכחי בלבד. אין לחשוף מידע מארגונים אחרים.`,
+        };
+      }
+    } else {
+      return {
+        allowed: true,
+        context: `\n\n[הרשאת זהות מחייבת] מספר הדובר כבר אושר במפורש לשיחה פרטית עם כרמן באוטומציה של הארגון הנוכחי. מותר לענות במסגרת הארגון הנוכחי בלבד. אין לחשוף מידע מארגונים אחרים.`,
+      };
+    }
+  }
+
   const { data: identities } = await supabase
     .from('carmen_whatsapp_identities')
     .select('id, phone, entity_type, entity_id, client_id, display_name, role_title, status, verified_at')
@@ -907,6 +1018,13 @@ async function resolveCarmenGroupIdentity(
   const identity = (identities || []).find((row: any) => phoneTail(row.phone) === tail);
   if (identity?.status === 'approved' && (identity?.verified_at || (groupClient && identity.client_id === groupClient.id))) {
     if (identity.entity_type === 'campaigner') {
+      const tenantStaff = await findCarmenTenantStaffByPhone(supabase, tenantId, digits);
+      if (tenantStaff?.isManager) {
+        return {
+          allowed: true,
+          context: `\n\n[הרשאת זהות מחייבת] הדובר הוא ${tenantStaff.displayName || identity.display_name || senderName || 'מנהל'} בתפקיד ${tenantStaff.role} בארגון הנוכחי. מותר לענות במסגרת הארגון הנוכחי בלבד. אין לחשוף מידע מארגונים אחרים.`,
+        };
+      }
       const { data: assignments } = await supabase
         .from('client_team')
         .select('client_id, clients(name, status)')
@@ -945,40 +1063,71 @@ async function resolveCarmenGroupIdentity(
 
   // Auto-discover by phone. Client contacts in their linked client group are
   // approved by membership; employees stay pending for manager approval.
-  const [{ data: campaigners }, { data: contacts }] = await Promise.all([
+  const [{ data: campaigners }, { data: contacts }, tenantStaff] = await Promise.all([
     supabase.from('campaigners').select('id, full_name, phone')
       .eq('tenant_id', tenantId).ilike('phone', `%${tail}`).limit(3),
     supabase.from('client_contacts').select('id, client_id, contact_name, role, phone')
       .eq('tenant_id', tenantId)
       .eq(groupClient ? 'client_id' : 'tenant_id', groupClient?.id || tenantId)
       .ilike('phone', `%${tail}`).limit(3),
+    findCarmenTenantStaffByPhone(supabase, tenantId, digits),
   ]);
   const knownCampaigner = (campaigners || []).find((row: any) => phoneTail(row.phone) === tail);
   const knownContact = (contacts || []).find((row: any) => phoneTail(row.phone) === tail);
-  const known = (groupClient && knownContact) ? knownContact : (knownCampaigner || knownContact);
+  const knownStaff = tenantStaff || (knownCampaigner ? {
+    campaignerId: knownCampaigner.id,
+    displayName: knownCampaigner.full_name,
+    role: 'campaigner',
+    isManager: false,
+  } : null);
+  const known = (groupClient && knownContact) ? knownContact : (knownStaff || knownContact);
   if (known) {
-    const isClientContact = !!knownContact && (!knownCampaigner || !!groupClient);
+    const isClientContact = !!knownContact && (!knownStaff || !!groupClient);
+    const now = new Date().toISOString();
     await supabase.from('carmen_whatsapp_identities').upsert({
       tenant_id: tenantId,
       phone: digits,
       entity_type: isClientContact ? 'client_contact' : 'campaigner',
-      entity_id: known.id,
+      entity_id: isClientContact ? known.id : knownStaff!.campaignerId,
       client_id: isClientContact ? known.client_id : null,
-      display_name: known.full_name || known.contact_name || senderName || null,
-      role_title: known.role || null,
-      status: isClientContact && groupClient ? 'approved' : 'pending',
-      verified_at: isClientContact && groupClient ? new Date().toISOString() : null,
+      display_name: knownStaff?.displayName || known.contact_name || senderName || null,
+      role_title: isClientContact ? known.role || null : knownStaff!.role,
+      status: 'approved',
+      approved_at: now,
+      verified_at: now,
     }, { onConflict: 'tenant_id,phone' });
+    await supabase.from('carmen_whatsapp_identity_candidates').update({
+      status: 'approved',
+      updated_at: now,
+    }).eq('tenant_id', tenantId).eq('group_chat_id', chatId).eq('phone', digits);
     if (isClientContact && groupClient) {
       return {
         allowed: true,
         context: `\n\n[הרשאת זהות מחייבת] הדובר הוא ${known.contact_name || senderName || 'איש קשר'} של הלקוח ${groupClient.name} (${groupClient.id}). חברותו בקבוצת הלקוח מאשרת שירות בקבוצה זו. מותר לענות רק במידע חיצוני שאושר ללקוח זה; אסור לחשוף מידע פנימי או מידע של לקוחות אחרים.`,
       };
     }
+    if (knownStaff!.isManager) {
+      return {
+        allowed: true,
+        context: `\n\n[הרשאת זהות מחייבת] הדובר הוא ${knownStaff!.displayName || senderName || 'מנהל'} בתפקיד ${knownStaff!.role} בארגון הנוכחי. מותר לענות במסגרת הארגון הנוכחי בלבד. אין לחשוף מידע מארגונים אחרים.`,
+      };
+    }
+    const { data: assignments } = await supabase.from('client_team')
+      .select('client_id, clients(name, status)')
+      .eq('campaigner_id', knownStaff!.campaignerId);
+    const clients = (assignments || [])
+      .filter((a: any) => a.clients?.status === 'active' || a.clients?.status === 'onboarding')
+      .map((a: any) => `${a.clients?.name || a.client_id} (${a.client_id})`);
+    if (groupClient && !(assignments || []).some((a: any) => a.client_id === groupClient.id)) {
+      return {
+        allowed: false,
+        reason: 'campaigner_not_assigned_to_group_client',
+        reply: 'אני מזהה אותך כאיש צוות, אבל הלקוח של הקבוצה הזו לא משויך אליך ולכן אין לי אפשרות למסור מידע.',
+      };
+    }
     return {
-      allowed: false,
-      reason: 'known_identity_pending_approval',
-      reply: 'זיהיתי אותך במערכת, אבל מנהל עדיין צריך לאשר לך לדבר איתי. שלחתי את הזיהוי לאישור.',
+      allowed: true,
+      context: `\n\n[הרשאת זהות מחייבת] הדובר הוא איש צוות מאומת: ${knownStaff!.displayName || senderName || 'ללא שם'}. מותר לענות רק לגבי הלקוחות הפעילים המשויכים אליו: ${clients.join(', ') || 'אין לקוחות משויכים'}. אין לחשוף מידע על לקוחות אחרים.`,
     };
   }
 
@@ -1204,6 +1353,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   if (isGroup && sourceChannel === 'own_instance') {
     const access = await resolveCarmenGroupIdentity(
       supabase, tenantId, chatId, phoneNumber, senderName, messageText,
+      cfg.carmen_allowed_phones,
     );
     if (!access.allowed) {
       if (access.reply) await routedSend(chatId, access.reply);

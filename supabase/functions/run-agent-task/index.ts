@@ -156,6 +156,84 @@ Deno.serve(async (req) => {
       last_run: new Date().toISOString(),
     }).eq('id', task_id)
 
+    // WhatsApp reminders are delivery jobs, not open-ended AI tasks. The
+    // originating chat (including a group chat id) is persisted when Carmen
+    // creates the task. Deliver directly and only mark the task completed
+    // after the provider action step confirms success.
+    const reminderDelivery = checkpoint?.reminder_delivery
+    const reminderNotify = checkpoint?.notify
+    if (reminderDelivery?.message && reminderNotify?.surface === 'whatsapp') {
+      let automationId: string | null = reminderNotify.automation_id || null
+      if (!automationId) {
+        const auto = await findCarmenSessionAutomation(
+          supabase,
+          reminderNotify.tenant_id || task.tenant_id,
+          null,
+          {
+            isGroup: !!reminderNotify.is_group,
+            chatId: reminderNotify.chat_id,
+            phoneNumber: reminderNotify.phone_number,
+          },
+        )
+        automationId = auto?.id || null
+      }
+
+      let sent = false
+      if (automationId && reminderNotify.chat_id) {
+        sent = await sendCarmenReplyViaActionStep({
+          supabase,
+          automationId,
+          tenantId: reminderNotify.tenant_id || task.tenant_id,
+          connectionUserId: reminderNotify.connection_user_id,
+          chatId: reminderNotify.chat_id,
+          phoneNumber: reminderNotify.phone_number || '',
+          isGroup: !!reminderNotify.is_group,
+          message: String(reminderDelivery.message).slice(0, 1500),
+        })
+      }
+
+      if (!sent) {
+        const error = automationId
+          ? 'WhatsApp reminder provider did not confirm delivery'
+          : 'No Carmen automation found for WhatsApp reminder destination'
+        await supabase.from('agent_tasks').update({
+          status: 'pending',
+          last_run: null,
+          result: {
+            ...checkpoint,
+            last_error: error,
+            run_count: runCount,
+          },
+        }).eq('id', task_id)
+        return new Response(JSON.stringify({ success: false, error, retrying: true }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      const deliveredAt = new Date().toISOString()
+      await supabase.from('agent_tasks').update({
+        status: 'completed',
+        completed_at: deliveredAt,
+        result: {
+          ...checkpoint,
+          delivered: true,
+          delivered_at: deliveredAt,
+          run_count: runCount,
+          completed: true,
+          final_output: reminderDelivery.message,
+        },
+      }).eq('id', task_id)
+      await maybeAdvanceLane(supabase, task)
+      return new Response(JSON.stringify({
+        success: true,
+        delivered: true,
+        destination: reminderNotify.is_group ? 'group' : 'private',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // Find the agent
     // Find the agent - try task's agent_id first, then fallback
     let { data: agent } = await supabase
