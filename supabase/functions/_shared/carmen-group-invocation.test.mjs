@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { groupMessageInvokesCarmen } from './carmen.ts';
@@ -17,4 +18,17 @@ test('does not accept a partial-word match', () => {
 
 test('accepts voice transcript prefix', () => {
   assert.equal(groupMessageInvokesCarmen('🎤 קארמן מה נשמע?'), true);
+});
+
+test('Manus group identity reads senderLid and semantically deduplicates retries', () => {
+  const webhookSource = readFileSync(
+    new URL('../manus-wa-webhook/index.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    webhookSource,
+    /payload\.author,\s*payload\.participant,\s*payload\.senderLid,\s*key\.participant/,
+  );
+  assert.match(webhookSource, /provider:\s*'carmen_group_turn'/);
+  assert.match(webhookSource, /dedup:\s*'group_fingerprint'/);
 });

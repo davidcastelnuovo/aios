@@ -2,7 +2,7 @@
 // operator on outbound messages (stops Carmen replying in the operator's private chats).
 // redeploy trigger: rebundle _shared/carmen.ts keyword-aware routing (retry — esm.sh 522 aborted prior deploy)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { findCarmenSessionAutomation, handleCarmenMessage } from '../_shared/carmen.ts';
+import { findCarmenSessionAutomation, groupMessageInvokesCarmen, handleCarmenMessage } from '../_shared/carmen.ts';
 import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
 
 const corsHeaders = {
@@ -802,7 +802,7 @@ Deno.serve(async (req) => {
       // Extract the REAL sender phone from author/participant fields.
       // Falling back to fromRaw inside a group gives the group id (120363...@g.us) which is useless.
       const authorCandidates = [
-        payload.author, payload.participant, key.participant,
+        payload.author, payload.participant, payload.senderLid, key.participant,
         (msgContainer as any)?.participant, (msgContainer as any)?.author,
       ].filter((v: any) => typeof v === 'string' && v.includes('@')) as string[];
       const authorRaw = authorCandidates[0] || '';
@@ -905,6 +905,64 @@ Deno.serve(async (req) => {
         if (recentOwn && recentOwn.length > 0) {
           console.log('[manus-wa group] dropping echoed body of our own outbound', { groupChatId, bodyPreview: messageText.slice(0, 60) });
           return ok({ received: true, ignored: 'group_body_echo' });
+        }
+      }
+
+      // Manus may redeliver the same group turn under a different provider id.
+      // Claim a short-lived semantic fingerprint before Carmen runs so those
+      // retries cannot produce two replies. Include the resolved author (or LID)
+      // so two different people asking the same question remain independent.
+      if (groupMessageInvokesCarmen(messageText)) {
+        const fingerprintInput = [
+          groupTenantId,
+          groupChatId,
+          authorPhone || authorRaw || 'unknown',
+          messageText.trim().replace(/\s+/g, ' ').toLowerCase(),
+        ].join('|');
+        const digestBytes = await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(fingerprintInput),
+        );
+        const digest = Array.from(new Uint8Array(digestBytes))
+          .map((byte) => byte.toString(16).padStart(2, '0'))
+          .join('');
+        const minuteBucket = Math.floor(Date.now() / 60_000);
+        const currentFingerprint = `${digest}:${minuteBucket}`;
+        const previousFingerprint = `${digest}:${minuteBucket - 1}`;
+
+        const { data: previousClaim } = await supabase
+          .from('processed_webhook_messages')
+          .select('external_message_id')
+          .eq('provider', 'carmen_group_turn')
+          .eq('tenant_id', groupTenantId)
+          .eq('external_message_id', previousFingerprint)
+          .maybeSingle();
+        if (previousClaim) {
+          console.log('[manus-wa group] semantic duplicate dropped', {
+            groupChatId,
+            authorPhone,
+            messageId,
+          });
+          return ok({ received: true, duplicate: true, dedup: 'group_fingerprint' });
+        }
+
+        const { error: fingerprintError } = await supabase
+          .from('processed_webhook_messages')
+          .insert({
+            provider: 'carmen_group_turn',
+            tenant_id: groupTenantId,
+            external_message_id: currentFingerprint,
+          });
+        if ((fingerprintError as any)?.code === '23505') {
+          console.log('[manus-wa group] semantic duplicate dropped', {
+            groupChatId,
+            authorPhone,
+            messageId,
+          });
+          return ok({ received: true, duplicate: true, dedup: 'group_fingerprint' });
+        }
+        if (fingerprintError) {
+          console.error('[manus-wa group] semantic dedup claim failed (continuing):', fingerprintError);
         }
       }
 
