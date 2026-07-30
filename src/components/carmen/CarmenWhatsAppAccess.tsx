@@ -62,8 +62,8 @@ export function CarmenWhatsAppAccess(props: Props) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey });
       toast.success(approved
-        ? "ההרשאה לדבר עם כרמן בוטלה"
-        : "נשלחה הודעת אימות פרטית. הגישה תיפתח לאחר מענה עם הקוד.");
+        ? "ההרשאה לדבר עם קארמן בוטלה"
+        : "המספר אושר. קארמן תזהה אותו בקבוצות המשויכות.");
     },
     onError: (error: Error) => toast.error(error.message || "שגיאה בעדכון הרשאת כרמן"),
   });
@@ -73,7 +73,7 @@ export function CarmenWhatsAppAccess(props: Props) {
       className="h-7 gap-1 text-xs" disabled={isLoading || mutation.isPending}
       onClick={() => mutation.mutate()}>
       {approved ? <ShieldOff className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-      {approved ? (identity?.verified_at ? "בטל גישה לכרמן" : "ממתין לאימות") : "אשר לדבר עם כרמן"}
+      {approved ? "בטל גישה לקארמן" : "אשר לדבר עם קארמן"}
     </Button>
   );
 }
