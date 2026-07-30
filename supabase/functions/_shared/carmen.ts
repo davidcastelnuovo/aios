@@ -1262,6 +1262,38 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     ? Number(cfg.session_timeout_minutes)
     : CARMEN_SESSION_IDLE_MINUTES_DEFAULT;
 
+  // GROUP SAFETY GATE: a blocked group must stay completely silent regardless
+  // of provider, automation scope, or an already-warm Carmen session. Green API
+  // checks this before calling us, but Manus reaches the shared handler directly,
+  // so the shared layer is the only reliable enforcement point.
+  if (isGroup) {
+    const { data: groupRows, error: groupLookupError } = await supabase
+      .from('whatsapp_groups')
+      .select('is_blocked')
+      .eq('tenant_id', tenantId)
+      .eq('group_chat_id', chatId)
+      .limit(10);
+    if (groupLookupError) {
+      console.error('[carmen] Group safety lookup failed; staying silent', {
+        tenantId, chatId, error: groupLookupError.message,
+      });
+      return { handled: true, outcome: 'active' };
+    }
+    if ((groupRows || []).some((row: any) => row.is_blocked === true)) {
+      console.log('[carmen] Group is blocked; staying silent', { tenantId, chatId });
+      return { handled: true, outcome: 'active' };
+    }
+
+    // Every group turn requires a fresh, explicit address to Carmen. A warm
+    // session must never make her listen to the group's ordinary conversation.
+    // Keep this before identity handling so an unrelated message from an unknown
+    // participant cannot trigger an identification prompt either.
+    const groupTriggerKeywords = resolveTriggerKeywords(cfg);
+    if (!messageHasTrigger(normalizedMsg, groupTriggerKeywords)) {
+      return { handled: false, reason: 'group_not_addressed' };
+    }
+  }
+
   // 🔁 DUAL-CHANNEL GUARD: if the matched automation is pinned to a DIFFERENT integration
   // than the one currently invoking us (this happens when the operator's own Green API
   // instance receives the same conversation that Carmen's pinned Manus integration is
@@ -1374,15 +1406,6 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         .eq('id', activeSession.id);
       await routedSend(chatId, 'סבבה, סיימנו 🙏');
       return { handled: true, outcome: 'ended' };
-    }
-
-    // Open-member-group session: Carmen answers ONLY messages that address her
-    // directly ("כרמן ..."). Everything else in the group is the members' own
-    // conversation — she must stay out of it, so skip silently without even
-    // touching the session timestamps.
-    if (isGroup && activeSession.open_group === true
-      && !messageHasTrigger(normalizedMsg, resolveTriggerKeywords(cfg))) {
-      return { handled: false, reason: 'open_group_not_addressed' };
     }
 
     // Short acknowledgement ("תודה" / "מעולה" / "ok") — don't reply, just keep session warm.
