@@ -100,6 +100,13 @@ function messageHasTrigger(normalizedMsg: string, triggerKeywords: string[]): bo
   return CARMEN_NAME_VARIANT_RE.test(prefix);
 }
 
+// Group turns are intentionally stricter than private sessions: every message
+// must address Carmen explicitly using one of the supported Hebrew spellings.
+export function groupMessageInvokesCarmen(message: string): boolean {
+  const content = String(message || '').replace(/^\s*🎤\s*/, '').trim();
+  return /(?:^|[\s,.:;!?()[\]{}"'׳״،؛؟-])[כק]א?רמן(?=$|[\s,.:;!?()[\]{}"'׳״،؛؟-])/u.test(content);
+}
+
 // Detect meta-instruction style messages (long lists of "תעני..." rules) that
 // shouldn't be replayed back to the model as a user turn — otherwise the model
 // "answers" the instructions instead of the real question.
@@ -949,7 +956,7 @@ async function resolveCarmenGroupIdentity(
   phoneNumber: string,
   senderName: string | null | undefined,
   messageText: string,
-  allowedPhones: unknown,
+  _allowedPhones: unknown,
 ): Promise<CarmenIdentityAccess> {
   const tail = phoneTail(phoneNumber);
   const digits = String(phoneNumber || '').replace(/\D/g, '');
@@ -964,49 +971,8 @@ async function resolveCarmenGroupIdentity(
     return {
       allowed: false,
       reason: 'unresolved_group_author',
-      reply: groupClient
-        ? 'אני עדיין לא מצליחה לזהות אותך. אפשר לכתוב לי שם מלא ותפקיד? אשמור אותך כאיש קשר של הלקוח.'
-        : 'אני עדיין לא מצליחה לזהות את מספר הטלפון שלך. אפשר לכתוב לי שם מלא, חברה ותפקיד? אעביר את הפרטים לאישור מנהל.',
+      reply: 'אני לא מזהה אותך. בקש ממנהל המערכת להוסיף את מספר הטלפון שלך להגדרות קארמן, כדי שאוכל לזהות אותך ולתת לך שירות.',
     };
-  }
-
-  // The automation's private-chat allow-list is an existing explicit identity
-  // approval. Reuse it in groups handled by the same Carmen automation instead
-  // of forcing the same person through a second, group-only verification flow.
-  const explicitlyAllowed = Array.isArray(allowedPhones)
-    && allowedPhones.some((phone: unknown) => phoneTail(String(phone || '')) === tail);
-  if (explicitlyAllowed) {
-    const tenantStaff = await findCarmenTenantStaffByPhone(supabase, tenantId, digits);
-    if (tenantStaff) {
-      const now = new Date().toISOString();
-      await supabase.from('carmen_whatsapp_identities').upsert({
-        tenant_id: tenantId,
-        phone: digits,
-        entity_type: 'campaigner',
-        entity_id: tenantStaff.campaignerId,
-        client_id: null,
-        display_name: tenantStaff.displayName || senderName || null,
-        role_title: tenantStaff.role,
-        status: 'approved',
-        approved_at: now,
-        verified_at: now,
-      }, { onConflict: 'tenant_id,phone' });
-      await supabase.from('carmen_whatsapp_identity_candidates').update({
-        status: 'approved',
-        updated_at: now,
-      }).eq('tenant_id', tenantId).eq('group_chat_id', chatId).eq('phone', digits);
-      if (tenantStaff.isManager) {
-        return {
-          allowed: true,
-          context: `\n\n[הרשאת זהות מחייבת] הדובר כבר אומת בשיחה הפרטית והוא ${tenantStaff.displayName || senderName || 'מנהל'} בתפקיד ${tenantStaff.role} בארגון הנוכחי. מותר לענות במסגרת הארגון הנוכחי בלבד. אין לחשוף מידע מארגונים אחרים.`,
-        };
-      }
-    } else {
-      return {
-        allowed: true,
-        context: `\n\n[הרשאת זהות מחייבת] מספר הדובר כבר אושר במפורש לשיחה פרטית עם כרמן באוטומציה של הארגון הנוכחי. מותר לענות במסגרת הארגון הנוכחי בלבד. אין לחשוף מידע מארגונים אחרים.`,
-      };
-    }
   }
 
   const { data: identities } = await supabase
@@ -1016,7 +982,7 @@ async function resolveCarmenGroupIdentity(
     .or(`phone.eq.${digits},phone.ilike.%${tail}`)
     .limit(3);
   const identity = (identities || []).find((row: any) => phoneTail(row.phone) === tail);
-  if (identity?.status === 'approved' && (identity?.verified_at || (groupClient && identity.client_id === groupClient.id))) {
+  if (identity?.status === 'approved') {
     if (identity.entity_type === 'campaigner') {
       const tenantStaff = await findCarmenTenantStaffByPhone(supabase, tenantId, digits);
       if (tenantStaff?.isManager) {
@@ -1044,7 +1010,7 @@ async function resolveCarmenGroupIdentity(
         context: `\n\n[הרשאת זהות מחייבת] הדובר הוא איש צוות מאומת: ${identity.display_name || senderName || 'ללא שם'}. מותר לענות רק לגבי הלקוחות הפעילים המשויכים אליו: ${clients.join(', ') || 'אין לקוחות משויכים'}. אין לחשוף מידע על לקוחות אחרים.`,
       };
     }
-    if (groupClient && identity.client_id !== groupClient.id) {
+    if (!groupClient || identity.client_id !== groupClient.id) {
       return { allowed: false, reason: 'client_contact_wrong_group', reply: null };
     }
     return {
@@ -1053,163 +1019,18 @@ async function resolveCarmenGroupIdentity(
     };
   }
 
-  if (identity && !groupClient) {
+  if (identity) {
     return {
       allowed: false,
-      reason: `identity_${identity.status}${identity.verified_at ? '' : '_unverified'}`,
-      reply: 'מצאתי אותך במערכת, אבל ההרשאה שלך לדבר איתי עדיין לא אושרה והושלמה. אחרי אישור ואימות אוכל לעזור.',
+      reason: `identity_${identity.status}`,
+      reply: 'אני מזהה את המספר, אבל הוא אינו מורשה כרגע. בקש ממנהל המערכת לאשר אותו בהגדרות קארמן.',
     };
   }
 
-  // Auto-discover by phone. Client contacts in their linked client group are
-  // approved by membership; employees stay pending for manager approval.
-  const [{ data: campaigners }, { data: contacts }, tenantStaff] = await Promise.all([
-    supabase.from('campaigners').select('id, full_name, phone')
-      .eq('tenant_id', tenantId).ilike('phone', `%${tail}`).limit(3),
-    supabase.from('client_contacts').select('id, client_id, contact_name, role, phone')
-      .eq('tenant_id', tenantId)
-      .eq(groupClient ? 'client_id' : 'tenant_id', groupClient?.id || tenantId)
-      .ilike('phone', `%${tail}`).limit(3),
-    findCarmenTenantStaffByPhone(supabase, tenantId, digits),
-  ]);
-  const knownCampaigner = (campaigners || []).find((row: any) => phoneTail(row.phone) === tail);
-  const knownContact = (contacts || []).find((row: any) => phoneTail(row.phone) === tail);
-  const knownStaff = tenantStaff || (knownCampaigner ? {
-    campaignerId: knownCampaigner.id,
-    displayName: knownCampaigner.full_name,
-    role: 'campaigner',
-    isManager: false,
-  } : null);
-  const known = (groupClient && knownContact) ? knownContact : (knownStaff || knownContact);
-  if (known) {
-    const isClientContact = !!knownContact && (!knownStaff || !!groupClient);
-    const now = new Date().toISOString();
-    await supabase.from('carmen_whatsapp_identities').upsert({
-      tenant_id: tenantId,
-      phone: digits,
-      entity_type: isClientContact ? 'client_contact' : 'campaigner',
-      entity_id: isClientContact ? known.id : knownStaff!.campaignerId,
-      client_id: isClientContact ? known.client_id : null,
-      display_name: knownStaff?.displayName || known.contact_name || senderName || null,
-      role_title: isClientContact ? known.role || null : knownStaff!.role,
-      status: 'approved',
-      approved_at: now,
-      verified_at: now,
-    }, { onConflict: 'tenant_id,phone' });
-    await supabase.from('carmen_whatsapp_identity_candidates').update({
-      status: 'approved',
-      updated_at: now,
-    }).eq('tenant_id', tenantId).eq('group_chat_id', chatId).eq('phone', digits);
-    if (isClientContact && groupClient) {
-      return {
-        allowed: true,
-        context: `\n\n[הרשאת זהות מחייבת] הדובר הוא ${known.contact_name || senderName || 'איש קשר'} של הלקוח ${groupClient.name} (${groupClient.id}). חברותו בקבוצת הלקוח מאשרת שירות בקבוצה זו. מותר לענות רק במידע חיצוני שאושר ללקוח זה; אסור לחשוף מידע פנימי או מידע של לקוחות אחרים.`,
-      };
-    }
-    if (knownStaff!.isManager) {
-      return {
-        allowed: true,
-        context: `\n\n[הרשאת זהות מחייבת] הדובר הוא ${knownStaff!.displayName || senderName || 'מנהל'} בתפקיד ${knownStaff!.role} בארגון הנוכחי. מותר לענות במסגרת הארגון הנוכחי בלבד. אין לחשוף מידע מארגונים אחרים.`,
-      };
-    }
-    const { data: assignments } = await supabase.from('client_team')
-      .select('client_id, clients(name, status)')
-      .eq('campaigner_id', knownStaff!.campaignerId);
-    const clients = (assignments || [])
-      .filter((a: any) => a.clients?.status === 'active' || a.clients?.status === 'onboarding')
-      .map((a: any) => `${a.clients?.name || a.client_id} (${a.client_id})`);
-    if (groupClient && !(assignments || []).some((a: any) => a.client_id === groupClient.id)) {
-      return {
-        allowed: false,
-        reason: 'campaigner_not_assigned_to_group_client',
-        reply: 'אני מזהה אותך כאיש צוות, אבל הלקוח של הקבוצה הזו לא משויך אליך ולכן אין לי אפשרות למסור מידע.',
-      };
-    }
-    return {
-      allowed: true,
-      context: `\n\n[הרשאת זהות מחייבת] הדובר הוא איש צוות מאומת: ${knownStaff!.displayName || senderName || 'ללא שם'}. מותר לענות רק לגבי הלקוחות הפעילים המשויכים אליו: ${clients.join(', ') || 'אין לקוחות משויכים'}. אין לחשוף מידע על לקוחות אחרים.`,
-    };
-  }
-
-  const { data: existing } = await supabase.from('carmen_whatsapp_identity_candidates')
-    .select('id, status, self_reported_identity, last_prompted_at')
-    .eq('tenant_id', tenantId).eq('group_chat_id', chatId).eq('phone', digits).maybeSingle();
-  if (!existing) {
-    await supabase.from('carmen_whatsapp_identity_candidates').insert({
-      tenant_id: tenantId,
-      group_id: group?.id || null,
-      group_chat_id: chatId,
-      phone: digits,
-      whatsapp_name: senderName || null,
-      status: 'awaiting_identity',
-      last_prompted_at: new Date().toISOString(),
-    });
-    return {
-      allowed: false,
-      reason: 'unknown_identity',
-      reply: groupClient
-        ? `אני לא מזהה אותך באנשי הקשר של ${groupClient.name}. אפשר לכתוב בבקשה שם מלא ותפקיד? אוסיף אותך לכרטיס הלקוח כדי שאזהה אותך מעכשיו.`
-        : 'אני לא מזהה אותך במערכת. אפשר לכתוב בבקשה שם מלא, חברה ותפקיד? אעביר את הפרטים למנהל, ורק לאחר אישור אוכל לתת שירות.',
-    };
-  }
-
-  if (existing.status === 'awaiting_identity' && messageText.trim()) {
-    if (groupClient) {
-      const parts = messageText.trim().split(/\s*[|,–—-]\s*/).filter(Boolean);
-      const fullName = (parts[0] || senderName || '').replace(/^(שם( מלא)?\s*[:：]\s*)/i, '').trim();
-      const role = (parts.slice(1).join(' ') || '').replace(/^(תפקיד\s*[:：]\s*)/i, '').trim();
-      if (!fullName || !role) {
-        return {
-          allowed: false,
-          reason: 'client_identity_missing_fields',
-          reply: 'כדי שאשמור אותך נכון, כתוב בבקשה בפורמט: שם מלא | תפקיד',
-        };
-      }
-      const { data: contact, error: contactError } = await supabase.from('client_contacts').insert({
-        tenant_id: tenantId,
-        client_id: groupClient.id,
-        contact_name: fullName,
-        role,
-        phone: digits,
-      }).select('id').single();
-      if (contactError || !contact) {
-        console.error('[carmen] failed creating client contact from group identity', contactError);
-        return { allowed: false, reason: 'client_contact_create_failed', reply: 'לא הצלחתי לשמור את הפרטים כרגע. נסה שוב בעוד כמה דקות.' };
-      }
-      await supabase.from('carmen_whatsapp_identities').upsert({
-        tenant_id: tenantId,
-        phone: digits,
-        entity_type: 'client_contact',
-        entity_id: contact.id,
-        client_id: groupClient.id,
-        display_name: fullName,
-        role_title: role,
-        status: 'approved',
-        verified_at: new Date().toISOString(),
-      }, { onConflict: 'tenant_id,phone' });
-      await supabase.from('carmen_whatsapp_identity_candidates').update({
-        self_reported_identity: messageText.trim().slice(0, 1000),
-        status: 'approved',
-        updated_at: new Date().toISOString(),
-      }).eq('id', existing.id);
-      return {
-        allowed: false,
-        reason: 'client_contact_created',
-        reply: `תודה ${fullName}, הוספתי אותך כאיש קשר בתפקיד ${role}. מעכשיו אני מזהה אותך בקבוצה.`,
-      };
-    }
-    await supabase.from('carmen_whatsapp_identity_candidates').update({
-      self_reported_identity: messageText.trim().slice(0, 1000),
-      status: 'awaiting_approval',
-      updated_at: new Date().toISOString(),
-    }).eq('id', existing.id);
-  }
   return {
     allowed: false,
-    reason: 'unknown_identity_awaiting_approval',
-    reply: existing.status === 'awaiting_identity'
-      ? 'תודה, שמרתי את הפרטים והעברתי אותם לאישור מנהל. אוכל לתת שירות רק לאחר האישור.'
-      : null,
+    reason: 'unknown_identity',
+    reply: 'אני לא מזהה אותך. בקש ממנהל המערכת להוסיף את מספר הטלפון שלך להגדרות קארמן, כדי שאוכל לזהות אותך ולתת לך שירות.',
   };
 }
 
@@ -1269,7 +1090,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   if (isGroup) {
     const { data: groupRows, error: groupLookupError } = await supabase
       .from('whatsapp_groups')
-      .select('is_blocked')
+      .select('id, is_blocked')
       .eq('tenant_id', tenantId)
       .eq('group_chat_id', chatId)
       .limit(10);
@@ -1284,12 +1105,20 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       return { handled: true, outcome: 'active' };
     }
 
+    // A group is an authorized Carmen surface only after it is registered once
+    // in this tenant. Client contacts are additionally restricted below to the
+    // active client linked to the group; approved staff can also use registered
+    // internal team groups such as "DMM דוד ואנה".
+    const groupIds = (groupRows || []).map((row: any) => row.id).filter(Boolean);
+    if (groupIds.length !== 1) {
+      return { handled: false, reason: 'group_not_uniquely_registered' };
+    }
+
     // Every group turn requires a fresh, explicit address to Carmen. A warm
     // session must never make her listen to the group's ordinary conversation.
     // Keep this before identity handling so an unrelated message from an unknown
     // participant cannot trigger an identification prompt either.
-    const groupTriggerKeywords = resolveTriggerKeywords(cfg);
-    if (!messageHasTrigger(normalizedMsg, groupTriggerKeywords)) {
+    if (!groupMessageInvokesCarmen(messageText)) {
       return { handled: false, reason: 'group_not_addressed' };
     }
   }
