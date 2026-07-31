@@ -1,8 +1,5 @@
 name: Apply SQL migration (Management API)
 
-# Manual or auto: run SQL against prod via Supabase CLI (`db query --linked`).
-# Requires repo secret BASE_ACCESS_TOKEN (sbp_...).
-
 on:
   workflow_dispatch:
     inputs:
@@ -10,6 +7,10 @@ on:
         description: 'Path to SQL file under the repo'
         required: true
         default: 'supabase/ops/apply_seo_monthly_shares.sql'
+      migration_name:
+        description: 'Migration name recorded in Supabase'
+        required: true
+        default: 'apply_seo_monthly_shares'
   push:
     branches: [main]
     paths:
@@ -26,40 +27,68 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
       - name: Resolve SQL file
         id: sql
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             FILE="${{ github.event.inputs.sql_file }}"
+            NAME="${{ github.event.inputs.migration_name }}"
           else
             FILE="supabase/ops/apply_seo_monthly_shares.sql"
+            NAME="apply_seo_monthly_shares"
           fi
           test -f "$FILE"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Link project
-        run: supabase link --project-ref "$PROJECT_REF"
-
-      - name: Apply SQL
+      - name: Apply via /database/migrations
         run: |
           set -euo pipefail
           FILE="${{ steps.sql.outputs.file }}"
-          echo "Applying $FILE"
-          attempt=1
-          until supabase db query --linked -f "$FILE"; do
-            if [ "$attempt" -ge 5 ]; then
-              echo "Giving up after $attempt attempts"
-              exit 1
-            fi
-            echo "Attempt $attempt failed — waiting 60s (Supabase API flaky)"
-            attempt=$((attempt + 1))
-            sleep 60
-          done
-          echo "Verifying table exists..."
-          supabase db query --linked "select to_regclass('public.seo_monthly_shares') as table_regclass;"
+          NAME="${{ steps.sql.outputs.name }}"
+          python3 - <<'PY'
+          import json, os, pathlib, sys, time, urllib.error, urllib.request
+
+          path = os.environ["SQL_FILE"]
+          name = os.environ["MIG_NAME"]
+          query = pathlib.Path(path).read_text()
+          body = json.dumps({"query": query, "name": name}).encode()
+          url = f"https://api.supabase.com/v1/projects/{os.environ['PROJECT_REF']}/database/migrations"
+          headers = {
+              "Authorization": f"Bearer {os.environ['SUPABASE_ACCESS_TOKEN']}",
+              "Content-Type": "application/json",
+              "User-Agent": "aios-apply-sql-migration/1.0",
+              "Accept": "application/json",
+          }
+
+          last_err = None
+          for attempt in range(1, 6):
+              req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+              try:
+                  with urllib.request.urlopen(req, timeout=180) as resp:
+                      raw = resp.read().decode()
+                      print(f"HTTP {resp.status} attempt={attempt}")
+                      print(raw[:4000])
+                      sys.exit(0)
+              except urllib.error.HTTPError as e:
+                  raw = e.read().decode()
+                  print(f"HTTP {e.code} attempt={attempt}", file=sys.stderr)
+                  print(raw[:4000], file=sys.stderr)
+                  last_err = e
+                  if e.code in (403, 429, 500, 502, 503, 504) and attempt < 5:
+                      time.sleep(60)
+                      continue
+                  sys.exit(1)
+              except Exception as e:
+                  print(f"error attempt={attempt}: {e}", file=sys.stderr)
+                  last_err = e
+                  if attempt < 5:
+                      time.sleep(60)
+                      continue
+                  sys.exit(1)
+          raise SystemExit(str(last_err))
+          PY
+        env:
+          SQL_FILE: ${{ steps.sql.outputs.file }}
+          MIG_NAME: ${{ steps.sql.outputs.name }}
