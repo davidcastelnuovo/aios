@@ -257,6 +257,91 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: r.ok, result: r.json, approval_id }), { status: r.ok ? 200 : 400, headers: corsHeaders });
     }
 
+    // ── Automation mutations ────────────────────────────────────────────────
+    if (row.tool_name === 'toggle_automation' || row.tool_name === 'delete_automation' || row.tool_name === 'edit_automation') {
+      const inp = (row.tool_input as any) || {};
+      let result: any = null;
+      let failed = false;
+      try {
+        if (!inp.automation_id) throw new Error('automation_id required');
+        const { data: auto } = await supabase.from('automations').select('id, name, tenant_id, is_flow, trigger_type').eq('id', inp.automation_id).eq('tenant_id', row.tenant_id).maybeSingle();
+        if (!auto) throw new Error('automation_not_found');
+
+        if (row.tool_name === 'toggle_automation') {
+          const { data, error } = await supabase.from('automations').update({ active: !!inp.active }).eq('id', inp.automation_id).eq('tenant_id', row.tenant_id).select('id, name, active').single();
+          if (error) throw error;
+          result = data;
+        } else if (row.tool_name === 'delete_automation') {
+          const { error } = await supabase.from('automations').delete().eq('id', inp.automation_id).eq('tenant_id', row.tenant_id);
+          if (error) throw error;
+          result = { deleted: inp.automation_id, name: auto.name };
+        } else {
+          // edit_automation
+          const patch: Record<string, unknown> = {};
+          if (inp.name != null) patch.name = String(inp.name);
+          if (inp.description != null) patch.description = inp.description;
+          if (inp.trigger_type != null) patch.trigger_type = String(inp.trigger_type);
+          if (inp.trigger_config && typeof inp.trigger_config === 'object') patch.configuration = inp.trigger_config;
+          if (Object.keys(patch).length) {
+            const { error } = await supabase.from('automations').update(patch).eq('id', inp.automation_id).eq('tenant_id', row.tenant_id);
+            if (error) throw error;
+          }
+          let stepsReplaced = 0;
+          if (Array.isArray(inp.steps) && inp.steps.length > 0) {
+            await supabase.from('automation_flow_steps').delete().eq('automation_id', inp.automation_id);
+            const { data: agents } = await supabase.from('ai_agents').select('id,name').eq('tenant_id', row.tenant_id).eq('active', true);
+            const carmen = (agents as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || '')) || (agents as any[] || [])[0];
+            const stepRows: any[] = [];
+            const trigId = crypto.randomUUID();
+            const triggerType = inp.trigger_type || auto.trigger_type || 'manual_command';
+            stepRows.push({
+              id: trigId, automation_id: inp.automation_id, tenant_id: row.tenant_id,
+              step_type: 'trigger', action_type: String(triggerType),
+              configuration: inp.trigger_config || {},
+              position_x: 400, position_y: 60, sort_order: 0, parent_step_id: null, condition_branch: null, label: 'טריגר',
+            });
+            let parent = trigId, sort = 0, y = 60;
+            for (const s of inp.steps.slice(0, 20)) {
+              sort++; y += 130;
+              const id = crypto.randomUUID();
+              const type = String(s.type || 'agent');
+              let action_type: string | null = null;
+              let config = (s.config && typeof s.config === 'object') ? { ...s.config } : {};
+              if (type === 'agent') {
+                action_type = 'agent';
+                config = { agent_id: carmen?.id || null, skin_slugs: s.skin ? [String(s.skin)] : [], step_instruction: s.instruction || '', ...config };
+              } else if (type === 'action') {
+                action_type = s.action_type ? String(s.action_type) : 'notification';
+              }
+              stepRows.push({
+                id, automation_id: inp.automation_id, tenant_id: row.tenant_id,
+                step_type: type, action_type, configuration: config,
+                position_x: 400, position_y: y, sort_order: sort, parent_step_id: parent, condition_branch: null,
+                label: s.label || type,
+              });
+              parent = id;
+            }
+            const { error: sErr } = await supabase.from('automation_flow_steps').insert(stepRows);
+            if (sErr) throw sErr;
+            stepsReplaced = stepRows.length;
+            await supabase.from('automations').update({ is_flow: true }).eq('id', inp.automation_id);
+          }
+          result = { automation_id: inp.automation_id, updated_fields: Object.keys(patch), steps_replaced: stepsReplaced };
+        }
+      } catch (e: any) {
+        failed = true;
+        result = { error: String(e?.message || e) };
+      }
+      await supabase.from('agent_approval_queue').update({
+        status: failed ? 'failed' : 'executed',
+        approved_by: approved_by || row.requested_by,
+        approved_at: row.approved_at || new Date().toISOString(),
+        executed_at: new Date().toISOString(),
+        execution_result: result,
+      }).eq('id', approval_id);
+      return new Response(JSON.stringify({ success: !failed, result, approval_id }), { status: failed ? 400 : 200, headers: corsHeaders });
+    }
+
     // ── Accounting mutations (real AccountingIntegrations tables) ────────────
     const accountingTools = new Set([
       'create_one_time_income', 'delete_one_time_income',

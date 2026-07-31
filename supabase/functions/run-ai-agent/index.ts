@@ -360,8 +360,18 @@ const ALL_TOOLS = [
   { name: 'list_products', description: 'רשימת מוצרים/שירותים', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
   { name: 'create_product', description: 'יצירת מוצר/שירות חדש', parameters: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, price: { type: 'number' } }, required: ['name', 'price'] } },
   // AUTOMATIONS
-  { name: 'list_automations', description: 'רשימת אוטומציות', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
-  { name: 'toggle_automation', description: 'הפעלה/כיבוי אוטומציה', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, active: { type: 'boolean' } }, required: ['automation_id', 'active'] } },
+  { name: 'list_automations', description: 'רשימת אוטומציות (id, name, active, trigger_type, is_flow). לפרטי שלבים השתמשי ב-get_automation_details.', parameters: { type: 'object', properties: { limit: { type: 'integer' }, active_only: { type: 'boolean' }, name_search: { type: 'string' } } } },
+  { name: 'get_automation_details', description: 'פרטי אוטומציה כולל צעדי flow (automation_flow_steps) — טריגר, agent, action, condition.', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, name_search: { type: 'string' } } } },
+  { name: 'toggle_automation', description: 'הפעלה/כיבוי אוטומציה. מכניס לתור אישורים — לא מבצע מיד.', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, active: { type: 'boolean' } }, required: ['automation_id', 'active'] } },
+  { name: 'delete_automation', description: 'מחיקת אוטומציה (כולל צעדי flow). מכניס לתור אישורים.', parameters: { type: 'object', properties: { automation_id: { type: 'string' } }, required: ['automation_id'] } },
+  { name: 'propose_automation_edit', description: 'הצעת עריכה לאוטומציה קיימת (שם/תיאור/טריגר/החלפת steps). מכניס לתור אישורים; אחרי אישור מעדכן את האוטומציה.', parameters: { type: 'object', properties: {
+    automation_id: { type: 'string' },
+    name: { type: 'string' },
+    description: { type: 'string' },
+    trigger_type: { type: 'string' },
+    trigger_config: { type: 'object' },
+    steps: { type: 'array', description: 'אם מסופק — מחליף את כל צעדי ה-flow (חוץ מהטריגר נבנה מחדש)', items: { type: 'object' } },
+  }, required: ['automation_id'] } },
   { name: 'inspect_meta_lead_forms', description: 'בדיקה חיה של טפסי לידים ב-Meta ושל הטופס המחובר לאוטומציה. מחזיר אוטומציות, Page/Form ID, שמות, סטטוס ושדות. השתמשי בכלי זה לפני החלפה או יצירה של טופס, וניתן לחפש לפי שם אוטומציה, עמוד או טופס.', parameters: { type: 'object', properties: { automation_name: { type: 'string', description: 'שם מלא או חלקי של האוטומציה' }, page_name: { type: 'string', description: 'שם מלא או חלקי של עמוד Meta' }, form_name: { type: 'string', description: 'שם מלא או חלקי של טופס הלידים' } } } },
   { name: 'set_automation_meta_lead_form', description: 'החלפת טופס הלידים המחובר לטריגר של אוטומציה לפי שם הטופס ב-Meta. הכלי מאמת התאמה יחידה לעמוד, לטופס ולאוטומציה, מעדכן את Form ID ורושם את הטופס לסנכרון. דורש אישור מפורש של המשתמש.', parameters: { type: 'object', properties: { automation_id: { type: 'string', description: 'מזהה האוטומציה, אם ידוע' }, automation_name: { type: 'string', description: 'שם מלא או חלקי של האוטומציה' }, form_name: { type: 'string', description: 'שם טופס Meta המדויק או חלק ייחודי ממנו' }, page_name: { type: 'string', description: 'שם עמוד Meta; מומלץ כשיש טפסים בעלי שם זהה' }, confirmed: { type: 'boolean', description: 'חובה true ורק לאחר אישור מפורש של המשתמש' } }, required: ['form_name', 'confirmed'] } },
   { name: 'create_meta_lead_form', description: 'יצירת Instant Form חדש בעמוד Meta. ניתן גם לחבר אותו מיד לאוטומציה. טופס שפורסם ב-Meta אינו ניתן לעריכה רגילה, לכן יש להציג למשתמש את השם, השדות, מדיניות הפרטיות והעמוד ולקבל אישור מפורש לפני הקריאה.', parameters: { type: 'object', properties: { page_name: { type: 'string', description: 'שם עמוד Meta המדויק או חלק ייחודי ממנו' }, form_name: { type: 'string', description: 'שם הטופס החדש' }, questions: { type: 'array', description: 'שדות הטופס לפי הסדר', items: { type: 'object', properties: { type: { type: 'string', description: 'סוג שדה Meta, למשל FULL_NAME, EMAIL, PHONE, CITY, CUSTOM' }, label: { type: 'string', description: 'חובה לשדה CUSTOM; אופציונלי לשדה רגיל' } }, required: ['type'] } }, privacy_policy_url: { type: 'string', description: 'קישור HTTPS למדיניות הפרטיות' }, privacy_policy_link_text: { type: 'string', description: 'טקסט קישור למדיניות, ברירת מחדל מדיניות פרטיות' }, follow_up_action_url: { type: 'string', description: 'קישור HTTPS למסך התודה/אתר לאחר השליחה' }, automation_id: { type: 'string', description: 'אוטומציה לחיבור מיידי, אם ידועה' }, automation_name: { type: 'string', description: 'שם אוטומציה לחיבור מיידי' }, confirmed: { type: 'boolean', description: 'חובה true ורק לאחר אישור מפורש של המשתמש' } }, required: ['page_name', 'form_name', 'questions', 'privacy_policy_url', 'follow_up_action_url', 'confirmed'] } },
@@ -2424,14 +2434,82 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // AUTOMATIONS
     case 'list_automations': {
-      const { data, error } = await supabase.from('automations').select('id, name, active, trigger_type').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+      let q = supabase.from('automations')
+        .select('id, name, description, active, trigger_type, is_flow, updated_at')
+        .in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+      if (args.active_only === true) q = q.eq('active', true)
+      if (args.name_search) q = q.ilike('name', `%${args.name_search}%`)
+      const { data, error } = await q
       if (error) throw error
       return { count: data.length, automations: data }
     }
-    case 'toggle_automation': {
-      const { data, error } = await supabase.from('automations').update({ active: args.active }).eq('id', args.automation_id).in('tenant_id', accessibleTenantIds).select('id, name, active').single()
-      if (error) throw error
-      return { automation_id: data.id, name: data.name, active: data.active }
+    case 'get_automation_details': {
+      let automationId = args.automation_id as string | undefined
+      if (!automationId && args.name_search) {
+        const { data: found } = await supabase.from('automations').select('id').in('tenant_id', accessibleTenantIds).ilike('name', `%${args.name_search}%`).limit(1).maybeSingle()
+        automationId = found?.id
+      }
+      if (!automationId) return { error: 'automation_id או name_search נדרש' }
+      const { data: auto, error } = await supabase.from('automations')
+        .select('id, name, description, active, trigger_type, configuration, is_flow, created_at, updated_at')
+        .eq('id', automationId).in('tenant_id', accessibleTenantIds).maybeSingle()
+      if (error || !auto) return { error: 'אוטומציה לא נמצאה' }
+      const { data: steps } = await supabase.from('automation_flow_steps')
+        .select('id, step_type, action_type, label, configuration, sort_order, parent_step_id, condition_branch, position_x, position_y')
+        .eq('automation_id', automationId)
+        .order('sort_order', { ascending: true })
+      return {
+        automation: auto,
+        steps: (steps || []).map((s: any) => ({
+          id: s.id,
+          step_type: s.step_type,
+          action_type: s.action_type,
+          label: s.label,
+          sort_order: s.sort_order,
+          parent_step_id: s.parent_step_id,
+          condition_branch: s.condition_branch,
+          skin_slugs: s.configuration?.skin_slugs || null,
+          step_instruction: s.configuration?.step_instruction || null,
+          agent_id: s.configuration?.agent_id || null,
+          facebook_form_id: s.configuration?.facebook_form_id || null,
+          config_keys: s.configuration ? Object.keys(s.configuration) : [],
+        })),
+        steps_count: steps?.length || 0,
+      }
+    }
+    case 'toggle_automation':
+    case 'delete_automation':
+    case 'propose_automation_edit': {
+      if (!args.automation_id) return { error: 'automation_id נדרש' }
+      const { data: auto } = await supabase.from('automations').select('id, name, active').eq('id', args.automation_id).in('tenant_id', accessibleTenantIds).maybeSingle()
+      if (!auto) return { error: 'אוטומציה לא נמצאה' }
+      const autoTitles: Record<string, string> = {
+        toggle_automation: `${args.active ? 'הפעלת' : 'כיבוי'} אוטומציה: ${auto.name}`,
+        delete_automation: `מחיקת אוטומציה: ${auto.name}`,
+        propose_automation_edit: `עריכת אוטומציה: ${auto.name}`,
+      }
+      const toolName = name === 'propose_automation_edit' ? 'edit_automation' : name
+      const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: toolName,
+        title: autoTitles[name] || name,
+        description: 'פעולת אוטומציה — דורשת אישור משתמש מפורש',
+        tool_name: toolName,
+        tool_input: args,
+        context: { caller_role: callerRole, caller_phone: callerPhone, automation_name: auto.name },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aqRow.id,
+        action: toolName,
+        summary: autoTitles[name] || name,
+        instruction_for_carmen: 'הצג למשתמש מה ישתנה באוטומציה ובקש אישור: "לאשר? (כן/לא)". אל תבצעי עד execute_pending_approval.',
+      }
     }
     case 'inspect_meta_lead_forms': {
       const { data: automations, error: automationError } = await supabase
