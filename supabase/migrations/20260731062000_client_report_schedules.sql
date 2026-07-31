@@ -125,6 +125,53 @@ BEFORE INSERT OR UPDATE OF enabled, frequency, day_of_week, day_of_month, send_t
 ON public.report_schedules
 FOR EACH ROW EXECUTE FUNCTION public.set_report_schedule_next_run();
 
--- Production scheduling is intentionally explicit. After deploying the
--- scheduled-report-worker, register it every 15 minutes with pg_cron using
--- the service-role bearer, following the existing cron Edge Function pattern.
+-- Register the worker only when the dedicated bearer has been provisioned in
+-- Vault. This keeps a fresh environment safely disabled until an operator
+-- explicitly opts in by adding REPORT_WORKER_SECRET to both Vault and Edge
+-- Function secrets.
+DO $report_cron$
+DECLARE
+  worker_secret text;
+  existing_job bigint;
+BEGIN
+  SELECT decrypted_secret
+  INTO worker_secret
+  FROM vault.decrypted_secrets
+  WHERE name = 'REPORT_WORKER_SECRET'
+  LIMIT 1;
+
+  IF worker_secret IS NULL OR worker_secret = '' THEN
+    RAISE NOTICE 'REPORT_WORKER_SECRET is absent; scheduled report cron remains disabled';
+    RETURN;
+  END IF;
+
+  SELECT jobid INTO existing_job
+  FROM cron.job
+  WHERE jobname = 'client-report-delivery'
+  LIMIT 1;
+  IF existing_job IS NOT NULL THEN
+    PERFORM cron.unschedule(existing_job);
+  END IF;
+
+  PERFORM cron.schedule(
+    'client-report-delivery',
+    '*/15 * * * *',
+    format(
+      $command$
+        SELECT net.http_post(
+          url := 'https://zvoijyneresvkadpprel.supabase.co/functions/v1/scheduled-report-worker',
+          headers := jsonb_build_object(
+            'Content-Type', 'application/json',
+            'Authorization', %L
+          ),
+          body := '{}'::jsonb
+        );
+      $command$,
+      'Bearer ' || worker_secret
+    )
+  );
+EXCEPTION
+  WHEN undefined_table OR undefined_function THEN
+    RAISE NOTICE 'pg_cron, pg_net, or Vault is unavailable; scheduled report cron remains disabled';
+END;
+$report_cron$;

@@ -241,13 +241,13 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [shareLink]);
 
-  const refreshDashboard = useCallback(async (showFeedback = false) => {
+  const refreshDashboard = useCallback(async (showFeedback = false, syncSources = true) => {
     setIsSyncing(true);
     try {
       const token = await ensureShareToken();
       if (!token) throw new Error("לא ניתן ליצור קישור לדשבורד");
 
-      const results = await syncReportTables(dashboardTables);
+      const results = syncSources ? await syncReportTables(dashboardTables) : [];
       const failures = results.filter((result) => result.status === "failed");
       if (failures.length > 0 && showFeedback) {
         toast.warning(`${failures.length} מקורות לא הסתנכרנו; יוצגו הנתונים האחרונים`);
@@ -271,7 +271,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   useEffect(() => {
     if (dashboardTablesLoading || initializedDashboardRef.current === dashboard.id) return;
     initializedDashboardRef.current = dashboard.id;
-    void refreshDashboard(false);
+    void refreshDashboard(false, false);
   }, [dashboard.id, dashboardTablesLoading, refreshDashboard]);
 
   const captureScreenshot = useCallback(async (): Promise<Blob | null> => {
@@ -536,7 +536,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         }
       }
 
-      const { error: deliveryLogError } = await supabase.from("report_deliveries" as any).insert({
+      const { error: deliveryLogError } = await supabase.from("report_deliveries").insert({
         tenant_id: tenantId,
         client_id: clientId,
         target_type: "dashboard",

@@ -6594,6 +6594,126 @@ export type Database = {
           },
         ]
       }
+      report_deliveries: {
+        Row: {
+          channels: string[]
+          client_id: string
+          created_at: string
+          details: Json
+          id: string
+          schedule_id: string | null
+          status: string
+          target_id: string
+          target_type: string
+          tenant_id: string
+        }
+        Insert: {
+          channels?: string[]
+          client_id: string
+          created_at?: string
+          details?: Json
+          id?: string
+          schedule_id?: string | null
+          status: string
+          target_id: string
+          target_type: string
+          tenant_id: string
+        }
+        Update: {
+          channels?: string[]
+          client_id?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          schedule_id?: string | null
+          status?: string
+          target_id?: string
+          target_type?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      report_schedules: {
+        Row: {
+          channels: string[]
+          client_id: string
+          created_at: string
+          created_by: string | null
+          dashboard_id: string | null
+          day_of_month: number | null
+          day_of_week: number | null
+          email_recipients: string[]
+          email_subject: string | null
+          enabled: boolean
+          frequency: string
+          id: string
+          last_run_at: string | null
+          locked_at: string | null
+          message: string | null
+          next_run_at: string | null
+          phone: string | null
+          send_time: string
+          table_id: string | null
+          target_type: string
+          tenant_id: string
+          timezone: string
+          updated_at: string
+          whatsapp_group_id: string | null
+        }
+        Insert: {
+          channels?: string[]
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          dashboard_id?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          email_recipients?: string[]
+          email_subject?: string | null
+          enabled?: boolean
+          frequency?: string
+          id?: string
+          last_run_at?: string | null
+          locked_at?: string | null
+          message?: string | null
+          next_run_at?: string | null
+          phone?: string | null
+          send_time?: string
+          table_id?: string | null
+          target_type: string
+          tenant_id: string
+          timezone?: string
+          updated_at?: string
+          whatsapp_group_id?: string | null
+        }
+        Update: {
+          channels?: string[]
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          dashboard_id?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          email_recipients?: string[]
+          email_subject?: string | null
+          enabled?: boolean
+          frequency?: string
+          id?: string
+          last_run_at?: string | null
+          locked_at?: string | null
+          message?: string | null
+          next_run_at?: string | null
+          phone?: string | null
+          send_time?: string
+          table_id?: string | null
+          target_type?: string
+          tenant_id?: string
+          timezone?: string
+          updated_at?: string
+          whatsapp_group_id?: string | null
+        }
+        Relationships: []
+      }
       report_alerts: {
         Row: {
           comparison_type: string

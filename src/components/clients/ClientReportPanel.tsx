@@ -196,12 +196,17 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     let cancelled = false;
 
     (async () => {
-      // 1. Refresh every supported source, not only ad platforms.
-      setIsSyncing(true);
-      const syncResult = await syncReportTable(table);
-      if (!cancelled) setIsSyncing(false);
-      if (syncResult.status === "failed") {
-        toast.warning("הסנכרון נכשל; מוצגים הנתונים האחרונים שנשמרו");
+      // 1. Preserve low-cost ad refresh on open. SEO/analytics sources refresh
+      // only from the explicit button so opening a client does not consume
+      // Ahrefs credits or start several long-running API jobs.
+      const autoSyncTypes = ["facebook_insights", "facebook_ecommerce", "google_ads"];
+      if (autoSyncTypes.includes(table.integration_type)) {
+        setIsSyncing(true);
+        const syncResult = await syncReportTable(table);
+        if (!cancelled) setIsSyncing(false);
+        if (syncResult.status === "failed") {
+          toast.warning("הסנכרון נכשל; מוצגים הנתונים האחרונים שנשמרו");
+        }
       }
 
       // 2. Refresh host queries and remount the isolated snapshot QueryClient.
@@ -540,7 +545,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         }
       }
 
-      const { error: deliveryLogError } = await supabase.from("report_deliveries" as any).insert({
+      const { error: deliveryLogError } = await supabase.from("report_deliveries").insert({
         tenant_id: tenantId,
         client_id: clientId,
         target_type: "table",

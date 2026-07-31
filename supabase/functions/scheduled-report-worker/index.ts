@@ -13,7 +13,12 @@ const htmlEscape = (value: string) =>
 
 Deno.serve(async (req) => {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  if (!serviceRoleKey || req.headers.get("Authorization") !== `Bearer ${serviceRoleKey}`) {
+  const workerSecret = Deno.env.get("REPORT_WORKER_SECRET") || "";
+  const bearer = req.headers.get("Authorization") || "";
+  const authorized =
+    (!!serviceRoleKey && bearer === `Bearer ${serviceRoleKey}`) ||
+    (!!workerSecret && bearer === `Bearer ${workerSecret}`);
+  if (!authorized) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: jsonHeaders });
   }
 

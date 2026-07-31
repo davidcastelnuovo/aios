@@ -54,7 +54,7 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
     queryKey,
     queryFn: async () => {
       let query = supabase
-        .from("report_schedules" as any)
+        .from("report_schedules")
         .select("*")
         .eq("client_id", clientId)
         .eq("target_type", target.kind);
@@ -63,7 +63,7 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
         : query.eq("dashboard_id", target.id);
       const { data, error } = await query.maybeSingle();
       if (error) throw error;
-      return data as any;
+      return data;
     },
     enabled: !!clientId && !!target.id,
   });
@@ -82,7 +82,7 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
     setSendEmail(channels.includes("email"));
     setEmails((schedule?.email_recipients || []).join(", "));
     setMessage(schedule?.message || "");
-  }, [schedule?.id, target.id]);
+  }, [schedule, target.id]);
 
   const save = async () => {
     if (!sendWhatsApp && !sendEmail) {
@@ -123,13 +123,13 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
       };
 
       const result = schedule?.id
-        ? await supabase.from("report_schedules" as any).update(payload).eq("id", schedule.id)
-        : await supabase.from("report_schedules" as any).insert(payload);
+        ? await supabase.from("report_schedules").update(payload).eq("id", schedule.id)
+        : await supabase.from("report_schedules").insert(payload);
       if (result.error) throw result.error;
       await queryClient.invalidateQueries({ queryKey });
       toast.success(enabled ? "תזמון הדוח נשמר והופעל" : "הגדרת התזמון נשמרה ללא הפעלה");
-    } catch (error: any) {
-      toast.error(`שמירת התזמון נכשלה: ${error?.message || error}`);
+    } catch (error: unknown) {
+      toast.error(`שמירת התזמון נכשלה: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSaving(false);
     }
