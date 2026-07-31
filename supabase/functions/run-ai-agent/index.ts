@@ -308,10 +308,10 @@ const ALL_TOOLS = [
   { name: 'send_message_to_manus', description: 'שליחת הודעה ישירה ל-Manus agent פעיל (תקשורת ישירה). משמש לשאלות, עדכונים, או המשך שיחה עם Manus על משימה קיימת. מחזיר מיידית ללא המתנה לתשובה.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'ההודעה לשליחה ל-Manus' }, task_id: { type: 'string', description: 'מזהה המשימה הקיימת (אופציונלי — אם לא מוגדר ישתמש ב-agent-default)' } }, required: ['message'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
   { name: 'list_facebook_campaigns', description: 'רשימת קמפיינים פעילים/מושבתים של לקוח עם campaign_id, שם וסטטוס. השתמש כדי למצוא את ה-campaign_id לפני toggle.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הקמפיין' } }, required: ['client_id'] } },
-  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק לפי campaign_id. דורש אישור מפורש של המשתמש לפני הפעלה — אל תקרא לכלי לפני שהמשתמש אישר את הפעולה הספציפית.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, confirmed: { type: 'boolean', description: 'חובה true — מאשר שהמשתמש אישר במפורש את הפעולה' } }, required: ['client_id', 'campaign_id', 'status', 'confirmed'] } },
+  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. אחרי שהמשתמש מאשר ("כן"), קראי ל-execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] } }, required: ['client_id', 'campaign_id', 'status'] } },
   { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: השוואת היום מול 7 ימים מול 30 ימים, מטריקות (CPL, CTR, frequency, spend), זיהוי חריגות והמלצות לפעולה. השתמש לפני שמציעים פעולה כדי לבסס המלצה.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
-  { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. דורש אישור מפורש של המשתמש (confirmed=true). חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' }, confirmed: { type: 'boolean' } }, required: ['client_id', 'campaign_id', 'confirmed'] } },
-  { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED) לצורך ניסיון בקהל/יצירה אחרים. דורש אישור.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['client_id', 'campaign_id', 'confirmed'] } },
+  { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת לפני הבקשה. אחרי אישור המשתמש — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' } }, required: ['client_id', 'campaign_id'] } },
+  { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED). מכניס בקשת אישור לתור — לא מבצע מיד. אחרי אישור — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'get_campaign_alerts', description: 'שליפת התראות פתוחות על קמפיינים (קמפיין נעצר, מודעה לא מאושרת, CPL חורג, frequency גבוה). השתמש בתחילת בדיקת דופק או כשהמשתמש שואל על מצב הקמפיינים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, only_open: { type: 'boolean', description: 'ברירת מחדל true' } } } },
   { name: 'acknowledge_campaign_alert', description: 'סימון התראת קמפיין כטופלה.', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
   { name: 'list_social_pages', description: 'רשימת עמודים מחוברים (פייסבוק/אינסטגרם) של הטננט. שימושי לפני פרסום או טיפול בתגובות.', parameters: { type: 'object', properties: { platform: { type: 'string', enum: ['facebook', 'instagram'] }, client_id: { type: 'string' } } } },
@@ -496,7 +496,7 @@ const ALL_TOOLS = [
   { name: 'send_calendar_invite', description: 'שליחת זימון Google Calendar (ICS) דרך מייל לנמען חיצוני — האירוע נוצר ביומן הארגון עם הנמען כמשתתף, וגוגל שולחת לו מייל אוטומטי עם כפתורי אישור/דחייה. השתמש כשהמשתמש רוצה לזמן פגישה עם אדם חיצוני.', parameters: { type: 'object', properties: { attendee_email: { type: 'string', description: 'כתובת המייל של המוזמן' }, attendee_name: { type: 'string', description: 'שם המוזמן (אופציונלי)' }, title: { type: 'string', description: 'שם הפגישה/האירוע' }, date: { type: 'string', description: 'תאריך בפורמט YYYY-MM-DD' }, time: { type: 'string', description: 'שעת התחלה בפורמט HH:MM' }, duration_minutes: { type: 'integer', description: 'משך בדקות (ברירת מחדל 60)' }, notes: { type: 'string', description: 'הערות / תיאור הפגישה (אופציונלי)' } }, required: ['attendee_email', 'title', 'date', 'time'] } },
   { name: 'list_calendar_events', description: 'רשימת אירועים ביומן הארגון בטווח תאריכים (ברירת מחדל: 14 הימים הקרובים). השתמשי כדי למצוא event_id לפני עדכון/ביטול פגישה, או כשנשאלת "מה יש ביומן".', parameters: { type: 'object', properties: { date_from: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל היום)' }, date_to: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל +14 ימים)' }, search: { type: 'string', description: 'סינון טקסט חופשי (שם פגישה/משתתף)' } } } },
   { name: 'update_calendar_invite', description: 'עדכון פגישה/זימון קיים ביומן — הזזת מועד, שינוי כותרת או הערות. כל המשתתפים מקבלים מייל עדכון אוטומטי. חובה event_id (מ-list_calendar_events). לעדכון מועד ספקי date+time (שעון ישראל).', parameters: { type: 'object', properties: { event_id: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'HH:MM שעון ישראל' }, duration_minutes: { type: 'integer' }, title: { type: 'string' }, notes: { type: 'string' } }, required: ['event_id'] } },
-  { name: 'cancel_calendar_invite', description: 'ביטול פגישה ביומן — המשתתפים מקבלים הודעת ביטול. חובה event_id (מ-list_calendar_events). בקשי אישור מהמשתמש לפני ביטול.', parameters: { type: 'object', properties: { event_id: { type: 'string' } }, required: ['event_id'] } },
+  { name: 'cancel_calendar_invite', description: 'ביטול פגישה ביומן — המשתתפים מקבלים הודעת ביטול. חובה event_id (מ-list_calendar_events). חובה confirmed=true אחרי שהמשתמש אישר במפורש.', parameters: { type: 'object', properties: { event_id: { type: 'string' }, confirmed: { type: 'boolean', description: 'חובה true — רק אחרי אישור מפורש של המשתמש' } }, required: ['event_id', 'confirmed'] } },
   // ===========================
   // CAMPAIGNER MESSAGING
   // ===========================
@@ -1602,28 +1602,47 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const campaigns = Array.from(map.values()).sort((a, b) => (b.last_date || '').localeCompare(a.last_date || ''))
       return { count: campaigns.length, campaigns }
     }
-    case 'toggle_facebook_campaign': {
-      if (args.confirmed !== true) {
-        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש. שאל את המשתמש לפני קריאה לכלי הזה ושלח confirmed=true רק אחרי שהוא אישר.' }
-      }
+    // Legacy Meta mutate tools — enqueue to agent_approval_queue (never execute immediately).
+    // Kept for skin compatibility; same gate as fb_pause / fb_update_budget / etc.
+    case 'toggle_facebook_campaign':
+    case 'update_facebook_budget':
+    case 'duplicate_facebook_campaign': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
-      const targetTenantId = accessibleTenantIds[0]
-      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/toggle-facebook-campaign`
-      const res = await fetch(fnUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({
-          tenant_id: targetTenantId,
-          campaign_id: args.campaign_id,
-          status: args.status,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) return { error: 'toggle_failed', details: json }
-      return { success: true, campaign_id: args.campaign_id, new_status: args.status, fb: json }
+      if (!args.campaign_id) return { error: 'campaign_id נדרש' }
+      if (name === 'toggle_facebook_campaign' && !['ACTIVE', 'PAUSED'].includes(args.status)) {
+        return { error: 'status חייב להיות ACTIVE או PAUSED' }
+      }
+      if (name === 'update_facebook_budget' && args.daily_budget == null && args.lifetime_budget == null) {
+        return { error: 'daily_budget או lifetime_budget נדרש' }
+      }
+      const legacyTitles: Record<string, string> = {
+        toggle_facebook_campaign: args.status === 'PAUSED'
+          ? `כיבוי קמפיין FB ${args.campaign_id}`
+          : `הדלקת קמפיין FB ${args.campaign_id}`,
+        update_facebook_budget: `שינוי תקציב FB ${args.campaign_id} → ${args.daily_budget ?? args.lifetime_budget}`,
+        duplicate_facebook_campaign: `שכפול קמפיין FB ${args.campaign_id}`,
+      }
+      const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: name,
+        title: legacyTitles[name] || name,
+        description: 'פעולת mutating על Meta — דורשת אישור משתמש מפורש (תור אישורים)',
+        tool_name: name,
+        tool_input: args,
+        context: { caller_role: callerRole, caller_phone: callerPhone, client_id: args.client_id },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aqRow.id,
+        action: name,
+        summary: legacyTitles[name] || name,
+        instruction_for_carmen: 'הצג למשתמש בקצרה מה את עומדת לעשות ובקש אישור: "לאשר? (כן/לא)". אל תבצעי כלום עד שיגיע אישור — קוראת ל-execute_pending_approval רק אחרי תשובה חיובית.',
+      }
     }
     case 'analyze_facebook_campaign': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
@@ -1636,32 +1655,6 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) return { error: 'analyze_failed', details: json }
-      return json
-    }
-    case 'update_facebook_budget':
-    case 'duplicate_facebook_campaign': {
-      if (args.confirmed !== true) {
-        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש (confirmed=true).' }
-      }
-      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
-      const targetTenantId = accessibleTenantIds[0]
-      const action = name === 'update_facebook_budget' ? 'update_budget' : 'duplicate'
-      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-control`
-      const res = await fetch(fnUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
-        body: JSON.stringify({
-          tenant_id: targetTenantId,
-          action,
-          campaign_id: args.campaign_id,
-          daily_budget: args.daily_budget,
-          lifetime_budget: args.lifetime_budget,
-          name_suffix: args.name_suffix,
-          confirmed: true,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) return { error: `${action}_failed`, details: json }
       return json
     }
     case 'get_campaign_alerts': {
@@ -3983,6 +3976,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
 
     case 'cancel_calendar_invite': {
+      if (args.confirmed !== true) {
+        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש. שאלי לפני ביטול ושלחי confirmed=true רק אחרי שהוא אישר.' }
+      }
       const { event_id } = args
       if (!event_id) return { error: 'event_id נדרש — מצאי אותו קודם עם list_calendar_events' }
       const cal = await resolveCalendarAccessToken(supabase, tenantId, callerCampaignerId, userId)

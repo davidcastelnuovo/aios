@@ -21,6 +21,8 @@ const TOOL_TO_FUNCTION: Record<string, { fn: string; action?: string }> = {
   fb_update_budget: { fn: 'carmen-fb-tools', action: 'update_budget' },
   fb_pause: { fn: 'carmen-fb-tools', action: 'pause' },
   fb_resume: { fn: 'carmen-fb-tools', action: 'resume' },
+  // Legacy Meta tools (same queue gate; mapped to carmen-fb-tools / fb-campaign-control)
+  update_facebook_budget: { fn: 'carmen-fb-tools', action: 'update_budget' },
   gads_pause: { fn: 'carmen-google-tools', action: 'pause' },
   gads_resume: { fn: 'carmen-google-tools', action: 'resume' },
   gads_update_budget: { fn: 'carmen-google-tools', action: 'update_budget' },
@@ -205,14 +207,70 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: !upErr, result, approval_id }), { status: upErr ? 400 : 200, headers: corsHeaders });
     }
 
+    // Legacy Meta: toggle_facebook_campaign → carmen-fb-tools pause/resume
+    if (row.tool_name === 'toggle_facebook_campaign') {
+      const inp = (row.tool_input as any) || {};
+      const entity_id = inp.campaign_id || inp.entity_id;
+      const status = String(inp.status || '').toUpperCase();
+      if (!entity_id || !['ACTIVE', 'PAUSED'].includes(status)) {
+        await supabase.from('agent_approval_queue').update({ status: 'failed', executed_at: new Date().toISOString(), execution_result: { error: 'invalid_toggle_input' } }).eq('id', approval_id);
+        return new Response(JSON.stringify({ error: 'invalid_toggle_input' }), { status: 400, headers: corsHeaders });
+      }
+      const r = await invokeEdgeFn('carmen-fb-tools', {
+        tenant_id: row.tenant_id,
+        action: status === 'PAUSED' ? 'pause' : 'resume',
+        confirmed: true,
+        entity_id,
+        client_id: inp.client_id,
+      });
+      await supabase.from('agent_approval_queue').update({
+        status: r.ok ? 'executed' : 'failed',
+        approved_by: approved_by || row.requested_by,
+        approved_at: row.approved_at || new Date().toISOString(),
+        executed_at: new Date().toISOString(),
+        execution_result: r.json,
+      }).eq('id', approval_id);
+      return new Response(JSON.stringify({ success: r.ok, result: r.json, approval_id }), { status: r.ok ? 200 : 400, headers: corsHeaders });
+    }
+
+    // Legacy Meta: duplicate_facebook_campaign → fb-campaign-control
+    if (row.tool_name === 'duplicate_facebook_campaign') {
+      const inp = (row.tool_input as any) || {};
+      if (!inp.campaign_id) {
+        await supabase.from('agent_approval_queue').update({ status: 'failed', executed_at: new Date().toISOString(), execution_result: { error: 'missing_campaign_id' } }).eq('id', approval_id);
+        return new Response(JSON.stringify({ error: 'missing_campaign_id' }), { status: 400, headers: corsHeaders });
+      }
+      const r = await invokeEdgeFn('fb-campaign-control', {
+        tenant_id: row.tenant_id,
+        action: 'duplicate',
+        campaign_id: inp.campaign_id,
+        name_suffix: inp.name_suffix,
+        confirmed: true,
+      });
+      await supabase.from('agent_approval_queue').update({
+        status: r.ok ? 'executed' : 'failed',
+        approved_by: approved_by || row.requested_by,
+        approved_at: row.approved_at || new Date().toISOString(),
+        executed_at: new Date().toISOString(),
+        execution_result: r.json,
+      }).eq('id', approval_id);
+      return new Response(JSON.stringify({ success: r.ok, result: r.json, approval_id }), { status: r.ok ? 200 : 400, headers: corsHeaders });
+    }
+
     const route = TOOL_TO_FUNCTION[row.tool_name];
     if (!route) return new Response(JSON.stringify({ error: 'unknown_tool', tool_name: row.tool_name }), { status: 400, headers: corsHeaders });
+
+    // Normalize legacy update_facebook_budget → carmen-fb-tools entity_id
+    const rawInput = (row.tool_input as any) || {};
+    const normalizedInput = row.tool_name === 'update_facebook_budget'
+      ? { ...rawInput, entity_id: rawInput.entity_id || rawInput.campaign_id }
+      : rawInput;
 
     const payload = {
       tenant_id: row.tenant_id,
       action: route.action,
       confirmed: true,
-      ...((row.tool_input as any) || {}),
+      ...normalizedInput,
     };
 
     const r = await invokeEdgeFn(route.fn, payload);
