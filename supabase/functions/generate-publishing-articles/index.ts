@@ -2,6 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuth } from "../_shared/security.ts";
 import { buildSkillsBlockBySlug } from "../_shared/skills/registry.ts";
+import {
+  ENTITY_ATTACHMENTS_BUCKET,
+  type MagazineImageKind,
+  publishingImageProxyUrl,
+  publishingImageStoragePath,
+} from "../_shared/publishing-images.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -70,7 +76,7 @@ async function generateArticleImage(
   apiKey: string,
   tenantId: string,
   articleId: string,
-  kind: "hero" | "inline",
+  kind: MagazineImageKind,
   prompt: string,
 ): Promise<ArticleImage | null> {
   if (!prompt) return null;
@@ -95,8 +101,8 @@ async function generateArticleImage(
   const encoded = payload?.data?.[0]?.b64_json;
   if (!encoded) return null;
   const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
-  const path = `${tenantId}/publishing/${articleId}/${kind}.webp`;
-  const { error } = await admin.storage.from("entity-attachments").upload(path, bytes, {
+  const path = publishingImageStoragePath(tenantId, articleId, kind);
+  const { error } = await admin.storage.from(ENTITY_ATTACHMENTS_BUCKET).upload(path, bytes, {
     contentType: "image/webp",
     cacheControl: "31536000",
     upsert: true,
@@ -105,8 +111,31 @@ async function generateArticleImage(
     console.error("article image upload failed", kind, error.message);
     return null;
   }
-  const { data } = admin.storage.from("entity-attachments").getPublicUrl(path);
-  return { url: data.publicUrl, prompt };
+  return { url: publishingImageProxyUrl(Deno.env.get("SUPABASE_URL")!, articleId, kind), prompt };
+}
+
+/** Ask for fresh image directions from an already written article. */
+async function requestImagePrompts(
+  apiKey: string,
+  article: { title: string | null; excerpt: string | null; content: unknown; category: string | null; primary_keyword: string },
+) {
+  const body = Array.isArray(article.content) ? article.content.slice(0, 14).join("\n") : "";
+  const generated = await requestArticleJson(
+    apiKey,
+    `את עורכת ויזואלית במגזין ישראלי. הפיקי הנחיות צילום למאמר קיים.
+ההנחיות באנגלית, ספציפיות לתוכן, ללא טקסט, לוגו או סימני מים בתוך התמונה. החזירי JSON תקין בלבד.`,
+    `הפיקי שתי הנחיות תמונה וכתובית נגישות עבור המאמר:
+${JSON.stringify({ title: article.title, excerpt: article.excerpt, category: article.category, primary_keyword: article.primary_keyword, body })}
+
+החזירי בדיוק:
+{"hero_image_prompt":"","inline_image_prompt":"","image_alt":""}`,
+    0.4,
+  );
+  return {
+    heroPrompt: String(generated.hero_image_prompt ?? "").trim(),
+    inlinePrompt: String(generated.inline_image_prompt ?? "").trim(),
+    imageAlt: String(generated.image_alt ?? "").trim(),
+  };
 }
 
 serve(async (req) => {
@@ -126,10 +155,11 @@ serve(async (req) => {
       ? [...new Set(body.article_ids.filter((id: unknown) => typeof id === "string"))].slice(0, 10)
       : [];
     if (!articleIds.length) return respond({ error: "article_ids required" }, 400);
+    const imagesOnly = body.mode === "images";
 
     const { data: articles, error: articlesError } = await admin
       .from("publishing_articles")
-      .select("id,tenant_id,client_id,customer_name,primary_keyword,proposed_topic,target_url,category,site_id,status")
+      .select("id,tenant_id,client_id,customer_name,primary_keyword,proposed_topic,target_url,category,site_id,status,title,excerpt,content")
       .in("id", articleIds);
     if (articlesError) throw articlesError;
     if (!articles?.length) return respond({ error: "Articles not found" }, 404);
@@ -172,6 +202,48 @@ serve(async (req) => {
     }
     if (!settings.openai_api_key) {
       return respond({ error: "OpenAI API key חסר בהגדרות האינטגרציות" }, 400);
+    }
+
+    if (imagesOnly) {
+      const imageResults: Array<{ id: string; ok: boolean; error?: string }> = [];
+      for (const article of articles) {
+        try {
+          if (!article.title || !Array.isArray(article.content) || !article.content.length) {
+            throw new Error("אין תוכן כתוב למאמר, לכן אין ממה להפיק תמונות");
+          }
+          const { heroPrompt, inlinePrompt, imageAlt } = await requestImagePrompts(
+            settings.openai_api_key,
+            article,
+          );
+          const [heroImage, inlineImage] = await Promise.all([
+            generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "hero", heroPrompt),
+            generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "inline", inlinePrompt),
+          ]);
+          if (!heroImage && !inlineImage) throw new Error("יצירת התמונות נכשלה");
+          const { error: imageUpdateError } = await admin
+            .from("publishing_articles")
+            .update({
+              ...(heroImage ? { hero_image_url: heroImage.url } : {}),
+              ...(inlineImage ? { inline_image_url: inlineImage.url } : {}),
+              ...(imageAlt ? { image_alt: imageAlt } : {}),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", article.id)
+            .eq("tenant_id", tenantId);
+          if (imageUpdateError) throw imageUpdateError;
+          imageResults.push({ id: article.id, ok: true });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error("regenerate-publishing-images item error", article.id, message);
+          imageResults.push({ id: article.id, ok: false, error: message });
+        }
+      }
+      return respond({
+        mode: "images",
+        generated: imageResults.filter((result) => result.ok).length,
+        failed: imageResults.filter((result) => !result.ok).length,
+        results: imageResults,
+      });
     }
 
     const clientIds = [...new Set(articles.map((article) => article.client_id).filter(Boolean))];

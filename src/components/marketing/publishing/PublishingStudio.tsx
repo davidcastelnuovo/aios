@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, Plus, Rocket, Save, Sparkles, Square, Upload } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Image as ImageIcon, Loader2, Pencil, Plus, Rocket, Save, Sparkles, Square, Upload } from "lucide-react";
 
 type PublishingSite = { id: string; site_key: string; name: string; destination_type: "pbn" | "wordpress" | "custom_api"; client_id: string | null; connection_id: string | null; base_url: string | null; categories: string[]; status: string; is_hidden: boolean };
 type WordPressSite = { id: string; site_url: string; site_name: string | null; client_id: string | null; is_active: boolean };
@@ -125,6 +125,7 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([]);
   const [generatingArticleIds, setGeneratingArticleIds] = useState<string[]>([]);
   const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number; stopping: boolean } | null>(null);
+  const [imageProgress, setImageProgress] = useState<{ current: number; total: number } | null>(null);
   const stopGenerationRef = useRef(false);
   const [publishingSelected, setPublishingSelected] = useState(false);
   const [networkProgress, setNetworkProgress] = useState<{ current: number; total: number; name: string } | null>(null);
@@ -537,6 +538,34 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     }
   };
 
+  const generateArticleImages = async (articleIds: string[]) => {
+    const ids = articleIds.slice(0, 10);
+    if (!ids.length || imageProgress) return;
+    setImageProgress({ current: 0, total: ids.length });
+    let generated = 0;
+    let failed = 0;
+    try {
+      for (const [index, id] of ids.entries()) {
+        try {
+          const { data, error } = await supabase.functions.invoke("generate-publishing-articles", { body: { article_ids: [id], mode: "images" } });
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          generated += Number(data?.generated ?? 0);
+          failed += Number(data?.failed ?? 0);
+        } catch {
+          failed += 1;
+        } finally {
+          setImageProgress({ current: index + 1, total: ids.length });
+          await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
+        }
+      }
+      if (failed) toast.warning(`${generated} מאמרים קיבלו תמונות חדשות, ${failed} נכשלו`);
+      else toast.success(generated === 1 ? "התמונות נוצרו מחדש למאמר" : `התמונות נוצרו מחדש ל-${generated} מאמרים`);
+    } finally {
+      setImageProgress(null);
+    }
+  };
+
   const approveAndPublishSelected = async () => {
     const selected = articles.filter((article) => selectedArticleIds.includes(article.id));
     const invalid = selected.filter((article) => !article.title || !article.content?.length || !article.site_id || !article.target_url);
@@ -605,17 +634,22 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
               <div className="flex-1 text-xs text-muted-foreground">
                 {generationProgress
                   ? `כותב מאמר ${Math.min(generationProgress.current + 1, generationProgress.total)} מתוך ${generationProgress.total}${generationProgress.stopping ? " · עוצר לאחר המאמר הנוכחי" : ""}`
-                  : `${selectedArticleIds.length} מאמרים נבחרו · כתיבה מרובה מוגבלת ל־10 בכל הרצה`}
+                  : imageProgress
+                    ? `מייצר תמונות למאמר ${Math.min(imageProgress.current + 1, imageProgress.total)} מתוך ${imageProgress.total}`
+                    : `${selectedArticleIds.length} מאמרים נבחרו · כתיבה מרובה מוגבלת ל־10 בכל הרצה`}
               </div>
               {generatingArticleIds.length ? (
                 <Button variant="destructive" onClick={stopArticleGeneration} disabled={Boolean(generationProgress?.stopping)}>
                   <Square className="ml-2 h-4 w-4" />{generationProgress?.stopping ? "עוצר..." : "עצור הרצה"}
                 </Button>
               ) : (
-                <Button variant="outline" onClick={() => generateArticles(selectedArticleIds)} disabled={!selectedArticleIds.length}>
+                <Button variant="outline" onClick={() => generateArticles(selectedArticleIds)} disabled={!selectedArticleIds.length || Boolean(imageProgress)}>
                   <Sparkles className="ml-2 h-4 w-4" />כתיבת נבחרים
                 </Button>
               )}
+              <Button variant="outline" onClick={() => generateArticleImages(selectedArticleIds)} disabled={!selectedArticleIds.length || Boolean(imageProgress) || Boolean(generatingArticleIds.length)}>
+                {imageProgress ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <ImageIcon className="ml-2 h-4 w-4" />}יצירת תמונות
+              </Button>
               <Button onClick={approveAndPublishSelected} disabled={!selectedArticleIds.length || publishingSelected}>
                 {publishingSelected ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Rocket className="ml-2 h-4 w-4" />}אשר ופרסם נבחרים
               </Button>
@@ -638,7 +672,8 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
                       <td className="p-3">{siteById.get(article.site_id ?? "")?.name ?? "לא משויך"}<div className="text-[10px] text-muted-foreground">{article.category}</div></td>
                       <td className="p-3"><Badge variant="outline">{article.status}</Badge></td>
                       <td className="p-3"><div className="flex items-center gap-2">
-                        <Button size="sm" variant="outline" onClick={() => generateArticles([article.id])} disabled={Boolean(generatingArticleIds.length)}>{isGenerating ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="ml-1 h-3.5 w-3.5" />}כתיבה</Button>
+                        <Button size="sm" variant="outline" onClick={() => generateArticles([article.id])} disabled={Boolean(generatingArticleIds.length) || Boolean(imageProgress)}>{isGenerating ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="ml-1 h-3.5 w-3.5" />}כתיבה</Button>
+                        <Button size="sm" variant="outline" onClick={() => generateArticleImages([article.id])} disabled={Boolean(imageProgress) || Boolean(generatingArticleIds.length) || !article.title}><ImageIcon className="ml-1 h-3.5 w-3.5" />תמונות</Button>
                         <Button size="sm" variant="outline" onClick={() => openArticleEditor(article)}><Pencil className="ml-1 h-3.5 w-3.5" />צפייה ועריכה</Button>
                       </div></td>
                     </tr>;

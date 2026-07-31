@@ -1,14 +1,31 @@
 /** Resolve magazine image URLs for public PBN pages without widening storage policies. */
 
 export const ENTITY_ATTACHMENTS_BUCKET = "entity-attachments";
-/** Longer than publishing-feed / magazine CDN caches (≤5m) so signed URLs survive edge TTL. */
-export const MAGAZINE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24;
 
-export type SignedUrlFactory = (
-  bucket: string,
-  path: string,
-  expiresIn: number,
-) => Promise<string | null>;
+export type MagazineImageKind = "hero" | "inline";
+
+/** Deterministic storage path written by generate-publishing-articles. */
+export function publishingImageStoragePath(
+  tenantId: string,
+  articleId: string,
+  kind: MagazineImageKind,
+): string {
+  return `${tenantId}/publishing/${articleId}/${kind}.webp`;
+}
+
+/**
+ * Stable public URL for a generated article image.
+ * The publishing-image function streams the object from the private bucket,
+ * so magazine pages, og:image tags and crawlers keep working indefinitely.
+ */
+export function publishingImageProxyUrl(
+  supabaseUrl: string,
+  articleId: string,
+  kind: MagazineImageKind,
+): string {
+  const base = supabaseUrl.replace(/\/+$/, "");
+  return `${base}/functions/v1/publishing-image?article_id=${encodeURIComponent(articleId)}&kind=${kind}`;
+}
 
 export function isAbsoluteHttpUrl(value: string | null | undefined): boolean {
   if (!value) return false;
@@ -34,7 +51,7 @@ export function extractEntityAttachmentPath(value: string | null | undefined): s
   try {
     const url = new URL(trimmed);
     const match = url.pathname.match(
-      /\/storage\/v1\/object\/(?:public|sign)\/entity-attachments\/(.+)$/,
+      /\/storage\/v1\/object\/(?:public|sign|authenticated)\/entity-attachments\/(.+)$/,
     );
     if (!match?.[1]) return null;
     return decodeURIComponent(match[1]);
@@ -45,37 +62,32 @@ export function extractEntityAttachmentPath(value: string | null | undefined): s
 
 /**
  * Public magazine pages may only emit absolute http(s) URLs.
- * Private entity-attachments objects are rewritten to short-lived signed URLs.
- * Relative / missing / unsignable values become null so templates omit <img>.
+ * Private storage URLs are rewritten to the stable publishing-image proxy.
+ * Relative or missing values become null so templates omit the <img> entirely.
  */
-export async function resolveMagazineImageUrl(
+export function resolveMagazineImageUrl(
   raw: string | null | undefined,
-  createSignedUrl: SignedUrlFactory,
-  options: { ttlSeconds?: number } = {},
-): Promise<string | null> {
-  const ttl = options.ttlSeconds ?? MAGAZINE_SIGNED_URL_TTL_SECONDS;
+  kind: MagazineImageKind,
+  proxyUrlFor: (kind: MagazineImageKind) => string,
+): string | null {
   const value = typeof raw === "string" ? raw.trim() : "";
-
   if (!value) return null;
+
+  if (extractEntityAttachmentPath(value)) return proxyUrlFor(kind);
   if (!isAbsoluteHttpUrl(value)) return null;
-
-  const path = extractEntityAttachmentPath(value);
-  if (!path) return value;
-
-  return await createSignedUrl(ENTITY_ATTACHMENTS_BUCKET, path, ttl);
+  return value;
 }
 
-export async function resolveArticleImageFields<T extends {
+export function resolveArticleImageFields<T extends {
   hero_image_url?: string | null;
   inline_image_url?: string | null;
 }>(
   article: T,
-  createSignedUrl: SignedUrlFactory,
-  options?: { ttlSeconds?: number },
-): Promise<T> {
-  const [hero_image_url, inline_image_url] = await Promise.all([
-    resolveMagazineImageUrl(article.hero_image_url, createSignedUrl, options),
-    resolveMagazineImageUrl(article.inline_image_url, createSignedUrl, options),
-  ]);
-  return { ...article, hero_image_url, inline_image_url };
+  proxyUrlFor: (kind: MagazineImageKind) => string,
+): T {
+  return {
+    ...article,
+    hero_image_url: resolveMagazineImageUrl(article.hero_image_url, "hero", proxyUrlFor),
+    inline_image_url: resolveMagazineImageUrl(article.inline_image_url, "inline", proxyUrlFor),
+  };
 }

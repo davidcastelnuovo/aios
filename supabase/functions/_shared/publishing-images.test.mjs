@@ -4,75 +4,82 @@ import test from "node:test";
 import {
   extractEntityAttachmentPath,
   isAbsoluteHttpUrl,
+  publishingImageProxyUrl,
+  publishingImageStoragePath,
   resolveArticleImageFields,
   resolveMagazineImageUrl,
 } from "./publishing-images.ts";
 
-test("rejects relative and empty magazine image URLs", async () => {
-  const signer = async () => {
-    throw new Error("signer should not run for relative urls");
-  };
+const SUPABASE_URL = "https://zvoijyneresvkadpprel.supabase.co";
+const TENANT = "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019";
+const ARTICLE = "c3ee1a9c-1111-2222-3333-444455556666";
+const proxyFor = (kind) => publishingImageProxyUrl(SUPABASE_URL, ARTICLE, kind);
+
+test("builds deterministic storage paths and stable proxy URLs", () => {
+  assert.equal(
+    publishingImageStoragePath(TENANT, ARTICLE, "hero"),
+    `${TENANT}/publishing/${ARTICLE}/hero.webp`,
+  );
+  assert.equal(
+    publishingImageProxyUrl(SUPABASE_URL, ARTICLE, "inline"),
+    `${SUPABASE_URL}/functions/v1/publishing-image?article_id=${ARTICLE}&kind=inline`,
+  );
+  assert.equal(
+    publishingImageProxyUrl(`${SUPABASE_URL}/`, ARTICLE, "hero"),
+    `${SUPABASE_URL}/functions/v1/publishing-image?article_id=${ARTICLE}&kind=hero`,
+  );
+});
+
+test("rejects relative and empty magazine image URLs", () => {
   assert.equal(isAbsoluteHttpUrl("/images/gold-appraisal-hero.webp"), false);
-  assert.equal(await resolveMagazineImageUrl("/images/gold-appraisal-hero.webp", signer), null);
-  assert.equal(await resolveMagazineImageUrl("/images/gold-appraisal-process.webp", signer), null);
-  assert.equal(await resolveMagazineImageUrl("", signer), null);
-  assert.equal(await resolveMagazineImageUrl(null, signer), null);
+  assert.equal(resolveMagazineImageUrl("/images/gold-appraisal-hero.webp", "hero", proxyFor), null);
+  assert.equal(resolveMagazineImageUrl("/images/gold-appraisal-process.webp", "inline", proxyFor), null);
+  assert.equal(resolveMagazineImageUrl("", "hero", proxyFor), null);
+  assert.equal(resolveMagazineImageUrl(null, "hero", proxyFor), null);
 });
 
 test("extracts entity-attachments paths from public and signed URLs", () => {
-  const path = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/publishing/article-1/hero.webp";
-  const publicUrl =
-    `https://zvoijyneresvkadpprel.supabase.co/storage/v1/object/public/entity-attachments/${path}`;
-  const signedUrl =
-    `https://zvoijyneresvkadpprel.supabase.co/storage/v1/object/sign/entity-attachments/${path}?token=abc`;
-  assert.equal(extractEntityAttachmentPath(publicUrl), path);
-  assert.equal(extractEntityAttachmentPath(signedUrl), path);
+  const path = `${TENANT}/publishing/${ARTICLE}/hero.webp`;
+  assert.equal(
+    extractEntityAttachmentPath(`${SUPABASE_URL}/storage/v1/object/public/entity-attachments/${path}`),
+    path,
+  );
+  assert.equal(
+    extractEntityAttachmentPath(`${SUPABASE_URL}/storage/v1/object/sign/entity-attachments/${path}?token=abc`),
+    path,
+  );
   assert.equal(extractEntityAttachmentPath(path), path);
   assert.equal(extractEntityAttachmentPath(`entity-attachments/${path}`), path);
   assert.equal(extractEntityAttachmentPath("https://images.pexels.com/photo.jpg"), null);
 });
 
-test("signs private entity-attachments URLs for anonymous magazine access", async () => {
-  const path = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/publishing/article-1/hero.webp";
-  const publicUrl =
-    `https://zvoijyneresvkadpprel.supabase.co/storage/v1/object/public/entity-attachments/${path}`;
-  const calls = [];
-  const signed = await resolveMagazineImageUrl(publicUrl, async (bucket, objectPath, ttl) => {
-    calls.push({ bucket, objectPath, ttl });
-    return `https://signed.example/${objectPath}?exp=${ttl}`;
-  });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].bucket, "entity-attachments");
-  assert.equal(calls[0].objectPath, path);
-  assert.match(signed, /^https:\/\/signed\.example\//);
+test("rewrites private storage URLs to the stable image proxy", () => {
+  const path = `${TENANT}/publishing/${ARTICLE}/hero.webp`;
+  assert.equal(
+    resolveMagazineImageUrl(`${SUPABASE_URL}/storage/v1/object/public/entity-attachments/${path}`, "hero", proxyFor),
+    proxyFor("hero"),
+  );
+  assert.equal(
+    resolveMagazineImageUrl(`${SUPABASE_URL}/storage/v1/object/sign/entity-attachments/${path}?token=x`, "hero", proxyFor),
+    proxyFor("hero"),
+  );
 });
 
-test("passes through external absolute URLs unchanged", async () => {
+test("passes through proxy and external absolute URLs unchanged", () => {
   const external = "https://images.pexels.com/photos/31428953/pexels-photo-31428953.jpeg";
-  const result = await resolveMagazineImageUrl(external, async () => {
-    throw new Error("should not sign external urls");
-  });
-  assert.equal(result, external);
+  assert.equal(resolveMagazineImageUrl(external, "hero", proxyFor), external);
+  assert.equal(resolveMagazineImageUrl(proxyFor("hero"), "hero", proxyFor), proxyFor("hero"));
 });
 
-test("resolves article hero+inline fields together and drops invalid ones", async () => {
-  const path = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/publishing/article-1/inline.webp";
-  const article = await resolveArticleImageFields(
+test("resolves hero and inline fields with their own kinds", () => {
+  const article = resolveArticleImageFields(
     {
       hero_image_url: "/images/gold-appraisal-hero.webp",
       inline_image_url:
-        `https://zvoijyneresvkadpprel.supabase.co/storage/v1/object/public/entity-attachments/${path}`,
+        `${SUPABASE_URL}/storage/v1/object/public/entity-attachments/${TENANT}/publishing/${ARTICLE}/inline.webp`,
     },
-    async (_bucket, objectPath) => `https://signed.example/${objectPath}`,
+    proxyFor,
   );
   assert.equal(article.hero_image_url, null);
-  assert.equal(article.inline_image_url, `https://signed.example/${path}`);
-});
-
-test("sign failure fails closed to null", async () => {
-  const path = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/publishing/article-1/hero.webp";
-  const publicUrl =
-    `https://zvoijyneresvkadpprel.supabase.co/storage/v1/object/public/entity-attachments/${path}`;
-  const result = await resolveMagazineImageUrl(publicUrl, async () => null);
-  assert.equal(result, null);
+  assert.equal(article.inline_image_url, proxyFor("inline"));
 });
