@@ -80,10 +80,14 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
     enabled: !!integration,
   });
 
-  const properties = (propertiesResponse?.properties || []) as GAProperty[];
+  const properties = useMemo(
+    () => (propertiesResponse?.properties || []) as GAProperty[],
+    [propertiesResponse?.properties],
+  );
+  const integrationSettings = integration?.settings as Record<string, unknown> | null;
   const connectionProblem = propertiesResponse?.needs_reconnect
     ? {
-        ownerEmail: propertiesResponse.owner_email || (integration?.settings as any)?.google_email || '',
+        ownerEmail: propertiesResponse.owner_email || String(integrationSettings?.google_email || ''),
         reason: propertiesResponse.reason || '',
         detail: propertiesResponse.error_detail || '',
       }
@@ -255,8 +259,8 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                         {allIntegrations.map((integ) => {
                           const s = integ.settings as Record<string, unknown> | null;
                           const email = (s?.google_email as string) || 'חשבון לא ידוע';
-                          const isOwn = (integ as any)._isOwn;
-                          const sharedBy = (integ as any)._sharedByName;
+                          const isOwn = integ._isOwn;
+                          const sharedBy = integ._sharedByName;
                           return (
                             <SelectItem key={integ.id} value={integ.id}>
                               {email} {!isOwn && sharedBy ? `(שותף ע"י ${sharedBy})` : ''}
@@ -277,9 +281,9 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                         {' '}ההרשאה פגה או נשללה, ולכן לא ניתן למשוך את רשימת הנכסים.
                       </div>
                       <div className="text-xs">
-                        {(integration as any)?._isOwn
+                        {integration?._isOwn
                           ? 'עבור להגדרות Google Analytics והתחבר מחדש.'
-                          : `בעל/ת החיבור (${(integration as any)?._sharedByName || connectionProblem.ownerEmail || 'המשתמש שחיבר'}) צריך/ה להתחבר מחדש בהגדרות Google Analytics.`}
+                          : `בעל/ת החיבור (${integration?._sharedByName || connectionProblem.ownerEmail || 'המשתמש שחיבר'}) צריך/ה להתחבר מחדש בהגדרות Google Analytics.`}
                         {connectionProblem.detail ? ` (${connectionProblem.detail})` : ''}
                       </div>
                     </AlertDescription>
