@@ -36,6 +36,23 @@ type MetaConfig = {
   graph_version: string;
 };
 
+type FacebookLoginResponse = {
+  authResponse?: { code?: string };
+};
+
+type FacebookSdk = {
+  init: (options: { appId: string; cookie: boolean; xfbml: boolean; version: string }) => void;
+  login: (
+    callback: (response: FacebookLoginResponse) => void,
+    options: Record<string, unknown>,
+  ) => void;
+};
+
+type FacebookWindow = Window & {
+  FB?: FacebookSdk;
+  fbAsyncInit?: () => void;
+};
+
 type Integration = {
   id: string;
   user_id: string | null;
@@ -60,7 +77,7 @@ const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsap
 
 function loadFacebookSdk(appId: string, version: string) {
   return new Promise<void>((resolve, reject) => {
-    const win = window as any;
+    const win = window as FacebookWindow;
     if (win.FB) {
       win.FB.init({ appId, cookie: true, xfbml: false, version });
       resolve();
@@ -161,12 +178,18 @@ export default function MetaWhatsAppSettings() {
   useEffect(() => {
     const listener = (event: MessageEvent) => {
       if (!event.origin.endsWith("facebook.com")) return;
-      let payload: any;
+      let parsed: unknown;
       try {
-        payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        parsed = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
       } catch {
         return;
       }
+      if (!parsed || typeof parsed !== "object") return;
+      const payload = parsed as {
+        type?: string;
+        event?: string;
+        data?: Record<string, unknown>;
+      };
       if (payload?.type !== "WA_EMBEDDED_SIGNUP") return;
       if (payload.event === "CANCEL") {
         setConnecting(false);
@@ -175,7 +198,7 @@ export default function MetaWhatsAppSettings() {
       }
       if (payload.event === "ERROR") {
         setConnecting(false);
-        toast.error(payload.data?.error_message || "Meta לא הצליחה להשלים את החיבור");
+        toast.error(String(payload.data?.error_message || "Meta לא הצליחה להשלים את החיבור"));
         return;
       }
       if (String(payload.event ?? "").startsWith("FINISH")) {
@@ -200,8 +223,10 @@ export default function MetaWhatsAppSettings() {
       await loadFacebookSdk(config.app_id, config.graph_version);
       const extras: Record<string, unknown> = { setup: {}, sessionInfoVersion: "3" };
       if (mode === "coexistence") extras.featureType = "whatsapp_business_app_onboarding";
-      (window as any).FB.login(
-        (response: any) => {
+      const sdk = (window as FacebookWindow).FB;
+      if (!sdk) throw new Error("Meta SDK לא נטען");
+      sdk.login(
+        (response: FacebookLoginResponse) => {
           if (!response?.authResponse?.code) {
             setConnecting(false);
             toast.error("Meta לא החזירה קוד הרשאה");

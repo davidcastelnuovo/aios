@@ -3,6 +3,20 @@
 
 ALTER TYPE public.chat_provider ADD VALUE IF NOT EXISTS 'meta_whatsapp';
 
+-- Customer-scoped Meta business tokens must never be readable through the
+-- tenant_integrations API. Only service-role edge functions can access them.
+CREATE TABLE IF NOT EXISTS public.meta_whatsapp_tokens (
+  integration_id uuid PRIMARY KEY
+    REFERENCES public.tenant_integrations(id) ON DELETE CASCADE,
+  access_token text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.meta_whatsapp_tokens ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.meta_whatsapp_tokens FROM anon, authenticated;
+GRANT ALL ON TABLE public.meta_whatsapp_tokens TO service_role;
+
 -- Meta Embedded Signup can return more than one phone number for the same user.
 DROP INDEX IF EXISTS public.tenant_integrations_user_level_unique;
 

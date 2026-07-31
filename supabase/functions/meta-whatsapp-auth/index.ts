@@ -224,7 +224,7 @@ Deno.serve(async (request) => {
           tenant_id: tenantId,
           user_id: authData.user.id,
           integration_type: "meta_whatsapp",
-          api_key: businessToken,
+          api_key: null,
           api_token_last_4: businessToken.slice(-4),
           instance_id: String(phone.id),
           display_name: phone.verified_name || phone.display_phone_number || "Meta WhatsApp",
@@ -237,6 +237,15 @@ Deno.serve(async (request) => {
           : admin.from("tenant_integrations").insert(payload);
         const { data: saved, error: saveError } = await query.select("id").single();
         if (saveError) throw saveError;
+        const { error: tokenError } = await admin.from("meta_whatsapp_tokens").upsert({
+          integration_id: saved.id,
+          access_token: businessToken,
+          updated_at: new Date().toISOString(),
+        });
+        if (tokenError) {
+          if (!existing) await admin.from("tenant_integrations").delete().eq("id", saved.id);
+          throw tokenError;
+        }
 
         connected.push({
           integration_id: saved.id,

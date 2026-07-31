@@ -92,7 +92,7 @@ export default function ChatIntegrations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tenant_integrations')
-        .select('*')
+        .select('id,user_id,display_name,is_active,settings')
         .eq('tenant_id', tenantId)
         .eq('integration_type', 'meta_whatsapp')
         .order('created_at')

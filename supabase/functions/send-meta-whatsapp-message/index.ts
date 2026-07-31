@@ -91,7 +91,7 @@ Deno.serve(async (request) => {
     const { data: integrations, error: integrationError } = await integrationQuery.order("created_at").limit(1);
     if (integrationError) throw integrationError;
     const integration = integrations?.[0];
-    if (!integration?.api_key) return reply({ error: "meta_whatsapp_not_connected" }, 400);
+    if (!integration) return reply({ error: "meta_whatsapp_not_connected" }, 400);
 
     if (integration.user_id !== userId && superAdmin !== true) {
       const visibility = integration.connection_visibility ?? "private";
@@ -107,6 +107,14 @@ Deno.serve(async (request) => {
       }
       if (!permitted) return reply({ error: "integration_access_denied" }, 403);
     }
+
+    const { data: tokenRow, error: tokenError } = await admin
+      .from("meta_whatsapp_tokens")
+      .select("access_token")
+      .eq("integration_id", integration.id)
+      .maybeSingle();
+    if (tokenError) throw tokenError;
+    if (!tokenRow?.access_token) return reply({ error: "meta_whatsapp_token_missing" }, 400);
 
     const settings = (integration.settings ?? {}) as Record<string, any>;
     const phoneNumberId = String(settings.phone_number_id ?? integration.instance_id ?? "");
@@ -138,7 +146,7 @@ Deno.serve(async (request) => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${integration.api_key}`,
+          Authorization: `Bearer ${tokenRow.access_token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(graphBody),
