@@ -21,6 +21,7 @@ import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyo
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
 import { getExplicitLeadFieldsFromData, getLeadsFromData } from "@/lib/adsMetrics";
+import { formatCurrency as formatCurrencyAmount, resolveDashboardCurrency } from "@/lib/currency";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -77,8 +78,6 @@ const getCampaignType = (type?: string, settings?: any): CampaignType => {
   return 'leads';
 };
 
-const formatCurrency = (num: number) =>
-  new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(num);
 const formatNumber = (num: number) => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
@@ -143,6 +142,8 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
 
   const tables = data?.tables || [];
   const rawRecords = data?.records || [];
+  const dashboardCurrency = useMemo(() => resolveDashboardCurrency(tables), [tables]);
+  const formatCurrency = (num: number) => formatCurrencyAmount(num, dashboardCurrency);
 
   // Deduplicate Facebook: if both facebook_insights AND facebook_ecommerce exist,
   // skip facebook_insights records to avoid double-counting spend/impressions/clicks

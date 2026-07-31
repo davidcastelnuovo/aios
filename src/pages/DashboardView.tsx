@@ -31,6 +31,7 @@ import { SeoDashboardWithGa } from "@/components/dynamic-tables/SeoDashboardWith
 import { SeoReportTabs } from "@/components/dynamic-tables/SeoReportTabs";
 import { WooCommerceDashboard } from "@/components/dynamic-tables/WooCommerceDashboard";
 import { getExplicitLeadFieldsFromData, getLeadsFromData } from "@/lib/adsMetrics";
+import { formatCurrency as formatCurrencyAmount, resolveDashboardCurrency } from "@/lib/currency";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -96,9 +97,6 @@ const formatNumber = (num: number) => {
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
   return Math.round(num).toString();
 };
-
-const formatCurrency = (num: number) =>
-  new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(num);
 
 const getIntegrationIcon = (type: string | null) => {
   switch (type) {
@@ -902,6 +900,10 @@ export default function DashboardView() {
     }
     return 'leads';
   }, [tables]);
+
+  // Display currency follows ads report settings (e.g. USD Google Ads), not a hard-coded ₪.
+  const dashboardCurrency = useMemo(() => resolveDashboardCurrency(tables), [tables]);
+  const formatCurrency = (num: number) => formatCurrencyAmount(num, dashboardCurrency);
 
   // Group records by date for table
   const recordsByDate = useMemo(() => {
