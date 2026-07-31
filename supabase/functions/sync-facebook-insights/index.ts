@@ -21,17 +21,36 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
+    // Allow service-role internal calls (Carmen / cron) to bypass user auth —
+    // mirrors sync-google-ads-data. Requires x-internal-cron: true AND service bearer.
+    const isInternalCron = req.headers.get('x-internal-cron') === 'true';
+    const authHeader = req.headers.get('Authorization') || '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const hasServiceRole = !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
+
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    let supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    let user: { id: string | null };
+    if (isInternalCron && hasServiceRole) {
+      user = { id: null };
+      supabase = supabaseAdmin;
+    } else {
+      const { data: { user: authedUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authedUser) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      user = authedUser;
     }
 
     const { table_id } = await req.json();

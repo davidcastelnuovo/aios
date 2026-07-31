@@ -482,6 +482,10 @@ const ALL_TOOLS = [
   { name: 'gads_resume', description: 'הדלקת קמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['customer_id','campaign_id'] } },
   { name: 'gads_update_budget', description: 'שינוי תקציב יומי לקמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number' } }, required: ['customer_id','campaign_id','daily_budget'] } },
   { name: 'list_google_ad_accounts', description: 'שליפת כל חשבונות Google Ads המחוברים לטננט. מחזיר customer_id, name, status, client_id (אם משויך ללקוח).', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'סינון לפי לקוח ספציפי (אופציונלי)' } } } },
+  { name: 'list_google_campaigns', description: 'רשימת קמפיינים בחשבון Google Ads (חי מ-API). ספקי customer_id או client_id (ייפתר דרך clients.google_ads_account_id).', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, client_id: { type: 'string' }, name_search: { type: 'string' }, status: { type: 'string', enum: ['ENABLED', 'PAUSED', 'REMOVED', 'ALL'] } }, required: [] } },
+  { name: 'create_google_ads_report_table', description: 'יצירת טבלת דוח Google Ads ב-CRM ללקוח (integration_type=google_ads). לא מריץ sync — קראי ל-sync_google_ads_report אחרי.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads' }, account_name: { type: 'string' }, date_range: { type: 'string', description: 'ברירת מחדל last_30_days' } }, required: ['client_id', 'customer_id'] } },
+  { name: 'sync_google_ads_report', description: 'סנכרון נתוני Google Ads לטבלת CRM. זהה לפי table_id או client_id (טבלת google_ads של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
+  { name: 'sync_facebook_insights', description: 'סנכרון נתוני Facebook Insights לטבלת CRM. זהה לפי table_id או client_id (טבלת facebook_insights של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
   { name: 'connect_google_ads_account', description: 'שיוך חשבון Google Ads (customer_id) ללקוח ב-CRM. שומר את המזהה ב-clients.google_ads_account_id.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads (ספרות בלבד, ללא מקפים)' } }, required: ['client_id', 'customer_id'] } },
   // ===========================
   // SCHEDULED PAUSE/RESUME
@@ -3843,6 +3847,153 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
 
       return { count: result.length, accounts: result }
+    }
+
+    case 'list_google_campaigns': {
+      let customerId = args.customer_id ? String(args.customer_id).replace(/-/g, '') : ''
+      if (!customerId && args.client_id) {
+        await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+        const { data: cl } = await supabase.from('clients').select('google_ads_account_id, name').eq('id', args.client_id).in('tenant_id', accessibleTenantIds).maybeSingle()
+        if (!cl?.google_ads_account_id) return { error: 'ללקוח אין google_ads_account_id — חברי עם connect_google_ads_account או ספקי customer_id' }
+        customerId = String(cl.google_ads_account_id).replace(/-/g, '')
+      }
+      if (!customerId) return { error: 'customer_id או client_id נדרש' }
+
+      const { data: gadsInteg } = await supabase
+        .from('tenant_integrations')
+        .select('settings, additional_config, api_key')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('integration_type', 'google_ads')
+        .eq('is_active', true)
+        .limit(1).maybeSingle()
+      const cfg = { ...(gadsInteg?.additional_config || {}), ...(gadsInteg?.settings || {}) }
+      const refreshToken = cfg.refresh_token || gadsInteg?.api_key
+      if (!refreshToken) return { error: 'אין חיבור Google Ads פעיל לטננט' }
+
+      const gClientId = Deno.env.get('GOOGLE_CLIENT_ID')
+      const gClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+      const gDevToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')
+      if (!gClientId || !gClientSecret || !gDevToken) return { error: 'חסרות הגדרות סביבה של Google Ads' }
+
+      const tokResp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        body: new URLSearchParams({ refresh_token: refreshToken, client_id: gClientId, client_secret: gClientSecret, grant_type: 'refresh_token' }),
+      })
+      const tokData = await tokResp.json()
+      if (!tokData.access_token) return { error: 'כישלון בחידוש טוקן Google Ads', details: tokData?.error_description }
+
+      const gadsHeaders: Record<string, string> = {
+        'Authorization': `Bearer ${tokData.access_token}`,
+        'developer-token': gDevToken,
+        'Content-Type': 'application/json',
+      }
+      const loginCustomerId = cfg.login_customer_id || cfg.mcc_id || cfg.manager_id
+      if (loginCustomerId) gadsHeaders['login-customer-id'] = String(loginCustomerId).replace(/-/g, '')
+
+      const statusFilter = args.status && args.status !== 'ALL' ? ` AND campaign.status = '${args.status}'` : ''
+      const query = `SELECT campaign.id, campaign.name, campaign.status, campaign_budget.amount_micros, metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.conversions FROM campaign WHERE campaign.status != 'REMOVED'${statusFilter} ORDER BY campaign.name`
+      const searchResp = await fetch(`https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:search`, {
+        method: 'POST',
+        headers: gadsHeaders,
+        body: JSON.stringify({ query }),
+      })
+      const searchData = await searchResp.json()
+      if (searchData.error) return { error: `Google Ads API: ${searchData.error?.message || JSON.stringify(searchData.error)}` }
+
+      let campaigns = (searchData.results || []).map((row: any) => ({
+        campaign_id: String(row.campaign?.id || ''),
+        name: row.campaign?.name || null,
+        status: row.campaign?.status || null,
+        daily_budget: row.campaignBudget?.amountMicros != null ? Number(row.campaignBudget.amountMicros) / 1_000_000 : null,
+        cost: row.metrics?.costMicros != null ? Number(row.metrics.costMicros) / 1_000_000 : null,
+        clicks: row.metrics?.clicks != null ? Number(row.metrics.clicks) : null,
+        impressions: row.metrics?.impressions != null ? Number(row.metrics.impressions) : null,
+        conversions: row.metrics?.conversions != null ? Number(row.metrics.conversions) : null,
+      }))
+      if (args.name_search) {
+        const needle = String(args.name_search).toLowerCase()
+        campaigns = campaigns.filter((c: any) => (c.name || '').toLowerCase().includes(needle))
+      }
+      return { customer_id: customerId, count: campaigns.length, campaigns }
+    }
+
+    case 'create_google_ads_report_table': {
+      const client_id = args.client_id
+      const customer_id = String(args.customer_id || '').replace(/-/g, '')
+      if (!client_id || !customer_id) return { error: 'client_id ו-customer_id נדרשים' }
+      await assertCallerCanAccessClient(supabase, client_id, callerScope)
+      const { data: existing } = await supabase
+        .from('crm_tables')
+        .select('id, name')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('client_id', client_id)
+        .eq('integration_type', 'google_ads')
+        .maybeSingle()
+      if (existing) {
+        return { already_exists: true, table_id: existing.id, name: existing.name, message: `כבר קיימת טבלת דוח Google Ads ללקוח זה: ${existing.name}` }
+      }
+      const { data: client } = await supabase.from('clients').select('name, agency_id').eq('id', client_id).single()
+      if (!client) return { error: 'לקוח לא נמצא' }
+      const accountName = args.account_name || customer_id
+      const slug = `google-ads-${client_id.substring(0, 8)}`
+      const { data: table, error } = await supabase.from('crm_tables').insert({
+        tenant_id: tenantId,
+        name: client.name,
+        slug,
+        description: `דוח Google Ads עבור ${client.name} (${accountName})`,
+        icon: 'BarChart3',
+        category: 'דוחות',
+        integration_type: 'google_ads',
+        integration_settings: {
+          customer_id,
+          account_name: accountName,
+          date_range: args.date_range || 'last_30_days',
+          sync_frequency: 'daily',
+          data_source: 'direct_api',
+          campaign_type: 'leads',
+          currency: 'ILS',
+        },
+        agency_id: client.agency_id || null,
+        client_id,
+        created_by: userId !== 'system' ? userId : null,
+      }).select('id, name, slug').single()
+      if (error) throw error
+      // Also pin google_ads_account_id on client if empty
+      await supabase.from('clients').update({ google_ads_account_id: customer_id }).eq('id', client_id).is('google_ads_account_id', null)
+      return { success: true, table_id: table.id, name: table.name, slug: table.slug, customer_id, client_name: client.name, next: 'קראי ל-sync_google_ads_report עם table_id כדי למשוך נתונים' }
+    }
+
+    case 'sync_google_ads_report':
+    case 'sync_facebook_insights': {
+      let tableId = args.table_id as string | undefined
+      const integType = name === 'sync_google_ads_report' ? 'google_ads' : 'facebook_insights'
+      if (!tableId && args.client_id) {
+        await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+        const { data: tbl } = await supabase.from('crm_tables').select('id, name')
+          .in('tenant_id', accessibleTenantIds).eq('client_id', args.client_id).eq('integration_type', integType).maybeSingle()
+        if (!tbl) return { error: `לא נמצאה טבלת ${integType} ללקוח — צרי קודם עם create_${integType === 'google_ads' ? 'google_ads_report_table' : 'facebook_report_table'}` }
+        tableId = tbl.id
+      }
+      if (!tableId) return { error: 'table_id או client_id נדרש' }
+      const { data: table } = await supabase.from('crm_tables').select('id, name, tenant_id, integration_type').eq('id', tableId).in('tenant_id', accessibleTenantIds).maybeSingle()
+      if (!table) return { error: 'טבלה לא נמצאה' }
+      if (table.integration_type !== integType) return { error: `טבלה זו היא ${table.integration_type}, לא ${integType}` }
+
+      const fnName = name === 'sync_google_ads_report' ? 'sync-google-ads-data' : 'sync-facebook-insights'
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        'x-internal-cron': 'true',
+      }
+      const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/${fnName}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ table_id: tableId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: 'sync_failed', details: json }
+      return { success: true, table_id: tableId, table_name: table.name, sync: json }
     }
 
     case 'connect_google_ads_account': {
