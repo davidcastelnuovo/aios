@@ -64,3 +64,5 @@ $$;
 REVOKE ALL ON FUNCTION public.run_ddl_once(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.run_ddl_once(text) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.run_ddl_once(text) TO service_role;
+
+-- retry trigger 2026-07-31T15:03:52Z

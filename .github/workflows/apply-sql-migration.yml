@@ -51,6 +51,15 @@ jobs:
           set -euo pipefail
           FILE="${{ steps.sql.outputs.file }}"
           echo "Applying $FILE"
-          supabase db query --linked -f "$FILE"
+          attempt=1
+          until supabase db query --linked -f "$FILE"; do
+            if [ "$attempt" -ge 5 ]; then
+              echo "Giving up after $attempt attempts"
+              exit 1
+            fi
+            echo "Attempt $attempt failed — waiting 60s (Supabase API flaky)"
+            attempt=$((attempt + 1))
+            sleep 60
+          done
           echo "Verifying table exists..."
           supabase db query --linked "select to_regclass('public.seo_monthly_shares') as table_regclass;"
