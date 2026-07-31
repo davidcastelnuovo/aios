@@ -17,6 +17,14 @@ ALTER TABLE public.meta_whatsapp_tokens ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.meta_whatsapp_tokens FROM anon, authenticated;
 GRANT ALL ON TABLE public.meta_whatsapp_tokens TO service_role;
 
+ALTER TABLE public.chat_messages
+ADD COLUMN IF NOT EXISTS integration_id uuid
+REFERENCES public.tenant_integrations(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS chat_messages_integration_id_idx
+ON public.chat_messages (integration_id, created_at DESC)
+WHERE integration_id IS NOT NULL;
+
 -- Meta Embedded Signup can return more than one phone number for the same user.
 DROP INDEX IF EXISTS public.tenant_integrations_user_level_unique;
 
@@ -27,7 +35,6 @@ WHERE user_id IS NOT NULL
 
 CREATE UNIQUE INDEX IF NOT EXISTS tenant_integrations_meta_wa_phone_unique
 ON public.tenant_integrations (
-  tenant_id,
   integration_type,
   ((settings->>'phone_number_id'))
 )
@@ -61,9 +68,15 @@ USING (
     AND EXISTS (
       SELECT 1
       FROM public.tenant_integrations ti
-      WHERE ti.user_id = chat_messages.connection_user_id
+      WHERE (
+          ti.id = chat_messages.integration_id
+          OR (
+            chat_messages.integration_id IS NULL
+            AND ti.user_id = chat_messages.connection_user_id
+            AND ti.integration_type IN ('green_api', 'manus_wa')
+          )
+        )
         AND ti.tenant_id = chat_messages.tenant_id
-        AND ti.integration_type IN ('green_api', 'manus_wa', 'meta_whatsapp')
         AND ti.is_active = true
         AND ti.connection_visibility = 'org'
     )
@@ -75,9 +88,15 @@ USING (
       SELECT 1
       FROM public.tenant_integrations ti
       JOIN public.integration_user_permissions iup ON iup.integration_id = ti.id
-      WHERE ti.user_id = chat_messages.connection_user_id
+      WHERE (
+          ti.id = chat_messages.integration_id
+          OR (
+            chat_messages.integration_id IS NULL
+            AND ti.user_id = chat_messages.connection_user_id
+            AND ti.integration_type IN ('green_api', 'manus_wa')
+          )
+        )
         AND ti.tenant_id = chat_messages.tenant_id
-        AND ti.integration_type IN ('green_api', 'manus_wa', 'meta_whatsapp')
         AND ti.is_active = true
         AND iup.user_id = auth.uid()
     )
@@ -95,9 +114,15 @@ WITH CHECK (
     OR EXISTS (
       SELECT 1
       FROM public.tenant_integrations ti
-      WHERE ti.user_id = connection_user_id
+      WHERE (
+          ti.id = chat_messages.integration_id
+          OR (
+            chat_messages.integration_id IS NULL
+            AND ti.user_id = connection_user_id
+            AND ti.integration_type IN ('green_api', 'manus_wa')
+          )
+        )
         AND ti.tenant_id = chat_messages.tenant_id
-        AND ti.integration_type IN ('green_api', 'manus_wa', 'meta_whatsapp')
         AND ti.is_active = true
         AND ti.connection_visibility = 'org'
     )
@@ -105,9 +130,15 @@ WITH CHECK (
       SELECT 1
       FROM public.tenant_integrations ti
       JOIN public.integration_user_permissions iup ON iup.integration_id = ti.id
-      WHERE ti.user_id = connection_user_id
+      WHERE (
+          ti.id = chat_messages.integration_id
+          OR (
+            chat_messages.integration_id IS NULL
+            AND ti.user_id = connection_user_id
+            AND ti.integration_type IN ('green_api', 'manus_wa')
+          )
+        )
         AND ti.tenant_id = chat_messages.tenant_id
-        AND ti.integration_type IN ('green_api', 'manus_wa', 'meta_whatsapp')
         AND ti.is_active = true
         AND iup.user_id = auth.uid()
     )

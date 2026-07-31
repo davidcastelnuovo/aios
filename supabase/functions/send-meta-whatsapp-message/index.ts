@@ -28,12 +28,12 @@ Deno.serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const isServiceRole = jwt === serviceKey;
+    const authClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
     let userId = "";
     if (!isServiceRole) {
-      const authClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-        auth: { persistSession: false },
-      });
       const { data, error } = await authClient.auth.getUser(jwt);
       if (error || !data.user) return reply({ error: "unauthorized" }, 401);
       userId = data.user.id;
@@ -51,6 +51,7 @@ Deno.serve(async (request) => {
       senderUserId,
       template,
     } = body;
+    if (clientId && leadId) return reply({ error: "choose_client_or_lead" }, 400);
     if (groupId) return reply({ error: "Meta WhatsApp Cloud API does not support groups" }, 400);
     if (isServiceRole) {
       if (typeof senderUserId !== "string" || !senderUserId) {
@@ -62,13 +63,18 @@ Deno.serve(async (request) => {
 
     let tenantId = typeof suppliedTenantId === "string" ? suppliedTenantId : "";
     let contactPhone = typeof phoneNumber === "string" ? phoneNumber : "";
+    const entityClient = isServiceRole ? admin : authClient;
     if (clientId) {
-      const { data } = await admin.from("clients").select("tenant_id,phone").eq("id", clientId).single();
-      tenantId ||= data?.tenant_id ?? "";
+      const { data } = await entityClient.from("clients").select("tenant_id,phone").eq("id", clientId).single();
+      if (!data?.tenant_id) return reply({ error: "client_not_found" }, 404);
+      if (tenantId && tenantId !== data.tenant_id) return reply({ error: "tenant_entity_mismatch" }, 403);
+      tenantId = data.tenant_id;
       contactPhone ||= data?.phone ?? "";
     } else if (leadId) {
-      const { data } = await admin.from("leads").select("tenant_id,phone").eq("id", leadId).single();
-      tenantId ||= data?.tenant_id ?? "";
+      const { data } = await entityClient.from("leads").select("tenant_id,phone").eq("id", leadId).single();
+      if (!data?.tenant_id) return reply({ error: "lead_not_found" }, 404);
+      if (tenantId && tenantId !== data.tenant_id) return reply({ error: "tenant_entity_mismatch" }, 403);
+      tenantId = data.tenant_id;
       contactPhone ||= data?.phone ?? "";
     }
     const to = digitsOnly(contactPhone).replace(/^00/, "").replace(/^0/, "972");
@@ -174,6 +180,7 @@ Deno.serve(async (request) => {
       lead_id: leadId ?? null,
       tenant_id: tenantId,
       connection_user_id: integration.user_id ?? userId,
+      integration_id: integration.id,
       message_text: message || `[תבנית: ${template.name}]`,
       direction: "outbound",
       channel: "whatsapp",

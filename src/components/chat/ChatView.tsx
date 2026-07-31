@@ -175,17 +175,23 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const storedProvider = (typeof window !== 'undefined' && providerStorageKey)
     ? (localStorage.getItem(providerStorageKey) as "manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null)
     : null;
-  const availableProviders = (chatIntegrations || []).map(i => i.integration_type) as Array<"manychat" | "green_api" | "manus_wa" | "meta_whatsapp">;
+  const availableProviders = Array.from(
+    new Set((chatIntegrations || []).map(i => i.integration_type)),
+  ) as Array<"manychat" | "green_api" | "manus_wa" | "meta_whatsapp">;
   // Prefer stored, fall back to first available; if contact has a known provider, prefer that.
   const preferredProvider = (contact?.active_chat_provider && availableProviders.includes(contact.active_chat_provider as any))
     ? contact.active_chat_provider as any
     : (storedProvider && availableProviders.includes(storedProvider) ? storedProvider : availableProviders[0] || null);
 
   const [selectedProvider, setSelectedProvider] = useState<"manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null>(null);
+  const [selectedMetaIntegrationId, setSelectedMetaIntegrationId] = useState<string | null>(null);
   const activeProvider = (selectedProvider && availableProviders.includes(selectedProvider))
     ? selectedProvider
     : preferredProvider;
-  const chatIntegration = (chatIntegrations || []).find(i => i.integration_type === activeProvider) || null;
+  const metaIntegrations = (chatIntegrations || []).filter(i => i.integration_type === "meta_whatsapp");
+  const chatIntegration = activeProvider === "meta_whatsapp"
+    ? metaIntegrations.find(i => i.id === selectedMetaIntegrationId) || metaIntegrations[0] || null
+    : (chatIntegrations || []).find(i => i.integration_type === activeProvider) || null;
   const connectionUserId = chatIntegration?.user_id;
 
   const switchProvider = (p: "manychat" | "green_api" | "manus_wa" | "meta_whatsapp") => {
@@ -405,7 +411,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, activeProvider, messagePeriod, telegramChatId],
+    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, chatIntegration?.id, activeProvider, messagePeriod, telegramChatId],
     queryFn: async () => {
       const dateFilter = getDateFilter();
       
@@ -447,6 +453,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         if (activeProvider) {
           query = query.eq("provider", activeProvider);
         }
+        if (activeProvider === "meta_whatsapp" && chatIntegration?.id) {
+          query = query.eq("integration_id", chatIntegration.id);
+        }
         if (dateFilter) {
           query = query.gte("created_at", dateFilter);
         }
@@ -479,6 +488,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       }
       if (activeProvider) {
         query = query.eq("provider", activeProvider);
+      }
+      if (activeProvider === "meta_whatsapp" && chatIntegration?.id) {
+        query = query.eq("integration_id", chatIntegration.id);
       }
       if (dateFilter) {
         query = query.gte("created_at", dateFilter);
@@ -854,6 +866,20 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                   {activeProvider === 'meta_whatsapp' && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
                       <Badge variant="outline" className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">Meta WhatsApp</Badge>
+                      {metaIntegrations.length > 1 && (
+                        <select
+                          className="h-7 rounded border bg-background px-2 text-xs"
+                          value={chatIntegration?.id || ""}
+                          onChange={(event) => setSelectedMetaIntegrationId(event.target.value)}
+                          aria-label="בחר מספר Meta WhatsApp"
+                        >
+                          {metaIntegrations.map((integration) => (
+                            <option key={integration.id} value={integration.id}>
+                              {integration.display_name || integration.id.slice(-6)}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       {contact.phone && <span className="font-mono">{contact.phone}</span>}
                     </div>
                   )}
@@ -871,6 +897,28 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                         </Button>
                       ))}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {contactType === 'unknown' && activeProvider === 'meta_whatsapp' && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                    Meta WhatsApp
+                  </Badge>
+                  {metaIntegrations.length > 1 && (
+                    <select
+                      className="h-7 rounded border bg-background px-2 text-xs"
+                      value={chatIntegration?.id || ""}
+                      onChange={(event) => setSelectedMetaIntegrationId(event.target.value)}
+                      aria-label="בחר מספר Meta WhatsApp"
+                    >
+                      {metaIntegrations.map((integration) => (
+                        <option key={integration.id} value={integration.id}>
+                          {integration.display_name || integration.id.slice(-6)}
+                        </option>
+                      ))}
+                    </select>
                   )}
                 </div>
               )}

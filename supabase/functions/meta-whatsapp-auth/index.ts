@@ -117,7 +117,7 @@ Deno.serve(async (request) => {
     const code = typeof body.code === "string" ? body.code : "";
     const sessionInfo = (body.session_info ?? {}) as MetaWhatsAppSessionInfo;
     const sessionEvent = typeof body.session_event === "string" ? body.session_event : "";
-    const requestedCoexistence = body.coexistence === true || isCoexistenceFinishEvent(sessionEvent);
+    const requestedCoexistence = isCoexistenceFinishEvent(sessionEvent);
     const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
     if (!code) return reply({ error: "exchange_code_required" }, 400);
     if (!requestedCoexistence && !/^\d{6}$/.test(pin)) {
@@ -154,12 +154,18 @@ Deno.serve(async (request) => {
         graphVersion,
       );
       const phones = (phonePayload.data ?? []).filter(
-        (phone: any) => !sessionInfo.phone_number_id || phone.id === sessionInfo.phone_number_id,
+        (phone: any) =>
+          sessionInfo.phone_number_id
+            ? phone.id === sessionInfo.phone_number_id
+            : !requestedCoexistence || phone.is_on_biz_app === true,
       );
       if (!phones.length) throw new Error("No WhatsApp business phone number was returned by Meta");
 
       for (const phone of phones) {
-        const coexistence = phone.is_on_biz_app === true || requestedCoexistence;
+        if (requestedCoexistence && phone.is_on_biz_app !== true) {
+          throw new Error("Meta did not confirm WhatsApp Business App coexistence for this number");
+        }
+        const coexistence = requestedCoexistence && phone.is_on_biz_app === true;
         if (!coexistence) {
           await graphJson(
             `${phone.id}/register`,
@@ -215,11 +221,13 @@ Deno.serve(async (request) => {
 
         const { data: existing } = await admin
           .from("tenant_integrations")
-          .select("id")
-          .eq("tenant_id", tenantId)
+          .select("id,tenant_id")
           .eq("integration_type", "meta_whatsapp")
           .filter("settings->>phone_number_id", "eq", String(phone.id))
           .maybeSingle();
+        if (existing && existing.tenant_id !== tenantId) {
+          throw new Error("This WhatsApp number is already connected to another AIOS organization");
+        }
         const payload = {
           tenant_id: tenantId,
           user_id: authData.user.id,

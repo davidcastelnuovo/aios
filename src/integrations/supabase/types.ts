@@ -2618,6 +2618,7 @@ export type Database = {
           direction: string
           group_id: string | null
           id: string
+          integration_id: string | null
           is_blocked: boolean
           lead_id: string | null
           message_text: string
@@ -2640,6 +2641,7 @@ export type Database = {
           direction: string
           group_id?: string | null
           id?: string
+          integration_id?: string | null
           is_blocked?: boolean
           lead_id?: string | null
           message_text: string
@@ -2662,6 +2664,7 @@ export type Database = {
           direction?: string
           group_id?: string | null
           id?: string
+          integration_id?: string | null
           is_blocked?: boolean
           lead_id?: string | null
           message_text?: string
@@ -2687,6 +2690,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_integrations"
             referencedColumns: ["id"]
           },
           {

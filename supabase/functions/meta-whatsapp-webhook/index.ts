@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import {
   collectWebhookMessages,
+  digitsOnly,
   messageText,
   normalizedPhoneCandidates,
 } from "../_shared/meta-whatsapp.ts";
@@ -78,6 +79,45 @@ Deno.serve(async (request) => {
       for (const change of entry.changes ?? []) {
         const value = change.value ?? {};
         const field = String(change.field ?? "");
+
+        if (field === "account_update") {
+          const disconnected = ["PARTNER_REMOVED", "ACCOUNT_OFFBOARDED"].includes(String(value.event ?? ""));
+          const { data: wabaIntegrations, error: wabaError } = await admin
+            .from("tenant_integrations")
+            .select("id,settings")
+            .eq("integration_type", "meta_whatsapp")
+            .filter("settings->>waba_id", "eq", String(entry.id));
+          if (wabaError) throw wabaError;
+          const eventPhone = digitsOnly(value.phone_number);
+          const affectedIntegrations = eventPhone
+            ? (wabaIntegrations ?? []).filter(
+                (row) => digitsOnly((row.settings as Record<string, any> | null)?.display_phone_number) === eventPhone,
+              )
+            : (wabaIntegrations ?? []);
+          for (const row of affectedIntegrations) {
+            const rowSettings = (row.settings ?? {}) as Record<string, any>;
+            const { error: updateError } = await admin
+              .from("tenant_integrations")
+              .update({
+                ...(disconnected ? { is_active: false } : {}),
+                settings: {
+                  ...rowSettings,
+                  account_update_event: value.event ?? null,
+                  account_update_at: new Date().toISOString(),
+                  ...(disconnected
+                    ? {
+                        disconnected_at: new Date().toISOString(),
+                        disconnection_info: value.disconnection_info ?? null,
+                      }
+                    : {}),
+                },
+              })
+              .eq("id", row.id);
+            if (updateError) throw updateError;
+          }
+          continue;
+        }
+
         const phoneNumberId = String(value.metadata?.phone_number_id ?? "");
         if (!phoneNumberId) continue;
 
@@ -88,29 +128,15 @@ Deno.serve(async (request) => {
           .eq("is_active", true)
           .filter("settings->>phone_number_id", "eq", phoneNumberId)
           .maybeSingle();
-        if (integrationError || !integration) {
+        if (integrationError) throw integrationError;
+        if (!integration) {
           console.warn("No active Meta WhatsApp integration for phone_number_id", phoneNumberId);
           continue;
         }
         const settings = (integration.settings ?? {}) as Record<string, any>;
 
-        if (field === "account_update" && value.event === "PARTNER_REMOVED") {
-          await admin
-            .from("tenant_integrations")
-            .update({
-              is_active: false,
-              settings: {
-                ...settings,
-                disconnected_at: new Date().toISOString(),
-                disconnection_info: value.disconnection_info ?? null,
-              },
-            })
-            .eq("id", integration.id);
-          continue;
-        }
-
         if (field === "smb_app_state_sync") {
-          await admin
+          const { error: syncUpdateError } = await admin
             .from("tenant_integrations")
             .update({
               settings: {
@@ -120,6 +146,7 @@ Deno.serve(async (request) => {
               },
             })
             .eq("id", integration.id);
+          if (syncUpdateError) throw syncUpdateError;
           continue;
         }
 
@@ -144,22 +171,24 @@ Deno.serve(async (request) => {
           let clientId: string | null = null;
           let leadId: string | null = null;
           if (suffix) {
-            const { data: client } = await admin
+            const { data: client, error: clientError } = await admin
               .from("clients")
               .select("id")
               .eq("tenant_id", integration.tenant_id)
               .ilike("phone", `%${suffix}%`)
               .limit(1)
               .maybeSingle();
+            if (clientError) throw clientError;
             clientId = client?.id ?? null;
             if (!clientId) {
-              const { data: lead } = await admin
+              const { data: lead, error: leadError } = await admin
                 .from("leads")
                 .select("id")
                 .eq("tenant_id", integration.tenant_id)
                 .ilike("phone", `%${suffix}%`)
                 .limit(1)
                 .maybeSingle();
+              if (leadError) throw leadError;
               leadId = lead?.id ?? null;
             }
           }
@@ -172,7 +201,8 @@ Deno.serve(async (request) => {
           if (clientId) blockQuery.eq("client_id", clientId);
           else if (leadId) blockQuery.eq("lead_id", leadId);
           else blockQuery.eq("sender_phone", item.peerPhone);
-          const { data: blocked } = await blockQuery.limit(1).maybeSingle();
+          const { data: blocked, error: blockedError } = await blockQuery.limit(1).maybeSingle();
+          if (blockedError) throw blockedError;
           if (blocked) continue;
 
           const rawProviderData = {
@@ -188,6 +218,7 @@ Deno.serve(async (request) => {
             lead_id: leadId,
             tenant_id: integration.tenant_id,
             connection_user_id: integration.user_id,
+            integration_id: integration.id,
             message_text: messageText(item.message),
             direction: item.direction,
             channel: "whatsapp",
@@ -200,7 +231,7 @@ Deno.serve(async (request) => {
           });
           if (insertError) {
             console.error("Failed to store Meta WhatsApp message", insertError);
-            continue;
+            throw insertError;
           }
           processed++;
         }
@@ -208,7 +239,7 @@ Deno.serve(async (request) => {
         if (field === "history") {
           const history = Array.isArray(value.history) ? value.history : [];
           const lastChunk = history.at(-1);
-          await admin
+          const { error: historyUpdateError } = await admin
             .from("tenant_integrations")
             .update({
               settings: {
@@ -219,6 +250,7 @@ Deno.serve(async (request) => {
               },
             })
             .eq("id", integration.id);
+          if (historyUpdateError) throw historyUpdateError;
         }
       }
     }
@@ -226,9 +258,8 @@ Deno.serve(async (request) => {
     return new Response(JSON.stringify({ received: true, processed }), { headers: jsonHeaders });
   } catch (error) {
     console.error("meta-whatsapp-webhook error", error);
-    // Return 200 after signature validation so malformed customer payloads do not cause retry storms.
     return new Response(JSON.stringify({ received: true, error: "processing_failed" }), {
-      status: 200,
+      status: 500,
       headers: jsonHeaders,
     });
   }
