@@ -9,9 +9,9 @@ interface SeoSnapshotCardsProps {
   gaOrganicSessions?: number | null;
   /** Previous month GA organic sessions */
   gaOrganicSessionsPrev?: number | null;
-  /** Live tracked-keyword list — used as fallback for Top 3/Top 10 counts */
+  /** Live tracked-keyword list — used for Top 3/Top 20 counts */
   trackedKeywords?: Array<any>;
-  /** Live organic-keyword list — used as additional fallback for Top 3/Top 10 counts */
+  /** Live organic-keyword list — used as additional input for Top 3/Top 20 counts */
   organicKeywords?: Array<any>;
 }
 
@@ -59,19 +59,20 @@ export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart, gaOrganic
   }
   const liveList = Array.from(mergedByKw.values());
   const liveTop3 = countAtOrBelow(liveList, 3);
-  const liveTop10 = countAtOrBelow(liveList, 10);
+  const liveTop20 = countAtOrBelow(liveList, 20);
 
   const snapTop3 = getVal(snapshot, "org_keywords_top3");
-  const snapTop10 = getVal(snapshot, "org_keywords_top10");
   const effectiveTop3 = liveTop3 > (snapTop3 ?? 0) ? liveTop3 : snapTop3;
-  const effectiveTop10 = liveTop10 > (snapTop10 ?? 0) ? liveTop10 : snapTop10;
+  // There is no historical org_keywords_top20 field. Use the merged live keyword
+  // rows so a Top 10 snapshot is never mislabeled as Top 20.
+  const effectiveTop20 = liveList.length > 0 ? liveTop20 : undefined;
 
   const metrics = [
     { keys: ['domain_rating', 'dr'], label: 'דירוג דומיין (DR)', icon: '🏆', isOrganic: false, override: undefined as number | undefined },
     { keys: ['org_traffic'], label: 'תנועה אורגנית', icon: '📈', isOrganic: true, override: undefined as number | undefined },
 
     { keys: ['org_keywords_top3'], label: 'מילות מפתח (Top 3)', icon: '🥇', isOrganic: false, override: effectiveTop3 },
-    { keys: ['org_keywords_top10'], label: 'מילות מפתח (Top 10)', icon: '🔟', isOrganic: false, override: effectiveTop10 },
+    { keys: ['org_keywords_top20'], label: 'מילות מפתח (Top 20)', icon: '🏆', isOrganic: false, override: effectiveTop20 },
     { keys: ['org_keywords_total'], label: 'סה״כ מילות מפתח', icon: '🔑', isOrganic: false, override: undefined as number | undefined },
     { keys: ['referring_domains', 'referring_domains_all_time'], label: 'דומיינים מפנים', icon: '🔗', isOrganic: false, override: undefined as number | undefined },
     { keys: ['backlinks_live'], label: 'קישורים נכנסים (פעילים)', icon: '🌐', isOrganic: false, override: undefined as number | undefined },

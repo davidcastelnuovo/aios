@@ -50,7 +50,7 @@ interface SeoKeywordsTableProps {
   hasGscData?: boolean;
   show3Month?: boolean;
   showYearly?: boolean;
-  /** Default tab. Top 10 is the primary SEO landing view. */
+  /** Default tab. Top 20 is the primary SEO landing view (legacy value name kept for compatibility). */
   defaultTab?: "tracked" | "top10" | "3month" | "yearly" | "monthly" | "all";
   /** Persistence key for relevance overrides (usually clientId). */
   relevancePersistKey?: string;
@@ -104,7 +104,7 @@ function KeywordRow({
   dimmed?: boolean;
   onMarkRelevant?: (keyword: string) => void;
   onMarkIrrelevant?: (keyword: string) => void;
-  /** Show "לא רלוונטי" even when the row is not dimmed (e.g. Top 10 relevant list). */
+  /** Show "לא רלוונטי" even when the row is not dimmed. */
   showIrrelevantAction?: boolean;
 }) {
   const posChangeMonth = kw.position_prev_month != null && kw.position != null
@@ -156,7 +156,7 @@ function KeywordRow({
                 e.stopPropagation();
                 onMarkIrrelevant(String(kw.keyword || ""));
               }}
-              title="סמן כלא רלוונטי והסתר מ-Top 10"
+              title="סמן כלא רלוונטי והסתר מכל רשימות הביטויים"
             >
               <EyeOff className="h-3 w-3" />
               לא רלוונטי
@@ -493,19 +493,39 @@ export function SeoKeywordsTable({
     return { he, en, all: mergedKeywords.length };
   }, [mergedKeywords]);
 
-  const allKeywords = useMemo(
+  const rawAllKeywords = useMemo(
     () => mergedKeywords.filter(kw => matchesLang(String(kw.keyword || ''), langFilter)),
     [mergedKeywords, langFilter]
   );
 
+  const { relevant: relevantKeywords, irrelevant: irrelevantKeywords } = useMemo(
+    () =>
+      filterRelevantKeywords(rawAllKeywords, effectiveTracked, {
+        enabled: true,
+        forceRelevant,
+        forceIrrelevant,
+      }),
+    [rawAllKeywords, effectiveTracked, forceRelevant, forceIrrelevant],
+  );
+
+  // The relevance switch applies to every keyword tab, not only the ranking shortcut.
+  const allKeywords = filterIrrelevant ? relevantKeywords : rawAllKeywords;
+  const irrelevantSet = useMemo(
+    () => new Set(irrelevantKeywords.map((k) => normalizeKw(String(k.keyword || "")))),
+    [irrelevantKeywords],
+  );
+
   const trackedFiltered = useMemo(() => {
-    const filtered = effectiveTracked.filter(kw => matchesLang(String(kw.keyword || ''), langFilter));
+    const filtered = effectiveTracked.filter((kw) => {
+      if (!matchesLang(String(kw.keyword || ''), langFilter)) return false;
+      return !filterIrrelevant || !irrelevantSet.has(normalizeKw(String(kw.keyword || "")));
+    });
     return [...filtered].sort((a, b) => {
       const aPos = a.position ?? Number.POSITIVE_INFINITY;
       const bPos = b.position ?? Number.POSITIVE_INFINITY;
       return aPos - bPos;
     });
-  }, [effectiveTracked, langFilter]);
+  }, [effectiveTracked, langFilter, filterIrrelevant, irrelevantSet]);
 
   const sortByPosition = (arr: any[]) =>
     [...arr].sort((a, b) => {
@@ -514,26 +534,21 @@ export function SeoKeywordsTable({
       return aPos - bPos;
     });
 
-  const top10Raw = useMemo(
-    () => sortByPosition(allKeywords.filter(k => k.position != null && k.position <= 10)),
-    [allKeywords],
+  const top20Raw = useMemo(
+    () => sortByPosition(rawAllKeywords.filter(k => k.position != null && k.position <= 20)),
+    [rawAllKeywords],
   );
 
-  const { relevant: top10Relevant, irrelevant: top10Irrelevant } = useMemo(
-    () =>
-      filterRelevantKeywords(top10Raw, effectiveTracked, {
-        enabled: true,
-        forceRelevant,
-        forceIrrelevant,
-      }),
-    [top10Raw, effectiveTracked, forceRelevant, forceIrrelevant],
+  const top20 = useMemo(
+    () => filterIrrelevant
+      ? top20Raw.filter((k) => !irrelevantSet.has(normalizeKw(String(k.keyword || ""))))
+      : top20Raw,
+    [filterIrrelevant, top20Raw, irrelevantSet],
   );
-
-  const top10 = filterIrrelevant ? top10Relevant : top10Raw;
-  const top10Dimmed = useMemo(() => {
+  const allDimmed = useMemo(() => {
     if (filterIrrelevant) return new Set<string>();
-    return new Set(top10Irrelevant.map((k) => normalizeKw(String(k.keyword || ""))));
-  }, [filterIrrelevant, top10Irrelevant]);
+    return irrelevantSet;
+  }, [filterIrrelevant, irrelevantSet]);
 
   const by3MonthChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_3month != null));
   const byYearlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_yearly != null));
@@ -642,7 +657,7 @@ export function SeoKeywordsTable({
             >
               <Filter className="h-3.5 w-3.5" />
               סנן לא רלוונטיים
-              {canFilter && top10Irrelevant.length > 0 && (
+              {canFilter && irrelevantKeywords.length > 0 && (
                 <Badge
                   variant="secondary"
                   role="button"
@@ -664,7 +679,7 @@ export function SeoKeywordsTable({
                     filterIrrelevant ? "bg-primary-foreground/20 text-primary-foreground" : "",
                   )}
                 >
-                  {filterIrrelevant ? `−${top10Irrelevant.length}` : top10Irrelevant.length}
+                  {filterIrrelevant ? `−${irrelevantKeywords.length}` : irrelevantKeywords.length}
                 </Badge>
               )}
             </button>
@@ -693,7 +708,7 @@ export function SeoKeywordsTable({
         <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
             <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              🏆 Top 10 מקודמים ({top10.length})
+              🏆 Top 20 מקודמים ({top20.length})
             </TabsTrigger>
             <TabsTrigger value="tracked" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               🎯 ביטויים במעקב ({trackedFiltered.length})
@@ -721,14 +736,18 @@ export function SeoKeywordsTable({
               showYearly={showYearly}
               showPrevMonth
               showGsc={hasGscData}
+              dimmedSet={allDimmed}
+              onMarkRelevant={handleMarkRelevant}
+              onMarkIrrelevant={handleMarkIrrelevant}
+              showIrrelevantAction
             />
           </TabsContent>
 
           <TabsContent value="top10" className="mt-0">
-            {!filterIrrelevant && top10Irrelevant.length > 0 && (
+            {!filterIrrelevant && irrelevantKeywords.length > 0 && (
               <div className="px-3 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-100 flex items-center justify-between gap-2 flex-wrap">
                 <span>
-                  מוצגים גם {top10Irrelevant.length} ביטויים שסומנו כלא רלוונטיים — לחץ &quot;רלוונטי&quot; / &quot;לא רלוונטי&quot;.
+                  מוצגים גם {irrelevantKeywords.length} ביטויים שסומנו כלא רלוונטיים — לחץ &quot;רלוונטי&quot; / &quot;לא רלוונטי&quot;.
                 </span>
                 <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setReviewOpen(true)}>
                   סקור מסוננים
@@ -736,14 +755,14 @@ export function SeoKeywordsTable({
               </div>
             )}
             <KeywordTable
-              keywords={top10}
-              title={`${top10.length} ביטויים בעמוד הראשון${filterIrrelevant && top10Irrelevant.length > 0 ? ` · סוננו ${top10Irrelevant.length}` : ""}`}
+              keywords={top20}
+              title={`${top20.length} ביטויים ב-Top 20${filterIrrelevant && irrelevantKeywords.length > 0 ? ` · סוננו ${irrelevantKeywords.length} מכל הרשימות` : ""}`}
               icon={<Trophy className="h-4 w-4 text-primary" />}
               show3Month={show3Month}
               showYearly={showYearly}
               showPrevMonth
               showGsc={hasGscData}
-              dimmedSet={top10Dimmed}
+              dimmedSet={allDimmed}
               onMarkRelevant={handleMarkRelevant}
               onMarkIrrelevant={handleMarkIrrelevant}
               showIrrelevantAction
@@ -757,6 +776,10 @@ export function SeoKeywordsTable({
               icon={<TrendingUp className="h-4 w-4 text-primary" />}
               show3Month
               showGsc={hasGscData}
+              dimmedSet={allDimmed}
+              onMarkRelevant={handleMarkRelevant}
+              onMarkIrrelevant={handleMarkIrrelevant}
+              showIrrelevantAction
             />
           </TabsContent>
 
@@ -767,6 +790,10 @@ export function SeoKeywordsTable({
               icon={<CalendarRange className="h-4 w-4 text-primary" />}
               showYearly
               showGsc={hasGscData}
+              dimmedSet={allDimmed}
+              onMarkRelevant={handleMarkRelevant}
+              onMarkIrrelevant={handleMarkIrrelevant}
+              showIrrelevantAction
             />
           </TabsContent>
 
@@ -777,6 +804,10 @@ export function SeoKeywordsTable({
               icon={<Calendar className="h-4 w-4 text-primary" />}
               showPrevMonth
               showGsc={hasGscData}
+              dimmedSet={allDimmed}
+              onMarkRelevant={handleMarkRelevant}
+              onMarkIrrelevant={handleMarkIrrelevant}
+              showIrrelevantAction
             />
           </TabsContent>
 
@@ -789,6 +820,10 @@ export function SeoKeywordsTable({
               showYearly={showYearly}
               showPrevMonth
               showGsc={hasGscData}
+              dimmedSet={allDimmed}
+              onMarkRelevant={handleMarkRelevant}
+              onMarkIrrelevant={handleMarkIrrelevant}
+              showIrrelevantAction
             />
           </TabsContent>
         </Tabs>
@@ -798,16 +833,16 @@ export function SeoKeywordsTable({
     <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
       <DialogContent className="max-w-xl max-h-[80vh] overflow-hidden flex flex-col" dir="rtl">
         <DialogHeader>
-          <DialogTitle>ביטויים שסוננו מ-Top 10</DialogTitle>
+          <DialogTitle>ביטויים שסוננו מכל הרשימות</DialogTitle>
           <DialogDescription>
             סמן &quot;רלוונטי&quot; כדי להחזיר למעקב, או &quot;לא רלוונטי&quot; כדי להסתיר באופן קבוע בדפדפן זה.
           </DialogDescription>
         </DialogHeader>
         <div className="overflow-y-auto flex-1 -mx-1 px-1 space-y-1">
-          {top10Irrelevant.length === 0 ? (
+          {irrelevantKeywords.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">אין ביטויים מסוננים כרגע</p>
           ) : (
-            top10Irrelevant.map((kw, idx) => {
+            irrelevantKeywords.map((kw, idx) => {
               const phrase = String(kw.keyword || "");
               const key = normalizeKw(phrase);
               const manual = forceIrrelevantSet.has(key);

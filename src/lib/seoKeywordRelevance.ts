@@ -1,6 +1,6 @@
 /**
  * Relevance of organic/GSC keywords relative to the client's tracked (Ahrefs) list.
- * Used to hide noise in Top 10 (e.g. "בנק דיסקונט…" for an architecture client).
+ * Used to hide noise across SEO keyword views (e.g. "בנק דיסקונט…" for an architecture client).
  */
 
 const HE_STOP = new Set([
