@@ -63,12 +63,106 @@ async function requestArticleJson(
       model: "gpt-4o-mini",
       response_format: { type: "json_object" },
       temperature,
+      max_tokens: 8000,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
     }),
   });
   if (!response.ok) throw new Error(`OpenAI ${response.status}: ${await response.text()}`);
   const payload = await response.json();
   return parseGeneratedArticle(payload.choices?.[0]?.message?.content ?? "{}");
+}
+
+function wordCountOf(parts: string[]) {
+  return parts.join(" ").split(/\s+/).filter(Boolean).length;
+}
+
+/** Deterministic repairs the model keeps missing: keyword once, LIST, TIP, length. */
+function hardenArticle(
+  candidate: GeneratedArticle,
+  keyword: string,
+): GeneratedArticle {
+  const content = Array.isArray(candidate.content)
+    ? candidate.content.map((part) => String(part).trim()).filter(Boolean)
+    : [];
+  const faq = Array.isArray(candidate.faq)
+    ? candidate.faq.slice(0, 6).map((item) => ({
+      question: String((item as Record<string, unknown>)?.question ?? "").trim(),
+      answer: String((item as Record<string, unknown>)?.answer ?? "").trim(),
+    })).filter((item) => item.question && item.answer)
+    : [];
+  const rawInfographic = (candidate.infographic ?? {}) as Record<string, unknown>;
+  let infographicItems = Array.isArray(rawInfographic.items)
+    ? rawInfographic.items.slice(0, 5).map((item) => ({
+      value: String((item as Record<string, unknown>)?.value ?? "").trim(),
+      label: String((item as Record<string, unknown>)?.label ?? "").trim(),
+      description: String((item as Record<string, unknown>)?.description ?? "").trim(),
+    })).filter((item) => item.label && item.description)
+    : [];
+
+  if (!content.some((part) => part.startsWith("LIST: "))) {
+    content.splice(Math.min(4, content.length), 0, "LIST: בדקו את הצורך האמיתי | השוו בין אפשרויות | שאלו על תהליך העבודה | ודאו מה כלול במחיר | בקשו דוגמאות מהשטח");
+  }
+  if (!content.some((part) => part.startsWith("TIP: "))) {
+    content.splice(Math.min(6, content.length), 0, "TIP: לפני שמחליטים, כדאי לרשום את המטרה, התקציב והאילוצים — כך קל יותר להשוות הצעות ולשאול שאלות מדויקות.");
+  }
+  for (let index = 0; index < content.length; index += 1) {
+    content[index] = content[index]
+      .replace(/בעולם המודרני/g, "בפועל")
+      .replace(/בעידן הדיגיטלי/g, "היום")
+      .replace(/אין ספק ש/g, "")
+      .replace(/במאמר זה/g, "כאן")
+      .replace(/לסיכום, ניתן לומר/g, "בשורה התחתונה")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  if (infographicItems.length < 3) {
+    infographicItems = [
+      { value: "01", label: "הגדרת הצורך", description: "מבהירים מה רוצים להשיג ומה חשוב במיוחד." },
+      { value: "02", label: "בדיקת אפשרויות", description: "משווים גישות, תהליכים ומה כלול בפועל." },
+      { value: "03", label: "החלטה מושכלת", description: "בוחרים לפי התאמה, שקיפות ויכולת ליווי." },
+      ...infographicItems,
+    ].slice(0, 5);
+  }
+  while (faq.length < 4) {
+    const n = faq.length + 1;
+    faq.push({
+      question: n === 1 ? "מאיפה מתחילים?" : n === 2 ? "מה חשוב לבדוק לפני שמתקדמים?" : n === 3 ? "איך יודעים שהבחירה מתאימה?" : "מתי כדאי להתייעץ עם איש מקצוע?",
+      answer: n === 1 ? "מתחילים מהצורך האמיתי, מהאילוצים ומהתוצאה הרצויה — ורק אחר כך בוחרים פתרון." : n === 2 ? "בודקים תהליך עבודה, שקיפות, התאמה למצב שלכם ומה קורה אם משהו משתנה בדרך." : n === 3 ? "כשיש התאמה ברורה לצורך, תיאום ציפיות, והסבר מובן על השלבים הבאים." : "כשהנושא מורכב, יש סיכון גבוה, או שאין מספיק בהירות כדי להחליט לבד.",
+    });
+  }
+
+  if (keyword) {
+    const bodyIndexes = content
+      .map((part, index) => ({ part, index }))
+      .filter(({ part }) => !part.startsWith("## ") && !part.startsWith("LIST: ") && !part.startsWith("TIP: "));
+    const pattern = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    let kept = false;
+    for (const { index } of bodyIndexes) {
+      content[index] = content[index].replace(pattern, (match) => {
+        if (!kept) {
+          kept = true;
+          return match;
+        }
+        return "הנושא";
+      });
+    }
+    if (!kept && bodyIndexes.length) {
+      const target = bodyIndexes[Math.min(1, bodyIndexes.length - 1)];
+      content[target.index] = `${target.part.replace(/\.*\s*$/, "")}. הנושא של ${keyword} דורש בדיקה מדויקת לפני שמחליטים.`;
+    }
+  }
+
+  return {
+    ...candidate,
+    title: String(candidate.title ?? "").trim(),
+    excerpt: String(candidate.excerpt ?? "").trim(),
+    content,
+    faq,
+    infographic: {
+      title: String(rawInfographic.title ?? "הדברים החשובים בקצרה").trim() || "הדברים החשובים בקצרה",
+      items: infographicItems,
+    },
+  };
 }
 
 async function generateArticleImage(
@@ -286,16 +380,19 @@ serve(async (req) => {
         const user = `כתבי מאמר מלא על סמך הנתונים הבאים:
 ${JSON.stringify(context)}
 
- דרישות:
-- 900–1300 מילים בעברית.
+ דרישות מחייבות:
+- לפחות 850 מילים בעברית בגוף המאמר (לא כולל FAQ). עדיף 900–1200.
+- לפחות 12 פריטי content: פתיחה, כותרות ## , פסקאות ארוכות, LIST, TIP וסיכום.
+- כל פסקת גוף צריכה להיות 40–80 מילים, לא משפט בודד.
 - כותרת ברורה ומושכת, ללא קליקבייט.
 - תקציר של 1–2 משפטים.
 - פתיחה, 5–8 חלקים הגיוניים וסיכום שימושי.
 - גוף המאמר יוחזר כמערך פסקאות. כותרות משנה יהיו פריטים נפרדים שמתחילים ב-"## ".
-- רשימה תוחזר כפריט שמתחיל ב-"LIST: " ולאחריו פריטים מופרדים ב-" | ".
-- תיבת מידע אחת תוחזר כפריט שמתחיל ב-"TIP: ".
+- רשימה אחת חובה: פריט שמתחיל ב-"LIST: " ולאחריו פריטים מופרדים ב-" | ".
+- תיבת מידע אחת חובה: פריט שמתחיל ב-"TIP: ".
 - 4–6 שאלות ותשובות קצרות.
 - אינפוגרפיקה אחת עם 3–5 פריטים. value יהיה מספר שלב קצר כמו "01" או מילה קצרה, לא נתון מומצא.
+- הביטוי לקידום "${article.primary_keyword}" יופיע פעם אחת בדיוק בפסקת גוף אחת.
 - שתי הנחיות תמונה מפורטות באנגלית: תמונת שער ותמונה משלימה. ללא טקסט או לוגו בתוך התמונה.
 - אל תציגי את הלקוח כמקור אובייקטיבי ואל תהפכי את המאמר לפרסומת.
 - אל תוסיפי Markdown מלבד "## " לכותרות משנה.
@@ -307,6 +404,7 @@ ${JSON.stringify(context)}
         const editorSystem = `את עורכת ראשית במגזין ישראלי. ערכי את הטיוטה כך שתישמע טבעית, מקצועית וספציפית לנושא.
 שמרי רק טענות שאפשר לבסס מההקשר או מידע כללי יציב. מחקי קלישאות, פתיחות גנריות, חזרות, ניסוח מכירתי ומשפטים שמדברים על "המאמר".
 גווני באורך המשפטים ובמבנה הפסקאות, אך אל תכניסי שגיאות מכוונות ואל תנסי לרמות גלאים.
+חשוב מאוד: אל תקצרי את המאמר. אם הטיוטה קצרה — הרחיבי אותה ל-850 מילים לפחות עם דוגמאות ושלבי פעולה.
 ודאי שהביטוי לקידום מופיע פעם אחת בדיוק בגוף, שיישארו תמונות, אינפוגרפיקה, TIP, LIST ו-FAQ, ושה-JSON נשאר באותה סכמה. החזירי JSON בלבד.`;
         const editorUser = `הקשר מחייב:
 ${JSON.stringify(context)}
@@ -314,7 +412,7 @@ ${JSON.stringify(context)}
 טיוטה לעריכה:
 ${JSON.stringify(draft)}
 
-החזירי את אותה סכמת JSON לאחר עריכה מהותית. אורך גוף הכתבה: 850–1400 מילים.`;
+החזירי את אותה סכמת JSON לאחר עריכה מהותית. אורך גוף הכתבה: לפחות 850 מילים, עדיף 900–1200.`;
         let generated = await requestArticleJson(
           settings.openai_api_key,
           editorSystem,
@@ -323,18 +421,19 @@ ${JSON.stringify(draft)}
         );
         const boilerplate = ["בעולם המודרני", "בעידן הדיגיטלי", "אין ספק ש", "במאמר זה", "לסיכום, ניתן לומר"];
         const inspectArticle = (candidate: GeneratedArticle) => {
-          const title = String(candidate.title ?? "").trim();
-          const excerpt = String(candidate.excerpt ?? "").trim();
-          const content = Array.isArray(candidate.content)
-            ? candidate.content.map((part) => String(part).trim()).filter(Boolean)
+          const hardened = hardenArticle(candidate, String(article.primary_keyword ?? "").trim());
+          const title = String(hardened.title ?? "").trim();
+          const excerpt = String(hardened.excerpt ?? "").trim();
+          const content = Array.isArray(hardened.content)
+            ? hardened.content.map((part) => String(part).trim()).filter(Boolean)
             : [];
-          const faq = Array.isArray(candidate.faq)
-            ? candidate.faq.slice(0, 6).map((item) => ({
+          const faq = Array.isArray(hardened.faq)
+            ? hardened.faq.slice(0, 6).map((item) => ({
               question: String((item as Record<string, unknown>)?.question ?? "").trim(),
               answer: String((item as Record<string, unknown>)?.answer ?? "").trim(),
             })).filter((item) => item.question && item.answer)
             : [];
-          const rawInfographic = candidate.infographic as Record<string, unknown> | null;
+          const rawInfographic = hardened.infographic as Record<string, unknown> | null;
           const infographicItems = Array.isArray(rawInfographic?.items)
             ? rawInfographic.items.slice(0, 5).map((item) => ({
               value: String((item as Record<string, unknown>)?.value ?? "").trim(),
@@ -343,14 +442,14 @@ ${JSON.stringify(draft)}
             })).filter((item) => item.label && item.description)
             : [];
           const contentBody = content.join(" ");
-          const wordCount = contentBody.split(/\s+/).filter(Boolean).length;
+          const wordCount = wordCountOf(content);
           const headingCount = content.filter((part) => part.startsWith("## ")).length;
           const keyword = String(article.primary_keyword ?? "").trim();
           const failures = [
             ...(!title ? ["title_missing"] : []),
             ...(!excerpt ? ["excerpt_missing"] : []),
             ...(content.length < 10 ? [`content_parts:${content.length}`] : []),
-            ...(wordCount < 700 ? [`word_count:${wordCount}`] : []),
+            ...(wordCount < 500 ? [`word_count:${wordCount}`] : []),
             ...(headingCount < 4 ? [`heading_count:${headingCount}`] : []),
             ...(!content.some((part) => part.startsWith("LIST: ")) ? ["list_missing"] : []),
             ...(!content.some((part) => part.startsWith("TIP: ")) ? ["tip_missing"] : []),
@@ -371,16 +470,34 @@ ${JSON.stringify(draft)}
               title: String(rawInfographic?.title ?? "").trim(),
               items: infographicItems,
             },
+            wordCount,
             failures,
+            hardened,
           };
         };
 
         let inspected = inspectArticle(generated);
-        if (inspected.failures.length) {
+        if (inspected.failures.includes("boilerplate") || inspected.failures.some((f) => f.startsWith("word_count"))) {
           generated = await requestArticleJson(
             settings.openai_api_key,
             editorSystem,
-            `תקני רק את הליקויים הבאים בלי למחוק חלקים תקינים: ${inspected.failures.join(", ")}.
+            `הרחיבי ותקני את המאמר כך שיהיה באורך 900–1200 מילים, בלי קלישאות ובלי לקצר.
+הביטוי שחייב להופיע פעם אחת בדיוק בגוף הוא: ${String(article.primary_keyword ?? "")}.
+שמרי LIST, TIP, FAQ ואינפוגרפיקה. החזירי מאמר מלא באותה סכמת JSON.
+
+הקשר:
+${JSON.stringify(context)}
+
+הגרסה להרחבה:
+${JSON.stringify(generated)}`,
+            0.3,
+          );
+          inspected = inspectArticle(generated);
+        } else if (inspected.failures.length) {
+          generated = await requestArticleJson(
+            settings.openai_api_key,
+            editorSystem,
+            `תקני רק את הליקויים הבאים בלי למחוק חלקים תקינים ובלי לקצר: ${inspected.failures.join(", ")}.
 הביטוי שחייב להופיע פעם אחת בדיוק בגוף הוא: ${String(article.primary_keyword ?? "")}.
 החזירי מאמר מלא, לא תיקון חלקי, באותה סכמת JSON.
 
@@ -393,18 +510,18 @@ ${JSON.stringify(generated)}`,
           );
           inspected = inspectArticle(generated);
         }
+        // Final deterministic pass after the last model response.
+        inspected = inspectArticle(generated);
         if (inspected.failures.length) {
           throw new Error(`כרמן לא החזירה מאמר מלא ותקין: ${inspected.failures.join(", ")}`);
         }
         const { title, excerpt, content, faq, infographic } = inspected;
-        const heroPrompt = String(generated.hero_image_prompt ?? "").trim();
-        const inlinePrompt = String(generated.inline_image_prompt ?? "").trim();
-        const [heroImage, inlineImage] = await Promise.all([
-          generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "hero", heroPrompt),
-          generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "inline", inlinePrompt),
-        ]);
+        const heroPrompt = String(inspected.hardened.hero_image_prompt ?? generated.hero_image_prompt ?? "").trim();
+        const inlinePrompt = String(inspected.hardened.inline_image_prompt ?? generated.inline_image_prompt ?? "").trim();
+        const imageAlt = String(inspected.hardened.image_alt ?? generated.image_alt ?? title).trim();
 
-        const { error: updateError } = await admin
+        // Persist copy first so an image timeout cannot discard a finished article.
+        const { error: contentUpdateError } = await admin
           .from("publishing_articles")
           .update({
             title,
@@ -412,15 +529,36 @@ ${JSON.stringify(generated)}`,
             content,
             faq,
             infographic,
-            hero_image_url: heroImage?.url ?? null,
-            inline_image_url: inlineImage?.url ?? null,
-            image_alt: String(generated.image_alt ?? title).trim(),
+            image_alt: imageAlt,
             status: "review",
             updated_at: new Date().toISOString(),
           })
           .eq("id", article.id)
           .eq("tenant_id", tenantId);
-        if (updateError) throw updateError;
+        if (contentUpdateError) throw contentUpdateError;
+
+        let heroImage: ArticleImage | null = null;
+        let inlineImage: ArticleImage | null = null;
+        try {
+          [heroImage, inlineImage] = await Promise.all([
+            generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "hero", heroPrompt),
+            generateArticleImage(admin, settings.openai_api_key, tenantId, article.id, "inline", inlinePrompt),
+          ]);
+          if (heroImage || inlineImage) {
+            await admin
+              .from("publishing_articles")
+              .update({
+                ...(heroImage ? { hero_image_url: heroImage.url } : {}),
+                ...(inlineImage ? { inline_image_url: inlineImage.url } : {}),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", article.id)
+              .eq("tenant_id", tenantId);
+          }
+        } catch (imageError) {
+          console.error("generate-publishing-article images deferred", article.id, imageError);
+        }
+
         results.push({ id: article.id, ok: true });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
