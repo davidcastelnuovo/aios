@@ -36,6 +36,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [viewDashboard, setViewDashboard] = useState<{ id: string; name: string } | null>(null);
   const [showLinkSection, setShowLinkSection] = useState(false);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [contentKind, setContentKind] = useState<"table" | "dashboard">("table");
   const userSelectedRef = useRef(false);
 
   // All tables for the tenant
@@ -178,7 +179,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
   const renderTableIcon = (table: any) => getIntegrationIcon(table?.integration_type);
 
-  const items = useMemo(() => {
+  const allItems = useMemo(() => {
     const dashItems = dashboards.map((d: any) => ({
       id: `dash-${d.id}`,
       kind: "dashboard" as const,
@@ -196,6 +197,17 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     return [...dashItems, ...tableItems];
   }, [dashboards, tables]);
 
+  const items = useMemo(
+    () => allItems.filter((item) => item.kind === contentKind),
+    [allItems, contentKind],
+  );
+
+  useEffect(() => {
+    if (items.length > 0) return;
+    if (contentKind === "table" && dashboards.length > 0) setContentKind("dashboard");
+    if (contentKind === "dashboard" && tables.length > 0) setContentKind("table");
+  }, [contentKind, dashboards.length, items.length, tables.length]);
+
   useEffect(() => {
     if (items.length === 0) {
       if (activeTabId !== null) setActiveTabId(null);
@@ -203,16 +215,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     }
     const currentExists = !!items.find((i) => i.id === activeTabId);
     if (!currentExists) {
-      // No valid selection — prefer first dashboard, else first item
-      const firstDash = items.find((i) => i.kind === "dashboard");
-      setActiveTabId((firstDash || items[0]).id);
-    } else if (!userSelectedRef.current) {
-      // User hasn't manually picked yet: if on a table but dashboards just loaded, switch to dashboard
-      const currentItem = items.find((i) => i.id === activeTabId);
-      if (currentItem?.kind === "table") {
-        const firstDash = items.find((i) => i.kind === "dashboard");
-        if (firstDash) setActiveTabId(firstDash.id);
-      }
+      setActiveTabId(items[0].id);
     }
   }, [items]);
 
@@ -225,12 +228,39 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     );
   }
 
-  const hasContent = items.length > 0;
+  const hasContent = allItems.length > 0;
+  const hasActiveKindContent = items.length > 0;
   const activeItem = items.find((i) => i.id === activeTabId) || items[0];
 
 
   return (
     <div className="space-y-3" dir="rtl">
+      {/* Reports and dashboards are independent surfaces. Keeping their
+          selectors separate prevents similarly named items from replacing
+          each other's active state. */}
+      {hasContent && (
+        <Tabs
+          value={contentKind}
+          onValueChange={(value) => {
+            userSelectedRef.current = false;
+            setActiveTabId(null);
+            setContentKind(value as "table" | "dashboard");
+          }}
+          dir="rtl"
+        >
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="table" disabled={tables.length === 0} className="gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              דוחות נפרדים ({tables.length})
+            </TabsTrigger>
+            <TabsTrigger value="dashboard" disabled={dashboards.length === 0} className="gap-2">
+              <LayoutDashboard className="h-4 w-4" />
+              דשבורדים ({dashboards.length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
       {/* Tabs row + manage-links toggle */}
       <div className="flex items-center gap-2">
         <Button
@@ -244,7 +274,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
           <ChevronDown className={`h-3 w-3 transition-transform ${showLinkSection ? 'rotate-180' : ''}`} />
         </Button>
 
-        {hasContent && (
+        {hasActiveKindContent && (
           <div className="flex-1 min-w-0">
             <Tabs value={activeItem?.id} onValueChange={(id) => { userSelectedRef.current = true; setActiveTabId(id); }} dir="rtl">
               <TabsList className="h-9 w-full justify-start overflow-x-auto flex-nowrap">
