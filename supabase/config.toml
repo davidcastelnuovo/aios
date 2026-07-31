@@ -297,6 +297,10 @@ verify_jwt = true
 [functions.publishing-feed]
 verify_jwt = false
 
+# Serves generated article images to public magazine pages and crawlers.
+[functions.publishing-image]
+verify_jwt = false
+
 [functions.domain-connections]
 verify_jwt = true
 

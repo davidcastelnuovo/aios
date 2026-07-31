@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Loader2, Pencil, Plus, Rocket, Save, Sparkles, Square, Upload } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileSpreadsheet, Globe2, Image as ImageIcon, Loader2, Pencil, Plus, Rocket, Save, Sparkles, Square, Upload } from "lucide-react";
 
 type PublishingSite = { id: string; site_key: string; name: string; destination_type: "pbn" | "wordpress" | "custom_api"; client_id: string | null; connection_id: string | null; base_url: string | null; categories: string[]; status: string; is_hidden: boolean };
 type WordPressSite = { id: string; site_url: string; site_name: string | null; client_id: string | null; is_active: boolean };
@@ -23,6 +23,7 @@ type PublishingArticle = { id: string; client_id: string | null; customer_name: 
 type ImportRow = { customerName: string; primaryKeyword: string; topic: string; targetUrl: string; siteKey: string; category: string; sheetName: string; rowNumber: number; sourceMonth: string; errors: string[] };
 type ClientOption = { id: string; name: string };
 type VercelProject = { id: string; name: string; framework: string | null; updated_at?: number; domains: Array<{ name: string; verified: boolean }>; deployment: { id: string; url: string; state: string; created_at: number } | null };
+type ArticleStatusFilter = "all" | "published" | "unpublished";
 
 /** Pilot magazine design systems for the first three PBN sites (baked into Vercel HTML on refresh). */
 const PILOT_DESIGN_STUDIOS: Record<string, string> = {
@@ -125,8 +126,11 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([]);
   const [generatingArticleIds, setGeneratingArticleIds] = useState<string[]>([]);
   const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number; stopping: boolean } | null>(null);
+  const [imageProgress, setImageProgress] = useState<{ current: number; total: number } | null>(null);
   const stopGenerationRef = useRef(false);
   const [publishingSelected, setPublishingSelected] = useState(false);
+  const [articleStatusFilter, setArticleStatusFilter] = useState<ArticleStatusFilter>("all");
+  const [articleClientFilter, setArticleClientFilter] = useState("all");
   const [networkProgress, setNetworkProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   // The generated Supabase types will include these tables after the migration is applied.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -193,6 +197,28 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
   }), [sites, vercelProjects]);
   const visiblePbnSites = useMemo(() => sites.filter((site) => site.destination_type === "pbn" && !site.is_hidden), [sites]);
   const publishedArticles = useMemo(() => articles.filter((article) => article.status === "published"), [articles]);
+  const articleClientOptions = useMemo(
+    () => [...new Set(articles.map((article) => article.customer_name?.trim()).filter((name): name is string => Boolean(name)))].sort((a, b) => a.localeCompare(b, "he")),
+    [articles],
+  );
+  const filteredArticles = useMemo(
+    () => articles.filter((article) => {
+      if (articleStatusFilter === "published" && article.status !== "published") return false;
+      if (articleStatusFilter === "unpublished" && article.status === "published") return false;
+      if (articleClientFilter !== "all" && article.customer_name?.trim() !== articleClientFilter) return false;
+      return true;
+    }),
+    [articleClientFilter, articleStatusFilter, articles],
+  );
+  const clientPublishableArticles = useMemo(
+    () => articleClientFilter === "all"
+      ? []
+      : articles.filter((article) =>
+        article.customer_name?.trim() === articleClientFilter &&
+        article.status !== "published" &&
+        Boolean(article.title && article.content?.length && article.site_id && article.target_url)),
+    [articleClientFilter, articles],
+  );
   const pbnRows = useMemo(() => visiblePbnSites.map((site) => {
     const project = vercelProjects.find((candidate) => candidate.id === site.connection_id || candidate.name.toLowerCase().endsWith(site.site_key.toLowerCase()));
     const primaryDomain = project?.domains.find((domain) => domain.verified)?.name ?? project?.domains[0]?.name ?? null;
@@ -537,10 +563,38 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
     }
   };
 
-  const approveAndPublishSelected = async () => {
-    const selected = articles.filter((article) => selectedArticleIds.includes(article.id));
+  const generateArticleImages = async (articleIds: string[]) => {
+    const ids = articleIds.slice(0, 10);
+    if (!ids.length || imageProgress) return;
+    setImageProgress({ current: 0, total: ids.length });
+    let generated = 0;
+    let failed = 0;
+    try {
+      for (const [index, id] of ids.entries()) {
+        try {
+          const { data, error } = await supabase.functions.invoke("generate-publishing-articles", { body: { article_ids: [id], mode: "images" } });
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          generated += Number(data?.generated ?? 0);
+          failed += Number(data?.failed ?? 0);
+        } catch {
+          failed += 1;
+        } finally {
+          setImageProgress({ current: index + 1, total: ids.length });
+          await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
+        }
+      }
+      if (failed) toast.warning(`${generated} מאמרים קיבלו תמונות חדשות, ${failed} נכשלו`);
+      else toast.success(generated === 1 ? "התמונות נוצרו מחדש למאמר" : `התמונות נוצרו מחדש ל-${generated} מאמרים`);
+    } finally {
+      setImageProgress(null);
+    }
+  };
+
+  const publishArticles = async (articleIds: string[], clearSelection = false) => {
+    const selected = articles.filter((article) => articleIds.includes(article.id) && article.status !== "published");
     const invalid = selected.filter((article) => !article.title || !article.content?.length || !article.site_id || !article.target_url);
-    if (!selected.length) return;
+    if (!selected.length) return toast.error("לא נמצאו מאמרים מוכנים לפרסום");
     if (invalid.length) return toast.error(`${invalid.length} מאמרים חסרים תוכן, אתר או קישור יעד`);
     setPublishingSelected(true);
     try {
@@ -564,7 +618,13 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         const liveUrl = articleLiveUrl(siteById.get(article.site_id!), slug)!;
         const response = await fetch(liveUrl, { cache: "no-store" });
         const html = await response.text();
-        return response.ok && Boolean(article.target_url) && html.includes(`href="${article.target_url}"`);
+        const escapedTarget = article.target_url!
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;");
+        return response.ok && (
+          html.includes(`href="${article.target_url}"`) ||
+          html.includes(`href="${escapedTarget}"`)
+        );
       }));
       if (checks.some((check) => !check)) {
         await db.from("publishing_articles").update({
@@ -573,13 +633,28 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         throw new Error("הפרסום לא אומת: לפחות עמוד אחד או קישור פנימי אחד אינו נגיש");
       }
       await queryClient.invalidateQueries({ queryKey: ["publishing-articles", tenantId] });
-      setSelectedArticleIds([]);
+      await queryClient.invalidateQueries({ queryKey: ["seo-monthly-work"] });
+      if (clearSelection) setSelectedArticleIds([]);
       toast.success(`${selected.length} מאמרים פורסמו; הקישורים זמינים בלשונית "פורסמו"`);
     } catch (error: unknown) {
       toast.error(errorMessage(error, "אישור המאמרים נכשל"));
     } finally {
       setPublishingSelected(false);
     }
+  };
+
+  const approveAndPublishSelected = () => publishArticles(selectedArticleIds, true);
+
+  const publishFilteredClient = () => {
+    if (articleClientFilter === "all") return;
+    const skipped = articles.filter((article) =>
+      article.customer_name?.trim() === articleClientFilter &&
+      article.status !== "published" &&
+      !clientPublishableArticles.some((candidate) => candidate.id === article.id)).length;
+    if (skipped) {
+      toast.info(`${skipped} משימות של ${articleClientFilter} עדיין חסרות תוכן או יעד ולא יפורסמו`);
+    }
+    return publishArticles(clientPublishableArticles.map((article) => article.id));
   };
 
   return <div className="flex min-h-0 flex-1 flex-col bg-muted/10" dir="rtl">
@@ -602,20 +677,53 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
         <ScrollArea className="h-full">
           <div className="space-y-3 p-5">
             <Card className="flex flex-wrap items-center gap-3 p-3">
+              <div className="text-xs font-semibold">סינון מאמרים</div>
+              <Select value={articleStatusFilter} onValueChange={(value) => setArticleStatusFilter(value as ArticleStatusFilter)}>
+                <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">הכול</SelectItem>
+                  <SelectItem value="published">פורסמו</SelectItem>
+                  <SelectItem value="unpublished">לא פורסמו</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={articleClientFilter} onValueChange={setArticleClientFilter}>
+                <SelectTrigger className="h-8 w-64 text-xs"><SelectValue placeholder="כל הלקוחות" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל הלקוחות</SelectItem>
+                  {articleClientOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Badge variant="secondary">{filteredArticles.length} תוצאות</Badge>
+              <div className="flex-1" />
+              <Button
+                size="sm"
+                onClick={publishFilteredClient}
+                disabled={articleClientFilter === "all" || !clientPublishableArticles.length || publishingSelected}
+              >
+                {publishingSelected ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Rocket className="ml-2 h-4 w-4" />}
+                פרסם ללקוח ({clientPublishableArticles.length})
+              </Button>
+            </Card>
+            <Card className="flex flex-wrap items-center gap-3 p-3">
               <div className="flex-1 text-xs text-muted-foreground">
                 {generationProgress
                   ? `כותב מאמר ${Math.min(generationProgress.current + 1, generationProgress.total)} מתוך ${generationProgress.total}${generationProgress.stopping ? " · עוצר לאחר המאמר הנוכחי" : ""}`
-                  : `${selectedArticleIds.length} מאמרים נבחרו · כתיבה מרובה מוגבלת ל־10 בכל הרצה`}
+                  : imageProgress
+                    ? `מייצר תמונות למאמר ${Math.min(imageProgress.current + 1, imageProgress.total)} מתוך ${imageProgress.total}`
+                    : `${selectedArticleIds.length} מאמרים נבחרו · כתיבה מרובה מוגבלת ל־10 בכל הרצה`}
               </div>
               {generatingArticleIds.length ? (
                 <Button variant="destructive" onClick={stopArticleGeneration} disabled={Boolean(generationProgress?.stopping)}>
                   <Square className="ml-2 h-4 w-4" />{generationProgress?.stopping ? "עוצר..." : "עצור הרצה"}
                 </Button>
               ) : (
-                <Button variant="outline" onClick={() => generateArticles(selectedArticleIds)} disabled={!selectedArticleIds.length}>
+                <Button variant="outline" onClick={() => generateArticles(selectedArticleIds)} disabled={!selectedArticleIds.length || Boolean(imageProgress)}>
                   <Sparkles className="ml-2 h-4 w-4" />כתיבת נבחרים
                 </Button>
               )}
+              <Button variant="outline" onClick={() => generateArticleImages(selectedArticleIds)} disabled={!selectedArticleIds.length || Boolean(imageProgress) || Boolean(generatingArticleIds.length)}>
+                {imageProgress ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <ImageIcon className="ml-2 h-4 w-4" />}יצירת תמונות
+              </Button>
               <Button onClick={approveAndPublishSelected} disabled={!selectedArticleIds.length || publishingSelected}>
                 {publishingSelected ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Rocket className="ml-2 h-4 w-4" />}אשר ופרסם נבחרים
               </Button>
@@ -624,10 +732,18 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
               {loadingArticles ? <Loader2 className="mx-auto my-12 h-6 w-6 animate-spin" /> : <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-muted/50"><tr>
-                    <th className="p-3"><Checkbox checked={articles.length > 0 && selectedArticleIds.length === articles.length} onCheckedChange={(checked) => setSelectedArticleIds(checked ? articles.map((article) => article.id) : [])} /></th>
+                    <th className="p-3"><Checkbox
+                      checked={filteredArticles.length > 0 && filteredArticles.every((article) => selectedArticleIds.includes(article.id))}
+                      onCheckedChange={(checked) => {
+                        const filteredIds = new Set(filteredArticles.map((article) => article.id));
+                        setSelectedArticleIds((current) => checked
+                          ? [...new Set([...current, ...filteredIds])]
+                          : current.filter((id) => !filteredIds.has(id)));
+                      }}
+                    /></th>
                     <th className="p-3 text-right">חודש שיוך</th><th className="p-3 text-right">לקוח</th><th className="p-3 text-right">ביטוי וקישור</th><th className="p-3 text-right">נושא</th><th className="p-3 text-right">אתר</th><th className="p-3 text-right">סטטוס</th><th className="p-3 text-right">פעולות</th>
                   </tr></thead>
-                  <tbody>{articles.map((article) => {
+                  <tbody>{filteredArticles.map((article) => {
                     const isGenerating = generatingArticleIds.includes(article.id);
                     return <tr key={article.id} className="border-t">
                       <td className="p-3"><Checkbox checked={selectedArticleIds.includes(article.id)} onCheckedChange={(checked) => toggleArticle(article.id, Boolean(checked))} /></td>
@@ -638,12 +754,14 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
                       <td className="p-3">{siteById.get(article.site_id ?? "")?.name ?? "לא משויך"}<div className="text-[10px] text-muted-foreground">{article.category}</div></td>
                       <td className="p-3"><Badge variant="outline">{article.status}</Badge></td>
                       <td className="p-3"><div className="flex items-center gap-2">
-                        <Button size="sm" variant="outline" onClick={() => generateArticles([article.id])} disabled={Boolean(generatingArticleIds.length)}>{isGenerating ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="ml-1 h-3.5 w-3.5" />}כתיבה</Button>
+                        <Button size="sm" variant="outline" onClick={() => generateArticles([article.id])} disabled={Boolean(generatingArticleIds.length) || Boolean(imageProgress)}>{isGenerating ? <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="ml-1 h-3.5 w-3.5" />}כתיבה</Button>
+                        <Button size="sm" variant="outline" onClick={() => generateArticleImages([article.id])} disabled={Boolean(imageProgress) || Boolean(generatingArticleIds.length) || !article.title}><ImageIcon className="ml-1 h-3.5 w-3.5" />תמונות</Button>
                         <Button size="sm" variant="outline" onClick={() => openArticleEditor(article)}><Pencil className="ml-1 h-3.5 w-3.5" />צפייה ועריכה</Button>
                       </div></td>
                     </tr>;
                   })}</tbody>
                 </table>
+                {!filteredArticles.length && <div className="p-10 text-center text-sm text-muted-foreground">לא נמצאו מאמרים לפי הפילטרים שנבחרו</div>}
               </div>}
             </Card>
           </div>

@@ -206,6 +206,11 @@ const sharedHelpers = `const escapeHtml = (value = "") => String(value).replace(
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[char]));
 const articleUrl = (slug) => "/articles/" + encodeURIComponent(slug);
+const magazineImg = (src, alt = "", attrs = "") => {
+  if (!src || !/^https?:\\/\\//i.test(String(src))) return "";
+  return "<img src=\\"" + escapeHtml(src) + "\\" alt=\\"" + escapeHtml(alt) + "\\"" +
+    (attrs ? " " + attrs : "") + " onerror=\\"this.remove()\\">";
+};
 `;
 
 const homeShell = (siteId: string, theme: MagazineTheme, css: string, bodyHtml: string) => `
@@ -268,7 +273,7 @@ footer{padding:28px;text-align:center;color:var(--muted);border-top:1px solid #f
 const signalHomeBody = `
 \${featured ? \`
 <section class="hero">
-  <div class="hero-media">\${featured.hero_image_url ? '<img src="' + escapeHtml(featured.hero_image_url) + '" alt="' + escapeHtml(featured.image_alt || featured.title) + '">' : ''}</div>
+  <div class="hero-media">\${magazineImg(featured.hero_image_url, featured.image_alt || featured.title)}</div>
   <div class="top"><div><a class="brand" href="/">\${escapeHtml(site.name || "מגזין")}</a><div class="studio">${"Signal Atelier"}</div></div><p class="tag">${"חדשנות, טכנולוגיה והעתיד שכבר כאן"}</p></div>
   <div class="hero-copy">
     <span class="eyebrow">\${escapeHtml(featured.category || "כתבה נבחרת")}</span>
@@ -281,7 +286,7 @@ const signalHomeBody = `
   <div class="rail-head"><h2>עוד מהמגזין</h2><span>\${rest.length} כתבות</span></div>
   \${rest.map((article) => \`
     <a class="story" href="\${articleUrl(article.slug)}">
-      \${article.hero_image_url ? '<img src="' + escapeHtml(article.hero_image_url) + '" alt="' + escapeHtml(article.image_alt || article.title) + '" loading="lazy">' : '<span class="ph"></span>'}
+      \${magazineImg(article.hero_image_url, article.image_alt || article.title, 'loading="lazy"') || '<span class="ph"></span>'}
       <div><div class="cat">\${escapeHtml(article.category || "מגזין")}</div><h3>\${escapeHtml(article.title)}</h3><p>\${escapeHtml(article.excerpt || "")}</p></div>
     </a>\`).join("")}
 </section>\` : \`
@@ -320,7 +325,7 @@ const ledgerHomeBody = `
   <div class="meta-row"><span><strong>North Ledger</strong> · ${"חדשות, חברה וכלכלה בגובה העיניים"}</span><span>\${new Date().toLocaleDateString("he-IL",{weekday:"long",day:"numeric",month:"long"})}</span></div>
 </header>
 <article class="feature">
-  <a class="feature-visual" href="\${articleUrl(featured.slug)}">\${featured.hero_image_url ? '<img src="' + escapeHtml(featured.hero_image_url) + '" alt="' + escapeHtml(featured.image_alt || featured.title) + '">' : ''}</a>
+  <a class="feature-visual" href="\${articleUrl(featured.slug)}">\${magazineImg(featured.hero_image_url, featured.image_alt || featured.title)}</a>
   <div class="feature-copy">
     <div class="eyebrow">\${escapeHtml(featured.category || "כתבה נבחרת")}</div>
     <h1><a href="\${articleUrl(featured.slug)}">\${escapeHtml(featured.title)}</a></h1>
@@ -334,7 +339,7 @@ const ledgerHomeBody = `
     <a class="row" href="\${articleUrl(article.slug)}">
       <div class="num">\${String(index + 1).padStart(2,"0")}</div>
       <div><h3>\${escapeHtml(article.title)}</h3><p>\${escapeHtml(article.excerpt || "")}</p></div>
-      \${article.hero_image_url ? '<img src="' + escapeHtml(article.hero_image_url) + '" alt="' + escapeHtml(article.image_alt || article.title) + '" loading="lazy">' : '<span class="ph"></span>'}
+      \${magazineImg(article.hero_image_url, article.image_alt || article.title, 'loading="lazy"') || '<span class="ph"></span>'}
     </a>\`).join("")}
 </section>\` : \`
 <header class="mast"><a class="brand" href="/">\${escapeHtml(site.name || "מגזין")}</a></header>
@@ -379,7 +384,7 @@ const atelierHomeBody = `
   </aside>
   <div class="main">
     <article class="feature">
-      <a class="feature-visual" href="\${articleUrl(featured.slug)}">\${featured.hero_image_url ? '<img src="' + escapeHtml(featured.hero_image_url) + '" alt="' + escapeHtml(featured.image_alt || featured.title) + '">' : ''}</a>
+      <a class="feature-visual" href="\${articleUrl(featured.slug)}">\${magazineImg(featured.hero_image_url, featured.image_alt || featured.title)}</a>
       <div class="feature-copy">
         <div class="eyebrow">\${escapeHtml(featured.category || "כתבה נבחרת")}</div>
         <h1><a href="\${articleUrl(featured.slug)}">\${escapeHtml(featured.title)}</a></h1>
@@ -390,7 +395,7 @@ const atelierHomeBody = `
     <section class="grid">
       \${rest.map((article) => \`
         <a class="card" href="\${articleUrl(article.slug)}">
-          <div class="image">\${article.hero_image_url ? '<img src="' + escapeHtml(article.hero_image_url) + '" alt="' + escapeHtml(article.image_alt || article.title) + '" loading="lazy">' : ''}</div>
+          <div class="image">\${magazineImg(article.hero_image_url, article.image_alt || article.title, 'loading="lazy"')}</div>
           <div class="card-copy"><div class="cat">\${escapeHtml(article.category || "מגזין")}</div><h3>\${escapeHtml(article.title)}</h3><p>\${escapeHtml(article.excerpt || "")}</p></div>
         </a>\`).join("")}
     </section>
@@ -435,7 +440,7 @@ const classicHomeBodyFixed = (theme: MagazineTheme) => `
 <header><div class="nav"><a class="brand" href="/">\${escapeHtml(site.name || "מגזין")}</a><span class="tag">${theme.tagline}</span></div></header>
 <main>\${featured ? \`
 <section class="featured">
-  \${featured.hero_image_url ? '<a href="' + articleUrl(featured.slug) + '"><img src="' + escapeHtml(featured.hero_image_url) + '" alt="' + escapeHtml(featured.image_alt || featured.title) + '"></a>' : ''}
+  \${(() => { const img = magazineImg(featured.hero_image_url, featured.image_alt || featured.title); return img ? '<a href="' + articleUrl(featured.slug) + '">' + img + '</a>' : ''; })()}
   <div class="featured-copy">
     <span class="eyebrow">\${escapeHtml(featured.category || "כתבה נבחרת")}</span>
     <h1><a href="\${articleUrl(featured.slug)}">\${escapeHtml(featured.title)}</a></h1>
@@ -445,7 +450,7 @@ const classicHomeBodyFixed = (theme: MagazineTheme) => `
 </section>
 <section class="grid">\${rest.map((article) => \`
   <a class="card" href="\${articleUrl(article.slug)}">
-    <span class="image">\${article.hero_image_url ? '<img src="' + escapeHtml(article.hero_image_url) + '" alt="' + escapeHtml(article.image_alt || article.title) + '" loading="lazy">' : ''}</span>
+    <span class="image">\${magazineImg(article.hero_image_url, article.image_alt || article.title, 'loading="lazy"')}</span>
     <div class="card-copy"><span class="category">\${escapeHtml(article.category || "מגזין")}</span>
     <h2>\${escapeHtml(article.title)}</h2><p>\${escapeHtml(article.excerpt || "")}</p></div>
   </a>\`).join("")}</section>\` : '<div class="empty"><h1>בקרוב כאן</h1><p>כתבות חדשות נמצאות בעריכה ויעלו בקרוב.</p></div>'}</main>
@@ -536,7 +541,7 @@ const articleBodyMarkup = (theme: MagazineTheme) => {
     <header><a href="/">\${escapeHtml(site.name || "מגזין")}</a></header>
     <main><div class="meta">\${escapeHtml(article.category || "")}\${date ? " · " + escapeHtml(date) : ""}</div>
     <h1>\${escapeHtml(article.title)}</h1><p class="lead">\${escapeHtml(article.excerpt || "")}</p>
-    \${article.hero_image_url ? '<img class="hero" src="' + escapeHtml(article.hero_image_url) + '" alt="' + escapeHtml(article.image_alt || article.title) + '">' : ''}
+    \${magazineImg(article.hero_image_url, article.image_alt || article.title, 'class="hero"')}
     \${parts}\${infographicHtml}\${faqHtml}</main>
     <footer>© \${new Date().getFullYear()} \${escapeHtml(site.name || "")}</footer>`;
   }
@@ -546,7 +551,7 @@ const articleBodyMarkup = (theme: MagazineTheme) => {
     <main>
       <div class="meta">\${escapeHtml(article.category || "")}\${date ? " · " + escapeHtml(date) : ""}</div>
       <h1>\${escapeHtml(article.title)}</h1><p class="lead">\${escapeHtml(article.excerpt || "")}</p>
-      \${article.hero_image_url ? '<img class="hero-inline" src="' + escapeHtml(article.hero_image_url) + '" alt="' + escapeHtml(article.image_alt || article.title) + '">' : ''}
+      \${magazineImg(article.hero_image_url, article.image_alt || article.title, 'class="hero-inline"')}
       \${parts}\${infographicHtml}\${faqHtml}
     </main>
     <footer>© \${new Date().getFullYear()} \${escapeHtml(site.name || "")} · ${theme.studio}</footer>`;
@@ -554,7 +559,7 @@ const articleBodyMarkup = (theme: MagazineTheme) => {
   return `
     <div class="top"><div><a href="/">\${escapeHtml(site.name || "מגזין")}</a><div class="studio">${theme.studio}</div></div></div>
     <section class="hero-wrap">
-      \${article.hero_image_url ? '<img src="' + escapeHtml(article.hero_image_url) + '" alt="' + escapeHtml(article.image_alt || article.title) + '">' : ''}
+      \${magazineImg(article.hero_image_url, article.image_alt || article.title)}
       <div class="hero-copy"><div class="meta">\${escapeHtml(article.category || "")}\${date ? " · " + escapeHtml(date) : ""}</div>
       <h1>\${escapeHtml(article.title)}</h1><p class="lead">\${escapeHtml(article.excerpt || "")}</p></div>
     </section>
@@ -567,6 +572,11 @@ export function articleFunction(siteId: string, theme: MagazineTheme) {
 const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[char]));
+const magazineImg = (src, alt = "", attrs = "") => {
+  if (!src || !/^https?:\\/\\//i.test(String(src))) return "";
+  return "<img src=\\"" + escapeHtml(src) + "\\" alt=\\"" + escapeHtml(alt) + "\\"" +
+    (attrs ? " " + attrs : "") + " onerror=\\"this.remove()\\">";
+};
 
 module.exports = async (request, response) => {
   const slug = String(request.query?.slug ?? "").replace(/^\\/+|\\/+$/g, "");
@@ -601,8 +611,8 @@ module.exports = async (request, response) => {
     }
     let result = "<p>" + html + "</p>";
     if (!imageInserted && article.inline_image_url && index >= Math.floor(content.length / 2)) {
-      result += '<figure><img src="' + escapeHtml(article.inline_image_url) + '" alt="' +
-        escapeHtml(article.image_alt || article.title) + '" loading="lazy"></figure>';
+      const inline = magazineImg(article.inline_image_url, article.image_alt || article.title, 'loading="lazy"');
+      if (inline) result += "<figure>" + inline + "</figure>";
       imageInserted = true;
     }
     return result;
@@ -626,6 +636,9 @@ module.exports = async (request, response) => {
     mainEntity: faq.map((item) => ({ "@type": "Question", name: item.question, acceptedAnswer: { "@type": "Answer", text: item.answer } }))
   }).replace(/</g, "\\\\u003c") + '</script>' : "";
   const canonical = "https://" + request.headers.host + "/articles/" + encodeURIComponent(slug);
+  const ogImage = article.hero_image_url && /^https?:\\/\\//i.test(String(article.hero_image_url))
+    ? '<meta property="og:image" content="' + escapeHtml(article.hero_image_url) + '">'
+    : "";
   response.setHeader("Content-Type", "text/html; charset=utf-8");
   response.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
   return response.status(200).send(\`<!doctype html><html lang="he" dir="rtl"><head>
@@ -636,7 +649,7 @@ module.exports = async (request, response) => {
     <meta property="og:type" content="article"><meta property="og:title" content="\${escapeHtml(article.title)}">
     <meta property="og:description" content="\${escapeHtml(article.excerpt || "")}"><meta property="og:url" content="\${canonical}">
     <meta name="twitter:card" content="summary_large_image">
-    \${article.hero_image_url ? '<meta property="og:image" content="' + escapeHtml(article.hero_image_url) + '">' : ''}
+    \${ogImage}
     \${faqSchema}
     ${fontLinks(theme)}
     <style>${articleCssByLayout(theme)}</style></head>
