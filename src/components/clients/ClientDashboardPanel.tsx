@@ -19,6 +19,8 @@ import {
   Send,
   Loader2,
   Camera,
+  RefreshCw,
+  Download,
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toPng, toJpeg } from "html-to-image";
@@ -28,6 +30,8 @@ import { ClientDashboardSnapshot } from "./ClientDashboardSnapshot";
 import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
 import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
+import { syncReportTables, waitForSnapshotReady } from "@/lib/reportSync";
+import { downloadReportPdf } from "@/lib/reportPdf";
 
 interface ClientDashboardPanelProps {
   dashboard: { id: string; name: string };
@@ -59,8 +63,12 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [snapshotMounted, setSnapshotMounted] = useState(false);
+  const [snapshotToken, setSnapshotToken] = useState<string | null>(null);
+  const [snapshotVersion, setSnapshotVersion] = useState(0);
   const autoCapturedRef = useRef<string | null>(null);
+  const initializedDashboardRef = useRef<string | null>(null);
 
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
   const [sendEmail, setSendEmail] = useState(false);
@@ -72,6 +80,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // On every dashboard open: show cached image only as a placeholder,
   // then force a fresh capture so the user always sees up-to-date data.
@@ -94,6 +103,20 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       return data;
     },
     enabled: !!clientId,
+  });
+
+  const { data: dashboardTables = [], isLoading: dashboardTablesLoading } = useQuery({
+    queryKey: ["client-dashboard-tables", clientId, tenantId],
+    queryFn: async () => {
+      const response = await supabase.functions.invoke(
+        `crm-tables?tenant_id=${tenantId}`,
+        { method: "GET" },
+      );
+      if (response.error) throw response.error;
+      const allTables = Array.isArray(response.data) ? response.data : [];
+      return allTables.filter((table: any) => table.client_id === clientId);
+    },
+    enabled: !!clientId && !!tenantId,
   });
 
   const { data: groups } = useQuery({
@@ -143,7 +166,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         .limit(1)
         .maybeSingle();
       const shareData = data as any;
-      if (shareData?.share_token) {
+      if (shareData?.share_token && shareData.is_active) {
         return shareData.share_token as string;
       }
       return null;
@@ -213,12 +236,46 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
   const shareUrl = shareLink ? `https://aios.co.il/shared/dashboard/${shareLink}` : null;
 
-  // Mount snapshot once we have the share token
+  // Keep the local token in sync after a query refresh.
   useEffect(() => {
     if (shareLink) {
+      setSnapshotToken(shareLink);
       setSnapshotMounted(true);
     }
   }, [shareLink]);
+
+  const refreshDashboard = useCallback(async (showFeedback = false, syncSources = true) => {
+    setIsSyncing(true);
+    try {
+      const token = await ensureShareToken();
+      if (!token) throw new Error("לא ניתן ליצור קישור לדשבורד");
+
+      const results = syncSources ? await syncReportTables(dashboardTables) : [];
+      const failures = results.filter((result) => result.status === "failed");
+      if (failures.length > 0 && showFeedback) {
+        toast.warning(`${failures.length} מקורות לא הסתנכרנו; יוצגו הנתונים האחרונים`);
+      }
+
+      setSnapshotToken(token);
+      setSnapshotMounted(true);
+      autoCapturedRef.current = null;
+      setSnapshotVersion((version) => version + 1);
+      await queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id] });
+      if (showFeedback && failures.length === 0) toast.success("נתוני הדשבורד סונכרנו");
+    } catch (error: any) {
+      console.error("Dashboard refresh error:", error);
+      toast.error(error?.message || "סנכרון הדשבורד נכשל");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [dashboard.id, dashboardTables, ensureShareToken, queryClient]);
+
+  // A dashboard should work on first open even when it never had a share link.
+  useEffect(() => {
+    if (dashboardTablesLoading || initializedDashboardRef.current === dashboard.id) return;
+    initializedDashboardRef.current = dashboard.id;
+    void refreshDashboard(false, false);
+  }, [dashboard.id, dashboardTablesLoading, refreshDashboard]);
 
   const captureScreenshot = useCallback(async (): Promise<Blob | null> => {
     const node = snapshotRef.current;
@@ -229,23 +286,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
     setIsCapturing(true);
     try {
-      // Wait until the snapshot signals it has finished loading data (max 25s).
-      // SharedDashboard sets data-snapshot-ready="true" on its root once
-      // useQuery resolved with real data (so all tabs / KPIs are populated).
-      const start = Date.now();
-      let ready = false;
-      while (Date.now() - start < 25000) {
-        if (node.querySelector('[data-snapshot-ready="true"]')) {
-          ready = true;
-          break;
-        }
-        await new Promise((r) => setTimeout(r, 250));
-      }
-      if (!ready) {
-        console.warn("[DashboardSnapshot] data-snapshot-ready never appeared, capturing anyway");
-      }
-      // Extra grace period for chart animations / images to settle
-      await new Promise((r) => setTimeout(r, 800));
+      await waitForSnapshotReady(node);
 
       // Prefer the explicit snapshot frame (Header + KPIs + Platform Breakdown only).
       // Falls back to the entire node for SEO/WooCommerce/Analytics-only views.
@@ -365,6 +406,19 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   }, [snapshotMounted, isCapturing, captureScreenshot, dashboard.id]);
 
   const handleSend = async () => {
+    if (!sendWhatsApp && !sendEmail) {
+      toast.error("יש לבחור לפחות אמצעי שליחה אחד");
+      return;
+    }
+    if (
+      sendWhatsApp &&
+      (!selectedGroupId || selectedGroupId === "__none__") &&
+      !directPhone
+    ) {
+      toast.error("יש לבחור קבוצת וואטסאפ או להזין מספר טלפון");
+      return;
+    }
+
     let blob = screenshotBlob;
     // Reuse the image already shown on screen — never re-capture on send
     if (!blob && screenshotUrl) {
@@ -484,6 +538,24 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           }
         }
       }
+
+      const { error: deliveryLogError } = await supabase.from("report_deliveries").insert({
+        tenant_id: tenantId,
+        client_id: clientId,
+        target_type: "dashboard",
+        target_id: dashboard.id,
+        channels: [
+          ...(sendWhatsApp ? ["whatsapp"] : []),
+          ...(sendEmail ? ["email"] : []),
+        ],
+        status: "sent",
+        details: {
+          source: "manual",
+          share_url: effectiveShareUrl,
+          email_recipients: sendEmail ? emailRecipients : [],
+        },
+      });
+      if (deliveryLogError) console.warn("Failed to log dashboard delivery:", deliveryLogError);
     } catch (e: any) {
       console.error("Send error:", e);
       toast.error(`שגיאה בשליחה: ${e?.message || "לא ידוע"}`);
@@ -493,18 +565,36 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   };
 
   const handleManualCapture = async () => {
-    if (!shareLink) {
+    if (!snapshotToken) {
       toast.info("יוצר קישור שיתוף...");
       const token = await ensureShareToken();
       if (!token) {
         toast.error("לא ניתן ליצור קישור שיתוף");
         return;
       }
+      setSnapshotToken(token);
       setSnapshotMounted(true);
       // Wait for snapshot to mount + render
       await new Promise((r) => setTimeout(r, 500));
     }
     await captureScreenshot();
+  };
+
+  const exportPdf = async () => {
+    if (!screenshotBlob) {
+      toast.error("יש ליצור צילום דשבורד לפני יצוא PDF");
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      await downloadReportPdf(screenshotBlob, `dashboard-${dashboard.name}.pdf`);
+      toast.success("קובץ ה-PDF נוצר");
+    } catch (error) {
+      console.error("Dashboard PDF export error:", error);
+      toast.error("יצוא ה-PDF נכשל");
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   return (
@@ -517,10 +607,12 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
             alt={`Dashboard: ${dashboard.name}`}
             className="w-full h-auto"
           />
-        ) : isCapturing ? (
+        ) : isCapturing || snapshotMounted || isSyncing ? (
           <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="text-sm">מצלם דשבורד...</span>
+            <span className="text-sm">
+              {isSyncing ? "מסנכרן מקורות..." : "טוען את הדשבורד..."}
+            </span>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
@@ -531,12 +623,37 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       </div>
 
       <div className="flex items-center gap-2 text-xs">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => refreshDashboard(true)}
+          disabled={isSyncing || isCapturing}
+        >
+          {isSyncing ? (
+            <><Loader2 className="ml-2 h-3 w-3 animate-spin" /> מסנכרן...</>
+          ) : (
+            <><RefreshCw className="ml-2 h-3 w-3" /> סנכרן את כל המקורות</>
+          )}
+        </Button>
         <Button type="button" variant="outline" size="sm" onClick={handleManualCapture} disabled={isCapturing}>
           {isCapturing ? (
             <><Loader2 className="ml-2 h-3 w-3 animate-spin" /> מצלם...</>
           ) : (
             <><Camera className="ml-2 h-3 w-3" /> {screenshotBlob ? "צלם מחדש" : "צלם דשבורד"}</>
           )}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={exportPdf}
+          disabled={!screenshotBlob || isExportingPdf}
+        >
+          {isExportingPdf
+            ? <Loader2 className="ml-2 h-3 w-3 animate-spin" />
+            : <Download className="ml-2 h-3 w-3" />}
+          יצוא PDF
         </Button>
         {screenshotBlob && <span className="text-primary">✓ צילום מוכן לשליחה</span>}
       </div>
@@ -555,7 +672,16 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
               groups={groups}
               value={selectedGroupId}
               onValueChange={setSelectedGroupId}
+              noneLabel="ללא קבוצה - שלח לטלפון"
             />
+            {(!selectedGroupId || selectedGroupId === "__none__") && (
+              <Input
+                value={directPhone}
+                onChange={(event) => setDirectPhone(event.target.value)}
+                placeholder="05xxxxxxxx"
+                className="h-8 text-xs"
+              />
+            )}
           </div>
         )}
 
@@ -591,7 +717,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       </div>
 
       {/* Hidden snapshot rendered via portal — mirrors ClientReportPanel pattern. */}
-      {snapshotMounted && shareLink && createPortal(
+      {snapshotMounted && snapshotToken && createPortal(
         <div
           style={{
             position: "fixed",
@@ -603,7 +729,11 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           }}
           aria-hidden="true"
         >
-          <ClientDashboardSnapshot ref={snapshotRef} shareToken={shareLink} />
+          <ClientDashboardSnapshot
+            key={`${dashboard.id}-${snapshotVersion}`}
+            ref={snapshotRef}
+            shareToken={snapshotToken}
+          />
         </div>,
         document.body
       )}

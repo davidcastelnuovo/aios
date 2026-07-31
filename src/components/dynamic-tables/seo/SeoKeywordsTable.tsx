@@ -1,9 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye, CalendarRange, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye, CalendarRange, Target, Filter, Plus } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { filterRelevantKeywords } from "@/lib/seoKeywordRelevance";
+import { toast } from "sonner";
 
 const HEBREW_REGEX = /[\u0590-\u05FF]/;
 const ENGLISH_REGEX = /[A-Za-z]/;
@@ -16,6 +19,10 @@ function matchesLang(keyword: string, lang: LangFilter): boolean {
   return true;
 }
 
+function normalizeKw(raw: string): string {
+  return String(raw || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 interface SeoKeywordsTableProps {
   keywords: any[];
   trackedKeywords?: any[];
@@ -23,12 +30,14 @@ interface SeoKeywordsTableProps {
   hasGscData?: boolean;
   show3Month?: boolean;
   showYearly?: boolean;
-  /** Default tab to open. Defaults to "tracked" so the user's tracked keywords are visible first. */
+  /** Default tab. Top 10 is the primary SEO landing view. */
   defaultTab?: "tracked" | "top10" | "3month" | "yearly" | "monthly" | "all";
-  /** Initial language filter persisted at the report/table level. */
+  /** Persistence key for relevance overrides (usually clientId). */
+  relevancePersistKey?: string;
   initialLangFilter?: LangFilter;
-  /** Called whenever the language filter changes — parent persists to DB. */
   onLangFilterChange?: (lang: LangFilter) => void;
+  /** Called when the user marks a keyword as relevant / worth tracking. */
+  onMarkRelevant?: (keyword: string) => void;
 }
 
 function fmt(n: number, digits = 1): string {
@@ -36,8 +45,6 @@ function fmt(n: number, digits = 1): string {
   return Number(n.toFixed(digits)).toString();
 }
 
-// Display the pathname when the URL parses; fall back to the raw string so a
-// malformed URL doesn't crash the whole table.
 function safePathname(url: string): string {
   try {
     return new URL(url).pathname;
@@ -48,7 +55,6 @@ function safePathname(url: string): string {
 
 function PositionChange({ value }: { value: number | null }) {
   if (value === null || value === undefined) return <span className="text-xs text-muted-foreground">—</span>;
-  // Round to 1 decimal to avoid floating-point noise like 0.3999999999999999
   const rounded = Math.round(value * 10) / 10;
   if (rounded === 0) return <span className="text-xs text-muted-foreground">ללא שינוי</span>;
   return (
@@ -59,7 +65,23 @@ function PositionChange({ value }: { value: number | null }) {
   );
 }
 
-function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw: any; show3Month?: boolean; showYearly?: boolean; showPrevMonth?: boolean; showGsc?: boolean }) {
+function KeywordRow({
+  kw,
+  show3Month,
+  showYearly,
+  showPrevMonth,
+  showGsc,
+  dimmed,
+  onMarkRelevant,
+}: {
+  kw: any;
+  show3Month?: boolean;
+  showYearly?: boolean;
+  showPrevMonth?: boolean;
+  showGsc?: boolean;
+  dimmed?: boolean;
+  onMarkRelevant?: (keyword: string) => void;
+}) {
   const posChangeMonth = kw.position_prev_month != null && kw.position != null
     ? kw.position_prev_month - kw.position : null;
   const posChange3m = kw.position_3month != null && kw.position != null
@@ -71,12 +93,33 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
   const displayClicks = gscClicks && gscClicks > 0 ? gscClicks : (ahrefsTraffic && ahrefsTraffic > 0 ? ahrefsTraffic : gscClicks);
 
   return (
-    <tr className="border-b last:border-0 hover:bg-muted/30">
+    <tr className={cn("border-b last:border-0 hover:bg-muted/30", dimmed && "opacity-55 bg-muted/20")}>
       <td className="p-3 font-medium text-right">
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5 flex-wrap justify-end">
           {String(kw.keyword || '')}
           {kw._source === 'gsc' && (
             <Badge variant="outline" className="text-[10px] px-1 py-0 font-normal text-muted-foreground">GSC</Badge>
+          )}
+          {dimmed && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 font-normal text-amber-700 border-amber-300">
+              לא רלוונטי?
+            </Badge>
+          )}
+          {dimmed && onMarkRelevant && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[11px] gap-1 text-primary"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMarkRelevant(String(kw.keyword || ""));
+              }}
+              title="סמן כרלוונטי והוסף למעקב המקומי"
+            >
+              <Plus className="h-3 w-3" />
+              רלוונטי
+            </Button>
           )}
         </span>
       </td>
@@ -135,7 +178,17 @@ function KeywordRow({ kw, show3Month, showYearly, showPrevMonth, showGsc }: { kw
   );
 }
 
-function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevMonth, showGsc }: {
+function KeywordTable({
+  keywords,
+  title,
+  icon,
+  show3Month,
+  showYearly,
+  showPrevMonth,
+  showGsc,
+  dimmedSet,
+  onMarkRelevant,
+}: {
   keywords: any[];
   title: string;
   icon: React.ReactNode;
@@ -143,6 +196,8 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   showYearly?: boolean;
   showPrevMonth?: boolean;
   showGsc?: boolean;
+  dimmedSet?: Set<string>;
+  onMarkRelevant?: (keyword: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
@@ -205,14 +260,26 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
                 )}
                 <th className="text-center p-3 font-medium">תנועה</th>
                 <th className="text-center p-3 font-medium">נפח חיפוש</th>
-
                 <th className="text-right p-3 font-medium">URL</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((kw, idx) => (
-                <KeywordRow key={idx} kw={kw} show3Month={show3Month} showYearly={showYearly} showPrevMonth={showPrevMonth} showGsc={showGsc} />
-              ))}
+              {filtered.map((kw, idx) => {
+                const key = normalizeKw(String(kw.keyword || ""));
+                const dimmed = !!dimmedSet?.has(key);
+                return (
+                  <KeywordRow
+                    key={`${key}-${idx}`}
+                    kw={kw}
+                    show3Month={show3Month}
+                    showYearly={showYearly}
+                    showPrevMonth={showPrevMonth}
+                    showGsc={showGsc}
+                    dimmed={dimmed}
+                    onMarkRelevant={onMarkRelevant}
+                  />
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -221,10 +288,43 @@ function KeywordTable({ keywords, title, icon, show3Month, showYearly, showPrevM
   );
 }
 
-export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywords = [], hasGscData = false, show3Month = false, showYearly = false, defaultTab = "tracked", initialLangFilter, onLangFilterChange }: SeoKeywordsTableProps) {
-  const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
+function loadForceRelevant(persistKey?: string): string[] {
+  if (!persistKey || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`seo-force-relevant:${persistKey}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
 
-  // Sync if the parent loads the saved value asynchronously after first render
+function saveForceRelevant(persistKey: string | undefined, values: string[]) {
+  if (!persistKey || typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`seo-force-relevant:${persistKey}`, JSON.stringify(values));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export function SeoKeywordsTable({
+  keywords,
+  trackedKeywords = [],
+  gscOnlyKeywords = [],
+  hasGscData = false,
+  show3Month = false,
+  showYearly = false,
+  defaultTab = "top10",
+  relevancePersistKey,
+  initialLangFilter,
+  onLangFilterChange,
+  onMarkRelevant,
+}: SeoKeywordsTableProps) {
+  const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
+  const [filterIrrelevant, setFilterIrrelevant] = useState(true);
+  const [forceRelevant, setForceRelevant] = useState<string[]>(() => loadForceRelevant(relevancePersistKey));
+
   useEffect(() => {
     if (initialLangFilter && initialLangFilter !== langFilter) {
       setLangFilterState(initialLangFilter);
@@ -232,15 +332,15 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialLangFilter]);
 
+  useEffect(() => {
+    setForceRelevant(loadForceRelevant(relevancePersistKey));
+  }, [relevancePersistKey]);
+
   const setLangFilter = (next: LangFilter) => {
     setLangFilterState(next);
     onLangFilterChange?.(next);
   };
 
-  // Deduplicate by keyword name (case-insensitive). Ahrefs Rank Tracker returns
-  // the same keyword once per country/location/language/device combo. Pick the
-  // best row (lowest position, then highest traffic, then highest volume) and
-  // backfill missing fields from the other variants so no data is lost.
   const dedupeByKeyword = (rows: any[]): any[] => {
     const groups = new Map<string, any[]>();
     for (const r of rows) {
@@ -280,10 +380,29 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
 
   const dedupedTrackedKeywords = useMemo(() => dedupeByKeyword(trackedKeywords), [trackedKeywords]);
 
-  // Merge all keywords (tracked + organic + gsc-only), deduplicate by keyword name
+  // Local "extra tracked" from force-relevant marks (so they also appear under במעקב)
+  const localExtraTracked = useMemo(() => {
+    const trackedNames = new Set(dedupedTrackedKeywords.map((k: any) => normalizeKw(String(k.keyword || ""))));
+    const extras: any[] = [];
+    for (const phrase of forceRelevant) {
+      const key = normalizeKw(phrase);
+      if (!key || trackedNames.has(key)) continue;
+      const fromOrganic = [...keywords, ...gscOnlyKeywords].find(
+        (k) => normalizeKw(String(k.keyword || "")) === key,
+      );
+      extras.push(fromOrganic ? { ...fromOrganic, _local_tracked: true } : { keyword: phrase, _local_tracked: true });
+    }
+    return extras;
+  }, [forceRelevant, dedupedTrackedKeywords, keywords, gscOnlyKeywords]);
+
+  const effectiveTracked = useMemo(
+    () => [...dedupedTrackedKeywords, ...localExtraTracked],
+    [dedupedTrackedKeywords, localExtraTracked],
+  );
+
   const mergedKeywords = useMemo(() => {
-    const allKeywords = [...dedupedTrackedKeywords];
-    const trackedNames = new Set(dedupedTrackedKeywords.map((k: any) => String(k.keyword || '').toLowerCase()));
+    const allKeywords = [...effectiveTracked];
+    const trackedNames = new Set(effectiveTracked.map((k: any) => String(k.keyword || '').toLowerCase()));
     for (const kw of keywords) {
       if (!trackedNames.has(String(kw.keyword || '').toLowerCase())) {
         allKeywords.push(kw);
@@ -296,7 +415,7 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
       }
     }
     return dedupeByKeyword(allKeywords);
-  }, [keywords, dedupedTrackedKeywords, gscOnlyKeywords]);
+  }, [keywords, effectiveTracked, gscOnlyKeywords]);
 
   const langCounts = useMemo(() => {
     let he = 0, en = 0;
@@ -313,17 +432,15 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
     [mergedKeywords, langFilter]
   );
 
-  // Tracked keywords filtered by language and sorted: keywords with position first (asc), then nulls
   const trackedFiltered = useMemo(() => {
-    const filtered = dedupedTrackedKeywords.filter(kw => matchesLang(String(kw.keyword || ''), langFilter));
+    const filtered = effectiveTracked.filter(kw => matchesLang(String(kw.keyword || ''), langFilter));
     return [...filtered].sort((a, b) => {
       const aPos = a.position ?? Number.POSITIVE_INFINITY;
       const bPos = b.position ?? Number.POSITIVE_INFINITY;
       return aPos - bPos;
     });
-  }, [dedupedTrackedKeywords, langFilter]);
+  }, [effectiveTracked, langFilter]);
 
-  // Sort helper: keywords with valid position first (ascending), then null/undefined positions at the end
   const sortByPosition = (arr: any[]) =>
     [...arr].sort((a, b) => {
       const aPos = a.position ?? Number.POSITIVE_INFINITY;
@@ -331,19 +448,46 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
       return aPos - bPos;
     });
 
-  // 1. All keywords in top 10 positions (page 1)
-  const top10 = sortByPosition(allKeywords.filter(k => k.position != null && k.position <= 10));
+  const top10Raw = useMemo(
+    () => sortByPosition(allKeywords.filter(k => k.position != null && k.position <= 10)),
+    [allKeywords],
+  );
 
-  // 2. All keywords with 3-month data, sorted by current position (best first)
+  const { relevant: top10Relevant, irrelevant: top10Irrelevant } = useMemo(
+    () =>
+      filterRelevantKeywords(top10Raw, effectiveTracked, {
+        enabled: true,
+        forceRelevant,
+      }),
+    [top10Raw, effectiveTracked, forceRelevant],
+  );
+
+  const top10 = filterIrrelevant ? top10Relevant : top10Raw;
+  const top10Dimmed = useMemo(() => {
+    if (filterIrrelevant) return new Set<string>();
+    return new Set(top10Irrelevant.map((k) => normalizeKw(String(k.keyword || ""))));
+  }, [filterIrrelevant, top10Irrelevant]);
+
   const by3MonthChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_3month != null));
-
-  // 3. All keywords with yearly data, sorted by current position (best first)
   const byYearlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_yearly != null));
-
-  // 4. All keywords with monthly data, sorted by current position (best first)
   const byMonthlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_prev_month != null));
 
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
+
+  const handleMarkRelevant = (keyword: string) => {
+    const key = normalizeKw(keyword);
+    if (!key) return;
+    setForceRelevant((prev) => {
+      if (prev.some((p) => normalizeKw(p) === key)) return prev;
+      const next = [...prev, keyword.trim()];
+      saveForceRelevant(relevancePersistKey, next);
+      return next;
+    });
+    onMarkRelevant?.(keyword.trim());
+    toast.success(`"${keyword.trim()}" סומן כרלוונטי ונוסף למעקב`);
+  };
+
+  const canFilter = effectiveTracked.length > 0;
 
   return (
     <Card dir="rtl">
@@ -383,7 +527,40 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
                 English ({formatNumber(langCounts.en)})
               </button>
             </div>
-            <Badge variant={dedupedTrackedKeywords.length > 0 ? "default" : "outline"} className="text-xs">🎯 {dedupedTrackedKeywords.length} במעקב</Badge>
+
+            <button
+              type="button"
+              disabled={!canFilter}
+              title={
+                canFilter
+                  ? "מסתיר ביטויים שלא קשורים לרשימת המעקב (לפי מילים משותפות)"
+                  : "אין ביטויים במעקב — אין על מה לבסס סינון"
+              }
+              onClick={() => setFilterIrrelevant((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md border transition-colors",
+                filterIrrelevant && canFilter
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-muted-foreground hover:bg-muted",
+                !canFilter && "opacity-50 cursor-not-allowed",
+              )}
+            >
+              <Filter className="h-3.5 w-3.5" />
+              סנן לא רלוונטיים
+              {canFilter && top10Irrelevant.length > 0 && (
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "text-[10px] h-4 px-1",
+                    filterIrrelevant ? "bg-primary-foreground/20 text-primary-foreground" : "",
+                  )}
+                >
+                  {filterIrrelevant ? `−${top10Irrelevant.length}` : top10Irrelevant.length}
+                </Badge>
+              )}
+            </button>
+
+            <Badge variant={effectiveTracked.length > 0 ? "default" : "outline"} className="text-xs">🎯 {effectiveTracked.length} במעקב</Badge>
             <Badge variant="outline" className="text-xs">{keywords.length} אורגניות</Badge>
             {gscOnlyKeywords.length > 0 && (
               <Badge variant="outline" className="text-xs border-blue-300 text-blue-600">🔍 {gscOnlyKeywords.length} GSC בלבד</Badge>
@@ -427,14 +604,21 @@ export function SeoKeywordsTable({ keywords, trackedKeywords = [], gscOnlyKeywor
           </TabsContent>
 
           <TabsContent value="top10" className="mt-0">
+            {!filterIrrelevant && top10Irrelevant.length > 0 && (
+              <div className="px-3 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-100">
+                מוצגים גם {top10Irrelevant.length} ביטויים שסומנו כלא רלוונטיים — לחץ &quot;רלוונטי&quot; כדי לשמור במעקב.
+              </div>
+            )}
             <KeywordTable
               keywords={top10}
-              title={`${top10.length} ביטויים בעמוד הראשון`}
+              title={`${top10.length} ביטויים בעמוד הראשון${filterIrrelevant && top10Irrelevant.length > 0 ? ` · סוננו ${top10Irrelevant.length}` : ""}`}
               icon={<Trophy className="h-4 w-4 text-primary" />}
               show3Month={show3Month}
               showYearly={showYearly}
               showPrevMonth
               showGsc={hasGscData}
+              dimmedSet={top10Dimmed}
+              onMarkRelevant={handleMarkRelevant}
             />
           </TabsContent>
 

@@ -37,6 +37,7 @@ import { Users, Eye, MousePointerClick, Clock, TrendingUp, Globe, CalendarIcon, 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
+import { resolveAnalyticsReportMode, type AnalyticsReportMode } from "@/lib/analyticsReportMode";
 
 interface CrmRecord {
   id: string;
@@ -48,8 +49,10 @@ interface GoogleAnalyticsDashboardProps {
   externalDateFilter?: string;
   externalCustomDateRange?: { from: Date | undefined; to: Date | undefined };
   tableId?: string;
+  /** Extra GA table ids to keep in sync when the mode toggle is changed. */
+  relatedTableIds?: string[];
   dashboardId?: string;
-  defaultReportMode?: 'ecommerce' | 'leads';
+  defaultReportMode?: AnalyticsReportMode;
 }
 
 // Explicit colorful chart colors
@@ -92,6 +95,7 @@ export function GoogleAnalyticsDashboard({
   externalDateFilter,
   externalCustomDateRange,
   tableId,
+  relatedTableIds,
   dashboardId,
   defaultReportMode,
 }: GoogleAnalyticsDashboardProps) {
@@ -127,15 +131,48 @@ export function GoogleAnalyticsDashboard({
     }
   }, [externalDateFilter]);
   const [showComparison, setShowComparison] = useState(false);
-  const [reportMode, setReportMode] = useState<'ecommerce' | 'leads'>(defaultReportMode || 'ecommerce');
+  // Default to leads (not ecommerce) so lead-gen clients stay in leads until an
+  // explicit choice / ads campaign type says otherwise.
+  const [reportMode, setReportMode] = useState<AnalyticsReportMode>(
+    resolveAnalyticsReportMode({ tableMode: defaultReportMode }),
+  );
   // Keep local mode in sync when the persisted default arrives (async parent load)
   // or when switching between dashboards/tables with different defaults.
   useEffect(() => {
-    if (defaultReportMode && defaultReportMode !== reportMode) {
-      setReportMode(defaultReportMode);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!defaultReportMode) return;
+    setReportMode(defaultReportMode);
   }, [defaultReportMode, dashboardId, tableId]);
+
+  const persistReportMode = (newMode: AnalyticsReportMode) => {
+    const tableIds = Array.from(
+      new Set([tableId, ...(relatedTableIds || [])].filter(Boolean) as string[]),
+    );
+    for (const id of tableIds) {
+      supabase.functions.invoke('crm-tables', {
+        method: 'PATCH',
+        body: { table_id: id, integration_settings: { default_report_mode: newMode } },
+      }).catch(console.error);
+    }
+    if (dashboardId) {
+      void supabase
+        .from('crm_dashboards')
+        .select('settings')
+        .eq('id', dashboardId)
+        .single()
+        .then(async ({ data, error }) => {
+          if (error) {
+            console.error(error);
+            return;
+          }
+          const currentSettings = (data?.settings as Record<string, unknown>) || {};
+          const { error: updateError } = await supabase
+            .from('crm_dashboards')
+            .update({ settings: { ...currentSettings, default_report_mode: newMode } })
+            .eq('id', dashboardId);
+          if (updateError) console.error(updateError);
+        });
+    }
+  };
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const toNumber = (value: unknown): number => {
@@ -755,29 +792,9 @@ export function GoogleAnalyticsDashboard({
         <Label className="text-sm font-medium">סוג דוח:</Label>
         <ToggleGroup type="single" value={reportMode} onValueChange={(v) => { 
           if (v) {
-            const newMode = v as 'ecommerce' | 'leads';
+            const newMode = v as AnalyticsReportMode;
             setReportMode(newMode);
-            if (tableId) {
-              supabase.functions.invoke('crm-tables', {
-                method: 'PATCH',
-                body: { table_id: tableId, integration_settings: { default_report_mode: newMode } },
-              }).catch(console.error);
-            }
-            if (dashboardId) {
-              supabase
-                .from('crm_dashboards')
-                .select('settings')
-                .eq('id', dashboardId)
-                .single()
-                .then(({ data }) => {
-                  const currentSettings = (data?.settings as Record<string, unknown>) || {};
-                  supabase
-                    .from('crm_dashboards')
-                    .update({ settings: { ...currentSettings, default_report_mode: newMode } })
-                    .eq('id', dashboardId)
-                    .then(() => {});
-                });
-            }
+            persistReportMode(newMode);
           }
         }}>
           <ToggleGroupItem value="ecommerce" className="gap-2 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">

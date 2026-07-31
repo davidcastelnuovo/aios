@@ -24,16 +24,18 @@ import {
   RefreshCw,
   ExternalLink,
   Camera,
+  Download,
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { ClientTableSnapshot } from "./ClientTableSnapshot";
-import { SeoCombinedSnapshot } from "./SeoCombinedSnapshot";
 import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
 import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
 import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
+import { syncReportTable, waitForSnapshotReady } from "@/lib/reportSync";
+import { downloadReportPdf } from "@/lib/reportPdf";
 
 interface ClientReportPanelProps {
   table: any;
@@ -42,18 +44,6 @@ interface ClientReportPanelProps {
 }
 
 const CACHE_KEY_PREFIX = "report-screenshot-";
-
-function getSyncFunction(integrationType: string | null): string | null {
-  switch (integrationType) {
-    case "facebook_insights":
-    case "facebook_ecommerce":
-      return "sync-facebook-insights";
-    case "google_ads":
-      return "sync-google-ads-data";
-    default:
-      return null;
-  }
-}
 
 function getAdAccountUrl(table: any): string | null {
   const settings = table?.integration_settings || {};
@@ -97,6 +87,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [captureReady, setCaptureReady] = useState(false);
+  const [snapshotVersion, setSnapshotVersion] = useState(0);
   const autoCapturedTableRef = useRef<string | null>(null);
 
   // Send controls state
@@ -111,6 +102,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Fetch client data
   const { data: client } = useQuery({
@@ -175,7 +167,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         .limit(1)
         .maybeSingle();
       const shareData = data as any;
-      if (shareData?.share_token) {
+      if (shareData?.share_token && shareData.is_active) {
         return `https://aios.co.il/shared/table/${shareData.share_token}`;
       }
       return null;
@@ -207,32 +199,29 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     let cancelled = false;
 
     (async () => {
-      // 1. Sync underlying data (if integration supports it)
-      const syncFn = getSyncFunction(table.integration_type);
-      if (syncFn) {
+      // 1. Preserve low-cost ad refresh on open. SEO/analytics sources refresh
+      // only from the explicit button so opening a client does not consume
+      // Ahrefs credits or start several long-running API jobs.
+      const autoSyncTypes = ["facebook_insights", "facebook_ecommerce", "google_ads"];
+      if (autoSyncTypes.includes(table.integration_type)) {
         setIsSyncing(true);
-        try {
-          await supabase.functions.invoke(syncFn, {
-            body: { table_id: table.id },
-          });
-        } catch (err) {
-          console.error("Sync error:", err);
-        } finally {
-          if (!cancelled) setIsSyncing(false);
+        const syncResult = await syncReportTable(table);
+        if (!cancelled) setIsSyncing(false);
+        if (syncResult.status === "failed") {
+          toast.warning("הסנכרון נכשל; מוצגים הנתונים האחרונים שנשמרו");
         }
       }
 
-      // 2. Force the snapshot subtree to refetch its queries (ahrefs/GSC/GA/etc.)
+      // 2. Refresh host queries and remount the isolated snapshot QueryClient.
       await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
       await queryClient.invalidateQueries({ queryKey: ["seo-combined-snapshot", table.id] });
       await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
       await queryClient.invalidateQueries({ queryKey: ["gsc-keywords", tenantId] });
+      if (cancelled) return;
+      setSnapshotVersion((version) => version + 1);
 
-      // 3. Wait for the snapshot DOM to render with fresh data, then capture
-      const delay = table.integration_type === "ahrefs" ? 6000 : 3000;
-      window.setTimeout(() => {
-        if (!cancelled) setCaptureReady(true);
-      }, delay);
+      // 3. Capture only after the remounted report declares itself ready.
+      setCaptureReady(true);
     })();
 
     return () => { cancelled = true; };
@@ -247,29 +236,23 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   }, [captureReady, isCapturing, table.id]);
 
   const triggerSync = async () => {
-    const syncFn = getSyncFunction(table.integration_type);
-    if (!syncFn) {
-      // Even without a dedicated sync fn, refresh queries + recapture
-      await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
-      await queryClient.invalidateQueries({ queryKey: ["seo-combined-snapshot", table.id] });
-      setTimeout(() => captureScreenshot(), 1500);
-      return;
-    }
-
     setIsSyncing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      await supabase.functions.invoke(syncFn, {
-        body: { table_id: table.id },
-      });
+      const result = await syncReportTable(table);
+      if (result.status === "failed") throw new Error(result.error);
       await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
+      await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
+      autoCapturedTableRef.current = null;
+      setCaptureReady(false);
+      setSnapshotVersion((version) => version + 1);
+      window.setTimeout(() => setCaptureReady(true), 0);
     } catch (err) {
       console.error("Sync error:", err);
+      toast.error("סנכרון הדוח נכשל");
     } finally {
       setIsSyncing(false);
-      // Re-capture after sync
-      setTimeout(() => captureScreenshot(), 2000);
     }
   };
 
@@ -279,6 +262,8 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
     setIsCapturing(true);
     try {
+      await waitForSnapshotReady(node);
+
       // If snapshot defines a `data-snapshot-end` marker, crop the screenshot
       // to only include content above it (e.g. SEO report → header + KPI cards only).
       const endMarker = node.querySelector<HTMLElement>('[data-snapshot-end="true"]');
@@ -562,6 +547,24 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           }
         }
       }
+
+      const { error: deliveryLogError } = await supabase.from("report_deliveries").insert({
+        tenant_id: tenantId,
+        client_id: clientId,
+        target_type: "table",
+        target_id: table.id,
+        channels: [
+          ...(sendWhatsApp ? ["whatsapp"] : []),
+          ...(sendEmail ? ["email"] : []),
+        ],
+        status: "sent",
+        details: {
+          source: "manual",
+          share_url: effectiveShareLink,
+          email_recipients: sendEmail ? emailRecipients : [],
+        },
+      });
+      if (deliveryLogError) console.warn("Failed to log report delivery:", deliveryLogError);
     } catch (error: any) {
       console.error("Error sending report:", error);
       const msg = String(error?.message || "");
@@ -582,6 +585,23 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       }
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    if (!screenshotBlob) {
+      toast.error("יש ליצור צילום דוח לפני יצוא PDF");
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      await downloadReportPdf(screenshotBlob, `report-${table.name}.pdf`);
+      toast.success("קובץ ה-PDF נוצר");
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("יצוא ה-PDF נכשל");
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -633,6 +653,18 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         >
           <Camera className={`h-3 w-3 ${isCapturing ? "animate-spin" : ""}`} />
           צלם מחדש
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1 text-xs"
+          onClick={exportPdf}
+          disabled={!screenshotBlob || isExportingPdf}
+        >
+          {isExportingPdf
+            ? <Loader2 className="h-3 w-3 animate-spin" />
+            : <Download className="h-3 w-3" />}
+          יצוא PDF
         </Button>
         {(() => {
           const adUrl = getAdAccountUrl(table);
@@ -780,6 +812,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           {/* Render the actual DynamicTableView (full report, not summary) so the
               screenshot mirrors exactly what the user sees inside the client card. */}
           <ClientTableSnapshot
+            key={`${table.id}-${snapshotVersion}`}
             ref={snapshotRef}
             tableSlug={table.slug}
             summaryOnly={
@@ -790,8 +823,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
                 : true
             }
           />
-          {/* Keep import to avoid dead-code lint while preserving fallback type */}
-          {false && <SeoCombinedSnapshot tableId={table.id} tableName={table.name} />}
         </div>,
         document.body
       )}

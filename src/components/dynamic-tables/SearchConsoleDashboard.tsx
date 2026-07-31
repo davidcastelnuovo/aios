@@ -27,6 +27,8 @@ interface SearchConsoleDashboardProps {
   tableId: string;
   initialLangFilter?: LangFilter;
   onLangFilterChange?: (lang: LangFilter) => void;
+  /** Ahrefs (or other) tracked phrases — seed the GSC "במעקב" list. */
+  seedTrackedKeywords?: string[];
 }
 
 interface AggregatedData {
@@ -57,7 +59,12 @@ const DATE_FILTER_LABELS: Record<GscDateFilter, string> = {
   all: 'הכל',
 };
 
-export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilterChange }: SearchConsoleDashboardProps) {
+export function SearchConsoleDashboard({
+  tableId,
+  initialLangFilter,
+  onLangFilterChange,
+  seedTrackedKeywords = [],
+}: SearchConsoleDashboardProps) {
   // Default: sort by position ascending (best rank = lowest number = first)
   const [sortBy, setSortBy] = useState<string>("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -66,6 +73,7 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
   const [newKeyword, setNewKeyword] = useState("");
   const [dateFilter, setDateFilter] = useState<GscDateFilter>('last_7_days');
   const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? 'all');
+  const [showTrackedOnly, setShowTrackedOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync if parent changes saved value
@@ -75,6 +83,21 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialLangFilter]);
+
+  // Seed / refresh from Ahrefs tracked list whenever the parent sends a new set.
+  const seedKey = seedTrackedKeywords.join("\u0001");
+  useEffect(() => {
+    if (!seedTrackedKeywords || seedTrackedKeywords.length === 0) return;
+    setTrackedKeywords((prev) => {
+      const merged = [...new Set([
+        ...seedTrackedKeywords.map((k) => String(k || "").trim()).filter(Boolean),
+        ...prev,
+      ])];
+      return merged;
+    });
+    setShowTrackedOnly(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedKey]);
 
   const setLangFilter = (next: LangFilter) => {
     setLangFilterState(next);
@@ -140,6 +163,13 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
         return true;
       });
     }
+    if (showTrackedOnly && trackedKeywords.length > 0) {
+      const trackedNorm = trackedKeywords.map(k => k.toLowerCase().trim()).filter(Boolean);
+      rows = rows.filter((r) => {
+        const q = (r.query || "").toLowerCase();
+        return trackedNorm.some((t) => q === t || q.includes(t) || t.includes(q));
+      });
+    }
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
       rows = rows.filter(r => r.query.toLowerCase().includes(q));
@@ -159,12 +189,13 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
       : <ArrowDown className="h-3 w-3 text-primary inline ml-1" />;
   };
 
-  // Find tracked keywords in the data
+  // Find tracked keywords in the full GSC set (not the filtered table rows)
   const trackedKeywordsData = trackedKeywords.map(keyword => {
     const normalizedKeyword = keyword.toLowerCase().trim();
-    const matchingQuery = sortedQueries.find(q => 
+    const matchingQuery = allQueries.find(q => 
       q.query.toLowerCase() === normalizedKeyword ||
-      q.query.toLowerCase().includes(normalizedKeyword)
+      q.query.toLowerCase().includes(normalizedKeyword) ||
+      normalizedKeyword.includes(q.query.toLowerCase())
     );
     
     return {
@@ -341,6 +372,11 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
           <CardTitle className="text-lg flex items-center gap-2">
             <Target className="h-5 w-5" />
             מעקב ביטויים
+            {seedTrackedKeywords.length > 0 && (
+              <Badge variant="secondary" className="text-xs font-normal">
+                מסונכרן מ-Ahrefs ({seedTrackedKeywords.length})
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -447,7 +483,11 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
           ) : (
             <div className="text-center py-6 text-muted-foreground">
               <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">הוסף ביטויים למעקב או טען קובץ CSV</p>
+              <p className="text-sm">
+                {seedTrackedKeywords.length > 0
+                  ? "טוען ביטויים במעקב מ-Ahrefs…"
+                  : "הוסף ביטויים למעקב או טען קובץ CSV — או סנכרן דוח SEO עם ביטויים במעקב מ-Ahrefs"}
+              </p>
             </div>
           )}
         </CardContent>
@@ -459,6 +499,21 @@ export function SearchConsoleDashboard({ tableId, initialLangFilter, onLangFilte
           <CardTitle className="text-lg flex items-center justify-between flex-wrap gap-2">
             <span>ביטויי חיפוש ({formatNumber(sortedQueries.length)})</span>
             <div className="flex items-center gap-2 flex-wrap">
+              {trackedKeywords.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowTrackedOnly((v) => !v)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md border transition-colors",
+                    showTrackedOnly
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  <Target className="h-3.5 w-3.5" />
+                  במעקב בלבד ({trackedKeywordsData.filter((k) => k.found).length})
+                </button>
+              )}
               <div className="inline-flex rounded-md border bg-background p-0.5">
                 <button
                   type="button"

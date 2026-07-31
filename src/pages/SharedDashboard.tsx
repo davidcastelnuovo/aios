@@ -21,6 +21,8 @@ import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyo
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
 import { getExplicitLeadFieldsFromData, getLeadsFromData } from "@/lib/adsMetrics";
+import { formatCurrency as formatCurrencyAmount, resolveDashboardCurrency } from "@/lib/currency";
+import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -77,8 +79,6 @@ const getCampaignType = (type?: string, settings?: any): CampaignType => {
   return 'leads';
 };
 
-const formatCurrency = (num: number) =>
-  new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(num);
 const formatNumber = (num: number) => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
@@ -137,12 +137,15 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     },
     enabled: !!shareToken,
     retry: false,
-    staleTime: 0,
-    gcTime: 0,
+    // Keep a warm cache so reopening / date flips don't flash a blank screen.
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
   });
 
   const tables = data?.tables || [];
   const rawRecords = data?.records || [];
+  const dashboardCurrency = useMemo(() => resolveDashboardCurrency(tables), [tables]);
+  const formatCurrency = (num: number) => formatCurrencyAmount(num, dashboardCurrency);
 
   // Deduplicate Facebook: if both facebook_insights AND facebook_ecommerce exist,
   // skip facebook_insights records to avoid double-counting spend/impressions/clicks
@@ -638,6 +641,20 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     return 'leads';
   }, [tables]);
 
+  const analyticsTableIds = useMemo(
+    () => (tables || []).filter((t: any) => t.integration_type === 'google_analytics').map((t: any) => t.id as string),
+    [tables],
+  );
+
+  const analyticsReportMode = useMemo(
+    () =>
+      resolveAnalyticsReportMode({
+        dashboardMode: (data?.dashboard as any)?.settings?.default_report_mode,
+        tables,
+      }),
+    [data?.dashboard, tables],
+  );
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl">
@@ -761,7 +778,9 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
         <GoogleAnalyticsDashboard
           records={allAnalyticsRecords}
           externalDateFilter={dateFilter}
-          defaultReportMode={(dashboard?.settings as any)?.default_report_mode}
+          tableId={analyticsTableIds[0]}
+          relatedTableIds={analyticsTableIds.slice(1)}
+          defaultReportMode={analyticsReportMode}
         />
       ) : platformFilter === 'woocommerce' ? (
         <PublicWooCommerceView sites={wooSites} orders={wooOrders} />
@@ -803,7 +822,10 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
             )}
             {hasSeoGa && (
               <TabsContent value="ga">
-                <GoogleAnalyticsDashboard records={seoGaRecords} />
+                <GoogleAnalyticsDashboard
+                  records={seoGaRecords}
+                  defaultReportMode={analyticsReportMode}
+                />
               </TabsContent>
             )}
           </Tabs>
