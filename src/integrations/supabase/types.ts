@@ -9226,6 +9226,7 @@ export type Database = {
           api_token_last_4: string | null
           auto_sync_enabled: boolean
           company_id: string | null
+          connection_visibility: string | null
           created_at: string
           display_name: string | null
           id: string
@@ -9244,6 +9245,7 @@ export type Database = {
           api_token_last_4?: string | null
           auto_sync_enabled?: boolean
           company_id?: string | null
+          connection_visibility?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
@@ -9262,6 +9264,7 @@ export type Database = {
           api_token_last_4?: string | null
           auto_sync_enabled?: boolean
           company_id?: string | null
+          connection_visibility?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
@@ -10962,7 +10965,12 @@ export type Database = {
         | "ad_account_billing_issue"
         | "ad_account_blocked"
         | "integration_disconnected"
-      chat_provider: "manychat" | "green_api" | "internal" | "manus_wa"
+      chat_provider:
+        | "manychat"
+        | "green_api"
+        | "internal"
+        | "manus_wa"
+        | "meta_whatsapp"
       client_mood_status:
         | "happy"
         | "wavering"
@@ -11223,7 +11231,7 @@ export const Constants = {
         "ad_account_blocked",
         "integration_disconnected",
       ],
-      chat_provider: ["manychat", "green_api", "internal", "manus_wa"],
+      chat_provider: ["manychat", "green_api", "internal", "manus_wa", "meta_whatsapp"],
       client_mood_status: [
         "happy",
         "wavering",
