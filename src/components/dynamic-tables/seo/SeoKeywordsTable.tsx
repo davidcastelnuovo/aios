@@ -2,7 +2,27 @@ import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUp, ArrowDown, Trophy, TrendingUp, Calendar, MousePointerClick, Eye, CalendarRange, Target, Filter, Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  ArrowUp,
+  ArrowDown,
+  Trophy,
+  TrendingUp,
+  Calendar,
+  MousePointerClick,
+  Eye,
+  CalendarRange,
+  Target,
+  Filter,
+  Plus,
+  EyeOff,
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { filterRelevantKeywords } from "@/lib/seoKeywordRelevance";
@@ -73,6 +93,8 @@ function KeywordRow({
   showGsc,
   dimmed,
   onMarkRelevant,
+  onMarkIrrelevant,
+  showIrrelevantAction,
 }: {
   kw: any;
   show3Month?: boolean;
@@ -81,6 +103,9 @@ function KeywordRow({
   showGsc?: boolean;
   dimmed?: boolean;
   onMarkRelevant?: (keyword: string) => void;
+  onMarkIrrelevant?: (keyword: string) => void;
+  /** Show "לא רלוונטי" even when the row is not dimmed (e.g. Top 10 relevant list). */
+  showIrrelevantAction?: boolean;
 }) {
   const posChangeMonth = kw.position_prev_month != null && kw.position != null
     ? kw.position_prev_month - kw.position : null;
@@ -119,6 +144,22 @@ function KeywordRow({
             >
               <Plus className="h-3 w-3" />
               רלוונטי
+            </Button>
+          )}
+          {(dimmed || showIrrelevantAction) && onMarkIrrelevant && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-amber-800"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMarkIrrelevant(String(kw.keyword || ""));
+              }}
+              title="סמן כלא רלוונטי והסתר מ-Top 10"
+            >
+              <EyeOff className="h-3 w-3" />
+              לא רלוונטי
             </Button>
           )}
         </span>
@@ -188,6 +229,8 @@ function KeywordTable({
   showGsc,
   dimmedSet,
   onMarkRelevant,
+  onMarkIrrelevant,
+  showIrrelevantAction,
 }: {
   keywords: any[];
   title: string;
@@ -198,6 +241,8 @@ function KeywordTable({
   showGsc?: boolean;
   dimmedSet?: Set<string>;
   onMarkRelevant?: (keyword: string) => void;
+  onMarkIrrelevant?: (keyword: string) => void;
+  showIrrelevantAction?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
@@ -277,6 +322,8 @@ function KeywordTable({
                     showGsc={showGsc}
                     dimmed={dimmed}
                     onMarkRelevant={onMarkRelevant}
+                    onMarkIrrelevant={onMarkIrrelevant}
+                    showIrrelevantAction={showIrrelevantAction}
                   />
                 );
               })}
@@ -288,24 +335,40 @@ function KeywordTable({
   );
 }
 
-function loadForceRelevant(persistKey?: string): string[] {
+function loadForceList(persistKey: string | undefined, kind: "relevant" | "irrelevant"): string[] {
   if (!persistKey || typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(`seo-force-relevant:${persistKey}`);
+    const raw = localStorage.getItem(`seo-force-${kind}:${persistKey}`);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.map(String) : [];
+    return Array.isArray(parsed) ? parsed.map(String).map((x) => x.trim()).filter(Boolean) : [];
   } catch {
     return [];
   }
 }
 
-function saveForceRelevant(persistKey: string | undefined, values: string[]) {
+function saveForceList(persistKey: string | undefined, kind: "relevant" | "irrelevant", values: string[]) {
   if (!persistKey || typeof window === "undefined") return;
   try {
-    localStorage.setItem(`seo-force-relevant:${persistKey}`, JSON.stringify(values));
+    localStorage.setItem(`seo-force-${kind}:${persistKey}`, JSON.stringify(values));
   } catch {
     /* ignore quota */
   }
+}
+
+function loadForceRelevant(persistKey?: string): string[] {
+  return loadForceList(persistKey, "relevant");
+}
+
+function saveForceRelevant(persistKey: string | undefined, values: string[]) {
+  saveForceList(persistKey, "relevant", values);
+}
+
+function loadForceIrrelevant(persistKey?: string): string[] {
+  return loadForceList(persistKey, "irrelevant");
+}
+
+function saveForceIrrelevant(persistKey: string | undefined, values: string[]) {
+  saveForceList(persistKey, "irrelevant", values);
 }
 
 export function SeoKeywordsTable({
@@ -324,6 +387,8 @@ export function SeoKeywordsTable({
   const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
   const [filterIrrelevant, setFilterIrrelevant] = useState(true);
   const [forceRelevant, setForceRelevant] = useState<string[]>(() => loadForceRelevant(relevancePersistKey));
+  const [forceIrrelevant, setForceIrrelevant] = useState<string[]>(() => loadForceIrrelevant(relevancePersistKey));
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
     if (initialLangFilter && initialLangFilter !== langFilter) {
@@ -334,6 +399,7 @@ export function SeoKeywordsTable({
 
   useEffect(() => {
     setForceRelevant(loadForceRelevant(relevancePersistKey));
+    setForceIrrelevant(loadForceIrrelevant(relevancePersistKey));
   }, [relevancePersistKey]);
 
   const setLangFilter = (next: LangFilter) => {
@@ -458,8 +524,9 @@ export function SeoKeywordsTable({
       filterRelevantKeywords(top10Raw, effectiveTracked, {
         enabled: true,
         forceRelevant,
+        forceIrrelevant,
       }),
-    [top10Raw, effectiveTracked, forceRelevant],
+    [top10Raw, effectiveTracked, forceRelevant, forceIrrelevant],
   );
 
   const top10 = filterIrrelevant ? top10Relevant : top10Raw;
@@ -477,6 +544,11 @@ export function SeoKeywordsTable({
   const handleMarkRelevant = (keyword: string) => {
     const key = normalizeKw(keyword);
     if (!key) return;
+    setForceIrrelevant((prev) => {
+      const next = prev.filter((p) => normalizeKw(p) !== key);
+      if (next.length !== prev.length) saveForceIrrelevant(relevancePersistKey, next);
+      return next;
+    });
     setForceRelevant((prev) => {
       if (prev.some((p) => normalizeKw(p) === key)) return prev;
       const next = [...prev, keyword.trim()];
@@ -487,9 +559,32 @@ export function SeoKeywordsTable({
     toast.success(`"${keyword.trim()}" סומן כרלוונטי ונוסף למעקב`);
   };
 
+  const handleMarkIrrelevant = (keyword: string) => {
+    const key = normalizeKw(keyword);
+    if (!key) return;
+    setForceRelevant((prev) => {
+      const next = prev.filter((p) => normalizeKw(p) !== key);
+      if (next.length !== prev.length) saveForceRelevant(relevancePersistKey, next);
+      return next;
+    });
+    setForceIrrelevant((prev) => {
+      if (prev.some((p) => normalizeKw(p) === key)) return prev;
+      const next = [...prev, keyword.trim()];
+      saveForceIrrelevant(relevancePersistKey, next);
+      return next;
+    });
+    toast.success(`"${keyword.trim()}" סומן כלא רלוונטי`);
+  };
+
   const canFilter = effectiveTracked.length > 0;
+  const manuallyHiddenCount = forceIrrelevant.length;
+  const forceIrrelevantSet = useMemo(
+    () => new Set(forceIrrelevant.map((p) => normalizeKw(p))),
+    [forceIrrelevant],
+  );
 
   return (
+    <>
     <Card dir="rtl">
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center justify-between gap-3 flex-wrap">
@@ -550,8 +645,22 @@ export function SeoKeywordsTable({
               {canFilter && top10Irrelevant.length > 0 && (
                 <Badge
                   variant="secondary"
+                  role="button"
+                  tabIndex={0}
+                  title="פתח את רשימת הביטויים שסוננו — סמן רלוונטי / לא רלוונטי"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setReviewOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setReviewOpen(true);
+                    }
+                  }}
                   className={cn(
-                    "text-[10px] h-4 px-1",
+                    "text-[10px] h-4 px-1 cursor-pointer hover:ring-1 hover:ring-offset-1",
                     filterIrrelevant ? "bg-primary-foreground/20 text-primary-foreground" : "",
                   )}
                 >
@@ -559,6 +668,18 @@ export function SeoKeywordsTable({
                 </Badge>
               )}
             </button>
+
+            {manuallyHiddenCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setReviewOpen(true)}
+                className="inline-flex items-center gap-1 px-2 h-7 text-xs rounded-md border bg-background text-muted-foreground hover:bg-muted"
+                title="ביטויים שסימנת ידנית כלא רלוונטיים"
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+                מוסתרים ({manuallyHiddenCount})
+              </button>
+            )}
 
             <Badge variant={effectiveTracked.length > 0 ? "default" : "outline"} className="text-xs">🎯 {effectiveTracked.length} במעקב</Badge>
             <Badge variant="outline" className="text-xs">{keywords.length} אורגניות</Badge>
@@ -605,8 +726,13 @@ export function SeoKeywordsTable({
 
           <TabsContent value="top10" className="mt-0">
             {!filterIrrelevant && top10Irrelevant.length > 0 && (
-              <div className="px-3 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-100">
-                מוצגים גם {top10Irrelevant.length} ביטויים שסומנו כלא רלוונטיים — לחץ &quot;רלוונטי&quot; כדי לשמור במעקב.
+              <div className="px-3 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-100 flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  מוצגים גם {top10Irrelevant.length} ביטויים שסומנו כלא רלוונטיים — לחץ &quot;רלוונטי&quot; / &quot;לא רלוונטי&quot;.
+                </span>
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setReviewOpen(true)}>
+                  סקור מסוננים
+                </Button>
               </div>
             )}
             <KeywordTable
@@ -619,6 +745,8 @@ export function SeoKeywordsTable({
               showGsc={hasGscData}
               dimmedSet={top10Dimmed}
               onMarkRelevant={handleMarkRelevant}
+              onMarkIrrelevant={handleMarkIrrelevant}
+              showIrrelevantAction
             />
           </TabsContent>
 
@@ -666,5 +794,72 @@ export function SeoKeywordsTable({
         </Tabs>
       </CardContent>
     </Card>
+
+    <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+      <DialogContent className="max-w-xl max-h-[80vh] overflow-hidden flex flex-col" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>ביטויים שסוננו מ-Top 10</DialogTitle>
+          <DialogDescription>
+            סמן &quot;רלוונטי&quot; כדי להחזיר למעקב, או &quot;לא רלוונטי&quot; כדי להסתיר באופן קבוע בדפדפן זה.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="overflow-y-auto flex-1 -mx-1 px-1 space-y-1">
+          {top10Irrelevant.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">אין ביטויים מסוננים כרגע</p>
+          ) : (
+            top10Irrelevant.map((kw, idx) => {
+              const phrase = String(kw.keyword || "");
+              const key = normalizeKw(phrase);
+              const manual = forceIrrelevantSet.has(key);
+              return (
+                <div
+                  key={`${key}-${idx}`}
+                  className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0 text-right">
+                    <div className="font-medium truncate">{phrase}</div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-2 justify-end mt-0.5">
+                      {kw.position != null && <span>מיקום {kw.position}</span>}
+                      {manual ? (
+                        <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-700 border-amber-300">
+                          הוסתר ידנית
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] h-4 px-1">
+                          אוטומטי
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => handleMarkRelevant(phrase)}
+                    >
+                      <Plus className="h-3 w-3" />
+                      רלוונטי
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs gap-1 text-muted-foreground"
+                      onClick={() => handleMarkIrrelevant(phrase)}
+                    >
+                      <EyeOff className="h-3 w-3" />
+                      לא רלוונטי
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
