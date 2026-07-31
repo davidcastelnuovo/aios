@@ -2,9 +2,10 @@ name: Deploy Supabase Edge Function
 
 # Deploys edge functions from repo source to the PRODUCTION Supabase project.
 #
-# - On merge to main: auto-deploys every function whose files changed in the
-#   merge (verify_jwt is read per-function from supabase/config.toml).
-# - Manual (Actions tab → Run workflow): deploy any single function by name.
+# - On merge to main: auto-deploys every function whose files changed anywhere in
+#   the pushed range (verify_jwt is read per-function from supabase/config.toml).
+# - Manual (Actions tab → Run workflow): deploy one function, or several by
+#   passing a space-separated list of folder names.
 #
 # Requires a repo secret named BASE_ACCESS_TOKEN = a Supabase access token (sbp_...).
 
@@ -12,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       function_name:
-        description: 'Edge function folder name to deploy'
+        description: 'Edge function folder name(s) to deploy — space-separated for several'
         required: false
         default: 'trigger-automation'
       verify_jwt:
@@ -35,7 +36,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
@@ -49,10 +50,18 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "list=${{ github.event.inputs.function_name }}" >> "$GITHUB_OUTPUT"
           else
-            # Functions whose files changed in this push.
-            CHANGED=$(git diff --name-only HEAD^ HEAD -- 'supabase/functions/**' \
+            # Diff the whole pushed range, not just HEAD^..HEAD. A merge commit's
+            # first parent hides functions changed by the other commits in the same
+            # push, which silently left production running stale code.
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+               || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              BEFORE="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+            fi
+            CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- 'supabase/functions/**' \
               | sed -E 's#supabase/functions/([^/]+)/.*#\1#' \
               | { grep -v '^_shared$' || true; } | sort -u | tr '\n' ' ')
+            echo "Diff range: $BEFORE..${{ github.sha }}"
             echo "Changed functions: $CHANGED"
             echo "list=$CHANGED" >> "$GITHUB_OUTPUT"
           fi
