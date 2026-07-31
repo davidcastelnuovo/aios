@@ -6934,6 +6934,7 @@ export type Database = {
           status: Database["public"]["Enums"]["seo_monthly_status"]
           tenant_id: string
           updated_by: string | null
+          work: Json
         }
         Insert: {
           client_id: string
@@ -6944,6 +6945,7 @@ export type Database = {
           status: Database["public"]["Enums"]["seo_monthly_status"]
           tenant_id: string
           updated_by?: string | null
+          work?: Json
         }
         Update: {
           client_id?: string
@@ -6954,6 +6956,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["seo_monthly_status"]
           tenant_id?: string
           updated_by?: string | null
+          work?: Json
         }
         Relationships: [
           {
