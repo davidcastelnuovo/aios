@@ -1,0 +1,71 @@
+name: Apply SQL migration (Management API)
+
+# One-shot / manual: run a SQL file against prod via Supabase Management API.
+# Requires repo secret BASE_ACCESS_TOKEN (sbp_...).
+
+on:
+  workflow_dispatch:
+    inputs:
+      sql_file:
+        description: 'Path to SQL file under the repo'
+        required: true
+        default: 'supabase/migrations/20260731110000_seo_monthly_shares.sql'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-sql-migration.yml'
+      - 'supabase/ops/apply_seo_monthly_shares.sql'
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+      PROJECT_REF: zvoijyneresvkadpprel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve SQL file
+        id: sql
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            FILE="${{ github.event.inputs.sql_file }}"
+          else
+            FILE="supabase/ops/apply_seo_monthly_shares.sql"
+          fi
+          test -f "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Apply SQL via Management API
+        run: |
+          set -euo pipefail
+          FILE="${{ steps.sql.outputs.file }}"
+          # Build JSON payload safely
+          python3 - <<'PY'
+          import json, os, pathlib, sys, urllib.request
+          path = os.environ["SQL_FILE"]
+          query = pathlib.Path(path).read_text()
+          body = json.dumps({"query": query}).encode()
+          req = urllib.request.Request(
+              f"https://api.supabase.com/v1/projects/{os.environ['PROJECT_REF']}/database/query",
+              data=body,
+              headers={
+                  "Authorization": f"Bearer {os.environ['SUPABASE_ACCESS_TOKEN']}",
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=120) as resp:
+                  raw = resp.read().decode()
+                  print(f"HTTP {resp.status}")
+                  print(raw[:4000])
+          except urllib.error.HTTPError as e:
+              print(f"HTTP {e.code}", file=sys.stderr)
+              print(e.read().decode()[:4000], file=sys.stderr)
+              sys.exit(1)
+          PY
+        env:
+          SQL_FILE: ${{ steps.sql.outputs.file }}
