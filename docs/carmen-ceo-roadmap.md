@@ -5,6 +5,8 @@
 > מסמך זה הוא **מיפוי + אפיון פערים + תכנית עבודה מתועדפת**. הוא מבוסס על סריקת הקוד ב-`main` (יולי 2026) ועל מסמכי החזון הקיימים (`orchestration-studio-plan.md`, `carmen-authoring.md`, `carmen-command-center.md`, `multitask-design.md`, `serial-queue-plan.md`).
 >
 > תאריך: 2026-07-31
+>
+> **העדפת סדר עבודה נוכחית (דוד, 2026-07-31):** להתחיל מביקורת כיסוי מול מה שדוד עושה במערכת בעצמו — ראה `docs/carmen-capability-audit.md` (WP0–WP5). מסמך זה נשאר כחזון ארוך-טווח למנכ"לית.
 
 ---
 
