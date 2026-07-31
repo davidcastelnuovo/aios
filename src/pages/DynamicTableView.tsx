@@ -56,6 +56,7 @@ import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
 
 import { MaskyooSiblingCard } from "@/components/dynamic-tables/MaskyooSiblingCard";
 import { CURRENCY_OPTIONS, getCurrencySymbol, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
+import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
 import { getLeadsFromData } from "@/lib/adsMetrics";
 import { isSeoReportSource } from "@/lib/seoReports";
@@ -3049,7 +3050,10 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           externalDateFilter={dateFilter}
           externalCustomDateRange={customDateRange}
           tableId={table?.id}
-          defaultReportMode={table?.integration_settings?.default_report_mode}
+          defaultReportMode={resolveAnalyticsReportMode({
+            tableMode: table?.integration_settings?.default_report_mode,
+            tables: table ? [table] : [],
+          })}
         />
       )}
 

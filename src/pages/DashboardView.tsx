@@ -32,6 +32,7 @@ import { SeoReportTabs } from "@/components/dynamic-tables/SeoReportTabs";
 import { WooCommerceDashboard } from "@/components/dynamic-tables/WooCommerceDashboard";
 import { getExplicitLeadFieldsFromData, getLeadsFromData } from "@/lib/adsMetrics";
 import { formatCurrency as formatCurrencyAmount, resolveDashboardCurrency } from "@/lib/currency";
+import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -901,6 +902,21 @@ export default function DashboardView() {
     return 'leads';
   }, [tables]);
 
+  const analyticsTableIds = useMemo(
+    () => (tables || []).filter((t: any) => t.integration_type === 'google_analytics').map((t: any) => t.id as string),
+    [tables],
+  );
+
+  // Prefer dashboard/table saved mode; else infer from ads campaign type (leads by default).
+  const analyticsReportMode = useMemo(
+    () =>
+      resolveAnalyticsReportMode({
+        dashboardMode: (dashboard?.settings as any)?.default_report_mode,
+        tables,
+      }),
+    [dashboard?.settings, tables],
+  );
+
   // Display currency follows ads report settings (e.g. USD Google Ads), not a hard-coded ₪.
   const dashboardCurrency = useMemo(() => resolveDashboardCurrency(tables), [tables]);
   const formatCurrency = (num: number) => formatCurrencyAmount(num, dashboardCurrency);
@@ -1251,7 +1267,9 @@ export default function DashboardView() {
               records={allAnalyticsRecords}
               externalDateFilter={dateFilter}
               dashboardId={dashboardId}
-              defaultReportMode={(dashboard?.settings as any)?.default_report_mode}
+              tableId={analyticsTableIds[0]}
+              relatedTableIds={analyticsTableIds.slice(1)}
+              defaultReportMode={analyticsReportMode}
             />
           ) : (
             <>

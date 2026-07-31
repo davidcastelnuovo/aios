@@ -607,10 +607,12 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
             alt={`Dashboard: ${dashboard.name}`}
             className="w-full h-auto"
           />
-        ) : isCapturing ? (
+        ) : isCapturing || snapshotMounted || isSyncing ? (
           <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="text-sm">מצלם דשבורד...</span>
+            <span className="text-sm">
+              {isSyncing ? "מסנכרן מקורות..." : "טוען את הדשבורד..."}
+            </span>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">

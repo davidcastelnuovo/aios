@@ -10,6 +10,7 @@ import { SearchConsoleDashboard } from "./SearchConsoleDashboard";
 import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
 import { GoogleAnalyticsTableDialog } from "./GoogleAnalyticsTableDialog";
 import { GscIntegration } from "./seo/GscIntegration";
+import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus, Phone } from "lucide-react";
 import { MaskyooSiblingCard } from "./MaskyooSiblingCard";
 
@@ -410,7 +411,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   records={gaRecords}
                   tableId={selectedGaTableId}
                   defaultReportMode={
-                    (gaTables.find(t => t.id === selectedGaTableId)?.integration_settings as any)?.default_report_mode || 'leads'
+                    resolveAnalyticsReportMode({
+                      tableMode: (gaTables.find(t => t.id === selectedGaTableId)?.integration_settings as any)?.default_report_mode,
+                      tables: gaTables,
+                    })
                   }
                 />
               ) : selectedGaTableId ? (
