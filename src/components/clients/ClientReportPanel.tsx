@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { ClientTableSnapshot } from "./ClientTableSnapshot";
-import { SeoCombinedSnapshot } from "./SeoCombinedSnapshot";
 import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
 import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
@@ -540,6 +539,24 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           }
         }
       }
+
+      const { error: deliveryLogError } = await supabase.from("report_deliveries" as any).insert({
+        tenant_id: tenantId,
+        client_id: clientId,
+        target_type: "table",
+        target_id: table.id,
+        channels: [
+          ...(sendWhatsApp ? ["whatsapp"] : []),
+          ...(sendEmail ? ["email"] : []),
+        ],
+        status: "sent",
+        details: {
+          source: "manual",
+          share_url: effectiveShareLink,
+          email_recipients: sendEmail ? emailRecipients : [],
+        },
+      });
+      if (deliveryLogError) console.warn("Failed to log report delivery:", deliveryLogError);
     } catch (error: any) {
       console.error("Error sending report:", error);
       const msg = String(error?.message || "");
@@ -769,8 +786,6 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
                 : true
             }
           />
-          {/* Keep import to avoid dead-code lint while preserving fallback type */}
-          {false && <SeoCombinedSnapshot tableId={table.id} tableName={table.name} />}
         </div>,
         document.body
       )}

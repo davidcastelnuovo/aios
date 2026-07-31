@@ -403,6 +403,19 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   }, [snapshotMounted, isCapturing, captureScreenshot, dashboard.id]);
 
   const handleSend = async () => {
+    if (!sendWhatsApp && !sendEmail) {
+      toast.error("יש לבחור לפחות אמצעי שליחה אחד");
+      return;
+    }
+    if (
+      sendWhatsApp &&
+      (!selectedGroupId || selectedGroupId === "__none__") &&
+      !directPhone
+    ) {
+      toast.error("יש לבחור קבוצת וואטסאפ או להזין מספר טלפון");
+      return;
+    }
+
     let blob = screenshotBlob;
     // Reuse the image already shown on screen — never re-capture on send
     if (!blob && screenshotUrl) {
@@ -522,6 +535,24 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           }
         }
       }
+
+      const { error: deliveryLogError } = await supabase.from("report_deliveries" as any).insert({
+        tenant_id: tenantId,
+        client_id: clientId,
+        target_type: "dashboard",
+        target_id: dashboard.id,
+        channels: [
+          ...(sendWhatsApp ? ["whatsapp"] : []),
+          ...(sendEmail ? ["email"] : []),
+        ],
+        status: "sent",
+        details: {
+          source: "manual",
+          share_url: effectiveShareUrl,
+          email_recipients: sendEmail ? emailRecipients : [],
+        },
+      });
+      if (deliveryLogError) console.warn("Failed to log dashboard delivery:", deliveryLogError);
     } catch (e: any) {
       console.error("Send error:", e);
       toast.error(`שגיאה בשליחה: ${e?.message || "לא ידוע"}`);
@@ -607,7 +638,16 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
               groups={groups}
               value={selectedGroupId}
               onValueChange={setSelectedGroupId}
+              noneLabel="ללא קבוצה - שלח לטלפון"
             />
+            {(!selectedGroupId || selectedGroupId === "__none__") && (
+              <Input
+                value={directPhone}
+                onChange={(event) => setDirectPhone(event.target.value)}
+                placeholder="05xxxxxxxx"
+                className="h-8 text-xs"
+              />
+            )}
           </div>
         )}
 

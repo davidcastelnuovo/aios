@@ -6,7 +6,7 @@ export interface SyncableReportTable {
   tenant_id?: string | null;
   client_id?: string | null;
   integration_type?: string | null;
-  integration_settings?: Record<string, any> | null;
+  integration_settings?: Record<string, unknown> | null;
 }
 
 export interface ReportSyncResult {
@@ -22,7 +22,7 @@ const dateRange = () => {
   return { startDate: start.toISOString().slice(0, 10), endDate };
 };
 
-async function invoke(functionName: string, body: Record<string, any>) {
+async function invoke(functionName: string, body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke(functionName, {
     method: "POST",
     body,
@@ -81,12 +81,12 @@ export async function syncReportTable(table: SyncableReportTable): Promise<Repor
         return { tableId: table.id, status: "skipped" };
     }
     return { tableId: table.id, status: "synced" };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`[reportSync] Failed to sync table ${table.id}:`, error);
     return {
       tableId: table.id,
       status: "failed",
-      error: String(error?.message || error),
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }

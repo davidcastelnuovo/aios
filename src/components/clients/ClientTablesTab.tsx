@@ -15,6 +15,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { ClientReportPanel } from "@/components/clients/ClientReportPanel";
 import { ClientDashboardPanel } from "@/components/clients/ClientDashboardPanel";
+import { ClientReportScheduleSettings } from "@/components/clients/ClientReportScheduleSettings";
 import { getIntegrationIcon } from "@/lib/integrationIcons";
 import { toast } from "sonner";
 
@@ -373,6 +374,19 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       )}
 
       {/* Active item content */}
+      {activeItem && tenantId && (
+        <ClientReportScheduleSettings
+          key={`schedule-${activeItem.id}`}
+          clientId={clientId}
+          tenantId={tenantId}
+          target={{
+            kind: activeItem.kind,
+            id: activeItem.raw.id,
+            name: activeItem.raw.name,
+          }}
+        />
+      )}
+
       {activeItem && activeItem.kind === "dashboard" && (
         <div className="border rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
