@@ -308,12 +308,13 @@ const ALL_TOOLS = [
   { name: 'send_message_to_manus', description: 'שליחת הודעה ישירה ל-Manus agent פעיל (תקשורת ישירה). משמש לשאלות, עדכונים, או המשך שיחה עם Manus על משימה קיימת. מחזיר מיידית ללא המתנה לתשובה.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'ההודעה לשליחה ל-Manus' }, task_id: { type: 'string', description: 'מזהה המשימה הקיימת (אופציונלי — אם לא מוגדר ישתמש ב-agent-default)' } }, required: ['message'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
   { name: 'list_facebook_campaigns', description: 'רשימת קמפיינים פעילים/מושבתים של לקוח עם campaign_id, שם וסטטוס. השתמש כדי למצוא את ה-campaign_id לפני toggle.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הקמפיין' } }, required: ['client_id'] } },
-  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק לפי campaign_id. דורש אישור מפורש של המשתמש לפני הפעלה — אל תקרא לכלי לפני שהמשתמש אישר את הפעולה הספציפית.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, confirmed: { type: 'boolean', description: 'חובה true — מאשר שהמשתמש אישר במפורש את הפעולה' } }, required: ['client_id', 'campaign_id', 'status', 'confirmed'] } },
+  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. אחרי שהמשתמש מאשר ("כן"), קראי ל-execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] } }, required: ['client_id', 'campaign_id', 'status'] } },
   { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: השוואת היום מול 7 ימים מול 30 ימים, מטריקות (CPL, CTR, frequency, spend), זיהוי חריגות והמלצות לפעולה. השתמש לפני שמציעים פעולה כדי לבסס המלצה.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
-  { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. דורש אישור מפורש של המשתמש (confirmed=true). חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' }, confirmed: { type: 'boolean' } }, required: ['client_id', 'campaign_id', 'confirmed'] } },
-  { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED) לצורך ניסיון בקהל/יצירה אחרים. דורש אישור.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['client_id', 'campaign_id', 'confirmed'] } },
+  { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת לפני הבקשה. אחרי אישור המשתמש — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' } }, required: ['client_id', 'campaign_id'] } },
+  { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED). מכניס בקשת אישור לתור — לא מבצע מיד. אחרי אישור — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'get_campaign_alerts', description: 'שליפת התראות פתוחות על קמפיינים (קמפיין נעצר, מודעה לא מאושרת, CPL חורג, frequency גבוה). השתמש בתחילת בדיקת דופק או כשהמשתמש שואל על מצב הקמפיינים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, only_open: { type: 'boolean', description: 'ברירת מחדל true' } } } },
-  { name: 'acknowledge_campaign_alert', description: 'סימון התראת קמפיין כטופלה.', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
+  { name: 'acknowledge_campaign_alert', description: 'סימון התראת קמפיין כטופלה (acknowledged).', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
+  { name: 'resolve_campaign_alert', description: 'סגירת התראת קמפיין (resolved) — כשהבעיה תוקנה בפועל.', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
   { name: 'list_social_pages', description: 'רשימת עמודים מחוברים (פייסבוק/אינסטגרם) של הטננט. שימושי לפני פרסום או טיפול בתגובות.', parameters: { type: 'object', properties: { platform: { type: 'string', enum: ['facebook', 'instagram'] }, client_id: { type: 'string' } } } },
   { name: 'publish_social_post', description: 'פרסום פוסט/תמונה/וידאו/Reel/Story לעמוד פייסבוק או אינסטגרם. דורש page_id (UUID של social_pages, לא ה-FB page id), post_type ו-caption/media_url. דורש confirmed=true.', parameters: { type: 'object', properties: { page_id: { type: 'string' }, post_type: { type: 'string', enum: ['post', 'photo', 'video', 'reel', 'story', 'link'] }, caption: { type: 'string' }, media_url: { type: 'string', description: 'URL ציבורי של המדיה (חובה ל-photo/video/reel/story)' }, link: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['page_id', 'post_type', 'confirmed'] } },
   { name: 'fetch_social_comments', description: 'משיכת תגובות חדשות מעמוד פייסבוק/אינסטגרם ועדכון מסד הנתונים.', parameters: { type: 'object', properties: { page_id: { type: 'string' } }, required: ['page_id'] } },
@@ -360,8 +361,18 @@ const ALL_TOOLS = [
   { name: 'list_products', description: 'רשימת מוצרים/שירותים', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
   { name: 'create_product', description: 'יצירת מוצר/שירות חדש', parameters: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, price: { type: 'number' } }, required: ['name', 'price'] } },
   // AUTOMATIONS
-  { name: 'list_automations', description: 'רשימת אוטומציות', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
-  { name: 'toggle_automation', description: 'הפעלה/כיבוי אוטומציה', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, active: { type: 'boolean' } }, required: ['automation_id', 'active'] } },
+  { name: 'list_automations', description: 'רשימת אוטומציות (id, name, active, trigger_type, is_flow). לפרטי שלבים השתמשי ב-get_automation_details.', parameters: { type: 'object', properties: { limit: { type: 'integer' }, active_only: { type: 'boolean' }, name_search: { type: 'string' } } } },
+  { name: 'get_automation_details', description: 'פרטי אוטומציה כולל צעדי flow (automation_flow_steps) — טריגר, agent, action, condition.', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, name_search: { type: 'string' } } } },
+  { name: 'toggle_automation', description: 'הפעלה/כיבוי אוטומציה. מכניס לתור אישורים — לא מבצע מיד.', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, active: { type: 'boolean' } }, required: ['automation_id', 'active'] } },
+  { name: 'delete_automation', description: 'מחיקת אוטומציה (כולל צעדי flow). מכניס לתור אישורים.', parameters: { type: 'object', properties: { automation_id: { type: 'string' } }, required: ['automation_id'] } },
+  { name: 'propose_automation_edit', description: 'הצעת עריכה לאוטומציה קיימת (שם/תיאור/טריגר/החלפת steps). מכניס לתור אישורים; אחרי אישור מעדכן את האוטומציה.', parameters: { type: 'object', properties: {
+    automation_id: { type: 'string' },
+    name: { type: 'string' },
+    description: { type: 'string' },
+    trigger_type: { type: 'string' },
+    trigger_config: { type: 'object' },
+    steps: { type: 'array', description: 'אם מסופק — מחליף את כל צעדי ה-flow (חוץ מהטריגר נבנה מחדש)', items: { type: 'object' } },
+  }, required: ['automation_id'] } },
   { name: 'inspect_meta_lead_forms', description: 'בדיקה חיה של טפסי לידים ב-Meta ושל הטופס המחובר לאוטומציה. מחזיר אוטומציות, Page/Form ID, שמות, סטטוס ושדות. השתמשי בכלי זה לפני החלפה או יצירה של טופס, וניתן לחפש לפי שם אוטומציה, עמוד או טופס.', parameters: { type: 'object', properties: { automation_name: { type: 'string', description: 'שם מלא או חלקי של האוטומציה' }, page_name: { type: 'string', description: 'שם מלא או חלקי של עמוד Meta' }, form_name: { type: 'string', description: 'שם מלא או חלקי של טופס הלידים' } } } },
   { name: 'set_automation_meta_lead_form', description: 'החלפת טופס הלידים המחובר לטריגר של אוטומציה לפי שם הטופס ב-Meta. הכלי מאמת התאמה יחידה לעמוד, לטופס ולאוטומציה, מעדכן את Form ID ורושם את הטופס לסנכרון. דורש אישור מפורש של המשתמש.', parameters: { type: 'object', properties: { automation_id: { type: 'string', description: 'מזהה האוטומציה, אם ידוע' }, automation_name: { type: 'string', description: 'שם מלא או חלקי של האוטומציה' }, form_name: { type: 'string', description: 'שם טופס Meta המדויק או חלק ייחודי ממנו' }, page_name: { type: 'string', description: 'שם עמוד Meta; מומלץ כשיש טפסים בעלי שם זהה' }, confirmed: { type: 'boolean', description: 'חובה true ורק לאחר אישור מפורש של המשתמש' } }, required: ['form_name', 'confirmed'] } },
   { name: 'create_meta_lead_form', description: 'יצירת Instant Form חדש בעמוד Meta. ניתן גם לחבר אותו מיד לאוטומציה. טופס שפורסם ב-Meta אינו ניתן לעריכה רגילה, לכן יש להציג למשתמש את השם, השדות, מדיניות הפרטיות והעמוד ולקבל אישור מפורש לפני הקריאה.', parameters: { type: 'object', properties: { page_name: { type: 'string', description: 'שם עמוד Meta המדויק או חלק ייחודי ממנו' }, form_name: { type: 'string', description: 'שם הטופס החדש' }, questions: { type: 'array', description: 'שדות הטופס לפי הסדר', items: { type: 'object', properties: { type: { type: 'string', description: 'סוג שדה Meta, למשל FULL_NAME, EMAIL, PHONE, CITY, CUSTOM' }, label: { type: 'string', description: 'חובה לשדה CUSTOM; אופציונלי לשדה רגיל' } }, required: ['type'] } }, privacy_policy_url: { type: 'string', description: 'קישור HTTPS למדיניות הפרטיות' }, privacy_policy_link_text: { type: 'string', description: 'טקסט קישור למדיניות, ברירת מחדל מדיניות פרטיות' }, follow_up_action_url: { type: 'string', description: 'קישור HTTPS למסך התודה/אתר לאחר השליחה' }, automation_id: { type: 'string', description: 'אוטומציה לחיבור מיידי, אם ידועה' }, automation_name: { type: 'string', description: 'שם אוטומציה לחיבור מיידי' }, confirmed: { type: 'boolean', description: 'חובה true ורק לאחר אישור מפורש של המשתמש' } }, required: ['page_name', 'form_name', 'questions', 'privacy_policy_url', 'follow_up_action_url', 'confirmed'] } },
@@ -369,6 +380,12 @@ const ALL_TOOLS = [
   { name: 'get_dashboard_stats', description: 'שליפת נתוני דשבורד: כמה לידים, לקוחות, משימות פתוחות, ועוד', parameters: { type: 'object', properties: {} } },
   // SOCIAL MEDIA
   { name: 'create_social_post', description: 'יצירת פוסט/מודעה חדשה במודול ניהול סושיאל מדיה. השתמש בכלי הזה כדי ליצור פוסטים עם תוכן טקסטואלי ותמונות. הפוסט יישמר כטיוטה במערכת.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת הפוסט/מודעה' }, content: { type: 'string', description: 'תוכן הפוסט - הקופי של המודעה' }, post_type: { type: 'string', enum: ['text', 'image', 'video', 'carousel'], description: 'סוג הפוסט' }, media_urls: { type: 'array', items: { type: 'string' }, description: 'קישורי מדיה (תמונות/וידאו)' } }, required: ['title', 'content'] } },
+  // Marketing department (Copy / Creative / SEO pipeline)
+  { name: 'list_marketing_work_items', description: 'רשימת עבודות במחלקת השיווק (קופי/קריאייטיב/SEO). אפשר לסנן לפי לקוח, מחלקה או סטטוס.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, department: { type: 'string', enum: ['copy', 'creative', 'seo'] }, status: { type: 'string' }, limit: { type: 'integer' } } } },
+  { name: 'get_marketing_work_item', description: 'פרטי עבודת שיווק כולל payload ושלב נוכחי.', parameters: { type: 'object', properties: { item_id: { type: 'string' } }, required: ['item_id'] } },
+  { name: 'create_marketing_work_item', description: 'יצירת בריף/עבודה חדשה במחלקת שיווק (copy/creative/seo). יוצר pipeline ללקוח אם חסר וממקם בשלב המתאים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, title: { type: 'string' }, brief: { type: 'string', description: 'בריף / חומר גלם' }, department: { type: 'string', enum: ['copy', 'creative', 'seo'], description: 'ברירת מחדל copy' }, content_type: { type: 'string' }, channel: { type: 'string' }, instructions: { type: 'string' } }, required: ['client_id', 'title', 'brief'] } },
+  { name: 'handoff_marketing_work_item', description: 'העברת עבודת שיווק לשלב הבא בפייפליין (למשל מ-copy ל-creative, מ-creative ל-target_paid).', parameters: { type: 'object', properties: { item_id: { type: 'string' }, to_stage_type: { type: 'string', enum: ['strategy', 'copy', 'creative', 'target_paid', 'target_seo', 'target_organic', 'measurement'] } }, required: ['item_id', 'to_stage_type'] } },
+  { name: 'update_marketing_work_item', description: 'עדכון כותרת/סטטוס/payload של עבודת שיווק.', parameters: { type: 'object', properties: { item_id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string', enum: ['draft', 'in_progress', 'review', 'approved', 'archived'] }, payload_patch: { type: 'object', description: 'מיזוג לתוך payload הקיים' } }, required: ['item_id'] } },
   { name: 'generate_ad_image', description: 'יצירת תמונה למודעה/פוסט באמצעות AI. מחזיר URL של התמונה שנוצרה. השתמש בכלי הזה כדי ליצור ויזואל למודעות ופוסטים ואז השתמש ב-create_social_post כדי לשמור את הפוסט.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של התמונה הרצויה באנגלית' }, aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16', '4:5'], description: 'יחס גובה-רוחב' } }, required: ['prompt'] } },
   // MEMORY
   { name: 'save_memory', description: 'שמירת מידע לזיכרון מתמשך (העדפות, פרויקטים, הוראות)', parameters: { type: 'object', properties: { key: { type: 'string', description: 'מפתח זיהוי' }, content: { type: 'string', description: 'התוכן לשמירה' }, category: { type: 'string', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal', 'instructions'] } }, required: ['key', 'content'] } },
@@ -386,9 +403,23 @@ const ALL_TOOLS = [
   { name: 'search_conversation_history', description: 'שליפה מכל היסטוריית ההתכתבויות של הארגון (WhatsApp) — ללא מגבלת סשן. שני מצבים: (1) חיפוש מילות מפתח — "מה המייל של פליקס", שם לקוח, נושא. חשוב: חפשי מילות תוכן בלבד (שם/מייל/נושא) — לעולם לא מילות זמן כמו "אתמול"/"בערב", הן לא מופיעות בהודעות! (2) דפדוף לפי זמן — לשאלות "מה דיברנו אתמול/בשבוע שעבר": קראי בלי query עם days_back מתאים ו-only_carmen_chats=true, ותקבלי את השיחות איתך כרונולוגית. אם חיפוש לא מצא — נסי מילה אחרת או עברי לדפדוף לפני שאת אומרת שאין.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מילות תוכן לחיפוש (עד 4, כולן חייבות להופיע). השמיטי לדפדוף לפי זמן.' }, days_back: { type: 'integer', description: 'כמה ימים אחורה (ברירת מחדל 180; לדפדוף "אתמול" השתמשי ב-2)' }, only_carmen_chats: { type: 'boolean', description: 'רק שיחות בערוץ של כרמן (ברירת מחדל true בדפדוף בלי query)' }, with_phone: { type: 'string', description: 'סינון לשיחות עם מספר טלפון מסוים' }, limit: { type: 'integer', description: 'מקסימום תוצאות (ברירת מחדל 20, בדפדוף 40)' } } } },
   { name: 'get_recent_inbound_messages', description: 'שליפת הודעות נכנסות אחרונות מכל השיחות', parameters: { type: 'object', properties: { limit: { type: 'integer' }, hours: { type: 'integer', description: 'כמה שעות אחורה (ברירת מחדל 24)' } } } },
   // FINANCE
-  { name: 'list_finance', description: 'רשימת תנועות כספיות', parameters: { type: 'object', properties: { client_id: { type: 'string' }, type: { type: 'string', enum: ['income', 'expense'] }, limit: { type: 'integer' } } } },
-  { name: 'create_finance_entry', description: 'יצירת רשומה כספית', parameters: { type: 'object', properties: { client_id: { type: 'string' }, amount: { type: 'number' }, type: { type: 'string', enum: ['income', 'expense'] }, description: { type: 'string' }, date: { type: 'string' } }, required: ['amount', 'type', 'description'] } },
-  { name: 'get_finance_summary', description: 'סיכום כספי חודשי', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' } } } },
+  { name: 'list_finance', description: 'רשימת תנועות מטבלת finance הישנה (legacy). להנהלת חשבונות האמיתית השתמשי ב-get_accounting_overview / list_one_time_incomes / list_income_payments.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, type: { type: 'string', enum: ['income', 'expense'] }, limit: { type: 'integer' } } } },
+  { name: 'create_finance_entry', description: 'יצירת רשומה בטבלת finance הישנה (legacy). להכנסה חד-פעמית בהנהלת חשבונות השתמשי ב-create_one_time_income (דורש אישור).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, amount: { type: 'number' }, type: { type: 'string', enum: ['income', 'expense'] }, description: { type: 'string' }, date: { type: 'string' } }, required: ['amount', 'type', 'description'] } },
+  { name: 'get_finance_summary', description: 'סיכום חודשי מטבלת finance הישנה (legacy). להנהלת חשבונות האמיתית השתמשי ב-get_accounting_overview.', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' } } } },
+  // Real accounting module (AccountingIntegrations)
+  { name: 'get_accounting_overview', description: 'סיכום הנהלת חשבונות לחודש: ריטיינרים צפויים, הכנסות חד-פעמיות, גביות בפועל (income_payments), הוצאות ששולמו, ורווח גולמי משוער. זה המודול האמיתי — לא טבלת finance.', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM, ברירת מחדל החודש הנוכחי' }, agency_id: { type: 'string' }, agency_name: { type: 'string' } } } },
+  { name: 'get_client_retainer', description: 'ריטיינר ותקציב חודשי של לקוח (עם overlay של client_tenant_financial_data לפי טננט).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, client_name: { type: 'string' } } } },
+  { name: 'list_one_time_incomes', description: 'הכנסות חד-פעמיות לחודש (one_time_incomes).', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' }, client_id: { type: 'string' } } } },
+  { name: 'list_income_payments', description: 'גביות בפועל לחודש (income_payments) — מה שסומן כנגבה בתזרים.', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' }, client_id: { type: 'string' } } } },
+  { name: 'list_expense_payments', description: 'הוצאות ששולמו לחודש (expense_payments).', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' }, expense_type: { type: 'string' } } } },
+  { name: 'list_invoice_uploads', description: 'תור חשבוניות שהועלו (invoice_uploads) — סטטוס OCR/קישור.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['pending', 'processed', 'linked', 'failed'] }, limit: { type: 'integer' } } } },
+  { name: 'create_one_time_income', description: 'יצירת הכנסה חד-פעמית בהנהלת חשבונות. מכניס לתור אישורים — לא מבצע מיד.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, product_name: { type: 'string' }, amount: { type: 'number' }, payment_month: { type: 'string', description: 'YYYY-MM' }, notes: { type: 'string' } }, required: ['client_id', 'product_name', 'amount', 'payment_month'] } },
+  { name: 'delete_one_time_income', description: 'מחיקת הכנסה חד-פעמית. מכניס לתור אישורים.', parameters: { type: 'object', properties: { income_id: { type: 'string' } }, required: ['income_id'] } },
+  { name: 'record_income_payment', description: 'סימון גבייה בפועל מלקוח (insert ל-income_payments). מכניס לתור אישורים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, amount: { type: 'number' }, payment_month: { type: 'string', description: 'YYYY-MM' }, notes: { type: 'string' } }, required: ['client_id', 'amount', 'payment_month'] } },
+  { name: 'delete_income_payment', description: 'ביטול סימון גבייה (מחיקת income_payments). מכניס לתור אישורים.', parameters: { type: 'object', properties: { payment_id: { type: 'string' } }, required: ['payment_id'] } },
+  { name: 'record_expense_payment', description: 'סימון הוצאה כשולמה (insert ל-expense_payments). מכניס לתור אישורים.', parameters: { type: 'object', properties: { expense_type: { type: 'string', description: 'supplier | client_fixed | supplier_payment | campaigner' }, expense_id: { type: 'string', description: 'מזהה ספק/לקוח' }, expense_name: { type: 'string' }, amount: { type: 'number' }, payment_month: { type: 'string', description: 'YYYY-MM' }, notes: { type: 'string' } }, required: ['expense_type', 'expense_id', 'expense_name', 'amount', 'payment_month'] } },
+  { name: 'delete_expense_payment', description: 'ביטול סימון תשלום הוצאה. מכניס לתור אישורים.', parameters: { type: 'object', properties: { payment_id: { type: 'string' } }, required: ['payment_id'] } },
+  { name: 'update_client_retainer', description: 'עדכון ריטיינר/תקציב חודשי של לקוח (upsert ל-client_tenant_financial_data). מכניס לתור אישורים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, retainer: { type: 'number' }, monthly_budget: { type: 'number' }, notes: { type: 'string' } }, required: ['client_id'] } },
   // UPDATES
   { name: 'list_updates', description: 'רשימת עדכונים ללקוח או ליד', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['client', 'lead'] }, entity_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['entity_type', 'entity_id'] } },
   // GOALS
@@ -468,6 +499,10 @@ const ALL_TOOLS = [
   { name: 'gads_resume', description: 'הדלקת קמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['customer_id','campaign_id'] } },
   { name: 'gads_update_budget', description: 'שינוי תקציב יומי לקמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number' } }, required: ['customer_id','campaign_id','daily_budget'] } },
   { name: 'list_google_ad_accounts', description: 'שליפת כל חשבונות Google Ads המחוברים לטננט. מחזיר customer_id, name, status, client_id (אם משויך ללקוח).', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'סינון לפי לקוח ספציפי (אופציונלי)' } } } },
+  { name: 'list_google_campaigns', description: 'רשימת קמפיינים בחשבון Google Ads (חי מ-API). ספקי customer_id או client_id (ייפתר דרך clients.google_ads_account_id).', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, client_id: { type: 'string' }, name_search: { type: 'string' }, status: { type: 'string', enum: ['ENABLED', 'PAUSED', 'REMOVED', 'ALL'] } }, required: [] } },
+  { name: 'create_google_ads_report_table', description: 'יצירת טבלת דוח Google Ads ב-CRM ללקוח (integration_type=google_ads). לא מריץ sync — קראי ל-sync_google_ads_report אחרי.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads' }, account_name: { type: 'string' }, date_range: { type: 'string', description: 'ברירת מחדל last_30_days' } }, required: ['client_id', 'customer_id'] } },
+  { name: 'sync_google_ads_report', description: 'סנכרון נתוני Google Ads לטבלת CRM. זהה לפי table_id או client_id (טבלת google_ads של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
+  { name: 'sync_facebook_insights', description: 'סנכרון נתוני Facebook Insights לטבלת CRM. זהה לפי table_id או client_id (טבלת facebook_insights של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
   { name: 'connect_google_ads_account', description: 'שיוך חשבון Google Ads (customer_id) ללקוח ב-CRM. שומר את המזהה ב-clients.google_ads_account_id.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads (ספרות בלבד, ללא מקפים)' } }, required: ['client_id', 'customer_id'] } },
   // ===========================
   // SCHEDULED PAUSE/RESUME
@@ -496,7 +531,7 @@ const ALL_TOOLS = [
   { name: 'send_calendar_invite', description: 'שליחת זימון Google Calendar (ICS) דרך מייל לנמען חיצוני — האירוע נוצר ביומן הארגון עם הנמען כמשתתף, וגוגל שולחת לו מייל אוטומטי עם כפתורי אישור/דחייה. השתמש כשהמשתמש רוצה לזמן פגישה עם אדם חיצוני.', parameters: { type: 'object', properties: { attendee_email: { type: 'string', description: 'כתובת המייל של המוזמן' }, attendee_name: { type: 'string', description: 'שם המוזמן (אופציונלי)' }, title: { type: 'string', description: 'שם הפגישה/האירוע' }, date: { type: 'string', description: 'תאריך בפורמט YYYY-MM-DD' }, time: { type: 'string', description: 'שעת התחלה בפורמט HH:MM' }, duration_minutes: { type: 'integer', description: 'משך בדקות (ברירת מחדל 60)' }, notes: { type: 'string', description: 'הערות / תיאור הפגישה (אופציונלי)' } }, required: ['attendee_email', 'title', 'date', 'time'] } },
   { name: 'list_calendar_events', description: 'רשימת אירועים ביומן הארגון בטווח תאריכים (ברירת מחדל: 14 הימים הקרובים). השתמשי כדי למצוא event_id לפני עדכון/ביטול פגישה, או כשנשאלת "מה יש ביומן".', parameters: { type: 'object', properties: { date_from: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל היום)' }, date_to: { type: 'string', description: 'YYYY-MM-DD (ברירת מחדל +14 ימים)' }, search: { type: 'string', description: 'סינון טקסט חופשי (שם פגישה/משתתף)' } } } },
   { name: 'update_calendar_invite', description: 'עדכון פגישה/זימון קיים ביומן — הזזת מועד, שינוי כותרת או הערות. כל המשתתפים מקבלים מייל עדכון אוטומטי. חובה event_id (מ-list_calendar_events). לעדכון מועד ספקי date+time (שעון ישראל).', parameters: { type: 'object', properties: { event_id: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'HH:MM שעון ישראל' }, duration_minutes: { type: 'integer' }, title: { type: 'string' }, notes: { type: 'string' } }, required: ['event_id'] } },
-  { name: 'cancel_calendar_invite', description: 'ביטול פגישה ביומן — המשתתפים מקבלים הודעת ביטול. חובה event_id (מ-list_calendar_events). בקשי אישור מהמשתמש לפני ביטול.', parameters: { type: 'object', properties: { event_id: { type: 'string' } }, required: ['event_id'] } },
+  { name: 'cancel_calendar_invite', description: 'ביטול פגישה ביומן — המשתתפים מקבלים הודעת ביטול. חובה event_id (מ-list_calendar_events). חובה confirmed=true אחרי שהמשתמש אישר במפורש.', parameters: { type: 'object', properties: { event_id: { type: 'string' }, confirmed: { type: 'boolean', description: 'חובה true — רק אחרי אישור מפורש של המשתמש' } }, required: ['event_id', 'confirmed'] } },
   // ===========================
   // CAMPAIGNER MESSAGING
   // ===========================
@@ -1602,28 +1637,47 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const campaigns = Array.from(map.values()).sort((a, b) => (b.last_date || '').localeCompare(a.last_date || ''))
       return { count: campaigns.length, campaigns }
     }
-    case 'toggle_facebook_campaign': {
-      if (args.confirmed !== true) {
-        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש. שאל את המשתמש לפני קריאה לכלי הזה ושלח confirmed=true רק אחרי שהוא אישר.' }
-      }
+    // Legacy Meta mutate tools — enqueue to agent_approval_queue (never execute immediately).
+    // Kept for skin compatibility; same gate as fb_pause / fb_update_budget / etc.
+    case 'toggle_facebook_campaign':
+    case 'update_facebook_budget':
+    case 'duplicate_facebook_campaign': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
-      const targetTenantId = accessibleTenantIds[0]
-      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/toggle-facebook-campaign`
-      const res = await fetch(fnUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({
-          tenant_id: targetTenantId,
-          campaign_id: args.campaign_id,
-          status: args.status,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) return { error: 'toggle_failed', details: json }
-      return { success: true, campaign_id: args.campaign_id, new_status: args.status, fb: json }
+      if (!args.campaign_id) return { error: 'campaign_id נדרש' }
+      if (name === 'toggle_facebook_campaign' && !['ACTIVE', 'PAUSED'].includes(args.status)) {
+        return { error: 'status חייב להיות ACTIVE או PAUSED' }
+      }
+      if (name === 'update_facebook_budget' && args.daily_budget == null && args.lifetime_budget == null) {
+        return { error: 'daily_budget או lifetime_budget נדרש' }
+      }
+      const legacyTitles: Record<string, string> = {
+        toggle_facebook_campaign: args.status === 'PAUSED'
+          ? `כיבוי קמפיין FB ${args.campaign_id}`
+          : `הדלקת קמפיין FB ${args.campaign_id}`,
+        update_facebook_budget: `שינוי תקציב FB ${args.campaign_id} → ${args.daily_budget ?? args.lifetime_budget}`,
+        duplicate_facebook_campaign: `שכפול קמפיין FB ${args.campaign_id}`,
+      }
+      const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: name,
+        title: legacyTitles[name] || name,
+        description: 'פעולת mutating על Meta — דורשת אישור משתמש מפורש (תור אישורים)',
+        tool_name: name,
+        tool_input: args,
+        context: { caller_role: callerRole, caller_phone: callerPhone, client_id: args.client_id },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aqRow.id,
+        action: name,
+        summary: legacyTitles[name] || name,
+        instruction_for_carmen: 'הצג למשתמש בקצרה מה את עומדת לעשות ובקש אישור: "לאשר? (כן/לא)". אל תבצעי כלום עד שיגיע אישור — קוראת ל-execute_pending_approval רק אחרי תשובה חיובית.',
+      }
     }
     case 'analyze_facebook_campaign': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
@@ -1636,32 +1690,6 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) return { error: 'analyze_failed', details: json }
-      return json
-    }
-    case 'update_facebook_budget':
-    case 'duplicate_facebook_campaign': {
-      if (args.confirmed !== true) {
-        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש (confirmed=true).' }
-      }
-      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
-      const targetTenantId = accessibleTenantIds[0]
-      const action = name === 'update_facebook_budget' ? 'update_budget' : 'duplicate'
-      const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-control`
-      const res = await fetch(fnUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
-        body: JSON.stringify({
-          tenant_id: targetTenantId,
-          action,
-          campaign_id: args.campaign_id,
-          daily_budget: args.daily_budget,
-          lifetime_budget: args.lifetime_budget,
-          name_suffix: args.name_suffix,
-          confirmed: true,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) return { error: `${action}_failed`, details: json }
       return json
     }
     case 'get_campaign_alerts': {
@@ -1684,6 +1712,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .in('tenant_id', accessibleTenantIds)
       if (error) return { error: error.message }
       return { success: true, alert_id: args.alert_id }
+    }
+    case 'resolve_campaign_alert': {
+      const { error } = await supabase.from('campaign_alerts')
+        .update({ resolved_at: new Date().toISOString(), acknowledged_at: new Date().toISOString() })
+        .eq('id', args.alert_id)
+        .in('tenant_id', accessibleTenantIds)
+      if (error) return { error: error.message }
+      return { success: true, alert_id: args.alert_id, resolved: true }
     }
     case 'list_social_pages': {
       let q = supabase.from('social_pages').select('id, platform, page_id, page_name, client_id, ig_business_id, picture_url, is_active')
@@ -2130,6 +2166,148 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       } catch (_e) { /* non-critical */ }
       return { success: true, post_id: data.id, title: data.title, content: data.content, media_urls: data.media_urls, status: 'draft', message: 'הפוסט נוצר בהצלחה כטיוטה במודול סושיאל מדיה' }
     }
+
+    // ============ MARKETING DEPARTMENT (work items / pipeline) ============
+    case 'list_marketing_work_items': {
+      let q = supabase.from('marketing_work_items')
+        .select('id, title, status, target_channel, client_id, pipeline_id, current_stage_id, payload, updated_at, clients(name)')
+        .eq('tenant_id', tenantId).order('updated_at', { ascending: false }).limit(args.limit || 30)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      let items = data || []
+      if (args.department) {
+        items = items.filter((it: any) => (it.payload?.department || '') === args.department)
+      }
+      return {
+        count: items.length,
+        items: items.map((it: any) => ({
+          id: it.id,
+          title: it.title,
+          status: it.status,
+          department: it.payload?.department || null,
+          client_id: it.client_id,
+          client_name: it.clients?.name || null,
+          target_channel: it.target_channel,
+          current_stage_id: it.current_stage_id,
+          updated_at: it.updated_at,
+          brief_preview: typeof it.payload?.brief_text === 'string' ? String(it.payload.brief_text).slice(0, 160) : null,
+        })),
+      }
+    }
+    case 'get_marketing_work_item': {
+      const { data: item, error } = await supabase.from('marketing_work_items')
+        .select('id, title, status, target_channel, client_id, pipeline_id, current_stage_id, payload, links, scheduled_date, created_at, updated_at, clients(name)')
+        .eq('id', args.item_id).eq('tenant_id', tenantId).maybeSingle()
+      if (error || !item) return { error: 'עבודה לא נמצאה' }
+      let stage = null
+      if (item.current_stage_id) {
+        const { data: st } = await supabase.from('marketing_pipeline_stages')
+          .select('id, name, stage_type, sort_order').eq('id', item.current_stage_id).maybeSingle()
+        stage = st
+      }
+      let stages: any[] = []
+      if (item.pipeline_id) {
+        const { data: sts } = await supabase.from('marketing_pipeline_stages')
+          .select('id, name, stage_type, sort_order').eq('pipeline_id', item.pipeline_id).order('sort_order')
+        stages = sts || []
+      }
+      return { item: { ...item, client_name: (item as any).clients?.name }, current_stage: stage, pipeline_stages: stages }
+    }
+    case 'create_marketing_work_item': {
+      const client_id = args.client_id
+      const title = String(args.title || '').trim()
+      const brief = String(args.brief || '').trim()
+      if (!client_id || !title || !brief) return { error: 'client_id, title ו-brief נדרשים' }
+      await assertCallerCanAccessClient(supabase, client_id, callerScope)
+      const department = ['copy', 'creative', 'seo'].includes(args.department) ? args.department : 'copy'
+      const track = department === 'seo' ? 'seo_geo' : 'campaigns'
+      const stageType = department === 'copy' ? 'copy' : department === 'creative' ? 'creative' : 'target_seo'
+
+      // Ensure pipeline + default stages (mirrors ensurePipelineForClient)
+      let { data: pipeline } = await supabase.from('marketing_pipelines')
+        .select('id').eq('client_id', client_id).eq('track', track).maybeSingle()
+      if (!pipeline) {
+        const { data: created, error: pErr } = await supabase.from('marketing_pipelines')
+          .insert({ client_id, tenant_id: tenantId, track }).select('id').single()
+        if (pErr) throw pErr
+        pipeline = created
+      }
+      const { count: stageCount } = await supabase.from('marketing_pipeline_stages')
+        .select('id', { count: 'exact', head: true }).eq('pipeline_id', pipeline!.id)
+      if ((stageCount ?? 0) === 0) {
+        const defaultStages = [
+          { stage_type: 'strategy', name: 'בריף', sort_order: 0, position_x: 1120, position_y: 200 },
+          { stage_type: 'copy', name: 'כתיבת תוכן', sort_order: 1, position_x: 840, position_y: 200 },
+          { stage_type: 'creative', name: 'קריאייטיב', sort_order: 2, position_x: 560, position_y: 200 },
+          { stage_type: track === 'seo_geo' ? 'target_seo' : 'target_paid', name: track === 'seo_geo' ? 'SEO / GEO' : 'קמפיין ממומן', sort_order: 3, position_x: 280, position_y: 200 },
+          { stage_type: 'measurement', name: 'מדידה', sort_order: 4, position_x: 0, position_y: 200 },
+        ]
+        await supabase.from('marketing_pipeline_stages').insert(
+          defaultStages.map((s) => ({ ...s, pipeline_id: pipeline!.id, tenant_id: tenantId, approval_mode: 'manual', configuration: {} }))
+        )
+      }
+      const { data: stages } = await supabase.from('marketing_pipeline_stages')
+        .select('id, stage_type').eq('pipeline_id', pipeline!.id)
+      const stageId = stages?.find((s: any) => s.stage_type === stageType)?.id || null
+      if (!stageId) return { error: `שלב ${stageType} לא נמצא בפייפליין` }
+
+      const channel = args.channel || 'כללי'
+      const { data: item, error } = await supabase.from('marketing_work_items').insert({
+        tenant_id: tenantId,
+        client_id,
+        pipeline_id: pipeline!.id,
+        current_stage_id: stageId,
+        title,
+        status: 'draft',
+        target_channel: String(channel).toLowerCase().replace(/\s+/g, '_'),
+        payload: {
+          brief_text: brief,
+          notes: args.instructions || '',
+          instructions: args.instructions || '',
+          content_type: args.content_type || (department === 'copy' ? 'ad_copy' : department),
+          channel,
+          department,
+          intake_source: 'carmen',
+        },
+        created_by: userId !== 'system' ? userId : null,
+      }).select('id, title, status, current_stage_id').single()
+      if (error) throw error
+      return { success: true, item_id: item.id, title: item.title, department, stage_type: stageType, status: item.status }
+    }
+    case 'handoff_marketing_work_item': {
+      const { data: item } = await supabase.from('marketing_work_items')
+        .select('id, pipeline_id, payload, title').eq('id', args.item_id).eq('tenant_id', tenantId).maybeSingle()
+      if (!item) return { error: 'עבודה לא נמצאה' }
+      const { data: stages } = await supabase.from('marketing_pipeline_stages')
+        .select('id, name, stage_type').eq('pipeline_id', item.pipeline_id)
+      const target = (stages || []).find((s: any) => s.stage_type === args.to_stage_type)
+      if (!target) return { error: `שלב ${args.to_stage_type} לא נמצא בפייפליין`, available: (stages || []).map((s: any) => s.stage_type) }
+      const { data: updated, error } = await supabase.from('marketing_work_items').update({
+        current_stage_id: target.id,
+        status: 'draft',
+        payload: { ...(item.payload || {}), department: args.to_stage_type === 'creative' ? 'creative' : args.to_stage_type === 'copy' ? 'copy' : (item.payload as any)?.department },
+        updated_at: new Date().toISOString(),
+      }).eq('id', args.item_id).select('id, title, current_stage_id, status').single()
+      if (error) throw error
+      return { success: true, item_id: updated.id, title: updated.title, handed_off_to: target.name, stage_type: target.stage_type }
+    }
+    case 'update_marketing_work_item': {
+      const { data: item } = await supabase.from('marketing_work_items')
+        .select('id, payload, title, status').eq('id', args.item_id).eq('tenant_id', tenantId).maybeSingle()
+      if (!item) return { error: 'עבודה לא נמצאה' }
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (args.title != null) patch.title = String(args.title)
+      if (args.status != null) patch.status = args.status
+      if (args.payload_patch && typeof args.payload_patch === 'object') {
+        patch.payload = { ...(item.payload || {}), ...args.payload_patch }
+      }
+      const { data: updated, error } = await supabase.from('marketing_work_items').update(patch).eq('id', args.item_id).select('id, title, status').single()
+      if (error) throw error
+      return { success: true, item: updated }
+    }
+
     case 'generate_ad_image': {
       const imagePrompt = args.prompt
 
@@ -2281,6 +2459,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     // TASKS - full CRUD
     case 'update_task': {
       await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
+      const { data: before } = await supabase.from('tasks')
+        .select('id, title, due_date, due_time, duration_minutes, campaigner_id, google_calendar_event_id')
+        .eq('id', args.task_id).in('tenant_id', accessibleTenantIds).maybeSingle()
       const updates: Record<string, any> = {}
       if (args.title) updates.title = args.title
       if (args.due_date !== undefined) updates.due_date = args.due_date
@@ -2292,8 +2473,24 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.campaigner_id !== undefined) updates.campaigner_id = args.campaigner_id
       if (args.duration_minutes !== undefined) updates.duration_minutes = args.duration_minutes
       if (args.status) updates.status = args.status
-      const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
+      const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status, due_date, due_time, campaigner_id, google_calendar_event_id, duration_minutes').single()
       if (error) throw error
+
+      // Sync Google Calendar when schedule fields change
+      const dateChanged = args.due_date !== undefined || args.due_time !== undefined
+      if (dateChanged && data) {
+        const dueDate = data.due_date
+        const dueTime = data.due_time
+        const campaignerId = data.campaigner_id
+        if (dueDate && dueTime && campaignerId && !data.google_calendar_event_id) {
+          tryCreateCalendarEventForTask(supabase, data.id, data.title, dueDate, dueTime, data.duration_minutes, campaignerId).catch(() => {})
+        } else if (dueDate && dueTime && data.google_calendar_event_id && campaignerId) {
+          // Best-effort PATCH of existing calendar event via helper path (recreate if patch unavailable)
+          try {
+            await tryCreateCalendarEventForTask(supabase, data.id, args.title || data.title || before?.title || 'משימה', dueDate, dueTime, data.duration_minutes, campaignerId)
+          } catch (_e) { /* non-fatal */ }
+        }
+      }
       return data
     }
     case 'delete_task': {
@@ -2413,14 +2610,82 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     // AUTOMATIONS
     case 'list_automations': {
-      const { data, error } = await supabase.from('automations').select('id, name, active, trigger_type').in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+      let q = supabase.from('automations')
+        .select('id, name, description, active, trigger_type, is_flow, updated_at')
+        .in('tenant_id', accessibleTenantIds).order('name').limit(args.limit || 50)
+      if (args.active_only === true) q = q.eq('active', true)
+      if (args.name_search) q = q.ilike('name', `%${args.name_search}%`)
+      const { data, error } = await q
       if (error) throw error
       return { count: data.length, automations: data }
     }
-    case 'toggle_automation': {
-      const { data, error } = await supabase.from('automations').update({ active: args.active }).eq('id', args.automation_id).in('tenant_id', accessibleTenantIds).select('id, name, active').single()
-      if (error) throw error
-      return { automation_id: data.id, name: data.name, active: data.active }
+    case 'get_automation_details': {
+      let automationId = args.automation_id as string | undefined
+      if (!automationId && args.name_search) {
+        const { data: found } = await supabase.from('automations').select('id').in('tenant_id', accessibleTenantIds).ilike('name', `%${args.name_search}%`).limit(1).maybeSingle()
+        automationId = found?.id
+      }
+      if (!automationId) return { error: 'automation_id או name_search נדרש' }
+      const { data: auto, error } = await supabase.from('automations')
+        .select('id, name, description, active, trigger_type, configuration, is_flow, created_at, updated_at')
+        .eq('id', automationId).in('tenant_id', accessibleTenantIds).maybeSingle()
+      if (error || !auto) return { error: 'אוטומציה לא נמצאה' }
+      const { data: steps } = await supabase.from('automation_flow_steps')
+        .select('id, step_type, action_type, label, configuration, sort_order, parent_step_id, condition_branch, position_x, position_y')
+        .eq('automation_id', automationId)
+        .order('sort_order', { ascending: true })
+      return {
+        automation: auto,
+        steps: (steps || []).map((s: any) => ({
+          id: s.id,
+          step_type: s.step_type,
+          action_type: s.action_type,
+          label: s.label,
+          sort_order: s.sort_order,
+          parent_step_id: s.parent_step_id,
+          condition_branch: s.condition_branch,
+          skin_slugs: s.configuration?.skin_slugs || null,
+          step_instruction: s.configuration?.step_instruction || null,
+          agent_id: s.configuration?.agent_id || null,
+          facebook_form_id: s.configuration?.facebook_form_id || null,
+          config_keys: s.configuration ? Object.keys(s.configuration) : [],
+        })),
+        steps_count: steps?.length || 0,
+      }
+    }
+    case 'toggle_automation':
+    case 'delete_automation':
+    case 'propose_automation_edit': {
+      if (!args.automation_id) return { error: 'automation_id נדרש' }
+      const { data: auto } = await supabase.from('automations').select('id, name, active').eq('id', args.automation_id).in('tenant_id', accessibleTenantIds).maybeSingle()
+      if (!auto) return { error: 'אוטומציה לא נמצאה' }
+      const autoTitles: Record<string, string> = {
+        toggle_automation: `${args.active ? 'הפעלת' : 'כיבוי'} אוטומציה: ${auto.name}`,
+        delete_automation: `מחיקת אוטומציה: ${auto.name}`,
+        propose_automation_edit: `עריכת אוטומציה: ${auto.name}`,
+      }
+      const toolName = name === 'propose_automation_edit' ? 'edit_automation' : name
+      const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: toolName,
+        title: autoTitles[name] || name,
+        description: 'פעולת אוטומציה — דורשת אישור משתמש מפורש',
+        tool_name: toolName,
+        tool_input: args,
+        context: { caller_role: callerRole, caller_phone: callerPhone, automation_name: auto.name },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aqRow.id,
+        action: toolName,
+        summary: autoTitles[name] || name,
+        instruction_for_carmen: 'הצג למשתמש מה ישתנה באוטומציה ובקש אישור: "לאשר? (כן/לא)". אל תבצעי עד execute_pending_approval.',
+      }
     }
     case 'inspect_meta_lead_forms': {
       const { data: automations, error: automationError } = await supabase
@@ -2798,7 +3063,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.type) query = query.eq('type', args.type)
       const { data, error } = await query
       if (error) throw error
-      return { count: data.length, entries: data.map((f: any) => ({ ...f, client_name: f.clients?.name })) }
+      return { count: data.length, entries: data.map((f: any) => ({ ...f, client_name: f.clients?.name })), note: 'legacy finance table — prefer get_accounting_overview' }
     }
     case 'create_finance_entry': {
       const { data, error } = await supabase.from('finance').insert({
@@ -2817,7 +3082,207 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       const income = (data || []).filter((f: any) => f.type === 'income').reduce((s: number, f: any) => s + (f.amount || 0), 0)
       const expense = (data || []).filter((f: any) => f.type === 'expense').reduce((s: number, f: any) => s + (f.amount || 0), 0)
-      return { month, income, expense, profit: income - expense, entries_count: data.length }
+      return { month, income, expense, profit: income - expense, entries_count: data.length, note: 'legacy finance table — prefer get_accounting_overview' }
+    }
+
+    // ============ REAL ACCOUNTING MODULE (AccountingIntegrations) ============
+    case 'get_accounting_overview': {
+      const month = String(args.month || new Date().toISOString().slice(0, 7))
+      let agencyId = args.agency_id as string | undefined
+      if (!agencyId && args.agency_name) {
+        const { data: ag } = await supabase.from('agencies').select('id, name').in('tenant_id', accessibleTenantIds).ilike('name', `%${args.agency_name}%`).limit(1).maybeSingle()
+        agencyId = ag?.id
+      }
+      let clientsQ = supabase.from('clients')
+        .select('id, name, status, agency_id, retainer, monthly_budget, monthly_fixed_expense, agencies(name)')
+        .in('tenant_id', accessibleTenantIds)
+        .in('status', ['active', 'onboarding', 'paused'])
+      if (agencyId) clientsQ = clientsQ.eq('agency_id', agencyId)
+      const { data: clients, error: cErr } = await clientsQ.limit(500)
+      if (cErr) throw cErr
+      const clientIds = (clients || []).map((c: any) => c.id)
+      const { data: ctfd } = clientIds.length
+        ? await supabase.from('client_tenant_financial_data').select('client_id, retainer, monthly_budget').eq('tenant_id', tenantId).in('client_id', clientIds)
+        : { data: [] as any[] }
+      const finMap = new Map<string, any>((ctfd || []).map((r: any) => [r.client_id, r]))
+      const enriched = (clients || []).map((c: any) => {
+        const overlay: any = finMap.get(c.id)
+        const retainer = Number(overlay?.retainer ?? c.retainer ?? 0) || 0
+        return {
+          client_id: c.id,
+          name: c.name,
+          status: c.status,
+          agency: c.agencies?.name || null,
+          retainer,
+          monthly_budget: Number(overlay?.monthly_budget ?? c.monthly_budget ?? 0) || 0,
+          monthly_fixed_expense: Number(c.monthly_fixed_expense ?? 0) || 0,
+        }
+      })
+      const expectedRetainers = enriched.filter((c: any) => c.status === 'active').reduce((s: number, c: any) => s + c.retainer, 0)
+
+      let otiQ = supabase.from('one_time_incomes').select('id, client_id, product_name, amount, payment_month, notes, clients(name)').eq('tenant_id', tenantId).eq('payment_month', month)
+      if (agencyId) {
+        const agencyClientIds = enriched.map((c: any) => c.client_id)
+        otiQ = otiQ.in('client_id', agencyClientIds.length ? agencyClientIds : ['00000000-0000-0000-0000-000000000000'])
+      }
+      const { data: oneTime } = await otiQ.limit(200)
+      const oneTimeTotal = (oneTime || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+
+      let ipQ = supabase.from('income_payments').select('id, client_id, client_name, amount, payment_month, received_at').eq('tenant_id', tenantId).eq('payment_month', month)
+      if (agencyId) {
+        const agencyClientIds = enriched.map((c: any) => c.client_id)
+        ipQ = ipQ.in('client_id', agencyClientIds.length ? agencyClientIds : ['00000000-0000-0000-0000-000000000000'])
+      }
+      const { data: incomePayments } = await ipQ.limit(500)
+      const collected = (incomePayments || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+
+      const { data: expensePayments } = await supabase.from('expense_payments')
+        .select('id, expense_type, expense_id, expense_name, amount, payment_month, paid_at')
+        .eq('tenant_id', tenantId).eq('payment_month', month).limit(500)
+      const expensesPaid = (expensePayments || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+      const expectedFixedExpenses = enriched.filter((c: any) => c.status === 'active').reduce((s: number, c: any) => s + c.monthly_fixed_expense, 0)
+
+      return {
+        month,
+        agency_id: agencyId || null,
+        expected_retainers: expectedRetainers,
+        one_time_incomes_total: oneTimeTotal,
+        expected_income: expectedRetainers + oneTimeTotal,
+        collected_income: collected,
+        collection_gap: (expectedRetainers + oneTimeTotal) - collected,
+        expected_fixed_client_expenses: expectedFixedExpenses,
+        expenses_paid: expensesPaid,
+        estimated_gross: collected - expensesPaid,
+        clients_count: enriched.length,
+        active_with_retainer: enriched.filter((c: any) => c.status === 'active' && c.retainer > 0).length,
+        one_time_incomes: (oneTime || []).slice(0, 30).map((r: any) => ({
+          id: r.id, client_id: r.client_id, client_name: r.clients?.name, product_name: r.product_name, amount: r.amount,
+        })),
+        top_uncollected_retainers: enriched
+          .filter((c: any) => c.status === 'active' && c.retainer > 0)
+          .filter((c: any) => !(incomePayments || []).some((p: any) => p.client_id === c.client_id && Number(p.amount) === c.retainer))
+          .sort((a: any, b: any) => b.retainer - a.retainer)
+          .slice(0, 15)
+          .map((c: any) => ({ client_id: c.client_id, name: c.name, retainer: c.retainer, agency: c.agency })),
+      }
+    }
+    case 'get_client_retainer': {
+      let clientId = args.client_id as string | undefined
+      if (!clientId && args.client_name) {
+        const { data: found } = await supabase.from('clients').select('id, name').in('tenant_id', accessibleTenantIds).ilike('name', `%${args.client_name}%`).limit(1).maybeSingle()
+        clientId = found?.id
+      }
+      if (!clientId) return { error: 'client_id או client_name נדרש' }
+      await assertCallerCanAccessClient(supabase, clientId, callerScope)
+      const { data: client, error } = await supabase.from('clients')
+        .select('id, name, status, retainer, monthly_budget, monthly_fixed_expense')
+        .eq('id', clientId).in('tenant_id', accessibleTenantIds).maybeSingle()
+      if (error || !client) return { error: 'לקוח לא נמצא' }
+      const { data: overlay } = await supabase.from('client_tenant_financial_data')
+        .select('retainer, monthly_budget, notes').eq('tenant_id', tenantId).eq('client_id', clientId).maybeSingle()
+      return {
+        client_id: client.id,
+        name: client.name,
+        status: client.status,
+        retainer: Number(overlay?.retainer ?? client.retainer ?? 0) || 0,
+        monthly_budget: Number(overlay?.monthly_budget ?? client.monthly_budget ?? 0) || 0,
+        monthly_fixed_expense: Number(client.monthly_fixed_expense ?? 0) || 0,
+        notes: overlay?.notes || null,
+        source: overlay ? 'client_tenant_financial_data' : 'clients',
+      }
+    }
+    case 'list_one_time_incomes': {
+      const month = String(args.month || new Date().toISOString().slice(0, 7))
+      let q = supabase.from('one_time_incomes')
+        .select('id, client_id, product_name, amount, payment_month, notes, is_paid, clients(name)')
+        .eq('tenant_id', tenantId).eq('payment_month', month).order('created_at', { ascending: false }).limit(100)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      const { data, error } = await q
+      if (error) throw error
+      return {
+        month,
+        count: data?.length || 0,
+        total: (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0),
+        incomes: (data || []).map((r: any) => ({ ...r, client_name: r.clients?.name })),
+      }
+    }
+    case 'list_income_payments': {
+      const month = String(args.month || new Date().toISOString().slice(0, 7))
+      let q = supabase.from('income_payments')
+        .select('id, client_id, client_name, amount, payment_month, received_at, notes')
+        .eq('tenant_id', tenantId).eq('payment_month', month).order('received_at', { ascending: false }).limit(200)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      const { data, error } = await q
+      if (error) throw error
+      return {
+        month,
+        count: data?.length || 0,
+        total_collected: (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0),
+        payments: data || [],
+      }
+    }
+    case 'list_expense_payments': {
+      const month = String(args.month || new Date().toISOString().slice(0, 7))
+      let q = supabase.from('expense_payments')
+        .select('id, expense_type, expense_id, expense_name, amount, payment_month, paid_at, notes')
+        .eq('tenant_id', tenantId).eq('payment_month', month).order('paid_at', { ascending: false }).limit(200)
+      if (args.expense_type) q = q.eq('expense_type', args.expense_type)
+      const { data, error } = await q
+      if (error) throw error
+      return {
+        month,
+        count: data?.length || 0,
+        total_paid: (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0),
+        payments: data || [],
+      }
+    }
+    case 'list_invoice_uploads': {
+      let q = supabase.from('invoice_uploads')
+        .select('id, vendor_name, invoice_number, invoice_date, total_amount, currency, status, supplier_id, client_id, finance_id, created_at, error_message')
+        .eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 30)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data?.length || 0, invoices: data || [] }
+    }
+    case 'create_one_time_income':
+    case 'delete_one_time_income':
+    case 'record_income_payment':
+    case 'delete_income_payment':
+    case 'record_expense_payment':
+    case 'delete_expense_payment':
+    case 'update_client_retainer': {
+      if (args.client_id) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const acctTitles: Record<string, string> = {
+        create_one_time_income: `הכנסה חד-פעמית: ${args.product_name || ''} ₪${args.amount ?? ''} (${args.payment_month || ''})`,
+        delete_one_time_income: `מחיקת הכנסה חד-פעמית ${args.income_id}`,
+        record_income_payment: `סימון גבייה ₪${args.amount ?? ''} לחודש ${args.payment_month || ''}`,
+        delete_income_payment: `ביטול גבייה ${args.payment_id}`,
+        record_expense_payment: `סימון הוצאה שולמה: ${args.expense_name || ''} ₪${args.amount ?? ''}`,
+        delete_expense_payment: `ביטול תשלום הוצאה ${args.payment_id}`,
+        update_client_retainer: `עדכון ריטיינר לקוח ${args.client_id} → ₪${args.retainer ?? '?'}`,
+      }
+      const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: name,
+        title: acctTitles[name] || name,
+        description: 'פעולת הנהלת חשבונות — דורשת אישור משתמש מפורש',
+        tool_name: name,
+        tool_input: args,
+        context: { caller_role: callerRole, caller_phone: callerPhone },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aqRow.id,
+        action: name,
+        summary: acctTitles[name] || name,
+        instruction_for_carmen: 'הצג למשתמש בקצרה את הפעולה הכספית ובקש אישור: "לאשר? (כן/לא)". אל תבצעי עד execute_pending_approval אחרי תשובה חיובית.',
+      }
     }
     // UPDATES
     case 'list_updates': {
@@ -2877,7 +3342,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Optionally mark as complete
       if (args.mark_complete) {
         await supabase.from('tasks')
-          .update({ status: 'done', assigned_agent: null })
+          .update({ status: 'completed', assigned_agent: null })
           .eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
       }
       return { success: true, task_id: args.task_id, completed: !!args.mark_complete }
@@ -3638,6 +4103,153 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { count: result.length, accounts: result }
     }
 
+    case 'list_google_campaigns': {
+      let customerId = args.customer_id ? String(args.customer_id).replace(/-/g, '') : ''
+      if (!customerId && args.client_id) {
+        await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+        const { data: cl } = await supabase.from('clients').select('google_ads_account_id, name').eq('id', args.client_id).in('tenant_id', accessibleTenantIds).maybeSingle()
+        if (!cl?.google_ads_account_id) return { error: 'ללקוח אין google_ads_account_id — חברי עם connect_google_ads_account או ספקי customer_id' }
+        customerId = String(cl.google_ads_account_id).replace(/-/g, '')
+      }
+      if (!customerId) return { error: 'customer_id או client_id נדרש' }
+
+      const { data: gadsInteg } = await supabase
+        .from('tenant_integrations')
+        .select('settings, additional_config, api_key')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('integration_type', 'google_ads')
+        .eq('is_active', true)
+        .limit(1).maybeSingle()
+      const cfg = { ...(gadsInteg?.additional_config || {}), ...(gadsInteg?.settings || {}) }
+      const refreshToken = cfg.refresh_token || gadsInteg?.api_key
+      if (!refreshToken) return { error: 'אין חיבור Google Ads פעיל לטננט' }
+
+      const gClientId = Deno.env.get('GOOGLE_CLIENT_ID')
+      const gClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+      const gDevToken = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN')
+      if (!gClientId || !gClientSecret || !gDevToken) return { error: 'חסרות הגדרות סביבה של Google Ads' }
+
+      const tokResp = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        body: new URLSearchParams({ refresh_token: refreshToken, client_id: gClientId, client_secret: gClientSecret, grant_type: 'refresh_token' }),
+      })
+      const tokData = await tokResp.json()
+      if (!tokData.access_token) return { error: 'כישלון בחידוש טוקן Google Ads', details: tokData?.error_description }
+
+      const gadsHeaders: Record<string, string> = {
+        'Authorization': `Bearer ${tokData.access_token}`,
+        'developer-token': gDevToken,
+        'Content-Type': 'application/json',
+      }
+      const loginCustomerId = cfg.login_customer_id || cfg.mcc_id || cfg.manager_id
+      if (loginCustomerId) gadsHeaders['login-customer-id'] = String(loginCustomerId).replace(/-/g, '')
+
+      const statusFilter = args.status && args.status !== 'ALL' ? ` AND campaign.status = '${args.status}'` : ''
+      const query = `SELECT campaign.id, campaign.name, campaign.status, campaign_budget.amount_micros, metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.conversions FROM campaign WHERE campaign.status != 'REMOVED'${statusFilter} ORDER BY campaign.name`
+      const searchResp = await fetch(`https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:search`, {
+        method: 'POST',
+        headers: gadsHeaders,
+        body: JSON.stringify({ query }),
+      })
+      const searchData = await searchResp.json()
+      if (searchData.error) return { error: `Google Ads API: ${searchData.error?.message || JSON.stringify(searchData.error)}` }
+
+      let campaigns = (searchData.results || []).map((row: any) => ({
+        campaign_id: String(row.campaign?.id || ''),
+        name: row.campaign?.name || null,
+        status: row.campaign?.status || null,
+        daily_budget: row.campaignBudget?.amountMicros != null ? Number(row.campaignBudget.amountMicros) / 1_000_000 : null,
+        cost: row.metrics?.costMicros != null ? Number(row.metrics.costMicros) / 1_000_000 : null,
+        clicks: row.metrics?.clicks != null ? Number(row.metrics.clicks) : null,
+        impressions: row.metrics?.impressions != null ? Number(row.metrics.impressions) : null,
+        conversions: row.metrics?.conversions != null ? Number(row.metrics.conversions) : null,
+      }))
+      if (args.name_search) {
+        const needle = String(args.name_search).toLowerCase()
+        campaigns = campaigns.filter((c: any) => (c.name || '').toLowerCase().includes(needle))
+      }
+      return { customer_id: customerId, count: campaigns.length, campaigns }
+    }
+
+    case 'create_google_ads_report_table': {
+      const client_id = args.client_id
+      const customer_id = String(args.customer_id || '').replace(/-/g, '')
+      if (!client_id || !customer_id) return { error: 'client_id ו-customer_id נדרשים' }
+      await assertCallerCanAccessClient(supabase, client_id, callerScope)
+      const { data: existing } = await supabase
+        .from('crm_tables')
+        .select('id, name')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('client_id', client_id)
+        .eq('integration_type', 'google_ads')
+        .maybeSingle()
+      if (existing) {
+        return { already_exists: true, table_id: existing.id, name: existing.name, message: `כבר קיימת טבלת דוח Google Ads ללקוח זה: ${existing.name}` }
+      }
+      const { data: client } = await supabase.from('clients').select('name, agency_id').eq('id', client_id).single()
+      if (!client) return { error: 'לקוח לא נמצא' }
+      const accountName = args.account_name || customer_id
+      const slug = `google-ads-${client_id.substring(0, 8)}`
+      const { data: table, error } = await supabase.from('crm_tables').insert({
+        tenant_id: tenantId,
+        name: client.name,
+        slug,
+        description: `דוח Google Ads עבור ${client.name} (${accountName})`,
+        icon: 'BarChart3',
+        category: 'דוחות',
+        integration_type: 'google_ads',
+        integration_settings: {
+          customer_id,
+          account_name: accountName,
+          date_range: args.date_range || 'last_30_days',
+          sync_frequency: 'daily',
+          data_source: 'direct_api',
+          campaign_type: 'leads',
+          currency: 'ILS',
+        },
+        agency_id: client.agency_id || null,
+        client_id,
+        created_by: userId !== 'system' ? userId : null,
+      }).select('id, name, slug').single()
+      if (error) throw error
+      // Also pin google_ads_account_id on client if empty
+      await supabase.from('clients').update({ google_ads_account_id: customer_id }).eq('id', client_id).is('google_ads_account_id', null)
+      return { success: true, table_id: table.id, name: table.name, slug: table.slug, customer_id, client_name: client.name, next: 'קראי ל-sync_google_ads_report עם table_id כדי למשוך נתונים' }
+    }
+
+    case 'sync_google_ads_report':
+    case 'sync_facebook_insights': {
+      let tableId = args.table_id as string | undefined
+      const integType = name === 'sync_google_ads_report' ? 'google_ads' : 'facebook_insights'
+      if (!tableId && args.client_id) {
+        await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+        const { data: tbl } = await supabase.from('crm_tables').select('id, name')
+          .in('tenant_id', accessibleTenantIds).eq('client_id', args.client_id).eq('integration_type', integType).maybeSingle()
+        if (!tbl) return { error: `לא נמצאה טבלת ${integType} ללקוח — צרי קודם עם create_${integType === 'google_ads' ? 'google_ads_report_table' : 'facebook_report_table'}` }
+        tableId = tbl.id
+      }
+      if (!tableId) return { error: 'table_id או client_id נדרש' }
+      const { data: table } = await supabase.from('crm_tables').select('id, name, tenant_id, integration_type').eq('id', tableId).in('tenant_id', accessibleTenantIds).maybeSingle()
+      if (!table) return { error: 'טבלה לא נמצאה' }
+      if (table.integration_type !== integType) return { error: `טבלה זו היא ${table.integration_type}, לא ${integType}` }
+
+      const fnName = name === 'sync_google_ads_report' ? 'sync-google-ads-data' : 'sync-facebook-insights'
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        'x-internal-cron': 'true',
+      }
+      const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/${fnName}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ table_id: tableId }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return { error: 'sync_failed', details: json }
+      return { success: true, table_id: tableId, table_name: table.name, sync: json }
+    }
+
     case 'connect_google_ads_account': {
       const { client_id, customer_id } = args
       if (!client_id || !customer_id) return { error: 'client_id ו-customer_id נדרשים' }
@@ -3756,7 +4368,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       const insertData: Record<string, any> = {
         tenant_id: tenantId,
-        created_by: callerId || null,
+        created_by: (userId && userId !== 'system') ? userId : null,
         name: args.name,
         channel: 'whatsapp',
         provider,
@@ -3983,6 +4595,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
 
     case 'cancel_calendar_invite': {
+      if (args.confirmed !== true) {
+        return { error: 'not_confirmed', message: 'אישור משתמש מפורש נדרש. שאלי לפני ביטול ושלחי confirmed=true רק אחרי שהוא אישר.' }
+      }
       const { event_id } = args
       if (!event_id) return { error: 'event_id נדרש — מצאי אותו קודם עם list_calendar_events' }
       const cal = await resolveCalendarAccessToken(supabase, tenantId, callerCampaignerId, userId)

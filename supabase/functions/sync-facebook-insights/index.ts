@@ -21,17 +21,36 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
+    // Allow service-role internal calls (Carmen / cron) to bypass user auth —
+    // mirrors sync-google-ads-data. Requires x-internal-cron: true AND service bearer.
+    const isInternalCron = req.headers.get('x-internal-cron') === 'true';
+    const authHeader = req.headers.get('Authorization') || '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const hasServiceRole = !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
+
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    let supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    let user: { id: string | null };
+    if (isInternalCron && hasServiceRole) {
+      user = { id: null };
+      supabase = supabaseAdmin;
+    } else {
+      const { data: { user: authedUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authedUser) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      user = authedUser;
     }
 
     const { table_id } = await req.json();
@@ -42,14 +61,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: tenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: user.id });
-    if (!tenantId) {
-      return new Response(JSON.stringify({ error: 'No tenant found' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    // User-path: verify the caller has a tenant. Internal Carmen/cron uses service role
+    // and relies on table lookup + service-role writes (same as sync-google-ads-data).
+    if (!isInternalCron || !hasServiceRole) {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: user.id });
+      if (!tenantId) {
+        return new Response(JSON.stringify({ error: 'No tenant found' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // Get table with integration settings - let RLS handle access control
+    // (service-role for internal calls bypasses RLS).
     const { data: table, error: tableError } = await supabase
       .from('crm_tables')
       .select('*')
@@ -307,7 +331,7 @@ Deno.serve(async (req) => {
       const recordRows = insights.map((insight) => ({
         table_id,
         tenant_id: tableTenantId,
-        created_by: user.id,
+        created_by: user.id || null,
         data: insight,
       }));
       const INSERT_CHUNK = 500;
