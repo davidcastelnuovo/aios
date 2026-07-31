@@ -60,6 +60,24 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     [ahrefsReports]
   );
 
+  // Tracked phrases from the latest valid Ahrefs report — shared with the GSC tab.
+  const ahrefsTrackedKeywords = useMemo(() => {
+    const valid = filterValidSeoReports(ahrefsReports || []);
+    for (const report of valid) {
+      const rd = (report as any)?.report_data || {};
+      const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+      const names = tracked
+        .map((k: any) => String(k?.keyword || k || "").trim())
+        .filter(Boolean);
+      if (names.length > 0) {
+        return Array.from(new Set(names.map((n: string) => n.toLowerCase())))
+          .map((lower) => names.find((n: string) => n.toLowerCase() === lower)!)
+          .filter(Boolean);
+      }
+    }
+    return [] as string[];
+  }, [ahrefsReports]);
+
   // Fetch the client's own website as a fallback for GSC domain auto-match
   // (when no Ahrefs SEO table exists for this client, targetDomain is empty).
   const { data: clientRow } = useQuery({
@@ -308,6 +326,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   tableId={selectedGscTableId}
                   initialLangFilter={savedGscLangFilter}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
+                  seedTrackedKeywords={ahrefsTrackedKeywords}
                 />
               </div>
             ) : (
