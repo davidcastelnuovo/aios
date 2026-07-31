@@ -9,9 +9,11 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
+import { useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
-import { Loader2, BarChart3, ExternalLink, Search, AlertCircle } from "lucide-react";
+import { Loader2, BarChart3, ExternalLink, Search, AlertCircle, Check, ChevronsUpDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface GoogleAnalyticsTableDialogProps {
   open: boolean;
@@ -37,6 +39,8 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
   const [selectedClient, setSelectedClient] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [propertySearch, setPropertySearch] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const [selectedIntegrationId, setSelectedIntegrationId] = useState("");
 
   // Fetch user's own + shared GA integrations
@@ -88,12 +92,39 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
   // Fetch agencies
   const { data: agencies } = useTableDialogAgencies({ enabled: open });
 
-  // Fetch clients based on selected agency
-  const { data: rawClients } = useAgencyClients(selectedAgency || null);
+  // Fetch all clients the current user may access. RLS includes cross-tenant
+  // clients shared through agencies, so the user can search by client name
+  // before selecting an agency.
+  const { data: allClients = [] } = useQuery({
+    queryKey: ["ga-table-dialog-clients", activeTenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name, agency_id")
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!activeTenantId,
+  });
 
-  const clients = assignedClientIds
-    ? (rawClients || []).filter(c => assignedClientIds.includes(c.id))
-    : rawClients;
+  const clients = useMemo(() => {
+    let filtered = selectedAgency
+      ? allClients.filter((client) => client.agency_id === selectedAgency)
+      : allClients;
+    if (assignedClientIds) {
+      filtered = filtered.filter((client) => assignedClientIds.includes(client.id));
+    }
+    return filtered;
+  }, [allClients, assignedClientIds, selectedAgency]);
+
+  const filteredClients = useMemo(() => {
+    const search = clientSearch.trim().toLocaleLowerCase("he");
+    if (!search) return clients;
+    return clients.filter((client) => client.name.toLocaleLowerCase("he").includes(search));
+  }, [clientSearch, clients]);
+
+  const selectedClientName = allClients.find((client) => client.id === selectedClient)?.name;
 
   const handleCreate = async () => {
     if (!tableName.trim()) {
@@ -161,6 +192,8 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
     setSelectedAgency("");
     setSelectedClient("");
     setPropertySearch("");
+    setClientSearch("");
+    setClientPopoverOpen(false);
   };
 
   const filteredProperties = useMemo(() => {
@@ -313,7 +346,11 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
 
                 <div className="space-y-2">
                   <Label>סוכנות (אופציונלי)</Label>
-                  <Select value={selectedAgency || "all"} onValueChange={(v) => { setSelectedAgency(v === "all" ? "" : v); setSelectedClient(""); }}>
+                  <Select value={selectedAgency || "all"} onValueChange={(v) => {
+                    setSelectedAgency(v === "all" ? "" : v);
+                    setSelectedClient("");
+                    setClientSearch("");
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder="כל הסוכנויות" />
                     </SelectTrigger>
@@ -328,24 +365,76 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                   </Select>
                 </div>
 
-                {selectedAgency && (
-                  <div className="space-y-2">
-                    <Label>לקוח (אופציונלי)</Label>
-                    <Select value={selectedClient || "all"} onValueChange={(v) => setSelectedClient(v === "all" ? "" : v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="כל הלקוחות" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">כל הלקוחות</SelectItem>
-                        {clients?.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.name}
-                          </SelectItem>
+                <div className="space-y-2">
+                  <Label>לקוח {assignedClientIds ? "*" : "(אופציונלי)"}</Label>
+                  <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={clientPopoverOpen}
+                        className="w-full justify-between font-normal"
+                      >
+                        <span className="truncate">{selectedClientName || "בחר לקוח לפי שם"}</span>
+                        <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                      <div className="flex items-center border-b px-3 py-2">
+                        <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        <Input
+                          autoFocus
+                          placeholder="חפש לפי שם לקוח..."
+                          value={clientSearch}
+                          onChange={(event) => setClientSearch(event.target.value)}
+                          className="h-8 border-0 shadow-none focus-visible:ring-0"
+                        />
+                      </div>
+                      <div className="max-h-[240px] overflow-y-auto p-1">
+                        {!assignedClientIds && (
+                          <button
+                            type="button"
+                            className={cn(
+                              "relative flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
+                              !selectedClient && "bg-accent",
+                            )}
+                            onClick={() => {
+                              setSelectedClient("");
+                              setClientPopoverOpen(false);
+                              setClientSearch("");
+                            }}
+                          >
+                            <Check className={cn("ml-2 h-4 w-4", selectedClient ? "opacity-0" : "opacity-100")} />
+                            ללא שיוך ללקוח
+                          </button>
+                        )}
+                        {filteredClients.map((client) => (
+                          <button
+                            type="button"
+                            key={client.id}
+                            className={cn(
+                              "relative flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
+                              selectedClient === client.id && "bg-accent",
+                            )}
+                            onClick={() => {
+                              setSelectedClient(client.id);
+                              setSelectedAgency(client.agency_id);
+                              setClientPopoverOpen(false);
+                              setClientSearch("");
+                            }}
+                          >
+                            <Check className={cn("ml-2 h-4 w-4", selectedClient === client.id ? "opacity-100" : "opacity-0")} />
+                            <span className="truncate">{client.name}</span>
+                          </button>
                         ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                        {filteredClients.length === 0 && (
+                          <p className="py-4 text-center text-sm text-muted-foreground">לא נמצאו לקוחות</p>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
                 <div className="flex gap-2 pt-4">
                   <Button onClick={handleCreate} disabled={isCreating} className="flex-1">
