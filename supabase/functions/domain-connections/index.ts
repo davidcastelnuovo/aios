@@ -163,9 +163,36 @@ Deno.serve(async (request) => {
       }
       project = updatedProject;
     }
-    const { data: publishingSite } = await admin.from("publishing_sites")
+    // Prefer the linked Vercel project id; fall back to aios-magazine-<site_key>
+    // so design refresh still works when correlation_id was never written.
+    let publishingSite: { id: string; site_key: string } | null = null;
+    const byConnection = await admin.from("publishing_sites")
       .select("id,site_key").eq("tenant_id", tenantId).eq("connection_id", project.id).maybeSingle();
-    if (!publishingSite?.id) return reply({ success: false, error: "publishing_site_not_found", project_id: project.id }, 404);
+    publishingSite = byConnection.data ?? null;
+    if (!publishingSite?.id) {
+      const siteKeyFromName = requestedName.match(/(site-\d+)$/i)?.[1]?.toLowerCase()
+        ?? requestedName.match(/(site-\d+)/i)?.[1]?.toLowerCase()
+        ?? "";
+      if (siteKeyFromName) {
+        const byKey = await admin.from("publishing_sites")
+          .select("id,site_key").eq("tenant_id", tenantId).eq("site_key", siteKeyFromName).maybeSingle();
+        publishingSite = byKey.data ?? null;
+        if (publishingSite?.id) {
+          await admin.from("publishing_sites")
+            .update({ connection_id: project.id })
+            .eq("id", publishingSite.id);
+        }
+      }
+    }
+    if (!publishingSite?.id) {
+      return reply({
+        success: false,
+        error: "publishing_site_not_found",
+        project_id: project.id,
+        project_name: requestedName,
+        hint: "Link the Vercel project in Publishing Studio, or ensure site_key matches aios-magazine-site-XX",
+      }, 404);
+    }
     const deploymentsResponse = await fetch(`https://api.vercel.com/v6/deployments?projectId=${templateProjectId}&teamId=${teamId}&limit=1&state=READY`, { headers });
     const deployments = await deploymentsResponse.json().catch(() => ({}));
     const templateDeploymentId = deployments?.deployments?.[0]?.uid;
