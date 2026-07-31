@@ -665,6 +665,9 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const dashboard = data.dashboard;
   const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasVisibleAnalyticsData && totalSummary.analyticsSessions > 0;
   const showAdsCards = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
+  // Revenue cubes should appear with WooCommerce alone (no GA required)
+  const showRevenueCards = (platformFilter === 'all' || platformFilter === 'google_analytics' || platformFilter === 'woocommerce')
+    && (showAnalyticsCards || hasWooData);
 
   const isSnapshotReady = !isLoading && !!data?.dashboard && Array.isArray(tables);
 
@@ -835,6 +838,22 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
 
               {dashboardCampaignType === 'ecommerce' ? (
                 <>
+                  {showAdsCards && (
+                    <Card className="h-full bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-950 dark:to-indigo-900">
+                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                        <p className="text-sm text-muted-foreground">סה״כ חשיפות</p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.impressions)}</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {showAdsCards && (
+                    <Card className="h-full bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-950 dark:to-violet-900">
+                      <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
+                        <p className="text-sm text-muted-foreground">סה״כ קליקים</p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.clicks)}</p>
+                      </CardContent>
+                    </Card>
+                  )}
                   {showAdsCards && totalSummary.leads > 0 && (
                     <Card className="h-full bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
@@ -851,11 +870,11 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                       </CardContent>
                     </Card>
                   )}
-                  {showAnalyticsCards && (
+                  {showRevenueCards && (
                     <Card className="h-full bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">
-                          {hasWooData ? "הכנסות (WooCommerce)" : "הכנסות (Analytics)"}
+                          {hasWooData ? "סה״כ הכנסות (WooCommerce)" : "סה״כ הכנסות"}
                         </p>
                         <p className="text-3xl font-bold mt-2">
                           {formatCurrency(hasWooData ? wooSummary.revenue : totalSummary.revenue)}
@@ -863,7 +882,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                       </CardContent>
                     </Card>
                   )}
-                  {showAnalyticsCards && (
+                  {showRevenueCards && ((hasWooData && wooSummary.orderCount > 0) || totalSummary.analyticsPurchases > 0 || totalSummary.results > 0) && (
                     <Card className="h-full bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">
@@ -875,7 +894,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                       </CardContent>
                     </Card>
                   )}
-                  {showAnalyticsCards && (
+                  {showAnalyticsCards && totalSummary.analyticsAddToCart > 0 && (
                     <Card className="h-full bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">הוספה לעגלה (ATC)</p>
@@ -883,7 +902,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                       </CardContent>
                     </Card>
                   )}
-                  {(platformFilter === 'all' || platformFilter === 'google_analytics') && (
+                  {(platformFilter === 'all' || platformFilter === 'google_analytics' || platformFilter === 'woocommerce') && (
                     <Card className={`h-full bg-gradient-to-br ${combinedRoas >= 1 ? 'from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900' : 'from-red-50 to-red-100 dark:from-red-950 dark:to-red-900'}`}>
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">ROAS משולב</p>
