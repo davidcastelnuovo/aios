@@ -313,7 +313,8 @@ const ALL_TOOLS = [
   { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת לפני הבקשה. אחרי אישור המשתמש — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED). מכניס בקשת אישור לתור — לא מבצע מיד. אחרי אישור — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'get_campaign_alerts', description: 'שליפת התראות פתוחות על קמפיינים (קמפיין נעצר, מודעה לא מאושרת, CPL חורג, frequency גבוה). השתמש בתחילת בדיקת דופק או כשהמשתמש שואל על מצב הקמפיינים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, only_open: { type: 'boolean', description: 'ברירת מחדל true' } } } },
-  { name: 'acknowledge_campaign_alert', description: 'סימון התראת קמפיין כטופלה.', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
+  { name: 'acknowledge_campaign_alert', description: 'סימון התראת קמפיין כטופלה (acknowledged).', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
+  { name: 'resolve_campaign_alert', description: 'סגירת התראת קמפיין (resolved) — כשהבעיה תוקנה בפועל.', parameters: { type: 'object', properties: { alert_id: { type: 'string' } }, required: ['alert_id'] } },
   { name: 'list_social_pages', description: 'רשימת עמודים מחוברים (פייסבוק/אינסטגרם) של הטננט. שימושי לפני פרסום או טיפול בתגובות.', parameters: { type: 'object', properties: { platform: { type: 'string', enum: ['facebook', 'instagram'] }, client_id: { type: 'string' } } } },
   { name: 'publish_social_post', description: 'פרסום פוסט/תמונה/וידאו/Reel/Story לעמוד פייסבוק או אינסטגרם. דורש page_id (UUID של social_pages, לא ה-FB page id), post_type ו-caption/media_url. דורש confirmed=true.', parameters: { type: 'object', properties: { page_id: { type: 'string' }, post_type: { type: 'string', enum: ['post', 'photo', 'video', 'reel', 'story', 'link'] }, caption: { type: 'string' }, media_url: { type: 'string', description: 'URL ציבורי של המדיה (חובה ל-photo/video/reel/story)' }, link: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['page_id', 'post_type', 'confirmed'] } },
   { name: 'fetch_social_comments', description: 'משיכת תגובות חדשות מעמוד פייסבוק/אינסטגרם ועדכון מסד הנתונים.', parameters: { type: 'object', properties: { page_id: { type: 'string' } }, required: ['page_id'] } },
@@ -379,6 +380,12 @@ const ALL_TOOLS = [
   { name: 'get_dashboard_stats', description: 'שליפת נתוני דשבורד: כמה לידים, לקוחות, משימות פתוחות, ועוד', parameters: { type: 'object', properties: {} } },
   // SOCIAL MEDIA
   { name: 'create_social_post', description: 'יצירת פוסט/מודעה חדשה במודול ניהול סושיאל מדיה. השתמש בכלי הזה כדי ליצור פוסטים עם תוכן טקסטואלי ותמונות. הפוסט יישמר כטיוטה במערכת.', parameters: { type: 'object', properties: { title: { type: 'string', description: 'כותרת הפוסט/מודעה' }, content: { type: 'string', description: 'תוכן הפוסט - הקופי של המודעה' }, post_type: { type: 'string', enum: ['text', 'image', 'video', 'carousel'], description: 'סוג הפוסט' }, media_urls: { type: 'array', items: { type: 'string' }, description: 'קישורי מדיה (תמונות/וידאו)' } }, required: ['title', 'content'] } },
+  // Marketing department (Copy / Creative / SEO pipeline)
+  { name: 'list_marketing_work_items', description: 'רשימת עבודות במחלקת השיווק (קופי/קריאייטיב/SEO). אפשר לסנן לפי לקוח, מחלקה או סטטוס.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, department: { type: 'string', enum: ['copy', 'creative', 'seo'] }, status: { type: 'string' }, limit: { type: 'integer' } } } },
+  { name: 'get_marketing_work_item', description: 'פרטי עבודת שיווק כולל payload ושלב נוכחי.', parameters: { type: 'object', properties: { item_id: { type: 'string' } }, required: ['item_id'] } },
+  { name: 'create_marketing_work_item', description: 'יצירת בריף/עבודה חדשה במחלקת שיווק (copy/creative/seo). יוצר pipeline ללקוח אם חסר וממקם בשלב המתאים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, title: { type: 'string' }, brief: { type: 'string', description: 'בריף / חומר גלם' }, department: { type: 'string', enum: ['copy', 'creative', 'seo'], description: 'ברירת מחדל copy' }, content_type: { type: 'string' }, channel: { type: 'string' }, instructions: { type: 'string' } }, required: ['client_id', 'title', 'brief'] } },
+  { name: 'handoff_marketing_work_item', description: 'העברת עבודת שיווק לשלב הבא בפייפליין (למשל מ-copy ל-creative, מ-creative ל-target_paid).', parameters: { type: 'object', properties: { item_id: { type: 'string' }, to_stage_type: { type: 'string', enum: ['strategy', 'copy', 'creative', 'target_paid', 'target_seo', 'target_organic', 'measurement'] } }, required: ['item_id', 'to_stage_type'] } },
+  { name: 'update_marketing_work_item', description: 'עדכון כותרת/סטטוס/payload של עבודת שיווק.', parameters: { type: 'object', properties: { item_id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string', enum: ['draft', 'in_progress', 'review', 'approved', 'archived'] }, payload_patch: { type: 'object', description: 'מיזוג לתוך payload הקיים' } }, required: ['item_id'] } },
   { name: 'generate_ad_image', description: 'יצירת תמונה למודעה/פוסט באמצעות AI. מחזיר URL של התמונה שנוצרה. השתמש בכלי הזה כדי ליצור ויזואל למודעות ופוסטים ואז השתמש ב-create_social_post כדי לשמור את הפוסט.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של התמונה הרצויה באנגלית' }, aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16', '4:5'], description: 'יחס גובה-רוחב' } }, required: ['prompt'] } },
   // MEMORY
   { name: 'save_memory', description: 'שמירת מידע לזיכרון מתמשך (העדפות, פרויקטים, הוראות)', parameters: { type: 'object', properties: { key: { type: 'string', description: 'מפתח זיהוי' }, content: { type: 'string', description: 'התוכן לשמירה' }, category: { type: 'string', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal', 'instructions'] } }, required: ['key', 'content'] } },
@@ -1706,6 +1713,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) return { error: error.message }
       return { success: true, alert_id: args.alert_id }
     }
+    case 'resolve_campaign_alert': {
+      const { error } = await supabase.from('campaign_alerts')
+        .update({ resolved_at: new Date().toISOString(), acknowledged_at: new Date().toISOString() })
+        .eq('id', args.alert_id)
+        .in('tenant_id', accessibleTenantIds)
+      if (error) return { error: error.message }
+      return { success: true, alert_id: args.alert_id, resolved: true }
+    }
     case 'list_social_pages': {
       let q = supabase.from('social_pages').select('id, platform, page_id, page_name, client_id, ig_business_id, picture_url, is_active')
         .in('tenant_id', accessibleTenantIds).eq('is_active', true).order('page_name')
@@ -2151,6 +2166,148 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       } catch (_e) { /* non-critical */ }
       return { success: true, post_id: data.id, title: data.title, content: data.content, media_urls: data.media_urls, status: 'draft', message: 'הפוסט נוצר בהצלחה כטיוטה במודול סושיאל מדיה' }
     }
+
+    // ============ MARKETING DEPARTMENT (work items / pipeline) ============
+    case 'list_marketing_work_items': {
+      let q = supabase.from('marketing_work_items')
+        .select('id, title, status, target_channel, client_id, pipeline_id, current_stage_id, payload, updated_at, clients(name)')
+        .eq('tenant_id', tenantId).order('updated_at', { ascending: false }).limit(args.limit || 30)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      let items = data || []
+      if (args.department) {
+        items = items.filter((it: any) => (it.payload?.department || '') === args.department)
+      }
+      return {
+        count: items.length,
+        items: items.map((it: any) => ({
+          id: it.id,
+          title: it.title,
+          status: it.status,
+          department: it.payload?.department || null,
+          client_id: it.client_id,
+          client_name: it.clients?.name || null,
+          target_channel: it.target_channel,
+          current_stage_id: it.current_stage_id,
+          updated_at: it.updated_at,
+          brief_preview: typeof it.payload?.brief_text === 'string' ? String(it.payload.brief_text).slice(0, 160) : null,
+        })),
+      }
+    }
+    case 'get_marketing_work_item': {
+      const { data: item, error } = await supabase.from('marketing_work_items')
+        .select('id, title, status, target_channel, client_id, pipeline_id, current_stage_id, payload, links, scheduled_date, created_at, updated_at, clients(name)')
+        .eq('id', args.item_id).eq('tenant_id', tenantId).maybeSingle()
+      if (error || !item) return { error: 'עבודה לא נמצאה' }
+      let stage = null
+      if (item.current_stage_id) {
+        const { data: st } = await supabase.from('marketing_pipeline_stages')
+          .select('id, name, stage_type, sort_order').eq('id', item.current_stage_id).maybeSingle()
+        stage = st
+      }
+      let stages: any[] = []
+      if (item.pipeline_id) {
+        const { data: sts } = await supabase.from('marketing_pipeline_stages')
+          .select('id, name, stage_type, sort_order').eq('pipeline_id', item.pipeline_id).order('sort_order')
+        stages = sts || []
+      }
+      return { item: { ...item, client_name: (item as any).clients?.name }, current_stage: stage, pipeline_stages: stages }
+    }
+    case 'create_marketing_work_item': {
+      const client_id = args.client_id
+      const title = String(args.title || '').trim()
+      const brief = String(args.brief || '').trim()
+      if (!client_id || !title || !brief) return { error: 'client_id, title ו-brief נדרשים' }
+      await assertCallerCanAccessClient(supabase, client_id, callerScope)
+      const department = ['copy', 'creative', 'seo'].includes(args.department) ? args.department : 'copy'
+      const track = department === 'seo' ? 'seo_geo' : 'campaigns'
+      const stageType = department === 'copy' ? 'copy' : department === 'creative' ? 'creative' : 'target_seo'
+
+      // Ensure pipeline + default stages (mirrors ensurePipelineForClient)
+      let { data: pipeline } = await supabase.from('marketing_pipelines')
+        .select('id').eq('client_id', client_id).eq('track', track).maybeSingle()
+      if (!pipeline) {
+        const { data: created, error: pErr } = await supabase.from('marketing_pipelines')
+          .insert({ client_id, tenant_id: tenantId, track }).select('id').single()
+        if (pErr) throw pErr
+        pipeline = created
+      }
+      const { count: stageCount } = await supabase.from('marketing_pipeline_stages')
+        .select('id', { count: 'exact', head: true }).eq('pipeline_id', pipeline!.id)
+      if ((stageCount ?? 0) === 0) {
+        const defaultStages = [
+          { stage_type: 'strategy', name: 'בריף', sort_order: 0, position_x: 1120, position_y: 200 },
+          { stage_type: 'copy', name: 'כתיבת תוכן', sort_order: 1, position_x: 840, position_y: 200 },
+          { stage_type: 'creative', name: 'קריאייטיב', sort_order: 2, position_x: 560, position_y: 200 },
+          { stage_type: track === 'seo_geo' ? 'target_seo' : 'target_paid', name: track === 'seo_geo' ? 'SEO / GEO' : 'קמפיין ממומן', sort_order: 3, position_x: 280, position_y: 200 },
+          { stage_type: 'measurement', name: 'מדידה', sort_order: 4, position_x: 0, position_y: 200 },
+        ]
+        await supabase.from('marketing_pipeline_stages').insert(
+          defaultStages.map((s) => ({ ...s, pipeline_id: pipeline!.id, tenant_id: tenantId, approval_mode: 'manual', configuration: {} }))
+        )
+      }
+      const { data: stages } = await supabase.from('marketing_pipeline_stages')
+        .select('id, stage_type').eq('pipeline_id', pipeline!.id)
+      const stageId = stages?.find((s: any) => s.stage_type === stageType)?.id || null
+      if (!stageId) return { error: `שלב ${stageType} לא נמצא בפייפליין` }
+
+      const channel = args.channel || 'כללי'
+      const { data: item, error } = await supabase.from('marketing_work_items').insert({
+        tenant_id: tenantId,
+        client_id,
+        pipeline_id: pipeline!.id,
+        current_stage_id: stageId,
+        title,
+        status: 'draft',
+        target_channel: String(channel).toLowerCase().replace(/\s+/g, '_'),
+        payload: {
+          brief_text: brief,
+          notes: args.instructions || '',
+          instructions: args.instructions || '',
+          content_type: args.content_type || (department === 'copy' ? 'ad_copy' : department),
+          channel,
+          department,
+          intake_source: 'carmen',
+        },
+        created_by: userId !== 'system' ? userId : null,
+      }).select('id, title, status, current_stage_id').single()
+      if (error) throw error
+      return { success: true, item_id: item.id, title: item.title, department, stage_type: stageType, status: item.status }
+    }
+    case 'handoff_marketing_work_item': {
+      const { data: item } = await supabase.from('marketing_work_items')
+        .select('id, pipeline_id, payload, title').eq('id', args.item_id).eq('tenant_id', tenantId).maybeSingle()
+      if (!item) return { error: 'עבודה לא נמצאה' }
+      const { data: stages } = await supabase.from('marketing_pipeline_stages')
+        .select('id, name, stage_type').eq('pipeline_id', item.pipeline_id)
+      const target = (stages || []).find((s: any) => s.stage_type === args.to_stage_type)
+      if (!target) return { error: `שלב ${args.to_stage_type} לא נמצא בפייפליין`, available: (stages || []).map((s: any) => s.stage_type) }
+      const { data: updated, error } = await supabase.from('marketing_work_items').update({
+        current_stage_id: target.id,
+        status: 'draft',
+        payload: { ...(item.payload || {}), department: args.to_stage_type === 'creative' ? 'creative' : args.to_stage_type === 'copy' ? 'copy' : (item.payload as any)?.department },
+        updated_at: new Date().toISOString(),
+      }).eq('id', args.item_id).select('id, title, current_stage_id, status').single()
+      if (error) throw error
+      return { success: true, item_id: updated.id, title: updated.title, handed_off_to: target.name, stage_type: target.stage_type }
+    }
+    case 'update_marketing_work_item': {
+      const { data: item } = await supabase.from('marketing_work_items')
+        .select('id, payload, title, status').eq('id', args.item_id).eq('tenant_id', tenantId).maybeSingle()
+      if (!item) return { error: 'עבודה לא נמצאה' }
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (args.title != null) patch.title = String(args.title)
+      if (args.status != null) patch.status = args.status
+      if (args.payload_patch && typeof args.payload_patch === 'object') {
+        patch.payload = { ...(item.payload || {}), ...args.payload_patch }
+      }
+      const { data: updated, error } = await supabase.from('marketing_work_items').update(patch).eq('id', args.item_id).select('id, title, status').single()
+      if (error) throw error
+      return { success: true, item: updated }
+    }
+
     case 'generate_ad_image': {
       const imagePrompt = args.prompt
 
@@ -2302,6 +2459,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     // TASKS - full CRUD
     case 'update_task': {
       await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
+      const { data: before } = await supabase.from('tasks')
+        .select('id, title, due_date, due_time, duration_minutes, campaigner_id, google_calendar_event_id')
+        .eq('id', args.task_id).in('tenant_id', accessibleTenantIds).maybeSingle()
       const updates: Record<string, any> = {}
       if (args.title) updates.title = args.title
       if (args.due_date !== undefined) updates.due_date = args.due_date
@@ -2313,8 +2473,24 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.campaigner_id !== undefined) updates.campaigner_id = args.campaigner_id
       if (args.duration_minutes !== undefined) updates.duration_minutes = args.duration_minutes
       if (args.status) updates.status = args.status
-      const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
+      const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status, due_date, due_time, campaigner_id, google_calendar_event_id, duration_minutes').single()
       if (error) throw error
+
+      // Sync Google Calendar when schedule fields change
+      const dateChanged = args.due_date !== undefined || args.due_time !== undefined
+      if (dateChanged && data) {
+        const dueDate = data.due_date
+        const dueTime = data.due_time
+        const campaignerId = data.campaigner_id
+        if (dueDate && dueTime && campaignerId && !data.google_calendar_event_id) {
+          tryCreateCalendarEventForTask(supabase, data.id, data.title, dueDate, dueTime, data.duration_minutes, campaignerId).catch(() => {})
+        } else if (dueDate && dueTime && data.google_calendar_event_id && campaignerId) {
+          // Best-effort PATCH of existing calendar event via helper path (recreate if patch unavailable)
+          try {
+            await tryCreateCalendarEventForTask(supabase, data.id, args.title || data.title || before?.title || 'משימה', dueDate, dueTime, data.duration_minutes, campaignerId)
+          } catch (_e) { /* non-fatal */ }
+        }
+      }
       return data
     }
     case 'delete_task': {
@@ -3166,7 +3342,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Optionally mark as complete
       if (args.mark_complete) {
         await supabase.from('tasks')
-          .update({ status: 'done', assigned_agent: null })
+          .update({ status: 'completed', assigned_agent: null })
           .eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
       }
       return { success: true, task_id: args.task_id, completed: !!args.mark_complete }
@@ -4192,7 +4368,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       const insertData: Record<string, any> = {
         tenant_id: tenantId,
-        created_by: callerId || null,
+        created_by: (userId && userId !== 'system') ? userId : null,
         name: args.name,
         channel: 'whatsapp',
         provider,

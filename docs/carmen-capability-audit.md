@@ -288,32 +288,25 @@ UI ב-`MarketingDepartment` + `CopyDepartment` / `CreativeDepartment` / `SeoGeoD
 
 ## 10. תכנית תיקון ממוקדת (Work packages)
 
-### WP0 — איחוד אישור Meta (מהיר, בטיחות) ⭐
-- להסיר/לעטוף את `toggle_facebook_campaign`, `update_facebook_budget`, `duplicate_facebook_campaign` כך שרק `fb_*` + queue יישארו.
-- לאכוף `confirmed` על `cancel_calendar_invite` או להעביר ל-queue.
-- תוצאה: **כל ניהול פרסום רק באישור מפורש בתור**.
+### WP0 — איחוד אישור Meta ✅ בוצע
+- Legacy Meta mutate tools (`toggle_facebook_campaign` / `update_facebook_budget` / `duplicate_facebook_campaign`) → `agent_approval_queue` בלבד.
+- `cancel_calendar_invite` אוכף `confirmed=true`.
 
-### WP1 — כספים אמיתיים ⭐
-- כלים לקריאה מ-`one_time_incomes` / `income_payments` / `expense_payments` / retainers.
-- כתיבה (רשום תשלום / הכנסה חד-פעמית) → `agent_approval_queue`.
-- עדכון סקין CFO שיצביע לכלים החדשים.
+### WP1 — כספים אמיתיים ✅ בוצע
+- כלים: `get_accounting_overview`, retainer/payments/invoices list + write דרך queue.
+- סקין CFO עודכן.
 
-### WP2 — Google Ads קריאה + sync
-- `list_google_campaigns`, `get_google_campaign_data`.
-- `create_google_ads_report_table` + `sync_google_ads_data` / `sync_facebook_insights`.
+### WP2 — Google Ads קריאה + sync ✅ בוצע
+- `list_google_campaigns`, `create_google_ads_report_table`, `sync_google_ads_report`, `sync_facebook_insights`.
 
-### WP3 — אוטומציות: עריכה + שקיפות
-- `get_automation_details` (כולל steps).
-- `propose_automation_edit` / `delete_automation` → queue.
-- אופציונלי: `test_automation` / `run_automation_manual`.
+### WP3 — אוטומציות ✅ בוצע
+- `get_automation_details`; toggle/delete/edit דרך queue.
 
-### WP4 — מחלקת שיווק
-- כלים ל-`marketing_work_items` (list/create/handoff stage).
-- חשיפת publishing edge functions ככלים.
+### WP4 — מחלקת שיווק ✅ בוצע
+- `list/get/create/handoff/update_marketing_work_item`.
 
-### WP5 — פוליש משימות / דוחות / דיוור
-- sync יומן ב-`update_task`; תיקון `complete_task_step` status; `created_by` ב-broadcast.
-- `resolve_campaign_alert`; ייצוא/שליחת דוח (אפשר בשלב ב').
+### WP5 — פוליש ✅ בוצע
+- `complete_task_step` → status `completed`; `create_broadcast` created_by; sync יומן ב-`update_task`; `resolve_campaign_alert`.
 
 ---
 
