@@ -2912,9 +2912,36 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
             
             // Calculate total ROAS - always use total conversions value / total cost
             const totalRoas = totals.cost > 0 ? totals.conversions_value / totals.cost : 0;
+            const avgValuePerConv = totals.conversions > 0 ? totals.conversions_value / totals.conversions : 0;
+            // Absurdly low AOV from Google Ads primary conv. value (e.g. Avieli ₪7 / 13) —
+            // almost always a tracking/config issue, not a sync math bug.
+            const suspiciousLowValue = isEcommerce
+              && totals.conversions >= 3
+              && totals.conversions_value > 0
+              && avgValuePerConv < 20;
+            const allValueHigher = totals.all_conversions_value > totals.conversions_value * 2
+              && totals.all_conversions_value - totals.conversions_value > 50;
+            const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
 
             return (
               <div className="overflow-x-auto">
+                {(suspiciousLowValue || allValueHigher) && (
+                  <div className="m-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+                    {suspiciousLowValue && (
+                      <p>
+                        ערך המרות נמוך מהצפוי ({gaCurrency}{Math.round(totals.conversions_value).toLocaleString('he-IL')} על {Math.round(totals.conversions)} המרות — כ־{gaCurrency}{avgValuePerConv.toFixed(1)} להמרה).
+                        זה בדרך כלל מה ש־Google Ads מדווח ב־Conv. value (פעולות ראשיות), לא באג בשליפה.
+                        בדקו בחשבון: האם Purchase מסומן כראשי, והאם ה־tag באתר שולח value+currency.
+                      </p>
+                    )}
+                    {allValueHigher && (
+                      <p className={suspiciousLowValue ? 'mt-1' : undefined}>
+                        ערך כל ההמרות (All conv. value) גבוה יותר: {gaCurrency}{Math.round(totals.all_conversions_value).toLocaleString('he-IL')} —
+                        ייתכן שערך הרכישות יושב על פעולת המרה משנית.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <table className="w-full text-sm" dir="rtl">
                   <thead className="bg-muted/50 border-b">
                     <tr>

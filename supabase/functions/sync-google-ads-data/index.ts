@@ -21,6 +21,9 @@ interface GoogleAdsRecord {
   cost: number;
   conversions: number;
   conversions_value: number;
+  /** Secondary/all conversion actions (not used for primary KPI; stored for diagnostics). */
+  all_conversions: number;
+  all_conversions_value: number;
   cost_per_conversion: number;
   roas: number;
   // Verified leads from connected WordPress site (Elementor submissions with matching gad_campaignid)
@@ -354,10 +357,11 @@ Deno.serve(async (req) => {
 
 
     // Use Google Ads Query Language to fetch campaign performance.
-    // We intentionally use ONLY `metrics.conversions` (primary conversions) — not
-    // `metrics.all_conversions` — to match exactly the "Conversions" column shown in
-    // the Google Ads web UI. all_conversions includes secondary/cross-device/store visits
-    // which over-count compared to what the user sees in the UI.
+    // Primary KPIs use `metrics.conversions` / `conversions_value` to match the Google Ads
+    // UI "Conversions" / "Conv. value" columns (primary-for-goal actions only).
+    // We ALSO pull all_conversions* for diagnostics: when purchase value is on a secondary
+    // action, primary conv. value can look absurdly low (e.g. ₪7 for 13 conversions) while
+    // all_conversions_value still holds the real revenue.
     const query = `
       SELECT
         segments.date,
@@ -370,6 +374,8 @@ Deno.serve(async (req) => {
         metrics.cost_micros,
         metrics.conversions,
         metrics.conversions_value,
+        metrics.all_conversions,
+        metrics.all_conversions_value,
         metrics.cost_per_conversion
       FROM campaign
       WHERE segments.date BETWEEN '${startDate.toISOString().split('T')[0]}' AND '${endDate.toISOString().split('T')[0]}'
@@ -543,7 +549,10 @@ Deno.serve(async (req) => {
         const costMicros = parseInt(result.metrics?.costMicros || '0');
         const cost = costMicros / 1000000; // Convert micros to actual currency
         const conversions = parseFloat(result.metrics?.conversions || '0');
+        // conversions_value is already in account currency (NOT micros) — do not divide by 1e6.
         const conversionsValue = parseFloat(result.metrics?.conversionsValue || '0');
+        const allConversions = parseFloat(result.metrics?.allConversions || '0');
+        const allConversionsValue = parseFloat(result.metrics?.allConversionsValue || '0');
         // ALWAYS use `metrics.conversions` to match the Google Ads UI's "Conversions" column.
         // Previously we fell back to `all_conversions` when conversions==0, but that includes
         // secondary actions (cross-device, store visits, view-through) and over-counted vs UI.
@@ -563,6 +572,8 @@ Deno.serve(async (req) => {
           cost: cost,
           conversions: finalConversions,
           conversions_value: conversionsValue,
+          all_conversions: allConversions,
+          all_conversions_value: allConversionsValue,
           cost_per_conversion: parseInt(result.metrics?.costPerConversion || '0') / 1000000,
           roas: Math.round(roas * 100) / 100,
         });
@@ -767,9 +778,9 @@ Deno.serve(async (req) => {
     }
 
     // Create fields if they don't exist (use admin client - table may belong to a different tenant)
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'cost_per_conversion', 'roas', 'verified_leads'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'עלות להמרה', 'ROAS', 'לידים באתר'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'all_conversions', 'all_conversions_value', 'cost_per_conversion', 'roas', 'verified_leads'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'כל ההמרות', 'ערך כל ההמרות', 'עלות להמרה', 'ROAS', 'לידים באתר'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
 
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabaseAdmin
