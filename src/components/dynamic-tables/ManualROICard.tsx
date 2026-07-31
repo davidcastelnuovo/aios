@@ -74,15 +74,14 @@ export function ManualROICard({
         await saveFn(payload);
       } else {
         if (!tableId) return;
-        const baseSettings = integrationSettings || {};
-        const newSettings = {
-          ...baseSettings,
-          manual_roi: payload,
-        };
-        const { error } = await supabase
-          .from("crm_tables")
-          .update({ integration_settings: newSettings })
-          .eq("id", tableId);
+        // Merge-only patch so currency / sync metadata are not wiped by a stale settings blob.
+        const { error } = await supabase.functions.invoke('crm-tables', {
+          method: 'PATCH',
+          body: {
+            table_id: tableId,
+            integration_settings: { manual_roi: payload },
+          },
+        });
         if (error) throw error;
       }
     } catch (e: any) {

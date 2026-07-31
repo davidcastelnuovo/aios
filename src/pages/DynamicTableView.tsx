@@ -55,7 +55,7 @@ import { EditTableDialog } from "@/components/dynamic-tables/EditTableDialog";
 import { SendReportDialog } from "@/components/dynamic-tables/SendReportDialog";
 
 import { MaskyooSiblingCard } from "@/components/dynamic-tables/MaskyooSiblingCard";
-import { CURRENCY_OPTIONS, getCurrencySymbol, type CurrencyCode } from "@/lib/currency";
+import { CURRENCY_OPTIONS, getCurrencySymbol, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
 import { getLeadsFromData } from "@/lib/adsMetrics";
 import { isSeoReportSource } from "@/lib/seoReports";
@@ -243,6 +243,19 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   });
 
   const table = tables?.find((t) => t.slug === tableSlug);
+
+  // Keep currency selector aligned with the persisted table setting (after refetch / sync).
+  // Skip while a settings dialog is open so an in-progress USD choice isn't reset by a refetch.
+  useEffect(() => {
+    if (!table) return;
+    if (showSettingsDialog || showGoogleSettingsDialog) return;
+    setSelectedCurrency(normalizeCurrencyCode(table.integration_settings?.currency));
+  }, [
+    table?.id,
+    table?.integration_settings?.currency,
+    showSettingsDialog,
+    showGoogleSettingsDialog,
+  ]);
 
   // Default Facebook reports to "last 7 days" instead of "last 30 days"
   const didSetFbDefaultRef = useRef(false);
@@ -1239,29 +1252,49 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       if (!table?.id) throw new Error('No table');
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      
+
       // Find the selected ad account to get its currency (only as a fallback)
       const selectedAccount = adAccounts?.find((acc: any) => acc.id === adAccountId);
       // User's manual choice wins over the ad-account currency
-      const currency = selectedCurrency || selectedAccount?.currency || 'ILS';
-      
-      const { error } = await supabase
-        .from('crm_tables')
-        .update({
+      const currency = normalizeCurrencyCode(
+        selectedCurrency || selectedAccount?.currency || 'ILS',
+      );
+
+      // Merge-only patch via crm-tables so concurrent sync fields (last_sync_at, etc.)
+      // are not wiped by a stale full settings blob.
+      const { error } = await supabase.functions.invoke('crm-tables', {
+        method: 'PATCH',
+        body: {
+          table_id: table.id,
           integration_settings: {
-            ...table.integration_settings,
             ad_account_id: adAccountId,
             ad_account_name: selectedAccount?.name,
-            currency: currency,
+            currency,
             date_range: selectedSyncDateRange,
-          }
-        })
-        .eq('id', table.id);
-      
+          },
+        },
+      });
+
       if (error) throw error;
-      return { adAccountId };
+      return { adAccountId, currency };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      queryClient.setQueryData(['crm-tables', tenantId], (old: CrmTable[] | undefined) => {
+        if (!old || !table?.id) return old;
+        return old.map((t) =>
+          t.id === table.id
+            ? {
+                ...t,
+                integration_settings: {
+                  ...(t.integration_settings || {}),
+                  currency: result.currency,
+                  date_range: selectedSyncDateRange,
+                  ad_account_id: result.adAccountId,
+                },
+              }
+            : t,
+        );
+      });
       queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       setShowSettingsDialog(false);
       toast.success('הגדרות הטבלה עודכנו בהצלחה');
@@ -1795,7 +1828,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 onClick={() => {
                   setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
                   setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
-                  setSelectedCurrency((table.integration_settings?.currency as CurrencyCode) || 'ILS');
+                  setSelectedCurrency(normalizeCurrencyCode(table.integration_settings?.currency));
                   setShowSettingsDialog(true);
                 }}
               >
@@ -1831,7 +1864,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 onClick={() => {
                   setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
                   setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
-                  setSelectedCurrency((table.integration_settings?.currency as CurrencyCode) || 'ILS');
+                  setSelectedCurrency(normalizeCurrencyCode(table.integration_settings?.currency));
                   setShowSettingsDialog(true);
                 }}
               >
@@ -1910,7 +1943,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 onClick={() => {
                   setSelectedGoogleAccount(table.integration_settings?.customer_id || '');
                   setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
-                  setSelectedCurrency((table.integration_settings?.currency as CurrencyCode) || 'ILS');
+                  setSelectedCurrency(normalizeCurrencyCode(table.integration_settings?.currency));
                   setShowGoogleSettingsDialog(true);
                 }}
               >
@@ -2230,7 +2263,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   <Label>מטבע תצוגה</Label>
                   <Select
                     value={selectedCurrency}
-                    onValueChange={(v) => setSelectedCurrency(v as CurrencyCode)}
+                    onValueChange={(v) => setSelectedCurrency(normalizeCurrencyCode(v))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="בחר מטבע" />
@@ -2319,7 +2352,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   <Label>מטבע תצוגה</Label>
                   <Select
                     value={selectedCurrency}
-                    onValueChange={(v) => setSelectedCurrency(v as CurrencyCode)}
+                    onValueChange={(v) => setSelectedCurrency(normalizeCurrencyCode(v))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="בחר מטבע" />
@@ -2340,18 +2373,21 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   onClick={async () => {
                     if (!table?.id || !selectedGoogleAccount) return;
                     const cleanId = selectedGoogleAccount.replace(/\D/g, '');
+                    const currency = normalizeCurrencyCode(selectedCurrency);
                     try {
-                      const { error: tableError } = await supabase
-                        .from('crm_tables')
-                        .update({
+                      // Merge-only patch so sync metadata (last_sync_at, manager_id, diag)
+                      // is not wiped by a stale full settings blob from the UI.
+                      const { error: tableError } = await supabase.functions.invoke('crm-tables', {
+                        method: 'PATCH',
+                        body: {
+                          table_id: table.id,
                           integration_settings: {
-                            ...table.integration_settings,
                             customer_id: cleanId,
                             date_range: selectedSyncDateRange,
-                            currency: selectedCurrency,
-                          }
-                        })
-                        .eq('id', table.id);
+                            currency,
+                          },
+                        },
+                      });
                       if (tableError) throw tableError;
 
                       // Also link the account to the client card so syncs/refresh work
@@ -2367,6 +2403,23 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                         }
                       }
 
+                      queryClient.setQueryData(['crm-tables', tenantId], (old: CrmTable[] | undefined) => {
+                        if (!old) return old;
+                        return old.map((t) =>
+                          t.id === table.id
+                            ? {
+                                ...t,
+                                integration_settings: {
+                                  ...(t.integration_settings || {}),
+                                  customer_id: cleanId,
+                                  date_range: selectedSyncDateRange,
+                                  currency,
+                                },
+                              }
+                            : t,
+                        );
+                      });
+                      setSelectedCurrency(currency);
                       queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
                       queryClient.invalidateQueries({ queryKey: ['clients', tenantId] });
                       setShowGoogleSettingsDialog(false);

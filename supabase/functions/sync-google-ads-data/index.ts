@@ -28,6 +28,34 @@ interface GoogleAdsRecord {
   verified_source?: string; // site URL we verified against, for transparency
 }
 
+/**
+ * Merge a patch into crm_tables.integration_settings using the LATEST row,
+ * not a stale snapshot from sync start. Without this, a concurrent currency
+ * change (e.g. USD) gets wiped when sync finishes and rewrites settings.
+ */
+async function patchIntegrationSettings(
+  admin: ReturnType<typeof createClient>,
+  tableId: string,
+  patch: Record<string, unknown>,
+  fallback: Record<string, unknown> = {},
+) {
+  const { data: fresh } = await admin
+    .from('crm_tables')
+    .select('integration_settings')
+    .eq('id', tableId)
+    .maybeSingle();
+  const current = (fresh?.integration_settings || fallback || {}) as Record<string, unknown>;
+  const { error } = await admin
+    .from('crm_tables')
+    .update({
+      integration_settings: { ...current, ...patch },
+    })
+    .eq('id', tableId);
+  if (error) {
+    console.error('[sync-google-ads] settings patch failed:', error.message);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -373,23 +401,17 @@ Deno.serve(async (req) => {
     // Records HTTP status, whether the developer-token secret is present (boolean only, never the value),
     // the login-customer-id used, and the first 1500 chars of the response body.
     try {
-      await supabaseAdmin
-        .from('crm_tables')
-        .update({
-          integration_settings: {
-            ...settings,
-            last_sync_diag: {
-              at: new Date().toISOString(),
-              http_status: searchResponse.status,
-              dev_token_present: !!DEVELOPER_TOKEN,
-              client_id_present: !!GOOGLE_CLIENT_ID,
-              login_customer_id: loginCustomerId,
-              customer_id: customerId,
-              body: _rawText.slice(0, 1500),
-            },
-          },
-        })
-        .eq('id', table_id);
+      await patchIntegrationSettings(supabaseAdmin, table_id, {
+        last_sync_diag: {
+          at: new Date().toISOString(),
+          http_status: searchResponse.status,
+          dev_token_present: !!DEVELOPER_TOKEN,
+          client_id_present: !!GOOGLE_CLIENT_ID,
+          login_customer_id: loginCustomerId,
+          customer_id: customerId,
+          body: _rawText.slice(0, 1500),
+        },
+      }, settings);
     } catch (_e) { /* diagnostics are best-effort */ }
 
     // If still 401 after a refresh attempt — refresh_token is bad/revoked
@@ -487,13 +509,13 @@ Deno.serve(async (req) => {
         loginCustomerId = result.mcc;
         initialError = null;
 
-        // Save discovered manager_id for future syncs
-        await supabaseAdmin
-          .from('crm_tables')
-          .update({
-            integration_settings: { ...settings, manager_id: result.mcc }
-          })
-          .eq('id', table_id);
+        // Save discovered manager_id for future syncs without wiping other settings
+        await patchIntegrationSettings(
+          supabaseAdmin,
+          table_id,
+          { manager_id: result.mcc },
+          settings,
+        );
       }
     }
 
@@ -797,16 +819,13 @@ Deno.serve(async (req) => {
     }
     console.log(`[sync-google-ads] inserted: ${inserted}`);
 
-    // Update last_sync_at (admin to bypass RLS for cross-tenant tables)
-    await supabaseAdmin
-      .from('crm_tables')
-      .update({
-        integration_settings: {
-          ...settings,
-          last_sync_at: new Date().toISOString(),
-        }
-      })
-      .eq('id', table_id);
+    // Update last_sync_at without wiping concurrent settings edits (currency, etc.)
+    await patchIntegrationSettings(
+      supabaseAdmin,
+      table_id,
+      { last_sync_at: new Date().toISOString() },
+      settings,
+    );
 
     return new Response(JSON.stringify({
       success: true,

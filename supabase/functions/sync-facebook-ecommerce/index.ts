@@ -374,12 +374,18 @@ Deno.serve(async (req) => {
     }
     console.log(`[sync-facebook-ecommerce] inserted: ${inserted}`);
 
-    // Update last_sync_at in integration_settings (admin to bypass RLS)
+    // Update last_sync_at without wiping concurrent currency / settings edits
+    const { data: freshTable } = await supabaseAdmin
+      .from('crm_tables')
+      .select('integration_settings')
+      .eq('id', table_id)
+      .maybeSingle();
+    const currentSettings = (freshTable?.integration_settings || settings || {}) as Record<string, unknown>;
     await supabaseAdmin
       .from('crm_tables')
       .update({
         integration_settings: {
-          ...settings,
+          ...currentSettings,
           last_sync_at: new Date().toISOString(),
         }
       })

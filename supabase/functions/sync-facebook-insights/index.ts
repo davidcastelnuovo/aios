@@ -319,12 +319,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update last_sync_at and account status in integration_settings
+    // Update last_sync_at / account status without wiping concurrent currency edits
+    const { data: freshTable } = await supabase
+      .from('crm_tables')
+      .select('integration_settings')
+      .eq('id', table_id)
+      .maybeSingle();
+    const currentSettings = (freshTable?.integration_settings || settings || {}) as Record<string, unknown>;
     await supabase
       .from('crm_tables')
       .update({
         integration_settings: {
-          ...settings,
+          ...currentSettings,
           last_sync_at: new Date().toISOString(),
           account_status: accountStatus,
           account_disable_reason: accountDisableReason,
