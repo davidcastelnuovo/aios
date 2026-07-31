@@ -331,14 +331,14 @@ export function PublishingStudio({ tenantId, clientId }: { tenantId: string; cli
           });
           if (error) throw error;
           if (!data?.success) throw new Error(data?.detail || data?.error || "שדרוג האתר נכשל");
-        } catch {
-          failed.push(site.name);
+        } catch (error: unknown) {
+          failed.push(`${site.name}${error instanceof Error && error.message ? ` (${error.message})` : ""}`);
         }
       }
       await refetchVercel();
-      if (failed.length) toast.error(`${failed.length} אתרים לא שודרגו: ${failed.join(", ")}`);
+      if (failed.length) toast.error(`${failed.length} אתרים לא שודרגו: ${failed.join(", ")}`, { duration: 12000 });
       else {
-        toast.success("העיצוב החדש נפרס בכל אתרי ה-PBN");
+        toast.success("העיצוב החדש נפרס בכל אתרי ה-PBN — רענן את האתרים בלחיצה קשה (Ctrl+Shift+R)");
         setSiteDialogOpen(false);
       }
     } finally {
