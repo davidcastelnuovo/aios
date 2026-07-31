@@ -20,6 +20,7 @@ import {
   Loader2,
   Camera,
   RefreshCw,
+  Download,
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toPng, toJpeg } from "html-to-image";
@@ -30,6 +31,7 @@ import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
 import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
 import { syncReportTables, waitForSnapshotReady } from "@/lib/reportSync";
+import { downloadReportPdf } from "@/lib/reportPdf";
 
 interface ClientDashboardPanelProps {
   dashboard: { id: string; name: string };
@@ -78,6 +80,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // On every dashboard open: show cached image only as a placeholder,
   // then force a fresh capture so the user always sees up-to-date data.
@@ -577,6 +580,23 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     await captureScreenshot();
   };
 
+  const exportPdf = async () => {
+    if (!screenshotBlob) {
+      toast.error("יש ליצור צילום דשבורד לפני יצוא PDF");
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      await downloadReportPdf(screenshotBlob, `dashboard-${dashboard.name}.pdf`);
+      toast.success("קובץ ה-PDF נוצר");
+    } catch (error) {
+      console.error("Dashboard PDF export error:", error);
+      toast.error("יצוא ה-PDF נכשל");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-4" dir="rtl">
       {/* Screenshot preview (replaces iframe) */}
@@ -620,6 +640,18 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           ) : (
             <><Camera className="ml-2 h-3 w-3" /> {screenshotBlob ? "צלם מחדש" : "צלם דשבורד"}</>
           )}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={exportPdf}
+          disabled={!screenshotBlob || isExportingPdf}
+        >
+          {isExportingPdf
+            ? <Loader2 className="ml-2 h-3 w-3 animate-spin" />
+            : <Download className="ml-2 h-3 w-3" />}
+          יצוא PDF
         </Button>
         {screenshotBlob && <span className="text-primary">✓ צילום מוכן לשליחה</span>}
       </div>

@@ -24,6 +24,7 @@ import {
   RefreshCw,
   ExternalLink,
   Camera,
+  Download,
 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { ClientTableSnapshot } from "./ClientTableSnapshot";
@@ -34,6 +35,7 @@ import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
 import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
 import { syncReportTable, waitForSnapshotReady } from "@/lib/reportSync";
+import { downloadReportPdf } from "@/lib/reportPdf";
 
 interface ClientReportPanelProps {
   table: any;
@@ -100,6 +102,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Fetch client data
   const { data: client } = useQuery({
@@ -585,6 +588,23 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     }
   };
 
+  const exportPdf = async () => {
+    if (!screenshotBlob) {
+      toast.error("יש ליצור צילום דוח לפני יצוא PDF");
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      await downloadReportPdf(screenshotBlob, `report-${table.name}.pdf`);
+      toast.success("קובץ ה-PDF נוצר");
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("יצוא ה-PDF נכשל");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-3" dir="rtl">
       {/* Screenshot Preview */}
@@ -633,6 +653,18 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         >
           <Camera className={`h-3 w-3 ${isCapturing ? "animate-spin" : ""}`} />
           צלם מחדש
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1 text-xs"
+          onClick={exportPdf}
+          disabled={!screenshotBlob || isExportingPdf}
+        >
+          {isExportingPdf
+            ? <Loader2 className="h-3 w-3 animate-spin" />
+            : <Download className="h-3 w-3" />}
+          יצוא PDF
         </Button>
         {(() => {
           const adUrl = getAdAccountUrl(table);
