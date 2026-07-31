@@ -1,4 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import {
+  MAGAZINE_SIGNED_URL_TTL_SECONDS,
+  resolveArticleImageFields,
+} from "../_shared/publishing-images.ts";
 
 const jsonHeaders = {
   "Content-Type": "application/json",
@@ -27,11 +31,22 @@ Deno.serve(async (request) => {
     .order("source_month", { ascending: false, nullsFirst: false });
   if (error) return new Response(JSON.stringify({ error: "article_lookup_failed" }), { status: 500, headers: jsonHeaders });
 
-  const datedArticles = (articles ?? []).map((article) => ({
-    ...article,
-    article_date: article.source_month ?? article.published_at,
-    actual_published_at: article.published_at,
-    published_at: article.source_month ?? article.published_at,
+  const createSignedUrl = async (bucket: string, path: string, expiresIn: number) => {
+    const { data, error: signError } = await admin.storage.from(bucket).createSignedUrl(path, expiresIn);
+    if (signError || !data?.signedUrl) return null;
+    return data.signedUrl;
+  };
+
+  const datedArticles = await Promise.all((articles ?? []).map(async (article) => {
+    const withSafeImages = await resolveArticleImageFields(article, createSignedUrl, {
+      ttlSeconds: MAGAZINE_SIGNED_URL_TTL_SECONDS,
+    });
+    return {
+      ...withSafeImages,
+      article_date: article.source_month ?? article.published_at,
+      actual_published_at: article.published_at,
+      published_at: article.source_month ?? article.published_at,
+    };
   }));
 
   return new Response(JSON.stringify({ site, articles: datedArticles, generatedAt: new Date().toISOString() }), { status: 200, headers: jsonHeaders });
