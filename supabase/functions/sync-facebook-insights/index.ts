@@ -61,14 +61,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: tenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: user.id });
-    if (!tenantId) {
-      return new Response(JSON.stringify({ error: 'No tenant found' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    // User-path: verify the caller has a tenant. Internal Carmen/cron uses service role
+    // and relies on table lookup + service-role writes (same as sync-google-ads-data).
+    if (!isInternalCron || !hasServiceRole) {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: user.id });
+      if (!tenantId) {
+        return new Response(JSON.stringify({ error: 'No tenant found' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // Get table with integration settings - let RLS handle access control
+    // (service-role for internal calls bypasses RLS).
     const { data: table, error: tableError } = await supabase
       .from('crm_tables')
       .select('*')
@@ -326,7 +331,7 @@ Deno.serve(async (req) => {
       const recordRows = insights.map((insight) => ({
         table_id,
         tenant_id: tableTenantId,
-        created_by: user.id,
+        created_by: user.id || null,
         data: insight,
       }));
       const INSERT_CHUNK = 500;
