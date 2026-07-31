@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.public-dashboard]
 verify_jwt = false
 
+[functions.public-seo-monthly]
+verify_jwt = false
+
 [functions.scheduled-report-worker]
 verify_jwt = false
 

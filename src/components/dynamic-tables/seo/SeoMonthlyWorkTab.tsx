@@ -1,12 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
-import { FileText, Link2, Loader2, Plus, Save, Trash2, Wrench } from "lucide-react";
+import {
+  Copy,
+  Download,
+  Eye,
+  FileText,
+  Link2,
+  Loader2,
+  Plus,
+  Save,
+  Share2,
+  Trash2,
+  Wrench,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useAhrefsReports } from "@/hooks/useAhrefsReports";
+import { filterValidSeoReports } from "@/components/dynamic-tables/seo/reportValidity";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +35,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   ONSITE_KIND_LABELS,
   SeoArticleItem,
   SeoLinkItem,
@@ -34,6 +54,16 @@ import {
   parseSeoMonthlyWork,
   sanitizeSeoMonthlyWork,
 } from "@/lib/seoMonthlyWork";
+import { buildDefaultShareToken } from "@/lib/share-slug";
+import {
+  buildSeoMonthlyShareSnapshot,
+  SeoMonthlyShareSnapshot,
+} from "@/lib/seoMonthlyShareSnapshot";
+import {
+  SeoMonthlySlideshow,
+  SeoMonthlySlideshowCaptureStack,
+} from "@/components/seo/SeoMonthlySlideshow";
+import { downloadSeoMonthlySlideshowPdf } from "@/lib/seoMonthlyPdf";
 
 type Props = {
   clientId: string;
@@ -41,11 +71,14 @@ type Props = {
   tenantId?: string;
 };
 
+const SHARE_ORIGIN = "https://aios.co.il";
+
 export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
   const { tenantId: currentTenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
   const tenantId = tenantIdProp || currentTenantId || "";
   const queryClient = useQueryClient();
+  const captureStackRef = useRef<HTMLDivElement>(null);
 
   const monthOptions = useMemo(
     () =>
@@ -63,6 +96,9 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
   const [status, setStatus] = useState<"up" | "stable" | "down">("stable");
   const [work, setWork] = useState<SeoMonthlyWork>(emptySeoMonthlyWork());
   const [dirty, setDirty] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const { data: row, isLoading, isFetching } = useQuery({
     queryKey: ["seo-monthly-work", clientId, tenantId, selectedMonth],
@@ -84,6 +120,50 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
       } | null;
     },
     enabled: !!clientId && !!tenantId && !!selectedMonth,
+  });
+
+  const { data: client } = useQuery({
+    queryKey: ["client-for-seo-monthly-share", clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name, website")
+        .eq("id", clientId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; name: string; website: string | null } | null;
+    },
+    enabled: !!clientId,
+  });
+
+  const { data: ahrefsReports } = useAhrefsReports({ clientId, limit: 20 });
+  const latestReportData = useMemo(() => {
+    const valid = filterValidSeoReports(ahrefsReports || []);
+    return (valid[0]?.report_data as Record<string, unknown> | undefined) || null;
+  }, [ahrefsReports]);
+
+  const reportDomain = useMemo(() => {
+    const valid = filterValidSeoReports(ahrefsReports || []);
+    return (valid[0] as any)?.domain || client?.website || undefined;
+  }, [ahrefsReports, client?.website]);
+
+  const { data: existingShare } = useQuery({
+    queryKey: ["seo-monthly-share", clientId, selectedMonth],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("seo_monthly_shares")
+        .select("share_token, is_active, updated_at")
+        .eq("client_id", clientId)
+        .eq("month", selectedMonth)
+        .maybeSingle();
+      if (error) {
+        // Table may not exist yet on prod before migration
+        if (String(error.message || "").includes("seo_monthly_shares")) return null;
+        throw error;
+      }
+      return data as { share_token: string; is_active: boolean; updated_at: string } | null;
+    },
+    enabled: !!clientId && !!selectedMonth,
   });
 
   useEffect(() => {
@@ -149,6 +229,125 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
 
   const monthLabel = monthOptions.find((m) => m.value === selectedMonth)?.label || selectedMonth;
 
+  const snapshot: SeoMonthlyShareSnapshot = useMemo(
+    () =>
+      buildSeoMonthlyShareSnapshot({
+        clientName: client?.name || "לקוח",
+        domain: reportDomain,
+        month: selectedMonth,
+        status,
+        work,
+        reportData: latestReportData,
+      }),
+    [client?.name, reportDomain, selectedMonth, status, work, latestReportData],
+  );
+
+  const shareUrl =
+    existingShare?.share_token && existingShare.is_active
+      ? `${SHARE_ORIGIN}/shared/seo-monthly/${existingShare.share_token}`
+      : null;
+
+  const upsertShare = async (): Promise<string> => {
+    if (!tenantId || !user?.id) throw new Error("חסר משתמש או טננט");
+    const frozen = buildSeoMonthlyShareSnapshot({
+      clientName: client?.name || "לקוח",
+      domain: reportDomain,
+      month: selectedMonth,
+      status,
+      work,
+      reportData: latestReportData,
+    });
+
+    if (existingShare?.share_token) {
+      const { error } = await (supabase as any)
+        .from("seo_monthly_shares")
+        .update({
+          snapshot: frozen,
+          is_active: true,
+          tenant_id: tenantId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("client_id", clientId)
+        .eq("month", selectedMonth);
+      if (error) throw error;
+      return existingShare.share_token;
+    }
+
+    const token = buildDefaultShareToken({
+      website: client?.website,
+      fallbackName: client?.name || "seo",
+      defaultPrefix: "seo",
+    });
+
+    const { data, error } = await (supabase as any)
+      .from("seo_monthly_shares")
+      .insert({
+        tenant_id: tenantId,
+        client_id: clientId,
+        month: selectedMonth,
+        share_token: token,
+        snapshot: frozen,
+        is_active: true,
+        created_by: user.id,
+      })
+      .select("share_token")
+      .single();
+    if (error) throw error;
+    return (data as any).share_token as string;
+  };
+
+  const handleShare = async () => {
+    setSharing(true);
+    try {
+      const token = await upsertShare();
+      const url = `${SHARE_ORIGIN}/shared/seo-monthly/${token}`;
+      await navigator.clipboard.writeText(url);
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-share", clientId, selectedMonth] });
+      if (dirty) {
+        toast.success("קישור השיתוף עודכן והועתק (כולל שינויים שעדיין לא נשמרו בטאב)");
+      } else {
+        toast.success("קישור השיתוף הועתק");
+      }
+    } catch (err: any) {
+      const msg = String(err?.message || "");
+      if (msg.includes("seo_monthly_shares") || msg.includes("schema cache") || err?.code === "42P01") {
+        toast.error("טבלת השיתוף עדיין לא קיימת בפרודקשן — צריך להריץ את המיגרציה seo_monthly_shares");
+      } else {
+        toast.error(msg || "שגיאה ביצירת קישור");
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleCopyExisting = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("הקישור הועתק");
+    } catch {
+      toast.error("לא ניתן להעתיק");
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      await new Promise((r) => setTimeout(r, 100));
+      if (!captureStackRef.current) throw new Error("אין שקפים ליצוא");
+      const safeName = `${snapshot.clientName}-${snapshot.monthLabel}`
+        .replace(/[^\w\u0590-\u05FF-]+/g, "-")
+        .slice(0, 60);
+      await downloadSeoMonthlySlideshowPdf(captureStackRef.current, `seo-${safeName}.pdf`);
+      toast.success("ה־PDF הורד");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "שגיאה ביצוא PDF");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-4" dir="rtl">
       <Card>
@@ -196,6 +395,57 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
             סיכום העבודה ל־{monthLabel}: באתר (מטא/כותרות), מאמרים שכתבנו, וקישורים.
             {dirty && <Badge variant="outline" className="mr-2 text-[10px]">יש שינויים שלא נשמרו</Badge>}
           </p>
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => setPreviewOpen(true)}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              תצוגת סליידשו
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              disabled={sharing}
+              onClick={handleShare}
+            >
+              {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+              {shareUrl ? "עדכן ושתף קישור" : "שתף בקישור"}
+            </Button>
+            {shareUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={handleCopyExisting}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                העתק קישור
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              disabled={exportingPdf}
+              onClick={handleExportPdf}
+            >
+              {exportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              יצוא PDF
+            </Button>
+          </div>
+          {shareUrl && (
+            <p className="mt-1 truncate text-[11px] text-muted-foreground" dir="ltr">
+              {shareUrl}
+            </p>
+          )}
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
@@ -232,6 +482,20 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
           />
         </>
       )}
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-5xl p-0 overflow-hidden border-0 bg-[#071820] sm:rounded-xl">
+          <DialogHeader className="sr-only">
+            <DialogTitle>תצוגת סליידשו SEO</DialogTitle>
+          </DialogHeader>
+          <div className="h-[min(80vh,720px)] w-full">
+            <SeoMonthlySlideshow snapshot={snapshot} className="h-full rounded-xl" />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Offscreen capture stack for PDF */}
+      <SeoMonthlySlideshowCaptureStack snapshot={snapshot} stackRef={captureStackRef} />
     </div>
   );
 }
