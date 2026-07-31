@@ -94,6 +94,7 @@ const AgentTasksPage = lazy(() => import("./pages/AgentTasksPage"));
 const SkinsManager = lazy(() => import("./pages/SkinsManager"));
 const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 const SharedTable = lazy(() => import("./pages/SharedTable"));
+const SharedSeoMonthly = lazy(() => import("./pages/SharedSeoMonthly"));
 
 const TelephonySettings = lazy(() => import("./pages/TelephonySettings"));
 const MaskyooSettings = lazy(() => import("./pages/MaskyooSettings"));
@@ -163,6 +164,7 @@ const App = () => (
                    <Route path="/chat-invite/:token" element={<ChatInvite />} />
                    <Route path="/shared/dashboard/:shareToken" element={<SharedDashboard />} />
                    <Route path="/shared/table/:shareToken" element={<SharedTable />} />
+                   <Route path="/shared/seo-monthly/:shareToken" element={<SharedSeoMonthly />} />
                   <Route path="/terms" element={<Terms />} />
                   
                   {/* Tenant-scoped routes */}
