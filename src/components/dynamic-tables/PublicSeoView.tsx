@@ -285,6 +285,8 @@ export function PublicSeoView({ tableName, reports, gscData = [], gscMultiPeriod
         snapshot={snapshot}
         prevMonth={snapshotPrevMonth}
         campaignStart={snapshotCampaignStart}
+        trackedKeywords={trackedKeywords}
+        organicKeywords={organicKeywords}
       />
 
       <SeoKeywordsTable
