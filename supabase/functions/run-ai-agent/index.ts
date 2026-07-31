@@ -3104,9 +3104,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: ctfd } = clientIds.length
         ? await supabase.from('client_tenant_financial_data').select('client_id, retainer, monthly_budget').eq('tenant_id', tenantId).in('client_id', clientIds)
         : { data: [] as any[] }
-      const finMap = new Map((ctfd || []).map((r: any) => [r.client_id, r]))
+      const finMap = new Map<string, any>((ctfd || []).map((r: any) => [r.client_id, r]))
       const enriched = (clients || []).map((c: any) => {
-        const overlay = finMap.get(c.id)
+        const overlay: any = finMap.get(c.id)
         const retainer = Number(overlay?.retainer ?? c.retainer ?? 0) || 0
         return {
           client_id: c.id,
