@@ -11,8 +11,9 @@ import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
 import { GoogleAnalyticsTableDialog } from "./GoogleAnalyticsTableDialog";
 import { GscIntegration } from "./seo/GscIntegration";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
-import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus, Phone } from "lucide-react";
+import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus, Phone, FileText } from "lucide-react";
 import { MaskyooSiblingCard } from "./MaskyooSiblingCard";
+import { SeoMonthlyWorkTab } from "./seo/SeoMonthlyWorkTab";
 
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -276,6 +277,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
             <Phone className="h-4 w-4" />
             שיחות מסקיו
           </TabsTrigger>
+          <TabsTrigger value="monthly-work" className="gap-1.5">
+            <FileText className="h-4 w-4" />
+            עבודה חודשית
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="maskyoo">
@@ -288,6 +293,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
               integration_settings: {},
             }}
           />
+        </TabsContent>
+
+        <TabsContent value="monthly-work">
+          <SeoMonthlyWorkTab clientId={clientId} tenantId={reportTenantId} />
         </TabsContent>
 
         <TabsContent value="seo">
