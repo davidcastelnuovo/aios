@@ -56,20 +56,30 @@ async function requestArticleJson(
   user: string,
   temperature: number,
 ) {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      response_format: { type: "json_object" },
-      temperature,
-      max_tokens: 8000,
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
-    }),
-  });
-  if (!response.ok) throw new Error(`OpenAI ${response.status}: ${await response.text()}`);
-  const payload = await response.json();
-  return parseGeneratedArticle(payload.choices?.[0]?.message?.content ?? "{}");
+  const invoke = async () => {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        temperature,
+        max_tokens: 8000,
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+      }),
+    });
+    if (!response.ok) throw new Error(`OpenAI ${response.status}: ${await response.text()}`);
+    const payload = await response.json();
+    return parseGeneratedArticle(payload.choices?.[0]?.message?.content ?? "{}");
+  };
+  try {
+    return await invoke();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/Unterminated string|Unexpected end|JSON/i.test(message)) throw error;
+    // One retry for truncated model JSON.
+    return await invoke();
+  }
 }
 
 function wordCountOf(parts: string[]) {
@@ -115,6 +125,15 @@ function hardenArticle(
       .replace(/\s+/g, " ")
       .trim();
   }
+  const seenParts = new Set<string>();
+  for (let index = content.length - 1; index >= 0; index -= 1) {
+    const key = normalizeText(content[index]);
+    if (!key || seenParts.has(key)) {
+      content.splice(index, 1);
+      continue;
+    }
+    seenParts.add(key);
+  }
   if (infographicItems.length < 3) {
     infographicItems = [
       { value: "01", label: "הגדרת הצורך", description: "מבהירים מה רוצים להשיג ומה חשוב במיוחד." },
@@ -132,23 +151,34 @@ function hardenArticle(
   }
 
   if (keyword) {
+    const normalizedKeyword = normalizeText(keyword);
+    const stripKeyword = (part: string) => {
+      if (!normalizedKeyword) return part;
+      // Rebuild the part without keyword occurrences using normalized matching windows.
+      let output = part;
+      while (countPhrase(output, keyword) > 0) {
+        const normalized = normalizeText(output);
+        const at = normalized.indexOf(normalizedKeyword);
+        if (at < 0) break;
+        // Approximate raw splice by regex fallback first.
+        const pattern = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+        if (pattern.test(output)) {
+          output = output.replace(pattern, "הנושא");
+          continue;
+        }
+        break;
+      }
+      return output.replace(/\s+/g, " ").trim();
+    };
+    for (let index = 0; index < content.length; index += 1) {
+      content[index] = stripKeyword(content[index]);
+    }
     const bodyIndexes = content
       .map((part, index) => ({ part, index }))
-      .filter(({ part }) => !part.startsWith("## ") && !part.startsWith("LIST: ") && !part.startsWith("TIP: "));
-    const pattern = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-    let kept = false;
-    for (const { index } of bodyIndexes) {
-      content[index] = content[index].replace(pattern, (match) => {
-        if (!kept) {
-          kept = true;
-          return match;
-        }
-        return "הנושא";
-      });
-    }
-    if (!kept && bodyIndexes.length) {
+      .filter(({ part }) => !part.startsWith("## ") && !part.startsWith("LIST: ") && !part.startsWith("TIP: ") && part.length > 20);
+    if (bodyIndexes.length) {
       const target = bodyIndexes[Math.min(1, bodyIndexes.length - 1)];
-      content[target.index] = `${target.part.replace(/\.*\s*$/, "")}. הנושא של ${keyword} דורש בדיקה מדויקת לפני שמחליטים.`;
+      content[target.index] = `${stripKeyword(target.part).replace(/\.*\s*$/, "")}. כשבוחנים ${keyword}, חשוב להסתכל על התהליך ולא רק על השורה התחתונה.`;
     }
   }
 
