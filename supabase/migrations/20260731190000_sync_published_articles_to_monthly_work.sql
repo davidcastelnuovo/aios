@@ -2,6 +2,12 @@
 -- The article appears under both "articles written" and "external links", keyed by
 -- publishing article id so retries/republishing update rather than duplicate it.
 
+-- Older production snapshots were created without the UNIQUE(client_id, month)
+-- constraint from the canonical table migration. The monthly UI and this trigger
+-- both rely on that conflict target.
+CREATE UNIQUE INDEX IF NOT EXISTS seo_monthly_updates_client_month_key
+  ON public.seo_monthly_updates (client_id, month);
+
 CREATE OR REPLACE FUNCTION public.sync_published_article_to_seo_monthly_work()
 RETURNS trigger
 LANGUAGE plpgsql
