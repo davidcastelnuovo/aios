@@ -148,19 +148,11 @@
 | list/create/summary | `list_finance`, `create_finance_entry`, `get_finance_summary` | ❌ **נוגעים רק בטבלת `finance` הישנה** — לא בנתונים שדוד רואה בהנהלת חשבונות |
 
 ### פערים (חובה לתקן)
-1. **אין כלים ל-`one_time_incomes` / `income_payments` / `expense_payments` / retainers.**
-2. **אין תזרים חודשי** כמו `CashFlowTab`.
-3. **אין חשבוניות** (`invoice_uploads` / OCR).
+1. ~~אין כלים ל-`one_time_incomes` / `income_payments` / `expense_payments` / retainers.~~ → **WP1 נסגר** (`get_accounting_overview` + list/create tools; כתיבה דרך queue).
+2. ~~אין תזרים חודשי~~ → מכוסה חלקית ב-`get_accounting_overview`.
+3. **אין העלאת חשבוניות** (`invoice_uploads` upload) — יש `list_invoice_uploads` לקריאה.
 4. אין ייצוא CSV.
-5. סקין CFO מפנה לכלים שלא קיימים — מטעה.
-
-**תיקון מומלץ:** כלים חדשים (קריאה קודם, כתיבה באישור):
-- `get_accounting_overview(month, agency_id?)`
-- `list_income_payments` / `record_income_payment` (queue)
-- `list_expense_payments` / `record_expense_payment` (queue)
-- `list_one_time_incomes` / `create_one_time_income` (queue)
-- `get_client_retainer_status`
-- `list_invoice_uploads` (קריאה; upload נשאר ב-UI בינתיים)
+5. ~~סקין CFO מפנה לכלים שלא קיימים~~ → עודכן ב-migration `20260731190000`.
 
 ---
 

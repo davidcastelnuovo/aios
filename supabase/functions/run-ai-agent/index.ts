@@ -386,9 +386,23 @@ const ALL_TOOLS = [
   { name: 'search_conversation_history', description: 'שליפה מכל היסטוריית ההתכתבויות של הארגון (WhatsApp) — ללא מגבלת סשן. שני מצבים: (1) חיפוש מילות מפתח — "מה המייל של פליקס", שם לקוח, נושא. חשוב: חפשי מילות תוכן בלבד (שם/מייל/נושא) — לעולם לא מילות זמן כמו "אתמול"/"בערב", הן לא מופיעות בהודעות! (2) דפדוף לפי זמן — לשאלות "מה דיברנו אתמול/בשבוע שעבר": קראי בלי query עם days_back מתאים ו-only_carmen_chats=true, ותקבלי את השיחות איתך כרונולוגית. אם חיפוש לא מצא — נסי מילה אחרת או עברי לדפדוף לפני שאת אומרת שאין.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מילות תוכן לחיפוש (עד 4, כולן חייבות להופיע). השמיטי לדפדוף לפי זמן.' }, days_back: { type: 'integer', description: 'כמה ימים אחורה (ברירת מחדל 180; לדפדוף "אתמול" השתמשי ב-2)' }, only_carmen_chats: { type: 'boolean', description: 'רק שיחות בערוץ של כרמן (ברירת מחדל true בדפדוף בלי query)' }, with_phone: { type: 'string', description: 'סינון לשיחות עם מספר טלפון מסוים' }, limit: { type: 'integer', description: 'מקסימום תוצאות (ברירת מחדל 20, בדפדוף 40)' } } } },
   { name: 'get_recent_inbound_messages', description: 'שליפת הודעות נכנסות אחרונות מכל השיחות', parameters: { type: 'object', properties: { limit: { type: 'integer' }, hours: { type: 'integer', description: 'כמה שעות אחורה (ברירת מחדל 24)' } } } },
   // FINANCE
-  { name: 'list_finance', description: 'רשימת תנועות כספיות', parameters: { type: 'object', properties: { client_id: { type: 'string' }, type: { type: 'string', enum: ['income', 'expense'] }, limit: { type: 'integer' } } } },
-  { name: 'create_finance_entry', description: 'יצירת רשומה כספית', parameters: { type: 'object', properties: { client_id: { type: 'string' }, amount: { type: 'number' }, type: { type: 'string', enum: ['income', 'expense'] }, description: { type: 'string' }, date: { type: 'string' } }, required: ['amount', 'type', 'description'] } },
-  { name: 'get_finance_summary', description: 'סיכום כספי חודשי', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' } } } },
+  { name: 'list_finance', description: 'רשימת תנועות מטבלת finance הישנה (legacy). להנהלת חשבונות האמיתית השתמשי ב-get_accounting_overview / list_one_time_incomes / list_income_payments.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, type: { type: 'string', enum: ['income', 'expense'] }, limit: { type: 'integer' } } } },
+  { name: 'create_finance_entry', description: 'יצירת רשומה בטבלת finance הישנה (legacy). להכנסה חד-פעמית בהנהלת חשבונות השתמשי ב-create_one_time_income (דורש אישור).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, amount: { type: 'number' }, type: { type: 'string', enum: ['income', 'expense'] }, description: { type: 'string' }, date: { type: 'string' } }, required: ['amount', 'type', 'description'] } },
+  { name: 'get_finance_summary', description: 'סיכום חודשי מטבלת finance הישנה (legacy). להנהלת חשבונות האמיתית השתמשי ב-get_accounting_overview.', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' } } } },
+  // Real accounting module (AccountingIntegrations)
+  { name: 'get_accounting_overview', description: 'סיכום הנהלת חשבונות לחודש: ריטיינרים צפויים, הכנסות חד-פעמיות, גביות בפועל (income_payments), הוצאות ששולמו, ורווח גולמי משוער. זה המודול האמיתי — לא טבלת finance.', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM, ברירת מחדל החודש הנוכחי' }, agency_id: { type: 'string' }, agency_name: { type: 'string' } } } },
+  { name: 'get_client_retainer', description: 'ריטיינר ותקציב חודשי של לקוח (עם overlay של client_tenant_financial_data לפי טננט).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, client_name: { type: 'string' } } } },
+  { name: 'list_one_time_incomes', description: 'הכנסות חד-פעמיות לחודש (one_time_incomes).', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' }, client_id: { type: 'string' } } } },
+  { name: 'list_income_payments', description: 'גביות בפועל לחודש (income_payments) — מה שסומן כנגבה בתזרים.', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' }, client_id: { type: 'string' } } } },
+  { name: 'list_expense_payments', description: 'הוצאות ששולמו לחודש (expense_payments).', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' }, expense_type: { type: 'string' } } } },
+  { name: 'list_invoice_uploads', description: 'תור חשבוניות שהועלו (invoice_uploads) — סטטוס OCR/קישור.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['pending', 'processed', 'linked', 'failed'] }, limit: { type: 'integer' } } } },
+  { name: 'create_one_time_income', description: 'יצירת הכנסה חד-פעמית בהנהלת חשבונות. מכניס לתור אישורים — לא מבצע מיד.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, product_name: { type: 'string' }, amount: { type: 'number' }, payment_month: { type: 'string', description: 'YYYY-MM' }, notes: { type: 'string' } }, required: ['client_id', 'product_name', 'amount', 'payment_month'] } },
+  { name: 'delete_one_time_income', description: 'מחיקת הכנסה חד-פעמית. מכניס לתור אישורים.', parameters: { type: 'object', properties: { income_id: { type: 'string' } }, required: ['income_id'] } },
+  { name: 'record_income_payment', description: 'סימון גבייה בפועל מלקוח (insert ל-income_payments). מכניס לתור אישורים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, amount: { type: 'number' }, payment_month: { type: 'string', description: 'YYYY-MM' }, notes: { type: 'string' } }, required: ['client_id', 'amount', 'payment_month'] } },
+  { name: 'delete_income_payment', description: 'ביטול סימון גבייה (מחיקת income_payments). מכניס לתור אישורים.', parameters: { type: 'object', properties: { payment_id: { type: 'string' } }, required: ['payment_id'] } },
+  { name: 'record_expense_payment', description: 'סימון הוצאה כשולמה (insert ל-expense_payments). מכניס לתור אישורים.', parameters: { type: 'object', properties: { expense_type: { type: 'string', description: 'supplier | client_fixed | supplier_payment | campaigner' }, expense_id: { type: 'string', description: 'מזהה ספק/לקוח' }, expense_name: { type: 'string' }, amount: { type: 'number' }, payment_month: { type: 'string', description: 'YYYY-MM' }, notes: { type: 'string' } }, required: ['expense_type', 'expense_id', 'expense_name', 'amount', 'payment_month'] } },
+  { name: 'delete_expense_payment', description: 'ביטול סימון תשלום הוצאה. מכניס לתור אישורים.', parameters: { type: 'object', properties: { payment_id: { type: 'string' } }, required: ['payment_id'] } },
+  { name: 'update_client_retainer', description: 'עדכון ריטיינר/תקציב חודשי של לקוח (upsert ל-client_tenant_financial_data). מכניס לתור אישורים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, retainer: { type: 'number' }, monthly_budget: { type: 'number' }, notes: { type: 'string' } }, required: ['client_id'] } },
   // UPDATES
   { name: 'list_updates', description: 'רשימת עדכונים ללקוח או ליד', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['client', 'lead'] }, entity_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['entity_type', 'entity_id'] } },
   // GOALS
@@ -2791,7 +2805,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.type) query = query.eq('type', args.type)
       const { data, error } = await query
       if (error) throw error
-      return { count: data.length, entries: data.map((f: any) => ({ ...f, client_name: f.clients?.name })) }
+      return { count: data.length, entries: data.map((f: any) => ({ ...f, client_name: f.clients?.name })), note: 'legacy finance table — prefer get_accounting_overview' }
     }
     case 'create_finance_entry': {
       const { data, error } = await supabase.from('finance').insert({
@@ -2810,7 +2824,207 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (error) throw error
       const income = (data || []).filter((f: any) => f.type === 'income').reduce((s: number, f: any) => s + (f.amount || 0), 0)
       const expense = (data || []).filter((f: any) => f.type === 'expense').reduce((s: number, f: any) => s + (f.amount || 0), 0)
-      return { month, income, expense, profit: income - expense, entries_count: data.length }
+      return { month, income, expense, profit: income - expense, entries_count: data.length, note: 'legacy finance table — prefer get_accounting_overview' }
+    }
+
+    // ============ REAL ACCOUNTING MODULE (AccountingIntegrations) ============
+    case 'get_accounting_overview': {
+      const month = String(args.month || new Date().toISOString().slice(0, 7))
+      let agencyId = args.agency_id as string | undefined
+      if (!agencyId && args.agency_name) {
+        const { data: ag } = await supabase.from('agencies').select('id, name').in('tenant_id', accessibleTenantIds).ilike('name', `%${args.agency_name}%`).limit(1).maybeSingle()
+        agencyId = ag?.id
+      }
+      let clientsQ = supabase.from('clients')
+        .select('id, name, status, agency_id, retainer, monthly_budget, monthly_fixed_expense, agencies(name)')
+        .in('tenant_id', accessibleTenantIds)
+        .in('status', ['active', 'onboarding', 'paused'])
+      if (agencyId) clientsQ = clientsQ.eq('agency_id', agencyId)
+      const { data: clients, error: cErr } = await clientsQ.limit(500)
+      if (cErr) throw cErr
+      const clientIds = (clients || []).map((c: any) => c.id)
+      const { data: ctfd } = clientIds.length
+        ? await supabase.from('client_tenant_financial_data').select('client_id, retainer, monthly_budget').eq('tenant_id', tenantId).in('client_id', clientIds)
+        : { data: [] as any[] }
+      const finMap = new Map((ctfd || []).map((r: any) => [r.client_id, r]))
+      const enriched = (clients || []).map((c: any) => {
+        const overlay = finMap.get(c.id)
+        const retainer = Number(overlay?.retainer ?? c.retainer ?? 0) || 0
+        return {
+          client_id: c.id,
+          name: c.name,
+          status: c.status,
+          agency: c.agencies?.name || null,
+          retainer,
+          monthly_budget: Number(overlay?.monthly_budget ?? c.monthly_budget ?? 0) || 0,
+          monthly_fixed_expense: Number(c.monthly_fixed_expense ?? 0) || 0,
+        }
+      })
+      const expectedRetainers = enriched.filter((c: any) => c.status === 'active').reduce((s: number, c: any) => s + c.retainer, 0)
+
+      let otiQ = supabase.from('one_time_incomes').select('id, client_id, product_name, amount, payment_month, notes, clients(name)').eq('tenant_id', tenantId).eq('payment_month', month)
+      if (agencyId) {
+        const agencyClientIds = enriched.map((c: any) => c.client_id)
+        otiQ = otiQ.in('client_id', agencyClientIds.length ? agencyClientIds : ['00000000-0000-0000-0000-000000000000'])
+      }
+      const { data: oneTime } = await otiQ.limit(200)
+      const oneTimeTotal = (oneTime || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+
+      let ipQ = supabase.from('income_payments').select('id, client_id, client_name, amount, payment_month, received_at').eq('tenant_id', tenantId).eq('payment_month', month)
+      if (agencyId) {
+        const agencyClientIds = enriched.map((c: any) => c.client_id)
+        ipQ = ipQ.in('client_id', agencyClientIds.length ? agencyClientIds : ['00000000-0000-0000-0000-000000000000'])
+      }
+      const { data: incomePayments } = await ipQ.limit(500)
+      const collected = (incomePayments || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+
+      const { data: expensePayments } = await supabase.from('expense_payments')
+        .select('id, expense_type, expense_id, expense_name, amount, payment_month, paid_at')
+        .eq('tenant_id', tenantId).eq('payment_month', month).limit(500)
+      const expensesPaid = (expensePayments || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+      const expectedFixedExpenses = enriched.filter((c: any) => c.status === 'active').reduce((s: number, c: any) => s + c.monthly_fixed_expense, 0)
+
+      return {
+        month,
+        agency_id: agencyId || null,
+        expected_retainers: expectedRetainers,
+        one_time_incomes_total: oneTimeTotal,
+        expected_income: expectedRetainers + oneTimeTotal,
+        collected_income: collected,
+        collection_gap: (expectedRetainers + oneTimeTotal) - collected,
+        expected_fixed_client_expenses: expectedFixedExpenses,
+        expenses_paid: expensesPaid,
+        estimated_gross: collected - expensesPaid,
+        clients_count: enriched.length,
+        active_with_retainer: enriched.filter((c: any) => c.status === 'active' && c.retainer > 0).length,
+        one_time_incomes: (oneTime || []).slice(0, 30).map((r: any) => ({
+          id: r.id, client_id: r.client_id, client_name: r.clients?.name, product_name: r.product_name, amount: r.amount,
+        })),
+        top_uncollected_retainers: enriched
+          .filter((c: any) => c.status === 'active' && c.retainer > 0)
+          .filter((c: any) => !(incomePayments || []).some((p: any) => p.client_id === c.client_id && Number(p.amount) === c.retainer))
+          .sort((a: any, b: any) => b.retainer - a.retainer)
+          .slice(0, 15)
+          .map((c: any) => ({ client_id: c.client_id, name: c.name, retainer: c.retainer, agency: c.agency })),
+      }
+    }
+    case 'get_client_retainer': {
+      let clientId = args.client_id as string | undefined
+      if (!clientId && args.client_name) {
+        const { data: found } = await supabase.from('clients').select('id, name').in('tenant_id', accessibleTenantIds).ilike('name', `%${args.client_name}%`).limit(1).maybeSingle()
+        clientId = found?.id
+      }
+      if (!clientId) return { error: 'client_id או client_name נדרש' }
+      await assertCallerCanAccessClient(supabase, clientId, callerScope)
+      const { data: client, error } = await supabase.from('clients')
+        .select('id, name, status, retainer, monthly_budget, monthly_fixed_expense')
+        .eq('id', clientId).in('tenant_id', accessibleTenantIds).maybeSingle()
+      if (error || !client) return { error: 'לקוח לא נמצא' }
+      const { data: overlay } = await supabase.from('client_tenant_financial_data')
+        .select('retainer, monthly_budget, notes').eq('tenant_id', tenantId).eq('client_id', clientId).maybeSingle()
+      return {
+        client_id: client.id,
+        name: client.name,
+        status: client.status,
+        retainer: Number(overlay?.retainer ?? client.retainer ?? 0) || 0,
+        monthly_budget: Number(overlay?.monthly_budget ?? client.monthly_budget ?? 0) || 0,
+        monthly_fixed_expense: Number(client.monthly_fixed_expense ?? 0) || 0,
+        notes: overlay?.notes || null,
+        source: overlay ? 'client_tenant_financial_data' : 'clients',
+      }
+    }
+    case 'list_one_time_incomes': {
+      const month = String(args.month || new Date().toISOString().slice(0, 7))
+      let q = supabase.from('one_time_incomes')
+        .select('id, client_id, product_name, amount, payment_month, notes, is_paid, clients(name)')
+        .eq('tenant_id', tenantId).eq('payment_month', month).order('created_at', { ascending: false }).limit(100)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      const { data, error } = await q
+      if (error) throw error
+      return {
+        month,
+        count: data?.length || 0,
+        total: (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0),
+        incomes: (data || []).map((r: any) => ({ ...r, client_name: r.clients?.name })),
+      }
+    }
+    case 'list_income_payments': {
+      const month = String(args.month || new Date().toISOString().slice(0, 7))
+      let q = supabase.from('income_payments')
+        .select('id, client_id, client_name, amount, payment_month, received_at, notes')
+        .eq('tenant_id', tenantId).eq('payment_month', month).order('received_at', { ascending: false }).limit(200)
+      if (args.client_id) q = q.eq('client_id', args.client_id)
+      const { data, error } = await q
+      if (error) throw error
+      return {
+        month,
+        count: data?.length || 0,
+        total_collected: (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0),
+        payments: data || [],
+      }
+    }
+    case 'list_expense_payments': {
+      const month = String(args.month || new Date().toISOString().slice(0, 7))
+      let q = supabase.from('expense_payments')
+        .select('id, expense_type, expense_id, expense_name, amount, payment_month, paid_at, notes')
+        .eq('tenant_id', tenantId).eq('payment_month', month).order('paid_at', { ascending: false }).limit(200)
+      if (args.expense_type) q = q.eq('expense_type', args.expense_type)
+      const { data, error } = await q
+      if (error) throw error
+      return {
+        month,
+        count: data?.length || 0,
+        total_paid: (data || []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0),
+        payments: data || [],
+      }
+    }
+    case 'list_invoice_uploads': {
+      let q = supabase.from('invoice_uploads')
+        .select('id, vendor_name, invoice_number, invoice_date, total_amount, currency, status, supplier_id, client_id, finance_id, created_at, error_message')
+        .eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(args.limit || 30)
+      if (args.status) q = q.eq('status', args.status)
+      const { data, error } = await q
+      if (error) throw error
+      return { count: data?.length || 0, invoices: data || [] }
+    }
+    case 'create_one_time_income':
+    case 'delete_one_time_income':
+    case 'record_income_payment':
+    case 'delete_income_payment':
+    case 'record_expense_payment':
+    case 'delete_expense_payment':
+    case 'update_client_retainer': {
+      if (args.client_id) await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const acctTitles: Record<string, string> = {
+        create_one_time_income: `הכנסה חד-פעמית: ${args.product_name || ''} ₪${args.amount ?? ''} (${args.payment_month || ''})`,
+        delete_one_time_income: `מחיקת הכנסה חד-פעמית ${args.income_id}`,
+        record_income_payment: `סימון גבייה ₪${args.amount ?? ''} לחודש ${args.payment_month || ''}`,
+        delete_income_payment: `ביטול גבייה ${args.payment_id}`,
+        record_expense_payment: `סימון הוצאה שולמה: ${args.expense_name || ''} ₪${args.amount ?? ''}`,
+        delete_expense_payment: `ביטול תשלום הוצאה ${args.payment_id}`,
+        update_client_retainer: `עדכון ריטיינר לקוח ${args.client_id} → ₪${args.retainer ?? '?'}`,
+      }
+      const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: userId,
+        action_type: name,
+        title: acctTitles[name] || name,
+        description: 'פעולת הנהלת חשבונות — דורשת אישור משתמש מפורש',
+        tool_name: name,
+        tool_input: args,
+        context: { caller_role: callerRole, caller_phone: callerPhone },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aqRow.id,
+        action: name,
+        summary: acctTitles[name] || name,
+        instruction_for_carmen: 'הצג למשתמש בקצרה את הפעולה הכספית ובקש אישור: "לאשר? (כן/לא)". אל תבצעי עד execute_pending_approval אחרי תשובה חיובית.',
+      }
     }
     // UPDATES
     case 'list_updates': {

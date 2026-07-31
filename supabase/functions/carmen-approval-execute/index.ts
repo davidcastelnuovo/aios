@@ -257,6 +257,100 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: r.ok, result: r.json, approval_id }), { status: r.ok ? 200 : 400, headers: corsHeaders });
     }
 
+    // ── Accounting mutations (real AccountingIntegrations tables) ────────────
+    const accountingTools = new Set([
+      'create_one_time_income', 'delete_one_time_income',
+      'record_income_payment', 'delete_income_payment',
+      'record_expense_payment', 'delete_expense_payment',
+      'update_client_retainer',
+    ]);
+    if (accountingTools.has(row.tool_name)) {
+      const inp = (row.tool_input as any) || {};
+      let result: any = null;
+      let failed = false;
+      try {
+        if (row.tool_name === 'create_one_time_income') {
+          const { data, error } = await supabase.from('one_time_incomes').insert({
+            tenant_id: row.tenant_id,
+            client_id: inp.client_id,
+            product_name: String(inp.product_name),
+            amount: Number(inp.amount),
+            payment_month: String(inp.payment_month),
+            notes: inp.notes || null,
+            created_by: approved_by || row.requested_by,
+          }).select('id, product_name, amount, payment_month').single();
+          if (error) throw error;
+          result = { income_id: data.id, ...data };
+        } else if (row.tool_name === 'delete_one_time_income') {
+          const { error } = await supabase.from('one_time_incomes').delete().eq('id', inp.income_id).eq('tenant_id', row.tenant_id);
+          if (error) throw error;
+          result = { deleted: inp.income_id };
+        } else if (row.tool_name === 'record_income_payment') {
+          const { data: client } = await supabase.from('clients').select('name').eq('id', inp.client_id).maybeSingle();
+          const { data, error } = await supabase.from('income_payments').insert({
+            tenant_id: row.tenant_id,
+            client_id: inp.client_id,
+            client_name: client?.name || inp.client_name || 'unknown',
+            amount: Number(inp.amount),
+            payment_month: String(inp.payment_month),
+            notes: inp.notes || null,
+            received_by: approved_by || row.requested_by,
+            received_at: new Date().toISOString(),
+          }).select('id, amount, payment_month, client_name').single();
+          if (error) throw error;
+          result = { payment_id: data.id, ...data };
+        } else if (row.tool_name === 'delete_income_payment') {
+          const { error } = await supabase.from('income_payments').delete().eq('id', inp.payment_id).eq('tenant_id', row.tenant_id);
+          if (error) throw error;
+          result = { deleted: inp.payment_id };
+        } else if (row.tool_name === 'record_expense_payment') {
+          const { data, error } = await supabase.from('expense_payments').insert({
+            tenant_id: row.tenant_id,
+            expense_type: String(inp.expense_type),
+            expense_id: inp.expense_id,
+            expense_name: String(inp.expense_name),
+            amount: Number(inp.amount),
+            payment_month: String(inp.payment_month),
+            notes: inp.notes || null,
+            paid_by: approved_by || row.requested_by,
+            paid_at: new Date().toISOString(),
+          }).select('id, expense_type, expense_name, amount, payment_month').single();
+          if (error) throw error;
+          result = { payment_id: data.id, ...data };
+        } else if (row.tool_name === 'delete_expense_payment') {
+          const { error } = await supabase.from('expense_payments').delete().eq('id', inp.payment_id).eq('tenant_id', row.tenant_id);
+          if (error) throw error;
+          result = { deleted: inp.payment_id };
+        } else if (row.tool_name === 'update_client_retainer') {
+          if (inp.retainer == null && inp.monthly_budget == null && !inp.notes) throw new Error('retainer / monthly_budget / notes required');
+          const payload: Record<string, unknown> = {
+            client_id: inp.client_id,
+            tenant_id: row.tenant_id,
+            updated_at: new Date().toISOString(),
+          };
+          if (inp.retainer != null) payload.retainer = Number(inp.retainer);
+          if (inp.monthly_budget != null) payload.monthly_budget = Number(inp.monthly_budget);
+          if (inp.notes != null) payload.notes = inp.notes;
+          const { data, error } = await supabase.from('client_tenant_financial_data')
+            .upsert(payload, { onConflict: 'client_id,tenant_id' })
+            .select('client_id, retainer, monthly_budget, notes').single();
+          if (error) throw error;
+          result = { updated: true, ...data };
+        }
+      } catch (e: any) {
+        failed = true;
+        result = { error: String(e?.message || e) };
+      }
+      await supabase.from('agent_approval_queue').update({
+        status: failed ? 'failed' : 'executed',
+        approved_by: approved_by || row.requested_by,
+        approved_at: row.approved_at || new Date().toISOString(),
+        executed_at: new Date().toISOString(),
+        execution_result: result,
+      }).eq('id', approval_id);
+      return new Response(JSON.stringify({ success: !failed, result, approval_id }), { status: failed ? 400 : 200, headers: corsHeaders });
+    }
+
     const route = TOOL_TO_FUNCTION[row.tool_name];
     if (!route) return new Response(JSON.stringify({ error: 'unknown_tool', tool_name: row.tool_name }), { status: 400, headers: corsHeaders });
 
