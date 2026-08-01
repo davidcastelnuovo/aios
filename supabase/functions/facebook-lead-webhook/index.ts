@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import {
+  buildLeadRoutingPayload,
+  resolveLeadClient,
+} from "../_shared/lead-routing.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -222,6 +226,12 @@ serve(async (req) => {
                   for (const field of flowLeadData.field_data || []) {
                     flowFieldData[field.name] = field.values?.[0] || '';
                   }
+                  const flowClient = await resolveLeadClient(
+                    supabase,
+                    flowTenantId,
+                    stepConfig.client_id,
+                  );
+                  const flowRoutingPayload = buildLeadRoutingPayload(flowClient, flowFieldData);
                   
                   // CUSTOM heuristic: detect name/phone/email from Hebrew labels
                   let mappedName = flowFieldData.full_name || `${flowFieldData.first_name || ''} ${flowFieldData.last_name || ''}`.trim() || null;
@@ -254,6 +264,11 @@ serve(async (req) => {
                     status: 'new',
                     tenant_id: flowTenantId,
                     agency_id: stepConfig.agency_id || null,
+                    client_id: flowClient?.client_id || null,
+                    facebook_form_id: formId,
+                    facebook_leadgen_id: leadgenId,
+                    form_data: flowFieldData,
+                    form_qa_summary: flowRoutingPayload.form_qa_summary,
                     notes: notesLines.join('\n'),
                   };
                   
@@ -299,6 +314,8 @@ serve(async (req) => {
                           agency_id: flowLeadRecord.agency_id || '',
                           notes: flowLeadRecord.notes || '',
                           facebook_form_id: formId,
+                          facebook_leadgen_id: leadgenId,
+                          ...flowRoutingPayload,
                           ...flowFbFields,
                         },
                       }),
@@ -363,6 +380,12 @@ serve(async (req) => {
               // Support both legacy single and new multi-select
               const salesPersonIds: string[] = formMappings.sales_person_ids 
                 || (formMappings.sales_person_id ? [formMappings.sales_person_id] : []);
+              const routedClient = await resolveLeadClient(
+                supabase,
+                integration.tenant_id,
+                formMappings.client_id,
+              );
+              const routingPayload = buildLeadRoutingPayload(routedClient, fieldData);
 
               // CUSTOM heuristic: detect name/phone/email from Hebrew labels
               let legacyMappedName: string | null = null;
@@ -391,7 +414,12 @@ serve(async (req) => {
                 status: 'new',
                 tenant_id: integration.tenant_id,
                 agency_id: formMappings.agency_id || null,
+                client_id: routedClient?.client_id || null,
                 sales_person_id: salesPersonIds.length > 0 ? salesPersonIds[0] : null,
+                facebook_form_id: formId,
+                facebook_leadgen_id: leadgenId,
+                form_data: fieldData,
+                form_qa_summary: routingPayload.form_qa_summary,
                 notes: legacyNotesLines.join('\n'),
               };
 
@@ -479,6 +507,15 @@ serve(async (req) => {
                   updates.sales_person_id = leadRecord.sales_person_id;
                   hasUpdates = true;
                 }
+                if (!existingLead.client_id && leadRecord.client_id) {
+                  updates.client_id = leadRecord.client_id;
+                  hasUpdates = true;
+                }
+                updates.facebook_form_id = formId;
+                updates.facebook_leadgen_id = leadgenId;
+                updates.form_data = fieldData;
+                updates.form_qa_summary = routingPayload.form_qa_summary;
+                hasUpdates = true;
                 
                 // Append to notes about this duplicate lead
                 const newNote = `\n\n[${new Date().toISOString()}] Facebook Lead Ads duplicate: leadgen_id=${leadgenId}`;
@@ -604,12 +641,14 @@ serve(async (req) => {
                   }
                 }
 
-                // Trigger CRM automations only (source: 'crm') — flows are handled separately
+                // Trigger both legacy lead_created automations and Flow Builder
+                // automations. The flow trigger configuration validates the form ID,
+                // so one flow can safely serve all mapped client forms.
                 try {
                   const triggerUrl = `${supabaseUrl}/functions/v1/trigger-automation`;
                   const triggerPayload = {
                     trigger_type: 'lead_created',
-                    source: 'crm',
+                    source: 'facebook_webhook',
                     tenant_id: integration.tenant_id,
                     data: {
                       lead_id: newLead.id,
@@ -622,6 +661,8 @@ serve(async (req) => {
                       agency_id: leadRecord.agency_id || '',
                       notes: leadRecord.notes || '',
                       facebook_form_id: formId,
+                      facebook_leadgen_id: leadgenId,
+                      ...routingPayload,
                       // Include all fb_ prefixed form fields for variable replacement
                       ...fbPrefixedFields,
                     },

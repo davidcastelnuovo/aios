@@ -1,4 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import {
+  buildLeadRoutingPayload,
+  resolveLeadClient,
+} from '../_shared/lead-routing.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,6 +21,8 @@ interface LeadPayload {
   products?: string
   industry?: string
   agency_id?: string
+  client_id?: string
+  form_data?: Record<string, string>
   manychat_subscriber_id?: string
   tag_name?: string
   tenant_slug?: string
@@ -55,6 +61,7 @@ Deno.serve(async (req) => {
     // ========== WIX FORM PARSER ==========
     // Wix sends data nested in data.submissions[] with {label, value} objects
     let payload: LeadPayload
+    let parsedFormData: Record<string, string> = {}
     const wixSubmissions = rawBody?.data?.submissions
     if (wixSubmissions && Array.isArray(wixSubmissions)) {
       const parsed: Record<string, string> = {}
@@ -63,6 +70,7 @@ Deno.serve(async (req) => {
         const label = (sub.label || '').trim().toLowerCase()
         const value = (sub.value || '').trim()
         if (!value) continue
+        parsedFormData[String(sub.label || label)] = value
 
         // Map Hebrew and English Wix form labels to lead fields
         if (['שם מלא', 'full name', 'name', 'שם'].includes(label)) {
@@ -119,10 +127,20 @@ Deno.serve(async (req) => {
         tenant_slug: rawBody.tenant_slug || undefined,
         tenant_id: rawBody.tenant_id || undefined,
         agency_id: rawBody.agency_id || undefined,
+        client_id: rawBody.client_id || undefined,
+        form_data: parsedFormData,
       }
     } else {
       // Standard flat JSON payload
       payload = rawBody as LeadPayload
+      const suppliedAnswers = rawBody?.form_data ?? rawBody?.answers ?? rawBody?.questions_and_answers
+      if (suppliedAnswers && typeof suppliedAnswers === 'object' && !Array.isArray(suppliedAnswers)) {
+        parsedFormData = Object.fromEntries(
+          Object.entries(suppliedAnswers)
+            .filter(([, value]) => value != null && String(value).trim())
+            .map(([key, value]) => [key, String(value)]),
+        )
+      }
     }
     // ========== END WIX FORM PARSER ==========
 
@@ -249,6 +267,9 @@ Deno.serve(async (req) => {
         }
       )
     }
+
+    const routedClient = await resolveLeadClient(supabase, tenantId!, payload.client_id)
+    const routingPayload = buildLeadRoutingPayload(routedClient, parsedFormData)
 
     // Map source into DB enum values (lead_source)
     // Allowed enum values: website, referral, social_media, paid_ads, cold_call, email_campaign, event, other
@@ -523,6 +544,9 @@ Deno.serve(async (req) => {
         products: payload.products || null,
         industry: payload.industry || null,
         agency_id: agencyId,
+        client_id: routedClient?.client_id || null,
+        form_data: parsedFormData,
+        form_qa_summary: routingPayload.form_qa_summary,
         tenant_id: tenantId,
         manychat_subscriber_id: payload.manychat_subscriber_id || null,
         status: 'new'
@@ -629,6 +653,7 @@ Deno.serve(async (req) => {
             status: lead.status,
             source: lead.source,
             agency_id: lead.agency_id,
+            ...routingPayload,
           },
           tenant_id: tenantId,
         }),

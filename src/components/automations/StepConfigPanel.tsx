@@ -159,6 +159,22 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
         { key: "email", label: "אימייל" },
         { key: "source", label: "מקור" },
         { key: "notes", label: "הערות" },
+        { key: "client_name", label: "שם הלקוח המקבל" },
+        { key: "client_phone", label: "טלפון הלקוח המקבל" },
+        { key: "client_email", label: "אימייל הלקוח המקבל" },
+        { key: "form_qa_summary", label: "כל שאלות ותשובות הסינון" },
+      ];
+      break;
+    case "facebook_lead_form":
+      fields = [
+        { key: "contact_name", label: "שם הליד" },
+        { key: "company_name", label: "שם חברה" },
+        { key: "phone", label: "טלפון הליד" },
+        { key: "email", label: "אימייל הליד" },
+        { key: "client_name", label: "שם הלקוח המקבל" },
+        { key: "client_phone", label: "טלפון הלקוח המקבל" },
+        { key: "client_email", label: "אימייל הלקוח המקבל" },
+        { key: "form_qa_summary", label: "כל שאלות ותשובות הסינון" },
       ];
       break;
     case "lead_status_changed":
@@ -2975,6 +2991,19 @@ function LeadSourceConfig({
   const [pulledLeadIndex, setPulledLeadIndex] = useState(0);
   const [pullDateRange, setPullDateRange] = useState<string>("last_week");
   const isFacebookForm = leadSource === "facebook_form";
+  const { data: routingClients = [] } = useQuery({
+    queryKey: ["clients-for-flow-lead-routing", tenantId],
+    enabled: Boolean(tenantId && isFacebookForm),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id,name,contact_name,phone")
+        .eq("tenant_id", tenantId!)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   // Display current selection summary
   const hasSelection = configuration?.facebook_form_id && configuration?.facebook_page_name;
@@ -3285,6 +3314,33 @@ function LeadSourceConfig({
             <Facebook className="h-4 w-4" />
             החלף טופס
           </Button>
+        </div>
+      )}
+
+      {isFacebookForm && (
+        <div className="space-y-2">
+          <Label className="block text-right">הלקוח שיקבל לידים מהטופס</Label>
+          <Select
+            value={configuration?.client_id || "none"}
+            onValueChange={(value) => onConfigChange("client_id", value === "none" ? null : value)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר לקוח" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">ללא ניתוב ללקוח</SelectItem>
+              {routingClients.map((client) => (
+                <SelectItem key={client.id} value={client.id}>
+                  {client.name || client.contact_name || client.id}
+                  {client.phone ? ` — ${client.phone}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-right text-xs text-muted-foreground">
+            הפעולות הבאות יקבלו את {"{{client_phone}}"}, {"{{client_name}}"} ואת{" "}
+            {"{{form_qa_summary}}"}.
+          </p>
         </div>
       )}
 

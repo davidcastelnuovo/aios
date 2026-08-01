@@ -5046,15 +5046,20 @@ export type Database = {
           agency_id: string | null
           attachments: Json
           campaign_name: string | null
+          client_id: string | null
           closing_date: string | null
           company_name: string | null
           contact_name: string | null
           created_at: string
           email: string | null
           estimated_deal_value: number | null
+          facebook_form_id: string | null
+          facebook_leadgen_id: string | null
           folder_link: string | null
           folder_links: Json
           follow_up_date: string | null
+          form_data: Json
+          form_qa_summary: string | null
           general_status: string | null
           id: string
           industry: string | null
@@ -5093,15 +5098,20 @@ export type Database = {
           agency_id?: string | null
           attachments?: Json
           campaign_name?: string | null
+          client_id?: string | null
           closing_date?: string | null
           company_name?: string | null
           contact_name?: string | null
           created_at?: string
           email?: string | null
           estimated_deal_value?: number | null
+          facebook_form_id?: string | null
+          facebook_leadgen_id?: string | null
           folder_link?: string | null
           folder_links?: Json
           follow_up_date?: string | null
+          form_data?: Json
+          form_qa_summary?: string | null
           general_status?: string | null
           id?: string
           industry?: string | null
@@ -5140,15 +5150,20 @@ export type Database = {
           agency_id?: string | null
           attachments?: Json
           campaign_name?: string | null
+          client_id?: string | null
           closing_date?: string | null
           company_name?: string | null
           contact_name?: string | null
           created_at?: string
           email?: string | null
           estimated_deal_value?: number | null
+          facebook_form_id?: string | null
+          facebook_leadgen_id?: string | null
           folder_link?: string | null
           folder_links?: Json
           follow_up_date?: string | null
+          form_data?: Json
+          form_qa_summary?: string | null
           general_status?: string | null
           id?: string
           industry?: string | null
@@ -5186,6 +5201,13 @@ export type Database = {
             columns: ["agency_id"]
             isOneToOne: false
             referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
           {
