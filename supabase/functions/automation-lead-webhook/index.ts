@@ -117,8 +117,35 @@ Deno.serve(async (request) => {
     const body = asRecord(await request.json().catch(() => ({})));
     const payload = Object.keys(asRecord(body.data)).length ? asRecord(body.data) : body;
     const formData = fieldDataRecord(body, payload);
-    const routedClient = await resolveLeadClient(admin, automation.tenant_id, configuration.client_id);
+    // A flow may lock to one client, or a trusted sender may route dynamically
+    // by client_id using the same webhook/automation across the whole portfolio.
+    const routedClient = await resolveLeadClient(
+      admin,
+      automation.tenant_id,
+      configuration.client_id || payload.client_id,
+    );
     const routing = buildLeadRoutingPayload(routedClient, formData);
+    const externalId = firstString(payload, ["external_id", "leadgen_id", "lead_id", "id"]);
+    if (externalId) {
+      const { error: receiptError } = await admin
+        .from("lead_notification_events")
+        .insert({
+          tenant_id: automation.tenant_id,
+          source: "webhook",
+          external_id: externalId,
+          client_id: routedClient?.client_id ?? null,
+          form_id: firstString(payload, ["form_id", "facebook_form_id"]) || null,
+        });
+      if (receiptError?.code === "23505") {
+        return reply({
+          success: true,
+          duplicate: true,
+          skipped: "already_processed",
+          crm_lead_created: false,
+        });
+      }
+      if (receiptError) throw receiptError;
+    }
 
     const normalized = {
       ...payload,

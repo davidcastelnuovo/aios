@@ -15,6 +15,7 @@ interface FormMapping {
   form_name: string;
   agency_id: string;
   client_id?: string | null;
+  create_crm_lead?: boolean;
   sales_person_id?: string | null;
   tag_id?: string | null;
   field_mappings: Record<string, string>;
@@ -214,6 +215,54 @@ serve(async (req) => {
               leadRecord.company_name = leadRecord.contact_name || heurName || 'ליד מפייסבוק';
             }
 
+            if (mapping.create_crm_lead === false) {
+              const { error: receiptError } = await supabase
+                .from('lead_notification_events')
+                .insert({
+                  tenant_id: integration.tenant_id,
+                  source: 'facebook',
+                  external_id: leadgenId,
+                  client_id: routedClient?.client_id || null,
+                  form_id: formId,
+                });
+              if (receiptError?.code === '23505') {
+                totalSkipped++;
+                continue;
+              }
+              if (receiptError) throw receiptError;
+
+              const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseKey}`,
+                },
+                body: JSON.stringify({
+                  trigger_type: 'lead_created',
+                  source: 'facebook_poll',
+                  tenant_id: integration.tenant_id,
+                  data: {
+                    contact_name: leadRecord.contact_name || '',
+                    company_name: leadRecord.company_name || '',
+                    phone: leadRecord.phone || '',
+                    email: leadRecord.email || '',
+                    source: leadRecord.source || 'paid_ads',
+                    status: 'new',
+                    agency_id: leadRecord.agency_id || '',
+                    facebook_form_id: formId,
+                    facebook_leadgen_id: leadgenId,
+                    crm_lead_created: false,
+                    ...routingPayload,
+                  },
+                }),
+              });
+              if (!automationResponse.ok) {
+                throw new Error(`Notification-only automation failed: ${await automationResponse.text()}`);
+              }
+              totalSynced++;
+              continue;
+            }
+
             // Insert the lead
             const { data: newLead, error: insertError } = await supabase
               .from('leads')
@@ -369,6 +418,54 @@ serve(async (req) => {
 
               if (!leadRecord.company_name || leadRecord.company_name === 'ליד מפייסבוק') {
                 leadRecord.company_name = leadRecord.contact_name || fieldData['full_name'] || fieldData['name'] || 'ליד מפייסבוק';
+              }
+
+              if (mapping.create_crm_lead === false) {
+                const { error: receiptError } = await supabase
+                  .from('lead_notification_events')
+                  .insert({
+                    tenant_id: integration.tenant_id,
+                    source: 'facebook',
+                    external_id: leadgenId,
+                    client_id: routedClient?.client_id || null,
+                    form_id: formId,
+                  });
+                if (receiptError?.code === '23505') {
+                  totalSkipped++;
+                  continue;
+                }
+                if (receiptError) throw receiptError;
+
+                const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${supabaseKey}`,
+                  },
+                  body: JSON.stringify({
+                    trigger_type: 'lead_created',
+                    source: 'facebook_poll',
+                    tenant_id: integration.tenant_id,
+                    data: {
+                      contact_name: leadRecord.contact_name || '',
+                      company_name: leadRecord.company_name || '',
+                      phone: leadRecord.phone || '',
+                      email: leadRecord.email || '',
+                      source: leadRecord.source || 'paid_ads',
+                      status: 'new',
+                      agency_id: leadRecord.agency_id || '',
+                      facebook_form_id: formId,
+                      facebook_leadgen_id: leadgenId,
+                      crm_lead_created: false,
+                      ...routingPayload,
+                    },
+                  }),
+                });
+                if (!automationResponse.ok) {
+                  throw new Error(`Notification-only automation failed: ${await automationResponse.text()}`);
+                }
+                totalSynced++;
+                continue;
               }
 
               const { data: newLead, error: insertError } = await supabase

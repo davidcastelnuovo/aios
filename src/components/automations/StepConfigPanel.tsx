@@ -764,7 +764,8 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
                   <p className="text-right text-[11px] text-muted-foreground">
                     אפשר לשלוח `form_data`, `answers`, `questions_and_answers`, או כל JSON שטוח.
                     יש לשלוח את הסוד ב-header ולא ב-URL. היעד באקשן WhatsApp צריך להיות
-                    `client_phone`.
+                    `client_phone`. אם לא נבחר לקוח קבוע, אפשר לשלוח `client_id` ב-payload
+                    כדי לנתב 100 לקוחות דרך אותה אוטומציה.
                   </p>
                 </div>
               )}
