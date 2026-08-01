@@ -114,23 +114,58 @@ Deno.serve(async (request) => {
       return reply({ error: "meta_whatsapp_not_configured" }, 503);
     }
 
-    const code = typeof body.code === "string" ? body.code : "";
+    const rawCode = typeof body.code === "string" ? body.code.trim() : "";
+    const suppliedToken = typeof body.access_token === "string" ? body.access_token.trim() : "";
     const sessionInfo = (body.session_info ?? {}) as MetaWhatsAppSessionInfo;
     const sessionEvent = typeof body.session_event === "string" ? body.session_event : "";
     const requestedCoexistence = isCoexistenceFinishEvent(sessionEvent);
     const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
-    if (!code) return reply({ error: "exchange_code_required" }, 400);
 
-    const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
-    tokenUrl.searchParams.set("client_id", appId);
-    tokenUrl.searchParams.set("client_secret", appSecret);
-    tokenUrl.searchParams.set("code", code);
-    const tokenResponse = await fetch(tokenUrl);
-    const tokenPayload = await tokenResponse.json();
-    if (!tokenResponse.ok || !tokenPayload?.access_token) {
-      throw new Error(tokenPayload?.error?.message || "Failed to exchange Meta authorization code");
+    // The JS SDK cross-domain bridge sometimes hands back a "cb=" arbiter id.
+    // That is never a usable authorization code.
+    const code = rawCode.startsWith("cb=") ? "" : rawCode;
+    if (!code && !suppliedToken) return reply({ error: "exchange_code_required" }, 400);
+
+    // Embedded Signup through the JS SDK returns either an authorization code or,
+    // for some configurations, a short-lived user token. Support both.
+    let businessToken = "";
+    if (code) {
+      const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
+      tokenUrl.searchParams.set("client_id", appId);
+      tokenUrl.searchParams.set("client_secret", appSecret);
+      tokenUrl.searchParams.set("code", code);
+      const tokenResponse = await fetch(tokenUrl);
+      const tokenPayload = await tokenResponse.json();
+      if (tokenResponse.ok && tokenPayload?.access_token) {
+        businessToken = String(tokenPayload.access_token);
+      } else if (!suppliedToken) {
+        const metaMessage = tokenPayload?.error?.message ?? "";
+        const hint = tokenPayload?.error?.error_subcode === 36008
+          ? " ודאו שה-Configuration הוא זרימת WhatsApp Embedded Signup, ושהדומיין רשום ב-Allowed Domains for the JavaScript SDK וב-Valid OAuth Redirect URIs."
+          : "";
+        return reply({
+          error: `${metaMessage || "Failed to exchange Meta authorization code"}${hint}`,
+          meta_error: tokenPayload?.error ?? null,
+        }, 400);
+      }
     }
-    const businessToken = String(tokenPayload.access_token);
+
+    if (!businessToken && suppliedToken) {
+      const longLivedUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
+      longLivedUrl.searchParams.set("grant_type", "fb_exchange_token");
+      longLivedUrl.searchParams.set("client_id", appId);
+      longLivedUrl.searchParams.set("client_secret", appSecret);
+      longLivedUrl.searchParams.set("fb_exchange_token", suppliedToken);
+      const longLivedResponse = await fetch(longLivedUrl);
+      const longLivedPayload = await longLivedResponse.json();
+      businessToken = longLivedResponse.ok && longLivedPayload?.access_token
+        ? String(longLivedPayload.access_token)
+        : suppliedToken;
+    }
+
+    if (!businessToken) {
+      return reply({ error: "Failed to obtain a Meta access token" }, 400);
+    }
 
     let wabaIds = [
       ...(Array.isArray(sessionInfo.waba_ids) ? sessionInfo.waba_ids : []),
@@ -139,6 +174,7 @@ Deno.serve(async (request) => {
 
     // Embedded Signup only emits session info for full WhatsApp flows. When it is
     // absent, ask Meta which WABAs the customer actually granted to this app.
+    let grantedScopes: string[] = [];
     if (!wabaIds.length) {
       const debug = await graphJson(
         `debug_token?input_token=${encodeURIComponent(businessToken)}`,
@@ -146,6 +182,7 @@ Deno.serve(async (request) => {
         undefined,
         graphVersion,
       );
+      grantedScopes = debug?.data?.scopes ?? [];
       const granular = debug?.data?.granular_scopes ?? [];
       wabaIds = granular
         .filter((entry: any) =>
@@ -155,11 +192,38 @@ Deno.serve(async (request) => {
         .filter((value: string, index: number, values: string[]) => value && values.indexOf(value) === index);
     }
 
+    // Last resort: read the WABAs shared with this app through the customer's businesses.
     if (!wabaIds.length) {
+      try {
+        const businesses = await graphJson("me/businesses?limit=50", businessToken, undefined, graphVersion);
+        for (const business of businesses?.data ?? []) {
+          for (const edge of ["client_whatsapp_business_accounts", "owned_whatsapp_business_accounts"]) {
+            try {
+              const accounts = await graphJson(
+                `${business.id}/${edge}?limit=50`,
+                businessToken,
+                undefined,
+                graphVersion,
+              );
+              for (const account of accounts?.data ?? []) {
+                if (account?.id && !wabaIds.includes(account.id)) wabaIds.push(account.id);
+              }
+            } catch { /* edge not accessible for this business */ }
+          }
+        }
+      } catch { /* business discovery unavailable */ }
+    }
+
+    if (!wabaIds.length) {
+      const scopeNote = grantedScopes.length
+        ? ` ההרשאות שהתקבלו: ${grantedScopes.join(", ")}.`
+        : "";
       return reply({
         error:
-          "Meta did not return a WhatsApp Business account. Make sure the Embedded Signup configuration is a WhatsApp flow with whatsapp_business_management and whatsapp_business_messaging.",
+          "Meta לא החזירה חשבון WhatsApp Business. ודאו שה-Configuration הוא זרימת WhatsApp Embedded Signup הכוללת whatsapp_business_management ו-whatsapp_business_messaging, ושבחרתם חשבון WhatsApp בתהליך." +
+          scopeNote,
         code: "waba_not_granted",
+        granted_scopes: grantedScopes,
       }, 400);
     }
 
