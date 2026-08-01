@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { FlowNodeData } from "./FlowNode";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTenantPath } from "@/hooks/useTenantPath";
 import { useToast } from "@/hooks/use-toast";
 import { RecipientsListEditor, migrateLegacyRecipients } from "./RecipientsListEditor";
 
@@ -767,6 +768,25 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
                     `client_phone`. אם לא נבחר לקוח קבוע, אפשר לשלוח `client_id` ב-payload
                     כדי לנתב 100 לקוחות דרך אותה אוטומציה.
                   </p>
+                  <details className="rounded-md border bg-background/70 p-2">
+                    <summary className="cursor-pointer text-right text-xs font-medium">
+                      הצג JSON לדוגמה
+                    </summary>
+                    <pre dir="ltr" className="mt-2 overflow-x-auto text-left text-[10px]">
+{`{
+  "external_id": "UNIQUE-LEAD-ID",
+  "client_name": "שם הלקוח",
+  "client_phone": "0500000000",
+  "lead_name": "שם הליד",
+  "lead_phone": "0501111111",
+  "lead_email": "lead@example.com",
+  "details": "פרטים נוספים",
+  "questions_and_answers": {
+    "מה התקציב?": "5,000 ש״ח"
+  }
+}`}
+                    </pre>
+                  </details>
                 </div>
               )}
             </div>
@@ -1288,6 +1308,7 @@ function MetaWhatsAppActionConfig({
   availableFields: { key: string; label: string }[];
   onConfigChange: (key: string, value: any) => void;
 }) {
+  const { buildPath } = useTenantPath();
   const sendMode = configuration?.send_mode === "template" ? "template" : "text";
   const phoneMode = configuration?.phone_mode || "field";
 
@@ -1346,7 +1367,19 @@ function MetaWhatsAppActionConfig({
 
   return (
     <div className="space-y-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
-      <p className="text-right text-xs font-semibold text-emerald-700">שליחה דרך Meta WhatsApp הרשמי</p>
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => window.open(buildPath("/meta-whatsapp-settings"), "_blank", "noopener,noreferrer")}
+        >
+          ניהול ויצירת תבניות
+        </Button>
+        <p className="text-right text-xs font-semibold text-emerald-700">
+          שליחה דרך Meta WhatsApp הרשמי
+        </p>
+      </div>
       <p className="text-right text-[11px] text-muted-foreground">
         מחוץ לחלון 24 שעות חובה לשלוח תבנית מאושרת. קבוצות אינן נתמכות ב-Cloud API.
       </p>

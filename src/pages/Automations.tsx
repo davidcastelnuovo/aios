@@ -5,9 +5,10 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy, Building2, ArrowRight, Cpu } from "lucide-react";
+import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow, MessageCircle, Bot, Share2, Copy, Building2, ArrowRight, Cpu, BookOpen, FileText } from "lucide-react";
 import { NodeIconDisplay } from "@/components/automations/nodeIcons";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
@@ -57,6 +58,7 @@ const ACTION_LABELS: Record<string, string> = {
   send_whatsapp: "שלח WhatsApp (ManyChat)",
   create_manychat_subscriber: "צור subscriber ב-ManyChat",
   send_greenapi_message: "שלח WhatsApp (Green API)",
+  send_meta_whatsapp_message: "שלח WhatsApp (Meta הרשמי)",
   add_lead_update: "הוסף עדכון לליד",
   add_client_update: "הוסף עדכון ללקוח",
   create_task: "צור משימה",
@@ -72,6 +74,7 @@ export default function Automations() {
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [cloneOrgOpen, setCloneOrgOpen] = useState(false);
+  const [webhookDocsOpen, setWebhookDocsOpen] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
   const { tenantId, isActiveTenantSynced } = useCurrentTenant();
   const { buildPath } = useTenantPath();
@@ -595,6 +598,14 @@ export default function Automations() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setWebhookDocsOpen(true)}>
+            <BookOpen className="h-4 w-4 ml-2" />
+            מדריך Webhooks
+          </Button>
+          <Button variant="outline" onClick={() => navigate(buildPath("meta-whatsapp-settings"))}>
+            <FileText className="h-4 w-4 ml-2" />
+            תבניות WhatsApp
+          </Button>
           <Button onClick={() => createFlowMutation.mutate()} disabled={createFlowMutation.isPending} variant="outline">
             <Workflow className="h-4 w-4 ml-2" />
             פלוו חדש
@@ -820,11 +831,18 @@ export default function Automations() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={(e) => { e.stopPropagation(); handleEdit(automation); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isFlow) {
+                          navigate(buildPath(`automations/flow/${automation.id}`));
+                        } else {
+                          handleEdit(automation);
+                        }
+                      }}
                       className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Edit className="h-3 w-3 ml-1" />
-                      עריכה
+                      {isFlow ? "עריכת Flow" : "עריכה"}
                     </Button>
                     <Button
                       size="sm"
@@ -935,6 +953,82 @@ export default function Automations() {
           onOpenChange={setCloneOrgOpen}
         />
       )}
+
+      <Dialog open={webhookDocsOpen} onOpenChange={setWebhookDocsOpen}>
+        <DialogContent dir="rtl" className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>מדריך Webhook להתראות לידים</DialogTitle>
+            <DialogDescription>
+              הפעלת flow ישירות מ-Make, Zapier או מערכת חיצונית — ללא יצירת ליד ב-CRM.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5 text-sm">
+            <ol className="list-decimal list-inside space-y-1">
+              <li>צרו Flow חדש ובחרו טריגר „Webhook ליד (ללא יצירה ב-CRM)”.</li>
+              <li>צרו כתובת מאובטחת והעתיקו את ה-URL ואת `x-webhook-secret`.</li>
+              <li>ב-Make השתמשו ב-HTTP → Make a request, בשיטת POST.</li>
+              <li>הוסיפו headers של `Content-Type: application/json` ושל הסוד.</li>
+              <li>הוסיפו פעולת Meta WhatsApp ובחרו יעד משדה `client_phone`.</li>
+            </ol>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label>JSON מומלץ</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    const example = JSON.stringify({
+                      external_id: "UNIQUE-LEAD-ID",
+                      client_name: "שם הלקוח המקבל",
+                      client_phone: "0500000000",
+                      lead_name: "שם הליד",
+                      lead_phone: "0501111111",
+                      lead_email: "lead@example.com",
+                      lead_company: "שם החברה",
+                      source: "Facebook / Google / Website",
+                      details: "פרטים נוספים",
+                      questions_and_answers: {
+                        "מה התקציב החודשי?": "5,000 ש״ח",
+                        "מתי תרצה להתחיל?": "השבוע",
+                      },
+                    }, null, 2);
+                    await navigator.clipboard.writeText(example);
+                    toast({ title: "הועתק", description: "דוגמת ה-JSON הועתקה" });
+                  }}
+                >
+                  <Copy className="h-4 w-4 ml-1" />
+                  העתק
+                </Button>
+              </div>
+              <pre dir="ltr" className="overflow-x-auto rounded-lg bg-muted p-4 text-left text-xs">
+{`{
+  "external_id": "UNIQUE-LEAD-ID",
+  "client_name": "שם הלקוח המקבל",
+  "client_phone": "0500000000",
+  "lead_name": "שם הליד",
+  "lead_phone": "0501111111",
+  "lead_email": "lead@example.com",
+  "lead_company": "שם החברה",
+  "source": "Facebook / Google / Website",
+  "details": "פרטים נוספים",
+  "questions_and_answers": {
+    "מה התקציב החודשי?": "5,000 ש״ח",
+    "מתי תרצה להתחיל?": "השבוע"
+  }
+}`}
+              </pre>
+            </div>
+
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
+              `external_id` חייב להיות ייחודי וקבוע. שליחה חוזרת עם אותו מזהה תידלג,
+              כדי ש-Make retry לא ישלח ללקוח פעמיים. הסוד הוא סיסמה ואין לשמור אותו
+              בתוך ה-URL.
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Logs Dialog */}
       <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
