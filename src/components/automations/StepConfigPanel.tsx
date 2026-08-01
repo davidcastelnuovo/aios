@@ -98,6 +98,7 @@ export const TRIGGER_CATEGORIES = [
     label: "🔗 אינטגרציות",
     options: [
       { value: "inbound_webhook_task",     label: "Webhook נכנס" },
+      { value: "inbound_webhook_lead",     label: "Webhook ליד (ללא יצירה ב-CRM)" },
       { value: "facebook_lead_form",       label: "טופס ליד פייסבוק" },
       { value: "instagram_message",        label: "הודעת אינסטגרם" },
       { value: "typeform_submitted",       label: "Typeform נשלח" },
@@ -166,6 +167,7 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
       ];
       break;
     case "facebook_lead_form":
+    case "inbound_webhook_lead":
       fields = [
         { key: "contact_name", label: "שם הליד" },
         { key: "company_name", label: "שם חברה" },
@@ -307,7 +309,21 @@ interface FacebookForm {
 
 export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], automationId, automationName }: StepConfigPanelProps) {
   const { tenant } = useCurrentTenant();
+  const { toast } = useToast();
   const tenantId = tenant?.id;
+  const { data: webhookClients = [] } = useQuery({
+    queryKey: ["clients-for-flow-only-webhook", tenantId],
+    enabled: Boolean(tenantId && node?.action_type === "inbound_webhook_lead"),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id,name,contact_name,phone")
+        .eq("tenant_id", tenantId!)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   if (!node) return null;
 
@@ -650,6 +666,108 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
                 האוטומציה תופעל בקריאה ל-Webhook הנכנס של המערכת.
                 כל הנתונים שיישלחו ב-payload יהיו זמינים כמשתנים בצעדים הבאים.
               </p>
+            </div>
+          )}
+
+          {/* ── Flow-only lead webhook (never creates a CRM lead) ── */}
+          {node.step_type === "trigger" && node.action_type === "inbound_webhook_lead" && (
+            <div className="space-y-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+              <div>
+                <p className="text-right text-xs font-semibold text-emerald-700">
+                  Webhook ליד ישיר לאוטומציה
+                </p>
+                <p className="text-right text-xs text-muted-foreground">
+                  כל שדות ה-JSON זמינים בצעדים הבאים. האירוע לא יוצר ליד ב-CRM.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="block text-right">הלקוח שיקבל את הלידים</Label>
+                <Select
+                  value={node.configuration?.client_id || "none"}
+                  onValueChange={(value) => handleConfigChange("client_id", value === "none" ? null : value)}
+                >
+                  <SelectTrigger className="text-right">
+                    <SelectValue placeholder="בחר לקוח" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">ללא ניתוב ללקוח</SelectItem>
+                    {webhookClients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name || client.contact_name || client.id}
+                        {client.phone ? ` — ${client.phone}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {!node.configuration?.webhook_secret ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    const bytes = crypto.getRandomValues(new Uint8Array(24));
+                    const secret = Array.from(bytes)
+                      .map((byte) => byte.toString(16).padStart(2, "0"))
+                      .join("");
+                    handleConfigChange("webhook_secret", secret);
+                  }}
+                >
+                  יצירת כתובת Webhook מאובטחת
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <Label className="block text-right">Webhook URL</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      dir="ltr"
+                      className="font-mono text-[10px]"
+                      value={`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-lead-webhook?automation_id=${automationId || ""}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={async () => {
+                        const webhookUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-lead-webhook?automation_id=${automationId || ""}`;
+                        await navigator.clipboard.writeText(webhookUrl);
+                        toast({ title: "הועתק", description: "כתובת ה-Webhook הועתקה" });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Label className="block text-right">Header: x-webhook-secret</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      dir="ltr"
+                      type="password"
+                      className="font-mono text-[10px]"
+                      value={node.configuration.webhook_secret}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(node.configuration.webhook_secret);
+                        toast({ title: "הועתק", description: "סוד ה-Webhook הועתק" });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-right text-[11px] text-muted-foreground">
+                    אפשר לשלוח `form_data`, `answers`, `questions_and_answers`, או כל JSON שטוח.
+                    יש לשלוח את הסוד ב-header ולא ב-URL. היעד באקשן WhatsApp צריך להיות
+                    `client_phone`.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

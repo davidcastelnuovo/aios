@@ -142,6 +142,7 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   agent: "סוכן AI",
   // טריגרים – לידים
   lead_created: "ליד נוצר",
+  inbound_webhook_lead: "Webhook ליד (ללא CRM)",
   lead_updated: "ליד עודכן",
   lead_status_changed: "סטאטוס ליד השתנה",
   lead_note_added: "הערה נוספה לליד",
