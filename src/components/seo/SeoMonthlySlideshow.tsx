@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   SeoMonthlyShareSnapshot,
@@ -44,14 +44,55 @@ function deltaLabel(current: number, prev?: number): string | null {
   return `${sign}${formatNum(d)} מול חודש קודם`;
 }
 
+/** Percentage growth against the campaign-start baseline. */
+function growthPct(current: number, base?: number | null): number | null {
+  if (base == null || !Number.isFinite(base)) return null;
+  if (base === 0) return current > 0 ? 100 : null;
+  return Math.round(((current - base) / base) * 100);
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url.replace(/^https?:\/\//, "").split("/")[0];
+  }
+}
+
+/** Same work item written with or without a bullet must render once. */
+function dedupeKey(value: string): string {
+  return value
+    .replace(/^[\s*•\-–—]+/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.,:;]+$/, "")
+    .toLowerCase();
+}
+
+function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    const k = key(item);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(item);
+  }
+  return out;
+}
+
 export function buildSeoMonthlySlides(snapshot: SeoMonthlyShareSnapshot): Slide[] {
   const slides: Slide[] = [{ kind: "cover", title: "פתיחה" }];
-  if (snapshot.metrics.length > 0) slides.push({ kind: "metrics", title: "מדדים מרכזיים" });
+  if (snapshot.metrics.length > 0 || snapshot.search) {
+    slides.push({ kind: "metrics", title: "מדדים מרכזיים" });
+  }
   if (snapshot.keywords.length > 0) slides.push({ kind: "keywords", title: "ביטויים מרכזיים" });
   if (snapshot.work.summary?.trim()) slides.push({ kind: "summary", title: "סיכום" });
   if (snapshot.work.onsite.length > 0) slides.push({ kind: "onsite", title: "עבודה באתר" });
   if (snapshot.work.articles.length > 0) slides.push({ kind: "articles", title: "מאמרים" });
-  if (snapshot.work.links.length > 0) slides.push({ kind: "links", title: "קישורים" });
+  if ((snapshot.recentLinks?.length || snapshot.work.links.length) > 0) {
+    slides.push({ kind: "links", title: "קישורים" });
+  }
   slides.push({ kind: "closing", title: "סיכום עבודה" });
   return slides;
 }
@@ -268,70 +309,231 @@ function CoverSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   );
 }
 
-function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+function TrendPill({ value, suffix }: { value: number; suffix?: string }) {
+  const up = value > 0;
+  const flat = value === 0;
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-3xl font-bold md:text-4xl">הפרמטרים המרכזיים</h2>
-        <p className="mt-2 text-[#F4F0E6]/60">תמונת מצב SEO לחודש זה</p>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
+        flat
+          ? "bg-white/10 text-[#F4F0E6]/60"
+          : up
+            ? "bg-[#2DA89E]/20 text-[#5BE0D2]"
+            : "bg-[#D4756B]/20 text-[#F0A79C]",
+      )}
+    >
+      {!flat && (up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />)}
+      {up ? "+" : ""}
+      {formatNum(value)}
+      {suffix}
+    </span>
+  );
+}
+
+function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+  const search = snapshot.search;
+
+  const headline = search
+    ? [
+        {
+          key: "clicks",
+          label: "קליקים מגוגל",
+          value: search.totals.clicks,
+          prev: search.prev?.clicks,
+          base: search.base?.clicks,
+        },
+        {
+          key: "impressions",
+          label: "חשיפות בגוגל",
+          value: search.totals.impressions,
+          prev: search.prev?.impressions,
+          base: search.base?.impressions,
+        },
+        {
+          key: "top20",
+          label: "ביטויים ב-Top 20",
+          value: search.totals.top20,
+          prev: search.prev?.top20,
+          base: search.base?.top20,
+        },
+        {
+          key: "keywords",
+          label: "ביטויים עם חשיפות",
+          value: search.totals.keywords,
+          prev: search.prev?.keywords,
+          base: search.base?.keywords,
+        },
+      ]
+    : [];
+
+  // Ahrefs' own traffic estimate is unreliable for small sites and reads as a
+  // contradiction next to real Search Console clicks, so hide it when we have GSC.
+  const hiddenWithSearch = ["gsc_clicks", "gsc_impressions", "top20", "keywords_total", "org_traffic"];
+  const secondary = snapshot.metrics.filter((m) =>
+    search ? !hiddenWithSearch.includes(m.key) : !["gsc_clicks", "gsc_impressions"].includes(m.key),
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-3xl font-bold md:text-4xl">הפרמטרים המרכזיים</h2>
+          <p className="mt-2 text-[#F4F0E6]/60">
+            {search ? "נתוני Google Search Console לחודש זה" : "תמונת מצב SEO לחודש זה"}
+          </p>
+        </div>
+        {search?.baseLabel && (
+          <p className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-[#F4F0E6]/70">
+            השוואה מאז תחילת הקידום · {search.baseLabel}
+          </p>
+        )}
       </div>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-        {snapshot.metrics.map((m) => {
-          const delta = deltaLabel(m.value, m.prevValue);
-          return (
-            <div
-              key={m.key}
-              className="border-b border-white/10 pb-4 pt-1"
-            >
-              <p className="text-xs text-[#F4F0E6]/55">{m.label}</p>
-              <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight md:text-4xl">
-                {formatNum(m.value)}
-              </p>
-              {delta && <p className="mt-1 text-[11px] text-[#2DA89E]">{delta}</p>}
-            </div>
-          );
-        })}
-      </div>
+
+      {headline.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {headline.map((m) => {
+            const pct = growthPct(m.value, m.base);
+            return (
+              <div
+                key={m.key}
+                className="rounded-xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm"
+              >
+                <p className="text-xs text-[#F4F0E6]/55">{m.label}</p>
+                <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight">
+                  {formatNum(m.value)}
+                </p>
+                <div className="mt-3 space-y-1.5">
+                  {m.prev != null && (
+                    <div className="flex items-center gap-2">
+                      <TrendPill value={m.value - m.prev} />
+                      <span className="text-[10px] text-[#F4F0E6]/45">מול חודש קודם</span>
+                    </div>
+                  )}
+                  {pct != null && (
+                    <div className="flex items-center gap-2">
+                      <TrendPill value={pct} suffix="%" />
+                      <span className="text-[10px] text-[#F4F0E6]/45">מאז תחילת הקידום</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {search?.totals.position != null && (
+        <p className="text-sm text-[#F4F0E6]/60">
+          מיקום ממוצע החודש:{" "}
+          <span className="font-semibold tabular-nums text-[#F4F0E6]">
+            {search.totals.position}
+          </span>
+          {search.base?.position != null && (
+            <>
+              {" · "}בתחילת הקידום:{" "}
+              <span className="tabular-nums text-[#F4F0E6]/80">{search.base.position}</span>
+            </>
+          )}
+        </p>
+      )}
+
+      {secondary.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 border-t border-white/10 pt-4 md:grid-cols-4">
+          {secondary.map((m) => {
+            const delta = deltaLabel(m.value, m.prevValue);
+            return (
+              <div key={m.key}>
+                <p className="text-xs text-[#F4F0E6]/55">{m.label}</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight">
+                  {formatNum(m.value)}
+                </p>
+                {delta && <p className="mt-1 text-[11px] text-[#2DA89E]">{delta}</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
 function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+  const withSearchData = snapshot.keywords.some((k) => k.impressions != null);
+  const rows = snapshot.keywords.slice(0, 20);
+  const half = Math.ceil(rows.length / 2);
+  const columns = rows.length > 10 ? [rows.slice(0, half), rows.slice(half)] : [rows];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <h2 className="text-3xl font-bold md:text-4xl">ביטויים מרכזיים</h2>
-        <p className="mt-2 text-[#F4F0E6]/60">המיקומים החזקים ביותר ברשימת המעקב</p>
+        <p className="mt-2 text-[#F4F0E6]/60">
+          {withSearchData
+            ? `Top ${rows.length} ביטויים לפי חשיפות וקליקים בגוגל`
+            : "המיקומים החזקים ביותר ברשימת המעקב"}
+        </p>
       </div>
-      <div className="grid gap-2">
-        {snapshot.keywords.slice(0, 10).map((kw, i) => {
-          const change =
-            kw.position != null && kw.prevPosition != null
-              ? kw.prevPosition - kw.position
-              : null;
-          return (
-            <div
-              key={`${kw.keyword}-${i}`}
-              className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 border-b border-white/8 py-2.5"
-            >
-              <span className="font-mono text-sm text-[#D4A574]">
-                {kw.position != null ? `#${kw.position}` : "—"}
-              </span>
-              <span className="truncate text-base md:text-lg">{kw.keyword}</span>
-              <span className="text-xs tabular-nums text-[#F4F0E6]/50">
-                {change == null
-                  ? kw.volume != null
-                    ? `${formatNum(kw.volume)} חיפושים`
-                    : ""
-                  : change > 0
-                    ? `↑ ${change}`
-                    : change < 0
-                      ? `↓ ${Math.abs(change)}`
-                      : "→"}
-              </span>
-            </div>
-          );
-        })}
+      <div className={cn("grid gap-x-8 gap-y-1", columns.length > 1 && "md:grid-cols-2")}>
+        {columns.map((col, ci) => (
+          <div key={ci} className="space-y-1">
+            {withSearchData && (
+              <div className="grid grid-cols-[2.4rem_1fr_3.6rem_3rem] items-center gap-2 pb-1 text-[10px] uppercase tracking-wide text-[#F4F0E6]/40">
+                <span>מיקום</span>
+                <span>ביטוי</span>
+                <span className="text-left">חשיפות</span>
+                <span className="text-left">קליקים</span>
+              </div>
+            )}
+            {col.map((kw, i) => {
+              const posChange =
+                kw.position != null && kw.basePosition != null
+                  ? Math.round((kw.basePosition - kw.position) * 10) / 10
+                  : kw.position != null && kw.prevPosition != null
+                    ? kw.prevPosition - kw.position
+                    : null;
+              return (
+                <div
+                  key={`${kw.keyword}-${ci}-${i}`}
+                  className="grid grid-cols-[2.4rem_1fr_3.6rem_3rem] items-center gap-2 border-b border-white/[0.07] py-1.5"
+                >
+                  <span className="font-mono text-xs text-[#D4A574]">
+                    {kw.position != null ? `#${kw.position}` : "—"}
+                  </span>
+                  <span className="truncate text-sm" title={kw.keyword}>
+                    {kw.keyword}
+                    {posChange != null && posChange !== 0 && (
+                      <span
+                        className={cn(
+                          "mr-1.5 text-[10px] tabular-nums",
+                          posChange > 0 ? "text-[#5BE0D2]" : "text-[#F0A79C]",
+                        )}
+                      >
+                        {posChange > 0 ? "↑" : "↓"}
+                        {Math.abs(posChange)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-left text-xs tabular-nums text-[#F4F0E6]/70">
+                    {kw.impressions != null
+                      ? formatNum(kw.impressions)
+                      : kw.volume != null
+                        ? formatNum(kw.volume)
+                        : "—"}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-left text-xs font-semibold tabular-nums",
+                      kw.clicks ? "text-[#2DA89E]" : "text-[#F4F0E6]/30",
+                    )}
+                  >
+                    {kw.clicks != null ? formatNum(kw.clicks) : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -349,21 +551,141 @@ function SummarySlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
 }
 
 function OnsiteSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
-  const items = snapshot.work.onsite.slice(0, 8);
+  const unique = dedupeBy(snapshot.work.onsite, (item) => dedupeKey(item.title));
+  const items = unique.slice(0, 10);
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold md:text-4xl">עבודה באתר</h2>
-        <p className="mt-2 text-[#F4F0E6]/60">{snapshot.work.onsite.length} פעולות</p>
+        <p className="mt-2 text-[#F4F0E6]/60">{unique.length} פעולות</p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         {items.map((item) => (
           <div key={item.id} className="border-r-2 border-[#2DA89E]/70 pr-4">
             <p className="text-[11px] tracking-wide text-[#D4A574]">{onsiteKindLabel(item.kind)}</p>
-            <p className="mt-1 text-lg font-medium">{item.title}</p>
-            {item.url && (
-              <p className="mt-1 truncate font-mono text-xs text-[#F4F0E6]/45" dir="ltr">
-                {item.url}
+            {item.url ? (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 block text-base font-medium leading-snug hover:text-[#5BE0D2] hover:underline"
+              >
+                {item.title}
+              </a>
+            ) : (
+              <p className="mt-1 text-base font-medium leading-snug">{item.title}</p>
+            )}
+          </div>
+        ))}
+      </div>
+      {unique.length > items.length && (
+        <p className="text-xs text-[#F4F0E6]/45">ועוד {unique.length - items.length} פעולות</p>
+      )}
+    </div>
+  );
+}
+
+function ArticlesSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+  const unique = dedupeBy(snapshot.work.articles, (item) => dedupeKey(item.title));
+  const items = unique.slice(0, 8);
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-3xl font-bold md:text-4xl">מאמרים שכתבנו</h2>
+        <p className="mt-2 text-[#F4F0E6]/60">{unique.length} מאמרים · לחיצה פותחת את המאמר</p>
+      </div>
+      <div className="space-y-2.5">
+        {items.map((item, i) => (
+          <div key={item.id} className="flex items-start gap-3 border-b border-white/10 pb-2.5">
+            <span className="mt-1 font-mono text-xs text-[#2DA89E]">
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            <div className="min-w-0 flex-1">
+              {item.url ? (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group inline-flex items-start gap-1.5 text-lg font-semibold leading-snug text-[#F4F0E6] hover:text-[#5BE0D2]"
+                >
+                  <span className="underline decoration-[#2DA89E]/50 underline-offset-4 group-hover:decoration-[#5BE0D2]">
+                    {item.title}
+                  </span>
+                  <ExternalLink className="mt-1.5 h-3.5 w-3.5 shrink-0 text-[#D4A574]" />
+                </a>
+              ) : (
+                <p className="text-lg font-semibold leading-snug">{item.title}</p>
+              )}
+              {item.topic && <p className="mt-0.5 text-sm text-[#F4F0E6]/55">{item.topic}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {unique.length > items.length && (
+        <p className="text-xs text-[#F4F0E6]/45">ועוד {unique.length - items.length} מאמרים</p>
+      )}
+    </div>
+  );
+}
+
+function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+  const fromRecent = snapshot.recentLinks?.length
+    ? snapshot.recentLinks
+    : snapshot.work.links.map((l) => ({
+        ...l,
+        month: snapshot.month,
+        monthLabel: snapshot.monthLabel,
+      }));
+  const unique = dedupeBy(fromRecent, (l) => l.url.trim().toLowerCase());
+
+  const byMonth = new Map<string, typeof unique>();
+  for (const link of unique) {
+    const list = byMonth.get(link.monthLabel) || [];
+    list.push(link);
+    byMonth.set(link.monthLabel, list);
+  }
+  const groups = Array.from(byMonth.entries()).slice(0, 3);
+  const spansMonths = groups.length > 1;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-3xl font-bold md:text-4xl">קישורים חיצוניים</h2>
+        <p className="mt-2 text-[#F4F0E6]/60">
+          {unique.length} קישורים{spansMonths ? " בשלושת החודשים האחרונים" : " החודש"}
+        </p>
+      </div>
+      <div className={cn("grid gap-x-8 gap-y-4", spansMonths && "md:grid-cols-3")}>
+        {groups.map(([monthLabel, links]) => (
+          <div key={monthLabel} className="space-y-1.5">
+            {spansMonths && (
+              <p className="text-[11px] font-semibold tracking-wide text-[#D4A574]">{monthLabel}</p>
+            )}
+            {links.slice(0, spansMonths ? 6 : 10).map((link) => (
+              <div key={link.id} className="border-b border-white/[0.07] py-1.5">
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block text-sm leading-snug text-[#F4F0E6] underline decoration-[#2DA89E]/40 underline-offset-4 hover:text-[#5BE0D2]"
+                  title={link.anchor || link.url}
+                  style={{
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
+                  {link.anchor?.trim() || hostOf(link.url)}
+                </a>
+                <p className="mt-0.5 truncate text-[11px] text-[#F4F0E6]/45" dir="ltr">
+                  {hostOf(link.url)}
+                </p>
+              </div>
+            ))}
+            {links.length > (spansMonths ? 6 : 10) && (
+              <p className="text-[11px] text-[#F4F0E6]/40">
+                ועוד {links.length - (spansMonths ? 6 : 10)}
               </p>
             )}
           </div>
@@ -373,73 +695,22 @@ function OnsiteSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   );
 }
 
-function ArticlesSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
-  const items = snapshot.work.articles.slice(0, 6);
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold md:text-4xl">מאמרים שכתבנו</h2>
-        <p className="mt-2 text-[#F4F0E6]/60">{snapshot.work.articles.length} מאמרים</p>
-      </div>
-      <div className="space-y-4">
-        {items.map((item, i) => (
-          <div key={item.id} className="flex items-start gap-4 border-b border-white/10 pb-4">
-            <span className="font-mono text-sm text-[#2DA89E]">
-              {String(i + 1).padStart(2, "0")}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-xl font-semibold">{item.title}</p>
-              {item.topic && <p className="mt-1 text-sm text-[#F4F0E6]/55">{item.topic}</p>}
-              {item.url && (
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 text-xs text-[#D4A574] hover:underline"
-                  dir="ltr"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  {item.url}
-                </a>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
-  const items = snapshot.work.links.slice(0, 8);
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold md:text-4xl">קישורים</h2>
-        <p className="mt-2 text-[#F4F0E6]/60">{snapshot.work.links.length} קישורים החודש</p>
-      </div>
-      <div className="space-y-3">
-        {items.map((item) => (
-          <div key={item.id} className="grid gap-1 border-b border-white/8 py-3 md:grid-cols-[1fr_auto]">
-            <div className="min-w-0">
-              <p className="truncate font-mono text-sm text-[#2DA89E]" dir="ltr">
-                {item.url}
-              </p>
-              {item.anchor && <p className="mt-1 text-base">עוגן: {item.anchor}</p>}
-              {item.notes && <p className="mt-0.5 text-sm text-[#F4F0E6]/50">{item.notes}</p>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function ClosingSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const counts = [
-    { label: "עבודה באתר", value: snapshot.work.onsite.length },
-    { label: "מאמרים", value: snapshot.work.articles.length },
-    { label: "קישורים", value: snapshot.work.links.length },
+    {
+      label: "עבודה באתר",
+      value: dedupeBy(snapshot.work.onsite, (i) => dedupeKey(i.title)).length,
+    },
+    {
+      label: "מאמרים",
+      value: dedupeBy(snapshot.work.articles, (i) => dedupeKey(i.title)).length,
+    },
+    {
+      label: "קישורים",
+      value: dedupeBy(snapshot.recentLinks || snapshot.work.links, (i) =>
+        i.url.trim().toLowerCase(),
+      ).length,
+    },
     { label: "ביטויים מוצגים", value: snapshot.keywords.length },
   ];
   return (

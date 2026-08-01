@@ -25,7 +25,14 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { filterRelevantKeywords } from "@/lib/seoKeywordRelevance";
+import {
+  filterRelevantKeywords,
+  loadSeoForceIrrelevant,
+  loadSeoForceRelevant,
+  normalizeKeywordPhrase,
+  saveSeoForceIrrelevant,
+  saveSeoForceRelevant,
+} from "@/lib/seoKeywordRelevance";
 import { toast } from "sonner";
 
 const HEBREW_REGEX = /[\u0590-\u05FF]/;
@@ -40,7 +47,7 @@ function matchesLang(keyword: string, lang: LangFilter): boolean {
 }
 
 function normalizeKw(raw: string): string {
-  return String(raw || "").toLowerCase().replace(/\s+/g, " ").trim();
+  return normalizeKeywordPhrase(raw);
 }
 
 interface SeoKeywordsTableProps {
@@ -335,42 +342,6 @@ function KeywordTable({
   );
 }
 
-function loadForceList(persistKey: string | undefined, kind: "relevant" | "irrelevant"): string[] {
-  if (!persistKey || typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`seo-force-${kind}:${persistKey}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.map(String).map((x) => x.trim()).filter(Boolean) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveForceList(persistKey: string | undefined, kind: "relevant" | "irrelevant", values: string[]) {
-  if (!persistKey || typeof window === "undefined") return;
-  try {
-    localStorage.setItem(`seo-force-${kind}:${persistKey}`, JSON.stringify(values));
-  } catch {
-    /* ignore quota */
-  }
-}
-
-function loadForceRelevant(persistKey?: string): string[] {
-  return loadForceList(persistKey, "relevant");
-}
-
-function saveForceRelevant(persistKey: string | undefined, values: string[]) {
-  saveForceList(persistKey, "relevant", values);
-}
-
-function loadForceIrrelevant(persistKey?: string): string[] {
-  return loadForceList(persistKey, "irrelevant");
-}
-
-function saveForceIrrelevant(persistKey: string | undefined, values: string[]) {
-  saveForceList(persistKey, "irrelevant", values);
-}
-
 export function SeoKeywordsTable({
   keywords,
   trackedKeywords = [],
@@ -386,8 +357,12 @@ export function SeoKeywordsTable({
 }: SeoKeywordsTableProps) {
   const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
   const [filterIrrelevant, setFilterIrrelevant] = useState(true);
-  const [forceRelevant, setForceRelevant] = useState<string[]>(() => loadForceRelevant(relevancePersistKey));
-  const [forceIrrelevant, setForceIrrelevant] = useState<string[]>(() => loadForceIrrelevant(relevancePersistKey));
+  const [forceRelevant, setForceRelevant] = useState<string[]>(() =>
+    loadSeoForceRelevant(relevancePersistKey),
+  );
+  const [forceIrrelevant, setForceIrrelevant] = useState<string[]>(() =>
+    loadSeoForceIrrelevant(relevancePersistKey),
+  );
   const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
@@ -398,8 +373,8 @@ export function SeoKeywordsTable({
   }, [initialLangFilter]);
 
   useEffect(() => {
-    setForceRelevant(loadForceRelevant(relevancePersistKey));
-    setForceIrrelevant(loadForceIrrelevant(relevancePersistKey));
+    setForceRelevant(loadSeoForceRelevant(relevancePersistKey));
+    setForceIrrelevant(loadSeoForceIrrelevant(relevancePersistKey));
   }, [relevancePersistKey]);
 
   const setLangFilter = (next: LangFilter) => {
@@ -561,13 +536,13 @@ export function SeoKeywordsTable({
     if (!key) return;
     setForceIrrelevant((prev) => {
       const next = prev.filter((p) => normalizeKw(p) !== key);
-      if (next.length !== prev.length) saveForceIrrelevant(relevancePersistKey, next);
+      if (next.length !== prev.length) saveSeoForceIrrelevant(relevancePersistKey, next);
       return next;
     });
     setForceRelevant((prev) => {
       if (prev.some((p) => normalizeKw(p) === key)) return prev;
       const next = [...prev, keyword.trim()];
-      saveForceRelevant(relevancePersistKey, next);
+      saveSeoForceRelevant(relevancePersistKey, next);
       return next;
     });
     onMarkRelevant?.(keyword.trim());
@@ -579,13 +554,13 @@ export function SeoKeywordsTable({
     if (!key) return;
     setForceRelevant((prev) => {
       const next = prev.filter((p) => normalizeKw(p) !== key);
-      if (next.length !== prev.length) saveForceRelevant(relevancePersistKey, next);
+      if (next.length !== prev.length) saveSeoForceRelevant(relevancePersistKey, next);
       return next;
     });
     setForceIrrelevant((prev) => {
       if (prev.some((p) => normalizeKw(p) === key)) return prev;
       const next = [...prev, keyword.trim()];
-      saveForceIrrelevant(relevancePersistKey, next);
+      saveSeoForceIrrelevant(relevancePersistKey, next);
       return next;
     });
     toast.success(`"${keyword.trim()}" סומן כלא רלוונטי`);
