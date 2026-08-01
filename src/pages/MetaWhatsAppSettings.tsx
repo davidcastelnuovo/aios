@@ -20,6 +20,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { IntegrationVisibilitySelector } from "@/components/forms/IntegrationVisibilitySelector";
+import { MetaWhatsAppTemplates } from "@/components/whatsapp/MetaWhatsAppTemplates";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -868,6 +869,12 @@ export default function MetaWhatsAppSettings() {
                       <AlertDescription>{settings.history_sync_error}</AlertDescription>
                     </Alert>
                   )}
+                  <Separator />
+                  <MetaWhatsAppTemplates
+                    tenantId={tenantId!}
+                    integrationId={integration.id}
+                    displayPhone={settings.display_phone_number}
+                  />
                   <Separator />
                   <IntegrationVisibilitySelector
                     integrationId={integration.id}
