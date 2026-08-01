@@ -43,6 +43,77 @@ const graphJson = async (
   return data;
 };
 
+const unique = (values: string[]) =>
+  values.filter((value, index) => value && values.indexOf(value) === index);
+
+type TokenDebug = { type: string; scopes: string[]; wabaIds: string[] };
+
+/** Reads the token metadata Meta exposes, including the assets it was granted. */
+const inspectToken = async (
+  token: string,
+  appToken: string,
+  graphVersion: string,
+): Promise<TokenDebug> => {
+  try {
+    const debug = await graphJson(
+      `debug_token?input_token=${encodeURIComponent(token)}`,
+      appToken,
+      undefined,
+      graphVersion,
+    );
+    const granular = debug?.data?.granular_scopes ?? [];
+    return {
+      type: String(debug?.data?.type ?? ""),
+      scopes: debug?.data?.scopes ?? [],
+      wabaIds: unique(
+        granular
+          .filter((entry: any) =>
+            ["whatsapp_business_management", "whatsapp_business_messaging"].includes(entry?.scope)
+          )
+          .flatMap((entry: any) => entry?.target_ids ?? []),
+      ),
+    };
+  } catch {
+    return { type: "", scopes: [], wabaIds: [] };
+  }
+};
+
+/** Falls back to walking the businesses a token can see when no asset grant is exposed. */
+const discoverWabasFromBusinesses = async (token: string, graphVersion: string) => {
+  const found: string[] = [];
+  try {
+    const businesses = await graphJson("me/businesses?limit=50", token, undefined, graphVersion);
+    for (const business of businesses?.data ?? []) {
+      for (const edge of ["client_whatsapp_business_accounts", "owned_whatsapp_business_accounts"]) {
+        try {
+          const accounts = await graphJson(
+            `${business.id}/${edge}?limit=50`,
+            token,
+            undefined,
+            graphVersion,
+          );
+          for (const account of accounts?.data ?? []) {
+            if (account?.id) found.push(account.id);
+          }
+        } catch { /* edge not accessible for this business */ }
+      }
+    }
+  } catch { /* business discovery unavailable */ }
+  return unique(found);
+};
+
+const PHONE_FIELDS = "id,display_phone_number,verified_name,quality_rating,platform_type,is_on_biz_app";
+
+const listPhoneNumbers = async (wabaId: string, token: string, graphVersion: string) => {
+  const payload = await graphJson(
+    `${wabaId}/phone_numbers?fields=${PHONE_FIELDS}`,
+    token,
+    undefined,
+    graphVersion,
+  );
+  return (payload.data ?? []) as any[];
+};
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (request.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
@@ -54,6 +125,7 @@ Deno.serve(async (request) => {
     const appSecret = Deno.env.get("META_APP_SECRET") ?? Deno.env.get("FACEBOOK_APP_SECRET") ?? "";
     const configurationId = Deno.env.get("META_WHATSAPP_CONFIG_ID") ?? "";
     const graphVersion = Deno.env.get("META_GRAPH_API_VERSION") ?? DEFAULT_META_GRAPH_VERSION;
+    const appToken = `${appId}|${appSecret}`;
     const authHeader = request.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace(/^Bearer\s+/i, "");
 
@@ -91,6 +163,50 @@ Deno.serve(async (request) => {
       });
     }
 
+    // Reports what Meta knows about the Embedded Signup configuration. A configuration
+    // that is not a WhatsApp login variation silently degrades into a plain Facebook
+    // login, which is impossible to tell apart from the browser.
+    if (action === "diagnose") {
+      if (!appId || !appSecret || !configurationId) {
+        return reply({ error: "meta_whatsapp_not_configured" }, 503);
+      }
+      const checks: Array<Record<string, unknown>> = [];
+      for (const path of [configurationId, `${configurationId}?fields=id,name`]) {
+        try {
+          const data = await graphJson(path, appToken, undefined, graphVersion);
+          checks.push({ path, ok: true, data });
+          break;
+        } catch (error) {
+          checks.push({ path, ok: false, error: error instanceof Error ? error.message : "unknown" });
+        }
+      }
+      let whatsappProduct: Record<string, unknown> = { ok: false };
+      try {
+        const subscribed = await graphJson(
+          `${appId}/subscriptions`,
+          appToken,
+          undefined,
+          graphVersion,
+        );
+        whatsappProduct = {
+          ok: true,
+          objects: (subscribed?.data ?? []).map((entry: any) => ({
+            object: entry?.object,
+            fields: (entry?.fields ?? []).map((field: any) => field?.name),
+          })),
+        };
+      } catch (error) {
+        whatsappProduct = { ok: false, error: error instanceof Error ? error.message : "unknown" };
+      }
+      return reply({
+        app_id: appId,
+        configuration_id: configurationId,
+        graph_version: graphVersion,
+        configuration: checks,
+        webhook_subscriptions: whatsappProduct,
+      });
+    }
+
     if (action === "disconnect") {
       const integrationId = typeof body.integration_id === "string" ? body.integration_id : "";
       if (!integrationId) return reply({ error: "integration_id_required" }, 400);
@@ -109,123 +225,176 @@ Deno.serve(async (request) => {
       return reply({ success: true });
     }
 
-    if (action !== "complete") return reply({ error: "unsupported_action" }, 400);
-    if (!appId || !appSecret || !configurationId) {
+    if (!["complete", "list_assets", "connect_manual"].includes(action)) {
+      return reply({ error: "unsupported_action" }, 400);
+    }
+    if (!appId || !appSecret) {
       return reply({ error: "meta_whatsapp_not_configured" }, 503);
     }
 
-    const rawCode = typeof body.code === "string" ? body.code.trim() : "";
     const suppliedToken = typeof body.access_token === "string" ? body.access_token.trim() : "";
-    const sessionInfo = (body.session_info ?? {}) as MetaWhatsAppSessionInfo;
-    const sessionEvent = typeof body.session_event === "string" ? body.session_event : "";
-    const requestedCoexistence = isCoexistenceFinishEvent(sessionEvent);
     const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
 
-    // The JS SDK cross-domain bridge sometimes hands back a "cb=" arbiter id.
-    // That is never a usable authorization code.
-    const code = rawCode.startsWith("cb=") ? "" : rawCode;
-    if (!code && !suppliedToken) return reply({ error: "exchange_code_required" }, 400);
-
-    // Embedded Signup through the JS SDK returns either an authorization code or,
-    // for some configurations, a short-lived user token. Support both.
+    // Resolve the token AIOS will act with. Embedded Signup hands back an
+    // authorization code; the manual path hands back a system user token.
     let businessToken = "";
-    if (code) {
-      const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
-      tokenUrl.searchParams.set("client_id", appId);
-      tokenUrl.searchParams.set("client_secret", appSecret);
-      tokenUrl.searchParams.set("code", code);
-      const tokenResponse = await fetch(tokenUrl);
-      const tokenPayload = await tokenResponse.json();
-      if (tokenResponse.ok && tokenPayload?.access_token) {
-        businessToken = String(tokenPayload.access_token);
-      } else if (!suppliedToken) {
-        const metaMessage = tokenPayload?.error?.message ?? "";
-        const hint = tokenPayload?.error?.error_subcode === 36008
-          ? " ודאו שה-Configuration הוא זרימת WhatsApp Embedded Signup, ושהדומיין רשום ב-Allowed Domains for the JavaScript SDK וב-Valid OAuth Redirect URIs."
-          : "";
-        return reply({
-          error: `${metaMessage || "Failed to exchange Meta authorization code"}${hint}`,
-          meta_error: tokenPayload?.error ?? null,
-        }, 400);
-      }
-    }
 
-    if (!businessToken && suppliedToken) {
-      const longLivedUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
-      longLivedUrl.searchParams.set("grant_type", "fb_exchange_token");
-      longLivedUrl.searchParams.set("client_id", appId);
-      longLivedUrl.searchParams.set("client_secret", appSecret);
-      longLivedUrl.searchParams.set("fb_exchange_token", suppliedToken);
-      const longLivedResponse = await fetch(longLivedUrl);
-      const longLivedPayload = await longLivedResponse.json();
-      businessToken = longLivedResponse.ok && longLivedPayload?.access_token
-        ? String(longLivedPayload.access_token)
-        : suppliedToken;
+    if (action === "complete") {
+      const rawCode = typeof body.code === "string" ? body.code.trim() : "";
+      // The JS SDK cross-domain bridge sometimes hands back a "cb=" arbiter id.
+      // That is never a usable authorization code.
+      const code = rawCode.startsWith("cb=") ? "" : rawCode;
+      if (!code && !suppliedToken) return reply({ error: "exchange_code_required" }, 400);
+
+      if (code) {
+        // Facebook Login for Business codes exchange without a redirect_uri, but a
+        // configuration that fell back to plain Facebook Login requires the exact
+        // redirect_uri the dialog used. Try both before giving up.
+        const redirectCandidates = unique([
+          "",
+          ...(Array.isArray(body.redirect_uris)
+            ? body.redirect_uris.filter((value: unknown) => typeof value === "string")
+            : []),
+          typeof body.redirect_uri === "string" ? body.redirect_uri : "",
+        ]);
+        let lastError: any = null;
+        for (const redirectUri of redirectCandidates) {
+          const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
+          tokenUrl.searchParams.set("client_id", appId);
+          tokenUrl.searchParams.set("client_secret", appSecret);
+          tokenUrl.searchParams.set("code", code);
+          if (redirectUri) tokenUrl.searchParams.set("redirect_uri", redirectUri);
+          const tokenResponse = await fetch(tokenUrl);
+          const tokenPayload = await tokenResponse.json().catch(() => ({}));
+          if (tokenResponse.ok && tokenPayload?.access_token) {
+            businessToken = String(tokenPayload.access_token);
+            break;
+          }
+          lastError = tokenPayload?.error ?? lastError;
+        }
+        if (!businessToken && !suppliedToken) {
+          const metaMessage = lastError?.message ?? "";
+          const hint = lastError?.error_subcode === 36008
+            ? " נראה שהתצורה אינה זרימת WhatsApp Embedded Signup, ולכן Meta פתחה התחברות פייסבוק רגילה. אפשר לחבר את המספר במסלול הידני עם Access Token."
+            : "";
+          return reply({
+            error: `${metaMessage || "Failed to exchange Meta authorization code"}${hint}`,
+            code: "code_exchange_failed",
+            meta_error: lastError ?? null,
+          }, 400);
+        }
+      }
+
+      if (!businessToken && suppliedToken) {
+        const longLivedUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
+        longLivedUrl.searchParams.set("grant_type", "fb_exchange_token");
+        longLivedUrl.searchParams.set("client_id", appId);
+        longLivedUrl.searchParams.set("client_secret", appSecret);
+        longLivedUrl.searchParams.set("fb_exchange_token", suppliedToken);
+        const longLivedResponse = await fetch(longLivedUrl);
+        const longLivedPayload = await longLivedResponse.json().catch(() => ({}));
+        businessToken = longLivedResponse.ok && longLivedPayload?.access_token
+          ? String(longLivedPayload.access_token)
+          : suppliedToken;
+      }
+    } else {
+      if (!suppliedToken) return reply({ error: "access_token_required" }, 400);
+      businessToken = suppliedToken;
     }
 
     if (!businessToken) {
       return reply({ error: "Failed to obtain a Meta access token" }, 400);
     }
 
-    let wabaIds = [
+    const sessionInfo = (body.session_info ?? {}) as MetaWhatsAppSessionInfo;
+    const sessionEvent = typeof body.session_event === "string" ? body.session_event : "";
+    const requestedCoexistence = action === "complete" && isCoexistenceFinishEvent(sessionEvent);
+
+    const debug = await inspectToken(businessToken, appToken, graphVersion);
+
+    // A short-lived user token from the manual path is worth extending; system user
+    // tokens are already long-lived and must never be exchanged.
+    if (action === "connect_manual" && debug.type === "USER") {
+      const longLivedUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
+      longLivedUrl.searchParams.set("grant_type", "fb_exchange_token");
+      longLivedUrl.searchParams.set("client_id", appId);
+      longLivedUrl.searchParams.set("client_secret", appSecret);
+      longLivedUrl.searchParams.set("fb_exchange_token", businessToken);
+      const longLivedResponse = await fetch(longLivedUrl);
+      const longLivedPayload = await longLivedResponse.json().catch(() => ({}));
+      if (longLivedResponse.ok && longLivedPayload?.access_token) {
+        businessToken = String(longLivedPayload.access_token);
+      }
+    }
+
+    const requestedWabaId = typeof body.waba_id === "string" ? body.waba_id.trim() : "";
+    let wabaIds = unique([
+      ...(requestedWabaId ? [requestedWabaId] : []),
       ...(Array.isArray(sessionInfo.waba_ids) ? sessionInfo.waba_ids : []),
       ...(sessionInfo.waba_id ? [sessionInfo.waba_id] : []),
-    ].filter((value, index, values) => value && values.indexOf(value) === index);
-
-    // Embedded Signup only emits session info for full WhatsApp flows. When it is
-    // absent, ask Meta which WABAs the customer actually granted to this app.
-    let grantedScopes: string[] = [];
-    if (!wabaIds.length) {
-      const debug = await graphJson(
-        `debug_token?input_token=${encodeURIComponent(businessToken)}`,
-        `${appId}|${appSecret}`,
-        undefined,
-        graphVersion,
-      );
-      grantedScopes = debug?.data?.scopes ?? [];
-      const granular = debug?.data?.granular_scopes ?? [];
-      wabaIds = granular
-        .filter((entry: any) =>
-          ["whatsapp_business_management", "whatsapp_business_messaging"].includes(entry?.scope),
-        )
-        .flatMap((entry: any) => entry?.target_ids ?? [])
-        .filter((value: string, index: number, values: string[]) => value && values.indexOf(value) === index);
-    }
-
-    // Last resort: read the WABAs shared with this app through the customer's businesses.
-    if (!wabaIds.length) {
-      try {
-        const businesses = await graphJson("me/businesses?limit=50", businessToken, undefined, graphVersion);
-        for (const business of businesses?.data ?? []) {
-          for (const edge of ["client_whatsapp_business_accounts", "owned_whatsapp_business_accounts"]) {
-            try {
-              const accounts = await graphJson(
-                `${business.id}/${edge}?limit=50`,
-                businessToken,
-                undefined,
-                graphVersion,
-              );
-              for (const account of accounts?.data ?? []) {
-                if (account?.id && !wabaIds.includes(account.id)) wabaIds.push(account.id);
-              }
-            } catch { /* edge not accessible for this business */ }
-          }
-        }
-      } catch { /* business discovery unavailable */ }
-    }
+    ]);
+    if (!wabaIds.length) wabaIds = debug.wabaIds;
+    if (!wabaIds.length) wabaIds = await discoverWabasFromBusinesses(businessToken, graphVersion);
 
     if (!wabaIds.length) {
-      const scopeNote = grantedScopes.length
-        ? ` ההרשאות שהתקבלו: ${grantedScopes.join(", ")}.`
-        : "";
+      const scopeNote = debug.scopes.length ? ` ההרשאות שהתקבלו: ${debug.scopes.join(", ")}.` : "";
       return reply({
         error:
-          "Meta לא החזירה חשבון WhatsApp Business. ודאו שה-Configuration הוא זרימת WhatsApp Embedded Signup הכוללת whatsapp_business_management ו-whatsapp_business_messaging, ושבחרתם חשבון WhatsApp בתהליך." +
+          "Meta לא החזירה חשבון WhatsApp Business. ודאו שהאסימון כולל whatsapp_business_management ו-whatsapp_business_messaging ושהוקצה לו חשבון WhatsApp." +
           scopeNote,
         code: "waba_not_granted",
-        granted_scopes: grantedScopes,
+        granted_scopes: debug.scopes,
+        token_type: debug.type,
       }, 400);
     }
+
+    // Lets the UI show the operator exactly which numbers Meta will connect.
+    if (action === "list_assets") {
+      const accounts: Array<Record<string, unknown>> = [];
+      for (const wabaId of wabaIds) {
+        try {
+          const [details, phones] = await Promise.all([
+            graphJson(`${wabaId}?fields=id,name,currency,timezone_id`, businessToken, undefined, graphVersion)
+              .catch(() => ({ id: wabaId })),
+            listPhoneNumbers(wabaId, businessToken, graphVersion),
+          ]);
+          accounts.push({
+            waba_id: wabaId,
+            name: (details as any)?.name ?? null,
+            phone_numbers: phones.map((phone) => ({
+              id: phone.id,
+              display_phone_number: phone.display_phone_number ?? null,
+              verified_name: phone.verified_name ?? null,
+              quality_rating: phone.quality_rating ?? null,
+              platform_type: phone.platform_type ?? null,
+              is_on_biz_app: phone.is_on_biz_app === true,
+            })),
+          });
+        } catch (error) {
+          accounts.push({
+            waba_id: wabaId,
+            error: error instanceof Error ? error.message : "unknown error",
+            phone_numbers: [],
+          });
+        }
+      }
+      return reply({
+        success: true,
+        token_type: debug.type,
+        granted_scopes: debug.scopes,
+        accounts,
+      });
+    }
+
+    const requestedPhoneIds = new Set(
+      [
+        ...(Array.isArray(body.phone_number_ids)
+          ? body.phone_number_ids.filter((value: unknown) => typeof value === "string")
+          : []),
+        ...(typeof body.phone_number_id === "string" ? [body.phone_number_id] : []),
+        ...(action === "complete" && sessionInfo.phone_number_id ? [sessionInfo.phone_number_id] : []),
+      ].filter(Boolean) as string[],
+    );
 
     const connected: Array<Record<string, unknown>> = [];
     const warnings: string[] = [];
@@ -233,15 +402,10 @@ Deno.serve(async (request) => {
     for (const wabaId of wabaIds) {
       await graphJson(`${wabaId}/subscribed_apps`, businessToken, { method: "POST" }, graphVersion);
 
-      const phonePayload = await graphJson(
-        `${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,platform_type,is_on_biz_app`,
-        businessToken,
-        undefined,
-        graphVersion,
-      );
-      const phones = (phonePayload.data ?? []).filter(
-        (phone: any) => !sessionInfo.phone_number_id || phone.id === sessionInfo.phone_number_id,
-      );
+      const allPhones = await listPhoneNumbers(wabaId, businessToken, graphVersion);
+      const phones = requestedPhoneIds.size
+        ? allPhones.filter((phone: any) => requestedPhoneIds.has(String(phone.id)))
+        : allPhones;
       if (!phones.length) throw new Error("No WhatsApp business phone number was returned by Meta");
 
       for (const phone of phones) {
@@ -254,7 +418,7 @@ Deno.serve(async (request) => {
         if (!coexistence) {
           if (!/^\d{6}$/.test(pin)) {
             return reply({
-              error: `המספר ${phone.display_phone_number ?? phone.id} דורש רישום ל-Cloud API. בחרו "מספר חדש" והזינו PIN בן 6 ספרות.`,
+              error: `המספר ${phone.display_phone_number ?? phone.id} דורש רישום ל-Cloud API. הזינו PIN בן 6 ספרות.`,
               code: "pin_required_for_registration",
             }, 400);
           }
@@ -304,6 +468,7 @@ Deno.serve(async (request) => {
           quality_rating: phone.quality_rating ?? null,
           platform_type: phone.platform_type ?? "CLOUD_API",
           coexistence_enabled: coexistence,
+          onboarding_method: action === "connect_manual" ? "manual_token" : "embedded_signup",
           webhook_subscribed_at: new Date().toISOString(),
           contacts_sync_request_id: contactsSyncRequestId,
           history_sync_request_id: historySyncRequestId,

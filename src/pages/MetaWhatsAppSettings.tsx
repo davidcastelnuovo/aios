@@ -7,10 +7,12 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  KeyRound,
   Loader2,
   MessageCircle,
   Phone,
   ShieldCheck,
+  Stethoscope,
   Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +36,20 @@ type MetaConfig = {
   app_id: string;
   configuration_id: string;
   graph_version: string;
+};
+
+type MetaAsset = {
+  waba_id: string;
+  name: string | null;
+  error?: string;
+  phone_numbers: Array<{
+    id: string;
+    display_phone_number: string | null;
+    verified_name: string | null;
+    quality_rating: string | null;
+    platform_type: string | null;
+    is_on_biz_app: boolean;
+  }>;
 };
 
 type FacebookLoginResponse = {
@@ -109,6 +125,11 @@ export default function MetaWhatsAppSettings() {
   const [mode, setMode] = useState<SignupMode>("coexistence");
   const [pin, setPin] = useState("");
   const [connecting, setConnecting] = useState(false);
+  const [showManual, setShowManual] = useState(false);
+  const [manualToken, setManualToken] = useState("");
+  const [manualPin, setManualPin] = useState("");
+  const [assets, setAssets] = useState<MetaAsset[] | null>(null);
+  const [selectedPhone, setSelectedPhone] = useState("");
   const codeRef = useRef<string | null>(null);
   const sessionRef = useRef<{ data: Record<string, unknown>; event: string } | null>(null);
   const completingRef = useRef(false);
@@ -161,11 +182,17 @@ export default function MetaWhatsAppSettings() {
           access_token: tokenRef.current,
           session_info: sessionRef.current?.data ?? {},
           session_event: sessionRef.current?.event ?? "",
+          redirect_uris: [`${window.location.origin}/`, window.location.origin, window.location.href],
           pin,
         },
       });
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "החיבור לא הושלם");
+      if (!data?.success) {
+        if (data?.code === "code_exchange_failed" || data?.code === "waba_not_granted") {
+          setShowManual(true);
+        }
+        throw new Error(data?.error || "החיבור לא הושלם");
+      }
       const count = data.connections?.length ?? 1;
       toast.success(`${count === 1 ? "מספר WhatsApp חובר" : `${count} מספרי WhatsApp חוברו`} בהצלחה`);
       if (data.warnings?.length) {
@@ -251,8 +278,13 @@ export default function MetaWhatsAppSettings() {
     }
     try {
       await loadFacebookSdk(config.app_id, config.graph_version);
-      const extras: Record<string, unknown> = { setup: {}, sessionInfoVersion: "3" };
-      if (mode === "coexistence") extras.featureType = "whatsapp_business_app_onboarding";
+      // featureType must always be present; Meta treats a missing key differently
+      // from an empty one and can drop back to the plain Facebook login dialog.
+      const extras: Record<string, unknown> = {
+        setup: {},
+        featureType: mode === "coexistence" ? "whatsapp_business_app_onboarding" : "",
+        sessionInfoVersion: "3",
+      };
       const sdk = (window as FacebookWindow).FB;
       if (!sdk) throw new Error("Meta SDK לא נטען");
       sdk.login(
@@ -281,12 +313,12 @@ export default function MetaWhatsAppSettings() {
           }, 2000);
         },
         {
+          // Only the parameters Meta documents for Embedded Signup may be sent.
+          // Anything else makes the dialog fall back to plain Facebook Login,
+          // which returns a code this app cannot exchange.
           config_id: config.configuration_id,
           response_type: "code",
           override_default_response_type: true,
-          // Meta skips the asset picker once a grant exists, which silently
-          // reuses an earlier selection that may not include a WhatsApp account.
-          auth_type: "rerequest",
           extras,
         },
       );
@@ -295,6 +327,69 @@ export default function MetaWhatsAppSettings() {
       toast.error(error instanceof Error ? error.message : "לא ניתן לפתוח את Meta");
     }
   };
+
+  const loadAssetsMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
+        body: { action: "list_assets", tenant_id: tenantId, access_token: manualToken.trim() },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "לא ניתן לקרוא את הנכסים מ-Meta");
+      return (data.accounts ?? []) as MetaAsset[];
+    },
+    onSuccess: (accounts) => {
+      setAssets(accounts);
+      const firstPhone = accounts.flatMap((account) =>
+        account.phone_numbers.map((phone) => `${account.waba_id}::${phone.id}`),
+      )[0];
+      setSelectedPhone(firstPhone ?? "");
+      const total = accounts.reduce((sum, account) => sum + account.phone_numbers.length, 0);
+      if (!total) toast.warning("לא נמצאו מספרי WhatsApp תחת האסימון הזה");
+      else toast.success(`נמצאו ${total} מספרים`);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const connectManualMutation = useMutation({
+    mutationFn: async () => {
+      const [wabaId, phoneNumberId] = selectedPhone.split("::");
+      if (!wabaId || !phoneNumberId) throw new Error("יש לבחור מספר");
+      const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
+        body: {
+          action: "connect_manual",
+          tenant_id: tenantId,
+          access_token: manualToken.trim(),
+          waba_id: wabaId,
+          phone_number_ids: [phoneNumberId],
+          pin: manualPin,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "החיבור לא הושלם");
+      return data;
+    },
+    onSuccess: async (data) => {
+      toast.success(`מספר WhatsApp חובר בהצלחה (${data.connections?.length ?? 1})`);
+      if (data.warnings?.length) toast.warning("החיבור הושלם, אך סנכרון היסטוריה חלקי.");
+      setManualToken("");
+      setManualPin("");
+      setAssets(null);
+      setSelectedPhone("");
+      await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const diagnoseMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
+        body: { action: "diagnose", tenant_id: tenantId },
+      });
+      if (error) throw error;
+      return data as Record<string, unknown>;
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const disconnectMutation = useMutation({
     mutationFn: async (integrationId: string) => {
@@ -408,6 +503,14 @@ export default function MetaWhatsAppSettings() {
               {connecting ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <ExternalLink className="ml-2 h-4 w-4" />}
               {connecting ? "משלים חיבור..." : "המשך לחיבור מאובטח ב־Meta"}
             </Button>
+            <p className="text-xs text-muted-foreground">
+              אם Meta מדלגת על מסכי ה־WhatsApp ומחזירה אתכם מיד לאתר, התצורה באפליקציה אינה זרימת
+              Embedded Signup.{" "}
+              <button type="button" className="underline" onClick={() => setShowManual(true)}>
+                חברו את המספר במסלול הידני
+              </button>
+              .
+            </p>
           </CardContent>
         </Card>
 
@@ -427,6 +530,159 @@ export default function MetaWhatsAppSettings() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <KeyRound className="h-5 w-5 text-emerald-600" />
+                חיבור ידני עם Access Token
+              </CardTitle>
+              <CardDescription>
+                מסלול שעובד גם בלי Embedded Signup: מדביקים אסימון System User מ־Meta Business
+                Settings, בוחרים מספר ומחברים.
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setShowManual((value) => !value)}>
+              {showManual ? "הסתרה" : "פתיחה"}
+            </Button>
+          </div>
+        </CardHeader>
+        {showManual && (
+          <CardContent className="space-y-5">
+            <Alert>
+              <ShieldCheck className="h-4 w-4" />
+              <AlertTitle>איך משיגים אסימון</AlertTitle>
+              <AlertDescription className="text-sm">
+                Meta Business Settings → Users → System users → יצירת משתמש מערכת → Add Assets ובחירת
+                חשבון ה־WhatsApp → Generate new token עם ההרשאות{" "}
+                <code>whatsapp_business_management</code> ו־<code>whatsapp_business_messaging</code>.
+                האסימון נשמר מוצפן ואינו נחשף בממשק.
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-2">
+              <Label htmlFor="meta-wa-token">Access Token</Label>
+              <Input
+                id="meta-wa-token"
+                type="password"
+                value={manualToken}
+                onChange={(event) => {
+                  setManualToken(event.target.value);
+                  setAssets(null);
+                  setSelectedPhone("");
+                }}
+                dir="ltr"
+                autoComplete="off"
+                placeholder="EAAG..."
+                className="font-mono text-xs"
+              />
+            </div>
+
+            <Button
+              variant="secondary"
+              onClick={() => loadAssetsMutation.mutate()}
+              disabled={!manualToken.trim() || loadAssetsMutation.isPending}
+            >
+              {loadAssetsMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+              שליפת חשבונות ומספרים
+            </Button>
+
+            {assets && (
+              <div className="space-y-3">
+                {assets.length === 0 && (
+                  <p className="text-sm text-muted-foreground">לא נמצאו חשבונות WhatsApp Business.</p>
+                )}
+                {assets.map((account) => (
+                  <div key={account.waba_id} className="rounded-lg border p-4">
+                    <div className="mb-3">
+                      <div className="font-semibold">{account.name || "WhatsApp Business Account"}</div>
+                      <div className="font-mono text-xs text-muted-foreground" dir="ltr">
+                        {account.waba_id}
+                      </div>
+                    </div>
+                    {account.error && (
+                      <p className="text-sm text-destructive">{account.error}</p>
+                    )}
+                    {account.phone_numbers.length === 0 && !account.error && (
+                      <p className="text-sm text-muted-foreground">אין מספרים בחשבון הזה.</p>
+                    )}
+                    <RadioGroup value={selectedPhone} onValueChange={setSelectedPhone} className="grid gap-2">
+                      {account.phone_numbers.map((phone) => {
+                        const value = `${account.waba_id}::${phone.id}`;
+                        return (
+                          <Label
+                            key={phone.id}
+                            htmlFor={`phone-${phone.id}`}
+                            className="flex cursor-pointer items-center gap-3 rounded-md border p-3 has-[[data-state=checked]]:border-emerald-500"
+                          >
+                            <RadioGroupItem id={`phone-${phone.id}`} value={value} />
+                            <span className="flex-1">
+                              <span className="block font-medium" dir="ltr">
+                                {phone.display_phone_number || phone.id}
+                              </span>
+                              <span className="block text-xs font-normal text-muted-foreground">
+                                {phone.verified_name || "ללא שם מאומת"}
+                              </span>
+                            </span>
+                            {phone.is_on_biz_app && <Badge variant="secondary">Coexistence</Badge>}
+                          </Label>
+                        );
+                      })}
+                    </RadioGroup>
+                  </div>
+                ))}
+
+                <div className="space-y-2">
+                  <Label htmlFor="meta-wa-manual-pin">PIN בן 6 ספרות (נדרש רק לרישום מספר חדש)</Label>
+                  <Input
+                    id="meta-wa-manual-pin"
+                    value={manualPin}
+                    onChange={(event) => setManualPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    inputMode="numeric"
+                    dir="ltr"
+                    placeholder="123456"
+                    className="max-w-48"
+                  />
+                </div>
+
+                <Button
+                  onClick={() => connectManualMutation.mutate()}
+                  disabled={!selectedPhone || connectManualMutation.isPending}
+                >
+                  {connectManualMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                  חיבור המספר הנבחר
+                </Button>
+              </div>
+            )}
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => diagnoseMutation.mutate()}
+                disabled={diagnoseMutation.isPending}
+              >
+                {diagnoseMutation.isPending
+                  ? <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  : <Stethoscope className="ml-2 h-4 w-4" />}
+                בדיקת תצורת Meta
+              </Button>
+              {diagnoseMutation.data && (
+                <pre
+                  dir="ltr"
+                  className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-left font-mono text-[11px]"
+                >
+                  {JSON.stringify(diagnoseMutation.data, null, 2)}
+                </pre>
+              )}
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>
