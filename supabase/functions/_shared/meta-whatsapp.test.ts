@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { sanitizeTemplateParameter, shouldApplyDeliveryStatus } from './meta-whatsapp.ts'
+import {
+  dropUnresolvedTemplateLines,
+  sanitizeTemplateParameter,
+  shouldApplyDeliveryStatus,
+} from './meta-whatsapp.ts'
 
 test('a lead with no screening answers does not break the template send', () => {
   assert.equal(sanitizeTemplateParameter(''), '-')
@@ -21,6 +25,23 @@ test('a parameter longer than Meta allows is truncated', () => {
   const truncated = sanitizeTemplateParameter('א'.repeat(5000))
   assert.equal(truncated.length, 1024)
   assert.ok(truncated.endsWith('…'))
+})
+
+test('a line whose placeholder resolves to nothing is dropped', () => {
+  const data: Record<string, string> = { lead_name: 'רון לוי', source: '' }
+  const resolve = (line: string) =>
+    line.replace(/\{\{(\w+)\}\}/g, (placeholder, key) => data[key] ?? placeholder)
+
+  const raw = ['שם הליד: {{lead_name}}', 'חברה: {{lead_company}}', 'מקור: {{source}}', 'ליד חדש התקבל'].join('\n')
+
+  assert.equal(dropUnresolvedTemplateLines(raw, resolve), 'שם הליד: {{lead_name}}\nליד חדש התקבל')
+})
+
+test('dropping unresolved lines leaves plain text and repeated placeholders alone', () => {
+  const resolve = (line: string) => line.replace(/\{\{name\}\}/g, 'דוד')
+  assert.equal(dropUnresolvedTemplateLines('שלום', resolve), 'שלום')
+  assert.equal(dropUnresolvedTemplateLines('{{name}} ו-{{name}}', resolve), '{{name}} ו-{{name}}')
+  assert.equal(dropUnresolvedTemplateLines('{{missing}}', resolve), '')
 })
 
 test('delivery status only moves forward, and failure always wins', () => {

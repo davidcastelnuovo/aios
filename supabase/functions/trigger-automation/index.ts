@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { sendCarmenReplyViaActionStep } from '../_shared/carmen.ts'
-import { sanitizeTemplateParameter } from '../_shared/meta-whatsapp.ts'
+import { dropUnresolvedTemplateLines, sanitizeTemplateParameter } from '../_shared/meta-whatsapp.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -3276,8 +3276,9 @@ async function executeMetaWhatsappMessage(supabase: any, config: any, data: any,
     if (!templateName) throw new Error('יש לבחור תבנית WhatsApp מאושרת')
     const language = String(config.template_language || 'he').trim() || 'he'
     const variables = Array.isArray(config.template_variables) ? config.template_variables : []
+    const resolveLine = (line: string) => replaceTemplateVariables(line, { ...data }, tenantSlug)
     const resolved = variables.map((value: unknown) =>
-      sanitizeTemplateParameter(replaceTemplateVariables(String(value ?? ''), { ...data }, tenantSlug)),
+      sanitizeTemplateParameter(resolveLine(dropUnresolvedTemplateLines(String(value ?? ''), resolveLine))),
     )
     payload.template = {
       name: templateName,
