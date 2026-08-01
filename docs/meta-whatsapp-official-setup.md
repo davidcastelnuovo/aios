@@ -23,6 +23,12 @@ webhook משרת את כל הארגונים ומנותב בבטחה למספר �
 
 ## 2. יצירת Embedded Signup Configuration
 
+> **תנאי מקדים.** הבחירה ב־login variation מסוג *WhatsApp Embedded Signup*
+> מופיעה רק לאפליקציות שקיבלו גישת Tech Provider / Solution Partner. באפליקציה
+> ללא הגישה הזו ניתן לשמור Configuration רגיל של Facebook Login for Business,
+> אבל הוא לא יפעיל את מסכי ה־WhatsApp. במקרה כזה יש להשתמש ב"חיבור ידני עם
+> Access Token" — ראו סעיף 9.
+
 1. היכנסו ל־**Facebook Login for Business → Configurations**.
 2. צרו Configuration עבור WhatsApp Embedded Signup בגרסה העדכנית. אל תיצרו
    אינטגרציה חדשה על Embedded Signup v2: Meta הודיעה ש־v2 יוצאת משימוש
@@ -179,3 +185,43 @@ Coexistence אינו זמין לכל מספר אוטומטית. Meta עשויה 
   Meta.
 - מחיקת חיבור ב־AIOS מסירה את הגישה מהמערכת בלבד. היא אינה מוחקת WABA או מספר
   מ־Meta.
+
+## 9. חיבור ידני עם Access Token
+
+מסלול חלופי שאינו תלוי ב־Embedded Signup. הוא מתאים כשהאפליקציה אינה Tech
+Provider, כשה־Configuration אינו זרימת WhatsApp, או כשרוצים לחבר מספר שכבר קיים
+תחת ה־Business של הארגון.
+
+### איך מזהים שצריך אותו
+
+Meta מדלגת על כל מסכי ה־WhatsApp, מציגה אישור פייסבוק רגיל ומחזירה מיד לאתר.
+הקוד שחוזר אינו קוד של Facebook Login for Business, ולכן החלפתו לאסימון נכשלת עם
+`error_subcode 36008`. AIOS מזהה את המצב, מציגה הודעה מתאימה ופותחת אוטומטית את
+כרטיס החיבור הידני.
+
+### הפקת האסימון
+
+1. **Meta Business Settings → Users → System users** ויצירת משתמש מערכת
+   (מומלץ Admin).
+2. **Add Assets** ובחירת חשבון ה־WhatsApp (WABA) עם הרשאת Full control.
+3. **Generate new token**, בחירת האפליקציה, וסימון:
+   - `whatsapp_business_management`
+   - `whatsapp_business_messaging`
+4. אסימון של System User אינו פג. אין להעביר אותו בערוצים לא מאובטחים.
+
+### החיבור עצמו
+
+בדף **WhatsApp Business הרשמי** פותחים את "חיבור ידני עם Access Token",
+מדביקים את האסימון ולוחצים **שליפת חשבונות ומספרים**. AIOS קוראת את הנכסים
+שהאסימון מורשה עליהם, מציגה כל WABA עם המספרים שלו, ומחברת את המספר שנבחר:
+נרשמת ל־webhooks, מריצה `register` עם PIN אם המספר אינו במצב Coexistence, ומפעילה
+סנכרון אנשי קשר והיסטוריה כשהוא כן.
+
+האסימון נשמר בטבלת `meta_whatsapp_tokens` שנגישה ל־service role בלבד, ואינו מוחזר
+לדפדפן. חיבורים שנוצרו כך מסומנים ב־`settings.onboarding_method = "manual_token"`.
+
+### בדיקת תצורה
+
+הכפתור **בדיקת תצורת Meta** מריץ את פעולת `diagnose` ב־`meta-whatsapp-auth`,
+שמדווחת מה Meta מחזירה עבור ה־`META_WHATSAPP_CONFIG_ID` המוגדר ואילו webhooks
+רשומים לאפליקציה. זו הדרך המהירה לוודא אם ה־Configuration בכלל קיים ונגיש.

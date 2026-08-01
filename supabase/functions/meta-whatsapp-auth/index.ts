@@ -247,23 +247,25 @@ Deno.serve(async (request) => {
       if (!code && !suppliedToken) return reply({ error: "exchange_code_required" }, 400);
 
       if (code) {
-        // Facebook Login for Business codes exchange without a redirect_uri, but a
-        // configuration that fell back to plain Facebook Login requires the exact
-        // redirect_uri the dialog used. Try both before giving up.
-        const redirectCandidates = unique([
-          "",
+        // Facebook Login for Business codes exchange with no redirect_uri at all.
+        // Codes minted by the plain JS SDK dialog need one, and Meta accepts an
+        // explicitly empty value for those. Walk every shape before giving up:
+        // null omits the parameter, "" sends it empty.
+        const suppliedRedirects = [
           ...(Array.isArray(body.redirect_uris)
             ? body.redirect_uris.filter((value: unknown) => typeof value === "string")
             : []),
-          typeof body.redirect_uri === "string" ? body.redirect_uri : "",
-        ]);
+          ...(typeof body.redirect_uri === "string" ? [body.redirect_uri] : []),
+        ].filter(Boolean) as string[];
+        const redirectCandidates: Array<string | null> = [null, "", ...unique(suppliedRedirects)];
+
         let lastError: any = null;
         for (const redirectUri of redirectCandidates) {
           const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
           tokenUrl.searchParams.set("client_id", appId);
           tokenUrl.searchParams.set("client_secret", appSecret);
           tokenUrl.searchParams.set("code", code);
-          if (redirectUri) tokenUrl.searchParams.set("redirect_uri", redirectUri);
+          if (redirectUri !== null) tokenUrl.searchParams.set("redirect_uri", redirectUri);
           const tokenResponse = await fetch(tokenUrl);
           const tokenPayload = await tokenResponse.json().catch(() => ({}));
           if (tokenResponse.ok && tokenPayload?.access_token) {
@@ -271,11 +273,14 @@ Deno.serve(async (request) => {
             break;
           }
           lastError = tokenPayload?.error ?? lastError;
+          // A code is single use. Once Meta says it was already redeemed there is
+          // nothing left to retry, and further attempts only mask the real error.
+          if (String(tokenPayload?.error?.message ?? "").includes("has been used")) break;
         }
         if (!businessToken && !suppliedToken) {
           const metaMessage = lastError?.message ?? "";
           const hint = lastError?.error_subcode === 36008
-            ? " נראה שהתצורה אינה זרימת WhatsApp Embedded Signup, ולכן Meta פתחה התחברות פייסבוק רגילה. אפשר לחבר את המספר במסלול הידני עם Access Token."
+            ? " Meta דחתה את הקוד. בדקו ש-aios.co.il מופיע ב-Allowed Domains for the JavaScript SDK וב-Valid OAuth Redirect URIs, ושה-Configuration הוא זרימת WhatsApp Embedded Signup. לחלופין חברו את המספר במסלול הידני עם Access Token."
             : "";
           return reply({
             error: `${metaMessage || "Failed to exchange Meta authorization code"}${hint}`,
