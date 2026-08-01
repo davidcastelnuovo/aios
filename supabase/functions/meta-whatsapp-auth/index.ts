@@ -434,14 +434,25 @@ Deno.serve(async (request) => {
       const accounts: Array<Record<string, unknown>> = [];
       for (const wabaId of wabaIds) {
         try {
-          const [details, phones] = await Promise.all([
+          // Meta delivers webhooks to every app subscribed to a WABA, so an
+          // existing provider on the same account means duplicate inbound
+          // messages and possibly duplicate automated replies. Show it first.
+          const [details, phones, subscribed] = await Promise.all([
             graphJson(`${wabaId}?fields=id,name,currency,timezone_id`, businessToken, undefined, graphVersion)
               .catch(() => ({ id: wabaId })),
             listPhoneNumbers(wabaId, businessToken, graphVersion),
+            graphJson(`${wabaId}/subscribed_apps`, businessToken, undefined, graphVersion)
+              .catch(() => null),
           ]);
           accounts.push({
             waba_id: wabaId,
             name: (details as any)?.name ?? null,
+            subscribed_apps: subscribed
+              ? ((subscribed as any).data ?? []).map((entry: any) => ({
+                id: String(entry?.whatsapp_business_api_data?.id ?? entry?.id ?? ""),
+                name: entry?.whatsapp_business_api_data?.name ?? entry?.name ?? null,
+              }))
+              : null,
             phone_numbers: phones.map((phone) => ({
               id: phone.id,
               display_phone_number: phone.display_phone_number ?? null,
@@ -463,6 +474,7 @@ Deno.serve(async (request) => {
         success: true,
         token_type: debug.type,
         granted_scopes: debug.scopes,
+        app_id: appId,
         accounts,
       });
     }
@@ -496,22 +508,35 @@ Deno.serve(async (request) => {
         // Meta's is_on_biz_app is authoritative: a number still used in the
         // WhatsApp Business app must not be re-registered for Cloud API.
         const coexistence = phone.is_on_biz_app === true;
-        if (!coexistence) {
+        // A number already on Cloud API (e.g. hosted through another provider
+        // such as ManyChat) is registered once, WABA-wide. Re-running /register
+        // would reset its two-step PIN and can break the other provider, so any
+        // app with WABA access simply sends without re-registering.
+        const alreadyOnCloud = String(phone.platform_type ?? "").toUpperCase() === "CLOUD_API";
+        if (!coexistence && !alreadyOnCloud) {
           if (!/^\d{6}$/.test(pin)) {
             return reply({
               error: `המספר ${phone.display_phone_number ?? phone.id} דורש רישום ל-Cloud API. הזינו PIN בן 6 ספרות.`,
               code: "pin_required_for_registration",
             }, 400);
           }
-          await graphJson(
-            `${phone.id}/register`,
-            businessToken,
-            {
-              method: "POST",
-              body: JSON.stringify({ messaging_product: "whatsapp", pin }),
-            },
-            graphVersion,
-          );
+          try {
+            await graphJson(
+              `${phone.id}/register`,
+              businessToken,
+              {
+                method: "POST",
+                body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+              },
+              graphVersion,
+            );
+          } catch (error) {
+            // Treat an already-registered number as success rather than failing
+            // the whole connection.
+            const message = error instanceof Error ? error.message : "";
+            if (!/already|registered/i.test(message)) throw error;
+            warnings.push(`${phone.display_phone_number || phone.id}: ${message}`);
+          }
         }
 
         let contactsSyncRequestId: string | null = null;
@@ -549,6 +574,7 @@ Deno.serve(async (request) => {
           quality_rating: phone.quality_rating ?? null,
           platform_type: phone.platform_type ?? "CLOUD_API",
           coexistence_enabled: coexistence,
+          already_registered: !coexistence && alreadyOnCloud,
           onboarding_method: action === "connect_manual" ? "manual_token" : "embedded_signup",
           webhook_subscribed_at: new Date().toISOString(),
           contacts_sync_request_id: contactsSyncRequestId,

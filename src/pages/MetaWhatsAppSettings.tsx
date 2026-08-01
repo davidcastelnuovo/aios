@@ -42,6 +42,7 @@ type MetaAsset = {
   waba_id: string;
   name: string | null;
   error?: string;
+  subscribed_apps?: Array<{ id: string; name: string | null }> | null;
   phone_numbers: Array<{
     id: string;
     display_phone_number: string | null;
@@ -167,6 +168,7 @@ export default function MetaWhatsAppSettings() {
   const [manualWabaId, setManualWabaId] = useState("");
   const [manualBusinessId, setManualBusinessId] = useState("");
   const [assets, setAssets] = useState<MetaAsset[] | null>(null);
+  const [metaAppId, setMetaAppId] = useState("");
   const [selectedPhone, setSelectedPhone] = useState("");
   const [discovery, setDiscovery] = useState<unknown>(null);
   const codeRef = useRef<string | null>(null);
@@ -369,6 +371,7 @@ export default function MetaWhatsAppSettings() {
       if (!data?.success) {
         throw new MetaAuthError(data?.error || "לא ניתן לקרוא את הנכסים מ-Meta", data?.code);
       }
+      setMetaAppId(String(data.app_id ?? ""));
       return (data.accounts ?? []) as MetaAsset[];
     },
     onSuccess: (accounts) => {
@@ -688,6 +691,23 @@ export default function MetaWhatsAppSettings() {
                     {account.error && (
                       <p className="text-sm text-destructive">{account.error}</p>
                     )}
+                    {(() => {
+                      const others = (account.subscribed_apps ?? []).filter(
+                        (app) => app.id && app.id !== metaAppId,
+                      );
+                      if (!others.length) return null;
+                      return (
+                        <Alert className="mb-3 border-amber-500/40">
+                          <ShieldCheck className="h-4 w-4" />
+                          <AlertTitle>אפליקציה נוספת כבר מחוברת לחשבון הזה</AlertTitle>
+                          <AlertDescription className="text-sm">
+                            {`המספר כבר מחובר ל-Cloud API דרך: ${
+                              others.map((app) => app.name || app.id).join(", ")
+                            }. AIOS יתחבר כמאזין נוסף — המספר לא יירשם מחדש וה-PIN לא ישתנה, אבל הודעות נכנסות יגיעו גם ל-AIOS וגם לאפליקציה הקיימת. אם אינכם רוצים כפילות, הסירו את האפליקציה הישנה מה-WABA לאחר החיבור.`}
+                          </AlertDescription>
+                        </Alert>
+                      );
+                    })()}
                     {account.phone_numbers.length === 0 && !account.error && (
                       <p className="text-sm text-muted-foreground">אין מספרים בחשבון הזה.</p>
                     )}
