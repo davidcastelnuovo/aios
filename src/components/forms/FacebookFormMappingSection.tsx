@@ -29,6 +29,7 @@ interface FacebookForm {
 interface FormMapping {
   field_mappings: Record<string, string>;
   agency_id: string | null;
+  client_id?: string | null;
   sales_person_id: string | null; // legacy single
   sales_person_ids?: string[]; // new multi-select
   tag_id: string | null;
@@ -78,12 +79,27 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const [selectedFormId, setSelectedFormId] = useState<string>("");
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [selectedAgency, setSelectedAgency] = useState<string>("");
+  const [selectedClient, setSelectedClient] = useState<string>("none");
   const [selectedSalesPersonIds, setSelectedSalesPersonIds] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState<string>("");
   const [pageTokens, setPageTokens] = useState<Record<string, string>>({});
   const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
   const [isAddingNewForm, setIsAddingNewForm] = useState<boolean>(false);
   const [editingFormId, setEditingFormId] = useState<string | null>(null);
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ["clients-for-facebook-form-routing", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id,name,contact_name,phone")
+        .eq("tenant_id", tenantId)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: Boolean(tenantId),
+  });
 
   // Fetch source integration token if this is a shared connection
   const { data: sourceToken } = useQuery({
@@ -207,6 +223,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       const mapping = existingSettings.form_mappings[selectedFormId] as FormMapping;
       setFieldMappings(mapping.field_mappings || {});
       setSelectedAgency(mapping.agency_id || "");
+      setSelectedClient(mapping.client_id || "none");
       // Support both legacy single and new multi-select
       const legacyId = mapping.sales_person_id;
       const multiIds = mapping.sales_person_ids || [];
@@ -232,6 +249,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       }
       setSelectedSalesPersonIds([]);
       setSelectedTag("");
+      setSelectedClient("none");
     }
   }, [selectedFormId, existingSettings, formsData]);
 
@@ -255,6 +273,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       formMappings[selectedFormId] = {
         field_mappings: fieldMappings,
         agency_id: selectedAgency || null,
+        client_id: selectedClient === "none" ? null : selectedClient,
         sales_person_id: selectedSalesPersonIds.length > 0 ? selectedSalesPersonIds[0] : null, // legacy compat
         sales_person_ids: selectedSalesPersonIds.length > 0 ? selectedSalesPersonIds : null,
         tag_id: selectedTag || null,
@@ -303,6 +322,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       setSelectedFormId("");
       setFieldMappings({});
       setSelectedAgency("");
+      setSelectedClient("none");
       setSelectedSalesPersonIds([]);
       setSelectedTag("");
       queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings', tenantId] });
@@ -438,6 +458,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         {mappedFormIds.map((formId) => {
               const mapping = existingFormMappings[formId];
               const agencyName = agencies.find(a => a.id === mapping.agency_id)?.name;
+              const clientName = clients.find(client => client.id === mapping.client_id)?.name;
               // Support both legacy single and new multi-select for display
               const spIds = mapping.sales_person_ids || (mapping.sales_person_id ? [mapping.sales_person_id] : []);
               const salesPersonNames = spIds
@@ -462,7 +483,9 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                     </div>
                     <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
                       {agencyName && <span>סוכנות: {agencyName}</span>}
-                      {agencyName && salesPersonNames && <span>•</span>}
+                      {(agencyName && clientName) && <span>•</span>}
+                      {clientName && <span>לקוח מקבל: {clientName}</span>}
+                      {(agencyName || clientName) && salesPersonNames && <span>•</span>}
                       {salesPersonNames && <span>אנשי מכירות: {salesPersonNames}</span>}
                       {(agencyName || salesPersonNames) && tagName && <span>•</span>}
                       {tagName && <span>תווית: {tagName}</span>}
@@ -478,6 +501,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                         setSelectedFormId(formId);
                         setFieldMappings(mapping.field_mappings || {});
                         setSelectedAgency(mapping.agency_id || '');
+                        setSelectedClient(mapping.client_id || 'none');
                         // Support both legacy and new multi-select
                         const ids = mapping.sales_person_ids || (mapping.sales_person_id ? [mapping.sales_person_id] : []);
                         setSelectedSalesPersonIds(ids);
@@ -803,6 +827,29 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
               </Select>
               <p className="text-xs text-muted-foreground">
                 לידים מטופס זה ישויכו אוטומטית לסוכנות שנבחרה
+              </p>
+            </div>
+
+            {/* Agency client routing */}
+            <div className="space-y-2">
+              <Label>הלקוח שיקבל את הלידים מטופס זה</Label>
+              <Select value={selectedClient} onValueChange={setSelectedClient}>
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר לקוח" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">ללא ניתוב ללקוח</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name || client.contact_name || client.id}
+                      {client.phone ? ` — ${client.phone}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                באוטומציה אחת ניתן לשלוח ל־{"{{client_phone}}"} ולהוסיף את{" "}
+                {"{{form_qa_summary}}"}. כל טופס ינותב ללקוח שנבחר כאן.
               </p>
             </div>
 

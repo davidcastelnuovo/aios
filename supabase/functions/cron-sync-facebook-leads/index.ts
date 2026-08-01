@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  buildLeadRoutingPayload,
+  resolveLeadClient,
+} from "../_shared/lead-routing.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +14,7 @@ interface FormMapping {
   form_id: string;
   form_name: string;
   agency_id: string;
+  client_id?: string | null;
   sales_person_id?: string | null;
   tag_id?: string | null;
   field_mappings: Record<string, string>;
@@ -158,14 +163,25 @@ serve(async (req) => {
                 fieldData[field.name] = field.values?.[0] || '';
               }
             }
+            const routedClient = await resolveLeadClient(
+              supabase,
+              integration.tenant_id,
+              mapping.client_id,
+            );
+            const routingPayload = buildLeadRoutingPayload(routedClient, fieldData);
 
             // Map fields according to configuration
             const leadRecord: Record<string, any> = {
               tenant_id: integration.tenant_id,
               agency_id: mapping.agency_id,
+              client_id: routedClient?.client_id || null,
               sales_person_id: (mapping.sales_person_id && mapping.sales_person_id !== 'none') ? mapping.sales_person_id : null,
               source: 'paid_ads',
               status: 'new',
+              facebook_form_id: formId,
+              facebook_leadgen_id: leadgenId,
+              form_data: fieldData,
+              form_qa_summary: routingPayload.form_qa_summary,
               notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${mapping.form_name || formId}\nForm ID: ${formId}\nCreated: ${fbLead.created_time || 'unknown'}`,
               company_name: 'ליד מפייסבוק', // Default
             };
@@ -258,6 +274,7 @@ serve(async (req) => {
                     agency_id: newLead.agency_id,
                     facebook_form_id: formId,
                     facebook_leadgen_id: leadgenId,
+                    ...routingPayload,
                     ...fbFields,
                   },
                   tenant_id: integration.tenant_id,
@@ -317,13 +334,24 @@ serve(async (req) => {
                   fieldData[field.name] = field.values?.[0] || '';
                 }
               }
+              const routedClient = await resolveLeadClient(
+                supabase,
+                integration.tenant_id,
+                mapping.client_id,
+              );
+              const routingPayload = buildLeadRoutingPayload(routedClient, fieldData);
 
               const leadRecord: Record<string, any> = {
                 tenant_id: integration.tenant_id,
                 agency_id: mapping.agency_id,
+                client_id: routedClient?.client_id || null,
                 sales_person_id: (mapping.sales_person_id && mapping.sales_person_id !== 'none') ? mapping.sales_person_id : null,
                 source: 'paid_ads',
                 status: 'new',
+                facebook_form_id: formId,
+                facebook_leadgen_id: leadgenId,
+                form_data: fieldData,
+                form_qa_summary: routingPayload.form_qa_summary,
                 notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${mapping.form_name || formId}\nForm ID: ${formId}\nCreated: ${fbLead.created_time || 'unknown'}`,
                 company_name: 'ליד מפייסבוק',
               };
@@ -393,6 +421,9 @@ serve(async (req) => {
                       status: newLead.status,
                       source: newLead.source,
                       agency_id: newLead.agency_id,
+                      facebook_form_id: formId,
+                      facebook_leadgen_id: leadgenId,
+                      ...routingPayload,
                     },
                     tenant_id: integration.tenant_id,
                   }),
@@ -578,6 +609,12 @@ serve(async (req) => {
             }
             
             // Map fields by type using facebook_form_fields from trigger config
+            const flowClient = await resolveLeadClient(
+              supabase,
+              info.tenantId,
+              (triggerStep?.configuration as any)?.client_id,
+            );
+            const flowRoutingPayload = buildLeadRoutingPayload(flowClient, fieldData);
             const formFields = (triggerStep?.configuration as any)?.facebook_form_fields || [];
             let mappedName: string | null = null;
             let mappedPhone: string | null = null;
@@ -640,6 +677,7 @@ serve(async (req) => {
                     source: 'paid_ads',
                     facebook_form_id: info.formId,
                     facebook_leadgen_id: leadgenId,
+                    ...flowRoutingPayload,
                     ...fbFields,
                   },
                   tenant_id: info.tenantId,
