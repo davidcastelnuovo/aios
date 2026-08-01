@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
-import { DEFAULT_META_GRAPH_VERSION, digitsOnly } from "../_shared/meta-whatsapp.ts";
+import { DEFAULT_META_GRAPH_VERSION, digitsOnly, renderTemplateText } from "../_shared/meta-whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -175,13 +175,33 @@ Deno.serve(async (request) => {
     }
 
     const messageId = result?.messages?.[0]?.id ?? null;
+
+    // Resolved after the send so a failure here can never affect delivery.
+    let templateText: string | null = null;
+    if (template?.name) {
+      const bodyComponent = (Array.isArray(template.components) ? template.components : []).find(
+        (component: Record<string, unknown>) => component?.type === "body",
+      );
+      const parameters = (Array.isArray(bodyComponent?.parameters) ? bodyComponent.parameters : []).map(
+        (parameter: Record<string, unknown>) => String(parameter?.text ?? ""),
+      );
+      templateText = await renderTemplateText(
+        String(settings.waba_id ?? ""),
+        String(template.name),
+        String(template.language ?? "he"),
+        parameters,
+        tokenRow.access_token,
+        graphVersion,
+      );
+    }
+
     const { error: insertError } = await admin.from("chat_messages").insert({
       client_id: clientId ?? null,
       lead_id: leadId ?? null,
       tenant_id: tenantId,
       connection_user_id: integration.user_id ?? userId,
       integration_id: integration.id,
-      message_text: message || `[תבנית: ${template.name}]`,
+      message_text: message || templateText || `[תבנית: ${template.name}]`,
       direction: "outbound",
       channel: "whatsapp",
       provider: "meta_whatsapp",
