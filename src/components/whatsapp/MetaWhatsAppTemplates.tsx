@@ -52,6 +52,7 @@ type MetaTemplate = {
   status: string;
   category: string;
   language: string;
+  parameter_format?: string;
   components: MetaTemplateComponent[];
   rejected_reason?: string | null;
   quality_score?: { score?: string } | null;
@@ -77,8 +78,33 @@ const variableIndexes = (text: string) =>
     .filter((value, index, values) => values.indexOf(value) === index)
     .sort((a, b) => a - b);
 
+const hasInvalidVariableSyntax = (text: string) => {
+  const tokens = [...text.matchAll(/\{\{([^{}]+)\}\}/g)];
+  const remainder = text.replace(/\{\{[^{}]+\}\}/g, "");
+  return (
+    tokens.some((match) => !/^\d+$/.test(match[1])) ||
+    remainder.includes("{{") ||
+    remainder.includes("}}")
+  );
+};
+
 const templateBody = (template: MetaTemplate) =>
   template.components?.find((component) => component.type.toUpperCase() === "BODY")?.text ?? "";
+
+const supportsDirectSend = (template: MetaTemplate) => {
+  if (template.parameter_format === "named") return false;
+  if (!template.components?.every((component) => ["BODY", "FOOTER"].includes(component.type.toUpperCase()))) {
+    return false;
+  }
+  const body = templateBody(template);
+  const tokens = [...body.matchAll(/\{\{([^{}]+)\}\}/g)];
+  const remainder = body.replace(/\{\{[^{}]+\}\}/g, "");
+  return (
+    tokens.every((match) => /^\d+$/.test(match[1])) &&
+    !remainder.includes("{{") &&
+    !remainder.includes("}}")
+  );
+};
 
 const friendlyError = (error: unknown) => {
   if (error instanceof Error) return error.message;
@@ -112,6 +138,7 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
       return {
         templates: (data?.templates ?? []) as MetaTemplate[],
         canManage: data?.can_manage === true,
+        truncated: data?.truncated === true,
       };
     },
   });
@@ -121,15 +148,17 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
     () => (sendTemplate ? variableIndexes(templateBody(sendTemplate)) : []),
     [sendTemplate],
   );
+  const formVariableKey = formVariables.join(",");
+  const sendVariableKey = sendVariables.join(",");
 
   useEffect(() => {
-    setExamples((current) => formVariables.map((_, index) => current[index] ?? ""));
-  }, [formVariables.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    setExamples(formVariables.map(() => ""));
+  }, [formVariableKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setSendValues(sendVariables.map(() => ""));
     setRecipientPhone("");
-  }, [sendTemplate?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sendTemplate?.id, sendVariableKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetCreateForm = () => {
     setForm({ name: "", category: "UTILITY", language: "he", body: "", footer: "" });
@@ -220,6 +249,10 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
   const canCreate =
     /^[a-z0-9_]+$/.test(form.name) &&
     form.body.trim().length > 0 &&
+    !hasInvalidVariableSyntax(form.body) &&
+    !form.footer.includes("{{") &&
+    !form.footer.includes("}}") &&
+    formVariables.every((value, index) => value === index + 1) &&
     examples.length === formVariables.length &&
     examples.every(Boolean);
   const canSend =
@@ -275,6 +308,12 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
           עדיין אין תבניות בחשבון WhatsApp הזה.
         </div>
       ) : (
+        <>
+        {templatesQuery.data?.truncated && (
+          <Alert className="mb-3">
+            <AlertDescription>מוצגות 2,000 התבניות הראשונות. מחקו תבניות ישנות כדי להציג נוספות.</AlertDescription>
+          </Alert>
+        )}
         <Table>
           <TableHeader>
             <TableRow>
@@ -291,6 +330,7 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
                 label: template.status,
                 className: "",
               };
+              const canSendTemplate = template.status === "APPROVED" && supportsDirectSend(template);
               return (
                 <TableRow key={template.id}>
                   <TableCell>
@@ -309,7 +349,14 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={template.status !== "APPROVED"}
+                        disabled={!canSendTemplate}
+                        title={
+                          template.status !== "APPROVED"
+                            ? "ניתן לשלוח רק תבנית מאושרת"
+                            : !supportsDirectSend(template)
+                              ? "התבנית כוללת header, כפתורים, מדיה או משתנים בעלי שם שעדיין אינם נתמכים בשליחה מהירה"
+                              : undefined
+                        }
                         onClick={() => setSendTemplate(template)}
                       >
                         <Send className="ml-1 h-3.5 w-3.5" />
@@ -336,6 +383,7 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
             })}
           </TableBody>
         </Table>
+        </>
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -399,6 +447,11 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
               <p className="text-xs text-muted-foreground">
                 משתנים נכתבים ברצף: {"{{1}}"}, {"{{2}}"} וכן הלאה.
               </p>
+              {hasInvalidVariableSyntax(form.body) && (
+                <p className="text-xs text-destructive">
+                  משתנים חייבים להיות מספריים וברצף, למשל {"{{1}}"} ואז {"{{2}}"}.
+                </p>
+              )}
             </div>
             {formVariables.map((variable, index) => (
               <div className="space-y-2" key={variable}>
@@ -422,6 +475,9 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
                 placeholder="AIOS — כאן בשבילך"
               />
               <p className="text-xs text-muted-foreground">{form.footer.length}/60</p>
+              {(form.footer.includes("{{") || form.footer.includes("}}")) && (
+                <p className="text-xs text-destructive">שורת סיום אינה תומכת במשתנים.</p>
+              )}
             </div>
           </div>
           <DialogFooter>

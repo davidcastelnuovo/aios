@@ -75,7 +75,7 @@ Deno.serve(async (request) => {
     const [{ data: membership }, { data: superAdmin }, { data: integration }] = await Promise.all([
       admin
         .from("tenant_users")
-        .select("user_id,role")
+        .select("user_id")
         .eq("tenant_id", tenantId)
         .eq("user_id", authData.user.id)
         .maybeSingle(),
@@ -92,9 +92,8 @@ Deno.serve(async (request) => {
       return reply({ error: "forbidden" }, 403);
     }
 
-    const isTenantOwner = membership?.role === "owner";
     const canManage =
-      superAdmin === true || isTenantOwner || integration.user_id === authData.user.id;
+      superAdmin === true || integration.user_id === authData.user.id;
     let canUse = canManage || integration.connection_visibility === "org";
     if (!canUse) {
       const { data: permission } = await admin
@@ -126,17 +125,27 @@ Deno.serve(async (request) => {
     const baseUrl = `https://graph.facebook.com/${graphVersion}/${wabaId}/message_templates`;
 
     if (action === "list") {
-      const url = new URL(baseUrl);
-      url.searchParams.set(
-        "fields",
-        "id,name,status,category,language,components,rejected_reason,quality_score",
-      );
-      url.searchParams.set("limit", "100");
-      const result = await graphRequest(url, tokenRow.access_token);
-      if (!result.ok) return reply({ error: result.error, meta_error: result.metaError }, result.status);
+      const templates: any[] = [];
+      let after = "";
+      let pageCount = 0;
+      do {
+        const url = new URL(baseUrl);
+        url.searchParams.set(
+          "fields",
+          "id,name,status,category,language,parameter_format,components,rejected_reason,quality_score",
+        );
+        url.searchParams.set("limit", "100");
+        if (after) url.searchParams.set("after", after);
+        const result = await graphRequest(url, tokenRow.access_token);
+        if (!result.ok) return reply({ error: result.error, meta_error: result.metaError }, result.status);
+        templates.push(...(result.data.data ?? []));
+        after = String(result.data.paging?.cursors?.after ?? "");
+        pageCount++;
+        if (!result.data.paging?.next) after = "";
+      } while (after && pageCount < 20);
       return reply({
-        templates: result.data.data ?? [],
-        paging: result.data.paging ?? null,
+        templates,
+        truncated: Boolean(after),
         can_manage: canManage,
       });
     }
@@ -165,6 +174,18 @@ Deno.serve(async (request) => {
         return reply({ error: "template_body_must_be_1_to_1024_characters" }, 400);
       }
       if (footerText.length > 60) return reply({ error: "footer_too_long" }, 400);
+      if (footerText.includes("{{") || footerText.includes("}}")) {
+        return reply({ error: "footer_variables_are_not_supported" }, 400);
+      }
+      const braceTokens = [...bodyText.matchAll(/\{\{([^{}]+)\}\}/g)];
+      const bodyWithoutValidTokens = bodyText.replace(/\{\{[^{}]+\}\}/g, "");
+      if (
+        braceTokens.some((match) => !/^\d+$/.test(match[1])) ||
+        bodyWithoutValidTokens.includes("{{") ||
+        bodyWithoutValidTokens.includes("}}")
+      ) {
+        return reply({ error: "only_positional_variables_like_double_brace_1_are_supported" }, 400);
+      }
 
       const indexes = placeholderIndexes(bodyText);
       const uniqueIndexes = [...new Set(indexes)].sort((a, b) => a - b);
