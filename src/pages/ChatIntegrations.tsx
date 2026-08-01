@@ -87,6 +87,22 @@ export default function ChatIntegrations() {
     enabled: !!tenantId && !!userId,
   });
 
+  const { data: metaWhatsAppIntegration } = useQuery({
+    queryKey: ['integration-meta-whatsapp', tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('id,user_id,display_name,is_active,settings')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'meta_whatsapp')
+        .order('created_at')
+        .limit(1);
+      if (error) throw error;
+      return data?.[0] || null;
+    },
+    enabled: !!tenantId,
+  });
+
   // Fetch Green API integrations the user has permission to use (from other users)
   const { data: permittedGreenApiIntegrations = [] } = useQuery({
     queryKey: ['permitted-green-api-integrations', tenantId, userId],
@@ -197,6 +213,16 @@ export default function ChatIntegrations() {
         return;
       }
 
+      if (providerId === 'meta_whatsapp') {
+        if (!metaWhatsAppIntegration) throw new Error('אין חיבור Meta WhatsApp. יש להגדיר חיבור תחילה.');
+        const { error } = await supabase
+          .from('tenant_integrations')
+          .update({ is_active: isActive })
+          .eq('id', metaWhatsAppIntegration.id);
+        if (error) throw error;
+        return;
+      }
+
       // For ManyChat: organization-level
       if (isActive) {
         // Deactivate all other organization-level providers
@@ -233,6 +259,7 @@ export default function ChatIntegrations() {
       queryClient.invalidateQueries({ queryKey: ['integration-manychat', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['integration-green-api', tenantId, userId] });
       queryClient.invalidateQueries({ queryKey: ['integration-manus-wa', tenantId, userId] });
+      queryClient.invalidateQueries({ queryKey: ['integration-meta-whatsapp', tenantId] });
       toast.success('סטטוס חיבור עודכן');
     },
     onError: (error: any) => {
@@ -264,6 +291,24 @@ export default function ChatIntegrations() {
   });
 
   const providers = [
+    {
+      id: 'meta_whatsapp',
+      name: 'Meta WhatsApp הרשמי',
+      description: 'WhatsApp Business Platform הרשמי, בחיבור ישיר ומאובטח דרך Meta.',
+      icon: MessageCircle,
+      color: 'from-emerald-500 to-green-700',
+      features: [
+        'Embedded Signup רשמי של Meta',
+        'מספר חדש או Coexistence עם WhatsApp Business',
+        'שליחה וקבלת הודעות בזמן אמת',
+        'סנכרון היסטוריה במספר קיים',
+      ],
+      integration: metaWhatsAppIntegration,
+      status: metaWhatsAppIntegration?.is_active ? 'active' : 'inactive',
+      hasApiKey: !!metaWhatsAppIntegration,
+      settingsPath: '/meta-whatsapp-settings',
+      badge: 'רשמי',
+    },
     {
       id: 'manychat',
       name: 'ManyChat',
@@ -323,7 +368,7 @@ export default function ChatIntegrations() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">אינטגרציות צ'אט</h1>
         <p className="text-muted-foreground">
-          בחר את ספק הצ'אט שברצונך להפעיל. ניתן להפעיל רק ספק אחד בכל פעם.
+          חברו ונהלו את ספקי הצ׳אט הזמינים לארגון.
         </p>
       </div>
 

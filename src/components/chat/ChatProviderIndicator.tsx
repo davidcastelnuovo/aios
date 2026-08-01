@@ -1,8 +1,8 @@
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Phone, Send } from "lucide-react";
+import { MessageSquare, Phone, Send, ShieldCheck } from "lucide-react";
 
 interface ChatProviderIndicatorProps {
-  provider: "manychat" | "green_api" | "internal" | "telegram" | "manus_wa" | null;
+  provider: "manychat" | "green_api" | "internal" | "telegram" | "manus_wa" | "meta_whatsapp" | null;
   size?: "sm" | "md";
 }
 
@@ -43,6 +43,18 @@ export function ChatProviderIndicator({ provider, size = "sm" }: ChatProviderInd
       >
         <Phone className={isSmall ? "h-2.5 w-2.5" : "h-3 w-3"} />
         {!isSmall && <span className="mr-1">Manus WA</span>}
+      </Badge>
+    );
+  }
+
+  if (provider === "meta_whatsapp") {
+    return (
+      <Badge
+        variant="outline"
+        className={`bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ${isSmall ? "text-xs px-1.5 py-0.5" : ""}`}
+      >
+        <ShieldCheck className={isSmall ? "h-2.5 w-2.5" : "h-3 w-3"} />
+        {!isSmall && <span className="mr-1">Meta WhatsApp</span>}
       </Badge>
     );
   }

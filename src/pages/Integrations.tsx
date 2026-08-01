@@ -96,6 +96,23 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check official Meta WhatsApp Cloud API connection status
+  const { data: metaWhatsAppIntegration } = useQuery({
+    queryKey: ['meta-whatsapp-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('id')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'meta_whatsapp')
+        .eq('is_active', true)
+        .limit(1);
+      return data?.[0] || null;
+    },
+    enabled: !!currentTenantId,
+  });
+
   // Check Facebook integration status
   const { data: facebookIntegration } = useQuery({
     queryKey: ['facebook-integration', currentTenantId],
@@ -453,6 +470,19 @@ export default function Integrations() {
       isConnected: hasGoogleSearchConsole,
       route: "google-search-console-settings",
       gradient: "bg-gradient-to-r from-blue-600 to-indigo-600",
+    },
+    {
+      icon: <MessageCircle className="h-6 w-6" />,
+      title: "WhatsApp Business הרשמי",
+      description: "חיבור ישיר ל־Meta WhatsApp Cloud API באמצעות Embedded Signup",
+      features: [
+        "חיבור רשמי ומאובטח דרך Meta",
+        "מספר חדש או Coexistence עם האפליקציה בטלפון",
+        "שליחה, קבלה וסנכרון שיחות",
+      ],
+      isConnected: !!metaWhatsAppIntegration,
+      route: "meta-whatsapp-settings",
+      gradient: "bg-gradient-to-r from-emerald-500 to-green-700",
     },
     {
       icon: <MessageCircle className="h-6 w-6" />,

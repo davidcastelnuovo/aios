@@ -147,7 +147,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         .select("id, integration_type, user_id, connection_visibility, display_name")
         .eq("tenant_id", tenantIdForProvider)
         .eq("is_active", true)
-        .in("integration_type", ["manychat", "green_api", "manus_wa"]);
+        .in("integration_type", ["manychat", "green_api", "manus_wa", "meta_whatsapp"]);
       if (error) return [];
 
       // Fetch integrations the user has explicit permission for
@@ -173,22 +173,28 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   // Persist provider selection per tenant
   const providerStorageKey = tenantIdForProvider ? `chat_provider_${tenantIdForProvider}` : null;
   const storedProvider = (typeof window !== 'undefined' && providerStorageKey)
-    ? (localStorage.getItem(providerStorageKey) as "manychat" | "green_api" | "manus_wa" | null)
+    ? (localStorage.getItem(providerStorageKey) as "manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null)
     : null;
-  const availableProviders = (chatIntegrations || []).map(i => i.integration_type) as Array<"manychat" | "green_api" | "manus_wa">;
+  const availableProviders = Array.from(
+    new Set((chatIntegrations || []).map(i => i.integration_type)),
+  ) as Array<"manychat" | "green_api" | "manus_wa" | "meta_whatsapp">;
   // Prefer stored, fall back to first available; if contact has a known provider, prefer that.
   const preferredProvider = (contact?.active_chat_provider && availableProviders.includes(contact.active_chat_provider as any))
     ? contact.active_chat_provider as any
     : (storedProvider && availableProviders.includes(storedProvider) ? storedProvider : availableProviders[0] || null);
 
-  const [selectedProvider, setSelectedProvider] = useState<"manychat" | "green_api" | "manus_wa" | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<"manychat" | "green_api" | "manus_wa" | "meta_whatsapp" | null>(null);
+  const [selectedMetaIntegrationId, setSelectedMetaIntegrationId] = useState<string | null>(null);
   const activeProvider = (selectedProvider && availableProviders.includes(selectedProvider))
     ? selectedProvider
     : preferredProvider;
-  const chatIntegration = (chatIntegrations || []).find(i => i.integration_type === activeProvider) || null;
+  const metaIntegrations = (chatIntegrations || []).filter(i => i.integration_type === "meta_whatsapp");
+  const chatIntegration = activeProvider === "meta_whatsapp"
+    ? metaIntegrations.find(i => i.id === selectedMetaIntegrationId) || metaIntegrations[0] || null
+    : (chatIntegrations || []).find(i => i.integration_type === activeProvider) || null;
   const connectionUserId = chatIntegration?.user_id;
 
-  const switchProvider = (p: "manychat" | "green_api" | "manus_wa") => {
+  const switchProvider = (p: "manychat" | "green_api" | "manus_wa" | "meta_whatsapp") => {
     setSelectedProvider(p);
     if (providerStorageKey) localStorage.setItem(providerStorageKey, p);
   };
@@ -405,7 +411,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, activeProvider, messagePeriod, telegramChatId],
+    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, chatIntegration?.id, activeProvider, messagePeriod, telegramChatId],
     queryFn: async () => {
       const dateFilter = getDateFilter();
       
@@ -447,6 +453,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         if (activeProvider) {
           query = query.eq("provider", activeProvider);
         }
+        if (activeProvider === "meta_whatsapp" && chatIntegration?.id) {
+          query = query.eq("integration_id", chatIntegration.id);
+        }
         if (dateFilter) {
           query = query.gte("created_at", dateFilter);
         }
@@ -479,6 +488,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       }
       if (activeProvider) {
         query = query.eq("provider", activeProvider);
+      }
+      if (activeProvider === "meta_whatsapp" && chatIntegration?.id) {
+        query = query.eq("integration_id", chatIntegration.id);
       }
       if (dateFilter) {
         query = query.gte("created_at", dateFilter);
@@ -601,6 +613,25 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         else if (contactType === "unknown") body.tenantId = tenantId;
 
         const { error } = await supabase.functions.invoke("send-manus-wa-message", { body });
+        if (error) throw error;
+      } else if (activeProvider === 'meta_whatsapp') {
+        if (contactType === 'group') {
+          toast.error("Meta WhatsApp הרשמי אינו תומך בקבוצות");
+          return;
+        }
+        if (!contact.phone && contactType !== 'unknown') {
+          toast.error("חסר מספר טלפון. אנא הוסף באיש הקשר.");
+          return;
+        }
+        const body: any = {
+          message,
+          phoneNumber: senderPhone || contact.phone,
+          integrationId: chatIntegration?.id,
+        };
+        if (contactType === "client") body.clientId = contactId;
+        else if (contactType === "lead") body.leadId = contactId;
+        else if (contactType === "unknown") body.tenantId = tenantId;
+        const { error } = await supabase.functions.invoke("send-meta-whatsapp-message", { body });
         if (error) throw error;
       }
 
@@ -832,6 +863,26 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                       {contact.phone && <span className="font-mono">{contact.phone}</span>}
                     </div>
                   )}
+                  {activeProvider === 'meta_whatsapp' && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
+                      <Badge variant="outline" className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">Meta WhatsApp</Badge>
+                      {metaIntegrations.length > 1 && (
+                        <select
+                          className="h-7 rounded border bg-background px-2 text-xs"
+                          value={chatIntegration?.id || ""}
+                          onChange={(event) => setSelectedMetaIntegrationId(event.target.value)}
+                          aria-label="בחר מספר Meta WhatsApp"
+                        >
+                          {metaIntegrations.map((integration) => (
+                            <option key={integration.id} value={integration.id}>
+                              {integration.display_name || integration.id.slice(-6)}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {contact.phone && <span className="font-mono">{contact.phone}</span>}
+                    </div>
+                  )}
                   {availableProviders.length > 1 && (
                     <div className="flex items-center gap-1 mr-2">
                       {availableProviders.map(p => (
@@ -842,10 +893,32 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
                           className="h-6 text-[10px] px-2"
                           onClick={() => switchProvider(p)}
                         >
-                          {p === 'green_api' ? 'Green' : p === 'manus_wa' ? 'Manus' : 'ManyChat'}
+                          {p === 'green_api' ? 'Green' : p === 'manus_wa' ? 'Manus' : p === 'meta_whatsapp' ? 'Meta' : 'ManyChat'}
                         </Button>
                       ))}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {contactType === 'unknown' && activeProvider === 'meta_whatsapp' && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="h-5 text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                    Meta WhatsApp
+                  </Badge>
+                  {metaIntegrations.length > 1 && (
+                    <select
+                      className="h-7 rounded border bg-background px-2 text-xs"
+                      value={chatIntegration?.id || ""}
+                      onChange={(event) => setSelectedMetaIntegrationId(event.target.value)}
+                      aria-label="בחר מספר Meta WhatsApp"
+                    >
+                      {metaIntegrations.map((integration) => (
+                        <option key={integration.id} value={integration.id}>
+                          {integration.display_name || integration.id.slice(-6)}
+                        </option>
+                      ))}
+                    </select>
                   )}
                 </div>
               )}

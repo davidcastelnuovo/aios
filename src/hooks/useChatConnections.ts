@@ -2,11 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
-export type ChatProviderKey = "green_api" | "manus_wa" | "telegram" | "manychat";
+export type ChatProviderKey = "green_api" | "manus_wa" | "meta_whatsapp" | "telegram" | "manychat";
 
 const PROVIDER_LABEL: Record<ChatProviderKey, string> = {
   green_api: "Green API",
   manus_wa: "Manus",
+  meta_whatsapp: "Meta WhatsApp",
   telegram: "טלגרם",
   manychat: "ManyChat",
 };
@@ -19,7 +20,7 @@ export interface ChatConnection {
   is_own: boolean;
   shared_by_name: string | null;
   /** Maps to chat_messages.provider — kept distinct so Manus vs Green API filter separately */
-  active_chat_provider: "green_api" | "manus_wa" | "telegram" | "manychat";
+  active_chat_provider: "green_api" | "manus_wa" | "meta_whatsapp" | "telegram" | "manychat";
   /** UI grouping bucket */
   platform: "whatsapp" | "telegram" | "manychat";
 }
@@ -37,7 +38,7 @@ export function useChatConnections(tenantId: string | undefined) {
     queryFn: async (): Promise<ChatConnection[]> => {
       if (!tenantId || !userId) return [];
 
-      const TYPES: ChatProviderKey[] = ["green_api", "manus_wa", "telegram", "manychat"];
+      const TYPES: ChatProviderKey[] = ["green_api", "manus_wa", "meta_whatsapp", "telegram", "manychat"];
 
       // Own integrations
       const { data: own, error: ownErr } = await supabase
@@ -111,7 +112,13 @@ export function useChatConnections(tenantId: string | undefined) {
             : baseLabel;
 
         const active_chat_provider: ChatConnection["active_chat_provider"] =
-          type === "manus_wa" ? "manus_wa" : type === "green_api" ? "green_api" : (type as any);
+          type === "manus_wa"
+            ? "manus_wa"
+            : type === "meta_whatsapp"
+              ? "meta_whatsapp"
+              : type === "green_api"
+                ? "green_api"
+                : (type as any);
         const platform: ChatConnection["platform"] =
           type === "telegram" ? "telegram" : type === "manychat" ? "manychat" : "whatsapp";
 
