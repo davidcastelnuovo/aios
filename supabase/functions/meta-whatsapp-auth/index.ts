@@ -120,9 +120,6 @@ Deno.serve(async (request) => {
     const requestedCoexistence = isCoexistenceFinishEvent(sessionEvent);
     const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
     if (!code) return reply({ error: "exchange_code_required" }, 400);
-    if (!requestedCoexistence && !/^\d{6}$/.test(pin)) {
-      return reply({ error: "six_digit_pin_required" }, 400);
-    }
 
     const tokenUrl = new URL(`https://graph.facebook.com/${graphVersion}/oauth/access_token`);
     tokenUrl.searchParams.set("client_id", appId);
@@ -135,11 +132,36 @@ Deno.serve(async (request) => {
     }
     const businessToken = String(tokenPayload.access_token);
 
-    const wabaIds = [
+    let wabaIds = [
       ...(Array.isArray(sessionInfo.waba_ids) ? sessionInfo.waba_ids : []),
       ...(sessionInfo.waba_id ? [sessionInfo.waba_id] : []),
     ].filter((value, index, values) => value && values.indexOf(value) === index);
-    if (!wabaIds.length) return reply({ error: "waba_id_missing_from_signup" }, 400);
+
+    // Embedded Signup only emits session info for full WhatsApp flows. When it is
+    // absent, ask Meta which WABAs the customer actually granted to this app.
+    if (!wabaIds.length) {
+      const debug = await graphJson(
+        `debug_token?input_token=${encodeURIComponent(businessToken)}`,
+        `${appId}|${appSecret}`,
+        undefined,
+        graphVersion,
+      );
+      const granular = debug?.data?.granular_scopes ?? [];
+      wabaIds = granular
+        .filter((entry: any) =>
+          ["whatsapp_business_management", "whatsapp_business_messaging"].includes(entry?.scope),
+        )
+        .flatMap((entry: any) => entry?.target_ids ?? [])
+        .filter((value: string, index: number, values: string[]) => value && values.indexOf(value) === index);
+    }
+
+    if (!wabaIds.length) {
+      return reply({
+        error:
+          "Meta did not return a WhatsApp Business account. Make sure the Embedded Signup configuration is a WhatsApp flow with whatsapp_business_management and whatsapp_business_messaging.",
+        code: "waba_not_granted",
+      }, 400);
+    }
 
     const connected: Array<Record<string, unknown>> = [];
     const warnings: string[] = [];
@@ -154,10 +176,7 @@ Deno.serve(async (request) => {
         graphVersion,
       );
       const phones = (phonePayload.data ?? []).filter(
-        (phone: any) =>
-          sessionInfo.phone_number_id
-            ? phone.id === sessionInfo.phone_number_id
-            : !requestedCoexistence || phone.is_on_biz_app === true,
+        (phone: any) => !sessionInfo.phone_number_id || phone.id === sessionInfo.phone_number_id,
       );
       if (!phones.length) throw new Error("No WhatsApp business phone number was returned by Meta");
 
@@ -165,8 +184,16 @@ Deno.serve(async (request) => {
         if (requestedCoexistence && phone.is_on_biz_app !== true) {
           throw new Error("Meta did not confirm WhatsApp Business App coexistence for this number");
         }
-        const coexistence = requestedCoexistence && phone.is_on_biz_app === true;
+        // Meta's is_on_biz_app is authoritative: a number still used in the
+        // WhatsApp Business app must not be re-registered for Cloud API.
+        const coexistence = phone.is_on_biz_app === true;
         if (!coexistence) {
+          if (!/^\d{6}$/.test(pin)) {
+            return reply({
+              error: `המספר ${phone.display_phone_number ?? phone.id} דורש רישום ל-Cloud API. בחרו "מספר חדש" והזינו PIN בן 6 ספרות.`,
+              code: "pin_required_for_registration",
+            }, 400);
+          }
           await graphJson(
             `${phone.id}/register`,
             businessToken,
