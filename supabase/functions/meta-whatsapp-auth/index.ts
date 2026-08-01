@@ -78,28 +78,92 @@ const inspectToken = async (
   }
 };
 
-/** Falls back to walking the businesses a token can see when no asset grant is exposed. */
-const discoverWabasFromBusinesses = async (token: string, graphVersion: string) => {
+const WABA_EDGES = ["owned_whatsapp_business_accounts", "client_whatsapp_business_accounts"];
+
+type DiscoveryStep = { source: string; found?: string[]; error?: string };
+
+/**
+ * Finds the WhatsApp accounts a token can act on when Meta did not scope the
+ * grant to specific assets. System user tokens in particular come back with
+ * unscoped permissions and no `me/businesses` edge, so several routes are
+ * tried and each outcome is recorded for the operator.
+ */
+const discoverWabas = async (
+  token: string,
+  graphVersion: string,
+  explicitBusinessId: string,
+) => {
   const found: string[] = [];
-  try {
-    const businesses = await graphJson("me/businesses?limit=50", token, undefined, graphVersion);
-    for (const business of businesses?.data ?? []) {
-      for (const edge of ["client_whatsapp_business_accounts", "owned_whatsapp_business_accounts"]) {
+  const steps: DiscoveryStep[] = [];
+
+  const readBusiness = async (businessId: string, source: string) => {
+    for (const edge of WABA_EDGES) {
+      try {
+        const accounts = await graphJson(
+          `${businessId}/${edge}?limit=50`,
+          token,
+          undefined,
+          graphVersion,
+        );
+        const ids = (accounts?.data ?? []).map((account: any) => account?.id).filter(Boolean);
+        found.push(...ids);
+        steps.push({ source: `${source}:${edge}`, found: ids });
+      } catch (error) {
+        steps.push({
+          source: `${source}:${edge}`,
+          error: error instanceof Error ? error.message : "unknown error",
+        });
+      }
+    }
+  };
+
+  if (explicitBusinessId) await readBusiness(explicitBusinessId, "business_id");
+
+  // A user token exposes the businesses it belongs to; a system user token does not.
+  if (!found.length) {
+    try {
+      const businesses = await graphJson("me/businesses?limit=50", token, undefined, graphVersion);
+      const ids = (businesses?.data ?? []).map((business: any) => business?.id).filter(Boolean);
+      steps.push({ source: "me/businesses", found: ids });
+      for (const businessId of ids) await readBusiness(businessId, `me/businesses/${businessId}`);
+    } catch (error) {
+      steps.push({
+        source: "me/businesses",
+        error: error instanceof Error ? error.message : "unknown error",
+      });
+    }
+  }
+
+  // A system user belongs to exactly one business, reachable through its own node.
+  if (!found.length) {
+    try {
+      const me = await graphJson("me?fields=id,name", token, undefined, graphVersion);
+      steps.push({ source: "me", found: me?.id ? [String(me.id)] : [] });
+      for (const edge of ["assigned_whatsapp_business_accounts", "businesses"]) {
         try {
-          const accounts = await graphJson(
-            `${business.id}/${edge}?limit=50`,
+          const payload = await graphJson(
+            `${me.id}/${edge}?limit=50`,
             token,
             undefined,
             graphVersion,
           );
-          for (const account of accounts?.data ?? []) {
-            if (account?.id) found.push(account.id);
-          }
-        } catch { /* edge not accessible for this business */ }
+          const ids = (payload?.data ?? []).map((entry: any) => entry?.id).filter(Boolean);
+          if (edge === "assigned_whatsapp_business_accounts") found.push(...ids);
+          else for (const businessId of ids) await readBusiness(businessId, `me/${businessId}`);
+          steps.push({ source: `me/${edge}`, found: ids });
+        } catch (error) {
+          steps.push({
+            source: `me/${edge}`,
+            error: error instanceof Error ? error.message : "unknown error",
+          });
+        }
       }
+    } catch (error) {
+      steps.push({ source: "me", error: error instanceof Error ? error.message : "unknown error" });
     }
-  } catch { /* business discovery unavailable */ }
-  return unique(found);
+  }
+
+  return { wabaIds: unique(found), steps };
 };
 
 const PHONE_FIELDS = "id,display_phone_number,verified_name,quality_rating,platform_type,is_on_biz_app";
@@ -333,23 +397,35 @@ Deno.serve(async (request) => {
     }
 
     const requestedWabaId = typeof body.waba_id === "string" ? body.waba_id.trim() : "";
+    const requestedBusinessId = typeof body.business_id === "string" ? body.business_id.trim() : "";
     let wabaIds = unique([
       ...(requestedWabaId ? [requestedWabaId] : []),
       ...(Array.isArray(sessionInfo.waba_ids) ? sessionInfo.waba_ids : []),
       ...(sessionInfo.waba_id ? [sessionInfo.waba_id] : []),
     ]);
     if (!wabaIds.length) wabaIds = debug.wabaIds;
-    if (!wabaIds.length) wabaIds = await discoverWabasFromBusinesses(businessToken, graphVersion);
+
+    let discoverySteps: DiscoveryStep[] = [];
+    if (!wabaIds.length) {
+      const discovered = await discoverWabas(businessToken, graphVersion, requestedBusinessId);
+      wabaIds = discovered.wabaIds;
+      discoverySteps = discovered.steps;
+    }
 
     if (!wabaIds.length) {
+      const hasWhatsAppScopes = debug.scopes.some((scope) => scope.startsWith("whatsapp_business"));
+      // Meta grants system users unscoped permissions, so the right scopes with
+      // no discoverable account means the account was never assigned to the user.
+      const guidance = hasWhatsAppScopes
+        ? "האסימון כולל את הרשאות ה-WhatsApp, אך Meta לא חשפה דרכו אף חשבון. הקצו את חשבון ה-WhatsApp ל-System User (Add assets → WhatsApp accounts → Full control), או הזינו כאן את ה-WhatsApp Business Account ID ידנית."
+        : "ודאו שהאסימון כולל whatsapp_business_management ו-whatsapp_business_messaging ושהוקצה לו חשבון WhatsApp.";
       const scopeNote = debug.scopes.length ? ` ההרשאות שהתקבלו: ${debug.scopes.join(", ")}.` : "";
       return reply({
-        error:
-          "Meta לא החזירה חשבון WhatsApp Business. ודאו שהאסימון כולל whatsapp_business_management ו-whatsapp_business_messaging ושהוקצה לו חשבון WhatsApp." +
-          scopeNote,
+        error: `Meta לא החזירה חשבון WhatsApp Business. ${guidance}${scopeNote}`,
         code: "waba_not_granted",
         granted_scopes: debug.scopes,
         token_type: debug.type,
+        discovery: discoverySteps,
       }, 400);
     }
 
