@@ -21,6 +21,7 @@ import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { useSeoScope } from "@/hooks/useSeoScope";
+import { filterSeoReportsByDomain, seoDomainsMatch } from "@/lib/seoDomain";
 
 interface SeoReportTabsProps {
   /**
@@ -56,14 +57,23 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     clientId,
     tenantIds: accessibleTenantIds,
   });
+
+  /** The one domain this client's SEO artifacts may come from. */
+  const expectedDomain = scope?.expectedDomain || "";
+
+  const ownDomainReports = useMemo(
+    () => filterSeoReportsByDomain(ahrefsReports || [], expectedDomain),
+    [ahrefsReports, expectedDomain],
+  );
+
   const hasValidAhrefsReports = useMemo(
-    () => filterValidSeoReports(ahrefsReports || []).length > 0,
-    [ahrefsReports]
+    () => filterValidSeoReports(ownDomainReports).length > 0,
+    [ownDomainReports]
   );
 
   // Tracked phrases from the latest valid Ahrefs report — shared with the GSC tab.
   const ahrefsTrackedKeywords = useMemo(() => {
-    const valid = filterValidSeoReports(ahrefsReports || []);
+    const valid = filterValidSeoReports(ownDomainReports);
     for (const report of valid) {
       const rd = (report as any)?.report_data || {};
       const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
@@ -77,7 +87,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
       }
     }
     return [] as string[];
-  }, [ahrefsReports]);
+  }, [ownDomainReports]);
 
   // Fetch the client's own website as a fallback for GSC domain auto-match
   // (when no Ahrefs SEO table exists for this client, targetDomain is empty).
@@ -99,7 +109,13 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const targetDomain = (seoTable?.integration_settings as any)?.targetDomain || '';
   const savedGaTableId = (seoTable?.integration_settings as any)?.linkedGaTableId || '';
   const savedGscTableId = (seoTable?.integration_settings as any)?.linkedGscTableId || '';
-  const savedGscSiteUrl = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || '';
+  const savedGscSiteUrlRaw = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || '';
+  // Ignore a linked Search Console property that belongs to another site —
+  // otherwise a bad link keeps feeding another client's clicks/impressions in.
+  const savedGscSiteUrl =
+    savedGscSiteUrlRaw && expectedDomain && !seoDomainsMatch(savedGscSiteUrlRaw, expectedDomain)
+      ? ''
+      : savedGscSiteUrlRaw;
   const savedGscLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || 'all') as 'all' | 'he' | 'en';
 
   // GA / GSC tables come from the scope (already searched across all accessible tenants)
@@ -305,6 +321,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
             clientId={clientId}
             accessibleTenantIds={accessibleTenantIds}
             gaRecords={gaRecords || []}
+            expectedDomain={expectedDomain}
             initialGscSiteUrl={savedGscSiteUrl}
             onGscSiteSelected={(siteUrl) => {
               if (siteUrl && siteUrl !== savedGscSiteUrl) {
@@ -355,7 +372,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   tenantId={reportTenantId}
                   tenantIds={accessibleTenantIds}
                   clientId={clientId}
-                  domain={savedGscSiteUrl || targetDomain || clientWebsite}
+                  domain={savedGscSiteUrl || expectedDomain || targetDomain || clientWebsite}
                   initialSiteUrl={savedGscSiteUrl}
                   initialLangFilter={savedGscLangFilter}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}

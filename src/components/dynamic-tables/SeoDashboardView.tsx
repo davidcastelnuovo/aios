@@ -21,6 +21,7 @@ import { AhrefsProjectPicker } from "./AhrefsProjectPicker";
 import { ListChecks } from "lucide-react";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { computeGaOrganicByMonth } from "./seo/computeGaOrganicByMonth";
+import { filterSeoReportsByDomain, sortSeoReportsByRecency } from "@/lib/seoDomain";
 
 interface SeoDashboardViewProps {
   tenantId: string;
@@ -41,9 +42,14 @@ interface SeoDashboardViewProps {
   initialLangFilter?: "all" | "he" | "en";
   /** Persist callback when the language filter changes. */
   onLangFilterChange?: (lang: "all" | "he" | "en") => void;
+  /**
+   * The client's own domain. Reports for any other domain are ignored, so a
+   * stray report synced under this client can't show another client's data.
+   */
+  expectedDomain?: string;
 }
 
-export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, onGscSiteSelected, initialLangFilter, onLangFilterChange }: SeoDashboardViewProps) {
+export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain }: SeoDashboardViewProps) {
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -128,16 +134,26 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     enabled: !!clientId && reportTenants.length > 0,
   });
 
-  const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
+  // Domain isolation first, validity second: a report for another site is never
+  // a candidate, even when it is newer and looks richer.
+  const ownDomainReports = useMemo(
+    () => filterSeoReportsByDomain(reports, expectedDomain),
+    [reports, expectedDomain],
+  );
+  const validReports = useMemo(
+    () => filterValidSeoReports(ownDomainReports),
+    [ownDomainReports],
+  );
 
   // Resolve a tenant-wide GSC integration as a fallback when the current
   // user has no personal/shared one — OR when their personal one isn't
   // mapped/usable for this client/site. Mirrors public-link parity so internal
   // viewers see Search Console keywords automatically without a manual sync.
   const firstReportDomain = useMemo(() => {
-    const r = (Array.isArray(reports) ? reports : []).find((x: any) => x?.domain);
+    if (expectedDomain) return expectedDomain;
+    const r = (Array.isArray(ownDomainReports) ? ownDomainReports : []).find((x: any) => x?.domain);
     return r?.domain as string | undefined;
-  }, [reports]);
+  }, [ownDomainReports, expectedDomain]);
 
   const resolvedGsc = useResolvedGscIntegration({
     clientId,
@@ -149,11 +165,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   // Selected report (default to the most-recently-synced valid report)
   const latestReport = useMemo(() => {
     if (validReports.length === 0) return null;
-    return [...validReports].sort((a: any, b: any) => {
-      const aT = new Date(a.received_at || a.report_date || 0).getTime();
-      const bT = new Date(b.received_at || b.report_date || 0).getTime();
-      return bT - aT;
-    })[0];
+    return sortSeoReportsByRecency(validReports)[0];
   }, [validReports]);
 
   const selectedReport = useMemo(() => {

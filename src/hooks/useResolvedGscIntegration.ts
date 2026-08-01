@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
+import { seoDomainsMatch } from "@/lib/seoDomain";
 
 export interface ResolvedGscIntegration {
   /** GSC integration ID to use for fetch-gsc-data calls. Null when nothing is available. */
@@ -15,21 +16,7 @@ export interface ResolvedGscIntegration {
   isLoading: boolean;
 }
 
-function normalizeSiteUrl(value?: string | null): string {
-  return String(value || "")
-    .replace(/^sc-domain:/, "")
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/\/+$/, "")
-    .toLowerCase();
-}
-
-function siteMatches(a?: string | null, b?: string | null): boolean {
-  const na = normalizeSiteUrl(a);
-  const nb = normalizeSiteUrl(b);
-  if (!na || !nb) return false;
-  return na === nb || na.includes(nb) || nb.includes(na);
-}
+const siteMatches = seoDomainsMatch;
 
 /**
  * Resolves a GSC integration for the SEO dashboard.

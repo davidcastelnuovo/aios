@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
+import { seoDomainsMatch } from "@/lib/seoDomain";
 import type { GscKeywordData } from "@/components/dynamic-tables/seo/GscIntegration";
 
 export type SeoMonthlyGscPeriods = {
@@ -60,6 +61,12 @@ export function useSeoMonthlyGsc(params: {
   campaignStartMonth?: string | null;
   savedSiteUrl?: string;
   domain?: string;
+  /**
+   * The client's own domain. Any resolved property that belongs to another site
+   * is rejected, so one bad mapping can't pull another client's Search Console
+   * numbers into this report.
+   */
+  expectedDomain?: string;
   enabled?: boolean;
 }): SeoMonthlyGscResult {
   const {
@@ -69,6 +76,7 @@ export function useSeoMonthlyGsc(params: {
     campaignStartMonth,
     savedSiteUrl,
     domain,
+    expectedDomain,
     enabled = true,
   } = params;
 
@@ -82,21 +90,27 @@ export function useSeoMonthlyGsc(params: {
     if (!clientId) return null;
     for (const integration of personalIntegrations as any[]) {
       const mapped: string | undefined = integration?.settings?.client_sites?.[clientId];
-      if (mapped) return { integrationId: integration.id as string, siteUrl: mapped };
+      if (!mapped) continue;
+      if (expectedDomain && !seoDomainsMatch(mapped, expectedDomain)) continue;
+      return { integrationId: integration.id as string, siteUrl: mapped };
     }
     return null;
-  }, [personalIntegrations, clientId]);
+  }, [personalIntegrations, clientId, expectedDomain]);
 
   const fallback = useResolvedGscIntegration({
     clientId,
     tenantIds,
     savedSiteUrl,
-    expectedDomain: domain,
+    expectedDomain: expectedDomain || domain,
     enabled: enabled && !personal,
   });
 
   const integrationId = personal?.integrationId ?? fallback.integrationId;
-  const siteUrl = personal?.siteUrl ?? fallback.siteUrl ?? savedSiteUrl ?? null;
+  const resolvedSiteUrl = personal?.siteUrl ?? fallback.siteUrl ?? savedSiteUrl ?? null;
+  const siteUrl =
+    resolvedSiteUrl && expectedDomain && !seoDomainsMatch(resolvedSiteUrl, expectedDomain)
+      ? null
+      : resolvedSiteUrl;
 
   // Never look further back than Search Console retains (~16 months).
   const earliestAllowed = shiftMonth(

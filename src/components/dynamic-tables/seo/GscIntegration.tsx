@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDown, Check, ArrowUpDown, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
 
 export type GscDateRange = '28d' | '3m' | '12m';
 
@@ -100,14 +101,7 @@ export interface GscKeywordData {
   position: number;
 }
 
-function normalizeDomain(value?: string) {
-  return String(value || "")
-    .replace(/^sc-domain:/, "")
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/\/+$/, "")
-    .toLowerCase();
-}
+const normalizeDomain = normalizeSeoDomain;
 
 export function GscIntegration({
   tenantId,
@@ -304,14 +298,7 @@ export function GscIntegration({
 
   const normalizedDomain = normalizeDomain(domain);
   const matchedSite = normalizedDomain
-    ? usableSites.find((site) => {
-        const normalizedSite = normalizeDomain(site.siteUrl);
-        return (
-          normalizedSite === normalizedDomain ||
-          normalizedSite.includes(normalizedDomain) ||
-          normalizedDomain.includes(normalizedSite)
-        );
-      })
+    ? usableSites.find((site) => seoDomainsMatch(site.siteUrl, normalizedDomain))
     : null;
 
   // Auto-link by domain: only suggest if the report domain matches a GSC property.

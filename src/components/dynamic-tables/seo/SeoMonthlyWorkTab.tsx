@@ -24,6 +24,7 @@ import { useSeoScope } from "@/hooks/useSeoScope";
 import { useSeoMonthlyGsc } from "@/hooks/useSeoMonthlyGsc";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 import { filterValidSeoReports } from "@/components/dynamic-tables/seo/reportValidity";
+import { filterSeoReportsByDomain, normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -154,15 +155,28 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
     limit: 20,
     tenantIds: accessibleTenantIds,
   });
-  const latestReportData = useMemo(() => {
-    const valid = filterValidSeoReports(ahrefsReports || []);
-    return (valid[0]?.report_data as Record<string, unknown> | undefined) || null;
-  }, [ahrefsReports]);
 
-  const reportDomain = useMemo(() => {
-    const valid = filterValidSeoReports(ahrefsReports || []);
-    return (valid[0] as any)?.domain || client?.website || undefined;
-  }, [ahrefsReports, client?.website]);
+  /** The one domain this client's SEO data may come from. */
+  const expectedDomain = seoScope?.expectedDomain || normalizeSeoDomain(client?.website);
+
+  /**
+   * Reports for another site are dropped before anything is read from them — a
+   * stray report synced under this client must not reach the report slides.
+   */
+  const ownDomainReports = useMemo(
+    () => filterValidSeoReports(filterSeoReportsByDomain(ahrefsReports || [], expectedDomain)),
+    [ahrefsReports, expectedDomain],
+  );
+
+  const latestReportData = useMemo(
+    () => (ownDomainReports[0]?.report_data as Record<string, unknown> | undefined) || null,
+    [ownDomainReports],
+  );
+
+  const reportDomain = useMemo(
+    () => (ownDomainReports[0] as any)?.domain || client?.website || expectedDomain || undefined,
+    [ownDomainReports, client?.website, expectedDomain],
+  );
 
   /** Same localStorage overrides as the positions table ("לא רלוונטי"). */
   const { forceRelevant, forceIrrelevant } = useSeoKeywordRelevance(clientId);
@@ -204,13 +218,22 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
     staleTime: 60 * 1000,
   });
 
+  // A linked property for a different site is dropped, so Search Console
+  // numbers can only ever come from this client's own property.
+  const linkedGscSiteUrl = seoScope?.seoTable?.integration_settings?.linkedGscSiteUrl || undefined;
+  const savedSiteUrl =
+    linkedGscSiteUrl && expectedDomain && !seoDomainsMatch(linkedGscSiteUrl, expectedDomain)
+      ? undefined
+      : linkedGscSiteUrl;
+
   const gsc = useSeoMonthlyGsc({
     clientId,
     tenantIds: accessibleTenantIds,
     month: selectedMonth,
     campaignStartMonth,
-    savedSiteUrl: seoScope?.seoTable?.integration_settings?.linkedGscSiteUrl || undefined,
+    savedSiteUrl,
     domain: reportDomain,
+    expectedDomain,
   });
 
   /**

@@ -1,5 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  normalizeSeoDomain,
+  selectSeoTableForClient,
+  seoTableDomain,
+} from "@/lib/seoDomain";
 
 /**
  * Resolves the full "scope" for SEO data of a given client, regardless of
@@ -21,6 +26,14 @@ export interface SeoScope {
   clientTenantId: string | null;
   /** The client's agency_id */
   agencyId: string | null;
+  /** The client's own website, as stored on the client record. */
+  clientWebsite: string | null;
+  /**
+   * The domain every SEO artifact for this client must belong to (normalized,
+   * no protocol / www). Prefers the client's website, falls back to the domain
+   * on the resolved SEO table. Empty when we have no signal.
+   */
+  expectedDomain: string;
   /**
    * All tenant_ids that may legitimately host SEO artifacts for this client.
    * Includes the client's home tenant + every tenant that shares the agency
@@ -46,6 +59,8 @@ export function useSeoScope(clientId: string | undefined) {
           clientId: "",
           clientTenantId: null,
           agencyId: null,
+          clientWebsite: null,
+          expectedDomain: "",
           accessibleTenantIds: [],
           seoTable: null,
           gaTables: [],
@@ -56,12 +71,13 @@ export function useSeoScope(clientId: string | undefined) {
       // 1. Load the client itself
       const { data: client } = await supabase
         .from("clients")
-        .select("id, tenant_id, agency_id")
+        .select("id, tenant_id, agency_id, website")
         .eq("id", clientId)
         .maybeSingle();
 
       const clientTenantId = client?.tenant_id ?? null;
       const agencyId = client?.agency_id ?? null;
+      const clientWebsite = (client as { website?: string | null } | null)?.website ?? null;
 
       // 2. Build the set of accessible tenant_ids via agency_tenant_access
       const tenantSet = new Set<string>();
@@ -84,6 +100,9 @@ export function useSeoScope(clientId: string | undefined) {
       // 3. Find the SEO/Ahrefs table for this client across ALL accessible tenants.
       //    Filter by client_id is the strongest signal; fall back to legacy
       //    integration_settings.clientId match for older tables that lack the FK.
+      //    When several tables claim the client, the one tracking the client's
+      //    own domain wins — a stray table for another site must never become
+      //    the source of truth for this client's SEO report.
       let seoTable: any = null;
       let gaTables: any[] = [];
       let gscTables: any[] = [];
@@ -91,17 +110,12 @@ export function useSeoScope(clientId: string | undefined) {
       if (accessibleTenantIds.length > 0) {
         const { data: seoCandidates } = await supabase
           .from("crm_tables")
-          .select("id, tenant_id, name, slug, integration_type, integration_settings, client_id, agency_id")
+          .select("id, tenant_id, name, slug, integration_type, integration_settings, client_id, agency_id, created_at, updated_at")
           .in("tenant_id", accessibleTenantIds)
           .eq("integration_type", "ahrefs")
           .limit(200);
 
-        seoTable =
-          (seoCandidates || []).find((t) => t.client_id === clientId) ||
-          (seoCandidates || []).find(
-            (t) => (t.integration_settings as any)?.clientId === clientId
-          ) ||
-          null;
+        seoTable = selectSeoTableForClient(seoCandidates || [], clientId, clientWebsite);
 
         const { data: relatedTables } = await supabase
           .from("crm_tables")
@@ -118,6 +132,9 @@ export function useSeoScope(clientId: string | undefined) {
         clientId,
         clientTenantId,
         agencyId,
+        clientWebsite,
+        expectedDomain:
+          normalizeSeoDomain(clientWebsite) || (seoTable ? seoTableDomain(seoTable) : ""),
         accessibleTenantIds,
         seoTable,
         gaTables,
