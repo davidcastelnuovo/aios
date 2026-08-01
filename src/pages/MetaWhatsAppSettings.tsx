@@ -93,9 +93,11 @@ const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsap
 
 class MetaAuthError extends Error {
   code?: string;
-  constructor(message: string, code?: string) {
+  details?: unknown;
+  constructor(message: string, code?: string, details?: unknown) {
     super(message);
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -107,7 +109,7 @@ class MetaAuthError extends Error {
 async function invokeMetaAuth(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", { body });
   if (!error) {
-    if (data?.error) throw new MetaAuthError(String(data.error), data.code);
+    if (data?.error) throw new MetaAuthError(String(data.error), data.code, data.discovery);
     return data;
   }
 
@@ -115,13 +117,13 @@ async function invokeMetaAuth(body: Record<string, unknown>) {
   if (response?.status === 401) {
     throw new MetaAuthError("ההתחברות למערכת פגה. רעננו את הדף, התחברו מחדש ונסו שוב.", "unauthorized");
   }
-  let payload: { error?: string; code?: string } | null = null;
+  let payload: { error?: string; code?: string; discovery?: unknown } | null = null;
   try {
     payload = await response?.clone().json();
   } catch {
     payload = null;
   }
-  if (payload?.error) throw new MetaAuthError(String(payload.error), payload.code);
+  if (payload?.error) throw new MetaAuthError(String(payload.error), payload.code, payload.discovery);
   throw error;
 }
 
@@ -162,8 +164,11 @@ export default function MetaWhatsAppSettings() {
   const [showManual, setShowManual] = useState(false);
   const [manualToken, setManualToken] = useState("");
   const [manualPin, setManualPin] = useState("");
+  const [manualWabaId, setManualWabaId] = useState("");
+  const [manualBusinessId, setManualBusinessId] = useState("");
   const [assets, setAssets] = useState<MetaAsset[] | null>(null);
   const [selectedPhone, setSelectedPhone] = useState("");
+  const [discovery, setDiscovery] = useState<unknown>(null);
   const codeRef = useRef<string | null>(null);
   const sessionRef = useRef<{ data: Record<string, unknown>; event: string } | null>(null);
   const completingRef = useRef(false);
@@ -358,6 +363,8 @@ export default function MetaWhatsAppSettings() {
         action: "list_assets",
         tenant_id: tenantId,
         access_token: manualToken.trim(),
+        waba_id: manualWabaId.trim(),
+        business_id: manualBusinessId.trim(),
       });
       if (!data?.success) {
         throw new MetaAuthError(data?.error || "לא ניתן לקרוא את הנכסים מ-Meta", data?.code);
@@ -365,6 +372,7 @@ export default function MetaWhatsAppSettings() {
       return (data.accounts ?? []) as MetaAsset[];
     },
     onSuccess: (accounts) => {
+      setDiscovery(null);
       setAssets(accounts);
       const firstPhone = accounts.flatMap((account) =>
         account.phone_numbers.map((phone) => `${account.waba_id}::${phone.id}`),
@@ -374,7 +382,11 @@ export default function MetaWhatsAppSettings() {
       if (!total) toast.warning("לא נמצאו מספרי WhatsApp תחת האסימון הזה");
       else toast.success(`נמצאו ${total} מספרים`);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      setAssets(null);
+      setDiscovery(error instanceof MetaAuthError ? error.details ?? null : null);
+      toast.error(error.message, { duration: 15000 });
+    },
   });
 
   const connectManualMutation = useMutation({
@@ -600,6 +612,43 @@ export default function MetaWhatsAppSettings() {
               />
             </div>
 
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="meta-wa-waba-id">
+                  WhatsApp Business Account ID
+                  <span className="text-muted-foreground"> — אופציונלי</span>
+                </Label>
+                <Input
+                  id="meta-wa-waba-id"
+                  value={manualWabaId}
+                  onChange={(event) => setManualWabaId(event.target.value.replace(/\D/g, ""))}
+                  dir="ltr"
+                  inputMode="numeric"
+                  placeholder="104938271625483"
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="meta-wa-business-id">
+                  Business Portfolio ID
+                  <span className="text-muted-foreground"> — אופציונלי</span>
+                </Label>
+                <Input
+                  id="meta-wa-business-id"
+                  value={manualBusinessId}
+                  onChange={(event) => setManualBusinessId(event.target.value.replace(/\D/g, ""))}
+                  dir="ltr"
+                  inputMode="numeric"
+                  placeholder="1029384756102938"
+                  className="font-mono text-xs"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              מלאו את השדות האלה רק אם השליפה האוטומטית לא מוצאת את החשבון. את ה־WABA ID רואים
+              ב־App Dashboard → WhatsApp → API Setup, או ב־Business Settings → WhatsApp accounts.
+            </p>
+
             <Button
               variant="secondary"
               onClick={() => loadAssetsMutation.mutate()}
@@ -608,6 +657,20 @@ export default function MetaWhatsAppSettings() {
               {loadAssetsMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
               שליפת חשבונות ומספרים
             </Button>
+
+            {discovery != null && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">
+                  מה Meta החזירה בכל ניסיון איתור
+                </Label>
+                <pre
+                  dir="ltr"
+                  className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-left font-mono text-[11px]"
+                >
+                  {JSON.stringify(discovery, null, 2)}
+                </pre>
+              </div>
+            )}
 
             {assets && (
               <div className="space-y-3">
