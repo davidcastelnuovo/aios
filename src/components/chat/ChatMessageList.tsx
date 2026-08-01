@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { Loader2, MoreVertical, Copy, CheckSquare, Reply, AlertCircle, History, Download } from "lucide-react";
+import { Loader2, MoreVertical, Copy, CheckSquare, Reply, AlertCircle, History, Download, Check, CheckCheck } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 import CustomAudioPlayer from "./CustomAudioPlayer";
@@ -398,6 +398,29 @@ export default function ChatMessageList({
     });
   };
 
+  // Delivery receipts reported by Meta WhatsApp Cloud API. A message Meta accepted
+  // is not necessarily a message that reached the recipient.
+  const getDeliveryIndicator = (message: Message) => {
+    const status = message.raw_provider_data?.delivery_status;
+    if (!status) return null;
+    if (status === 'failed') {
+      const reason =
+        message.raw_provider_data?.delivery_error?.error_data?.details ||
+        message.raw_provider_data?.delivery_error?.title ||
+        message.raw_provider_data?.delivery_error?.message ||
+        'ההודעה לא נמסרה';
+      return (
+        <span className="flex items-center gap-0.5 text-red-600" title={`נכשלה: ${reason}`}>
+          <AlertCircle className="h-3 w-3" />
+          נכשלה
+        </span>
+      );
+    }
+    if (status === 'read') return <CheckCheck className="h-3.5 w-3.5 text-sky-500" aria-label="נקראה" />;
+    if (status === 'delivered') return <CheckCheck className="h-3.5 w-3.5 text-gray-500" aria-label="נמסרה" />;
+    return <Check className="h-3.5 w-3.5 text-gray-500" aria-label="נשלחה" />;
+  };
+
   // Get sender color for group messages
   const getSenderDisplayColor = (message: Message): string => {
     if (contactType !== 'group' || message.direction !== 'inbound') {
@@ -484,6 +507,7 @@ export default function ChatMessageList({
                       <span className="mr-2">• {message.profiles.full_name}</span>
                     )}
                   </span>
+                  {isOutbound && getDeliveryIndicator(message)}
                   {message.message_text && !reactionEmoji && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

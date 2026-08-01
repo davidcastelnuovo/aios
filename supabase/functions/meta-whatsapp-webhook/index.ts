@@ -4,6 +4,7 @@ import {
   digitsOnly,
   messageText,
   normalizedPhoneCandidates,
+  shouldApplyDeliveryStatus,
 } from "../_shared/meta-whatsapp.ts";
 
 const jsonHeaders = { "Content-Type": "application/json" };
@@ -148,6 +149,39 @@ Deno.serve(async (request) => {
             .eq("id", integration.id);
           if (syncUpdateError) throw syncUpdateError;
           continue;
+        }
+
+        for (const status of value.statuses ?? []) {
+          const wamid = String(status.id ?? "");
+          if (!wamid) continue;
+          const { data: sentMessage, error: sentMessageError } = await admin
+            .from("chat_messages")
+            .select("id,raw_provider_data")
+            .eq("tenant_id", integration.tenant_id)
+            .eq("raw_provider_data->>idMessage", wamid)
+            .limit(1)
+            .maybeSingle();
+          if (sentMessageError) throw sentMessageError;
+          if (!sentMessage) continue;
+          const rawProviderData = (sentMessage.raw_provider_data ?? {}) as Record<string, unknown>;
+          if (!shouldApplyDeliveryStatus(rawProviderData.delivery_status, status.status)) continue;
+          const failure = Array.isArray(status.errors) ? status.errors[0] ?? null : null;
+          const { error: statusUpdateError } = await admin
+            .from("chat_messages")
+            .update({
+              raw_provider_data: {
+                ...rawProviderData,
+                delivery_status: String(status.status),
+                delivery_status_at: timestampIso(status.timestamp),
+                delivery_error: failure,
+                delivery_conversation: status.conversation ?? null,
+              },
+            })
+            .eq("id", sentMessage.id);
+          if (statusUpdateError) throw statusUpdateError;
+          if (failure) {
+            console.error("Meta WhatsApp delivery failed", { wamid, error: failure });
+          }
         }
 
         const contactNames = new Map<string, string>();
