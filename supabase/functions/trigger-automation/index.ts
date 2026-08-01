@@ -1846,16 +1846,27 @@ Deno.serve(async (req) => {
 
           const executionTime = Date.now() - startTime
 
-          // Log success
+          // A flow reports per-step results, so the run is only a success when every
+          // step succeeded. Without this a run whose only action failed was logged
+          // green and the failure was buried inside the response payload.
+          const flowStepResults = (response as { steps?: Array<{ success?: boolean; error?: string }> } | null)?.steps
+          const failedSteps = Array.isArray(flowStepResults)
+            ? flowStepResults.filter((step) => step?.success === false)
+            : []
+          const succeeded = failedSteps.length === 0
+
           await supabase.from('automation_logs').insert({
             automation_id: automation.id,
-            success: true,
+            success: succeeded,
+            error_message: succeeded
+              ? null
+              : failedSteps.map((step) => step?.error || 'שלב נכשל').join(' | '),
             payload: payloadData,
             response: response,
             execution_time_ms: executionTime,
           })
 
-          return { success: true, automation_id: automation.id, response }
+          return { success: succeeded, automation_id: automation.id, response }
         } catch (error) {
           const executionTime = Date.now() - startTime
           console.error(`Error executing automation ${automation.id}:`, error)
