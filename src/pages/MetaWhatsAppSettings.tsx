@@ -37,7 +37,7 @@ type MetaConfig = {
 };
 
 type FacebookLoginResponse = {
-  authResponse?: { code?: string };
+  authResponse?: { code?: string; accessToken?: string };
 };
 
 type FacebookSdk = {
@@ -113,6 +113,7 @@ export default function MetaWhatsAppSettings() {
   const sessionRef = useRef<{ data: Record<string, unknown>; event: string } | null>(null);
   const completingRef = useRef(false);
   const sessionTimerRef = useRef<number | null>(null);
+  const tokenRef = useRef<string | null>(null);
 
   const { data: config, error: configError } = useQuery({
     queryKey: ["meta-whatsapp-config", tenantId],
@@ -144,7 +145,8 @@ export default function MetaWhatsAppSettings() {
   });
 
   const finishSignup = async () => {
-    if (!tenantId || !codeRef.current || completingRef.current) return;
+    if (!tenantId || completingRef.current) return;
+    if (!codeRef.current && !tokenRef.current) return;
     if (sessionTimerRef.current) {
       window.clearTimeout(sessionTimerRef.current);
       sessionTimerRef.current = null;
@@ -156,6 +158,7 @@ export default function MetaWhatsAppSettings() {
           action: "complete",
           tenant_id: tenantId,
           code: codeRef.current,
+          access_token: tokenRef.current,
           session_info: sessionRef.current?.data ?? {},
           session_event: sessionRef.current?.event ?? "",
           pin,
@@ -173,6 +176,7 @@ export default function MetaWhatsAppSettings() {
       toast.error(error instanceof Error ? error.message : "שגיאה בחיבור WhatsApp");
     } finally {
       codeRef.current = null;
+      tokenRef.current = null;
       sessionRef.current = null;
       completingRef.current = false;
       setConnecting(false);
@@ -202,6 +206,7 @@ export default function MetaWhatsAppSettings() {
           sessionTimerRef.current = null;
         }
         codeRef.current = null;
+        tokenRef.current = null;
         setConnecting(false);
         toast.info("תהליך החיבור בוטל");
         return;
@@ -212,13 +217,14 @@ export default function MetaWhatsAppSettings() {
           sessionTimerRef.current = null;
         }
         codeRef.current = null;
+        tokenRef.current = null;
         setConnecting(false);
         toast.error(String(payload.data?.error_message || "Meta לא הצליחה להשלים את החיבור"));
         return;
       }
       if (String(payload.event ?? "").startsWith("FINISH")) {
         sessionRef.current = { data: payload.data ?? {}, event: payload.event };
-        if (codeRef.current) void finishSignup();
+        if (codeRef.current || tokenRef.current) void finishSignup();
       }
     };
     window.addEventListener("message", listener);
@@ -237,6 +243,7 @@ export default function MetaWhatsAppSettings() {
     }
     setConnecting(true);
     codeRef.current = null;
+    tokenRef.current = null;
     sessionRef.current = null;
     if (sessionTimerRef.current) {
       window.clearTimeout(sessionTimerRef.current);
@@ -250,12 +257,18 @@ export default function MetaWhatsAppSettings() {
       if (!sdk) throw new Error("Meta SDK לא נטען");
       sdk.login(
         (response: FacebookLoginResponse) => {
-          if (!response?.authResponse?.code) {
+          const auth = response?.authResponse;
+          // Depending on the configuration, Embedded Signup returns either an
+          // authorization code or a short-lived user token. Accept either one.
+          const returnedCode = auth?.code && !auth.code.startsWith("cb=") ? auth.code : null;
+          const returnedToken = auth?.accessToken ?? null;
+          if (!returnedCode && !returnedToken) {
             setConnecting(false);
-            toast.error("Meta לא החזירה קוד הרשאה");
+            toast.error("Meta לא החזירה הרשאה. נסו שוב ואשרו את חשבון ה-WhatsApp בתהליך.");
             return;
           }
-          codeRef.current = response.authResponse.code;
+          codeRef.current = returnedCode;
+          tokenRef.current = returnedToken;
           // Meta only emits the WA_EMBEDDED_SIGNUP session message for full
           // WhatsApp flows. Give it a brief moment, then complete regardless so
           // the screen can never wait forever for a message that never arrives.
@@ -271,6 +284,9 @@ export default function MetaWhatsAppSettings() {
           config_id: config.configuration_id,
           response_type: "code",
           override_default_response_type: true,
+          // Meta skips the asset picker once a grant exists, which silently
+          // reuses an earlier selection that may not include a WhatsApp account.
+          auth_type: "rerequest",
           extras,
         },
       );
