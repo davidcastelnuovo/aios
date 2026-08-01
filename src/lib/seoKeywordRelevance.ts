@@ -50,12 +50,91 @@ export function tokenizeKeyword(raw: string): string[] {
   return Array.from(new Set(tokens));
 }
 
-function normalizePhrase(raw: string): string {
+export function normalizeKeywordPhrase(raw: string): string {
   return String(raw || "")
     .toLowerCase()
     .replace(/[״"׳']/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** @deprecated Prefer normalizeKeywordPhrase — kept as an alias for older call sites. */
+const normalizePhrase = normalizeKeywordPhrase;
+
+/** localStorage key for manual relevance overrides (per client / table). */
+export function seoForceListStorageKey(
+  persistKey: string,
+  kind: "relevant" | "irrelevant",
+): string {
+  return `seo-force-${kind}:${persistKey}`;
+}
+
+export const SEO_KEYWORD_RELEVANCE_EVENT = "seo-keyword-relevance-changed";
+
+export type SeoKeywordRelevanceChangedDetail = {
+  persistKey: string;
+  kind?: "relevant" | "irrelevant";
+};
+
+export function notifySeoKeywordRelevanceChanged(
+  persistKey: string | undefined,
+  kind?: "relevant" | "irrelevant",
+) {
+  if (!persistKey || typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<SeoKeywordRelevanceChangedDetail>(SEO_KEYWORD_RELEVANCE_EVENT, {
+      detail: { persistKey, kind },
+    }),
+  );
+}
+
+export function loadSeoForceList(
+  persistKey: string | undefined,
+  kind: "relevant" | "irrelevant",
+): string[] {
+  if (!persistKey || typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(seoForceListStorageKey(persistKey, kind));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.map(String).map((x) => x.trim()).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSeoForceList(
+  persistKey: string | undefined,
+  kind: "relevant" | "irrelevant",
+  values: string[],
+) {
+  if (!persistKey || typeof window === "undefined") return;
+  try {
+    localStorage.setItem(
+      seoForceListStorageKey(persistKey, kind),
+      JSON.stringify(values),
+    );
+    notifySeoKeywordRelevanceChanged(persistKey, kind);
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export function loadSeoForceRelevant(persistKey?: string): string[] {
+  return loadSeoForceList(persistKey, "relevant");
+}
+
+export function loadSeoForceIrrelevant(persistKey?: string): string[] {
+  return loadSeoForceList(persistKey, "irrelevant");
+}
+
+export function saveSeoForceRelevant(persistKey: string | undefined, values: string[]) {
+  saveSeoForceList(persistKey, "relevant", values);
+}
+
+export function saveSeoForceIrrelevant(persistKey: string | undefined, values: string[]) {
+  saveSeoForceList(persistKey, "irrelevant", values);
 }
 
 export function buildTrackedTokenIndex(trackedKeywords: Array<{ keyword?: string } | string>): {

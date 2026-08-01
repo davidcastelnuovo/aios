@@ -5,6 +5,7 @@ import {
   SeoMonthlyWork,
   sanitizeSeoMonthlyWork,
 } from "@/lib/seoMonthlyWork";
+import { filterRelevantKeywords } from "@/lib/seoKeywordRelevance";
 
 export type SeoShareMetric = {
   key: string;
@@ -183,6 +184,17 @@ export function buildSeoMonthlyShareSnapshot(opts: {
   } | null;
   /** External links from the previous months, so the links slide can span a quarter. */
   recentLinks?: SeoShareRecentLink[];
+  /**
+   * Same relevance filter as the positions table ("סנן לא רלוונטיים").
+   * Slideshow always excludes irrelevant keywords — never show a term the user
+   * marked לא רלוונטי or that fails the tracked-keyword relevance check.
+   */
+  relevance?: {
+    forceRelevant?: string[];
+    forceIrrelevant?: string[];
+    /** Defaults to true. Pass false only for debugging. */
+    enabled?: boolean;
+  };
 }): SeoMonthlyShareSnapshot {
   const work = sanitizeSeoMonthlyWork(opts.work);
   const rd = (opts.reportData || {}) as Record<string, unknown>;
@@ -197,6 +209,12 @@ export function buildSeoMonthlyShareSnapshot(opts: {
 
   const tracked = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
   const organic = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
+  const relevanceOpts = {
+    enabled: opts.relevance?.enabled !== false,
+    forceRelevant: opts.relevance?.forceRelevant,
+    forceIrrelevant: opts.relevance?.forceIrrelevant,
+  };
+
   const byKw = new Map<string, SeoShareKeyword>();
   for (const raw of [...tracked, ...organic]) {
     const row = normalizeKeywordRow(raw);
@@ -215,6 +233,16 @@ export function buildSeoMonthlyShareSnapshot(opts: {
       byKw.set(key, { ...existing, ...row });
     }
   }
+
+  // Drop irrelevant Ahrefs rows before metrics / Top-N so the slideshow matches
+  // the positions table filter (including manual "לא רלוונטי" overrides).
+  const ahrefsRelevant = filterRelevantKeywords(
+    Array.from(byKw.values()),
+    tracked,
+    relevanceOpts,
+  ).relevant;
+  byKw.clear();
+  for (const row of ahrefsRelevant) byKw.set(row.keyword.toLowerCase(), row);
   const allKeywords = Array.from(byKw.values());
 
   const liveTop3 = countAtOrBelow(allKeywords, 3);
@@ -264,9 +292,12 @@ export function buildSeoMonthlyShareSnapshot(opts: {
   }
 
   // ── Search Console ────────────────────────────────────────────────────────
-  const gscCurrent = opts.gsc?.current ?? [];
-  const gscPrev = opts.gsc?.prev ?? [];
-  const gscBase = opts.gsc?.baseline ?? [];
+  const filterGsc = (rows: GscRow[]) =>
+    filterRelevantKeywords(rows, tracked, relevanceOpts).relevant;
+
+  const gscCurrent = filterGsc(opts.gsc?.current ?? []);
+  const gscPrev = filterGsc(opts.gsc?.prev ?? []);
+  const gscBase = filterGsc(opts.gsc?.baseline ?? []);
   const hasGsc = gscCurrent.length > 0;
 
   let search: SeoShareSearch | undefined;

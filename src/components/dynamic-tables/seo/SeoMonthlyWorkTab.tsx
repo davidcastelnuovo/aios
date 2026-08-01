@@ -22,6 +22,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { useSeoScope } from "@/hooks/useSeoScope";
 import { useSeoMonthlyGsc } from "@/hooks/useSeoMonthlyGsc";
+import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 import { filterValidSeoReports } from "@/components/dynamic-tables/seo/reportValidity";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -139,7 +140,20 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
     enabled: !!clientId,
   });
 
-  const { data: ahrefsReports } = useAhrefsReports({ clientId, limit: 20 });
+  // SEO artifacts can live in a sibling tenant for shared-agency clients.
+  const { data: seoScope } = useSeoScope(clientId);
+  const accessibleTenantIds = seoScope?.accessibleTenantIds?.length
+    ? seoScope.accessibleTenantIds
+    : tenantId
+      ? [tenantId]
+      : [];
+
+  // Same query key family as the positions dashboard — refreshes flow through here.
+  const { data: ahrefsReports } = useAhrefsReports({
+    clientId,
+    limit: 20,
+    tenantIds: accessibleTenantIds,
+  });
   const latestReportData = useMemo(() => {
     const valid = filterValidSeoReports(ahrefsReports || []);
     return (valid[0]?.report_data as Record<string, unknown> | undefined) || null;
@@ -150,13 +164,8 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
     return (valid[0] as any)?.domain || client?.website || undefined;
   }, [ahrefsReports, client?.website]);
 
-  // SEO artifacts can live in a sibling tenant for shared-agency clients.
-  const { data: seoScope } = useSeoScope(clientId);
-  const accessibleTenantIds = seoScope?.accessibleTenantIds?.length
-    ? seoScope.accessibleTenantIds
-    : tenantId
-      ? [tenantId]
-      : [];
+  /** Same localStorage overrides as the positions table ("לא רלוונטי"). */
+  const { forceRelevant, forceIrrelevant } = useSeoKeywordRelevance(clientId);
 
   /** Every month this client has a work log for — drives the campaign baseline. */
   const { data: monthsWithWork } = useQuery({
@@ -338,6 +347,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
           baselineMonth: gsc.baselineMonth,
         },
         recentLinks,
+        relevance: { forceRelevant, forceIrrelevant },
       }),
     [
       client?.name,
@@ -351,6 +361,8 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
       gsc.baseline,
       gsc.baselineMonth,
       recentLinks,
+      forceRelevant,
+      forceIrrelevant,
     ],
   );
 
@@ -375,6 +387,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
         baselineMonth: gsc.baselineMonth,
       },
       recentLinks,
+      relevance: { forceRelevant, forceIrrelevant },
     });
 
     if (existingShare?.share_token) {
