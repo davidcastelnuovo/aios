@@ -91,6 +91,40 @@ type Integration = {
 const PROJECT_REF = import.meta.env.VITE_SUPABASE_PROJECT_ID as string;
 const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
 
+class MetaAuthError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+/**
+ * supabase-js reports every non-2xx response as a bare "non-2xx status code"
+ * error and discards the body, which hides the reason Meta rejected the
+ * connection. Read the body so the operator sees the real failure.
+ */
+async function invokeMetaAuth(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", { body });
+  if (!error) {
+    if (data?.error) throw new MetaAuthError(String(data.error), data.code);
+    return data;
+  }
+
+  const response = (error as { context?: Response }).context;
+  if (response?.status === 401) {
+    throw new MetaAuthError("ההתחברות למערכת פגה. רעננו את הדף, התחברו מחדש ונסו שוב.", "unauthorized");
+  }
+  let payload: { error?: string; code?: string } | null = null;
+  try {
+    payload = await response?.clone().json();
+  } catch {
+    payload = null;
+  }
+  if (payload?.error) throw new MetaAuthError(String(payload.error), payload.code);
+  throw error;
+}
+
 function loadFacebookSdk(appId: string, version: string) {
   return new Promise<void>((resolve, reject) => {
     const win = window as FacebookWindow;
@@ -140,14 +174,8 @@ export default function MetaWhatsAppSettings() {
     queryKey: ["meta-whatsapp-config", tenantId],
     enabled: Boolean(tenantId),
     retry: false,
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
-        body: { action: "config", tenant_id: tenantId },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data as MetaConfig;
-    },
+    queryFn: async () =>
+      (await invokeMetaAuth({ action: "config", tenant_id: tenantId })) as MetaConfig,
   });
 
   const { data: integrations = [], isLoading } = useQuery({
@@ -174,25 +202,17 @@ export default function MetaWhatsAppSettings() {
     }
     completingRef.current = true;
     try {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
-        body: {
-          action: "complete",
-          tenant_id: tenantId,
-          code: codeRef.current,
-          access_token: tokenRef.current,
-          session_info: sessionRef.current?.data ?? {},
-          session_event: sessionRef.current?.event ?? "",
-          redirect_uris: [`${window.location.origin}/`, window.location.origin, window.location.href],
-          pin,
-        },
+      const data = await invokeMetaAuth({
+        action: "complete",
+        tenant_id: tenantId,
+        code: codeRef.current,
+        access_token: tokenRef.current,
+        session_info: sessionRef.current?.data ?? {},
+        session_event: sessionRef.current?.event ?? "",
+        redirect_uris: [`${window.location.origin}/`, window.location.origin, window.location.href],
+        pin,
       });
-      if (error) throw error;
-      if (!data?.success) {
-        if (data?.code === "code_exchange_failed" || data?.code === "waba_not_granted") {
-          setShowManual(true);
-        }
-        throw new Error(data?.error || "החיבור לא הושלם");
-      }
+      if (!data?.success) throw new MetaAuthError(data?.error || "החיבור לא הושלם", data?.code);
       const count = data.connections?.length ?? 1;
       toast.success(`${count === 1 ? "מספר WhatsApp חובר" : `${count} מספרי WhatsApp חוברו`} בהצלחה`);
       if (data.warnings?.length) {
@@ -200,7 +220,11 @@ export default function MetaWhatsAppSettings() {
       }
       await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "שגיאה בחיבור WhatsApp");
+      const code = error instanceof MetaAuthError ? error.code : undefined;
+      if (code === "code_exchange_failed" || code === "waba_not_granted") setShowManual(true);
+      toast.error(error instanceof Error ? error.message : "שגיאה בחיבור WhatsApp", {
+        duration: 12000,
+      });
     } finally {
       codeRef.current = null;
       tokenRef.current = null;
@@ -330,11 +354,14 @@ export default function MetaWhatsAppSettings() {
 
   const loadAssetsMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
-        body: { action: "list_assets", tenant_id: tenantId, access_token: manualToken.trim() },
+      const data = await invokeMetaAuth({
+        action: "list_assets",
+        tenant_id: tenantId,
+        access_token: manualToken.trim(),
       });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "לא ניתן לקרוא את הנכסים מ-Meta");
+      if (!data?.success) {
+        throw new MetaAuthError(data?.error || "לא ניתן לקרוא את הנכסים מ-Meta", data?.code);
+      }
       return (data.accounts ?? []) as MetaAsset[];
     },
     onSuccess: (accounts) => {
@@ -354,18 +381,15 @@ export default function MetaWhatsAppSettings() {
     mutationFn: async () => {
       const [wabaId, phoneNumberId] = selectedPhone.split("::");
       if (!wabaId || !phoneNumberId) throw new Error("יש לבחור מספר");
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
-        body: {
-          action: "connect_manual",
-          tenant_id: tenantId,
-          access_token: manualToken.trim(),
-          waba_id: wabaId,
-          phone_number_ids: [phoneNumberId],
-          pin: manualPin,
-        },
+      const data = await invokeMetaAuth({
+        action: "connect_manual",
+        tenant_id: tenantId,
+        access_token: manualToken.trim(),
+        waba_id: wabaId,
+        phone_number_ids: [phoneNumberId],
+        pin: manualPin,
       });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "החיבור לא הושלם");
+      if (!data?.success) throw new MetaAuthError(data?.error || "החיבור לא הושלם", data?.code);
       return data;
     },
     onSuccess: async (data) => {
@@ -381,23 +405,19 @@ export default function MetaWhatsAppSettings() {
   });
 
   const diagnoseMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
-        body: { action: "diagnose", tenant_id: tenantId },
-      });
-      if (error) throw error;
-      return data as Record<string, unknown>;
-    },
+    mutationFn: async () =>
+      (await invokeMetaAuth({ action: "diagnose", tenant_id: tenantId })) as Record<string, unknown>,
     onError: (error: Error) => toast.error(error.message),
   });
 
   const disconnectMutation = useMutation({
     mutationFn: async (integrationId: string) => {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
-        body: { action: "disconnect", tenant_id: tenantId, integration_id: integrationId },
+      const data = await invokeMetaAuth({
+        action: "disconnect",
+        tenant_id: tenantId,
+        integration_id: integrationId,
       });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "הניתוק נכשל");
+      if (!data?.success) throw new MetaAuthError(data?.error || "הניתוק נכשל", data?.code);
     },
     onSuccess: () => {
       toast.success("החיבור הוסר מ-AIOS");
