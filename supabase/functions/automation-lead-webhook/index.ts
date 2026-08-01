@@ -125,6 +125,14 @@ Deno.serve(async (request) => {
       configuration.client_id || payload.client_id,
     );
     const routing = buildLeadRoutingPayload(routedClient, formData);
+    if (!routedClient) {
+      // Make/Zapier scenarios often already know the destination client.
+      // The per-flow secret makes these trusted fields safe to accept while
+      // avoiding a UUID lookup table in every existing scenario.
+      routing.client_name = firstString(payload, ["client_name", "recipient_name"]);
+      routing.client_phone = firstString(payload, ["client_phone", "recipient_phone"]);
+      routing.client_email = firstString(payload, ["client_email", "recipient_email"]);
+    }
     const externalId = firstString(payload, ["external_id", "leadgen_id", "lead_id", "id"]);
     if (externalId) {
       const { error: receiptError } = await admin
@@ -149,10 +157,10 @@ Deno.serve(async (request) => {
 
     const normalized = {
       ...payload,
-      contact_name: firstString(payload, ["contact_name", "full_name", "name"]),
-      company_name: firstString(payload, ["company_name", "company"]),
-      phone: firstString(payload, ["phone", "phone_number", "mobile"]),
-      email: firstString(payload, ["email", "email_address"]),
+      contact_name: firstString(payload, ["lead_name", "contact_name", "full_name", "name"]),
+      company_name: firstString(payload, ["lead_company", "company_name", "company"]),
+      phone: firstString(payload, ["lead_phone", "phone", "phone_number", "mobile"]),
+      email: firstString(payload, ["lead_email", "email", "email_address"]),
       source: firstString(payload, ["source"]) || "webhook",
       ...routing,
       raw_payload: body,
