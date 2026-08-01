@@ -447,6 +447,64 @@ serve(async (req) => {
                 leadRecord.phone = fieldData.phone_number || fieldData.phone || legacyMappedPhone || null;
               }
 
+              // Notification-only form mapping: forward the complete Facebook
+              // payload to Flow Builder without creating a CRM lead. One generic
+              // lead_created flow can serve every mapped client through
+              // {{client_phone}} and {{form_qa_summary}}.
+              if (formMappings.create_crm_lead === false) {
+                const { error: receiptError } = await supabase
+                  .from('lead_notification_events')
+                  .insert({
+                    tenant_id: integration.tenant_id,
+                    source: 'facebook',
+                    external_id: leadgenId,
+                    client_id: routedClient?.client_id || null,
+                    form_id: formId,
+                  });
+                if (receiptError?.code === '23505') {
+                  continue;
+                }
+                if (receiptError) throw receiptError;
+
+                const triggerUrl = `${supabaseUrl}/functions/v1/trigger-automation`;
+                const triggerResponse = await fetch(triggerUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${supabaseServiceKey}`,
+                  },
+                  body: JSON.stringify({
+                    trigger_type: 'lead_created',
+                    source: 'facebook_webhook',
+                    tenant_id: integration.tenant_id,
+                    data: {
+                      contact_name: leadRecord.contact_name || '',
+                      company_name: leadRecord.company_name || '',
+                      phone: leadRecord.phone || '',
+                      email: leadRecord.email || '',
+                      source: leadRecord.source || 'paid_ads',
+                      status: 'new',
+                      agency_id: leadRecord.agency_id || '',
+                      facebook_form_id: formId,
+                      facebook_leadgen_id: leadgenId,
+                      crm_lead_created: false,
+                      ...routingPayload,
+                    },
+                  }),
+                });
+                if (!triggerResponse.ok) {
+                  console.error(
+                    'Notification-only lead automation failed:',
+                    await triggerResponse.text(),
+                  );
+                }
+                await supabase
+                  .from('tenant_integrations')
+                  .update({ last_sync_at: new Date().toISOString() })
+                  .eq('id', integration.id);
+                continue;
+              }
+
               // ========== DEDUPLICATION LOGIC ==========
               const normalizedPhone = normalizePhone(leadRecord.phone);
               const normalizedEmail = leadRecord.email?.trim().toLowerCase() || null;

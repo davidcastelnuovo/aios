@@ -30,6 +30,7 @@ interface FormMapping {
   field_mappings: Record<string, string>;
   agency_id: string | null;
   client_id?: string | null;
+  create_crm_lead?: boolean;
   sales_person_id: string | null; // legacy single
   sales_person_ids?: string[]; // new multi-select
   tag_id: string | null;
@@ -80,6 +81,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [selectedAgency, setSelectedAgency] = useState<string>("");
   const [selectedClient, setSelectedClient] = useState<string>("none");
+  const [createCrmLead, setCreateCrmLead] = useState(true);
   const [selectedSalesPersonIds, setSelectedSalesPersonIds] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState<string>("");
   const [pageTokens, setPageTokens] = useState<Record<string, string>>({});
@@ -224,6 +226,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       setFieldMappings(mapping.field_mappings || {});
       setSelectedAgency(mapping.agency_id || "");
       setSelectedClient(mapping.client_id || "none");
+      setCreateCrmLead(mapping.create_crm_lead !== false);
       // Support both legacy single and new multi-select
       const legacyId = mapping.sales_person_id;
       const multiIds = mapping.sales_person_ids || [];
@@ -250,6 +253,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       setSelectedSalesPersonIds([]);
       setSelectedTag("");
       setSelectedClient("none");
+      setCreateCrmLead(true);
     }
   }, [selectedFormId, existingSettings, formsData]);
 
@@ -274,6 +278,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         field_mappings: fieldMappings,
         agency_id: selectedAgency || null,
         client_id: selectedClient === "none" ? null : selectedClient,
+        create_crm_lead: createCrmLead,
         sales_person_id: selectedSalesPersonIds.length > 0 ? selectedSalesPersonIds[0] : null, // legacy compat
         sales_person_ids: selectedSalesPersonIds.length > 0 ? selectedSalesPersonIds : null,
         tag_id: selectedTag || null,
@@ -323,6 +328,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       setFieldMappings({});
       setSelectedAgency("");
       setSelectedClient("none");
+      setCreateCrmLead(true);
       setSelectedSalesPersonIds([]);
       setSelectedTag("");
       queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings', tenantId] });
@@ -480,6 +486,11 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                       <Badge variant="secondary" className="text-xs">
                         {fieldCount} שדות ממופים
                       </Badge>
+                      {mapping.create_crm_lead === false && (
+                        <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-700">
+                          התראה בלבד
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
                       {agencyName && <span>סוכנות: {agencyName}</span>}
@@ -502,6 +513,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                         setFieldMappings(mapping.field_mappings || {});
                         setSelectedAgency(mapping.agency_id || '');
                         setSelectedClient(mapping.client_id || 'none');
+                        setCreateCrmLead(mapping.create_crm_lead !== false);
                         // Support both legacy and new multi-select
                         const ids = mapping.sales_person_ids || (mapping.sales_person_id ? [mapping.sales_person_id] : []);
                         setSelectedSalesPersonIds(ids);
@@ -851,6 +863,23 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                 באוטומציה אחת ניתן לשלוח ל־{"{{client_phone}}"} ולהוסיף את{" "}
                 {"{{form_qa_summary}}"}. כל טופס ינותב ללקוח שנבחר כאן.
               </p>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+              <Checkbox
+                id="create-crm-lead"
+                checked={createCrmLead}
+                onCheckedChange={(checked) => setCreateCrmLead(checked === true)}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="create-crm-lead" className="cursor-pointer">
+                  צור גם רשומת ליד ב-CRM
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  בטלו כדי להפעיל אוטומציה ולשלוח ל־{"{{client_phone}}"} בלי להכניס את
+                  הליד למערכת. השאלות והתשובות עדיין זמינות ב־{"{{form_qa_summary}}"}.
+                </p>
+              </div>
             </div>
 
             {/* Sales People Multi-Selection */}
