@@ -367,8 +367,11 @@ function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
       ]
     : [];
 
-  const secondary = snapshot.metrics.filter(
-    (m) => !["gsc_clicks", "gsc_impressions", "top20", "keywords_total"].includes(m.key),
+  // Ahrefs' own traffic estimate is unreliable for small sites and reads as a
+  // contradiction next to real Search Console clicks, so hide it when we have GSC.
+  const hiddenWithSearch = ["gsc_clicks", "gsc_impressions", "top20", "keywords_total", "org_traffic"];
+  const secondary = snapshot.metrics.filter((m) =>
+    search ? !hiddenWithSearch.includes(m.key) : !["gsc_clicks", "gsc_impressions"].includes(m.key),
   );
 
   return (
@@ -518,7 +521,12 @@ function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
                         ? formatNum(kw.volume)
                         : "—"}
                   </span>
-                  <span className="text-left text-xs font-semibold tabular-nums text-[#2DA89E]">
+                  <span
+                    className={cn(
+                      "text-left text-xs font-semibold tabular-nums",
+                      kw.clicks ? "text-[#2DA89E]" : "text-[#F4F0E6]/30",
+                    )}
+                  >
                     {kw.clicks != null ? formatNum(kw.clicks) : "—"}
                   </span>
                 </div>
@@ -659,8 +667,14 @@ function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
                   href={link.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="block truncate text-sm text-[#F4F0E6] underline decoration-[#2DA89E]/40 underline-offset-4 hover:text-[#5BE0D2]"
+                  className="block text-sm leading-snug text-[#F4F0E6] underline decoration-[#2DA89E]/40 underline-offset-4 hover:text-[#5BE0D2]"
                   title={link.anchor || link.url}
+                  style={{
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
                 >
                   {link.anchor?.trim() || hostOf(link.url)}
                 </a>
