@@ -1570,6 +1570,30 @@ Deno.serve(async (req) => {
                     stepResponse = await executeGreenApiMessage(supabase, stepConfig, stepData, tenantId)
                     previousStepOutput = stepResponse
                   }
+                } else if (effectiveActionType === 'send_meta_whatsapp_message') {
+                  if (stepConfig.message_template?.includes('{{agent_output}}') && !previousStepOutput?.output) {
+                    if (previousStepOutput && previousStepOutput.success === false) {
+                      throw new Error('כרמן לא החזירה תשובה לשליחה, לכן ההודעה לא נשלחה')
+                    }
+                    stepResponse = { success: true, skipped: 'empty_agent_output' }
+                    previousStepOutput = stepResponse
+                  } else {
+                    if (stepConfig.message_template && previousStepOutput) {
+                      const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
+                      stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
+                      stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                    }
+                    if (Array.isArray(stepConfig.template_variables) && previousStepOutput) {
+                      const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
+                      stepConfig.template_variables = stepConfig.template_variables.map((value: string) =>
+                        String(value ?? '')
+                          .replace(/\{\{agent_output\}\}/g, agentText)
+                          .replace(/\{\{previous_step_output\}\}/g, agentText),
+                      )
+                    }
+                    stepResponse = await executeMetaWhatsappMessage(supabase, stepConfig, stepData, tenantId)
+                    previousStepOutput = stepResponse
+                  }
                 } else if (effectiveActionType === 'send_whatsapp') {
                   if (stepConfig.message_template && previousStepOutput) {
                     const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
@@ -1770,6 +1794,8 @@ Deno.serve(async (req) => {
               response = await executeCreateManychatSubscriber(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'send_greenapi_message' || automation.action_type === 'send_manus_message') {
               response = await executeGreenApiMessage(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'send_meta_whatsapp_message') {
+              response = await executeMetaWhatsappMessage(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'send_greenapi_to_campaigner') {
               response = await executeGreenApiToCampaigner(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'add_lead_update') {
@@ -3153,6 +3179,127 @@ async function sendWaMessage(opts: {
       })
     }
     return j
+  }
+}
+
+/** Resolves a destination phone for Meta Cloud API (1:1 only — no groups). */
+function resolveMetaDestinationPhone(config: any, data: any): string {
+  const phoneMode = config.phone_mode || 'field'
+  let raw = ''
+
+  if (phoneMode === 'manual' && config.manual_phone) {
+    raw = String(config.manual_phone)
+  } else if ((phoneMode === 'field' || config.phone_field) && config.phone_field && data?.[config.phone_field]) {
+    raw = String(data[config.phone_field])
+  } else if (data?.phone) {
+    raw = String(data.phone)
+  } else if (data?.contact_phone) {
+    raw = String(data.contact_phone)
+  }
+
+  if (!raw) throw new Error('לא נמצא מספר טלפון לשליחה')
+  if (raw.includes('@g.us') || data?.contact_type === 'group') {
+    throw new Error('Meta WhatsApp Cloud API אינו תומך בקבוצות. השתמשו ב-Green API / Manus לקבוצות.')
+  }
+
+  const digits = raw.replace(/\D/g, '').replace(/^00/, '')
+  if (!digits) throw new Error('מספר הטלפון אינו תקין')
+  if (digits.startsWith('972')) return digits
+  if (digits.startsWith('0')) return `972${digits.slice(1)}`
+  if (digits.length === 9) return `972${digits}`
+  return digits
+}
+
+async function executeMetaWhatsappMessage(supabase: any, config: any, data: any, tenantId: string) {
+  const sendMode = config.send_mode === 'template' ? 'template' : 'text'
+  const integrationId = config.meta_whatsapp_integration_id || config.integration_id || null
+
+  const { data: tenant } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
+  const tenantSlug = tenant?.slug
+
+  let integrationQuery = supabase
+    .from('tenant_integrations')
+    .select('id, user_id, display_name, settings, instance_id')
+    .eq('tenant_id', tenantId)
+    .eq('integration_type', 'meta_whatsapp')
+    .eq('is_active', true)
+  if (integrationId) integrationQuery = integrationQuery.eq('id', integrationId)
+  const { data: integrations, error: integrationError } = await integrationQuery.order('created_at').limit(1)
+  if (integrationError) throw integrationError
+  const integration = integrations?.[0]
+  if (!integration) throw new Error('לא נמצא חיבור Meta WhatsApp פעיל')
+
+  let senderUserId = integration.user_id as string | null
+  if (!senderUserId) {
+    const { data: owner } = await supabase
+      .from('tenant_users')
+      .select('user_id')
+      .eq('tenant_id', tenantId)
+      .limit(1)
+      .maybeSingle()
+    senderUserId = owner?.user_id ?? null
+  }
+  if (!senderUserId) throw new Error('לא נמצא משתמש לשיוך שליחת Meta WhatsApp')
+
+  const phoneNumber = resolveMetaDestinationPhone(config, data)
+  const payload: Record<string, unknown> = {
+    tenantId,
+    integrationId: integration.id,
+    senderUserId,
+    phoneNumber,
+    clientId: data?.client_id || null,
+    leadId: data?.lead_id || data?.id || null,
+  }
+
+  if (sendMode === 'template') {
+    const templateName = String(config.template_name || '').trim()
+    if (!templateName) throw new Error('יש לבחור תבנית WhatsApp מאושרת')
+    const language = String(config.template_language || 'he').trim() || 'he'
+    const variables = Array.isArray(config.template_variables) ? config.template_variables : []
+    const resolved = variables.map((value: unknown) =>
+      replaceTemplateVariables(String(value ?? ''), { ...data }, tenantSlug),
+    )
+    payload.template = {
+      name: templateName,
+      language,
+      ...(resolved.length
+        ? {
+            components: [
+              {
+                type: 'body',
+                parameters: resolved.map((text: string) => ({ type: 'text', text })),
+              },
+            ],
+          }
+        : {}),
+    }
+  } else {
+    if (!config.message_template) throw new Error('תבנית הודעה לא הוגדרה')
+    payload.message = replaceTemplateVariables(config.message_template, { ...data }, tenantSlug)
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const response = await fetch(`${supabaseUrl}/functions/v1/send-meta-whatsapp-message`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${serviceKey}`,
+    },
+    body: JSON.stringify(payload),
+  })
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok || result?.error) {
+    throw new Error(result?.error || `Meta WhatsApp send failed (${response.status})`)
+  }
+
+  return {
+    success: true,
+    provider: 'meta_whatsapp',
+    integration_id: integration.id,
+    phone_number: phoneNumber,
+    send_mode: sendMode,
+    result,
   }
 }
 

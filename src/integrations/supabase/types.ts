@@ -10946,6 +10946,7 @@ export type Database = {
         | "send_whatsapp"
         | "create_manychat_subscriber"
         | "send_greenapi_message"
+        | "send_meta_whatsapp_message"
         | "add_lead_update"
         | "add_client_update"
         | "send_greenapi_to_campaigner"
@@ -11210,6 +11211,7 @@ export const Constants = {
         "send_whatsapp",
         "create_manychat_subscriber",
         "send_greenapi_message",
+        "send_meta_whatsapp_message",
         "add_lead_update",
         "add_client_update",
         "send_greenapi_to_campaigner",

@@ -46,6 +46,8 @@ const ACTION_ICONS: Record<string, any> = {
   agent: Bot,
   send_whatsapp: Send,
   send_greenapi_message: MessageSquare,
+  send_meta_whatsapp_message: MessageSquare,
+  send_manus_message: MessageSquare,
   send_greenapi_to_campaigner: MessageSquare,
   webhook: Zap,
   add_lead_update: ClipboardList,
@@ -61,6 +63,8 @@ const ACTION_LABELS: Record<string, string> = {
   agent: "סוכן AI",
   send_whatsapp: "שליחת WhatsApp",
   send_greenapi_message: "WhatsApp (Green API)",
+  send_meta_whatsapp_message: "WhatsApp (Meta הרשמי)",
+  send_manus_message: "WhatsApp (Manus)",
   send_greenapi_to_campaigner: "WhatsApp לקמפיינר",
   webhook: "Webhook",
   add_lead_update: "עדכון ליד",
@@ -328,7 +332,9 @@ export function ExecutionHistoryPanel({
                                   )}
 
                                   {/* WhatsApp step details */}
-                                  {(step.action_type === "send_whatsapp" || step.action_type === "send_greenapi_message") && step.response && (
+                                  {(step.action_type === "send_whatsapp" ||
+                                    step.action_type === "send_greenapi_message" ||
+                                    step.action_type === "send_meta_whatsapp_message") && step.response && (
                                     <div className="mt-1 text-[10px] text-muted-foreground">
                                       {step.response.subscriber_id && (
                                         <span>Subscriber: {step.response.subscriber_id}</span>

@@ -126,6 +126,7 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   whatsapp_session: "שמור סשן שיחה",
   send_whatsapp: "שלח WhatsApp (ManyChat)",
   send_greenapi_message: "שלח WhatsApp (Green API)",
+  send_meta_whatsapp_message: "שלח WhatsApp (Meta הרשמי)",
   send_manus_message: "שלח WhatsApp (Manus)",
   send_greenapi_to_campaigner: "שלח WhatsApp ל-Campaigner",
   send_telegram: "שלח הודעת Telegram",
@@ -409,10 +410,15 @@ export const FlowNodeRF = memo(function FlowNodeRF({
         {/* WhatsApp message preview */}
         {(nodeData.action_type === "send_whatsapp" ||
           nodeData.action_type === "send_greenapi_message" ||
+          nodeData.action_type === "send_meta_whatsapp_message" ||
           nodeData.action_type === "send_manus_message") &&
-          nodeData.configuration?.message && (
+          (nodeData.configuration?.message_template || nodeData.configuration?.template_name || nodeData.configuration?.message) && (
             <p className="text-xs text-muted-foreground truncate">
-              {String(nodeData.configuration.message).substring(0, 50)}
+              {String(
+                nodeData.configuration.message_template ||
+                  nodeData.configuration.template_name ||
+                  nodeData.configuration.message,
+              ).substring(0, 50)}
             </p>
           )}
 

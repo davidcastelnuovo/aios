@@ -120,6 +120,7 @@ const TRIGGER_OPTIONS = TRIGGER_CATEGORIES.flatMap(c => c.options);
 const ACTION_OPTIONS = [
   { value: "send_whatsapp", label: "שלח WhatsApp (ManyChat)" },
   { value: "send_greenapi_message", label: "שלח WhatsApp (Green API / Manus)" },
+  { value: "send_meta_whatsapp_message", label: "שלח WhatsApp (Meta הרשמי)" },
   { value: "send_manus_message", label: "שלח WhatsApp (Manus - legacy)" },
   { value: "send_telegram", label: "שלח הודעת Telegram" },
   { value: "create_task", label: "צור משימה" },
@@ -916,6 +917,15 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
             />
           )}
 
+          {node.action_type === "send_meta_whatsapp_message" && (
+            <MetaWhatsAppActionConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              availableFields={availableFields}
+              onConfigChange={handleConfigChange}
+            />
+          )}
+
           {/* Telegram send config */}
           {node.action_type === "send_telegram" && (
             <div className="space-y-3 bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
@@ -1132,6 +1142,269 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
 }
 
 // Sub-component for Green API action configuration
+function MetaWhatsAppActionConfig({
+  tenantId,
+  configuration,
+  availableFields,
+  onConfigChange,
+}: {
+  tenantId: string | undefined;
+  configuration: Record<string, any>;
+  availableFields: { key: string; label: string }[];
+  onConfigChange: (key: string, value: any) => void;
+}) {
+  const sendMode = configuration?.send_mode === "template" ? "template" : "text";
+  const phoneMode = configuration?.phone_mode || "field";
+
+  const { data: integrations = [], isLoading } = useQuery({
+    queryKey: ["meta-whatsapp-integrations-for-flow", tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_integrations")
+        .select("id, display_name, settings, is_active")
+        .eq("tenant_id", tenantId!)
+        .eq("integration_type", "meta_whatsapp")
+        .eq("is_active", true)
+        .order("created_at");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const selectedIntegrationId = configuration?.meta_whatsapp_integration_id || "";
+
+  const { data: templates = [], isFetching: loadingTemplates } = useQuery({
+    queryKey: ["meta-whatsapp-templates-for-flow", tenantId, selectedIntegrationId],
+    enabled: Boolean(tenantId && selectedIntegrationId && sendMode === "template"),
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates", {
+        body: {
+          action: "list",
+          tenant_id: tenantId,
+          integration_id: selectedIntegrationId,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const rows = Array.isArray(data?.templates) ? data.templates : Array.isArray(data?.data) ? data.data : [];
+      return rows.filter((row: any) => String(row?.status || "").toUpperCase() === "APPROVED");
+    },
+  });
+
+  useEffect(() => {
+    if (!integrations.length) return;
+    const current = configuration?.meta_whatsapp_integration_id;
+    const stillValid = current && integrations.some((row) => row.id === current);
+    if (!stillValid && integrations.length === 1) {
+      onConfigChange("meta_whatsapp_integration_id", integrations[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [integrations.length]);
+
+  const phoneFields = availableFields.filter(
+    (field) => field.key === "phone" || field.key.includes("phone"),
+  );
+  const variables: string[] = Array.isArray(configuration?.template_variables)
+    ? configuration.template_variables
+    : [];
+
+  return (
+    <div className="space-y-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+      <p className="text-right text-xs font-semibold text-emerald-700">שליחה דרך Meta WhatsApp הרשמי</p>
+      <p className="text-right text-[11px] text-muted-foreground">
+        מחוץ לחלון 24 שעות חובה לשלוח תבנית מאושרת. קבוצות אינן נתמכות ב-Cloud API.
+      </p>
+
+      <div className="space-y-2">
+        <Label className="block text-right">חיבור Meta WhatsApp</Label>
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground">טוען חיבורים...</p>
+        ) : integrations.length === 0 ? (
+          <p className="text-xs text-destructive">אין חיבור Meta WhatsApp פעיל בארגון</p>
+        ) : (
+          <Select
+            value={selectedIntegrationId}
+            onValueChange={(value) => onConfigChange("meta_whatsapp_integration_id", value)}
+          >
+            <SelectTrigger dir="rtl">
+              <SelectValue placeholder="בחרו מספר" />
+            </SelectTrigger>
+            <SelectContent>
+              {integrations.map((row: any) => (
+                <SelectItem key={row.id} value={row.id}>
+                  {row.settings?.display_phone_number || row.display_name || row.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label className="block text-right">סוג שליחה</Label>
+        <RadioGroup
+          value={sendMode}
+          onValueChange={(value) => onConfigChange("send_mode", value)}
+          className="flex justify-end gap-4"
+          dir="rtl"
+        >
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="text" id="meta-send-text" />
+            <Label htmlFor="meta-send-text" className="cursor-pointer text-sm">טקסט (חלון 24 שעות)</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="template" id="meta-send-template" />
+            <Label htmlFor="meta-send-template" className="cursor-pointer text-sm">תבנית מאושרת</Label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      {sendMode === "text" ? (
+        <div className="space-y-2">
+          <Label className="block text-right">תוכן ההודעה</Label>
+          <Textarea
+            value={configuration?.message_template || ""}
+            onChange={(event) => onConfigChange("message_template", event.target.value)}
+            placeholder="שלום {{contact_name}}, ..."
+            className="min-h-24 text-right"
+            dir="rtl"
+          />
+          <div className="flex flex-wrap justify-end gap-1">
+            {availableFields.slice(0, 8).map((field) => (
+              <Button
+                key={field.key}
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px]"
+                onClick={() =>
+                  onConfigChange(
+                    "message_template",
+                    `${configuration?.message_template || ""}{{${field.key}}}`,
+                  )
+                }
+              >
+                {`{{${field.key}}}`}
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label className="block text-right">תבנית מאושרת</Label>
+            {loadingTemplates ? (
+              <p className="text-xs text-muted-foreground">טוען תבניות...</p>
+            ) : (
+              <Select
+                value={configuration?.template_name || ""}
+                onValueChange={(value) => {
+                  onConfigChange("template_name", value);
+                  const selected = templates.find((row: any) => row.name === value);
+                  if (selected?.language) onConfigChange("template_language", selected.language);
+                }}
+              >
+                <SelectTrigger dir="rtl">
+                  <SelectValue placeholder={templates.length ? "בחרו תבנית" : "אין תבניות מאושרות"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((row: any) => (
+                    <SelectItem key={`${row.name}-${row.language || "he"}`} value={row.name}>
+                      {row.name}
+                      {row.language ? ` (${row.language})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label className="block text-right">שפת התבנית</Label>
+            <Input
+              value={configuration?.template_language || "he"}
+              onChange={(event) => onConfigChange("template_language", event.target.value)}
+              dir="ltr"
+              className="max-w-32"
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onConfigChange("template_variables", [...variables, ""])}
+              >
+                הוסף משתנה {"{{n}}"}
+              </Button>
+              <Label className="text-right">משתני BODY לפי סדר (אופציונלי)</Label>
+            </div>
+            {variables.map((value, index) => (
+              <Input
+                key={`tvar-${index}`}
+                value={value}
+                onChange={(event) => {
+                  const next = [...variables];
+                  next[index] = event.target.value;
+                  onConfigChange("template_variables", next);
+                }}
+                placeholder={`ערך ל-{{${index + 1}}} או {{contact_name}}`}
+                dir="rtl"
+                className="text-right"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label className="block text-right">יעד הטלפון</Label>
+        <RadioGroup
+          value={phoneMode}
+          onValueChange={(value) => onConfigChange("phone_mode", value)}
+          className="flex justify-end gap-4"
+          dir="rtl"
+        >
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="field" id="meta-phone-field" />
+            <Label htmlFor="meta-phone-field" className="cursor-pointer text-sm">משדה</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="manual" id="meta-phone-manual" />
+            <Label htmlFor="meta-phone-manual" className="cursor-pointer text-sm">ידני</Label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      {phoneMode === "manual" ? (
+        <Input
+          value={configuration?.manual_phone || ""}
+          onChange={(event) => onConfigChange("manual_phone", event.target.value)}
+          placeholder="9725..."
+          dir="ltr"
+        />
+      ) : (
+        <Select
+          value={configuration?.phone_field || "phone"}
+          onValueChange={(value) => onConfigChange("phone_field", value)}
+        >
+          <SelectTrigger dir="rtl">
+            <SelectValue placeholder="בחרו שדה טלפון" />
+          </SelectTrigger>
+          <SelectContent>
+            {(phoneFields.length ? phoneFields : [{ key: "phone", label: "טלפון" }]).map((field) => (
+              <SelectItem key={field.key} value={field.key}>
+                {field.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+}
+
 function GreenAPIActionConfig({
   tenantId,
   configuration,

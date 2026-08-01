@@ -531,6 +531,14 @@ export const NODE_ICON_MAP: Record<string, NodeIconConfig> = {
     BrandIcon: WhatsAppIcon,
     category: "action_message",
   },
+  send_meta_whatsapp_message: {
+    icon: MessageSquare,
+    color: "#059669",
+    bgColor: "rgba(5,150,105,0.12)",
+    borderColor: "rgba(5,150,105,0.35)",
+    BrandIcon: WhatsAppIcon,
+    category: "action_message",
+  },
   send_manus_message: {
     icon: MessageSquare,
     color: "#16a34a",
