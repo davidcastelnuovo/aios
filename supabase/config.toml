@@ -48,6 +48,9 @@ verify_jwt = true
 [functions.send-meta-whatsapp-message]
 verify_jwt = true
 
+[functions.meta-whatsapp-templates]
+verify_jwt = true
+
 [functions.meta-whatsapp-webhook]
 verify_jwt = false
 
