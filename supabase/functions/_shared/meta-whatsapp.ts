@@ -106,3 +106,45 @@ export function collectWebhookMessages(value: Record<string, any>, field: string
 export function isCoexistenceFinishEvent(event: unknown): boolean {
   return event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING";
 }
+
+const TEMPLATE_PARAMETER_MAX_LENGTH = 1024;
+const EMPTY_TEMPLATE_PARAMETER_PLACEHOLDER = "-";
+
+/**
+ * Meta rejects a template body parameter that is empty ((#131008) Required parameter
+ * is missing) or that contains newlines, tabs or 4+ consecutive spaces ((#132018)).
+ * A lead with no answers to the screening questions is a normal case, so an empty
+ * value is replaced with a placeholder rather than failing the whole send.
+ */
+export function sanitizeTemplateParameter(value: unknown): string {
+  const cleaned = String(value ?? "")
+    .replace(/[\r\n\t]+/g, " • ")
+    .replace(/(?:•\s*){2,}/g, "• ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^\s*•\s*/, "")
+    .replace(/\s*•\s*$/, "")
+    .trim();
+  if (!cleaned) return EMPTY_TEMPLATE_PARAMETER_PLACEHOLDER;
+  if (cleaned.length <= TEMPLATE_PARAMETER_MAX_LENGTH) return cleaned;
+  return `${cleaned.slice(0, TEMPLATE_PARAMETER_MAX_LENGTH - 1)}…`;
+}
+
+export type MetaDeliveryStatus = "sent" | "delivered" | "read" | "failed";
+
+const DELIVERY_STATUS_RANK: Record<string, number> = {
+  accepted: 1,
+  sent: 2,
+  delivered: 3,
+  read: 4,
+  failed: 5,
+};
+
+/**
+ * Meta can deliver status webhooks out of order, so only move a message forward
+ * along sent → delivered → read. `failed` always wins.
+ */
+export function shouldApplyDeliveryStatus(previous: unknown, next: unknown): boolean {
+  const nextRank = DELIVERY_STATUS_RANK[String(next ?? "")] ?? 0;
+  if (!nextRank) return false;
+  return nextRank > (DELIVERY_STATUS_RANK[String(previous ?? "")] ?? 0);
+}
