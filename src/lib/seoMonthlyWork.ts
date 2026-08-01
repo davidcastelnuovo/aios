@@ -156,34 +156,66 @@ export function createLinkItem(partial?: Partial<SeoLinkItem>): SeoLinkItem {
   };
 }
 
-/** Drop empty draft rows before persisting. */
+/**
+ * The tracking sheets write the same line with and without a bullet, so
+ * compare on the text itself rather than the raw string.
+ */
+function dedupeKey(value: string): string {
+  return value
+    .replace(/^[\s*•\-–—]+/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.,:;]+$/, "")
+    .toLowerCase();
+}
+
+function dropDuplicates<T>(rows: T[], key: (row: T) => string): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const k = key(row);
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/** Drop empty draft rows and duplicates before persisting. */
 export function sanitizeSeoMonthlyWork(work: SeoMonthlyWork): SeoMonthlyWork {
   return {
     summary: (work.summary || "").trim(),
-    onsite: work.onsite
-      .map((r) => ({
-        ...r,
-        title: r.title.trim(),
-        notes: r.notes?.trim() || undefined,
-        url: r.url?.trim() || undefined,
-      }))
-      .filter((r) => r.title),
-    articles: work.articles
-      .map((r) => ({
-        ...r,
-        title: r.title.trim(),
-        topic: r.topic.trim(),
-        notes: r.notes?.trim() || undefined,
-        url: r.url?.trim() || undefined,
-      }))
-      .filter((r) => r.title),
-    links: work.links
-      .map((r) => ({
-        ...r,
-        url: r.url.trim(),
-        anchor: r.anchor?.trim() || undefined,
-        notes: r.notes?.trim() || undefined,
-      }))
-      .filter((r) => r.url),
+    onsite: dropDuplicates(
+      work.onsite
+        .map((r) => ({
+          ...r,
+          title: r.title.trim(),
+          notes: r.notes?.trim() || undefined,
+          url: r.url?.trim() || undefined,
+        }))
+        .filter((r) => r.title),
+      (r) => dedupeKey(r.title),
+    ),
+    articles: dropDuplicates(
+      work.articles
+        .map((r) => ({
+          ...r,
+          title: r.title.trim(),
+          topic: r.topic.trim(),
+          notes: r.notes?.trim() || undefined,
+          url: r.url?.trim() || undefined,
+        }))
+        .filter((r) => r.title),
+      (r) => dedupeKey(r.title),
+    ),
+    links: dropDuplicates(
+      work.links
+        .map((r) => ({
+          ...r,
+          url: r.url.trim(),
+          anchor: r.anchor?.trim() || undefined,
+          notes: r.notes?.trim() || undefined,
+        }))
+        .filter((r) => r.url),
+      (r) => r.url.toLowerCase(),
+    ),
   };
 }

@@ -20,6 +20,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
+import { useSeoScope } from "@/hooks/useSeoScope";
+import { useSeoMonthlyGsc } from "@/hooks/useSeoMonthlyGsc";
 import { filterValidSeoReports } from "@/components/dynamic-tables/seo/reportValidity";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,6 +60,7 @@ import { buildDefaultShareToken } from "@/lib/share-slug";
 import {
   buildSeoMonthlyShareSnapshot,
   SeoMonthlyShareSnapshot,
+  SeoShareRecentLink,
 } from "@/lib/seoMonthlyShareSnapshot";
 import {
   SeoMonthlySlideshow,
@@ -146,6 +149,96 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
     const valid = filterValidSeoReports(ahrefsReports || []);
     return (valid[0] as any)?.domain || client?.website || undefined;
   }, [ahrefsReports, client?.website]);
+
+  // SEO artifacts can live in a sibling tenant for shared-agency clients.
+  const { data: seoScope } = useSeoScope(clientId);
+  const accessibleTenantIds = seoScope?.accessibleTenantIds?.length
+    ? seoScope.accessibleTenantIds
+    : tenantId
+      ? [tenantId]
+      : [];
+
+  /** Every month this client has a work log for — drives the campaign baseline. */
+  const { data: monthsWithWork } = useQuery({
+    queryKey: ["seo-monthly-months", clientId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("seo_monthly_updates")
+        .select("month")
+        .eq("client_id", clientId)
+        .order("month", { ascending: true });
+      if (error) throw error;
+      return (data as Array<{ month: string }>).map((r) => r.month.slice(0, 10));
+    },
+    enabled: !!clientId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const campaignStartMonth = monthsWithWork?.[0] ?? null;
+
+  /** Links published in the two months before the selected one. */
+  const { data: priorMonthsWork } = useQuery({
+    queryKey: ["seo-monthly-recent-links", clientId, selectedMonth],
+    queryFn: async () => {
+      const from = format(startOfMonth(subMonths(new Date(`${selectedMonth}T12:00:00`), 2)), "yyyy-MM-dd");
+      const { data, error } = await (supabase as any)
+        .from("seo_monthly_updates")
+        .select("month, work")
+        .eq("client_id", clientId)
+        .gte("month", from)
+        .lte("month", selectedMonth)
+        .order("month", { ascending: false });
+      if (error) throw error;
+      return data as Array<{ month: string; work: unknown }>;
+    },
+    enabled: !!clientId && !!selectedMonth,
+    staleTime: 60 * 1000,
+  });
+
+  const gsc = useSeoMonthlyGsc({
+    clientId,
+    tenantIds: accessibleTenantIds,
+    month: selectedMonth,
+    campaignStartMonth,
+    savedSiteUrl: seoScope?.seoTable?.integration_settings?.linkedGscSiteUrl || undefined,
+    domain: reportDomain,
+  });
+
+  /**
+   * External links over a three-month window. The current month comes from the
+   * live editor state so unsaved rows show up in the preview too.
+   */
+  const recentLinks = useMemo<SeoShareRecentLink[]>(() => {
+    const out: SeoShareRecentLink[] = [];
+    const seen = new Set<string>();
+    const push = (month: string, link: { id?: string; url?: string; anchor?: string; notes?: string }) => {
+      const url = (link.url || "").trim();
+      if (!url || seen.has(url.toLowerCase())) return;
+      seen.add(url.toLowerCase());
+      let monthLabel = month;
+      try {
+        monthLabel = format(new Date(`${month}T12:00:00`), "MMMM yyyy", { locale: he });
+      } catch {
+        /* keep raw */
+      }
+      out.push({
+        id: link.id || `${month}-${url}`,
+        url,
+        anchor: link.anchor?.trim() || undefined,
+        notes: link.notes?.trim() || undefined,
+        month,
+        monthLabel,
+      });
+    };
+    for (const link of work.links) push(selectedMonth, link);
+    for (const row of priorMonthsWork || []) {
+      const month = row.month.slice(0, 10);
+      if (month === selectedMonth) continue;
+      const parsed = parseSeoMonthlyWork(row.work);
+      for (const link of parsed.links) push(month, link);
+    }
+    return out.sort((a, b) => b.month.localeCompare(a.month));
+  }, [work.links, priorMonthsWork, selectedMonth]);
 
   const { data: existingShare } = useQuery({
     queryKey: ["seo-monthly-share", clientId, selectedMonth],
@@ -238,8 +331,27 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
         status,
         work,
         reportData: latestReportData,
+        gsc: {
+          current: gsc.current,
+          prev: gsc.prev,
+          baseline: gsc.baseline,
+          baselineMonth: gsc.baselineMonth,
+        },
+        recentLinks,
       }),
-    [client?.name, reportDomain, selectedMonth, status, work, latestReportData],
+    [
+      client?.name,
+      reportDomain,
+      selectedMonth,
+      status,
+      work,
+      latestReportData,
+      gsc.current,
+      gsc.prev,
+      gsc.baseline,
+      gsc.baselineMonth,
+      recentLinks,
+    ],
   );
 
   const shareUrl =
@@ -256,6 +368,13 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
       status,
       work,
       reportData: latestReportData,
+      gsc: {
+        current: gsc.current,
+        prev: gsc.prev,
+        baseline: gsc.baseline,
+        baselineMonth: gsc.baselineMonth,
+      },
+      recentLinks,
     });
 
     if (existingShare?.share_token) {
