@@ -112,6 +112,7 @@ export default function MetaWhatsAppSettings() {
   const codeRef = useRef<string | null>(null);
   const sessionRef = useRef<{ data: Record<string, unknown>; event: string } | null>(null);
   const completingRef = useRef(false);
+  const sessionTimerRef = useRef<number | null>(null);
 
   const { data: config, error: configError } = useQuery({
     queryKey: ["meta-whatsapp-config", tenantId],
@@ -143,7 +144,11 @@ export default function MetaWhatsAppSettings() {
   });
 
   const finishSignup = async () => {
-    if (!tenantId || !codeRef.current || !sessionRef.current || completingRef.current) return;
+    if (!tenantId || !codeRef.current || completingRef.current) return;
+    if (sessionTimerRef.current) {
+      window.clearTimeout(sessionTimerRef.current);
+      sessionTimerRef.current = null;
+    }
     completingRef.current = true;
     try {
       const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", {
@@ -151,9 +156,8 @@ export default function MetaWhatsAppSettings() {
           action: "complete",
           tenant_id: tenantId,
           code: codeRef.current,
-          session_info: sessionRef.current.data,
-          session_event: sessionRef.current.event,
-          coexistence: mode === "coexistence",
+          session_info: sessionRef.current?.data ?? {},
+          session_event: sessionRef.current?.event ?? "",
           pin,
         },
       });
@@ -192,23 +196,38 @@ export default function MetaWhatsAppSettings() {
       };
       if (payload?.type !== "WA_EMBEDDED_SIGNUP") return;
       if (payload.event === "CANCEL") {
+        if (completingRef.current) return;
+        if (sessionTimerRef.current) {
+          window.clearTimeout(sessionTimerRef.current);
+          sessionTimerRef.current = null;
+        }
+        codeRef.current = null;
         setConnecting(false);
         toast.info("תהליך החיבור בוטל");
         return;
       }
       if (payload.event === "ERROR") {
+        if (sessionTimerRef.current) {
+          window.clearTimeout(sessionTimerRef.current);
+          sessionTimerRef.current = null;
+        }
+        codeRef.current = null;
         setConnecting(false);
         toast.error(String(payload.data?.error_message || "Meta לא הצליחה להשלים את החיבור"));
         return;
       }
       if (String(payload.event ?? "").startsWith("FINISH")) {
         sessionRef.current = { data: payload.data ?? {}, event: payload.event };
-        void finishSignup();
+        if (codeRef.current) void finishSignup();
       }
     };
     window.addEventListener("message", listener);
     return () => window.removeEventListener("message", listener);
   });
+
+  useEffect(() => () => {
+    if (sessionTimerRef.current) window.clearTimeout(sessionTimerRef.current);
+  }, []);
 
   const launchSignup = async () => {
     if (!config) return;
@@ -219,6 +238,10 @@ export default function MetaWhatsAppSettings() {
     setConnecting(true);
     codeRef.current = null;
     sessionRef.current = null;
+    if (sessionTimerRef.current) {
+      window.clearTimeout(sessionTimerRef.current);
+      sessionTimerRef.current = null;
+    }
     try {
       await loadFacebookSdk(config.app_id, config.graph_version);
       const extras: Record<string, unknown> = { setup: {}, sessionInfoVersion: "3" };
@@ -233,7 +256,16 @@ export default function MetaWhatsAppSettings() {
             return;
           }
           codeRef.current = response.authResponse.code;
-          void finishSignup();
+          // Meta only emits the WA_EMBEDDED_SIGNUP session message for full
+          // WhatsApp flows. Give it a brief moment, then complete regardless so
+          // the screen can never wait forever for a message that never arrives.
+          if (sessionRef.current) {
+            void finishSignup();
+            return;
+          }
+          sessionTimerRef.current = window.setTimeout(() => {
+            void finishSignup();
+          }, 2000);
         },
         {
           config_id: config.configuration_id,
@@ -337,20 +369,24 @@ export default function MetaWhatsAppSettings() {
               </Label>
             </RadioGroup>
 
-            {mode === "new_number" && (
-              <div className="space-y-2">
-                <Label htmlFor="meta-wa-pin">PIN לאימות דו־שלבי (6 ספרות)</Label>
-                <Input
-                  id="meta-wa-pin"
-                  value={pin}
-                  onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                  inputMode="numeric"
-                  dir="ltr"
-                  placeholder="123456"
-                  className="max-w-48"
-                />
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="meta-wa-pin">
+                PIN לאימות דו־שלבי (6 ספרות)
+                {mode === "coexistence" && <span className="text-muted-foreground"> — אופציונלי</span>}
+              </Label>
+              <Input
+                id="meta-wa-pin"
+                value={pin}
+                onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                inputMode="numeric"
+                dir="ltr"
+                placeholder="123456"
+                className="max-w-48"
+              />
+              <p className="text-xs text-muted-foreground">
+                נדרש כאשר המספר נרשם ל־Cloud API. במסלול Coexistence Meta מדלגת על הרישום.
+              </p>
+            </div>
 
             <Button onClick={launchSignup} disabled={!config || connecting} size="lg" className="w-full bg-[#1877F2] hover:bg-[#166FE5]">
               {connecting ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <ExternalLink className="ml-2 h-4 w-4" />}
