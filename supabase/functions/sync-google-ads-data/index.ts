@@ -1,4 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import {
+  detectGoogleAdsError,
+  googleAdsErrorBody,
+  isManagerAccountError,
+  managerAccountErrorBody,
+} from '../_shared/googleAdsErrors.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -438,14 +444,6 @@ Deno.serve(async (req) => {
     }
 
 
-    // Helper: detect Google Ads error in any response shape (object, array, or wrapped)
-    const detectGAError = (data: any): any | null => {
-      if (!data) return null;
-      if (data.error) return data.error;
-      if (Array.isArray(data) && data.length > 0 && data[0]?.error) return data[0].error;
-      return null;
-    };
-
     // Helper: try a list of candidate MCCs and return the first that works
     const tryMccCandidates = async (candidates: string[]): Promise<{ data: any; mcc: string } | null> => {
       for (const mcc of candidates) {
@@ -463,16 +461,26 @@ Deno.serve(async (req) => {
           }
         );
         const retryData = await retryResponse.json().catch(() => null);
-        if (retryData && !detectGAError(retryData)) {
+        if (retryData && !detectGoogleAdsError(retryData)) {
           console.log(`[sync-google-ads] Found working MCC: ${mcc}`);
           return { data: retryData, mcc };
         }
-        console.log(`[sync-google-ads] MCC ${mcc} failed:`, JSON.stringify(detectGAError(retryData)).slice(0, 200));
+        console.log(`[sync-google-ads] MCC ${mcc} failed:`, JSON.stringify(detectGoogleAdsError(retryData)).slice(0, 200));
       }
       return null;
     };
 
-    let initialError = detectGAError(searchData);
+    let initialError = detectGoogleAdsError(searchData);
+
+    // A manager account can never return metrics, so stop here instead of burning
+    // requests on MCC candidates that cannot change the outcome, and say what to fix.
+    if (initialError && isManagerAccountError(initialError)) {
+      console.error('[sync-google-ads] report points at a manager account:', customerId);
+      return new Response(JSON.stringify(managerAccountErrorBody(customerId)), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     // If failed and no manager_id was set, try to discover the MCC
     if (initialError && !settings.manager_id) {
@@ -531,13 +539,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    const finalError = detectGAError(searchData);
+    const finalError = detectGoogleAdsError(searchData);
     if (finalError) {
       console.error('Google Ads API error:', finalError);
-      return new Response(JSON.stringify({
-        error: 'Google Ads API error',
-        details: finalError.message || JSON.stringify(finalError)
-      }), {
+      const body = isManagerAccountError(finalError)
+        ? managerAccountErrorBody(customerId)
+        : googleAdsErrorBody(finalError);
+      return new Response(JSON.stringify(body), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -620,7 +628,7 @@ Deno.serve(async (req) => {
           }
         );
         const categoryData = await categoryResponse.json().catch(() => null);
-        const categoryError = detectGAError(categoryData);
+        const categoryError = detectGoogleAdsError(categoryData);
         if (categoryError) {
           console.warn('[sync-google-ads] add-to-cart segmentation failed:', JSON.stringify(categoryError).slice(0, 300));
         } else {
