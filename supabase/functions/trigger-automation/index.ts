@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { sendCarmenReplyViaActionStep } from '../_shared/carmen.ts'
+import { dropUnresolvedTemplateLines, sanitizeTemplateParameter } from '../_shared/meta-whatsapp.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1845,16 +1846,27 @@ Deno.serve(async (req) => {
 
           const executionTime = Date.now() - startTime
 
-          // Log success
+          // A flow reports per-step results, so the run is only a success when every
+          // step succeeded. Without this a run whose only action failed was logged
+          // green and the failure was buried inside the response payload.
+          const flowStepResults = (response as { steps?: Array<{ success?: boolean; error?: string }> } | null)?.steps
+          const failedSteps = Array.isArray(flowStepResults)
+            ? flowStepResults.filter((step) => step?.success === false)
+            : []
+          const succeeded = failedSteps.length === 0
+
           await supabase.from('automation_logs').insert({
             automation_id: automation.id,
-            success: true,
+            success: succeeded,
+            error_message: succeeded
+              ? null
+              : failedSteps.map((step) => step?.error || 'שלב נכשל').join(' | '),
             payload: payloadData,
             response: response,
             execution_time_ms: executionTime,
           })
 
-          return { success: true, automation_id: automation.id, response }
+          return { success: succeeded, automation_id: automation.id, response }
         } catch (error) {
           const executionTime = Date.now() - startTime
           console.error(`Error executing automation ${automation.id}:`, error)
@@ -3219,17 +3231,25 @@ async function executeMetaWhatsappMessage(supabase: any, config: any, data: any,
 
   let integrationQuery = supabase
     .from('tenant_integrations')
-    .select('id, user_id, display_name, settings, instance_id')
-    .eq('tenant_id', tenantId)
+    .select('id, tenant_id, user_id, display_name, settings, instance_id')
     .eq('integration_type', 'meta_whatsapp')
     .eq('is_active', true)
   if (integrationId) integrationQuery = integrationQuery.eq('id', integrationId)
+  else integrationQuery = integrationQuery.eq('tenant_id', tenantId)
   const { data: integrations, error: integrationError } = await integrationQuery.order('created_at').limit(1)
   if (integrationError) throw integrationError
   const integration = integrations?.[0]
   if (!integration) throw new Error('לא נמצא חיבור Meta WhatsApp פעיל')
+  if (integration.tenant_id !== tenantId) {
+    const { data: canUse, error: accessError } = await supabase.rpc('tenant_can_use_integration', {
+      p_tenant_id: tenantId,
+      p_integration_id: integration.id,
+    })
+    if (accessError) throw accessError
+    if (canUse !== true) throw new Error('חיבור Meta WhatsApp לא שותף עם הארגון הזה')
+  }
 
-  let senderUserId = integration.user_id as string | null
+  let senderUserId = integration.tenant_id === tenantId ? integration.user_id as string | null : null
   if (!senderUserId) {
     const { data: owner } = await supabase
       .from('tenant_users')
@@ -3256,13 +3276,9 @@ async function executeMetaWhatsappMessage(supabase: any, config: any, data: any,
     if (!templateName) throw new Error('יש לבחור תבנית WhatsApp מאושרת')
     const language = String(config.template_language || 'he').trim() || 'he'
     const variables = Array.isArray(config.template_variables) ? config.template_variables : []
-    // Meta rejects template text parameters containing newlines/tabs (132018).
-    // Preserve a readable Q&A block with inline separators.
+    const resolveLine = (line: string) => replaceTemplateVariables(line, { ...data }, tenantSlug)
     const resolved = variables.map((value: unknown) =>
-      replaceTemplateVariables(String(value ?? ''), { ...data }, tenantSlug)
-        .replace(/[\r\n\t]+/g, ' • ')
-        .replace(/\s{2,}/g, ' ')
-        .trim(),
+      sanitizeTemplateParameter(resolveLine(dropUnresolvedTemplateLines(String(value ?? ''), resolveLine))),
     )
     payload.template = {
       name: templateName,

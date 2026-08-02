@@ -84,7 +84,6 @@ Deno.serve(async (request) => {
         .from("tenant_integrations")
         .select("id,tenant_id,user_id,connection_visibility,settings,is_active")
         .eq("id", integrationId)
-        .eq("tenant_id", tenantId)
         .eq("integration_type", "meta_whatsapp")
         .maybeSingle(),
     ]);
@@ -92,9 +91,18 @@ Deno.serve(async (request) => {
       return reply({ error: "forbidden" }, 403);
     }
 
+    const isSharedAcrossTenants = integration.tenant_id !== tenantId;
     const canManage =
       superAdmin === true || integration.user_id === authData.user.id;
-    let canUse = canManage || integration.connection_visibility === "org";
+    let canUse = canManage || (!isSharedAcrossTenants && integration.connection_visibility === "org");
+    if (isSharedAcrossTenants) {
+      const { data: tenantCanUse, error: accessError } = await admin.rpc("tenant_can_use_integration", {
+        p_tenant_id: tenantId,
+        p_integration_id: integrationId,
+      });
+      if (accessError) throw accessError;
+      canUse = tenantCanUse === true;
+    }
     if (!canUse) {
       const { data: permission } = await admin
         .from("integration_user_permissions")
@@ -157,7 +165,7 @@ Deno.serve(async (request) => {
       const language = String(template.language ?? "he");
       const bodyText = String(template.body_text ?? "").trim();
       const footerText = String(template.footer_text ?? "").trim();
-      const examples = Array.isArray(template.examples)
+      const examples: string[] = Array.isArray(template.examples)
         ? template.examples.map((value: unknown) => String(value).trim())
         : [];
 

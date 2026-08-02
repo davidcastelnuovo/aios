@@ -5,6 +5,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+type GreenApiIntegration = {
+  id: string;
+  tenant_id: string;
+  user_id?: string | null;
+  api_key?: string | null;
+  settings?: {
+    instance_id?: string;
+    country_code?: string;
+    default_country_code?: string;
+  } | null;
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -67,7 +79,13 @@ Deno.serve(async (req) => {
         auth: { persistSession: false, autoRefreshToken: false }
       }
     );
-    const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId, quotedMessageId, senderUserId } = await req.json();
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const {
+      clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId,
+      quotedMessageId, senderUserId, integrationId,
+    } = await req.json();
 
     // For service role calls, use senderUserId from the body
     if (isServiceRole) {
@@ -133,6 +151,17 @@ Deno.serve(async (req) => {
       tenantId = activeTenant?.tenant_id;
     }
 
+    const [{ data: membership }, { data: superAdmin }] = await Promise.all([
+      admin.from('tenant_users').select('user_id').eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle(),
+      admin.rpc('is_super_admin', { _user_id: userId }),
+    ]);
+    if (!membership && superAdmin !== true) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (!tenantId) {
       console.error('❌ Could not determine tenant for user:', userId);
       return new Response(JSON.stringify({ error: 'Tenant not found' }), {
@@ -142,15 +171,37 @@ Deno.serve(async (req) => {
     }
     
 
-    // Get Green API integration for current user
-    const { data: integration } = await supabaseClient
-      .from('tenant_integrations')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('user_id', userId)
-      .eq('integration_type', 'green_api')
-      .eq('is_active', true)
-      .maybeSingle();
+    // Resolve either the caller's own connection or one explicitly shared with
+    // their tenant. The canonical credential row stays in the owner tenant.
+    let integration: GreenApiIntegration | null = null;
+    if (integrationId) {
+      const { data } = await admin
+        .from('tenant_integrations')
+        .select('*')
+        .eq('id', integrationId)
+        .eq('integration_type', 'green_api')
+        .eq('is_active', true)
+        .maybeSingle();
+      integration = data;
+      if (integration?.tenant_id !== tenantId) {
+        const { data: canUse, error: accessError } = await admin.rpc('tenant_can_use_integration', {
+          p_tenant_id: tenantId,
+          p_integration_id: integrationId,
+        });
+        if (accessError) throw accessError;
+        if (canUse !== true && superAdmin !== true) integration = null;
+      }
+    } else {
+      const { data } = await admin
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', userId)
+        .eq('integration_type', 'green_api')
+        .eq('is_active', true)
+        .maybeSingle();
+      integration = data;
+    }
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
       console.error('Green API integration not configured for user:', userId);
@@ -226,14 +277,15 @@ Deno.serve(async (req) => {
     const senderPhoneForDb = !groupChatId ? chatId.replace('@c.us', '') : null;
 
     // Save message to database
-    const { error: insertError } = await supabaseClient
+    const { error: insertError } = await admin
       .from('chat_messages')
       .insert({
         client_id: clientId || null,
         lead_id: leadId || null,
         group_id: groupId || null,
         tenant_id: tenantId,
-        connection_user_id: userId,
+        connection_user_id: integration.user_id || userId,
+        integration_id: integration.id,
         message_text: message,
         direction: 'outbound',
         channel: 'whatsapp',

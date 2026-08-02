@@ -55,6 +55,9 @@ Deno.serve(async (req) => {
         ? { auth: { persistSession: false } }
         : { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } }
     );
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
     const body = await req.json();
     const {
@@ -100,6 +103,16 @@ Deno.serve(async (req) => {
       const { data } = await supabase.from('user_active_tenant').select('tenant_id').eq('user_id', userId).single();
       tenantId = data?.tenant_id;
     }
+
+    const [{ data: membership }, { data: superAdmin }] = await Promise.all([
+      admin.from('tenant_users').select('user_id').eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle(),
+      admin.rpc('is_super_admin', { _user_id: userId }),
+    ]);
+    if (!membership && superAdmin !== true) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
     if (!tenantId) {
       return new Response(JSON.stringify({ error: 'Tenant not found' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -114,11 +127,19 @@ Deno.serve(async (req) => {
     // Find integration
     let integ: any = null;
     if (integrationId) {
-      const { data } = await supabase.from('tenant_integrations').select('*')
-        .eq('id', integrationId).eq('tenant_id', tenantId).maybeSingle();
+      const { data } = await admin.from('tenant_integrations').select('*')
+        .eq('id', integrationId).eq('integration_type', 'manus_wa').eq('is_active', true).maybeSingle();
       integ = data;
+      if (integ?.tenant_id !== tenantId) {
+        const { data: canUse, error: accessError } = await admin.rpc('tenant_can_use_integration', {
+          p_tenant_id: tenantId,
+          p_integration_id: integrationId,
+        });
+        if (accessError) throw accessError;
+        if (canUse !== true && superAdmin !== true) integ = null;
+      }
     } else {
-      const { data } = await supabase.from('tenant_integrations').select('*')
+      const { data } = await admin.from('tenant_integrations').select('*')
         .eq('tenant_id', tenantId).eq('user_id', userId)
         .eq('integration_type', 'manus_wa').eq('is_active', true)
         .order('created_at', { ascending: true }).limit(1);
@@ -222,12 +243,13 @@ Deno.serve(async (req) => {
     }
 
     // Save to chat_messages
-    const { error: insertError } = await supabase.from('chat_messages').insert({
+    const { error: insertError } = await admin.from('chat_messages').insert({
       client_id: clientId || null,
       lead_id: leadId || null,
       group_id: groupId || null,
       tenant_id: tenantId,
       connection_user_id: integ.user_id || userId,
+      integration_id: integ.id,
       message_text: message,
       direction: 'outbound',
       channel: 'whatsapp',

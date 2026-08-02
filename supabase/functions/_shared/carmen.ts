@@ -580,14 +580,29 @@ export async function sendCarmenReplyViaActionStep(args: {
     .select('action_type, configuration, created_at')
     .eq('automation_id', automationId)
     .eq('step_type', 'action')
-    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
+    .in('action_type', [
+      'send_manus_message',
+      'send_greenapi_message',
+      'send_green_api_message',
+      'send_meta_whatsapp_message',
+    ])
     .order('created_at', { ascending: true })
     .limit(1);
   const step = steps?.[0];
   if (!step) return false;
 
+  const isMeta = step.action_type === 'send_meta_whatsapp_message';
+  // Meta's Cloud API has no group messaging at all, so a Carmen line running on it
+  // can only ever answer 1:1.
+  if (isMeta && isGroup) {
+    console.warn('[carmen-route] Meta WhatsApp cannot send to groups, skipping action step');
+    return false;
+  }
+
   const cfg = step.configuration || {};
-  const integrationId = cfg.green_api_integration_id || cfg.integration_id || null;
+  const integrationId = (isMeta ? cfg.meta_whatsapp_integration_id : cfg.green_api_integration_id)
+    || cfg.integration_id
+    || null;
 
   // Resolve group UUID (whatsapp_groups.id) when sending to a group.
   let groupId: string | null = null;
@@ -605,7 +620,11 @@ export async function sendCarmenReplyViaActionStep(args: {
     }
   }
 
-  const fnName = step.action_type === 'send_manus_message' ? 'send-manus-wa-message' : 'send-green-api-message';
+  const fnName = isMeta
+    ? 'send-meta-whatsapp-message'
+    : step.action_type === 'send_manus_message'
+      ? 'send-manus-wa-message'
+      : 'send-green-api-message';
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
@@ -1444,9 +1463,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     // the operator sends to ANY third party (e.g. a private chat with a colleague)
     // self-matches and Carmen replies where she shouldn't. For inbound messages
     // behaviour is unchanged. Match the counterpart (phoneNumber/chatId) instead.
-    const phoneCandidates = [phoneNumber, chatId?.split('@')?.[0]]
+    const phoneCandidates = ([phoneNumber, chatId?.split('@')?.[0]] as Array<string | null | undefined>)
       .concat(isManualOutgoing ? [] : [sourcePhoneNumber])
-      .map((p: string | null | undefined) => (p || '').replace(/[^0-9]/g, ''))
+      .map((p) => (p || '').replace(/[^0-9]/g, ''))
       .filter(Boolean);
     const isPhoneAllowed = allowedPhones.some((p: string) => {
       const a = p.replace(/[^0-9]/g, '');

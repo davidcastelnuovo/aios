@@ -95,7 +95,7 @@ export function ShareIntegrationTenantsDialog({
       toast({
         title: grant ? "גישה ניתנה" : "גישה הוסרה",
         description: grant 
-          ? "הארגון יכול כעת לראות הודעות מאינטגרציה זו"
+          ? "הארגון יכול כעת לבחור בחיבור באוטומציות ולשלוח דרכו"
           : "הגישה לאינטגרציה הוסרה מהארגון",
       });
     },
@@ -141,7 +141,8 @@ export function ShareIntegrationTenantsDialog({
             שיתוף אינטגרציה בין ארגונים
           </DialogTitle>
           <DialogDescription>
-            בחר אילו ארגונים יוכלו לראות הודעות מהאינטגרציה: {integrationName}
+            בחר אילו ארגונים יוכלו להשתמש בחיבור באוטומציות: {integrationName}. פרטי הגישה
+            והאסימונים נשארים בארגון הבעלים ואינם מועתקים.
           </DialogDescription>
         </DialogHeader>
 

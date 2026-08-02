@@ -106,3 +106,107 @@ export function collectWebhookMessages(value: Record<string, any>, field: string
 export function isCoexistenceFinishEvent(event: unknown): boolean {
   return event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING";
 }
+
+const PLACEHOLDER_PATTERN = /\{\{[^}]+\}\}/g;
+
+/**
+ * Drops the lines of a template parameter whose placeholders resolve to nothing, so a
+ * lead that arrives without, say, a company name yields no line at all rather than a
+ * dangling "חברה:" label or a literal {{lead_company}} in the delivered message.
+ */
+export function dropUnresolvedTemplateLines(raw: string, resolve: (line: string) => string): string {
+  return String(raw ?? "")
+    .split(/\r?\n/)
+    .filter((line) => {
+      if (!PLACEHOLDER_PATTERN.test(line)) {
+        PLACEHOLDER_PATTERN.lastIndex = 0;
+        return true;
+      }
+      PLACEHOLDER_PATTERN.lastIndex = 0;
+      const withoutPlaceholders = line.replace(PLACEHOLDER_PATTERN, "").trim();
+      const resolved = resolve(line).replace(PLACEHOLDER_PATTERN, "").trim();
+      return resolved !== withoutPlaceholders;
+    })
+    .join("\n");
+}
+
+const TEMPLATE_PARAMETER_MAX_LENGTH = 1024;
+const EMPTY_TEMPLATE_PARAMETER_PLACEHOLDER = "-";
+
+/**
+ * Meta rejects a template body parameter that is empty ((#131008) Required parameter
+ * is missing) or that contains newlines, tabs or 4+ consecutive spaces ((#132018)).
+ * A lead with no answers to the screening questions is a normal case, so an empty
+ * value is replaced with a placeholder rather than failing the whole send.
+ */
+export function sanitizeTemplateParameter(value: unknown): string {
+  const cleaned = String(value ?? "")
+    .replace(/[\r\n\t]+/g, " • ")
+    .replace(/(?:•\s*){2,}/g, "• ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^\s*•\s*/, "")
+    .replace(/\s*•\s*$/, "")
+    .trim();
+  if (!cleaned) return EMPTY_TEMPLATE_PARAMETER_PLACEHOLDER;
+  if (cleaned.length <= TEMPLATE_PARAMETER_MAX_LENGTH) return cleaned;
+  return `${cleaned.slice(0, TEMPLATE_PARAMETER_MAX_LENGTH - 1)}…`;
+}
+
+/**
+ * Renders what a template send actually said, so the chat thread shows the message
+ * rather than a bare template name. Returns null when the body cannot be resolved.
+ */
+export async function renderTemplateText(
+  wabaId: string,
+  templateName: string,
+  language: string,
+  parameters: string[],
+  accessToken: string,
+  graphVersion: string,
+): Promise<string | null> {
+  if (!wabaId || !templateName) return null;
+  try {
+    const url = new URL(`https://graph.facebook.com/${graphVersion}/${wabaId}/message_templates`);
+    url.searchParams.set("name", templateName);
+    url.searchParams.set("fields", "name,language,components");
+    url.searchParams.set("limit", "20");
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const templates: MetaWhatsAppMessage[] = Array.isArray(payload?.data) ? payload.data : [];
+    const template =
+      templates.find((item) => item.name === templateName && item.language === language) ??
+      templates.find((item) => item.name === templateName);
+    const components: MetaWhatsAppMessage[] = Array.isArray(template?.components) ? template.components : [];
+    const text = components
+      .filter((component) => ["HEADER", "BODY", "FOOTER"].includes(String(component.type ?? "")))
+      .map((component) => String(component.text ?? ""))
+      .filter(Boolean)
+      .join("\n\n")
+      .replace(/\{\{(\d+)\}\}/g, (placeholder, position) => parameters[Number(position) - 1] ?? placeholder)
+      .trim();
+    return text || null;
+  } catch {
+    return null;
+  }
+}
+
+export type MetaDeliveryStatus = "sent" | "delivered" | "read" | "failed";
+
+const DELIVERY_STATUS_RANK: Record<string, number> = {
+  accepted: 1,
+  sent: 2,
+  delivered: 3,
+  read: 4,
+  failed: 5,
+};
+
+/**
+ * Meta can deliver status webhooks out of order, so only move a message forward
+ * along sent → delivered → read. `failed` always wins.
+ */
+export function shouldApplyDeliveryStatus(previous: unknown, next: unknown): boolean {
+  const nextRank = DELIVERY_STATUS_RANK[String(next ?? "")] ?? 0;
+  if (!nextRank) return false;
+  return nextRank > (DELIVERY_STATUS_RANK[String(previous ?? "")] ?? 0);
+}

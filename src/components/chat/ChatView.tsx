@@ -150,6 +150,25 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         .in("integration_type", ["manychat", "green_api", "manus_wa", "meta_whatsapp"]);
       if (error) return [];
 
+      const { data: grants } = await supabase
+        .from("integration_tenant_access")
+        .select("integration_id")
+        .eq("accessing_tenant_id", tenantIdForProvider);
+      const grantedIds = (grants || []).map((grant) => grant.integration_id);
+      let grantedIntegrations: typeof data = [];
+      if (grantedIds.length > 0) {
+        const { data: shared } = await supabase
+          .from("tenant_integrations")
+          .select("id, integration_type, user_id, connection_visibility, display_name")
+          .in("id", grantedIds)
+          .eq("is_active", true)
+          .in("integration_type", ["manychat", "green_api", "manus_wa", "meta_whatsapp"]);
+        grantedIntegrations = (shared || []).map((integration) => ({
+          ...integration,
+          user_id: userId,
+        }));
+      }
+
       // Fetch integrations the user has explicit permission for
       const { data: permData } = await supabase
         .from("integration_user_permissions")
@@ -158,7 +177,9 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       const permittedIds = new Set((permData || []).map((p: any) => p.integration_id));
 
       // Filter: manychat = tenant level; WA = own OR org-visible OR explicitly permitted
-      return (data || []).filter((i: any) => {
+      const grantedIdSet = new Set(grantedIds);
+      return [...(data || []), ...(grantedIntegrations || [])].filter((i: any) => {
+        if (grantedIdSet.has(i.id)) return true;              // explicitly shared with tenant
         if (i.integration_type === "manychat") return true;
         if (i.user_id === userId) return true;               // own connection
         if (i.connection_visibility === "org") return true;  // org-wide shared

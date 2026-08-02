@@ -11,6 +11,7 @@ import {
   Loader2,
   MessageCircle,
   Phone,
+  Share2,
   ShieldCheck,
   Stethoscope,
   Trash2,
@@ -20,6 +21,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { IntegrationVisibilitySelector } from "@/components/forms/IntegrationVisibilitySelector";
+import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
 import { MetaWhatsAppTemplates } from "@/components/whatsapp/MetaWhatsAppTemplates";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -172,6 +174,7 @@ export default function MetaWhatsAppSettings() {
   const [metaAppId, setMetaAppId] = useState("");
   const [selectedPhone, setSelectedPhone] = useState("");
   const [discovery, setDiscovery] = useState<unknown>(null);
+  const [sharingIntegration, setSharingIntegration] = useState<Integration | null>(null);
   const codeRef = useRef<string | null>(null);
   const sessionRef = useRef<{ data: Record<string, unknown>; event: string } | null>(null);
   const completingRef = useRef(false);
@@ -876,6 +879,23 @@ export default function MetaWhatsAppSettings() {
                     displayPhone={settings.display_phone_number}
                   />
                   <Separator />
+                  {integration.user_id === userId && (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => setSharingIntegration(integration)}
+                        className="w-full sm:w-auto"
+                      >
+                        <Share2 className="ml-2 h-4 w-4" />
+                        שתף חיבור עם ארגון
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        השיתוף נותן לארגון הנבחר להשתמש בחיבור הזה באוטומציות. האסימון נשאר בארגון
+                        הבעלים ואינו מועתק או מוצג.
+                      </p>
+                      <Separator />
+                    </>
+                  )}
                   <IntegrationVisibilitySelector
                     integrationId={integration.id}
                     integrationName={integration.display_name || "Meta WhatsApp"}
@@ -888,6 +908,20 @@ export default function MetaWhatsAppSettings() {
           })
         )}
       </div>
+      {sharingIntegration && (
+        <ShareIntegrationTenantsDialog
+          open={Boolean(sharingIntegration)}
+          onOpenChange={(open) => {
+            if (!open) setSharingIntegration(null);
+          }}
+          integrationId={sharingIntegration.id}
+          integrationName={
+            sharingIntegration.settings?.verified_name
+            || sharingIntegration.display_name
+            || "Meta WhatsApp"
+          }
+        />
+      )}
     </div>
   );
 }

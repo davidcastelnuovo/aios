@@ -1316,15 +1316,31 @@ function MetaWhatsAppActionConfig({
     queryKey: ["meta-whatsapp-integrations-for-flow", tenantId],
     enabled: Boolean(tenantId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      const [{ data: own, error: ownError }, { data: grants, error: grantsError }] = await Promise.all([
+        supabase
+          .from("tenant_integrations")
+          .select("id, tenant_id, display_name, settings, is_active")
+          .eq("tenant_id", tenantId!)
+          .eq("integration_type", "meta_whatsapp")
+          .eq("is_active", true),
+        supabase
+          .from("integration_tenant_access")
+          .select("integration_id")
+          .eq("accessing_tenant_id", tenantId!),
+      ]);
+      if (ownError) throw ownError;
+      if (grantsError) throw grantsError;
+
+      const sharedIds = (grants || []).map((grant) => grant.integration_id);
+      if (sharedIds.length === 0) return own ?? [];
+      const { data: shared, error: sharedError } = await supabase
         .from("tenant_integrations")
-        .select("id, display_name, settings, is_active")
-        .eq("tenant_id", tenantId!)
+        .select("id, tenant_id, display_name, settings, is_active")
+        .in("id", sharedIds)
         .eq("integration_type", "meta_whatsapp")
-        .eq("is_active", true)
-        .order("created_at");
-      if (error) throw error;
-      return data ?? [];
+        .eq("is_active", true);
+      if (sharedError) throw sharedError;
+      return [...(own ?? []), ...(shared ?? [])];
     },
   });
 
@@ -2445,20 +2461,59 @@ function CarmenSessionConfig({
   });
   const [groupSearch, setGroupSearch] = useState("");
 
-  // Fetch ALL WhatsApp connections (Green API + Manus WA)
+  // Fetch connections owned by this tenant plus exact connections another tenant
+  // explicitly shared through integration_tenant_access. Credentials never reach
+  // the browser; this is only the metadata needed to pin the automation.
   const { data: waConnections } = useQuery({
     queryKey: ["wa-connections-for-carmen", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from("tenant_integrations")
-        .select("id, integration_type, settings, user_id, instance_id")
-        .eq("tenant_id", tenantId)
-        .in("integration_type", ["green_api", "manus_wa"])
-        .eq("is_active", true)
-        .order("integration_type", { ascending: false });
-      if (error) throw error;
-      return data || [];
+      const [{ data: own, error: ownError }, { data: grants, error: grantsError }] = await Promise.all([
+        supabase
+          .from("tenant_integrations")
+          .select("id, tenant_id, integration_type, settings, user_id, instance_id, display_name")
+          .eq("tenant_id", tenantId)
+          .in("integration_type", ["green_api", "manus_wa", "meta_whatsapp"])
+          .eq("is_active", true),
+        supabase
+          .from("integration_tenant_access")
+          .select("integration_id")
+          .eq("accessing_tenant_id", tenantId),
+      ]);
+      if (ownError) throw ownError;
+      if (grantsError) throw grantsError;
+
+      const sharedIds = (grants || []).map((grant) => grant.integration_id);
+      let shared = (own || []).slice(0, 0);
+      if (sharedIds.length > 0) {
+        const { data, error } = await supabase
+          .from("tenant_integrations")
+          .select("id, tenant_id, integration_type, settings, user_id, instance_id, display_name")
+          .in("id", sharedIds)
+          .in("integration_type", ["green_api", "manus_wa", "meta_whatsapp"])
+          .eq("is_active", true);
+        if (error) throw error;
+        shared = data || [];
+      }
+
+      const ownerTenantIds = [...new Set(shared.map((connection) => connection.tenant_id))];
+      let tenantNames = new Map<string, string>();
+      if (ownerTenantIds.length > 0) {
+        const { data: owners, error } = await supabase
+          .from("tenants")
+          .select("id, name")
+          .in("id", ownerTenantIds);
+        if (error) throw error;
+        tenantNames = new Map((owners || []).map((owner) => [owner.id, owner.name]));
+      }
+
+      return [
+        ...(own || []).map((connection) => ({ ...connection, shared_from_tenant_name: null })),
+        ...shared.map((connection) => ({
+          ...connection,
+          shared_from_tenant_name: tenantNames.get(connection.tenant_id) || "ארגון אחר",
+        })),
+      ].sort((a, b) => String(b.integration_type).localeCompare(String(a.integration_type)));
     },
     enabled: !!tenantId,
   });
@@ -2476,13 +2531,24 @@ function CarmenSessionConfig({
   }, [waConnections]);
 
   const scopeMode = configuration?.carmen_scope_mode || "all";
+  const selectedCarmenConnection = waConnections?.find(
+    (c) => c.id === configuration?.carmen_integration_id,
+  );
 
   // Helper label for connection
   const getConnectionLabel = (c: any) => {
     const settings = c.settings as any;
-    const displayName = c.display_name || settings?.display_name || settings?.phone_number || settings?.instance_id || c.instance_id;
-    const providerLabel = c.integration_type === "manus_wa" ? "מאנוס" : "Green API";
-    return `${providerLabel} — ${displayName}`;
+    const displayName = c.display_name || settings?.display_name || settings?.phone_number
+      || settings?.display_phone_number || settings?.instance_id || c.instance_id;
+    const providerLabel = c.integration_type === "manus_wa"
+      ? "מאנוס"
+      : c.integration_type === "meta_whatsapp"
+        ? "Meta WhatsApp API"
+        : "Green API";
+    const sharedLabel = c.shared_from_tenant_name
+      ? ` · משותף מ־${c.shared_from_tenant_name}`
+      : "";
+    return `${providerLabel} — ${displayName}${sharedLabel}`;
   };
 
   return (
@@ -2604,6 +2670,32 @@ function CarmenSessionConfig({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Without this, any scope other than "specific_group" denies groups entirely. */}
+        {scopeMode !== "specific_group" && (
+          <div className="space-y-2 border-t border-red-500/30 pt-3">
+            <div className="flex items-start gap-2 justify-end">
+              <div className="text-right">
+                <Label htmlFor="carmen-open-member-groups" className="font-semibold cursor-pointer">
+                  מענה בכל קבוצה שהסוכן חבר בה
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  כשזה כבוי, הסוכן לא יגיב בשום קבוצה אלא אם בחרת "קבוצות ספציפיות בלבד" למעלה. כשזה
+                  דלוק, הוספת מספר הסוכן לקבוצה היא עצמה האישור, והוא יגיב בכל קבוצה שהוא חבר בה. בכל
+                  מקרה הסוכן מגיב רק כשפונים אליו בשמו במפורש.
+                </p>
+              </div>
+              <Checkbox
+                id="carmen-open-member-groups"
+                checked={configuration?.carmen_open_member_groups === true}
+                onCheckedChange={(checked) =>
+                  onConfigChange("carmen_open_member_groups", checked === true)
+                }
+                className="mt-1"
+              />
+            </div>
+          </div>
+        )}
 
         {/* קבוצות ספציפיות (Multi-select) */}
         {scopeMode === "specific_group" && (() => {
@@ -2822,6 +2914,14 @@ function CarmenSessionConfig({
               <span className="text-xs text-green-600 text-right flex-1">
                 ✅ כרמן תגיב רק דרך חיבור זה
               </span>
+            </div>
+          )}
+          {selectedCarmenConnection?.integration_type === "meta_whatsapp" && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
+              <p className="text-xs text-blue-600 text-right">
+                ℹ️ Meta WhatsApp API אינו תומך בקבוצות כלל — בחיבור זה כרמן תגיב בשיחות פרטיות בלבד,
+                ולא תוכל לשלוח לקבוצות גם אם יוגדרו כאן.
+              </p>
             </div>
           )}
         </div>
