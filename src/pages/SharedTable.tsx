@@ -26,7 +26,15 @@ import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
-import { getLeadsFromData } from "@/lib/adsMetrics";
+import {
+  getAddToCartFromData,
+  getAdsPurchasesFromData,
+  getLeadsFromData,
+  getPurchasesFromData,
+  getRevenueFromData,
+  getSessionsFromData,
+  getSpendFromData,
+} from "@/lib/adsMetrics";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -48,14 +56,6 @@ const DATE_FILTERS = [
   { value: 'last_month', label: 'חודש קודם' },
   { value: 'all', label: 'הכל' },
 ];
-
-// --- Helpers (same as SharedDashboard) ---
-const getSpendFromData = (d: any) => Number(d?.spend) || Number(d?.cost) || 0;
-const getRevenueFromData = (d: any) =>
-  Number(d?.purchase_value) || Number(d?.purchaseRevenue) || Number(d?.conversions_value) || Number(d?.conversion_value) || 0;
-const getPurchasesFromData = (d: any) => Number(d?.purchases) || Number(d?.ecommercePurchases) || Number(d?.transactions) || 0;
-const getSessionsFromData = (d: any) => Number(d?.sessions) || 0;
-const getAddToCartFromData = (d: any) => Number(d?.add_to_cart) || Number(d?.addToCarts) || 0;
 
 const isAnalyticsPlatform = (s: string) => s === 'google_analytics';
 const isAdsPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(s);
@@ -180,7 +180,7 @@ export default function SharedTable() {
         clicks += Number(d.clicks) || 0;
         // For Google Ads leads-only tables, never count conversions_value as revenue
         if (!(forceLeadsOnly && isGoogleAds)) {
-          purchases += getPurchasesFromData(d);
+          purchases += getAdsPurchasesFromData(d);
           revenue += getRevenueFromData(d);
           addToCart += getAddToCartFromData(d);
         }
@@ -223,7 +223,7 @@ export default function SharedTable() {
       map[name].impressions += Number(d.impressions) || 0;
       map[name].clicks += Number(d.clicks) || 0;
       if (!(forceLeadsOnly && isGoogleAds)) {
-        map[name].purchases += getPurchasesFromData(d);
+        map[name].purchases += getAdsPurchasesFromData(d);
         map[name].revenue += getRevenueFromData(d);
         map[name].addToCart += getAddToCartFromData(d);
       }

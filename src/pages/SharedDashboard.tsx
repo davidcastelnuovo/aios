@@ -20,7 +20,18 @@ import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
-import { getExplicitLeadFieldsFromData, getLeadsFromData } from "@/lib/adsMetrics";
+import {
+  getAddToCartFromData,
+  getAdsPurchasesFromData,
+  getExplicitLeadFieldsFromData,
+  getLeadsFromData,
+  getPurchasesFromData,
+  getRevenueFromData,
+  getSessionsFromData,
+  getSpendFromData,
+  getUsersFromData,
+  hasAddToCartMetric,
+} from "@/lib/adsMetrics";
 import { formatCurrency as formatCurrencyAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import {
@@ -47,13 +58,6 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
 type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'woocommerce' | 'seo';
 type CampaignType = 'leads' | 'ecommerce';
 
-const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
-const getRevenueFromData = (data: any) =>
-  Number(data?.purchase_value) || Number(data?.purchaseRevenue) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
-const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
-const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
-const getUsersFromData = (data: any) => Number(data?.users) || 0;
-const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
 const hasMeaningfulAnalyticsMetrics = (data: any) =>
   getSessionsFromData(data) > 0 ||
   getUsersFromData(data) > 0 ||
@@ -348,7 +352,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       const rawSource = record._source || 'unknown';
       const source = normalizePlatformKey(rawSource);
       if (!platforms[source]) {
-        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, leads: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0 };
+        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, leads: 0, revenue: 0, addToCart: 0, addToCartTracked: false, roas: 0, cpl: 0 };
       }
       const d = record.data || {};
       if (isAnalyticsPlatform(source)) {
@@ -357,15 +361,17 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
         platforms[source].results += getPurchasesFromData(d);
         platforms[source].revenue += getRevenueFromData(d);
         platforms[source].addToCart += getAddToCartFromData(d);
+        platforms[source].addToCartTracked ||= hasAddToCartMetric(d);
       } else {
         platforms[source].spend += getSpendFromData(d);
         platforms[source].impressions += Number(d.impressions) || 0;
         platforms[source].clicks += Number(d.clicks) || 0;
         const ct = campaignTypeByPlatform[rawSource] || campaignTypeByPlatform[source] || 'leads';
         if (ct === 'ecommerce') {
-          platforms[source].results += getPurchasesFromData(d);
+          platforms[source].results += getAdsPurchasesFromData(d);
           platforms[source].revenue += getRevenueFromData(d);
           platforms[source].addToCart += getAddToCartFromData(d);
+          platforms[source].addToCartTracked ||= hasAddToCartMetric(d);
           platforms[source].leads += getExplicitLeadFieldsFromData(d);
         } else {
           const leads = getLeadsFromData(d);
@@ -579,7 +585,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       map[name].clicks += Number(d.clicks) || 0;
       map[name].spend += getSpendFromData(d);
       map[name].addToCart += getAddToCartFromData(d);
-      map[name].purchases += getPurchasesFromData(d);
+      map[name].purchases += getAdsPurchasesFromData(d);
       map[name].revenue += getRevenueFromData(d);
     });
     return Object.values(map).sort((a, b) => b.spend - a.spend);
@@ -1341,7 +1347,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
                                 <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
-                                <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
+                                <TableCell>{metrics.addToCartTracked ? formatNumber(metrics.addToCart) : '-'}</TableCell>
                                 <TableCell>{formatNumber(metrics.results)}</TableCell>
                                 <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
                                 <TableCell>
