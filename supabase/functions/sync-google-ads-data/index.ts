@@ -26,6 +26,12 @@ interface GoogleAdsRecord {
   all_conversions_value: number;
   cost_per_conversion: number;
   roas: number;
+  /**
+   * Add-to-cart conversions, from the ADD_TO_CART conversion action category.
+   * Left undefined when the account tracks no add-to-cart action at all, so the
+   * report can tell "not tracked" apart from "nobody added to cart".
+   */
+  add_to_cart?: number;
   // Verified leads from connected WordPress site (Elementor submissions with matching gad_campaignid)
   verified_leads?: number;
   verified_source?: string; // site URL we verified against, for transparency
@@ -582,6 +588,71 @@ Deno.serve(async (req) => {
     console.log(`[sync-google-ads] total records parsed: ${records.length}`);
 
     // ============================================================
+    // ENRICHMENT: add-to-cart per campaign/day (ecommerce tables only).
+    // The campaign report carries no add-to-cart metric, so ecommerce reports
+    // have nothing to show in that column. Re-query the same window segmented by
+    // conversion action category and keep the ADD_TO_CART slice. Add-to-cart is
+    // usually a SECONDARY action, so it lives in `all_conversions` rather than
+    // `conversions`. Purchases deliberately stay on `metrics.conversions` so the
+    // report keeps matching the Google Ads UI "Conversions" column.
+    // ============================================================
+    if (settings.campaign_type === 'ecommerce') {
+      try {
+        const categoryQuery = `
+          SELECT
+            segments.date,
+            campaign.id,
+            segments.conversion_action_category,
+            metrics.all_conversions
+          FROM campaign
+          WHERE segments.date BETWEEN '${startDate.toISOString().split('T')[0]}' AND '${endDate.toISOString().split('T')[0]}'
+        `;
+        const categoryResponse = await adsFetch(
+          `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
+          {
+            method: 'POST',
+            headers: {
+              'developer-token': DEVELOPER_TOKEN,
+              'login-customer-id': loginCustomerId,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: categoryQuery }),
+          }
+        );
+        const categoryData = await categoryResponse.json().catch(() => null);
+        const categoryError = detectGAError(categoryData);
+        if (categoryError) {
+          console.warn('[sync-google-ads] add-to-cart segmentation failed:', JSON.stringify(categoryError).slice(0, 300));
+        } else {
+          const addToCartByCampaignDay = new Map<string, number>();
+          const categoryBatches = Array.isArray(categoryData) ? categoryData : (categoryData?.results ? [categoryData] : []);
+          for (const batch of categoryBatches) {
+            for (const row of batch.results || []) {
+              if (row.segments?.conversionActionCategory !== 'ADD_TO_CART') continue;
+              const key = `${row.campaign?.id || ''}|${row.segments?.date || ''}`;
+              const value = parseFloat(row.metrics?.allConversions || '0');
+              addToCartByCampaignDay.set(key, (addToCartByCampaignDay.get(key) || 0) + value);
+            }
+          }
+          // Only annotate when the account actually tracks add-to-cart; leaving the
+          // field out keeps the report showing the column as unavailable.
+          if (addToCartByCampaignDay.size > 0) {
+            for (const rec of records) {
+              rec.add_to_cart = addToCartByCampaignDay.get(`${rec.campaign_id}|${rec.date}`) || 0;
+            }
+          }
+          console.log(`[sync-google-ads] add-to-cart segments matched: ${addToCartByCampaignDay.size}`);
+        }
+      } catch (atcErr) {
+        // Non-fatal: the report falls back to showing add-to-cart as unavailable.
+        console.warn(
+          '[sync-google-ads] add-to-cart enrichment error (non-fatal):',
+          atcErr instanceof Error ? atcErr.message : atcErr,
+        );
+      }
+    }
+
+    // ============================================================
     // ENRICHMENT: Verify lead counts against connected WordPress site
     // For each campaign_id, count actual Elementor form submissions where
     // gad_campaignid matches. This catches discrepancies between Google Ads
@@ -778,9 +849,9 @@ Deno.serve(async (req) => {
     }
 
     // Create fields if they don't exist (use admin client - table may belong to a different tenant)
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'all_conversions', 'all_conversions_value', 'cost_per_conversion', 'roas', 'verified_leads'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'כל ההמרות', 'ערך כל ההמרות', 'עלות להמרה', 'ROAS', 'לידים באתר'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'all_conversions', 'all_conversions_value', 'cost_per_conversion', 'roas', 'add_to_cart', 'verified_leads'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'כל ההמרות', 'ערך כל ההמרות', 'עלות להמרה', 'ROAS', 'הוספות לעגלה', 'לידים באתר'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
 
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabaseAdmin
