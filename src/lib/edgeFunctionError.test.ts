@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {
+  googleAdsErrorBody,
+  managerAccountErrorBody,
+} from '../../supabase/functions/_shared/googleAdsErrors.ts';
 import { edgeFunctionErrorMessage } from './edgeFunctionError.ts';
 
 /** A rejection from `supabase.functions.invoke`: generic message, real body on `context`. */
@@ -12,13 +16,9 @@ const functionsHttpError = (status: number, body: unknown) =>
   });
 
 test('the function\'s own message wins over the generic transport error', async () => {
-  const error = functionsHttpError(400, {
-    error: 'manager_account_selected',
-    message: 'החשבון שנבחר לדוח (456-878-7244) הוא חשבון ניהול (MCC) ולא חשבון פרסום.',
-    customer_id: '4568787244',
-  });
+  const error = functionsHttpError(400, { error: 'needs_reauth', message: 'יש לחבר מחדש.' });
   const message = await edgeFunctionErrorMessage(error, 'הסנכרון נכשל');
-  assert.match(message, /456-878-7244/);
+  assert.equal(message, 'יש לחבר מחדש.');
   assert.doesNotMatch(message, /non-2xx/);
 });
 
@@ -52,4 +52,39 @@ test('a non-JSON body leaves the thrown error message in place', async () => {
 test('an error with no context at all uses the fallback', async () => {
   assert.equal(await edgeFunctionErrorMessage({}, 'הסנכרון נכשל'), 'הסנכרון נכשל');
   assert.equal(await edgeFunctionErrorMessage(null, 'הסנכרון נכשל'), 'הסנכרון נכשל');
+});
+
+// What the Google Ads sync toast ends up saying, using the bodies the function
+// actually returns.
+test('a manager account report reaches the user as instructions', async () => {
+  const shown = await edgeFunctionErrorMessage(
+    functionsHttpError(400, managerAccountErrorBody('4568787244')),
+    'הסנכרון נכשל',
+  );
+  assert.match(shown, /456-878-7244/);
+  assert.match(shown, /יש לפתוח את הגדרות הטבלה ולבחור את חשבון הפרסום עצמו/);
+  assert.doesNotMatch(shown, /non-2xx/);
+});
+
+test('any other Google Ads failure reaches the user in Google\'s own wording', async () => {
+  const googleFailure = {
+    message: 'Request contains an invalid argument.',
+    details: [
+      {
+        errors: [
+          {
+            errorCode: { queryError: 'UNRECOGNIZED_FIELD' },
+            message: "Field 'metrics.nope' is not recognized.",
+          },
+        ],
+      },
+    ],
+  };
+
+  const shown = await edgeFunctionErrorMessage(
+    functionsHttpError(400, googleAdsErrorBody(googleFailure)),
+    'הסנכרון נכשל',
+  );
+  assert.equal(shown, "Field 'metrics.nope' is not recognized. (UNRECOGNIZED_FIELD)");
+  assert.doesNotMatch(shown, /invalid argument/);
 });
