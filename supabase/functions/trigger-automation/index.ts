@@ -3219,17 +3219,25 @@ async function executeMetaWhatsappMessage(supabase: any, config: any, data: any,
 
   let integrationQuery = supabase
     .from('tenant_integrations')
-    .select('id, user_id, display_name, settings, instance_id')
-    .eq('tenant_id', tenantId)
+    .select('id, tenant_id, user_id, display_name, settings, instance_id')
     .eq('integration_type', 'meta_whatsapp')
     .eq('is_active', true)
   if (integrationId) integrationQuery = integrationQuery.eq('id', integrationId)
+  else integrationQuery = integrationQuery.eq('tenant_id', tenantId)
   const { data: integrations, error: integrationError } = await integrationQuery.order('created_at').limit(1)
   if (integrationError) throw integrationError
   const integration = integrations?.[0]
   if (!integration) throw new Error('לא נמצא חיבור Meta WhatsApp פעיל')
+  if (integration.tenant_id !== tenantId) {
+    const { data: canUse, error: accessError } = await supabase.rpc('tenant_can_use_integration', {
+      p_tenant_id: tenantId,
+      p_integration_id: integration.id,
+    })
+    if (accessError) throw accessError
+    if (canUse !== true) throw new Error('חיבור Meta WhatsApp לא שותף עם הארגון הזה')
+  }
 
-  let senderUserId = integration.user_id as string | null
+  let senderUserId = integration.tenant_id === tenantId ? integration.user_id as string | null : null
   if (!senderUserId) {
     const { data: owner } = await supabase
       .from('tenant_users')

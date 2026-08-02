@@ -90,16 +90,31 @@ Deno.serve(async (request) => {
     let integrationQuery = admin
       .from("tenant_integrations")
       .select("*")
-      .eq("tenant_id", tenantId)
       .eq("integration_type", "meta_whatsapp")
       .eq("is_active", true);
-    if (integrationId) integrationQuery = integrationQuery.eq("id", integrationId);
+    if (integrationId) {
+      // A shared integration keeps its canonical row and token in the owner tenant.
+      // Access is checked below against integration_tenant_access.
+      integrationQuery = integrationQuery.eq("id", integrationId);
+    } else {
+      integrationQuery = integrationQuery.eq("tenant_id", tenantId);
+    }
     const { data: integrations, error: integrationError } = await integrationQuery.order("created_at").limit(1);
     if (integrationError) throw integrationError;
     const integration = integrations?.[0];
     if (!integration) return reply({ error: "meta_whatsapp_not_connected" }, 400);
 
-    if (integration.user_id !== userId && superAdmin !== true) {
+    const isSharedAcrossTenants = integration.tenant_id !== tenantId;
+    if (isSharedAcrossTenants) {
+      const { data: canUse, error: accessError } = await admin.rpc("tenant_can_use_integration", {
+        p_tenant_id: tenantId,
+        p_integration_id: integration.id,
+      });
+      if (accessError) throw accessError;
+      if (canUse !== true && superAdmin !== true) {
+        return reply({ error: "integration_not_shared_with_tenant" }, 403);
+      }
+    } else if (integration.user_id !== userId && superAdmin !== true) {
       const visibility = integration.connection_visibility ?? "private";
       let permitted = visibility === "org";
       if (!permitted) {

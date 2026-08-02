@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { handleCarmenMessage } from "../_shared/carmen.ts";
 import {
   collectWebhookMessages,
@@ -37,6 +37,70 @@ const timestampIso = (value: unknown) => {
   if (!Number.isFinite(seconds) || seconds <= 0) return new Date().toISOString();
   return new Date(seconds * 1000).toISOString();
 };
+
+async function resolvePinnedCarmenTarget(
+  admin: SupabaseClient,
+  integrationId: string,
+  ownerTenantId: string,
+): Promise<{ tenantId: string; userId: string } | null> {
+  const { data: grants, error: grantsError } = await admin
+    .from("integration_tenant_access")
+    .select("accessing_tenant_id")
+    .eq("integration_id", integrationId);
+  if (grantsError) throw grantsError;
+
+  const candidateTenantIds = [
+    ownerTenantId,
+    ...(grants ?? []).map((grant: { accessing_tenant_id: string }) => grant.accessing_tenant_id),
+  ];
+
+  // Once a connection is shared, only an exact automation pin can claim it.
+  // This keeps the owner tenant's Manus-pinned Carmen from answering traffic
+  // intended for a grantee tenant's Meta-pinned Carmen.
+  if ((grants ?? []).length > 0) {
+    const { data: steps, error: stepsError } = await admin
+      .from("automation_flow_steps")
+      .select("automation_id,tenant_id")
+      .in("tenant_id", candidateTenantIds)
+      .eq("step_type", "trigger")
+      .eq("action_type", "carmen_whatsapp_session")
+      .filter("configuration->>carmen_integration_id", "eq", integrationId);
+    if (stepsError) throw stepsError;
+
+    const automationIds = (steps ?? []).map((step: { automation_id: string }) => step.automation_id);
+    if (automationIds.length === 0) return null;
+    const { data: active, error: activeError } = await admin
+      .from("automations")
+      .select("id,tenant_id")
+      .in("id", automationIds)
+      .eq("active", true);
+    if (activeError) throw activeError;
+
+    const tenantIds = [...new Set((active ?? []).map((automation: { tenant_id: string }) => automation.tenant_id))];
+    if (tenantIds.length !== 1) {
+      console.error("Shared Meta integration must have exactly one active pinned Carmen tenant", {
+        integrationId,
+        tenantIds,
+      });
+      return null;
+    }
+    candidateTenantIds.splice(0, candidateTenantIds.length, tenantIds[0]);
+  } else {
+    candidateTenantIds.splice(0, candidateTenantIds.length, ownerTenantId);
+  }
+
+  const tenantId = candidateTenantIds[0];
+  const { data: member, error: memberError } = await admin
+    .from("tenant_users")
+    .select("user_id")
+    .eq("tenant_id", tenantId)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  if (memberError) throw memberError;
+  if (!member?.user_id) return null;
+  return { tenantId, userId: member.user_id };
+}
 
 Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -237,15 +301,79 @@ Deno.serve(async (request) => {
           processed++;
 
           // Carmen on Meta WhatsApp. The Cloud API has no group messaging, so this
-          // line is 1:1 only by construction. A failure here must not fail the
-          // webhook — the message is already stored.
+          // line is 1:1 only by construction. When the connection is shared,
+          // exactly one tenant with an active exact pin owns Carmen routing.
           if (item.source === "live" && item.direction === "inbound") {
             try {
+              const target = await resolvePinnedCarmenTarget(
+                admin,
+                integration.id,
+                integration.tenant_id,
+              );
+              if (!target) continue;
+
+              if (target.tenantId !== integration.tenant_id) {
+                let targetClientId: string | null = null;
+                let targetLeadId: string | null = null;
+                if (suffix) {
+                  const { data: targetClient } = await admin
+                    .from("clients")
+                    .select("id")
+                    .eq("tenant_id", target.tenantId)
+                    .ilike("phone", `%${suffix}%`)
+                    .limit(1)
+                    .maybeSingle();
+                  targetClientId = targetClient?.id ?? null;
+                  if (!targetClientId) {
+                    const { data: targetLead } = await admin
+                      .from("leads")
+                      .select("id")
+                      .eq("tenant_id", target.tenantId)
+                      .ilike("phone", `%${suffix}%`)
+                      .limit(1)
+                      .maybeSingle();
+                    targetLeadId = targetLead?.id ?? null;
+                  }
+                }
+
+                const { data: targetBlocked } = await admin
+                  .from("blocked_contacts")
+                  .select("id")
+                  .eq("tenant_id", target.tenantId)
+                  .eq("sender_phone", item.peerPhone)
+                  .limit(1)
+                  .maybeSingle();
+                if (targetBlocked) continue;
+
+                const { error: copyError } = await admin.from("chat_messages").insert({
+                  client_id: targetClientId,
+                  lead_id: targetLeadId,
+                  tenant_id: target.tenantId,
+                  connection_user_id: target.userId,
+                  integration_id: integration.id,
+                  message_text: messageText(item.message),
+                  direction: "inbound",
+                  channel: "whatsapp",
+                  provider: "meta_whatsapp",
+                  sender_phone: item.peerPhone,
+                  sender_name: contactNames.get(item.peerPhone) || null,
+                  is_blocked: false,
+                  created_at: timestampIso(item.message.timestamp),
+                  raw_provider_data: {
+                    ...rawProviderData,
+                    idMessage: `${messageId}:tenant:${target.tenantId}`,
+                    source_provider_message_id: messageId,
+                    shared_integration_owner_tenant_id: integration.tenant_id,
+                  },
+                });
+                if (copyError) throw copyError;
+              }
+
               await handleCarmenMessage({
                 supabase: admin,
-                tenantId: integration.tenant_id,
+                tenantId: target.tenantId,
                 integrationId: integration.id,
-                connectionUserId: integration.user_id ?? "",
+                connectionUserId: target.userId,
                 chatId: item.peerPhone,
                 phoneNumber: item.peerPhone,
                 senderName: contactNames.get(item.peerPhone) || "",
@@ -262,9 +390,9 @@ Deno.serve(async (request) => {
                       Authorization: `Bearer ${serviceKey}`,
                     },
                     body: JSON.stringify({
-                      tenantId: integration.tenant_id,
+                      tenantId: target.tenantId,
                       integrationId: integration.id,
-                      senderUserId: integration.user_id,
+                      senderUserId: target.userId,
                       phoneNumber: item.peerPhone,
                       message,
                     }),
