@@ -30,7 +30,18 @@ import { SeoDashboardView } from "@/components/dynamic-tables/SeoDashboardView";
 import { SeoDashboardWithGa } from "@/components/dynamic-tables/SeoDashboardWithGa";
 import { SeoReportTabs } from "@/components/dynamic-tables/SeoReportTabs";
 import { WooCommerceDashboard } from "@/components/dynamic-tables/WooCommerceDashboard";
-import { getExplicitLeadFieldsFromData, getLeadsFromData } from "@/lib/adsMetrics";
+import {
+  getAddToCartFromData,
+  getAdsPurchasesFromData,
+  getExplicitLeadFieldsFromData,
+  getLeadsFromData,
+  getPurchasesFromData,
+  getRevenueFromData,
+  getSessionsFromData,
+  getSpendFromData,
+  getUsersFromData,
+  hasAddToCartMetric,
+} from "@/lib/adsMetrics";
 import { formatCurrency as formatCurrencyAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import {
@@ -70,15 +81,6 @@ const getCampaignType = (integrationType?: string | null, integrationSettings?: 
   // For facebook_insights, don't assume — will be determined dynamically from data
   return 'leads';
 };
-
-const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
-const getRevenueFromData = (data: any) =>
-  Number(data?.purchase_value) || Number(data?.purchaseRevenue) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
-
-const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
-const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
-const getUsersFromData = (data: any) => Number(data?.users) || 0;
-const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
 
 const isAdsPlatform = (source: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(source);
 const isAnalyticsPlatform = (source: string) => source === 'google_analytics';
@@ -517,7 +519,7 @@ export default function DashboardView() {
       const rawSource = record._source || 'unknown';
       const source = normalizePlatformKey(rawSource);
       if (!platforms[source]) {
-        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, leads: 0, revenue: 0, addToCart: 0, roas: 0, cpl: 0, recordCount: 0 };
+        platforms[source] = { spend: 0, impressions: 0, clicks: 0, sessions: 0, users: 0, results: 0, leads: 0, revenue: 0, addToCart: 0, addToCartTracked: false, roas: 0, cpl: 0, recordCount: 0 };
       }
       
       const data = record.data || {};
@@ -529,14 +531,16 @@ export default function DashboardView() {
         platforms[source].results += getPurchasesFromData(data);
         platforms[source].revenue += getRevenueFromData(data);
         platforms[source].addToCart += getAddToCartFromData(data);
+        platforms[source].addToCartTracked ||= hasAddToCartMetric(data);
       } else {
         platforms[source].spend += getSpendFromData(data);
         platforms[source].impressions += Number(data.impressions) || 0;
         platforms[source].clicks += Number(data.clicks) || 0;
         if (campaignType === 'ecommerce') {
-          platforms[source].results += getPurchasesFromData(data);
+          platforms[source].results += getAdsPurchasesFromData(data);
           platforms[source].revenue += getRevenueFromData(data);
           platforms[source].addToCart += getAddToCartFromData(data);
+          platforms[source].addToCartTracked ||= hasAddToCartMetric(data);
           // Only count explicit lead fields for ecommerce (not conversions which are purchases)
           platforms[source].leads += getExplicitLeadFieldsFromData(data);
         } else {
@@ -767,7 +771,7 @@ export default function DashboardView() {
       campaigns[campaignName].clicks += Number(data.clicks) || Number(data.link_clicks) || 0;
       campaigns[campaignName].leads += getLeadsFromData(data);
       campaigns[campaignName].revenue += getRevenueFromData(data);
-      campaigns[campaignName].purchases += getPurchasesFromData(data);
+      campaigns[campaignName].purchases += getAdsPurchasesFromData(data);
     });
     
     return Object.values(campaigns).sort((a, b) => b.spend - a.spend);
@@ -832,7 +836,7 @@ export default function DashboardView() {
       map[name].clicks += Number(d.clicks) || 0;
       map[name].spend += getSpendFromData(d);
       map[name].addToCart += getAddToCartFromData(d);
-      map[name].purchases += getPurchasesFromData(d);
+      map[name].purchases += getAdsPurchasesFromData(d);
       map[name].revenue += getRevenueFromData(d);
     });
     
@@ -1851,7 +1855,7 @@ export default function DashboardView() {
                                   <>
                                     <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
                                     <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
-                                    <TableCell>{formatNumber(metrics.addToCart)}</TableCell>
+                                    <TableCell>{metrics.addToCartTracked ? formatNumber(metrics.addToCart) : '-'}</TableCell>
                                     <TableCell>{formatNumber(metrics.results)}</TableCell>
                                     <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
                                     <TableCell>
