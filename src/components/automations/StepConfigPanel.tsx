@@ -1316,15 +1316,31 @@ function MetaWhatsAppActionConfig({
     queryKey: ["meta-whatsapp-integrations-for-flow", tenantId],
     enabled: Boolean(tenantId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      const [{ data: own, error: ownError }, { data: grants, error: grantsError }] = await Promise.all([
+        supabase
+          .from("tenant_integrations")
+          .select("id, tenant_id, display_name, settings, is_active")
+          .eq("tenant_id", tenantId!)
+          .eq("integration_type", "meta_whatsapp")
+          .eq("is_active", true),
+        supabase
+          .from("integration_tenant_access")
+          .select("integration_id")
+          .eq("accessing_tenant_id", tenantId!),
+      ]);
+      if (ownError) throw ownError;
+      if (grantsError) throw grantsError;
+
+      const sharedIds = (grants || []).map((grant) => grant.integration_id);
+      if (sharedIds.length === 0) return own ?? [];
+      const { data: shared, error: sharedError } = await supabase
         .from("tenant_integrations")
-        .select("id, display_name, settings, is_active")
-        .eq("tenant_id", tenantId!)
+        .select("id, tenant_id, display_name, settings, is_active")
+        .in("id", sharedIds)
         .eq("integration_type", "meta_whatsapp")
-        .eq("is_active", true)
-        .order("created_at");
-      if (error) throw error;
-      return data ?? [];
+        .eq("is_active", true);
+      if (sharedError) throw sharedError;
+      return [...(own ?? []), ...(shared ?? [])];
     },
   });
 
@@ -2445,20 +2461,59 @@ function CarmenSessionConfig({
   });
   const [groupSearch, setGroupSearch] = useState("");
 
-  // Fetch ALL WhatsApp connections (Green API + Manus WA)
+  // Fetch connections owned by this tenant plus exact connections another tenant
+  // explicitly shared through integration_tenant_access. Credentials never reach
+  // the browser; this is only the metadata needed to pin the automation.
   const { data: waConnections } = useQuery({
     queryKey: ["wa-connections-for-carmen", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from("tenant_integrations")
-        .select("id, integration_type, settings, user_id, instance_id, display_name")
-        .eq("tenant_id", tenantId)
-        .in("integration_type", ["green_api", "manus_wa", "meta_whatsapp"])
-        .eq("is_active", true)
-        .order("integration_type", { ascending: false });
-      if (error) throw error;
-      return data || [];
+      const [{ data: own, error: ownError }, { data: grants, error: grantsError }] = await Promise.all([
+        supabase
+          .from("tenant_integrations")
+          .select("id, tenant_id, integration_type, settings, user_id, instance_id, display_name")
+          .eq("tenant_id", tenantId)
+          .in("integration_type", ["green_api", "manus_wa", "meta_whatsapp"])
+          .eq("is_active", true),
+        supabase
+          .from("integration_tenant_access")
+          .select("integration_id")
+          .eq("accessing_tenant_id", tenantId),
+      ]);
+      if (ownError) throw ownError;
+      if (grantsError) throw grantsError;
+
+      const sharedIds = (grants || []).map((grant) => grant.integration_id);
+      let shared = (own || []).slice(0, 0);
+      if (sharedIds.length > 0) {
+        const { data, error } = await supabase
+          .from("tenant_integrations")
+          .select("id, tenant_id, integration_type, settings, user_id, instance_id, display_name")
+          .in("id", sharedIds)
+          .in("integration_type", ["green_api", "manus_wa", "meta_whatsapp"])
+          .eq("is_active", true);
+        if (error) throw error;
+        shared = data || [];
+      }
+
+      const ownerTenantIds = [...new Set(shared.map((connection) => connection.tenant_id))];
+      let tenantNames = new Map<string, string>();
+      if (ownerTenantIds.length > 0) {
+        const { data: owners, error } = await supabase
+          .from("tenants")
+          .select("id, name")
+          .in("id", ownerTenantIds);
+        if (error) throw error;
+        tenantNames = new Map((owners || []).map((owner) => [owner.id, owner.name]));
+      }
+
+      return [
+        ...(own || []).map((connection) => ({ ...connection, shared_from_tenant_name: null })),
+        ...shared.map((connection) => ({
+          ...connection,
+          shared_from_tenant_name: tenantNames.get(connection.tenant_id) || "ארגון אחר",
+        })),
+      ].sort((a, b) => String(b.integration_type).localeCompare(String(a.integration_type)));
     },
     enabled: !!tenantId,
   });
@@ -2490,7 +2545,10 @@ function CarmenSessionConfig({
       : c.integration_type === "meta_whatsapp"
         ? "Meta WhatsApp API"
         : "Green API";
-    return `${providerLabel} — ${displayName}`;
+    const sharedLabel = c.shared_from_tenant_name
+      ? ` · משותף מ־${c.shared_from_tenant_name}`
+      : "";
+    return `${providerLabel} — ${displayName}${sharedLabel}`;
   };
 
   return (

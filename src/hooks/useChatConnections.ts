@@ -79,11 +79,39 @@ export function useChatConnections(tenantId: string | undefined) {
         .eq("is_active", true)
         .is("user_id", null);
 
+      // Cross-tenant grants share the canonical integration row; no credential or
+      // mirror row is copied into this tenant.
+      const { data: tenantGrants, error: grantsError } = await supabase
+        .from("integration_tenant_access")
+        .select("integration_id")
+        .eq("accessing_tenant_id", tenantId);
+      if (grantsError) throw grantsError;
+      const grantedIds = (tenantGrants || []).map((grant) => grant.integration_id);
+      let crossTenantShared = (own || []).slice(0, 0);
+      if (grantedIds.length > 0) {
+        const { data, error } = await supabase
+          .from("tenant_integrations")
+          .select("id, integration_type, user_id, display_name, instance_id, api_token_last_4, is_active")
+          .in("id", grantedIds)
+          .in("integration_type", TYPES)
+          .eq("is_active", true);
+        if (error) throw error;
+        // Chat rows copied into the accessing tenant are scoped to the local user,
+        // while the physical integration row remains owned by the source user.
+        crossTenantShared = (data || []).map((connection) => ({
+          ...connection,
+          user_id: userId,
+        }));
+      }
+
       const ownIds = new Set((own || []).map((i: any) => i.id));
       const combinedRaw = [
         ...(own || []),
         ...shared.filter((i) => !ownIds.has(i.id)),
         ...(tenantScoped || []).filter((i) => !ownIds.has(i.id) && !shared.find((s) => s.id === i.id)),
+        ...crossTenantShared.filter(
+          (i) => !ownIds.has(i.id) && !shared.find((s) => s.id === i.id),
+        ),
       ];
 
       // Resolve owner names for shared ones
