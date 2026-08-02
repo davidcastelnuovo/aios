@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { handleCarmenMessage } from "../_shared/carmen.ts";
 import {
   collectWebhookMessages,
   digitsOnly,
@@ -234,6 +235,47 @@ Deno.serve(async (request) => {
             throw insertError;
           }
           processed++;
+
+          // Carmen on Meta WhatsApp. The Cloud API has no group messaging, so this
+          // line is 1:1 only by construction. A failure here must not fail the
+          // webhook — the message is already stored.
+          if (item.source === "live" && item.direction === "inbound") {
+            try {
+              await handleCarmenMessage({
+                supabase: admin,
+                tenantId: integration.tenant_id,
+                integrationId: integration.id,
+                connectionUserId: integration.user_id ?? "",
+                chatId: item.peerPhone,
+                phoneNumber: item.peerPhone,
+                senderName: contactNames.get(item.peerPhone) || "",
+                messageText: messageText(item.message),
+                isIncoming: true,
+                isManualOutgoing: false,
+                isGroup: false,
+                sourceChannel: "own_instance",
+                sendMessage: async (_chatId: string, message: string) => {
+                  const response = await fetch(`${supabaseUrl}/functions/v1/send-meta-whatsapp-message`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${serviceKey}`,
+                    },
+                    body: JSON.stringify({
+                      tenantId: integration.tenant_id,
+                      integrationId: integration.id,
+                      senderUserId: integration.user_id,
+                      phoneNumber: item.peerPhone,
+                      message,
+                    }),
+                  });
+                  return response.ok;
+                },
+              });
+            } catch (carmenError) {
+              console.error("Carmen handling failed for Meta WhatsApp message", carmenError);
+            }
+          }
         }
 
         if (field === "history") {

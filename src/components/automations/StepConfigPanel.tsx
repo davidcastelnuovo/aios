@@ -2452,9 +2452,9 @@ function CarmenSessionConfig({
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("id, integration_type, settings, user_id, instance_id")
+        .select("id, integration_type, settings, user_id, instance_id, display_name")
         .eq("tenant_id", tenantId)
-        .in("integration_type", ["green_api", "manus_wa"])
+        .in("integration_type", ["green_api", "manus_wa", "meta_whatsapp"])
         .eq("is_active", true)
         .order("integration_type", { ascending: false });
       if (error) throw error;
@@ -2476,12 +2476,20 @@ function CarmenSessionConfig({
   }, [waConnections]);
 
   const scopeMode = configuration?.carmen_scope_mode || "all";
+  const selectedCarmenConnection = waConnections?.find(
+    (c) => c.id === configuration?.carmen_integration_id,
+  );
 
   // Helper label for connection
   const getConnectionLabel = (c: any) => {
     const settings = c.settings as any;
-    const displayName = c.display_name || settings?.display_name || settings?.phone_number || settings?.instance_id || c.instance_id;
-    const providerLabel = c.integration_type === "manus_wa" ? "מאנוס" : "Green API";
+    const displayName = c.display_name || settings?.display_name || settings?.phone_number
+      || settings?.display_phone_number || settings?.instance_id || c.instance_id;
+    const providerLabel = c.integration_type === "manus_wa"
+      ? "מאנוס"
+      : c.integration_type === "meta_whatsapp"
+        ? "Meta WhatsApp API"
+        : "Green API";
     return `${providerLabel} — ${displayName}`;
   };
 
@@ -2604,6 +2612,32 @@ function CarmenSessionConfig({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Without this, any scope other than "specific_group" denies groups entirely. */}
+        {scopeMode !== "specific_group" && (
+          <div className="space-y-2 border-t border-red-500/30 pt-3">
+            <div className="flex items-start gap-2 justify-end">
+              <div className="text-right">
+                <Label htmlFor="carmen-open-member-groups" className="font-semibold cursor-pointer">
+                  מענה בכל קבוצה שהסוכן חבר בה
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  כשזה כבוי, הסוכן לא יגיב בשום קבוצה אלא אם בחרת "קבוצות ספציפיות בלבד" למעלה. כשזה
+                  דלוק, הוספת מספר הסוכן לקבוצה היא עצמה האישור, והוא יגיב בכל קבוצה שהוא חבר בה. בכל
+                  מקרה הסוכן מגיב רק כשפונים אליו בשמו במפורש.
+                </p>
+              </div>
+              <Checkbox
+                id="carmen-open-member-groups"
+                checked={configuration?.carmen_open_member_groups === true}
+                onCheckedChange={(checked) =>
+                  onConfigChange("carmen_open_member_groups", checked === true)
+                }
+                className="mt-1"
+              />
+            </div>
+          </div>
+        )}
 
         {/* קבוצות ספציפיות (Multi-select) */}
         {scopeMode === "specific_group" && (() => {
@@ -2822,6 +2856,14 @@ function CarmenSessionConfig({
               <span className="text-xs text-green-600 text-right flex-1">
                 ✅ כרמן תגיב רק דרך חיבור זה
               </span>
+            </div>
+          )}
+          {selectedCarmenConnection?.integration_type === "meta_whatsapp" && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
+              <p className="text-xs text-blue-600 text-right">
+                ℹ️ Meta WhatsApp API אינו תומך בקבוצות כלל — בחיבור זה כרמן תגיב בשיחות פרטיות בלבד,
+                ולא תוכל לשלוח לקבוצות גם אם יוגדרו כאן.
+              </p>
             </div>
           )}
         </div>
