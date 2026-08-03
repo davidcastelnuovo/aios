@@ -27,6 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -39,6 +40,9 @@ type MetaConfig = {
   app_id: string;
   configuration_id: string;
   graph_version: string;
+  has_saved_token?: boolean;
+  saved_token_last_4?: string | null;
+  saved_token_updated_at?: string | null;
 };
 
 type MetaAsset = {
@@ -172,8 +176,9 @@ export default function MetaWhatsAppSettings() {
   const [manualBusinessId, setManualBusinessId] = useState("");
   const [assets, setAssets] = useState<MetaAsset[] | null>(null);
   const [metaAppId, setMetaAppId] = useState("");
-  const [selectedPhone, setSelectedPhone] = useState("");
+  const [selectedPhones, setSelectedPhones] = useState<string[]>([]);
   const [discovery, setDiscovery] = useState<unknown>(null);
+  const [discoveryLimited, setDiscoveryLimited] = useState(false);
   const [sharingIntegration, setSharingIntegration] = useState<Integration | null>(null);
   const codeRef = useRef<string | null>(null);
   const sessionRef = useRef<{ data: Record<string, unknown>; event: string } | null>(null);
@@ -376,21 +381,20 @@ export default function MetaWhatsAppSettings() {
         throw new MetaAuthError(data?.error || "לא ניתן לקרוא את הנכסים מ-Meta", data?.code);
       }
       setMetaAppId(String(data.app_id ?? ""));
+      setDiscoveryLimited(Boolean(data.discovery_limited));
       return (data.accounts ?? []) as MetaAsset[];
     },
     onSuccess: (accounts) => {
       setDiscovery(null);
       setAssets(accounts);
-      const firstPhone = accounts.flatMap((account) =>
-        account.phone_numbers.map((phone) => `${account.waba_id}::${phone.id}`),
-      )[0];
-      setSelectedPhone(firstPhone ?? "");
+      setSelectedPhones([]);
       const total = accounts.reduce((sum, account) => sum + account.phone_numbers.length, 0);
       if (!total) toast.warning("לא נמצאו מספרי WhatsApp תחת האסימון הזה");
       else toast.success(`נמצאו ${total} מספרים`);
     },
     onError: (error: Error) => {
       setAssets(null);
+      setDiscoveryLimited(false);
       setDiscovery(error instanceof MetaAuthError ? error.details ?? null : null);
       toast.error(error.message, { duration: 15000 });
     },
@@ -398,26 +402,31 @@ export default function MetaWhatsAppSettings() {
 
   const connectManualMutation = useMutation({
     mutationFn: async () => {
-      const [wabaId, phoneNumberId] = selectedPhone.split("::");
-      if (!wabaId || !phoneNumberId) throw new Error("יש לבחור מספר");
+      const selections = selectedPhones.map((value) => {
+        const [wabaId, phoneNumberId] = value.split("::");
+        return { wabaId, phoneNumberId };
+      }).filter((selection) => selection.wabaId && selection.phoneNumberId);
+      if (!selections.length) throw new Error("יש לבחור לפחות מספר אחד");
+      const selectedWabas = [...new Set(selections.map((selection) => selection.wabaId))];
       const data = await invokeMetaAuth({
         action: "connect_manual",
         tenant_id: tenantId,
-        access_token: manualToken.trim(),
-        waba_id: wabaId,
-        phone_number_ids: [phoneNumberId],
+        ...(manualToken.trim() ? { access_token: manualToken.trim() } : {}),
+        ...(selectedWabas.length === 1 ? { waba_id: selectedWabas[0] } : {}),
+        business_id: manualBusinessId.trim(),
+        phone_number_ids: selections.map((selection) => selection.phoneNumberId),
         pin: manualPin,
       });
       if (!data?.success) throw new MetaAuthError(data?.error || "החיבור לא הושלם", data?.code);
       return data;
     },
     onSuccess: async (data) => {
-      toast.success(`מספר WhatsApp חובר בהצלחה (${data.connections?.length ?? 1})`);
+      const count = data.connections?.length ?? selectedPhones.length;
+      toast.success(`${count === 1 ? "מספר WhatsApp חובר" : `${count} מספרי WhatsApp חוברו`} בהצלחה`);
       if (data.warnings?.length) toast.warning("החיבור הושלם, אך סנכרון היסטוריה חלקי.");
-      setManualToken("");
       setManualPin("");
-      setAssets(null);
-      setSelectedPhone("");
+      setSelectedPhones([]);
+      await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-config", tenantId] });
       await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -579,8 +588,8 @@ export default function MetaWhatsAppSettings() {
                 חיבור ידני עם Access Token
               </CardTitle>
               <CardDescription>
-                מסלול שעובד גם בלי Embedded Signup: מדביקים אסימון System User מ־Meta Business
-                Settings, בוחרים מספר ומחברים.
+                שומרים אסימון System User פעם אחת. לאחר מכן AIOS יכולה לסנכרן כל WABA ומספר
+                חדש שיוקצה לאותו משתמש, ולחבר מספר אחד או כמה מספרים יחד.
               </CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowManual((value) => !value)}>
@@ -592,12 +601,26 @@ export default function MetaWhatsAppSettings() {
           <CardContent className="space-y-5">
             <Alert>
               <ShieldCheck className="h-4 w-4" />
-              <AlertTitle>איך משיגים אסימון</AlertTitle>
+              <AlertTitle>
+                {config?.has_saved_token
+                  ? `אסימון שמור${config.saved_token_last_4 ? ` (מסתיים ב־${config.saved_token_last_4})` : ""}`
+                  : "איך משיגים אסימון"}
+              </AlertTitle>
               <AlertDescription className="text-sm">
-                Meta Business Settings → Users → System users → יצירת משתמש מערכת → Add Assets ובחירת
-                חשבון ה־WhatsApp → Generate new token עם ההרשאות{" "}
-                <code>whatsapp_business_management</code> ו־<code>whatsapp_business_messaging</code>.
-                האסימון נשמר מוצפן ואינו נחשף בממשק.
+                {config?.has_saved_token ? (
+                  <>
+                    אין צורך ליצור או להדביק אסימון נוסף. הקצו WABA או מספר ל־System User ב־Meta
+                    ולחצו על "סנכרון חשבונות ומספרים". הדבקת אסימון כאן תחליף את האסימון השמור.
+                  </>
+                ) : (
+                  <>
+                    Meta Business Settings → Users → System users → יצירת משתמש מערכת → Add Assets ובחירת
+                    חשבון ה־WhatsApp → Generate new token עם ההרשאות{" "}
+                    <code>business_management</code>, <code>whatsapp_business_management</code> ו־
+                    <code>whatsapp_business_messaging</code>.
+                    האסימון נשמר ואינו נחשף בממשק.
+                  </>
+                )}
               </AlertDescription>
             </Alert>
 
@@ -610,11 +633,11 @@ export default function MetaWhatsAppSettings() {
                 onChange={(event) => {
                   setManualToken(event.target.value);
                   setAssets(null);
-                  setSelectedPhone("");
+                  setSelectedPhones([]);
                 }}
                 dir="ltr"
                 autoComplete="off"
-                placeholder="EAAG..."
+                placeholder={config?.has_saved_token ? "השאירו ריק כדי להשתמש באסימון השמור" : "EAAG..."}
                 className="font-mono text-xs"
               />
             </div>
@@ -659,11 +682,23 @@ export default function MetaWhatsAppSettings() {
             <Button
               variant="secondary"
               onClick={() => loadAssetsMutation.mutate()}
-              disabled={!manualToken.trim() || loadAssetsMutation.isPending}
+              disabled={(!manualToken.trim() && !config?.has_saved_token) || loadAssetsMutation.isPending}
             >
               {loadAssetsMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-              שליפת חשבונות ומספרים
+              סנכרון חשבונות ומספרים
             </Button>
+
+            {discoveryLimited && (
+              <Alert className="border-amber-500/40">
+                <ShieldCheck className="h-4 w-4" />
+                <AlertTitle>המספרים הקיימים מוצגים, אך גילוי חשבונות חדשים מוגבל</AlertTitle>
+                <AlertDescription>
+                  האסימון השמור חסר <code>business_management</code>. צרו פעם אחת אסימון חדש לאותו
+                  System User עם שלוש ההרשאות, הדביקו אותו כאן ולחצו שוב על סנכרון. לאחר מכן כל WABA
+                  ומספר שיוקצו למשתמש יתגלו בלי ליצור אסימון נוסף.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {discovery != null && (
               <div className="space-y-2">
@@ -681,6 +716,35 @@ export default function MetaWhatsAppSettings() {
 
             {assets && (
               <div className="space-y-3">
+                {(() => {
+                  const connectedIds = new Set(
+                    integrations.map((integration) => integration.settings?.phone_number_id).filter(Boolean),
+                  );
+                  const available = assets.flatMap((account) =>
+                    account.phone_numbers
+                      .filter((phone) => !connectedIds.has(phone.id))
+                      .map((phone) => `${account.waba_id}::${phone.id}`),
+                  );
+                  if (!available.length) return null;
+                  const allSelected = available.every((value) => selectedPhones.includes(value));
+                  return (
+                    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 p-3">
+                      <span className="text-sm">
+                        {selectedPhones.length
+                          ? `${selectedPhones.length} מספרים נבחרו לחיבור`
+                          : "בחרו מספר אחד או כמה מספרים"}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedPhones(allSelected ? [] : available)}
+                      >
+                        {allSelected ? "נקה בחירה" : "בחר הכול"}
+                      </Button>
+                    </div>
+                  );
+                })()}
                 {assets.length === 0 && (
                   <p className="text-sm text-muted-foreground">לא נמצאו חשבונות WhatsApp Business.</p>
                 )}
@@ -715,16 +779,33 @@ export default function MetaWhatsAppSettings() {
                     {account.phone_numbers.length === 0 && !account.error && (
                       <p className="text-sm text-muted-foreground">אין מספרים בחשבון הזה.</p>
                     )}
-                    <RadioGroup value={selectedPhone} onValueChange={setSelectedPhone} className="grid gap-2">
+                    <div className="grid gap-2">
                       {account.phone_numbers.map((phone) => {
                         const value = `${account.waba_id}::${phone.id}`;
+                        const alreadyConnected = integrations.some(
+                          (integration) => integration.settings?.phone_number_id === phone.id,
+                        );
+                        const checked = alreadyConnected || selectedPhones.includes(value);
                         return (
                           <Label
                             key={phone.id}
                             htmlFor={`phone-${phone.id}`}
-                            className="flex cursor-pointer items-center gap-3 rounded-md border p-3 has-[[data-state=checked]]:border-emerald-500"
+                            className={`flex items-center gap-3 rounded-md border p-3 ${
+                              alreadyConnected ? "cursor-default bg-muted/40" : "cursor-pointer"
+                            }`}
                           >
-                            <RadioGroupItem id={`phone-${phone.id}`} value={value} />
+                            <Checkbox
+                              id={`phone-${phone.id}`}
+                              checked={checked}
+                              disabled={alreadyConnected}
+                              onCheckedChange={(next) => {
+                                setSelectedPhones((current) =>
+                                  next
+                                    ? [...new Set([...current, value])]
+                                    : current.filter((item) => item !== value),
+                                );
+                              }}
+                            />
                             <span className="flex-1">
                               <span className="block font-medium" dir="ltr">
                                 {phone.display_phone_number || phone.id}
@@ -733,11 +814,12 @@ export default function MetaWhatsAppSettings() {
                                 {phone.verified_name || "ללא שם מאומת"}
                               </span>
                             </span>
+                            {alreadyConnected && <Badge variant="outline">כבר מחובר</Badge>}
                             {phone.is_on_biz_app && <Badge variant="secondary">Coexistence</Badge>}
                           </Label>
                         );
                       })}
-                    </RadioGroup>
+                    </div>
                   </div>
                 ))}
 
@@ -756,10 +838,12 @@ export default function MetaWhatsAppSettings() {
 
                 <Button
                   onClick={() => connectManualMutation.mutate()}
-                  disabled={!selectedPhone || connectManualMutation.isPending}
+                  disabled={!selectedPhones.length || connectManualMutation.isPending}
                 >
                   {connectManualMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                  חיבור המספר הנבחר
+                  {selectedPhones.length === 1
+                    ? "חיבור המספר הנבחר"
+                    : `חיבור ${selectedPhones.length} המספרים שנבחרו`}
                 </Button>
               </div>
             )}
