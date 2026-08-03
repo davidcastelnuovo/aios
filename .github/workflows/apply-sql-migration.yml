@@ -19,6 +19,7 @@ on:
       - 'supabase/ops/fix_cross_tenant_client_task_updates.sql'
       - 'supabase/ops/fix_seo_monthly_updates_cross_tenant.sql'
       - 'supabase/ops/fix_clients_seo_keyword_relevance.sql'
+      - 'supabase/ops/create_cursor_dispatches.sql'
 
 jobs:
   apply:
@@ -54,7 +55,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/fix_clients_seo_keyword_relevance.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/create_cursor_dispatches.sql'; then
+              FILE="supabase/ops/create_cursor_dispatches.sql"
+              NAME="create_cursor_dispatches"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_clients_seo_keyword_relevance.sql'; then
               FILE="supabase/ops/fix_clients_seo_keyword_relevance.sql"
               NAME="fix_clients_seo_keyword_relevance"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_seo_monthly_updates_cross_tenant.sql'; then

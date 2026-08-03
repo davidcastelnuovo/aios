@@ -81,6 +81,18 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
                 size="sm"
                 className="w-full"
                 onClick={() => {
+                  setName("Cursor");
+                  setUrl(`https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/cursor-mcp`);
+                }}
+              >
+                🖱️ הוסף את Cursor (כרמן תוכל להפנות אליך משימות מורכבות ותיקונים)
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
                   setName("Claude");
                   setUrl(`https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/claude-mcp`);
                 }}
@@ -100,7 +112,7 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
                 🤖 הוסף את Manus (כרמן תוכל להאציל לו משימות מורכבות)
               </Button>
               <p className="text-xs text-muted-foreground">
-                ממלא שם + URL אוטומטית. הזן את ה-Bearer (ערך MANUS_MCP_BEARER) ולחץ התחבר.
+                ממלא שם + URL אוטומטית. הזן את ה-Bearer המתאים (CURSOR_MCP_BEARER / CLAUDE_MCP_BEARER / MANUS_MCP_BEARER) ולחץ התחבר.
               </p>
               <div>
                 <Label>שם</Label>

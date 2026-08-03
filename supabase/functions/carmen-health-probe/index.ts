@@ -159,7 +159,11 @@ Deno.serve(async (req) => {
   }
 
   // 2. MCP edge functions — any HTTP answer below 500 proves the function is up
-  for (const [service, fn] of [['mcp_system_graph', 'system-graph-mcp'], ['mcp_claude', 'claude-mcp']] as const) {
+  for (const [service, fn] of [
+    ['mcp_system_graph', 'system-graph-mcp'],
+    ['mcp_claude', 'claude-mcp'],
+    ['mcp_cursor', 'cursor-mcp'],
+  ] as const) {
     const res = await timedFetch(`${supabaseUrl}/functions/v1/${fn}`, { method: 'GET' });
     rows.push({
       tenant_id: null, service,

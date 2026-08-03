@@ -248,7 +248,8 @@ export function ProfileTab({ agent }: { agent: any }) {
                   <SelectValue placeholder="בחר סוכן escalation" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">🔀 שניהם (ברירת מחדל)</SelectItem>
+                  <SelectItem value="all">🔀 כולם (ברירת מחדל)</SelectItem>
+                  <SelectItem value="cursor">🖱️ Cursor בלבד</SelectItem>
                   <SelectItem value="claude">⚡ Claude בלבד</SelectItem>
                   <SelectItem value="manus">🤖 Manus בלבד</SelectItem>
                   <SelectItem value="none">🚫 ללא escalation</SelectItem>
