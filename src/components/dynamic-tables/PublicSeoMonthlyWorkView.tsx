@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { format, startOfMonth } from "date-fns";
+import { format, startOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 import { Download, ExternalLink, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -74,12 +74,22 @@ export function PublicSeoMonthlyWorkView({
     [months],
   );
 
+  const lastCalendarMonth = format(startOfMonth(subMonths(new Date(), 1)), "yyyy-MM-dd");
+  const currentCalendarMonth = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  // Prefer last month for the client-facing report; fall back to newest past month, then newest available.
   const defaultMonth =
-    sortedMonths[0]?.month || format(startOfMonth(new Date()), "yyyy-MM-dd");
+    sortedMonths.find((m) => m.month === lastCalendarMonth)?.month ||
+    sortedMonths.find((m) => m.month < currentCalendarMonth)?.month ||
+    sortedMonths[0]?.month ||
+    lastCalendarMonth;
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
 
+  // If months arrive after first paint, keep the selection on last-month when still on the initial default.
   const selected =
-    sortedMonths.find((m) => m.month === selectedMonth) || sortedMonths[0] || null;
+    sortedMonths.find((m) => m.month === selectedMonth) ||
+    sortedMonths.find((m) => m.month === defaultMonth) ||
+    sortedMonths[0] ||
+    null;
 
   const work = useMemo(() => {
     if (!selected) return emptySeoMonthlyWork();
