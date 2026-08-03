@@ -68,34 +68,50 @@ export function SeoUpdateModal({
     };
   });
 
-  // Fetch existing SEO history for this client
+  // Fetch existing SEO history for this client.
+  // Keyed by client_id only — shared-agency rows may live on another tenant.
   const { data: seoHistory = [] } = useQuery({
-    queryKey: ["seo-monthly-history", clientId, tenantId],
+    queryKey: ["seo-monthly-history", clientId],
     queryFn: async () => {
-      if (!clientId || !tenantId) return [];
+      if (!clientId) return [];
       const { data, error } = await (supabase as any)
         .from("seo_monthly_updates")
-        .select("id, month, status, notes, created_at")
+        .select("id, month, status, notes, created_at, tenant_id")
         .eq("client_id", clientId)
-        .eq("tenant_id", tenantId)
         .order("month", { ascending: false })
         .limit(6);
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!clientId && !!tenantId && open,
+    enabled: !!clientId && open,
   });
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
+      if (!user?.id) throw new Error("Missing user");
+
+      // Keep the row on the client's home / existing tenant so shared-agency
+      // viewers don't fork a second empty history under their session tenant.
+      const existing = (seoHistory as Array<{ month?: string; tenant_id?: string }>).find(
+        (r) => String(r.month || "").slice(0, 10) === selectedMonth,
+      );
+      let saveTenantId = existing?.tenant_id || tenantId || "";
+      if (!existing?.tenant_id) {
+        const { data: clientRow } = await supabase
+          .from("clients")
+          .select("tenant_id")
+          .eq("id", clientId)
+          .maybeSingle();
+        saveTenantId = clientRow?.tenant_id || saveTenantId;
+      }
+      if (!saveTenantId) throw new Error("Missing tenant");
 
       const { error } = await (supabase as any)
         .from("seo_monthly_updates")
         .upsert(
           {
             client_id: clientId,
-            tenant_id: tenantId,
+            tenant_id: saveTenantId,
             month: selectedMonth,
             status,
             notes: notes.trim() || null,
@@ -107,8 +123,9 @@ export function SeoUpdateModal({
     },
     onSuccess: () => {
       toast.success("עדכון SEO נשמר בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-history", clientId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-history", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-work", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest"] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-single", clientId] });
       queryClient.invalidateQueries({ queryKey: ["dmm-clients", tenantId] });
       setNotes("");
