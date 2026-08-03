@@ -12,6 +12,7 @@ import { useTerminology } from "@/hooks/useTerminology";
 import { useViewAs } from "@/contexts/ViewAsContext";
 import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
 import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
+import { resolveClientTaskAgency, type TaskClientRow } from "@/lib/taskClientAgency";
 import {
   Form,
   FormControl,
@@ -101,6 +102,16 @@ const formSchema = z.object({
   message: "יש לבחור תאריך ושעה לתזכורת",
   path: ["self_reminder_at"],
 });
+
+async function fetchClientById(clientId: string): Promise<TaskClientRow | null> {
+  const { data, error } = await supabase
+    .from("clients")
+    .select("id, name, agency_id")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
 
 interface AddTaskFormProps {
   clientId?: string;
@@ -225,13 +236,15 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
   });
 
   const { data: clients } = useQuery({
-    queryKey: ["clients", currentTenantId, crossTenantAgencyIds],
+    // Deliberately not keyed as ["clients", ...]: other dialogs cache a
+    // differently-filtered client list under that key.
+    queryKey: ["task-form-clients", currentTenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!currentTenantId) return [];
       let query = supabase
         .from("clients")
         .select("*")
-        .eq("status", "active")
+        .neq("status", "ended")
         .order("name");
       
       if (crossTenantAgencyIds && crossTenantAgencyIds.length > 0) {
@@ -247,12 +260,28 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     enabled: !!currentTenantId,
   });
 
+  // When the form is opened from a client card the client is fixed, so it must
+  // be shown even if the filtered list above does not include it.
+  const { data: forcedClient } = useQuery({
+    queryKey: ["task-form-forced-client", clientId],
+    queryFn: async () => (clientId ? fetchClientById(clientId) : null),
+    enabled: !!clientId,
+  });
+
   const assignableClients = useMemo(() => {
     if (!clients) return [];
     if (!selectedCampaignerId) return clients;
     const allowedIds = new Set(assignedClientIds);
     return clients.filter((client) => allowedIds.has(client.id));
   }, [clients, selectedCampaignerId, assignedClientIds]);
+
+  const clientOptions = useMemo(() => {
+    const options = assignableClients.map((client) => ({ id: client.id, name: client.name }));
+    if (forcedClient && !options.some((option) => option.id === forcedClient.id)) {
+      options.unshift({ id: forcedClient.id, name: forcedClient.name });
+    }
+    return options;
+  }, [assignableClients, forcedClient]);
 
   useEffect(() => {
     if (clientId || !selectedCampaignerId) return;
@@ -290,13 +319,15 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       let entityName = 'משימה כללית';
 
       if (values.task_category === "client") {
-        // Get agency_id from the selected client
-        selectedClient = clients?.find(c => c.id === values.client_id);
-        if (!selectedClient?.agency_id) {
-          throw new Error("הלקוח שנבחר לא משויך לסוכנות");
-        }
-        finalAgencyId = selectedClient.agency_id;
-        entityName = selectedClient.name;
+        const resolved = await resolveClientTaskAgency({
+          clientId: values.client_id,
+          fetchClient: fetchClientById,
+          cachedClients: clients,
+          fallbackAgencyId: agencyId,
+        });
+        selectedClient = resolved.client;
+        finalAgencyId = resolved.agencyId;
+        entityName = resolved.clientName;
       } else if (values.task_category === "lead") {
         // Get lead from DB (avoid stale UI state) to ensure FK exists
         const { data: leadRow, error: leadError } = await supabase
@@ -660,7 +691,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                               )}
                             >
                               {field.value
-                                ? assignableClients.find((client) => client.id === field.value)?.name
+                                ? clientOptions.find((client) => client.id === field.value)?.name
                                 : "בחר לקוח"}
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
@@ -672,7 +703,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                             <CommandList>
                               <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
                               <CommandGroup>
-                                {assignableClients.map((client) => (
+                                {clientOptions.map((client) => (
                                   <CommandItem
                                     key={client.id}
                                     value={client.name}
