@@ -220,10 +220,18 @@ Deno.serve(async (request) => {
       if (!appId || !configurationId) {
         return reply({ error: "meta_whatsapp_not_configured" }, 503);
       }
+      const { data: storedCredential } = await admin
+        .from("meta_whatsapp_tenant_credentials")
+        .select("api_token_last_4,updated_at")
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
       return reply({
         app_id: appId,
         configuration_id: configurationId,
         graph_version: graphVersion,
+        has_saved_token: Boolean(storedCredential),
+        saved_token_last_4: storedCredential?.api_token_last_4 ?? null,
+        saved_token_updated_at: storedCredential?.updated_at ?? null,
       });
     }
 
@@ -366,9 +374,17 @@ Deno.serve(async (request) => {
           ? String(longLivedPayload.access_token)
           : suppliedToken;
       }
-    } else {
-      if (!suppliedToken) return reply({ error: "access_token_required" }, 400);
+    } else if (suppliedToken) {
       businessToken = suppliedToken;
+    } else {
+      const { data: storedCredential, error: storedCredentialError } = await admin
+        .from("meta_whatsapp_tenant_credentials")
+        .select("access_token")
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (storedCredentialError) throw storedCredentialError;
+      if (!storedCredential?.access_token) return reply({ error: "access_token_required" }, 400);
+      businessToken = String(storedCredential.access_token);
     }
 
     if (!businessToken) {
@@ -429,6 +445,23 @@ Deno.serve(async (request) => {
       }, 400);
     }
 
+    // A validated token is an organization-level discovery credential. Saving it
+    // once lets the same system user expose newly assigned WABAs and numbers later
+    // without asking the operator to paste or generate another token.
+    if (suppliedToken || action === "complete") {
+      const { error: credentialError } = await admin
+        .from("meta_whatsapp_tenant_credentials")
+        .upsert({
+          tenant_id: tenantId,
+          access_token: businessToken,
+          token_type: debug.type || null,
+          api_token_last_4: businessToken.slice(-4),
+          updated_by: authData.user.id,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "tenant_id" });
+      if (credentialError) throw credentialError;
+    }
+
     // Lets the UI show the operator exactly which numbers Meta will connect.
     if (action === "list_assets") {
       const accounts: Array<Record<string, unknown>> = [];
@@ -475,6 +508,7 @@ Deno.serve(async (request) => {
         token_type: debug.type,
         granted_scopes: debug.scopes,
         app_id: appId,
+        using_saved_token: !suppliedToken,
         accounts,
       });
     }
@@ -499,6 +533,9 @@ Deno.serve(async (request) => {
       const phones = requestedPhoneIds.size
         ? allPhones.filter((phone: any) => requestedPhoneIds.has(String(phone.id)))
         : allPhones;
+      // A multi-WABA batch may select numbers from only some accounts. Accounts
+      // without a selected phone are not errors; continue to the selected ones.
+      if (!phones.length && requestedPhoneIds.size) continue;
       if (!phones.length) throw new Error("No WhatsApp business phone number was returned by Meta");
 
       for (const phone of phones) {
@@ -626,6 +663,10 @@ Deno.serve(async (request) => {
           coexistence,
         });
       }
+    }
+
+    if (!connected.length) {
+      throw new Error("None of the selected WhatsApp phone numbers was returned by Meta");
     }
 
     return reply({ success: true, connections: connected, warnings });
