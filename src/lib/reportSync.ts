@@ -113,18 +113,24 @@ export async function syncReportTables(
 export async function waitForSnapshotReady(
   node: HTMLElement,
   timeoutMs = 30_000,
+  options?: { settleMs?: number; pollMs?: number },
 ): Promise<void> {
+  const settleMs = options?.settleMs ?? 200;
+  const pollMs = options?.pollMs ?? 100;
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const ready =
       node.dataset.snapshotReady === "true" ||
       !!node.querySelector('[data-snapshot-ready="true"]');
     if (ready) {
-      // Let fonts, charts and images complete their final layout.
-      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      // Brief settle so fonts/layout finish — keep this short; capture already
+      // waits on data-snapshot-ready from the report itself.
+      if (settleMs > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, settleMs));
+      }
       return;
     }
-    await new Promise((resolve) => window.setTimeout(resolve, 200));
+    await new Promise((resolve) => window.setTimeout(resolve, pollMs));
   }
   throw new Error("הדוח לא סיים להיטען בזמן");
 }

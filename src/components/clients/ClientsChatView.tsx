@@ -1272,7 +1272,11 @@ export function ClientsChatView({
                 </TabsContent>
 
                 <TabsContent value="report" className="mt-0">
-                  <ClientTablesTab clientId={selectedClient.id} clientName={selectedClientDisplayName || "לקוח"} />
+                  <ClientTablesTab
+                    clientId={selectedClient.id}
+                    clientName={selectedClientDisplayName || "לקוח"}
+                    peerClientIds={filteredClients.map((c) => c.id)}
+                  />
                 </TabsContent>
 
                 <TabsContent value="updates" className="mt-0">
