@@ -201,6 +201,8 @@ export function PublicSeoView({ tableName, reports, gscData = [], gscMultiPeriod
   const trackedKeywords = useMemo(() => rawTracked.map(enrich), [rawTracked, comparison, prevMonthMap, gscMap]);
 
   // GSC-only keywords: appear in GSC but not in Ahrefs organic/tracked.
+  // Keep `position` populated (same as SeoDashboardView) so Top 20 מקודמים
+  // on shared links includes GSC-ranked terms — null position previously hid them.
   const gscOnlyKeywords = useMemo(() => {
     if (gscData.length === 0) return [];
     const ahrefsNames = new Set<string>();
@@ -211,23 +213,30 @@ export function PublicSeoView({ tableName, reports, gscData = [], gscMultiPeriod
         const name = String(g.keyword || "").toLowerCase().trim();
         return name && !ahrefsNames.has(name);
       })
-      .map((g) => ({
-        keyword: g.keyword,
-        position: null,
-        traffic: 0,
-        volume: null,
-        kd: null,
-        cpc: null,
-        url: "",
-        position_prev_month: null,
-        position_3month: null,
-        position_yearly: null,
-        gsc_clicks: g.clicks,
-        gsc_impressions: g.impressions,
-        gsc_ctr: g.ctr,
-        gsc_position: g.position,
-      }));
-  }, [gscData, rawOrganic, rawTracked]);
+      .map((g) => {
+        const key = String(g.keyword || "").toLowerCase().trim();
+        const prev = gscPrevMonthMap.get(key)?.position ?? null;
+        const m3 = gscThreeMonthMap.get(key)?.position ?? null;
+        const y1 = gscYearlyMap.get(key)?.position ?? null;
+        return {
+          keyword: g.keyword,
+          position: g.position ?? null,
+          traffic: 0,
+          volume: null,
+          kd: null,
+          cpc: null,
+          url: "",
+          position_prev_month: prev,
+          position_3month: m3,
+          position_yearly: y1,
+          gsc_clicks: g.clicks,
+          gsc_impressions: g.impressions,
+          gsc_ctr: g.ctr,
+          gsc_position: g.position ?? null,
+          _source: "gsc" as const,
+        };
+      });
+  }, [gscData, rawOrganic, rawTracked, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap]);
 
   if (!validReports || validReports.length === 0) {
     return (

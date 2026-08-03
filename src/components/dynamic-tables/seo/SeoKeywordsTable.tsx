@@ -502,15 +502,26 @@ export function SeoKeywordsTable({
     });
   }, [effectiveTracked, langFilter, filterIrrelevant, irrelevantSet]);
 
+  const keywordRank = (k: any): number | null => {
+    const rank = k?.position ?? k?.gsc_position ?? null;
+    return typeof rank === "number" && Number.isFinite(rank) ? rank : null;
+  };
+
   const sortByPosition = (arr: any[]) =>
     [...arr].sort((a, b) => {
-      const aPos = a.position ?? Number.POSITIVE_INFINITY;
-      const bPos = b.position ?? Number.POSITIVE_INFINITY;
+      const aPos = keywordRank(a) ?? Number.POSITIVE_INFINITY;
+      const bPos = keywordRank(b) ?? Number.POSITIVE_INFINITY;
       return aPos - bPos;
     });
 
   const top20Raw = useMemo(
-    () => sortByPosition(rawAllKeywords.filter(k => k.position != null && k.position <= 20)),
+    () =>
+      sortByPosition(
+        rawAllKeywords.filter((k) => {
+          const rank = keywordRank(k);
+          return rank != null && rank <= 20;
+        }),
+      ),
     [rawAllKeywords],
   );
 

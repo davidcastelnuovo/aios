@@ -410,8 +410,9 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       if (!tenantId) throw new Error("Tenant ID not found");
       
-      // Update client data (without financial fields)
-      const { error: clientError } = await supabase
+      // Update client data (without financial fields).
+      // Require a returned row — RLS denials often come back as success + 0 rows.
+      const { data: updatedRows, error: clientError } = await supabase
         .from("clients")
         .update({
           name: values.name,
@@ -432,9 +433,13 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
           meta_ads_account_id: values.meta_ads_account_id || null,
           google_ads_account_id: values.google_ads_account_id || null,
         })
-        .eq("id", client.id);
+        .eq("id", client.id)
+        .select("id");
 
       if (clientError) throw clientError;
+      if (!updatedRows?.length) {
+        throw new Error("אין הרשאה לעדכן את הלקוח (או שהלקוח לא נמצא)");
+      }
       
       // Update or insert tenant-specific financial data
       if (canViewFinance()) {

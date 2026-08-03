@@ -10,7 +10,8 @@
 --   The clients policy below is the same change that landed in
 --   20260409064938_d36d11b2-8c13-4482-8331-9f0611e48fbd.sql but was never applied
 --   to production. Re-issue it under a current version so the Management API apply
---   path picks it up.
+--   path picks it up. Also allow SEO to update SEO-tagged clients they can see.
+--   Note: clients.services is jsonb (array of strings), not text[].
 
 -- ── clients UPDATE ──────────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "Authenticated users can update clients" ON public.clients;
@@ -36,6 +37,10 @@ USING (
         has_role(auth.uid(), 'campaigner'::app_role)
         AND id = ANY (get_user_client_ids(auth.uid()))
       )
+      OR (
+        has_role(auth.uid(), 'seo'::app_role)
+        AND (is_seo_client = true OR services @> '["seo"]'::jsonb)
+      )
     )
   )
 )
@@ -53,6 +58,10 @@ WITH CHECK (
       OR (
         has_role(auth.uid(), 'campaigner'::app_role)
         AND id = ANY (get_user_client_ids(auth.uid()))
+      )
+      OR (
+        has_role(auth.uid(), 'seo'::app_role)
+        AND (is_seo_client = true OR services @> '["seo"]'::jsonb)
       )
     )
   )

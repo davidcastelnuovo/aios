@@ -2,7 +2,6 @@
 -- Source of truth also lives in:
 --   supabase/migrations/20260803140000_fix_cross_tenant_client_task_updates.sql
 
--- ── clients UPDATE ──────────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "Authenticated users can update clients" ON public.clients;
 DROP POLICY IF EXISTS "Users can update clients in their tenants" ON public.clients;
 DROP POLICY IF EXISTS "Users can update clients in their or shared tenants" ON public.clients;
@@ -26,6 +25,10 @@ USING (
         has_role(auth.uid(), 'campaigner'::app_role)
         AND id = ANY (get_user_client_ids(auth.uid()))
       )
+      OR (
+        has_role(auth.uid(), 'seo'::app_role)
+        AND (is_seo_client = true OR services @> '["seo"]'::jsonb)
+      )
     )
   )
 )
@@ -44,11 +47,18 @@ WITH CHECK (
         has_role(auth.uid(), 'campaigner'::app_role)
         AND id = ANY (get_user_client_ids(auth.uid()))
       )
+      OR (
+        has_role(auth.uid(), 'seo'::app_role)
+        AND (is_seo_client = true OR services @> '["seo"]'::jsonb)
+      )
     )
   )
 );
 
 -- ── tasks UPDATE ────────────────────────────────────────────────────────────
+-- Mirror the clients rule: same-tenant OR shared-agency, with the existing role
+-- gates. Do NOT require user_roles.tenant_id = tasks.tenant_id — that blocked
+-- every cross-tenant update even when agency_tenant_access was present.
 DROP POLICY IF EXISTS "Users can update tasks in accessible agencies" ON public.tasks;
 
 CREATE POLICY "Users can update tasks in accessible agencies"
