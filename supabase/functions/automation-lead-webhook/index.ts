@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import {
   buildLeadRoutingPayload,
+  filterScreeningAnswers,
+  parseQaText,
   resolveLeadClient,
 } from "../_shared/lead-routing.ts";
 
@@ -27,20 +29,29 @@ const stringRecord = (value: unknown): Record<string, string> =>
       .map(([key, item]) => [key, String(item)]),
   );
 
+const coerceScreeningRecord = (value: unknown): Record<string, string> => {
+  if (typeof value === "string" && value.trim()) return parseQaText(value);
+  return filterScreeningAnswers(stringRecord(value));
+};
+
 const fieldDataRecord = (body: Record<string, unknown>, payload: Record<string, unknown>) => {
-  const explicit =
-    body.form_data ??
-    body.answers ??
-    body.questions_and_answers ??
-    payload.form_data ??
-    payload.answers ??
-    payload.questions_and_answers;
-  const direct = stringRecord(explicit);
-  if (Object.keys(direct).length) return direct;
+  // Prefer an explicit answers object/string. Make often sends questions_and_answers
+  // as a free-text blob; never fall back to the whole envelope (client_name, etc.).
+  for (const candidate of [
+    body.form_data,
+    body.answers,
+    body.questions_and_answers,
+    payload.form_data,
+    payload.answers,
+    payload.questions_and_answers,
+  ]) {
+    const parsed = coerceScreeningRecord(candidate);
+    if (Object.keys(parsed).length) return parsed;
+  }
 
   const fieldData = body.field_data ?? payload.field_data;
   if (Array.isArray(fieldData)) {
-    return Object.fromEntries(
+    return filterScreeningAnswers(Object.fromEntries(
       fieldData
         .map((field) => asRecord(field))
         .map((field) => {
@@ -48,12 +59,11 @@ const fieldDataRecord = (body: Record<string, unknown>, payload: Record<string, 
           return [String(field.name ?? ""), String(values[0] ?? field.value ?? "")] as const;
         })
         .filter(([key, value]) => key && value),
-    );
+    ));
   }
 
-  // Generic webhook: every primitive payload key remains available to the
-  // flow, and custom keys also become the Q&A block.
-  return stringRecord(payload);
+  // Last resort: only non-routing keys from the flat payload.
+  return filterScreeningAnswers(stringRecord(payload));
 };
 
 const firstString = (payload: Record<string, unknown>, keys: string[]) => {
