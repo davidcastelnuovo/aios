@@ -178,6 +178,7 @@ export default function MetaWhatsAppSettings() {
   const [metaAppId, setMetaAppId] = useState("");
   const [selectedPhones, setSelectedPhones] = useState<string[]>([]);
   const [discovery, setDiscovery] = useState<unknown>(null);
+  const [discoveryLimited, setDiscoveryLimited] = useState(false);
   const [sharingIntegration, setSharingIntegration] = useState<Integration | null>(null);
   const codeRef = useRef<string | null>(null);
   const sessionRef = useRef<{ data: Record<string, unknown>; event: string } | null>(null);
@@ -380,6 +381,7 @@ export default function MetaWhatsAppSettings() {
         throw new MetaAuthError(data?.error || "לא ניתן לקרוא את הנכסים מ-Meta", data?.code);
       }
       setMetaAppId(String(data.app_id ?? ""));
+      setDiscoveryLimited(Boolean(data.discovery_limited));
       return (data.accounts ?? []) as MetaAsset[];
     },
     onSuccess: (accounts) => {
@@ -392,6 +394,7 @@ export default function MetaWhatsAppSettings() {
     },
     onError: (error: Error) => {
       setAssets(null);
+      setDiscoveryLimited(false);
       setDiscovery(error instanceof MetaAuthError ? error.details ?? null : null);
       toast.error(error.message, { duration: 15000 });
     },
@@ -613,7 +616,8 @@ export default function MetaWhatsAppSettings() {
                   <>
                     Meta Business Settings → Users → System users → יצירת משתמש מערכת → Add Assets ובחירת
                     חשבון ה־WhatsApp → Generate new token עם ההרשאות{" "}
-                    <code>whatsapp_business_management</code> ו־<code>whatsapp_business_messaging</code>.
+                    <code>business_management</code>, <code>whatsapp_business_management</code> ו־
+                    <code>whatsapp_business_messaging</code>.
                     האסימון נשמר ואינו נחשף בממשק.
                   </>
                 )}
@@ -683,6 +687,18 @@ export default function MetaWhatsAppSettings() {
               {loadAssetsMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
               סנכרון חשבונות ומספרים
             </Button>
+
+            {discoveryLimited && (
+              <Alert className="border-amber-500/40">
+                <ShieldCheck className="h-4 w-4" />
+                <AlertTitle>המספרים הקיימים מוצגים, אך גילוי חשבונות חדשים מוגבל</AlertTitle>
+                <AlertDescription>
+                  האסימון השמור חסר <code>business_management</code>. צרו פעם אחת אסימון חדש לאותו
+                  System User עם שלוש ההרשאות, הדביקו אותו כאן ולחצו שוב על סנכרון. לאחר מכן כל WABA
+                  ומספר שיוקצו למשתמש יתגלו בלי ליצור אסימון נוסף.
+                </AlertDescription>
+              </Alert>
+            )}
 
             {discovery != null && (
               <div className="space-y-2">

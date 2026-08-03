@@ -422,7 +422,25 @@ Deno.serve(async (request) => {
     if (!wabaIds.length) wabaIds = debug.wabaIds;
 
     let discoverySteps: DiscoveryStep[] = [];
-    if (!wabaIds.length) {
+    // Manual token management is intentionally broader than Embedded Signup:
+    // every refresh should look for newly assigned accounts, while retaining
+    // WABAs already known to AIOS if Meta's discovery edge is temporarily
+    // unavailable. `business_management` is required by Meta for portfolio-wide
+    // discovery, but existing WABAs remain usable with the WhatsApp scopes alone.
+    if (!requestedWabaId && ["list_assets", "connect_manual"].includes(action)) {
+      const { data: knownIntegrations, error: knownIntegrationsError } = await admin
+        .from("tenant_integrations")
+        .select("settings")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "meta_whatsapp");
+      if (knownIntegrationsError) throw knownIntegrationsError;
+      const knownWabaIds = (knownIntegrations ?? [])
+        .map((integration: any) => integration?.settings?.waba_id)
+        .filter((value: unknown): value is string => typeof value === "string" && Boolean(value));
+      const discovered = await discoverWabas(businessToken, graphVersion, requestedBusinessId);
+      wabaIds = unique([...wabaIds, ...knownWabaIds, ...discovered.wabaIds]);
+      discoverySteps = discovered.steps;
+    } else if (!wabaIds.length) {
       const discovered = await discoverWabas(businessToken, graphVersion, requestedBusinessId);
       wabaIds = discovered.wabaIds;
       discoverySteps = discovered.steps;
@@ -509,6 +527,7 @@ Deno.serve(async (request) => {
         granted_scopes: debug.scopes,
         app_id: appId,
         using_saved_token: !suppliedToken,
+        discovery_limited: !debug.scopes.includes("business_management"),
         accounts,
       });
     }
