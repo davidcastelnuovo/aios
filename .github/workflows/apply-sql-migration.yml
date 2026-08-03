@@ -29,6 +29,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Need full history so github.event.before is resolvable for path diffs.
+          fetch-depth: 0
 
       - name: Resolve SQL file
         id: sql
@@ -38,29 +41,45 @@ jobs:
             FILE="${{ github.event.inputs.sql_file }}"
             NAME="${{ github.event.inputs.migration_name }}"
           else
+            BEFORE="${{ github.event.before }}"
+            SHA="${{ github.sha }}"
+            # Shallow / missing before SHA: fall back to files touched by HEAD.
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+               || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              CHANGED=$(git show --pretty=format: --name-only "$SHA" | sort -u || true)
+            else
+              CHANGED=$(git diff --name-only "$BEFORE" "$SHA" | sort -u || true)
+            fi
+            echo "Changed files (ops resolve):"
+            echo "$CHANGED" | grep '^supabase/ops/' || true
+
             # Prefer the newest ops migration that triggered this push.
-            if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- \
-                'supabase/ops/fix_clients_seo_keyword_relevance.sql' | grep -q .; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/fix_clients_seo_keyword_relevance.sql'; then
               FILE="supabase/ops/fix_clients_seo_keyword_relevance.sql"
               NAME="fix_clients_seo_keyword_relevance"
-            elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- \
-                'supabase/ops/fix_seo_monthly_updates_cross_tenant.sql' | grep -q .; then
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_seo_monthly_updates_cross_tenant.sql'; then
               FILE="supabase/ops/fix_seo_monthly_updates_cross_tenant.sql"
               NAME="fix_seo_monthly_updates_cross_tenant"
-            elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- \
-                'supabase/ops/fix_cross_tenant_client_task_updates.sql' | grep -q .; then
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_cross_tenant_client_task_updates.sql'; then
               FILE="supabase/ops/fix_cross_tenant_client_task_updates.sql"
               NAME="fix_cross_tenant_client_task_updates"
-            else
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_seo_monthly_shares.sql'; then
               FILE="supabase/ops/apply_seo_monthly_shares.sql"
               NAME="apply_seo_monthly_shares"
+            else
+              echo "No matching supabase/ops SQL file in push; skipping apply."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
           fi
           test -f "$FILE"
+          echo "Resolved FILE=$FILE NAME=$NAME"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Apply via /database/migrations
+        if: steps.sql.outputs.skip != 'true'
         run: |
           set -euo pipefail
           FILE="${{ steps.sql.outputs.file }}"
