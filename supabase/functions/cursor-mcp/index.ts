@@ -19,7 +19,7 @@
 //   CURSOR_MODEL_ID         e.g. composer-2.5 — omit for account default
 //   CURSOR_AUTO_CREATE_PR   "false" to disable auto PR (default true)
 //   CURSOR_DEFAULT_TENANT_ID fallback tenant when bearer can't resolve one
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
