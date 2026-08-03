@@ -2,8 +2,9 @@
 // Cursor Cloud Agents — the same runtime David uses here (repo + GitHub + DB).
 //
 // JSON-RPC 2.0 over HTTP (mcp-connect / _shared/mcp-tools dialect). Each
-// tools/call creates a Cursor Cloud Agent via https://api.cursor.com/v1/agents
-// and returns the agent URL (https://cursor.com/agents/<bcId>).
+// tools/call prefers a sticky Cursor Cloud Agent per tenant (follow-up run via
+// POST /v1/agents/{id}/runs) so conversation history is preserved; creates a
+// new agent only when none exists / sticky is dead. Returns the agent URL.
 //
 // Tools:
 //   - request_dev_task : code/feature/bugfix → Cursor implements + opens a PR
@@ -19,6 +20,8 @@
 //   CURSOR_MODEL_ID         e.g. composer-2.5 — omit for account default
 //   CURSOR_AUTO_CREATE_PR   "false" to disable auto PR (default true)
 //   CURSOR_DEFAULT_TENANT_ID fallback tenant when bearer can't resolve one
+//   CURSOR_STICKY_AGENT_ID  force one global sticky agent id (bc-…)
+//   CURSOR_STICKY           "false" to disable sticky reuse (default true)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -30,10 +33,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.0.0" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.1.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 100_000;
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
+const STICKY_ENABLED = (Deno.env.get("CURSOR_STICKY") || "true").toLowerCase() !== "false";
 
 const TOOLS = [
   {
@@ -142,77 +146,25 @@ async function resolveContext(
   }
 }
 
-/** Create a Cursor Cloud Agent and return its public URL + id. */
-async function fireCursorAgent(promptText: string, opts?: {
-  name?: string;
-  startingRef?: string;
-}): Promise<{ url: string; id: string }> {
-  const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
-  if (!apiKey) {
-    throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
-  }
+type FireResult = { url: string; id: string; reused: boolean };
 
-  const text = promptText.length > MAX_TEXT ? promptText.slice(0, MAX_TEXT) : promptText;
-  const repoUrl = Deno.env.get("CURSOR_REPO_URL") || DEFAULT_REPO;
-  const startingRef = opts?.startingRef || Deno.env.get("CURSOR_STARTING_REF") || "main";
-  const envName = Deno.env.get("CURSOR_CLOUD_ENV_NAME") || "";
-  const modelId = Deno.env.get("CURSOR_MODEL_ID") || "";
-  const autoCreatePR = (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
-
-  const body: Record<string, unknown> = {
-    prompt: { text },
-    autoCreatePR,
-    name: (opts?.name || "Carmen → Cursor").slice(0, 100),
+function cursorAuthHeaders(apiKey: string, basic = false): Record<string, string> {
+  return {
+    "Authorization": basic ? `Basic ${btoa(`${apiKey}:`)}` : `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "User-Agent": "aios-cursor-mcp/1.1",
   };
+}
 
-  if (modelId) body.model = { id: modelId };
-
-  // Prefer a named cloud environment (same VM setup David uses) when configured.
-  if (envName) {
-    body.env = { type: "cloud", name: envName };
-  } else {
-    body.repos = [{ url: repoUrl, startingRef }];
+async function cursorFetch(apiKey: string, url: string, init: RequestInit): Promise<Response> {
+  const headers = { ...cursorAuthHeaders(apiKey, false), ...(init.headers || {}) };
+  let resp = await fetch(url, { ...init, headers });
+  if (resp.status === 401 || resp.status === 403) {
+    const basicHeaders = { ...cursorAuthHeaders(apiKey, true), ...(init.headers || {}) };
+    resp = await fetch(url, { ...init, headers: basicHeaders });
   }
-
-  const resp = await fetch("https://api.cursor.com/v1/agents", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      "User-Agent": "aios-cursor-mcp/1.0",
-    },
-    body: JSON.stringify(body),
-  });
-
-  const raw = await resp.text();
-  if (!resp.ok) {
-    // Retry once with Basic auth (some API key types prefer -u KEY:)
-    if (resp.status === 401 || resp.status === 403) {
-      const basic = btoa(`${apiKey}:`);
-      const retry = await fetch("https://api.cursor.com/v1/agents", {
-        method: "POST",
-        headers: {
-          "Authorization": `Basic ${basic}`,
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "User-Agent": "aios-cursor-mcp/1.0",
-        },
-        body: JSON.stringify(body),
-      });
-      const retryRaw = await retry.text();
-      if (!retry.ok) {
-        let detail = retryRaw.slice(0, 500);
-        try { detail = JSON.parse(retryRaw)?.error?.message || JSON.parse(retryRaw)?.message || detail; } catch { /* keep */ }
-        throw new Error(`Cursor agent create ${retry.status}: ${detail}`);
-      }
-      return parseAgentResponse(retryRaw);
-    }
-    let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
-    throw new Error(`Cursor agent create ${resp.status}: ${detail}`);
-  }
-  return parseAgentResponse(raw);
+  return resp;
 }
 
 function parseAgentResponse(raw: string): { url: string; id: string } {
@@ -227,6 +179,173 @@ function parseAgentResponse(raw: string): { url: string; id: string } {
       "(agent created)",
   );
   return { url, id: id || url };
+}
+
+async function getStickyAgentId(tenantId: string | null): Promise<string | null> {
+  const forced = Deno.env.get("CURSOR_STICKY_AGENT_ID") || "";
+  if (forced.startsWith("bc-")) return forced;
+  if (!tenantId) return null;
+  const sb = sbClient();
+  if (!sb) return null;
+  try {
+    const { data } = await sb
+      .from("cursor_sticky_agents")
+      .select("cursor_agent_id")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    const id = String((data as any)?.cursor_agent_id || "");
+    if (id.startsWith("bc-")) return id;
+    // Fallback: last successful dispatch for this tenant.
+    const { data: last } = await sb
+      .from("cursor_dispatches")
+      .select("cursor_agent_id")
+      .eq("tenant_id", tenantId)
+      .not("cursor_agent_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const lastId = String((last as any)?.cursor_agent_id || "");
+    return lastId.startsWith("bc-") ? lastId : null;
+  } catch (e) {
+    console.error("[cursor-mcp] getStickyAgentId failed:", (e as any)?.message ?? e);
+    return null;
+  }
+}
+
+async function saveStickyAgent(tenantId: string | null, agentId: string, sessionUrl: string): Promise<void> {
+  if (!tenantId || !agentId.startsWith("bc-")) return;
+  const sb = sbClient();
+  if (!sb) return;
+  try {
+    await sb.from("cursor_sticky_agents").upsert({
+      tenant_id: tenantId,
+      cursor_agent_id: agentId,
+      session_url: sessionUrl,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "tenant_id" });
+  } catch (e) {
+    console.error("[cursor-mcp] saveStickyAgent failed:", (e as any)?.message ?? e);
+  }
+}
+
+async function clearStickyAgent(tenantId: string | null): Promise<void> {
+  if (!tenantId) return;
+  const sb = sbClient();
+  if (!sb) return;
+  try {
+    await sb.from("cursor_sticky_agents").delete().eq("tenant_id", tenantId);
+  } catch { /* ignore */ }
+}
+
+/** Follow-up on an existing sticky agent (preserves conversation + workspace). */
+async function followUpStickyAgent(
+  apiKey: string,
+  agentId: string,
+  promptText: string,
+): Promise<FireResult | null> {
+  const url = `https://api.cursor.com/v1/agents/${encodeURIComponent(agentId)}/runs`;
+  // Retry a few times on agent_busy (only one run at a time).
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const resp = await cursorFetch(apiKey, url, {
+      method: "POST",
+      body: JSON.stringify({ prompt: { text: promptText } }),
+    });
+    const raw = await resp.text();
+    if (resp.ok) {
+      const parsed = parseAgentResponse(raw);
+      // run responses nest agentId; keep sticky id
+      return {
+        id: agentId,
+        url: parsed.url.includes("/agents/") ? parsed.url : `https://cursor.com/agents/${agentId}`,
+        reused: true,
+      };
+    }
+    if (resp.status === 409) {
+      // Busy — wait and retry.
+      await new Promise((r) => setTimeout(r, 2500 * attempt));
+      continue;
+    }
+    // Dead / archived / not found → caller should create a new agent.
+    if (resp.status === 404 || resp.status === 410 || resp.status === 400) {
+      console.warn(`[cursor-mcp] sticky follow-up ${resp.status}: ${raw.slice(0, 200)}`);
+      return null;
+    }
+    let detail = raw.slice(0, 500);
+    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    throw new Error(`Cursor follow-up ${resp.status}: ${detail}`);
+  }
+  // Still busy — return the sticky URL so Carmen can point David at it.
+  return {
+    id: agentId,
+    url: `https://cursor.com/agents/${agentId}`,
+    reused: true,
+  };
+}
+
+/** Create a brand-new Cursor Cloud Agent. */
+async function createCursorAgent(apiKey: string, promptText: string, opts?: {
+  name?: string;
+  startingRef?: string;
+}): Promise<FireResult> {
+  const repoUrl = Deno.env.get("CURSOR_REPO_URL") || DEFAULT_REPO;
+  const startingRef = opts?.startingRef || Deno.env.get("CURSOR_STARTING_REF") || "main";
+  const envName = Deno.env.get("CURSOR_CLOUD_ENV_NAME") || "";
+  const modelId = Deno.env.get("CURSOR_MODEL_ID") || "";
+  const autoCreatePR = (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
+
+  const body: Record<string, unknown> = {
+    prompt: { text: promptText },
+    autoCreatePR,
+    name: (opts?.name || "Carmen → Cursor").slice(0, 100),
+  };
+  if (modelId) body.model = { id: modelId };
+  if (envName) {
+    body.env = { type: "cloud", name: envName };
+  } else {
+    body.repos = [{ url: repoUrl, startingRef }];
+  }
+
+  const resp = await cursorFetch(apiKey, "https://api.cursor.com/v1/agents", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const raw = await resp.text();
+  if (!resp.ok) {
+    let detail = raw.slice(0, 500);
+    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    throw new Error(`Cursor agent create ${resp.status}: ${detail}`);
+  }
+  const parsed = parseAgentResponse(raw);
+  return { ...parsed, reused: false };
+}
+
+/** Prefer sticky agent (history), else create new and remember it per tenant. */
+async function fireCursorAgent(promptText: string, opts?: {
+  name?: string;
+  startingRef?: string;
+  tenantId?: string | null;
+}): Promise<FireResult> {
+  const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
+  if (!apiKey) {
+    throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
+  }
+  const text = promptText.length > MAX_TEXT ? promptText.slice(0, MAX_TEXT) : promptText;
+
+  if (STICKY_ENABLED) {
+    const stickyId = await getStickyAgentId(opts?.tenantId ?? null);
+    if (stickyId) {
+      const followed = await followUpStickyAgent(apiKey, stickyId, text);
+      if (followed) {
+        await saveStickyAgent(opts?.tenantId ?? null, followed.id, followed.url);
+        return followed;
+      }
+      await clearStickyAgent(opts?.tenantId ?? null);
+    }
+  }
+
+  const created = await createCursorAgent(apiKey, text, opts);
+  await saveStickyAgent(opts?.tenantId ?? null, created.id, created.url);
+  return created;
 }
 
 async function recentDispatchContext(tenantId: string | null): Promise<string> {
@@ -338,9 +457,10 @@ async function handleToolCall(
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
-    const { url, id } = await fireCursorAgent(text, {
+    const { url, id, reused } = await fireCursorAgent(text, {
       name: `Carmen DEV: ${task.slice(0, 60)}`,
       startingRef: branch || undefined,
+      tenantId: ctx.tenantId,
     });
     await logDispatch({
       tenantId: ctx.tenantId,
@@ -353,7 +473,9 @@ async function handleToolCall(
       cursorAgentId: id,
     });
     return (
-      `✅ Dispatched the dev task to Cursor Cloud Agent. Cursor is now working on it and will open a pull request when finished.\n` +
+      `✅ Dispatched the dev task to Cursor Cloud Agent` +
+      (reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
+      `. Cursor is now working on it and will open a pull request when finished.\n` +
       `Session: ${url}`
     );
   }
@@ -369,8 +491,9 @@ async function handleToolCall(
       (context ? `\nContext:\n${context}\n` : ``) +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
-    const { url, id } = await fireCursorAgent(text, {
+    const { url, id, reused } = await fireCursorAgent(text, {
       name: `Carmen: ${request.slice(0, 60)}`,
+      tenantId: ctx.tenantId,
     });
     await logDispatch({
       tenantId: ctx.tenantId,
@@ -382,7 +505,12 @@ async function handleToolCall(
       sessionUrl: url,
       cursorAgentId: id,
     });
-    return `✅ Sent your request to Cursor. A Cloud Agent session is now running on it.\nSession: ${url}`;
+    return (
+      `✅ Sent your request to Cursor` +
+      (reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
+      `. A Cloud Agent session is now running on it.\n` +
+      `Session: ${url}`
+    );
   }
 
   throw new Error(`Unknown tool: ${name}`);

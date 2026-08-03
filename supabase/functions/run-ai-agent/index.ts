@@ -116,11 +116,24 @@ const LOW_PRIORITY_TOOLS = new Set([
   'create_sales_person', 'create_agency', 'prioritize_tasks', 'propose_automation',
   'create_whatsapp_instance', 'get_whatsapp_qr_link', 'connect_google_ads_account', 'save_media_from_chat',
 ])
+function isEscalationMcpTool(name: string | undefined): boolean {
+  if (!name) return false
+  return name.startsWith('mcp_Cursor__') || name.startsWith('mcp_Claude__') || name.startsWith('mcp_Manus__')
+}
+
 function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
   if (target.provider !== 'openai' || tools.length <= OPENAI_MAX_TOOLS) return tools
-  const kept = tools.filter((t) => !LOW_PRIORITY_TOOLS.has(t?.function?.name))
-  const capped = kept.length <= OPENAI_MAX_TOOLS ? kept : kept.slice(0, OPENAI_MAX_TOOLS)
-  console.log(`[AGENT] OpenAI tool cap: ${tools.length} → ${capped.length}`)
+  // Escalation MCP tools (Cursor/Claude/Manus) are appended after the native
+  // toolset — never drop them when enforcing OpenAI's 128-tool cap.
+  const mustKeep = tools.filter((t) => isEscalationMcpTool(t?.function?.name))
+  const kept = tools.filter((t) => {
+    const n = t?.function?.name
+    if (isEscalationMcpTool(n)) return false // re-add at front below
+    return !LOW_PRIORITY_TOOLS.has(n)
+  })
+  const room = Math.max(0, OPENAI_MAX_TOOLS - mustKeep.length)
+  const capped = [...mustKeep, ...kept.slice(0, room)]
+  console.log(`[AGENT] OpenAI tool cap: ${tools.length} → ${capped.length} (kept ${mustKeep.length} escalation MCP)`)
   return capped
 }
 
