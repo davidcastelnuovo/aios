@@ -82,6 +82,8 @@ export function ExecutionHistoryPanel({
 }: ExecutionHistoryPanelProps) {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [rerunningId, setRerunningId] = useState<string | null>(null);
+  const [retryingFailed, setRetryingFailed] = useState(false);
+  const [retryProgress, setRetryProgress] = useState({ done: 0, total: 0 });
 
   const { data: logs = [], isLoading, refetch } = useQuery({
     queryKey: ["automation-logs-flow", automationId],
@@ -127,6 +129,43 @@ export function ExecutionHistoryPanel({
     }
   };
 
+  // A run can fail long after it was logged — a WhatsApp provider may accept a
+  // message and only later report that it was never delivered. Recovering those
+  // one by one is impractical when a provider outage stalls a whole morning.
+  const failedLogs = logs.filter((log) => log.success === false && log.payload);
+
+  const handleRetryAllFailed = async () => {
+    if (!failedLogs.length) return;
+    setRetryingFailed(true);
+    setRetryProgress({ done: 0, total: failedLogs.length });
+    let succeeded = 0;
+    try {
+      // Sequential: a provider that is rate limiting or refusing sends should not
+      // be hit with the whole backlog at once.
+      for (const [index, log] of failedLogs.entries()) {
+        const { error } = await supabase.functions.invoke("trigger-automation", {
+          body: { automationId, payload: log.payload, _rerun: true },
+        });
+        if (!error) succeeded += 1;
+        setRetryProgress({ done: index + 1, total: failedLogs.length });
+      }
+      toast({
+        title: "ההרצות החוזרות הופעלו",
+        description: `${succeeded} מתוך ${failedLogs.length} נשלחו מחדש. בדוק את ההיסטוריה לתוצאה.`,
+      });
+      setTimeout(() => refetch(), 2000);
+    } catch (err) {
+      toast({
+        title: "שגיאה בהרצה חוזרת",
+        description: err instanceof Error ? err.message : String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setRetryingFailed(false);
+      setRetryProgress({ done: 0, total: 0 });
+    }
+  };
+
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -141,6 +180,27 @@ export function ExecutionHistoryPanel({
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
+          {failedLogs.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 w-full gap-2"
+              disabled={retryingFailed}
+              onClick={handleRetryAllFailed}
+            >
+              {retryingFailed ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  שולח מחדש {retryProgress.done}/{retryProgress.total}
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  הרץ מחדש את כל הכשלונות ({failedLogs.length})
+                </>
+              )}
+            </Button>
+          )}
         </SheetHeader>
 
         <ScrollArea className="flex-1">
