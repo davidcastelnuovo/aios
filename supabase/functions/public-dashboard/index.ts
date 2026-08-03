@@ -196,6 +196,8 @@ Deno.serve(async (req) => {
     let seoGscRecords: any[] = [];
     let seoLinkedGscSiteUrl: string | null = null;
     let seoTargetClientId: string | null = dashboard.client_id || null;
+    let seoForceRelevant: string[] = [];
+    let seoForceIrrelevant: string[] = [];
     let seoTenantIdList: string[] = dashboard.tenant_id ? [dashboard.tenant_id] : [];
     let gscMultiPeriod: { prevMonth: any[]; threeMonth: any[]; yearly: any[] } | null = null;
     let wooSites: any[] = [];
@@ -282,7 +284,7 @@ Deno.serve(async (req) => {
         try {
           const { data: clientRow } = await supabase
             .from("clients")
-            .select("tenant_id, agency_id")
+            .select("tenant_id, agency_id, seo_keyword_relevance")
             .eq("id", seoTargetClientId || dashboard.client_id)
             .maybeSingle();
           if (clientRow?.tenant_id) accessibleTenantIds.add(clientRow.tenant_id);
@@ -296,6 +298,13 @@ Deno.serve(async (req) => {
               if (r.source_tenant_id) accessibleTenantIds.add(r.source_tenant_id);
             }
           }
+          const relevance = (clientRow as any)?.seo_keyword_relevance || {};
+          const asList = (v: unknown): string[] =>
+            Array.isArray(v)
+              ? v.map((x) => String(x || "").trim()).filter(Boolean)
+              : [];
+          seoForceRelevant = asList(relevance.force_relevant ?? relevance.forceRelevant);
+          seoForceIrrelevant = asList(relevance.force_irrelevant ?? relevance.forceIrrelevant);
         } catch (e) {
           console.error("Error resolving accessible tenants for GSC:", e);
         }
@@ -502,6 +511,10 @@ Deno.serve(async (req) => {
         gsc_multi_period: gscMultiPeriod,
         maskyoo_snapshots: maskyooSnapshots,
         maskyoo_period: maskyooPeriod,
+        seo_keyword_relevance: {
+          force_relevant: seoForceRelevant,
+          force_irrelevant: seoForceIrrelevant,
+        },
         has_email_restriction: false,
       }),
 

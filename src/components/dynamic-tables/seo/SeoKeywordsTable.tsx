@@ -27,12 +27,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   filterRelevantKeywords,
-  loadSeoForceIrrelevant,
-  loadSeoForceRelevant,
   normalizeKeywordPhrase,
-  saveSeoForceIrrelevant,
-  saveSeoForceRelevant,
 } from "@/lib/seoKeywordRelevance";
+import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 import { toast } from "sonner";
 
 const HEBREW_REGEX = /[\u0590-\u05FF]/;
@@ -59,8 +56,13 @@ interface SeoKeywordsTableProps {
   showYearly?: boolean;
   /** Default tab. Top 20 is the primary SEO landing view (legacy value name kept for compatibility). */
   defaultTab?: "tracked" | "top10" | "3month" | "yearly" | "monthly" | "all";
-  /** Persistence key for relevance overrides (usually clientId). */
+  /** Persistence key for relevance overrides (usually clientId UUID). */
   relevancePersistKey?: string;
+  /** Server-provided overrides (public share links). */
+  initialForceRelevant?: string[];
+  initialForceIrrelevant?: string[];
+  /** Hide mark actions and skip writes (anonymous share viewers). */
+  relevanceReadOnly?: boolean;
   initialLangFilter?: LangFilter;
   onLangFilterChange?: (lang: LangFilter) => void;
   /** Called when the user marks a keyword as relevant / worth tracking. */
@@ -351,19 +353,27 @@ export function SeoKeywordsTable({
   showYearly = false,
   defaultTab = "top10",
   relevancePersistKey,
+  initialForceRelevant,
+  initialForceIrrelevant,
+  relevanceReadOnly = false,
   initialLangFilter,
   onLangFilterChange,
   onMarkRelevant,
 }: SeoKeywordsTableProps) {
   const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
   const [filterIrrelevant, setFilterIrrelevant] = useState(true);
-  const [forceRelevant, setForceRelevant] = useState<string[]>(() =>
-    loadSeoForceRelevant(relevancePersistKey),
-  );
-  const [forceIrrelevant, setForceIrrelevant] = useState<string[]>(() =>
-    loadSeoForceIrrelevant(relevancePersistKey),
-  );
   const [reviewOpen, setReviewOpen] = useState(false);
+  const {
+    forceRelevant,
+    forceIrrelevant,
+    markRelevant,
+    markIrrelevant,
+    readOnly,
+  } = useSeoKeywordRelevance(relevancePersistKey, {
+    initialForceRelevant,
+    initialForceIrrelevant,
+    readOnly: relevanceReadOnly,
+  });
 
   useEffect(() => {
     if (initialLangFilter && initialLangFilter !== langFilter) {
@@ -371,11 +381,6 @@ export function SeoKeywordsTable({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialLangFilter]);
-
-  useEffect(() => {
-    setForceRelevant(loadSeoForceRelevant(relevancePersistKey));
-    setForceIrrelevant(loadSeoForceIrrelevant(relevancePersistKey));
-  }, [relevancePersistKey]);
 
   const setLangFilter = (next: LangFilter) => {
     setLangFilterState(next);
@@ -483,8 +488,25 @@ export function SeoKeywordsTable({
     [rawAllKeywords, effectiveTracked, forceRelevant, forceIrrelevant],
   );
 
+  const forceIrrelevantSet = useMemo(
+    () => new Set(forceIrrelevant.map((p) => normalizeKw(p))),
+    [forceIrrelevant],
+  );
+
+  // Share links (readOnly): always hide manually-marked irrelevant keywords.
+  // In-app: the "סנן לא רלוונטיים" toggle can reveal auto-filtered rows for review,
+  // but force-irrelevant marks stay hidden unless the user opens the review dialog.
+  const applyRelevanceFilter = readOnly ? true : filterIrrelevant;
+
   // The relevance switch applies to every keyword tab, not only the ranking shortcut.
-  const allKeywords = filterIrrelevant ? relevantKeywords : rawAllKeywords;
+  const allKeywords = useMemo(() => {
+    if (applyRelevanceFilter) return relevantKeywords;
+    // Toggle off in-app: show auto-filtered again, but keep manual לא רלוונטי hidden.
+    return rawAllKeywords.filter(
+      (k) => !forceIrrelevantSet.has(normalizeKw(String(k.keyword || ""))),
+    );
+  }, [applyRelevanceFilter, relevantKeywords, rawAllKeywords, forceIrrelevantSet]);
+
   const irrelevantSet = useMemo(
     () => new Set(irrelevantKeywords.map((k) => normalizeKw(String(k.keyword || "")))),
     [irrelevantKeywords],
@@ -493,14 +515,16 @@ export function SeoKeywordsTable({
   const trackedFiltered = useMemo(() => {
     const filtered = effectiveTracked.filter((kw) => {
       if (!matchesLang(String(kw.keyword || ''), langFilter)) return false;
-      return !filterIrrelevant || !irrelevantSet.has(normalizeKw(String(kw.keyword || "")));
+      const key = normalizeKw(String(kw.keyword || ""));
+      if (forceIrrelevantSet.has(key)) return false;
+      return !applyRelevanceFilter || !irrelevantSet.has(key);
     });
     return [...filtered].sort((a, b) => {
       const aPos = a.position ?? Number.POSITIVE_INFINITY;
       const bPos = b.position ?? Number.POSITIVE_INFINITY;
       return aPos - bPos;
     });
-  }, [effectiveTracked, langFilter, filterIrrelevant, irrelevantSet]);
+  }, [effectiveTracked, langFilter, applyRelevanceFilter, irrelevantSet, forceIrrelevantSet]);
 
   const keywordRank = (k: any): number | null => {
     const rank = k?.position ?? k?.gsc_position ?? null;
@@ -526,15 +550,23 @@ export function SeoKeywordsTable({
   );
 
   const top20 = useMemo(
-    () => filterIrrelevant
-      ? top20Raw.filter((k) => !irrelevantSet.has(normalizeKw(String(k.keyword || ""))))
-      : top20Raw,
-    [filterIrrelevant, top20Raw, irrelevantSet],
+    () =>
+      top20Raw.filter((k) => {
+        const key = normalizeKw(String(k.keyword || ""));
+        if (forceIrrelevantSet.has(key)) return false;
+        return !applyRelevanceFilter || !irrelevantSet.has(key);
+      }),
+    [applyRelevanceFilter, top20Raw, irrelevantSet, forceIrrelevantSet],
   );
   const allDimmed = useMemo(() => {
-    if (filterIrrelevant) return new Set<string>();
-    return irrelevantSet;
-  }, [filterIrrelevant, irrelevantSet]);
+    if (applyRelevanceFilter) return new Set<string>();
+    // Manual marks are already removed from lists; dim only auto-filtered leftovers.
+    const dimmed = new Set<string>();
+    for (const key of irrelevantSet) {
+      if (!forceIrrelevantSet.has(key)) dimmed.add(key);
+    }
+    return dimmed;
+  }, [applyRelevanceFilter, irrelevantSet, forceIrrelevantSet]);
 
   const by3MonthChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_3month != null));
   const byYearlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_yearly != null));
@@ -543,46 +575,32 @@ export function SeoKeywordsTable({
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
 
   const handleMarkRelevant = (keyword: string) => {
+    if (readOnly) return;
     const key = normalizeKw(keyword);
     if (!key) return;
-    setForceIrrelevant((prev) => {
-      const next = prev.filter((p) => normalizeKw(p) !== key);
-      if (next.length !== prev.length) saveSeoForceIrrelevant(relevancePersistKey, next);
-      return next;
-    });
-    setForceRelevant((prev) => {
-      if (prev.some((p) => normalizeKw(p) === key)) return prev;
-      const next = [...prev, keyword.trim()];
-      saveSeoForceRelevant(relevancePersistKey, next);
-      return next;
-    });
+    markRelevant(keyword);
     onMarkRelevant?.(keyword.trim());
     toast.success(`"${keyword.trim()}" סומן כרלוונטי ונוסף למעקב`);
   };
 
   const handleMarkIrrelevant = (keyword: string) => {
+    if (readOnly) return;
     const key = normalizeKw(keyword);
     if (!key) return;
-    setForceRelevant((prev) => {
-      const next = prev.filter((p) => normalizeKw(p) !== key);
-      if (next.length !== prev.length) saveSeoForceRelevant(relevancePersistKey, next);
-      return next;
-    });
-    setForceIrrelevant((prev) => {
-      if (prev.some((p) => normalizeKw(p) === key)) return prev;
-      const next = [...prev, keyword.trim()];
-      saveSeoForceIrrelevant(relevancePersistKey, next);
-      return next;
-    });
+    markIrrelevant(keyword);
     toast.success(`"${keyword.trim()}" סומן כלא רלוונטי`);
   };
 
-  const canFilter = effectiveTracked.length > 0;
+  // Manual marks filter even with an empty tracked list; auto-filter needs tracked terms.
+  const canFilter = effectiveTracked.length > 0 || forceIrrelevant.length > 0;
   const manuallyHiddenCount = forceIrrelevant.length;
-  const forceIrrelevantSet = useMemo(
-    () => new Set(forceIrrelevant.map((p) => normalizeKw(p))),
-    [forceIrrelevant],
-  );
+  const markProps = readOnly
+    ? {}
+    : {
+        onMarkRelevant: handleMarkRelevant,
+        onMarkIrrelevant: handleMarkIrrelevant,
+        showIrrelevantAction: true as const,
+      };
 
   return (
     <>
@@ -626,19 +644,24 @@ export function SeoKeywordsTable({
 
             <button
               type="button"
-              disabled={!canFilter}
+              disabled={!canFilter || readOnly}
               title={
-                canFilter
-                  ? "מסתיר ביטויים שלא קשורים לרשימת המעקב (לפי מילים משותפות)"
-                  : "אין ביטויים במעקב — אין על מה לבסס סינון"
+                readOnly
+                  ? "בקישור שיתוף ביטויים לא רלוונטיים מסוננים תמיד"
+                  : canFilter
+                    ? "מסתיר ביטויים שלא קשורים לרשימת המעקב (לפי מילים משותפות)"
+                    : "אין ביטויים במעקב — אין על מה לבסס סינון"
               }
-              onClick={() => setFilterIrrelevant((v) => !v)}
+              onClick={() => {
+                if (readOnly) return;
+                setFilterIrrelevant((v) => !v);
+              }}
               className={cn(
                 "inline-flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium rounded-md border transition-colors",
-                filterIrrelevant && canFilter
+                applyRelevanceFilter && canFilter
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-background text-muted-foreground hover:bg-muted",
-                !canFilter && "opacity-50 cursor-not-allowed",
+                (!canFilter || readOnly) && "opacity-50 cursor-not-allowed",
               )}
             >
               <Filter className="h-3.5 w-3.5" />
@@ -646,14 +669,20 @@ export function SeoKeywordsTable({
               {canFilter && irrelevantKeywords.length > 0 && (
                 <Badge
                   variant="secondary"
-                  role="button"
-                  tabIndex={0}
-                  title="פתח את רשימת הביטויים שסוננו — סמן רלוונטי / לא רלוונטי"
+                  role={readOnly ? undefined : "button"}
+                  tabIndex={readOnly ? undefined : 0}
+                  title={
+                    readOnly
+                      ? `${irrelevantKeywords.length} ביטויים מסוננים`
+                      : "פתח את רשימת הביטויים שסוננו — סמן רלוונטי / לא רלוונטי"
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (readOnly) return;
                     setReviewOpen(true);
                   }}
                   onKeyDown={(e) => {
+                    if (readOnly) return;
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       e.stopPropagation();
@@ -661,16 +690,17 @@ export function SeoKeywordsTable({
                     }
                   }}
                   className={cn(
-                    "text-[10px] h-4 px-1 cursor-pointer hover:ring-1 hover:ring-offset-1",
-                    filterIrrelevant ? "bg-primary-foreground/20 text-primary-foreground" : "",
+                    "text-[10px] h-4 px-1",
+                    !readOnly && "cursor-pointer hover:ring-1 hover:ring-offset-1",
+                    applyRelevanceFilter ? "bg-primary-foreground/20 text-primary-foreground" : "",
                   )}
                 >
-                  {filterIrrelevant ? `−${irrelevantKeywords.length}` : irrelevantKeywords.length}
+                  {applyRelevanceFilter ? `−${irrelevantKeywords.length}` : irrelevantKeywords.length}
                 </Badge>
               )}
             </button>
 
-            {manuallyHiddenCount > 0 && (
+            {manuallyHiddenCount > 0 && !readOnly && (
               <button
                 type="button"
                 onClick={() => setReviewOpen(true)}
@@ -680,6 +710,12 @@ export function SeoKeywordsTable({
                 <EyeOff className="h-3.5 w-3.5" />
                 מוסתרים ({manuallyHiddenCount})
               </button>
+            )}
+            {manuallyHiddenCount > 0 && readOnly && (
+              <Badge variant="outline" className="text-xs gap-1">
+                <EyeOff className="h-3 w-3" />
+                מוסתרים ({manuallyHiddenCount})
+              </Badge>
             )}
 
             <Badge variant={effectiveTracked.length > 0 ? "default" : "outline"} className="text-xs">🎯 {effectiveTracked.length} במעקב</Badge>
@@ -723,17 +759,15 @@ export function SeoKeywordsTable({
               showPrevMonth
               showGsc={hasGscData}
               dimmedSet={allDimmed}
-              onMarkRelevant={handleMarkRelevant}
-              onMarkIrrelevant={handleMarkIrrelevant}
-              showIrrelevantAction
+              {...markProps}
             />
           </TabsContent>
 
           <TabsContent value="top10" className="mt-0">
-            {!filterIrrelevant && irrelevantKeywords.length > 0 && (
+            {!applyRelevanceFilter && !readOnly && irrelevantKeywords.length > 0 && (
               <div className="px-3 py-2 text-xs text-amber-800 bg-amber-50 border-b border-amber-100 flex items-center justify-between gap-2 flex-wrap">
                 <span>
-                  מוצגים גם {irrelevantKeywords.length} ביטויים שסומנו כלא רלוונטיים — לחץ &quot;רלוונטי&quot; / &quot;לא רלוונטי&quot;.
+                  מוצגים גם ביטויים שסוננו אוטומטית — לחץ &quot;רלוונטי&quot; / &quot;לא רלוונטי&quot;. ביטויים שסומנו ידנית כלא רלוונטיים נשארים מוסתרים.
                 </span>
                 <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setReviewOpen(true)}>
                   סקור מסוננים
@@ -742,16 +776,14 @@ export function SeoKeywordsTable({
             )}
             <KeywordTable
               keywords={top20}
-              title={`${top20.length} ביטויים ב-Top 20${filterIrrelevant && irrelevantKeywords.length > 0 ? ` · סוננו ${irrelevantKeywords.length} מכל הרשימות` : ""}`}
+              title={`${top20.length} ביטויים ב-Top 20${applyRelevanceFilter && irrelevantKeywords.length > 0 ? ` · סוננו ${irrelevantKeywords.length} מכל הרשימות` : ""}`}
               icon={<Trophy className="h-4 w-4 text-primary" />}
               show3Month={show3Month}
               showYearly={showYearly}
               showPrevMonth
               showGsc={hasGscData}
               dimmedSet={allDimmed}
-              onMarkRelevant={handleMarkRelevant}
-              onMarkIrrelevant={handleMarkIrrelevant}
-              showIrrelevantAction
+              {...markProps}
             />
           </TabsContent>
 
@@ -763,9 +795,7 @@ export function SeoKeywordsTable({
               show3Month
               showGsc={hasGscData}
               dimmedSet={allDimmed}
-              onMarkRelevant={handleMarkRelevant}
-              onMarkIrrelevant={handleMarkIrrelevant}
-              showIrrelevantAction
+              {...markProps}
             />
           </TabsContent>
 
@@ -777,9 +807,7 @@ export function SeoKeywordsTable({
               showYearly
               showGsc={hasGscData}
               dimmedSet={allDimmed}
-              onMarkRelevant={handleMarkRelevant}
-              onMarkIrrelevant={handleMarkIrrelevant}
-              showIrrelevantAction
+              {...markProps}
             />
           </TabsContent>
 
@@ -791,9 +819,7 @@ export function SeoKeywordsTable({
               showPrevMonth
               showGsc={hasGscData}
               dimmedSet={allDimmed}
-              onMarkRelevant={handleMarkRelevant}
-              onMarkIrrelevant={handleMarkIrrelevant}
-              showIrrelevantAction
+              {...markProps}
             />
           </TabsContent>
 
@@ -807,9 +833,7 @@ export function SeoKeywordsTable({
               showPrevMonth
               showGsc={hasGscData}
               dimmedSet={allDimmed}
-              onMarkRelevant={handleMarkRelevant}
-              onMarkIrrelevant={handleMarkIrrelevant}
-              showIrrelevantAction
+              {...markProps}
             />
           </TabsContent>
         </Tabs>
@@ -821,7 +845,7 @@ export function SeoKeywordsTable({
         <DialogHeader>
           <DialogTitle>ביטויים שסוננו מכל הרשימות</DialogTitle>
           <DialogDescription>
-            סמן &quot;רלוונטי&quot; כדי להחזיר למעקב, או &quot;לא רלוונטי&quot; כדי להסתיר באופן קבוע בדפדפן זה.
+            סמן &quot;רלוונטי&quot; כדי להחזיר למעקב, או &quot;לא רלוונטי&quot; כדי להסתיר באופן קבוע גם בקישורי שיתוף.
           </DialogDescription>
         </DialogHeader>
         <div className="overflow-y-auto flex-1 -mx-1 px-1 space-y-1">
