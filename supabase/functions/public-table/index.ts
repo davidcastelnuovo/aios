@@ -248,15 +248,25 @@ Deno.serve(async (req) => {
       const accessibleTenantIds = new Set<string>();
       accessibleTenantIds.add(table.tenant_id);
       let clientAgencyId: string | null = null;
+      // Manual "לא רלוונטי" / "רלוונטי" overrides — shared with PublicSeoView.
+      let seoForceRelevant: string[] = [];
+      let seoForceIrrelevant: string[] = [];
       if (targetClientId) {
         try {
           const { data: clientRow } = await supabase
             .from("clients")
-            .select("tenant_id, agency_id")
+            .select("tenant_id, agency_id, seo_keyword_relevance")
             .eq("id", targetClientId)
             .maybeSingle();
           if (clientRow?.tenant_id) accessibleTenantIds.add(clientRow.tenant_id);
           clientAgencyId = clientRow?.agency_id || null;
+          const relevance = (clientRow as any)?.seo_keyword_relevance || {};
+          const asList = (v: unknown): string[] =>
+            Array.isArray(v)
+              ? v.map((x) => String(x || "").trim()).filter(Boolean)
+              : [];
+          seoForceRelevant = asList(relevance.force_relevant ?? relevance.forceRelevant);
+          seoForceIrrelevant = asList(relevance.force_irrelevant ?? relevance.forceIrrelevant);
           if (clientAgencyId) {
             const { data: accessRows } = await supabase
               .from("agency_tenant_access")
@@ -621,6 +631,7 @@ Deno.serve(async (req) => {
             integration_type: table.integration_type,
             integration_settings: table.integration_settings,
             agency_name: agencyName,
+            client_id: targetClientId || null,
           },
           fields: fields || [],
           records: [],
@@ -632,6 +643,10 @@ Deno.serve(async (req) => {
           gsc_multi_period: gscMultiPeriod,
           maskyoo_snapshots: maskyooSnapshots,
           maskyoo_period: maskyooPeriod,
+          seo_keyword_relevance: {
+            force_relevant: seoForceRelevant,
+            force_irrelevant: seoForceIrrelevant,
+          },
           has_email_restriction: false,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -821,6 +821,9 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                 gscData={seoGscAggregated}
                 gscMultiPeriod={gscMultiPeriod}
                 gaOrganicByMonth={seoGaOrganicByMonth}
+                clientId={dashboard?.client_id || null}
+                forceRelevant={(data as any)?.seo_keyword_relevance?.force_relevant || []}
+                forceIrrelevant={(data as any)?.seo_keyword_relevance?.force_irrelevant || []}
               />
               <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
             </TabsContent>
@@ -846,6 +849,9 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
               gscData={seoGscAggregated}
               gscMultiPeriod={gscMultiPeriod}
               gaOrganicByMonth={seoGaOrganicByMonth}
+              clientId={dashboard?.client_id || null}
+              forceRelevant={(data as any)?.seo_keyword_relevance?.force_relevant || []}
+              forceIrrelevant={(data as any)?.seo_keyword_relevance?.force_irrelevant || []}
             />
             <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
           </div>

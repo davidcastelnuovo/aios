@@ -34,6 +34,11 @@ interface PublicSeoViewProps {
   gaOrganicByMonth?: { month: string; sessions: number }[];
   /** Initial language filter persisted on the SEO crm_table — read-only in public view. */
   initialLangFilter?: "all" | "he" | "en";
+  /** Client UUID — preferred relevance persist key (matches in-app). */
+  clientId?: string | null;
+  /** Server-persisted manual relevance overrides for this client. */
+  forceRelevant?: string[];
+  forceIrrelevant?: string[];
 }
 
 function normalizeKeyword(kw: any) {
@@ -52,7 +57,17 @@ function normalizeKeyword(kw: any) {
   };
 }
 
-export function PublicSeoView({ tableName, reports, gscData = [], gscMultiPeriod = null, gaOrganicByMonth = [], initialLangFilter }: PublicSeoViewProps) {
+export function PublicSeoView({
+  tableName,
+  reports,
+  gscData = [],
+  gscMultiPeriod = null,
+  gaOrganicByMonth = [],
+  initialLangFilter,
+  clientId = null,
+  forceRelevant = [],
+  forceIrrelevant = [],
+}: PublicSeoViewProps) {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
 
@@ -306,7 +321,10 @@ export function PublicSeoView({ tableName, reports, gscData = [], gscMultiPeriod
         show3Month={comparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0}
         showYearly={comparison.yearly.size > 0 || gscYearlyMap.size > 0}
         defaultTab="top10"
-        relevancePersistKey={tableName}
+        relevancePersistKey={clientId || undefined}
+        initialForceRelevant={forceRelevant}
+        initialForceIrrelevant={forceIrrelevant}
+        relevanceReadOnly
         initialLangFilter={initialLangFilter}
       />
 

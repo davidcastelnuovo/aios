@@ -378,6 +378,9 @@ export default function SharedTable() {
                 gscMultiPeriod={data.gsc_multi_period || null}
                 gaOrganicByMonth={gaOrganicByMonth}
                 initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
+                clientId={(data.table as any).client_id || null}
+                forceRelevant={(data as any).seo_keyword_relevance?.force_relevant || []}
+                forceIrrelevant={(data as any).seo_keyword_relevance?.force_irrelevant || []}
               />
             </TabsContent>
 
