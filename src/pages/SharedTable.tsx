@@ -19,10 +19,11 @@ import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3, CalendarIcon, ChevronDown, Phone } from "lucide-react";
+import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3, CalendarIcon, ChevronDown, Phone, FileText } from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
+import { PublicSeoMonthlyWorkView } from "@/components/dynamic-tables/PublicSeoMonthlyWorkView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
@@ -304,6 +305,8 @@ export default function SharedTable() {
     const hasGa = gaRecords.length > 0;
     const hasGsc = gscRecords.length > 0;
     const hasMaskyoo = maskyooSnapshots.length > 0;
+    const seoMonthly = (data as any).seo_monthly || null;
+    const hasMonthlyWork = Array.isArray(seoMonthly?.months) && seoMonthly.months.length > 0;
     const showTabs = true;
 
     // Derive monthly NON-PAID GA sessions for the SEO traffic chart — using the
@@ -368,6 +371,10 @@ export default function SharedTable() {
                 <Phone className="h-4 w-4" />
                 שיחות מסקיו
               </TabsTrigger>
+              <TabsTrigger value="monthly-work" className="gap-1.5">
+                <FileText className="h-4 w-4" />
+                עבודה שבוצעה
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="seo" className="space-y-4">
@@ -398,6 +405,18 @@ export default function SharedTable() {
 
             <TabsContent value="maskyoo">
               <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
+            </TabsContent>
+
+            <TabsContent value="monthly-work">
+              <PublicSeoMonthlyWorkView
+                clientName={seoMonthly?.client_name || data.table.name}
+                domain={seoMonthly?.domain || (data.table.integration_settings as any)?.targetDomain}
+                months={hasMonthlyWork ? seoMonthly.months : []}
+                shareToken={seoMonthly?.share_token || null}
+                ahrefsReports={data.ahrefs_reports || []}
+                forceRelevant={(data as any).seo_keyword_relevance?.force_relevant || []}
+                forceIrrelevant={(data as any).seo_keyword_relevance?.force_irrelevant || []}
+              />
             </TabsContent>
           </Tabs>
 

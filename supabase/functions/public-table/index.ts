@@ -248,6 +248,8 @@ Deno.serve(async (req) => {
       const accessibleTenantIds = new Set<string>();
       accessibleTenantIds.add(table.tenant_id);
       let clientAgencyId: string | null = null;
+      let clientName: string | null = null;
+      let clientWebsite: string | null = null;
       // Manual "לא רלוונטי" / "רלוונטי" overrides — shared with PublicSeoView.
       let seoForceRelevant: string[] = [];
       let seoForceIrrelevant: string[] = [];
@@ -255,11 +257,13 @@ Deno.serve(async (req) => {
         try {
           const { data: clientRow } = await supabase
             .from("clients")
-            .select("tenant_id, agency_id, seo_keyword_relevance")
+            .select("tenant_id, agency_id, name, website, seo_keyword_relevance")
             .eq("id", targetClientId)
             .maybeSingle();
           if (clientRow?.tenant_id) accessibleTenantIds.add(clientRow.tenant_id);
           clientAgencyId = clientRow?.agency_id || null;
+          clientName = (clientRow as any)?.name || null;
+          clientWebsite = (clientRow as any)?.website || null;
           const relevance = (clientRow as any)?.seo_keyword_relevance || {};
           const asList = (v: unknown): string[] =>
             Array.isArray(v)
@@ -286,13 +290,14 @@ Deno.serve(async (req) => {
       // Ahrefs reports — search across all accessible tenants
       // Order MUST match SeoDashboardView (received_at DESC, then report_date DESC)
       // so the "first/latest" report shown publicly is the same one the user sees internally.
+      // Cap at 20: matching the in-app report list keeps the public payload small/fast.
       let reportsQuery = supabase
         .from("ahrefs_reports")
         .select("id, domain, report_type, report_date, received_at, report_data, comparison_data, metadata")
         .in("tenant_id", tenantIdList)
         .order("received_at", { ascending: false })
         .order("report_date", { ascending: false, nullsFirst: false })
-        .limit(200);
+        .limit(20);
 
       if (targetClientId) reportsQuery = reportsQuery.eq("client_id", targetClientId);
       if (targetDomain) {
@@ -381,10 +386,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Fetch GSC records (paginated, up to 10000)
+      // Fetch GSC records (paginated). Cap keeps the public share fast — keyword
+      // aggregates for the SEO table don't need the full 10k-row history.
       if (gscTable?.id) {
         try {
-          for (let from = 0; from < 10000; from += 1000) {
+          for (let from = 0; from < 3000; from += 1000) {
             const { data: page, error } = await supabase
               .from("crm_records")
               .select("id, data")
@@ -449,7 +455,8 @@ Deno.serve(async (req) => {
               const gscApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodedSiteUrl}/searchAnalytics/query`;
 
               const collected: any[] = [];
-              for (let page = 0; page < 25; page++) {
+              // Cap pages so a cold GSC fallback can't stall the shared link.
+              for (let page = 0; page < 5; page++) {
                 const resp = await fetch(gscApiUrl, {
                   method: "POST",
                   headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -516,6 +523,56 @@ Deno.serve(async (req) => {
           console.error("Error fetching maskyoo snapshots:", e);
         }
       }
+
+      // Monthly work log + share token — powers the public "עבודה חודשית" tab.
+      // Fetched before/alongside the slower GSC multi-period calls.
+      let seoMonthly: {
+        client_name: string | null;
+        domain: string | null;
+        share_token: string | null;
+        months: Array<{ month: string; status: string; work: unknown; notes: string | null }>;
+      } = {
+        client_name: clientName,
+        domain: targetDomain || clientWebsite,
+        share_token: null,
+        months: [],
+      };
+      const seoMonthlyPromise = (async () => {
+        if (!targetClientId) return;
+        try {
+          const [{ data: monthlyRows }, { data: monthlyShare }] = await Promise.all([
+            supabase
+              .from("seo_monthly_updates")
+              .select("month, status, work, notes")
+              .eq("client_id", targetClientId)
+              .order("month", { ascending: false })
+              .limit(12),
+            supabase
+              .from("seo_monthly_shares")
+              .select("share_token, month, is_active")
+              .eq("client_id", targetClientId)
+              .eq("is_active", true)
+              .order("month", { ascending: false })
+              .limit(12),
+          ]);
+          seoMonthly.months = (monthlyRows || []).map((row: any) => ({
+            month: String(row.month || "").slice(0, 10),
+            status: row.status || "stable",
+            work: row.work ?? {},
+            notes: row.notes ?? null,
+          }));
+          const newestWorkMonth = seoMonthly.months[0]?.month || null;
+          const shareRows = monthlyShare || [];
+          const matched =
+            (newestWorkMonth &&
+              shareRows.find((s: any) => String(s.month || "").slice(0, 10) === newestWorkMonth)) ||
+            shareRows[0] ||
+            null;
+          seoMonthly.share_token = matched?.share_token || null;
+        } catch (e) {
+          console.error("Error fetching seo monthly work for public table:", e);
+        }
+      })();
 
       // Multi-period GSC keyword aggregates for SEO change columns
       // (שינוי חודשי / 3 חודשים / שנתי). Mirrors GscIntegration's
@@ -611,10 +668,16 @@ Deno.serve(async (req) => {
               }));
             };
 
+            const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T) =>
+              Promise.race<T>([
+                promise,
+                new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+              ]);
+            // Don't let a slow Google API hang the whole shared SEO page.
             const [pm, tm, yr] = await Promise.all([
-              fetchPeriod(periods.prevMonth.startOffset, periods.prevMonth.endOffset),
-              fetchPeriod(periods.threeMonth.startOffset, periods.threeMonth.endOffset),
-              fetchPeriod(periods.yearly.startOffset, periods.yearly.endOffset),
+              withTimeout(fetchPeriod(periods.prevMonth.startOffset, periods.prevMonth.endOffset), 4500, []),
+              withTimeout(fetchPeriod(periods.threeMonth.startOffset, periods.threeMonth.endOffset), 4500, []),
+              withTimeout(fetchPeriod(periods.yearly.startOffset, periods.yearly.endOffset), 4500, []),
             ]);
             gscMultiPeriod = { prevMonth: pm, threeMonth: tm, yearly: yr };
           }
@@ -622,6 +685,8 @@ Deno.serve(async (req) => {
           console.error("Error fetching GSC multi-period:", e);
         }
       }
+
+      await seoMonthlyPromise;
 
       return new Response(
         JSON.stringify({
@@ -643,6 +708,7 @@ Deno.serve(async (req) => {
           gsc_multi_period: gscMultiPeriod,
           maskyoo_snapshots: maskyooSnapshots,
           maskyoo_period: maskyooPeriod,
+          seo_monthly: seoMonthly,
           seo_keyword_relevance: {
             force_relevant: seoForceRelevant,
             force_irrelevant: seoForceIrrelevant,
