@@ -4290,18 +4290,18 @@ $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.find_campaign_tables(p_client_ids uuid[])
- RETURNS TABLE(table_id uuid, client_id uuid, slug text, name text)
+ RETURNS TABLE(table_id uuid, client_id uuid, slug text, name text, integration_type text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-  SELECT DISTINCT ct.id, ct.client_id, ct.slug, ct.name
+  SELECT DISTINCT ct.id, ct.client_id, ct.slug, ct.name, ct.integration_type
   FROM public.crm_tables ct
   WHERE ct.client_id = ANY(p_client_ids)
     AND EXISTS (
       SELECT 1 FROM public.crm_records r
       WHERE r.table_id = ct.id
-        AND r.data ? 'spend'
+        AND (r.data ? 'spend' OR r.data ? 'cost')
         AND (r.data ? 'campaign_name' OR r.data ? 'campaign_id')
       LIMIT 1
     );

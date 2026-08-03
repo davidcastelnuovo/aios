@@ -374,7 +374,9 @@ Deno.serve(async (req) => {
     }
     console.log(`[sync-facebook-ecommerce] inserted: ${inserted}`);
 
-    // Update last_sync_at without wiping concurrent currency / settings edits
+    // Update last_sync_at on both the column and settings so health/pulse do
+    // not treat a fresh settings sync as stale because the column was null/old.
+    const syncedAt = new Date().toISOString();
     const { data: freshTable } = await supabaseAdmin
       .from('crm_tables')
       .select('integration_settings')
@@ -384,9 +386,10 @@ Deno.serve(async (req) => {
     await supabaseAdmin
       .from('crm_tables')
       .update({
+        last_sync_at: syncedAt,
         integration_settings: {
           ...currentSettings,
-          last_sync_at: new Date().toISOString(),
+          last_sync_at: syncedAt,
         }
       })
       .eq('id', table_id);
@@ -395,7 +398,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true,
       records_synced: inserted,
-      last_sync_at: new Date().toISOString()
+      last_sync_at: syncedAt
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

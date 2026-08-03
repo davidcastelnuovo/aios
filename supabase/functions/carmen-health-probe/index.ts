@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { isSyncStale, resolveLastSyncAt } from '../_shared/campaign-pulse.ts';
 
 // Periodic infrastructure health probe for the Carmen Command Center.
 // Invoked by pg_cron (see migration 20260722160000_service_health_checks.sql).
@@ -94,10 +95,11 @@ async function buildTenantHealthDigest(supabase: any, tenantId: string, checks: 
           issues.push(`🔴 *${client.name}* — ${platformLabel}: חסר חשבון מודעות בדוח ${table.name}`);
           continue;
         }
-        const lastSync = table.last_sync_at || table.integration_settings?.last_sync_at;
-        const stale = !lastSync || Date.now() - new Date(lastSync).getTime() > 18 * 60 * 60 * 1000;
-        if (stale) {
-          issues.push(`🟡 *${client.name}* — ${platformLabel}: הסנכרון האחרון ישן או חסר`);
+        // Prefer the freshest of column vs settings — some sync paths only
+        // patched integration_settings.last_sync_at and left the column stale.
+        const lastSync = resolveLastSyncAt(table);
+        if (isSyncStale(table)) {
+          issues.push(`🟡 *${client.name}* — ${platformLabel}: הסנכרון האחרון ישן או חסר${lastSync ? ` (עד ${lastSync})` : ''}`);
         }
       }
     }

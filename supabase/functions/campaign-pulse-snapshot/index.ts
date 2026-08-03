@@ -1,5 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import {
+  CAMPAIGN_TABLE_TYPES,
+  classifyCampaignPulseStatus,
+  clientCampaignServices as servicesFromClient,
+  effectiveIsEcommerce,
+  tableMatchesServices,
+} from '../_shared/campaign-pulse.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -10,23 +17,9 @@ const round = (value: number | null, digits = 2) =>
 
 const META_GRAPH_VERSION = 'v21.0'
 const META_ACTIVITY_OBJECTS = new Set(['CAMPAIGN', 'AD_SET', 'AD'])
-const CAMPAIGN_SERVICES = new Set(['ppc_meta', 'ppc_google'])
-const CAMPAIGN_TABLE_TYPES = ['facebook_insights', 'facebook_ecommerce', 'google_ads']
 
 function clientCampaignServices(client: any): Set<string> {
-  return new Set(
-    (Array.isArray(client?.services) ? client.services : [])
-      .map((service: unknown) => String(service))
-      .filter((service: string) => CAMPAIGN_SERVICES.has(service)),
-  )
-}
-
-function tableMatchesServices(table: any, services: Set<string>): boolean {
-  if (table.integration_type === 'google_ads') return services.has('ppc_google')
-  if (table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce') {
-    return services.has('ppc_meta')
-  }
-  return false
+  return servicesFromClient(client?.services)
 }
 
 async function getMetaToken(supabase: any, tenantId: string): Promise<string | null> {
@@ -250,9 +243,9 @@ Deno.serve(async (req) => {
     const clientIds = campaignClients.map((client: any) => client.id)
     const tableResult = clientIds.length
       ? await supabase.from('crm_tables')
-          .select('id, client_id, integration_type, integration_settings, campaign_active')
+          .select('id, client_id, integration_type, integration_settings, campaign_active, last_sync_at')
           .in('client_id', clientIds)
-          .in('integration_type', CAMPAIGN_TABLE_TYPES)
+          .in('integration_type', [...CAMPAIGN_TABLE_TYPES])
       : { data: [], error: null }
     if (tableResult.error) { results.push({ tenant_id: tenantId, error: tableResult.error.message }); continue }
     const activeTablesByClient = new Map<string, any[]>()
@@ -308,9 +301,27 @@ Deno.serve(async (req) => {
         : { at: null, type: null, actor: null, object: null, availability: 'not_applicable' }
       let records: any[] = []
       if (tableIds.length) {
-        const response = await supabase.from('crm_records').select('data')
+        // Prefer a server-side date filter so long histories cannot push the
+        // recent window out of the default page. Fall back to an unfiltered
+        // wider page + client filter if the JSON-path filter is empty/errors.
+        const filtered = await supabase.from('crm_records').select('data')
           .in('table_id', tableIds)
-        records = response.data || []
+          .filter('data->>date', 'gte', d30Str)
+          .limit(5000)
+        if (!filtered.error && (filtered.data?.length || 0) > 0) {
+          records = filtered.data || []
+        } else {
+          if (filtered.error) {
+            console.warn('[campaign-pulse] crm_records date filter failed', client.id, filtered.error.message)
+          }
+          const fallback = await supabase.from('crm_records').select('data')
+            .in('table_id', tableIds)
+            .limit(5000)
+          records = fallback.data || []
+          if (fallback.error) {
+            console.warn('[campaign-pulse] crm_records fallback failed', client.id, fallback.error.message)
+          }
+        }
       }
       const recent = records.filter((row: any) => row.data?.date && row.data.date >= d30Str)
       const current = recent.filter((row: any) => row.data.date >= d7Str)
@@ -331,22 +342,40 @@ Deno.serve(async (req) => {
       const revenue = sum(current, ['purchase_value', 'conversions_value', 'revenue'])
       const roas = spend7 > 0 ? revenue / spend7 : null
       const freshest = recent.map((row: any) => row.data?.date).filter(Boolean).sort().reverse()[0] || null
-      const flags: string[] = []
-      let status: 'healthy' | 'warning' | 'critical' | 'no_data' = 'healthy'
-      if (!tableIds.length || recent.length === 0) {
-        status = 'no_data'; flags.push(!tableIds.length ? 'אין טבלת קמפיין מחוברת' : 'אין נתונים ב-30 הימים האחרונים')
-      } else if (client.is_ecommerce) {
-        if (spend7 > 0 && purchases === 0) { status = 'critical'; flags.push('הוצאה ללא רכישות') }
-        else if (roas !== null && roas < 1) { status = 'critical'; flags.push('ROAS נמוך מ-1') }
-        else if (roas !== null && roas < 1.5) { status = 'warning'; flags.push('ROAS נמוך') }
-      } else {
-        if (spend7 > 0 && leads7 === 0) { status = 'critical'; flags.push('הוצאה ללא לידים') }
-        else if (cplChange !== null && cplChange > 25) { status = 'warning'; flags.push(`CPL עלה ב-${round(cplChange, 1)}%`) }
-      }
+      const configuredForClient = (tableResult.data || []).filter((table: any) =>
+        table.client_id === client.id && tableMatchesServices(table, clientCampaignServices(client))
+      )
+      const isEcommerce = effectiveIsEcommerce(client.is_ecommerce, activeTables)
+      const { status, flags, stalePlatforms } = classifyCampaignPulseStatus({
+        activeTables,
+        hasConfiguredCampaignTable: configuredForClient.length > 0,
+        recentRecordCount: recent.length,
+        isEcommerce,
+        spend7,
+        leads7,
+        purchases7: purchases,
+        roas,
+        cplChangePct: cplChange,
+        nowMs: now.getTime(),
+      })
+      console.log('[campaign-pulse] client classified', {
+        client_id: client.id,
+        client_name: client.name,
+        status,
+        tables: activeTables.map((table: any) => ({
+          id: table.id,
+          type: table.integration_type,
+          campaign_active: table.campaign_active,
+        })),
+        recent_records: recent.length,
+        is_ecommerce: isEcommerce,
+        stale_platforms: stalePlatforms,
+        flags,
+      })
       snapshots.push({
         tenant_id: tenantId, agency_id: client.agency_id, client_id: client.id,
         calculated_at: now.toISOString(), data_fresh_through: freshest, status,
-        is_ecommerce: !!client.is_ecommerce, spend_7d: round(spend7), leads_7d: round(leads7),
+        is_ecommerce: isEcommerce, spend_7d: round(spend7), leads_7d: round(leads7),
         cpl_7d: round(cpl7), cpl_change_pct: round(cplChange, 1), purchases_7d: round(purchases),
         revenue_7d: round(revenue), roas_7d: round(roas), flags, source: 'synced_crm',
         last_meta_change_at: lastMetaChange.at,
