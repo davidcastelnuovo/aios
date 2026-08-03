@@ -105,14 +105,35 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [sharing, setSharing] = useState(false);
 
+  const { data: client } = useQuery({
+    queryKey: ["client-for-seo-monthly-share", clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name, website, tenant_id")
+        .eq("id", clientId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as {
+        id: string;
+        name: string;
+        website: string | null;
+        tenant_id: string;
+      } | null;
+    },
+    enabled: !!clientId,
+  });
+
+  // Natural key is (client_id, month). Do NOT filter by session/report tenant —
+  // shared-agency rows often live on the client's home tenant (DMM) while the
+  // viewer is on MarketingCaptain.
   const { data: row, isLoading, isFetching } = useQuery({
-    queryKey: ["seo-monthly-work", clientId, tenantId, selectedMonth],
+    queryKey: ["seo-monthly-work", clientId, selectedMonth],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("seo_monthly_updates")
-        .select("id, month, status, notes, work")
+        .select("id, month, status, notes, work, tenant_id")
         .eq("client_id", clientId)
-        .eq("tenant_id", tenantId)
         .eq("month", selectedMonth)
         .maybeSingle();
       if (error) throw error;
@@ -122,23 +143,10 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
         status: "up" | "stable" | "down";
         notes: string | null;
         work: unknown;
+        tenant_id: string;
       } | null;
     },
-    enabled: !!clientId && !!tenantId && !!selectedMonth,
-  });
-
-  const { data: client } = useQuery({
-    queryKey: ["client-for-seo-monthly-share", clientId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, name, website")
-        .eq("id", clientId)
-        .maybeSingle();
-      if (error) throw error;
-      return data as { id: string; name: string; website: string | null } | null;
-    },
-    enabled: !!clientId,
+    enabled: !!clientId && !!selectedMonth,
   });
 
   // SEO artifacts can live in a sibling tenant for shared-agency clients.
@@ -314,14 +322,20 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!tenantId || !user?.id) throw new Error("חסר משתמש או טננט");
+      if (!user?.id) throw new Error("חסר משתמש");
+      // Prefer the existing row's tenant, then the client's home tenant, then
+      // the SEO-report / session tenant — never invent a second row under MC
+      // for a DMM-MC client.
+      const saveTenantId =
+        row?.tenant_id || client?.tenant_id || tenantId || "";
+      if (!saveTenantId) throw new Error("חסר טננט לשמירה");
       const cleaned = sanitizeSeoMonthlyWork(work);
       const { error } = await (supabase as any)
         .from("seo_monthly_updates")
         .upsert(
           {
             client_id: clientId,
-            tenant_id: tenantId,
+            tenant_id: saveTenantId,
             month: selectedMonth,
             status,
             notes: cleaned.summary || null,
@@ -337,9 +351,11 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
       setWork(cleaned);
       setDirty(false);
       toast.success("סיכום העבודה החודשית נשמר");
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-work", clientId, tenantId, selectedMonth] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-work", clientId, selectedMonth] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-months", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-recent-links", clientId] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-history", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest"] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-single", clientId] });
     },
     onError: (err: any) => {
