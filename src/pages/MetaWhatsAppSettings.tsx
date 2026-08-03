@@ -178,7 +178,9 @@ export default function MetaWhatsAppSettings() {
   const [mode, setMode] = useState<SignupMode>("coexistence");
   const [pin, setPin] = useState("");
   const [connecting, setConnecting] = useState(false);
-  const [showManual, setShowManual] = useState(false);
+  // Manual System User path is the reliable onboarding for Pending Cloud API
+  // numbers; keep it open so the registration PIN is never buried.
+  const [showManual, setShowManual] = useState(true);
   const [manualToken, setManualToken] = useState("");
   const [manualPin, setManualPin] = useState("");
   const [manualWabaId, setManualWabaId] = useState("");
@@ -428,8 +430,8 @@ export default function MetaWhatsAppSettings() {
       }).filter((selection) => selection.wabaId && selection.phoneNumberId);
       if (!selections.length) throw new Error("יש לבחור לפחות מספר אחד");
       if (selectedPhonesNeedPin && !/^\d{6}$/.test(manualPin)) {
-        document.getElementById("meta-wa-manual-pin")?.focus();
-        throw new Error("המספר שבחרתם עדיין Pending — בחרו PIN בן 6 ספרות למטה ואז לחצו חיבור");
+        document.getElementById("meta-wa-manual-pin-top")?.focus();
+        throw new Error("המספר שבחרתם עדיין Pending — הזינו PIN בן 6 ספרות בראש החיבור הידני ואז לחצו חיבור");
       }
       const selectedWabas = [...new Set(selections.map((selection) => selection.wabaId))];
       const data = await invokeMetaAuth({
@@ -454,8 +456,12 @@ export default function MetaWhatsAppSettings() {
       await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
     },
     onError: (error: Error) => {
-      if (error instanceof MetaAuthError && error.code === "pin_required_for_registration") {
-        document.getElementById("meta-wa-manual-pin")?.focus();
+      if (
+        error instanceof MetaAuthError &&
+        error.code === "pin_required_for_registration"
+      ) {
+        document.getElementById("meta-wa-manual-pin-top")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        document.getElementById("meta-wa-manual-pin-top")?.focus();
       }
       toast.error(error.message, { duration: 12000 });
     },
@@ -557,6 +563,16 @@ export default function MetaWhatsAppSettings() {
               </Label>
             </RadioGroup>
 
+            <Alert className="border-amber-500/40">
+              <KeyRound className="h-4 w-4" />
+              <AlertTitle>למספר בסטטוס Pending — השתמשו בחיבור הידני</AlertTitle>
+              <AlertDescription className="text-sm">
+                החיבור דרך Meta Embedded Signup לא משלים רישום Cloud API למספר שכבר נוסף ב־WhatsApp
+                Manager. גללו ל־<strong>חיבור ידני עם Access Token</strong>, הזינו PIN בן 6 ספרות,
+                סנכרנו, בחרו את המספר ולחצו חיבור.
+              </AlertDescription>
+            </Alert>
+
             <div className="space-y-2">
               <Label htmlFor="meta-wa-pin">
                 PIN לאימות דו־שלבי (6 ספרות)
@@ -581,10 +597,17 @@ export default function MetaWhatsAppSettings() {
               {connecting ? "משלים חיבור..." : "המשך לחיבור מאובטח ב־Meta"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              אם Meta מדלגת על מסכי ה־WhatsApp ומחזירה אתכם מיד לאתר, התצורה באפליקציה אינה זרימת
-              Embedded Signup.{" "}
-              <button type="button" className="underline" onClick={() => setShowManual(true)}>
-                חברו את המספר במסלול הידני
+              אם Meta מדלגת על מסכי ה־WhatsApp או שהמספר נשאר Pending,{" "}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  setShowManual(true);
+                  document.getElementById("meta-manual-connect")?.scrollIntoView({ behavior: "smooth" });
+                  window.setTimeout(() => document.getElementById("meta-wa-manual-pin")?.focus(), 300);
+                }}
+              >
+                עברו לחיבור הידני עם PIN
               </button>
               .
             </p>
@@ -608,17 +631,17 @@ export default function MetaWhatsAppSettings() {
         </Card>
       </div>
 
-      <Card className="mb-6">
+      <Card id="meta-manual-connect" className="mb-6 border-emerald-500/40">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <KeyRound className="h-5 w-5 text-emerald-600" />
-                חיבור ידני עם Access Token
+                חיבור ידני עם Access Token + PIN
               </CardTitle>
               <CardDescription>
-                שומרים אסימון System User פעם אחת. לאחר מכן AIOS יכולה לסנכרן כל WABA ומספר
-                חדש שיוקצה לאותו משתמש, ולחבר מספר אחד או כמה מספרים יחד.
+                המסלול הנכון למספר Pending: אסימון System User, PIN בן 6 ספרות, סנכרון, בחירת מספר
+                וחיבור. AIOS מריצה את הרישום ל־Cloud API.
               </CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowManual((value) => !value)}>
@@ -653,8 +676,26 @@ export default function MetaWhatsAppSettings() {
               </AlertDescription>
             </Alert>
 
+            <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+              <Label htmlFor="meta-wa-manual-pin-top">
+                1. PIN בן 6 ספרות לרישום Cloud API
+              </Label>
+              <Input
+                id="meta-wa-manual-pin-top"
+                value={manualPin}
+                onChange={(event) => setManualPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                inputMode="numeric"
+                dir="ltr"
+                placeholder="למשל 482193"
+                className="max-w-48 bg-background"
+              />
+              <p className="text-xs text-muted-foreground">
+                אתם בוחרים את הקוד ושומרים אותו. בלי PIN המספר ישאר Pending ולא יתחבר.
+              </p>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="meta-wa-token">Access Token</Label>
+              <Label htmlFor="meta-wa-token">2. Access Token</Label>
               <Input
                 id="meta-wa-token"
                 type="password"
@@ -714,7 +755,7 @@ export default function MetaWhatsAppSettings() {
               disabled={(!manualToken.trim() && !config?.has_saved_token) || loadAssetsMutation.isPending}
             >
               {loadAssetsMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-              סנכרון חשבונות ומספרים
+              3. סנכרון חשבונות ומספרים
             </Button>
 
             {discoveryLimited && (
@@ -855,55 +896,25 @@ export default function MetaWhatsAppSettings() {
                   </div>
                 ))}
 
-                {selectedPhonesNeedPin && (
-                  <Alert className="border-amber-500/50 bg-amber-500/5">
+                {selectedPhonesNeedPin && !/^\d{6}$/.test(manualPin) && (
+                  <Alert className="border-destructive/40">
                     <KeyRound className="h-4 w-4" />
-                    <AlertTitle>נדרש PIN להשלמת הרישום</AlertTitle>
-                    <AlertDescription className="space-y-3 text-sm">
-                      <p>
-                        המספר עדיין בסטטוס Pending ב-Meta. בחרו קוד בן 6 ספרות (אתם קובעים אותו),
-                        שמרו אותו, ואז לחצו חיבור — AIOS תשלים את הרישום ל-Cloud API.
-                      </p>
-                      <div className="space-y-2">
-                        <Label htmlFor="meta-wa-manual-pin">PIN בן 6 ספרות</Label>
-                        <Input
-                          id="meta-wa-manual-pin"
-                          value={manualPin}
-                          onChange={(event) =>
-                            setManualPin(event.target.value.replace(/\D/g, "").slice(0, 6))
-                          }
-                          inputMode="numeric"
-                          dir="ltr"
-                          placeholder="למשל 482193"
-                          className="max-w-48 bg-background"
-                          autoFocus
-                        />
-                        {manualPin.length > 0 && manualPin.length < 6 && (
-                          <p className="text-xs text-destructive">חסרות ספרות — צריך בדיוק 6</p>
-                        )}
-                      </div>
+                    <AlertTitle>חסר PIN</AlertTitle>
+                    <AlertDescription className="text-sm">
+                      המספר דורש רישום Cloud API. גללו לראש החיבור הידני והזינו PIN בן 6 ספרות
+                      בשלב 1, ואז לחצו חיבור.
                     </AlertDescription>
                   </Alert>
                 )}
 
-                {!selectedPhonesNeedPin && (
-                  <div className="space-y-2">
-                    <Label htmlFor="meta-wa-manual-pin">
-                      PIN בן 6 ספרות
-                      <span className="text-muted-foreground"> — רק אם המספר עדיין לא רשום</span>
-                    </Label>
-                    <Input
-                      id="meta-wa-manual-pin"
-                      value={manualPin}
-                      onChange={(event) =>
-                        setManualPin(event.target.value.replace(/\D/g, "").slice(0, 6))
-                      }
-                      inputMode="numeric"
-                      dir="ltr"
-                      placeholder="123456"
-                      className="max-w-48"
-                    />
-                  </div>
+                {selectedPhonesNeedPin && /^\d{6}$/.test(manualPin) && (
+                  <Alert className="border-emerald-500/40">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertTitle>PIN מוכן</AlertTitle>
+                    <AlertDescription className="text-sm">
+                      הקוד שהזנתם בראש הכרטיס ישמש לרישום המספר. לחצו חיבור להשלמה.
+                    </AlertDescription>
+                  </Alert>
                 )}
 
                 <Button
@@ -916,10 +927,10 @@ export default function MetaWhatsAppSettings() {
                 >
                   {connectManualMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
                   {selectedPhonesNeedPin && !/^\d{6}$/.test(manualPin)
-                    ? "הזינו PIN בן 6 ספרות למעלה"
+                    ? "הזינו PIN בשלב 1 למעלה"
                     : selectedPhones.length === 1
-                      ? "חיבור המספר הנבחר"
-                      : `חיבור ${selectedPhones.length} המספרים שנבחרו`}
+                      ? "4. חיבור המספר הנבחר"
+                      : `4. חיבור ${selectedPhones.length} המספרים שנבחרו`}
                 </Button>
               </div>
             )}
