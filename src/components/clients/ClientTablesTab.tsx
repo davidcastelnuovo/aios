@@ -16,15 +16,18 @@ import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { ClientReportPanel } from "@/components/clients/ClientReportPanel";
 import { ClientDashboardPanel } from "@/components/clients/ClientDashboardPanel";
 import { ClientReportScheduleSettings } from "@/components/clients/ClientReportScheduleSettings";
+import { ReportScreenshotPrefetcher } from "@/components/clients/ReportScreenshotPrefetcher";
 import { getIntegrationIcon } from "@/lib/integrationIcons";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
   clientId: string;
   clientName: string;
+  /** Other clients in the currently filtered agency list — used for background screenshot prefetch. */
+  peerClientIds?: string[];
 }
 
-export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) {
+export function ClientTablesTab({ clientId, clientName, peerClientIds = [] }: ClientTablesTabProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const { tenantId } = useCurrentTenant();
@@ -39,6 +42,11 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [contentKind, setContentKind] = useState<"table" | "dashboard">("table");
   const userSelectedRef = useRef(false);
+  const [prefetchEnabled, setPrefetchEnabled] = useState(false);
+
+  useEffect(() => {
+    setPrefetchEnabled(false);
+  }, [clientId]);
 
   // All tables for the tenant
   const { data: allTables = [], isLoading } = useQuery({
@@ -465,9 +473,20 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
               table={activeItem.raw}
               clientId={clientId}
               tenantId={tenantId || ""}
+              onInteractive={() => setPrefetchEnabled(true)}
             />
           </div>
         </div>
+      )}
+
+      {tenantId && peerClientIds.length > 0 && contentKind === "table" && (
+        <ReportScreenshotPrefetcher
+          peerClientIds={peerClientIds}
+          currentClientId={clientId}
+          currentTableId={activeItem?.kind === "table" ? activeItem.raw.id : null}
+          allTables={allTables}
+          enabled={prefetchEnabled}
+        />
       )}
 
       {activeItem && tenantId && (
