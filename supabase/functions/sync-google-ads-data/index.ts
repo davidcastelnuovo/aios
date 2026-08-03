@@ -901,18 +901,28 @@ Deno.serve(async (req) => {
     }
     console.log(`[sync-google-ads] inserted: ${inserted}`);
 
-    // Update last_sync_at without wiping concurrent settings edits (currency, etc.)
+    // Update last_sync_at on both the column and settings. Health/pulse read
+    // the freshest of the two; older writers only patched settings and left a
+    // stale column that looked like "sync missing".
+    const syncedAt = new Date().toISOString();
     await patchIntegrationSettings(
       supabaseAdmin,
       table_id,
-      { last_sync_at: new Date().toISOString() },
+      { last_sync_at: syncedAt },
       settings,
     );
+    const { error: lastSyncColErr } = await supabaseAdmin
+      .from('crm_tables')
+      .update({ last_sync_at: syncedAt })
+      .eq('id', table_id);
+    if (lastSyncColErr) {
+      console.error('[sync-google-ads] last_sync_at column update failed:', lastSyncColErr.message);
+    }
 
     return new Response(JSON.stringify({
       success: true,
       records_synced: inserted,
-      last_sync_at: new Date().toISOString(),
+      last_sync_at: syncedAt,
       verified_against: verifiedSiteUrl,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

@@ -1833,7 +1833,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         agencies: undefined,
       }))
       const statusLabel: Record<string, string> = {
-        healthy: '🟢 תקין', warning: '🟡 תשומת לב', critical: '🔴 קריטי', no_data: '🟡 אין נתונים',
+        healthy: '🟢 תקין',
+        warning: '🟡 תשומת לב',
+        critical: '🔴 קריטי',
+        // no_data = no campaign report table connected. Stale sync is warning, not no_data.
+        no_data: '🟡 אין טבלת קמפיין מחוברת',
       }
       const fmtNumber = (value: any) => value === null || value === undefined ? '—' : String(value)
       const fmtDate = (value: any) => value
@@ -1955,30 +1959,69 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
 
         const tableIds = tables.map((t: any) => t.table_id)
-        const { data: records } = await supabase
+        const filteredRecords = await supabase
           .from('crm_records').select('data')
           .in('table_id', tableIds)
           .in('tenant_id', accessibleTenantIds)
+          .filter('data->>date', 'gte', d30Str)
+          .limit(5000)
+        let records = (!filteredRecords.error && (filteredRecords.data?.length || 0) > 0)
+          ? filteredRecords.data
+          : null
+        if (!records) {
+          const fallbackRecords = await supabase
+            .from('crm_records').select('data')
+            .in('table_id', tableIds)
+            .in('tenant_id', accessibleTenantIds)
+            .limit(5000)
+          records = fallbackRecords.data || []
+        }
 
-        if (!records || records.length === 0) {
-          not_connected_clients.push({ client_id: client.id, client_name: client.name, reason: 'empty_table' })
+        // Tables exist = connected. Empty/stale sync is attention, not "not connected".
+        const recentProbe = (records || []).filter((r: any) => r.data?.date && r.data.date >= d30Str)
+        if (!records || recentProbe.length === 0) {
+          synced_clients.push({
+            client_id: client.id,
+            client_name: client.name,
+            agency_name: client.agencies?.name ?? null,
+            is_ecommerce: !!client.is_ecommerce || tables.some((t: any) => t.integration_type === 'facebook_ecommerce'),
+            spend_7d: 0,
+            spend_30d: 0,
+            leads_7d: 0,
+            leads_30d: 0,
+            cpl_7d: null,
+            cpl_30d_avg: null,
+            purchases_7d: 0,
+            purchases_30d: 0,
+            revenue_7d: 0,
+            revenue_30d: 0,
+            cpp_7d: null,
+            cpp_change_pct: null,
+            roas_7d: null,
+            profit_7d: 0,
+            spend_change_pct: null,
+            cpl_change_pct: null,
+            last_data_date: null,
+            last_campaign_update: null,
+            days_since_last_campaign_touch: null,
+            sync_status: 'stale_or_empty',
+            alert: '🟡 סנכרון ישן או חסר — טבלת קמפיין מחוברת אך אין נתונים ב-30 הימים האחרונים',
+          })
           continue
         }
 
-        const last30d = records.filter((r: any) => r.data?.date && r.data.date >= d30Str)
-        if (last30d.length === 0) {
-          not_connected_clients.push({ client_id: client.id, client_name: client.name, reason: 'no_recent_data_30d' })
-          continue
-        }
-
+        const last30d = recentProbe
         const last7d = last30d.filter((r: any) => r.data?.date >= d7Str)
         const older = last30d.filter((r: any) => r.data?.date < d7Str)
 
-        const sum = (arr: any[], field: string) => arr.reduce((s: number, r: any) => s + (parseFloat(r.data?.[field]) || 0), 0)
-        const spend7 = sum(last7d, 'spend')
-        const spendOlder = sum(older, 'spend')
-        const leads7 = sum(last7d, 'leads')
-        const leadsOlder = sum(older, 'leads')
+        const sumFields = (arr: any[], fields: string[]) => arr.reduce((s: number, r: any) => {
+          const field = fields.find((candidate) => r.data?.[candidate] !== undefined && r.data?.[candidate] !== null)
+          return s + (field ? (parseFloat(r.data?.[field]) || 0) : 0)
+        }, 0)
+        const spend7 = sumFields(last7d, ['spend', 'cost'])
+        const spendOlder = sumFields(older, ['spend', 'cost'])
+        const leads7 = sumFields(last7d, ['leads', 'conversions', 'all_conversions'])
+        const leadsOlder = sumFields(older, ['leads', 'conversions', 'all_conversions'])
 
         const days7 = Math.max(last7d.length, 1)
         const daysOlder = Math.max(older.length, 1)
@@ -1991,10 +2034,10 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         const cplChangePct = cplOlder && cpl7 ? ((cpl7 - cplOlder) / cplOlder * 100) : null
 
         // Ecommerce metrics (purchases / purchase_value / roas)
-        const purchases7 = sum(last7d, 'purchases')
-        const purchasesOlder = sum(older, 'purchases')
-        const purchaseValue7 = sum(last7d, 'purchase_value')
-        const purchaseValueOlder = sum(older, 'purchase_value')
+        const purchases7 = sumFields(last7d, ['purchases'])
+        const purchasesOlder = sumFields(older, ['purchases'])
+        const purchaseValue7 = sumFields(last7d, ['purchase_value', 'conversions_value', 'revenue'])
+        const purchaseValueOlder = sumFields(older, ['purchase_value', 'conversions_value', 'revenue'])
         const cpp7 = purchases7 > 0 ? spend7 / purchases7 : null
         const cppOlder = purchasesOlder > 0 ? spendOlder / purchasesOlder : null
         const cppChangePct = cppOlder && cpp7 ? ((cpp7 - cppOlder) / cppOlder * 100) : null
@@ -2009,7 +2052,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
         const lastDataDate = last30d.map((r: any) => r.data?.date).filter(Boolean).sort().reverse()[0] || null
 
-        const isEcom = !!client.is_ecommerce
+        const isEcom = !!client.is_ecommerce || tables.some((t: any) => t.integration_type === 'facebook_ecommerce')
         const ecomAlert = isEcom
           ? (roas7 !== null && roas7 < 1 ? '🔴 ROAS<1 הפסד'
             : purchases7 === 0 && spend7 > 0 ? '🔴 אין רכישות'
@@ -2043,6 +2086,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           last_data_date: lastDataDate,
           last_campaign_update: lastCampaignUpdate,
           days_since_last_campaign_touch: daysSinceLastCampaignTouch,
+          sync_status: 'ok',
           alert: isEcom ? ecomAlert : (spendChangePct !== null && spendChangePct > 15 ? '🔴 התייקרות' : (cplChangePct !== null && cplChangePct > 20 ? '🟡 עלייה בעלות לליד' : '🟢 תקין')),
         })
       }

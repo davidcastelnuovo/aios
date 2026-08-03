@@ -32,6 +32,13 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-03 — diagnose campaign pulse no_data vs stale sync
+- **Skin slug:** `diagnose_campaign_pulse_status` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When David says a client’s pulse shows “no data” but reports are connected, distinguish true `no_data` (no campaign table) from `warning`/stale sync, and surface available metrics (including ecommerce ROAS/purchases).
+- **How:** Call `get_latest_campaign_pulse(client_name=...)`. Interpret `status` + `flags`: `no_data` = missing table; flags containing `סנכרון ישן או חסר` = connected but stale — never say “אין נתונים” for that case. If `is_ecommerce`, prefer ROAS/purchases over CPL.
+- **Code fixes (same PR):** `find_campaign_tables` accepts Google `cost`; pulse classifier marks connected+empty/stale as `warning` not `no_data`; health probe uses freshest of column/settings `last_sync_at`; ecommerce tables force ecommerce metrics; sync writers update both sync timestamps.
+- **Origin:** Carmen → Cursor DEV TASK — client `4/4 ארבע על ארבע` marked missing/no_data despite Meta+Google report tables connected (health said sync old/missing).
+
 ### 2026-06-26 — save_memory engine fix (UUID sentinel)
 - **Skin slug:** n/a (engine bug fix — no new Carmen skill needed)
 - **What changed:** `run-ai-agent` was crashing with `invalid input syntax for type uuid: "system"` whenever `save_memory` was called without a logged-in user (e.g. WhatsApp automations). `ai_memory.user_id` is `NOT NULL uuid` but the fallback was the literal string `'system'`. Fixed in PR #65: introduced `SYSTEM_USER_UUID = '00000000-0000-0000-0000-000000000000'` and replaced both broken sites (save_memory tool + auto-instruction-capture path). Carmen no longer needs any workaround — the engine handles it.

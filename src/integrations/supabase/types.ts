@@ -10500,6 +10500,7 @@ export type Database = {
         Args: { p_client_ids: string[] }
         Returns: {
           client_id: string
+          integration_type: string
           name: string
           slug: string
           table_id: string
