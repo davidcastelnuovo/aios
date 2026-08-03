@@ -19,6 +19,10 @@ verify_jwt = false
 [functions.claude-mcp]
 verify_jwt = false
 
+# Cursor Cloud Agents MCP — custom bearer (CURSOR_MCP_BEARER), not a JWT.
+[functions.cursor-mcp]
+verify_jwt = false
+
 # Shared read-only architecture graph MCP. It validates its own bearer token.
 [functions.system-graph-mcp]
 verify_jwt = false

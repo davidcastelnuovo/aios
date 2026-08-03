@@ -5588,15 +5588,19 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       if (mcp.toolDefs.length > 0) {
         // 4b-i. Escalation agent filter
         // If metadata.escalation_agent is set, only expose MCP tools for the chosen escalation agent.
-        // 'claude'  → block mcp_Manus__ tools (keep Claude MCP tools only)
-        // 'manus'   → block mcp_Claude__ tools (keep Manus MCP tools only)
-        // 'none'    → block both (no escalation to external AI)
+        // 'cursor'  → Cursor MCP only
+        // 'claude'  → Claude MCP only
+        // 'manus'   → Manus MCP only
+        // 'none'    → no external escalation MCPs
         // 'all'/unset → keep everything (default, backward-compatible)
         const escalationAgent: string = (agent as any).metadata?.escalation_agent || 'all'
+        const isEscalationMcp = (n: string) =>
+          n.startsWith('mcp_Claude__') || n.startsWith('mcp_Manus__') || n.startsWith('mcp_Cursor__')
         for (const t of mcp.toolDefs) {
-          if (escalationAgent === 'claude' && t.name.startsWith('mcp_Manus__')) continue
-          if (escalationAgent === 'manus'  && t.name.startsWith('mcp_Claude__')) continue
-          if (escalationAgent === 'none'   && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Manus__'))) continue
+          if (escalationAgent === 'cursor' && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Manus__'))) continue
+          if (escalationAgent === 'claude' && (t.name.startsWith('mcp_Manus__') || t.name.startsWith('mcp_Cursor__'))) continue
+          if (escalationAgent === 'manus'  && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Cursor__'))) continue
+          if (escalationAgent === 'none'   && isEscalationMcp(t.name)) continue
           toolsForAPI.push({ type: 'function', function: t as any })
         }
         mcpExecutors = mcp.executors
