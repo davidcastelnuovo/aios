@@ -246,6 +246,15 @@ Deno.serve(async (request) => {
           if (statusUpdateError) throw statusUpdateError;
           if (failure) {
             console.error("Meta WhatsApp delivery failed", { wamid, error: failure });
+            // Meta answers the send call with an id before it decides whether the
+            // message can go out, so the automation run was already logged green.
+            const { error: logMarkError } = await admin.rpc("mark_automation_log_delivery_failure", {
+              p_provider_message_id: wamid,
+              p_error: failure,
+            });
+            if (logMarkError) {
+              console.error("Failed to mark automation log as undelivered", { wamid, error: logMarkError });
+            }
           }
         }
 

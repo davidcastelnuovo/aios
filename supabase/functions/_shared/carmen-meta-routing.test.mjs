@@ -16,18 +16,26 @@ function stubSupabase(stepRows) {
   return { from: () => builder }
 }
 
+// Under Deno the `Deno` global is a read-only property, so a plain assignment
+// throws instead of stubbing it.
+function defineGlobal(name, value) {
+  Object.defineProperty(globalThis, name, { value, configurable: true, writable: true })
+}
+
 function withStubbedRuntime(run) {
   const originalDeno = globalThis.Deno
   const originalFetch = globalThis.fetch
   const calls = []
-  globalThis.Deno = { env: { get: (key) => (key === 'SUPABASE_URL' ? 'https://project.supabase.co' : 'service-key') } }
-  globalThis.fetch = async (url, init) => {
+  defineGlobal('Deno', {
+    env: { get: (key) => (key === 'SUPABASE_URL' ? 'https://project.supabase.co' : 'service-key') },
+  })
+  defineGlobal('fetch', async (url, init) => {
     calls.push({ url: String(url), body: JSON.parse(init.body) })
     return { ok: true, text: async () => '' }
-  }
+  })
   return run(calls).finally(() => {
-    globalThis.Deno = originalDeno
-    globalThis.fetch = originalFetch
+    defineGlobal('Deno', originalDeno)
+    defineGlobal('fetch', originalFetch)
   })
 }
 
