@@ -5587,6 +5587,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id, disabledIntegrations)
       if (mcp.toolDefs.length > 0) {
         // 4b-i. Escalation agent filter
+        // cursor escalation filter deploy marker
         // If metadata.escalation_agent is set, only expose MCP tools for the chosen escalation agent.
         // 'cursor'  → Cursor MCP only
         // 'claude'  → Claude MCP only
