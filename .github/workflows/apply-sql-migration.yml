@@ -17,6 +17,7 @@ on:
       - '.github/workflows/apply-sql-migration.yml'
       - 'supabase/ops/apply_seo_monthly_shares.sql'
       - 'supabase/ops/fix_cross_tenant_client_task_updates.sql'
+      - 'supabase/ops/fix_seo_monthly_updates_cross_tenant.sql'
 
 jobs:
   apply:
@@ -38,6 +39,10 @@ jobs:
           else
             # Prefer the newest ops migration that triggered this push.
             if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- \
+                'supabase/ops/fix_seo_monthly_updates_cross_tenant.sql' | grep -q .; then
+              FILE="supabase/ops/fix_seo_monthly_updates_cross_tenant.sql"
+              NAME="fix_seo_monthly_updates_cross_tenant"
+            elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- \
                 'supabase/ops/fix_cross_tenant_client_task_updates.sql' | grep -q .; then
               FILE="supabase/ops/fix_cross_tenant_client_task_updates.sql"
               NAME="fix_cross_tenant_client_task_updates"
