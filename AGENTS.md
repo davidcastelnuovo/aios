@@ -21,6 +21,7 @@ Services and how to run them:
 - The app reads `VITE_SUPABASE_*` from the committed root `.env` and talks directly to the hosted Supabase (Postgres + ~215 Deno Edge Functions). Auth, data, and edge functions are all remote, so login/data actions hit **production** — do not create throwaway accounts or write test data casually.
 
 Non-obvious gotchas:
+- **Default org / Carmen = MarketingCaptain** (`2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`). WhatsApp updates via `claude_notify_david` must go through Marketing Captain Carmen. Do not pass a client’s tenant (e.g. DMM) unless David explicitly says to work on DMM / Carmen of DMM.
 - Package manager is `pnpm` (a `pnpm-workspace.yaml` exists). Multiple lockfiles coexist (`package-lock.json`, `pnpm-lock.yaml`, `bun.lock*`) but Vercel/production and this dev setup use different managers; prefer `pnpm` locally for consistency. `bun` is not installed here.
 - `pnpm lint` (`eslint .`) lints the whole repo including `supabase/functions/**` (Deno) and currently reports thousands of **pre-existing** errors (mostly `@typescript-eslint/no-explicit-any`, plus Deno-specific code). This is the baseline repo state — a non-zero lint exit is expected and not caused by env setup.
 - The Chrome extension in `extension/` is a **separate** product with its own `package.json`/lockfile (`bun`); it is not part of the root workspace and is optional for core dev.
