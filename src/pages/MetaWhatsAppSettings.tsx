@@ -99,6 +99,15 @@ type Integration = {
 const PROJECT_REF = import.meta.env.VITE_SUPABASE_PROJECT_ID as string;
 const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
 
+/** Numbers not yet on Cloud API (and not Coexistence) need a one-time /register with a PIN. */
+function needsCloudRegistration(phone: {
+  platform_type: string | null;
+  is_on_biz_app: boolean;
+}) {
+  if (phone.is_on_biz_app) return false;
+  return String(phone.platform_type ?? "").toUpperCase() !== "CLOUD_API";
+}
+
 class MetaAuthError extends Error {
   code?: string;
   details?: unknown;
@@ -400,6 +409,17 @@ export default function MetaWhatsAppSettings() {
     },
   });
 
+  const selectedPhonesNeedPin = Boolean(
+    assets &&
+      selectedPhones.some((value) => {
+        const [, phoneNumberId] = value.split("::");
+        const phone = assets
+          .flatMap((account) => account.phone_numbers)
+          .find((entry) => entry.id === phoneNumberId);
+        return phone ? needsCloudRegistration(phone) : false;
+      }),
+  );
+
   const connectManualMutation = useMutation({
     mutationFn: async () => {
       const selections = selectedPhones.map((value) => {
@@ -407,6 +427,10 @@ export default function MetaWhatsAppSettings() {
         return { wabaId, phoneNumberId };
       }).filter((selection) => selection.wabaId && selection.phoneNumberId);
       if (!selections.length) throw new Error("יש לבחור לפחות מספר אחד");
+      if (selectedPhonesNeedPin && !/^\d{6}$/.test(manualPin)) {
+        document.getElementById("meta-wa-manual-pin")?.focus();
+        throw new Error("המספר שבחרתם עדיין Pending — בחרו PIN בן 6 ספרות למטה ואז לחצו חיבור");
+      }
       const selectedWabas = [...new Set(selections.map((selection) => selection.wabaId))];
       const data = await invokeMetaAuth({
         action: "connect_manual",
@@ -429,7 +453,12 @@ export default function MetaWhatsAppSettings() {
       await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-config", tenantId] });
       await queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      if (error instanceof MetaAuthError && error.code === "pin_required_for_registration") {
+        document.getElementById("meta-wa-manual-pin")?.focus();
+      }
+      toast.error(error.message, { duration: 12000 });
+    },
   });
 
   const diagnoseMutation = useMutation({
@@ -816,6 +845,9 @@ export default function MetaWhatsAppSettings() {
                             </span>
                             {alreadyConnected && <Badge variant="outline">כבר מחובר</Badge>}
                             {phone.is_on_biz_app && <Badge variant="secondary">Coexistence</Badge>}
+                            {!alreadyConnected && needsCloudRegistration(phone) && (
+                              <Badge variant="destructive">דורש PIN</Badge>
+                            )}
                           </Label>
                         );
                       })}
@@ -823,27 +855,71 @@ export default function MetaWhatsAppSettings() {
                   </div>
                 ))}
 
-                <div className="space-y-2">
-                  <Label htmlFor="meta-wa-manual-pin">PIN בן 6 ספרות (נדרש רק לרישום מספר חדש)</Label>
-                  <Input
-                    id="meta-wa-manual-pin"
-                    value={manualPin}
-                    onChange={(event) => setManualPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                    inputMode="numeric"
-                    dir="ltr"
-                    placeholder="123456"
-                    className="max-w-48"
-                  />
-                </div>
+                {selectedPhonesNeedPin && (
+                  <Alert className="border-amber-500/50 bg-amber-500/5">
+                    <KeyRound className="h-4 w-4" />
+                    <AlertTitle>נדרש PIN להשלמת הרישום</AlertTitle>
+                    <AlertDescription className="space-y-3 text-sm">
+                      <p>
+                        המספר עדיין בסטטוס Pending ב-Meta. בחרו קוד בן 6 ספרות (אתם קובעים אותו),
+                        שמרו אותו, ואז לחצו חיבור — AIOS תשלים את הרישום ל-Cloud API.
+                      </p>
+                      <div className="space-y-2">
+                        <Label htmlFor="meta-wa-manual-pin">PIN בן 6 ספרות</Label>
+                        <Input
+                          id="meta-wa-manual-pin"
+                          value={manualPin}
+                          onChange={(event) =>
+                            setManualPin(event.target.value.replace(/\D/g, "").slice(0, 6))
+                          }
+                          inputMode="numeric"
+                          dir="ltr"
+                          placeholder="למשל 482193"
+                          className="max-w-48 bg-background"
+                          autoFocus
+                        />
+                        {manualPin.length > 0 && manualPin.length < 6 && (
+                          <p className="text-xs text-destructive">חסרות ספרות — צריך בדיוק 6</p>
+                        )}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {!selectedPhonesNeedPin && (
+                  <div className="space-y-2">
+                    <Label htmlFor="meta-wa-manual-pin">
+                      PIN בן 6 ספרות
+                      <span className="text-muted-foreground"> — רק אם המספר עדיין לא רשום</span>
+                    </Label>
+                    <Input
+                      id="meta-wa-manual-pin"
+                      value={manualPin}
+                      onChange={(event) =>
+                        setManualPin(event.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      inputMode="numeric"
+                      dir="ltr"
+                      placeholder="123456"
+                      className="max-w-48"
+                    />
+                  </div>
+                )}
 
                 <Button
                   onClick={() => connectManualMutation.mutate()}
-                  disabled={!selectedPhones.length || connectManualMutation.isPending}
+                  disabled={
+                    !selectedPhones.length ||
+                    connectManualMutation.isPending ||
+                    (selectedPhonesNeedPin && !/^\d{6}$/.test(manualPin))
+                  }
                 >
                   {connectManualMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                  {selectedPhones.length === 1
-                    ? "חיבור המספר הנבחר"
-                    : `חיבור ${selectedPhones.length} המספרים שנבחרו`}
+                  {selectedPhonesNeedPin && !/^\d{6}$/.test(manualPin)
+                    ? "הזינו PIN בן 6 ספרות למעלה"
+                    : selectedPhones.length === 1
+                      ? "חיבור המספר הנבחר"
+                      : `חיבור ${selectedPhones.length} המספרים שנבחרו`}
                 </Button>
               </div>
             )}
