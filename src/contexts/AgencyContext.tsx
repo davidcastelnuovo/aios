@@ -12,9 +12,20 @@ interface AgencyContextType {
 
 const AgencyContext = createContext<AgencyContextType | undefined>(undefined);
 
+const STORAGE_KEY = "selectedAgencyId";
+
+function readStoredAgency(): string {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored && stored.length > 0) return stored;
+  } catch {
+    // ignore storage failures (private mode, etc.)
+  }
+  return "all";
+}
+
 export function AgencyProvider({ children }: { children: ReactNode }) {
-  const storageKey = "selectedAgencyId";
-  const [selectedAgency, setSelectedAgency] = useState<string>("all");
+  const [selectedAgency, setSelectedAgency] = useState<string>(readStoredAgency);
   const didSetDefault = useRef(false);
   const queryClient = useQueryClient();
   
@@ -25,7 +36,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   // Persist selection
   useEffect(() => {
     try {
-      localStorage.setItem(storageKey, selectedAgency);
+      localStorage.setItem(STORAGE_KEY, selectedAgency);
     } catch {}
   }, [selectedAgency]);
 
@@ -104,13 +115,17 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Multiple agencies: validate current selection
+    // Multiple agencies: validate current selection. While agencies are still
+    // loading/refetching we keep the previous choice so a brief empty/partial
+    // list (e.g. shared agencies lagging) does not kick the user back to "all".
+    if (isLoadingAgencies) return;
+
     const exists = selectedAgency === "all" || agencies.some((a) => a.id === selectedAgency);
     if (!exists) {
       setSelectedAgency("all");
       didSetDefault.current = true;
     }
-  }, [agencies, selectedAgency]);
+  }, [agencies, selectedAgency, isLoadingAgencies]);
 
   // Don't block the whole app on agency loading — pages handle their own
   // loading states while agencies load in the background.

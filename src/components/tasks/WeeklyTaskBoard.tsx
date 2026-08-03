@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -37,6 +37,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
+import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 
@@ -139,8 +140,22 @@ export function WeeklyTaskBoard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const { isTeamManager, isOwner, isSuperAdmin } = useUserRole();
+  const seesTeamTasksByDefault = isTeamManager || isOwner || isSuperAdmin;
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
+  // Team managers / owners land on the agency's full board, not "mine" only —
+  // otherwise filtering the header to DMM/Promo looks empty when their personal
+  // queue happens to have no open tasks in that agency.
+  const didApplyRoleDefault = useRef(false);
+  useEffect(() => {
+    if (didApplyRoleDefault.current) return;
+    if (!seesTeamTasksByDefault) return;
+    didApplyRoleDefault.current = true;
+    setFilters((prev) =>
+      prev.campaignerId === "mine" ? { ...prev, campaignerId: "all" } : prev
+    );
+  }, [seesTeamTasksByDefault]);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
   const [quickAddSlot, setQuickAddSlot] = useState<{ date: Date; time: string } | null>(null);
@@ -362,24 +377,12 @@ export function WeeklyTaskBoard() {
         query = query.is("client_id", null);
       }
 
-      // Apply agency filter from header
+      // Apply agency filter from header. Filter on tasks.agency_id directly —
+      // the previous client_id IN (...) subquery added a fourth PostgREST `.or()`
+      // (on top of tenant / date / mine) that could empty the board for shared
+      // agencies, and hid tasks whose client row the user could not SELECT.
       if (selectedAgency && selectedAgency !== "all") {
-        // Get client IDs belonging to the selected agency
-        const { data: agencyClients } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("agency_id", selectedAgency);
-
-        const clientIds = agencyClients?.map(c => c.id) || [];
-
-        // Show tasks linked to a client in this agency, OR tasks assigned directly
-        // to the agency with no client. Tasks of other agencies and client-less
-        // tasks of other agencies are excluded — those only show under "all agencies".
-        const orParts = [`and(client_id.is.null,agency_id.eq.${selectedAgency})`];
-        if (clientIds.length > 0) {
-          orParts.unshift(`client_id.in.(${clientIds.join(",")})`);
-        }
-        query = query.or(orParts.join(","));
+        query = query.eq("agency_id", selectedAgency);
       }
 
 

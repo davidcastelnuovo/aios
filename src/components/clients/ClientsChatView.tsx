@@ -327,11 +327,13 @@ export function ClientsChatView({
     try {
       const { error, data } = await supabase.from("clients").update({ [field]: value }).eq("id", clientId).select();
       if (error) throw error;
-      if (!data || data.length === 0) throw new Error("Update blocked by permissions");
+      if (!data || data.length === 0) {
+        throw new Error("אין הרשאה לעדכן לקוח זה (ייתכן שלקוח בסוכנות משותפת)");
+      }
       toast.success("עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
-    } catch {
-      toast.error("שגיאה בעדכון");
+    } catch (err: any) {
+      toast.error(`שגיאה בעדכון: ${err?.message || "נסה שוב"}`);
     }
   };
 
