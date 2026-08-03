@@ -64,17 +64,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+// Session-scoped: owners get a one-time organization-wide starting view on first
+// visit to Clients. Must NOT re-run on every remount — that was wiping the global
+// agency filter whenever anyone navigated back to this module.
+let ownerAgencyDefaultApplied = false;
+
 export default function Clients() {
   const { selectedAgency, setSelectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
-  // Owners need an organization-wide starting view. A previously selected
-  // agency can otherwise make a complete client list look like an access bug.
-  // This runs once when the elevated role resolves; agency filtering remains
-  // available afterwards.
   useEffect(() => {
-    if (isOwner || isSuperAdmin) {
+    if ((isOwner || isSuperAdmin) && !ownerAgencyDefaultApplied) {
+      ownerAgencyDefaultApplied = true;
       setSelectedAgency("all");
     }
   }, [isOwner, isSuperAdmin, setSelectedAgency]);

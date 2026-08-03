@@ -1,19 +1,7 @@
--- Fix cross-tenant client/task UPDATEs for shared agencies (e.g. MarketingCaptain ↔ DMM-MC).
---
--- Background:
---   DMM-MC clients live on the DMM tenant but are shared with MarketingCaptain via
---   agency_tenant_access. SELECT policies already allow TMs/campaigners on MC to see
---   those rows, but UPDATE still required tenant_id = the user's active tenant.
---   Result: Anna (and anyone on MC) could see DMM-MC clients/tasks but every edit
---   returned 0 rows / "Update blocked by permissions".
---
---   The clients policy below is the same change that landed in
---   20260409064938_d36d11b2-8c13-4482-8331-9f0611e48fbd.sql but was never applied
---   to production. Re-issue it under a current version so the Management API apply
---   path picks it up. Also allow SEO to update SEO-tagged clients they can see.
---   Note: clients.services is jsonb (array of strings), not text[].
+-- Applied via .github/workflows/apply-sql-migration.yml (Management API).
+-- Source of truth also lives in:
+--   supabase/migrations/20260803140000_fix_cross_tenant_client_task_updates.sql
 
--- ── clients UPDATE ──────────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "Authenticated users can update clients" ON public.clients;
 DROP POLICY IF EXISTS "Users can update clients in their tenants" ON public.clients;
 DROP POLICY IF EXISTS "Users can update clients in their or shared tenants" ON public.clients;
