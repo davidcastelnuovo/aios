@@ -9,9 +9,20 @@ async function readBlobAsDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+function normalizeHref(href: string | null | undefined): string | null {
+  if (!href) return null;
+  const trimmed = href.trim();
+  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("javascript:")) return null;
+  try {
+    return new URL(trimmed, window.location.origin).toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Capture each `.seo-monthly-slideshow` child of the stack and write a
- * landscape PDF (one slide per page).
+ * landscape PDF (one slide per page). Anchor tags become clickable PDF links.
  */
 export async function downloadSeoMonthlySlideshowPdf(
   stackEl: HTMLElement,
@@ -64,6 +75,23 @@ export async function downloadSeoMonthlySlideshowPdf(
     const x = (pageWidth - w) / 2;
     const y = (pageHeight - h) / 2;
     pdf.addImage(pngDataUrl, "PNG", x, y, w, h, undefined, "FAST");
+
+    // Map visible <a href> boxes onto the placed image so PDF links work.
+    const slideRect = node.getBoundingClientRect();
+    if (slideRect.width > 0 && slideRect.height > 0) {
+      const anchors = Array.from(node.querySelectorAll<HTMLAnchorElement>("a[href]"));
+      for (const anchor of anchors) {
+        const href = normalizeHref(anchor.getAttribute("href") || anchor.href);
+        if (!href) continue;
+        const rect = anchor.getBoundingClientRect();
+        if (rect.width < 2 || rect.height < 2) continue;
+        const linkX = x + ((rect.left - slideRect.left) / slideRect.width) * w;
+        const linkY = y + ((rect.top - slideRect.top) / slideRect.height) * h;
+        const linkW = (rect.width / slideRect.width) * w;
+        const linkH = (rect.height / slideRect.height) * h;
+        pdf.link(linkX, linkY, linkW, linkH, { url: href });
+      }
+    }
   }
 
   const safe = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
