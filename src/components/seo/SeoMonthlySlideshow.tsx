@@ -696,6 +696,7 @@ function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
 }
 
 function ClosingSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+  // Closing slide is "what we did this month" — never inflate with prior-month links.
   const counts = [
     {
       label: "עבודה באתר",
@@ -707,9 +708,7 @@ function ClosingSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
     },
     {
       label: "קישורים",
-      value: dedupeBy(snapshot.recentLinks || snapshot.work.links, (i) =>
-        i.url.trim().toLowerCase(),
-      ).length,
+      value: dedupeBy(snapshot.work.links, (i) => i.url.trim().toLowerCase()).length,
     },
     { label: "ביטויים מוצגים", value: snapshot.keywords.length },
   ];
@@ -751,7 +750,8 @@ export function SeoMonthlySlideshowCaptureStack({
     <div
       ref={stackRef}
       aria-hidden
-      className="pointer-events-none fixed -left-[10000px] top-0 z-[-1] flex flex-col gap-0"
+      // Keep layout measurable for PDF link hit-boxes (no pointer interaction).
+      className="pointer-events-none fixed -left-[10000px] top-0 z-[-1] flex flex-col gap-0 [&_a]:pointer-events-auto"
     >
       {slides.map((_, i) => (
         <SeoMonthlySlideshow

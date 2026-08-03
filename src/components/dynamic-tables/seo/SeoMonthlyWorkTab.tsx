@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "react-router-dom";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 import {
   Copy,
   Download,
-  Eye,
   FileText,
   Link2,
   Loader2,
   Plus,
+  Presentation,
   Save,
-  Share2,
   Trash2,
   Wrench,
 } from "lucide-react";
@@ -39,12 +39,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   ONSITE_KIND_LABELS,
   SeoArticleItem,
   SeoLinkItem,
@@ -64,10 +58,7 @@ import {
   SeoMonthlyShareSnapshot,
   SeoShareRecentLink,
 } from "@/lib/seoMonthlyShareSnapshot";
-import {
-  SeoMonthlySlideshow,
-  SeoMonthlySlideshowCaptureStack,
-} from "@/components/seo/SeoMonthlySlideshow";
+import { SeoMonthlySlideshowCaptureStack } from "@/components/seo/SeoMonthlySlideshow";
 import { downloadSeoMonthlySlideshowPdf } from "@/lib/seoMonthlyPdf";
 
 type Props = {
@@ -83,6 +74,8 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
   const { user } = useCurrentUser();
   const tenantId = tenantIdProp || currentTenantId || "";
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
   const captureStackRef = useRef<HTMLDivElement>(null);
 
   const monthOptions = useMemo(
@@ -101,9 +94,8 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
   const [status, setStatus] = useState<"up" | "stable" | "down">("stable");
   const [work, setWork] = useState<SeoMonthlyWork>(emptySeoMonthlyWork());
   const [dirty, setDirty] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [openingDeck, setOpeningDeck] = useState(false);
 
   const { data: client } = useQuery({
     queryKey: ["client-for-seo-monthly-share", clientId],
@@ -467,18 +459,40 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
     return (data as any).share_token as string;
   };
 
-  const handleShare = async () => {
-    setSharing(true);
+  /** Persist dirty edits, refresh the share token/snapshot, then open the live deck. */
+  const handleOpenPresentation = async () => {
+    setOpeningDeck(true);
     try {
+      if (dirty) await saveMutation.mutateAsync();
+      const token = await upsertShare();
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-share", clientId, selectedMonth] });
+      navigate(`/shared/seo-monthly/${token}`, {
+        state: {
+          fromApp: true,
+          returnTo: `${location.pathname}${location.search}${location.hash}`,
+        },
+      });
+    } catch (err: any) {
+      const msg = String(err?.message || "");
+      if (msg.includes("seo_monthly_shares") || msg.includes("schema cache") || err?.code === "42P01") {
+        toast.error("טבלת השיתוף עדיין לא קיימת בפרודקשן — צריך להריץ את המיגרציה seo_monthly_shares");
+      } else {
+        toast.error(msg || "שגיאה בפתיחת המצגת");
+      }
+    } finally {
+      setOpeningDeck(false);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    setOpeningDeck(true);
+    try {
+      if (dirty) await saveMutation.mutateAsync();
       const token = await upsertShare();
       const url = `${SHARE_ORIGIN}/shared/seo-monthly/${token}`;
       await navigator.clipboard.writeText(url);
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-share", clientId, selectedMonth] });
-      if (dirty) {
-        toast.success("קישור השיתוף עודכן והועתק (כולל שינויים שעדיין לא נשמרו בטאב)");
-      } else {
-        toast.success("קישור השיתוף הועתק");
-      }
+      toast.success("קישור השיתוף הועתק — נפתח תמיד עם העדכונים האחרונים");
     } catch (err: any) {
       const msg = String(err?.message || "");
       if (msg.includes("seo_monthly_shares") || msg.includes("schema cache") || err?.code === "42P01") {
@@ -487,30 +501,21 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
         toast.error(msg || "שגיאה ביצירת קישור");
       }
     } finally {
-      setSharing(false);
-    }
-  };
-
-  const handleCopyExisting = async () => {
-    if (!shareUrl) return;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("הקישור הועתק");
-    } catch {
-      toast.error("לא ניתן להעתיק");
+      setOpeningDeck(false);
     }
   };
 
   const handleExportPdf = async () => {
     setExportingPdf(true);
     try {
+      if (dirty) await saveMutation.mutateAsync();
       await new Promise((r) => setTimeout(r, 100));
       if (!captureStackRef.current) throw new Error("אין שקפים ליצוא");
       const safeName = `${snapshot.clientName}-${snapshot.monthLabel}`
         .replace(/[^\w\u0590-\u05FF-]+/g, "-")
         .slice(0, 60);
       await downloadSeoMonthlySlideshowPdf(captureStackRef.current, `seo-${safeName}.pdf`);
-      toast.success("ה־PDF הורד");
+      toast.success("ה־PDF הורד (כולל קישורים לחיצים)");
     } catch (err: any) {
       console.error(err);
       toast.error(err?.message || "שגיאה ביצוא PDF");
@@ -564,48 +569,37 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             סיכום העבודה ל־{monthLabel}: באתר (מטא/כותרות), מאמרים שכתבנו, וקישורים.
+            המצגת נפתחת תמיד עם העדכונים האחרונים שנשמרו.
             {dirty && <Badge variant="outline" className="mr-2 text-[10px]">יש שינויים שלא נשמרו</Badge>}
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-2">
             <Button
               type="button"
-              variant="outline"
               size="sm"
               className="h-8 gap-1.5"
-              onClick={() => setPreviewOpen(true)}
+              disabled={openingDeck || saveMutation.isPending || isLoading}
+              onClick={handleOpenPresentation}
             >
-              <Eye className="h-3.5 w-3.5" />
-              תצוגת סליידשו
+              {openingDeck ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Presentation className="h-3.5 w-3.5" />}
+              פתח מצגת
             </Button>
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="h-8 gap-1.5"
-              disabled={sharing}
-              onClick={handleShare}
+              disabled={openingDeck || saveMutation.isPending || isLoading}
+              onClick={handleCopyShareLink}
             >
-              {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
-              {shareUrl ? "עדכן ושתף קישור" : "שתף בקישור"}
+              <Copy className="h-3.5 w-3.5" />
+              העתק קישור שיתוף
             </Button>
-            {shareUrl && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 gap-1.5"
-                onClick={handleCopyExisting}
-              >
-                <Copy className="h-3.5 w-3.5" />
-                העתק קישור
-              </Button>
-            )}
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="h-8 gap-1.5"
-              disabled={exportingPdf}
+              disabled={exportingPdf || openingDeck || saveMutation.isPending}
               onClick={handleExportPdf}
             >
               {exportingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
@@ -653,17 +647,6 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
           />
         </>
       )}
-
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-5xl p-0 overflow-hidden border-0 bg-[#071820] sm:rounded-xl">
-          <DialogHeader className="sr-only">
-            <DialogTitle>תצוגת סליידשו SEO</DialogTitle>
-          </DialogHeader>
-          <div className="h-[min(80vh,720px)] w-full">
-            <SeoMonthlySlideshow snapshot={snapshot} className="h-full rounded-xl" />
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Offscreen capture stack for PDF */}
       <SeoMonthlySlideshowCaptureStack snapshot={snapshot} stackRef={captureStackRef} />

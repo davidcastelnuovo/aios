@@ -44,7 +44,7 @@ WITH CHECK (
 );
 
 COMMENT ON TABLE public.seo_monthly_shares IS
-  'Public slideshow shares for SEO monthly work reports. snapshot is frozen at share/update time.';
+  'Public slideshow shares for SEO monthly work reports. snapshot is refreshed live from seo_monthly_updates on each public open.';
 
 -- Ensure one-shot DDL helper exists for future edge runners.
 CREATE OR REPLACE FUNCTION public.run_ddl_once(sql text)
