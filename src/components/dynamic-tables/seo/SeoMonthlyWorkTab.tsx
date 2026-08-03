@@ -90,7 +90,12 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
     [],
   );
 
-  const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value || format(startOfMonth(new Date()), "yyyy-MM-dd"));
+  // Default to last calendar month — monthly client reports are usually for the month that just closed.
+  const [selectedMonth, setSelectedMonth] = useState(
+    monthOptions[1]?.value ||
+      monthOptions[0]?.value ||
+      format(startOfMonth(subMonths(new Date(), 1)), "yyyy-MM-dd"),
+  );
   const [status, setStatus] = useState<"up" | "stable" | "down">("stable");
   const [work, setWork] = useState<SeoMonthlyWork>(emptySeoMonthlyWork());
   const [dirty, setDirty] = useState(false);
