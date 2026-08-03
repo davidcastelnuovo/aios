@@ -113,7 +113,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         ? [tenantId]
         : [];
 
-  const { data: reports = [], isLoading, error: reportsError } = useQuery({
+  const { data: reports = [], isLoading, isFetching: reportsFetching, error: reportsError } = useQuery({
     queryKey: ['seo-dashboard-reports', reportTenants.slice().sort().join(','), clientId],
     queryFn: async () => {
       let q = supabase
@@ -519,7 +519,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     );
   }
 
-  if (reportsError) {
+  if (reportsError && !reportsFetching && !isLoading) {
     return (
       <Card className="p-8 text-center" dir="rtl">
         <FileText className="h-12 w-12 mx-auto text-destructive mb-3" />
