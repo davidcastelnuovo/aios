@@ -13,6 +13,14 @@ Carmen already speaks MCP as a client (`agent_mcp_connections`, `mcp-connect`, `
 
 Both are **asynchronous**: the call returns `https://cursor.com/agents/<bcId>` immediately.
 
+### Sticky agent (conversation memory)
+
+By default Carmen reuses **one Cloud Agent per tenant** (`cursor_sticky_agents`):
+follow-ups call `POST /v1/agents/{id}/runs` so Cursor keeps the same conversation
+and workspace. A new agent is created only when none exists or the sticky one is gone.
+
+Optional secrets: `CURSOR_STICKY_AGENT_ID` (force a specific `bc-…`), `CURSOR_STICKY=false` to disable.
+
 ## One-time setup
 
 ### 1. Cursor API key (David)

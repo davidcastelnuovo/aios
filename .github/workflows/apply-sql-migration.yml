@@ -20,6 +20,7 @@ on:
       - 'supabase/ops/fix_seo_monthly_updates_cross_tenant.sql'
       - 'supabase/ops/fix_clients_seo_keyword_relevance.sql'
       - 'supabase/ops/create_cursor_dispatches.sql'
+      - 'supabase/ops/create_cursor_sticky_agents.sql'
 
 jobs:
   apply:
@@ -55,7 +56,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/create_cursor_dispatches.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/create_cursor_sticky_agents.sql'; then
+              FILE="supabase/ops/create_cursor_sticky_agents.sql"
+              NAME="create_cursor_sticky_agents"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/create_cursor_dispatches.sql'; then
               FILE="supabase/ops/create_cursor_dispatches.sql"
               NAME="create_cursor_dispatches"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_clients_seo_keyword_relevance.sql'; then
