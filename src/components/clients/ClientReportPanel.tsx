@@ -30,12 +30,16 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { ClientTableSnapshot } from "./ClientTableSnapshot";
 import { toPng } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
-import { EmailRecipientsSelector, type EmailOption } from "./EmailRecipientsSelector";
+import { EmailRecipientsSelector } from "./EmailRecipientsSelector";
 import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
 import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
 import { syncReportTable, waitForSnapshotReady } from "@/lib/reportSync";
 import { downloadReportPdf } from "@/lib/reportPdf";
+import {
+  buildDefaultReportRecipientEmails,
+  buildReportEmailOptions,
+} from "@/lib/defaultReportEmailRecipients";
 
 interface ClientReportPanelProps {
   table: any;
@@ -175,14 +179,16 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     enabled: !!table.id,
   });
 
-  // Pre-fill from client data
+  // Pre-fill from client data + default DMM report distribution list
   useEffect(() => {
     if (client) {
       if (client.phone) setDirectPhone(client.phone);
-      if (client.email) setEmailRecipients((prev) => (prev.length === 0 ? [client.email!] : prev));
       if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
       setEmailSubject((prev) => prev || `דוח ${table.name}${client.name ? ` - ${client.name}` : ""}`);
     }
+    setEmailRecipients((prev) =>
+      prev.length === 0 ? buildDefaultReportRecipientEmails(client?.email) : prev,
+    );
   }, [client, table.name]);
 
   // On every table open: clear stale screenshot, sync data, then capture fresh
@@ -732,20 +738,11 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           <div className="space-y-2">
             <ReportEmailSenderSelect value={emailSender} onChange={setEmailSender} />
             <EmailRecipientsSelector
-              options={[
-                ...(client?.email
-                  ? [{
-                      email: client.email,
-                      label: `${client.name} (לקוח)`,
-                      icon: "📋",
-                    } satisfies EmailOption]
-                  : []),
-                ...((teamMembers || []).map((t: any) => ({
-                  email: t.campaigners.email,
-                  label: `${t.campaigners.full_name}${t.role_on_account ? ` (${t.role_on_account})` : ""}`,
-                  icon: "👤",
-                } satisfies EmailOption))),
-              ]}
+              options={buildReportEmailOptions({
+                clientEmail: client?.email,
+                clientName: client?.name,
+                teamMembers: teamMembers || [],
+              })}
               selectedEmails={emailRecipients}
               onChange={setEmailRecipients}
             />

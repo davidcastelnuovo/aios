@@ -362,24 +362,15 @@ export function WeeklyTaskBoard() {
         query = query.is("client_id", null);
       }
 
-      // Apply agency filter from header
+      // Apply agency filter from header.
+      // Filter on tasks.agency_id directly (same as Dashboard). The previous
+      // approach OR'd client_id.in.(agency clients) with null-client+agency, which
+      // (a) hid client tasks whose agency_id matched but whose client wasn't
+      // returned by the clients RLS/list query, and (b) stacked another .or()
+      // on top of the date-range .or(). Team managers on shared agencies
+      // (DMM-MC / promo) saw an empty board unless "all agencies" was selected.
       if (selectedAgency && selectedAgency !== "all") {
-        // Get client IDs belonging to the selected agency
-        const { data: agencyClients } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("agency_id", selectedAgency);
-
-        const clientIds = agencyClients?.map(c => c.id) || [];
-
-        // Show tasks linked to a client in this agency, OR tasks assigned directly
-        // to the agency with no client. Tasks of other agencies and client-less
-        // tasks of other agencies are excluded — those only show under "all agencies".
-        const orParts = [`and(client_id.is.null,agency_id.eq.${selectedAgency})`];
-        if (clientIds.length > 0) {
-          orParts.unshift(`client_id.in.(${clientIds.join(",")})`);
-        }
-        query = query.or(orParts.join(","));
+        query = query.eq("agency_id", selectedAgency);
       }
 
 
