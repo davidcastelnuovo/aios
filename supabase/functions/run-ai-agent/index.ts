@@ -314,15 +314,16 @@ const ALL_TOOLS = [
   // MESSAGES
   { name: 'send_message', description: 'שליחת הודעת WhatsApp ללקוח או ליד', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, message_text: { type: 'string' } }, required: ['contact_type', 'contact_id', 'message_text'] } },
   // SEARCH
-  { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. עבור client: אם הקורא הוא קמפיינר WhatsApp, התוצאות מוגבלות אוטומטית ללקוחות שלו אלא אם הועבר all_scopes=true. ניתן לסנן clients/leads לפי agency_id.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' } }, required: ['entity_type', 'search_term'] } },
+  { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. ללקוחות: מחפש גם aliases/אנגלית/עברית, שמות חשבונות מודעות Meta, טבלאות דוח, ולקוחות ended/paused — לא רק active. עבור קמפיינר WhatsApp התוצאות מוגבלות אלא אם all_scopes=true.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' }, include_inactive: { type: 'boolean', description: 'ללקוחות: כלול ended/paused (ברירת מחדל true בחיפוש לפי שם)' } }, required: ['entity_type', 'search_term'] } },
   { name: 'query_system_graph', description: 'חיפוש לקריאה בלבד בגרף הארכיטקטורה של AIOS: קוד, Edge Functions, טבלאות SQL, מודולים וקשרים ביניהם. השתמשי רק לשאלות טכניות על מבנה המערכת, מיקום מימוש, תלות בין רכיבים או השפעת שינוי. הכלי זמין למנהלים בלבד ואינו מחזיר נתוני לקוחות.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מונחים טכניים לחיפוש, רצוי באנגלית ושמות רכיבים מדויקים' }, depth: { type: 'integer', minimum: 0, maximum: 3, description: 'עומק ניווט בקשרים, ברירת מחדל 2' }, limit: { type: 'integer', minimum: 1, maximum: 80, description: 'מספר צמתים מרבי, ברירת מחדל 40' } }, required: ['query'] } },
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
   { name: 'send_message_to_manus', description: 'שליחת הודעה ישירה ל-Manus agent פעיל (תקשורת ישירה). משמש לשאלות, עדכונים, או המשך שיחה עם Manus על משימה קיימת. מחזיר מיידית ללא המתנה לתשובה.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'ההודעה לשליחה ל-Manus' }, task_id: { type: 'string', description: 'מזהה המשימה הקיימת (אופציונלי — אם לא מוגדר ישתמש ב-agent-default)' } }, required: ['message'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
   { name: 'list_facebook_campaigns', description: 'רשימת קמפיינים פעילים/מושבתים של לקוח עם campaign_id, שם וסטטוס. השתמש כדי למצוא את ה-campaign_id לפני toggle.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הקמפיין' } }, required: ['client_id'] } },
-  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. אחרי שהמשתמש מאשר ("כן"), קראי ל-execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] } }, required: ['client_id', 'campaign_id', 'status'] } },
-  { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: השוואת היום מול 7 ימים מול 30 ימים, מטריקות (CPL, CTR, frequency, spend), זיהוי חריגות והמלצות לפעולה. השתמש לפני שמציעים פעולה כדי לבסס המלצה.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
+  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין/ad set/מודעה בפייסבוק. campaign_id יכול להיות גם ad_id. מכניס בקשת אישור לתור — לא מבצע מיד. אחרי אישור — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, campaign_id: { type: 'string', description: 'Facebook campaign_id / adset_id / ad_id' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, level: { type: 'string', enum: ['campaign', 'adset', 'ad'], description: 'ברירת מחדל campaign; עבור מודעה בודדת העבירי level=ad' } }, required: ['client_id', 'campaign_id', 'status'] } },
+  { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: היום/7/30 ימים + פירוט מודעות (ad-level) עם spend/leads/CPL. השתמשי לפני הפעלה/כיבוי סלקטיבי של מודעות.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
+  { name: 'list_facebook_ads', description: 'רשימת מודעות (ads) תחת קמפיין פייסבוק עם סטטוס ו-CPL/spend/leads ל-7 ימים. להשתמש לפני הדלקה סלקטיבית של מודעות עם CPL נמוך.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת לפני הבקשה. אחרי אישור המשתמש — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED). מכניס בקשת אישור לתור — לא מבצע מיד. אחרי אישור — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'get_campaign_alerts', description: 'שליפת התראות פתוחות על קמפיינים (קמפיין נעצר, מודעה לא מאושרת, CPL חורג, frequency גבוה). השתמש בתחילת בדיקת דופק או כשהמשתמש שואל על מצב הקמפיינים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, only_open: { type: 'boolean', description: 'ברירת מחדל true' } } } },
@@ -564,11 +565,11 @@ const ALL_TOOLS = [
 const FB_GRAPH_VERSION = 'v21.0'
 
 async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientId: string): Promise<string | null> {
-  // 1. crm_tables (clients connected via the facebook sync/report-table flow).
+  // client_id is globally unique — do not require tenant_id match. Shared/partner
+  // tenants often hold the CRM row while Carmen runs under David's home tenant.
   const { data } = await supabase
     .from('crm_tables')
     .select('integration_settings, last_sync_at')
-    .eq('tenant_id', tenantId)
     .eq('client_id', clientId)
     .in('integration_type', ['facebook_insights', 'facebook_ecommerce'])
     .order('last_sync_at', { ascending: false, nullsFirst: false })
@@ -582,10 +583,270 @@ async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientI
     .from('clients')
     .select('meta_ads_account_id')
     .eq('id', clientId)
-    .eq('tenant_id', tenantId)
     .maybeSingle()
   if (cl?.meta_ads_account_id) return String(cl.meta_ads_account_id).replace(/^act_/, '')
   return null
+}
+
+/** Resolve which tenant owns a client (for FB token / shared integrations). */
+async function resolveClientTenantId(supabase: any, clientId: string, fallbackTenantId: string): Promise<string> {
+  const { data } = await supabase.from('clients').select('tenant_id').eq('id', clientId).maybeSingle()
+  return data?.tenant_id || fallbackTenantId
+}
+
+/** Expand Hebrew/English aliases so "קרנליוס" / Cornelius / Kernelios all match. */
+function expandClientSearchTerms(raw: string): string[] {
+  const term = String(raw || '').trim()
+  if (!term) return []
+  const terms = new Set<string>([term])
+  const lower = term.toLocaleLowerCase('he')
+  const aliasGroups = [
+    ['kernelios', 'kernel', 'cornelius', 'קרנליוס', 'קרניליוס', 'yael kernelios', 'edvard kernelios', 'KERNELIOS'],
+  ]
+  for (const group of aliasGroups) {
+    if (group.some((alias) => lower.includes(alias.toLocaleLowerCase('he')) || alias.toLocaleLowerCase('he').includes(lower))) {
+      for (const alias of group) terms.add(alias)
+    }
+  }
+  // Common Hebrew typo: קרנליוס ↔ קרניליוס
+  if (/קרנל/.test(term)) {
+    terms.add('קרנליוס')
+    terms.add('קרניליוס')
+    terms.add('KERNELIOS')
+    terms.add('Cornelius')
+  }
+  return Array.from(terms)
+}
+
+/**
+ * Broad client lookup: CRM name/contact, crm_tables name, Meta ad account names,
+ * all statuses (including ended). Used by search_entities / list_clients name search.
+ */
+async function searchClientsBroadly(
+  supabase: any,
+  accessibleTenantIds: string[],
+  searchTerm: string,
+  opts: { limit?: number; agencyId?: string | null; clientIdsFilter?: string[] | null } = {},
+): Promise<any[]> {
+  const limit = Math.min(Math.max(opts.limit || 20, 1), 50)
+  const terms = expandClientSearchTerms(searchTerm)
+  if (!terms.length || !accessibleTenantIds.length) return []
+
+  const orName = terms
+    .map((t) => t.replace(/[%_,]/g, ''))
+    .filter(Boolean)
+    .flatMap((t) => [`name.ilike.%${t}%`, `contact_name.ilike.%${t}%`])
+    .join(',')
+
+  let clientQ = supabase
+    .from('clients')
+    .select('id, name, contact_name, phone, status, agency_id, tenant_id, meta_ads_account_id, agencies(name)')
+    .in('tenant_id', accessibleTenantIds)
+    .or(orName)
+    .limit(limit)
+  if (opts.agencyId) clientQ = clientQ.eq('agency_id', opts.agencyId)
+  if (opts.clientIdsFilter?.length) clientQ = clientQ.in('id', opts.clientIdsFilter)
+  const { data: byName, error: nameErr } = await clientQ
+  if (nameErr) throw nameErr
+
+  // Also match Facebook report tables / ad account names (e.g. "Yael Kernelios LTD").
+  const tableOr = terms
+    .map((t) => t.replace(/[%_,]/g, ''))
+    .filter(Boolean)
+    .flatMap((t) => [
+      `name.ilike.%${t}%`,
+      `integration_settings->>ad_account_name.ilike.%${t}%`,
+    ])
+    .join(',')
+  let tablesQ = supabase
+    .from('crm_tables')
+    .select('id, name, client_id, integration_type, integration_settings, clients(id, name, contact_name, phone, status, agency_id, tenant_id, meta_ads_account_id, agencies(name))')
+    .in('tenant_id', accessibleTenantIds)
+    .in('integration_type', ['facebook_insights', 'facebook_ecommerce', 'google_ads'])
+    .or(tableOr)
+    .limit(limit)
+  if (opts.clientIdsFilter?.length) tablesQ = tablesQ.in('client_id', opts.clientIdsFilter)
+  const { data: byTable } = await tablesQ
+
+  const byId = new Map<string, any>()
+  for (const c of byName || []) {
+    byId.set(c.id, {
+      id: c.id,
+      name: c.name,
+      contact_name: c.contact_name,
+      phone: c.phone,
+      status: c.status,
+      agency_id: c.agency_id,
+      agency_name: c.agencies?.name ?? null,
+      tenant_id: c.tenant_id,
+      meta_ads_account_id: c.meta_ads_account_id,
+      matched_via: ['client_name'],
+      ad_accounts: [] as any[],
+    })
+  }
+  for (const t of byTable || []) {
+    const c: any = t.clients
+    if (!c?.id) continue
+    if (opts.agencyId && c.agency_id !== opts.agencyId) continue
+    const settings = t.integration_settings || {}
+    const adAccount = {
+      table_id: t.id,
+      table_name: t.name,
+      integration_type: t.integration_type,
+      ad_account_id: settings.ad_account_id || settings.account_id || null,
+      ad_account_name: settings.ad_account_name || null,
+      account_status: settings.account_status || null,
+    }
+    const existing = byId.get(c.id)
+    if (existing) {
+      existing.matched_via = Array.from(new Set([...(existing.matched_via || []), 'ad_account_or_report_table']))
+      existing.ad_accounts.push(adAccount)
+    } else {
+      byId.set(c.id, {
+        id: c.id,
+        name: c.name,
+        contact_name: c.contact_name,
+        phone: c.phone,
+        status: c.status,
+        agency_id: c.agency_id,
+        agency_name: c.agencies?.name ?? null,
+        tenant_id: c.tenant_id,
+        meta_ads_account_id: c.meta_ads_account_id,
+        matched_via: ['ad_account_or_report_table'],
+        ad_accounts: [adAccount],
+      })
+    }
+  }
+
+  // Prefer active, then onboarding, then ended/paused — but always return duplicates.
+  const statusRank: Record<string, number> = { active: 0, onboarding: 1, paused: 2, ended: 3 }
+  return Array.from(byId.values())
+    .sort((a, b) => (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9) || String(a.name).localeCompare(String(b.name), 'he'))
+    .slice(0, limit)
+}
+
+/** Deep single-campaign analysis + ad-level CPL (inline Graph; no edge-fn dependency). */
+async function fbAnalyzeCampaignInline(
+  supabase: any,
+  tenantId: string,
+  clientId: string,
+  campaignId: string,
+): Promise<any> {
+  const tokenTenant = await resolveClientTenantId(supabase, clientId, tenantId)
+  let token = await fbGetToken(supabase, tokenTenant)
+  if (!token && tokenTenant !== tenantId) token = await fbGetToken(supabase, tenantId)
+  if (!token) return { error: 'fb_not_connected' }
+
+  const fields = 'spend,impressions,clicks,ctr,cpc,cpm,frequency,actions,cost_per_action_type'
+  const cplFrom = (ins: any) => {
+    if (!ins) return null
+    const leadAction = (ins.cost_per_action_type || []).find((a: any) =>
+      ['lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead', 'leadgen.other'].includes(a.action_type)
+      || String(a.action_type || '').endsWith('.lead')
+    )
+    if (leadAction) return Number(leadAction.value)
+    const leads = fbLeadsFromActions(ins.actions || [])
+    const spend = Number(ins.spend || 0)
+    return leads > 0 ? Number((spend / leads).toFixed(2)) : null
+  }
+  const fetchInsights = async (date_preset: string) => {
+    const r = await fetch(`https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}/insights?fields=${fields}&date_preset=${date_preset}&access_token=${token}`)
+    const j = await r.json()
+    return j?.data?.[0] || null
+  }
+  const fetchAds = async () => {
+    const r = await fetch(
+      `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}/ads?fields=id,name,effective_status,status&limit=200&access_token=${token}`,
+    )
+    const j = await r.json()
+    if (!r.ok || j?.error || !Array.isArray(j?.data)) return []
+    const ads = j.data
+    // Ad-level insights for last_7d
+    const insightsUrl = `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}/insights?level=ad&date_preset=last_7d&fields=ad_id,ad_name,spend,actions,impressions,clicks&limit=200&access_token=${token}`
+    const ir = await fetch(insightsUrl)
+    const ij = await ir.json()
+    const byAd = new Map<string, any>()
+    for (const row of (ij?.data || [])) {
+      const leads = fbLeadsFromActions(row.actions || [])
+      const spend = Number(row.spend || 0)
+      byAd.set(String(row.ad_id), {
+        spend,
+        leads,
+        impressions: Number(row.impressions || 0),
+        clicks: Number(row.clicks || 0),
+        cpl: leads > 0 ? Number((spend / leads).toFixed(2)) : null,
+      })
+    }
+    return ads.map((ad: any) => {
+      const m = byAd.get(String(ad.id)) || { spend: 0, leads: 0, impressions: 0, clicks: 0, cpl: null }
+      return {
+        ad_id: ad.id,
+        ad_name: ad.name,
+        status: ad.status,
+        effective_status: ad.effective_status,
+        spend_7d: m.spend,
+        leads_7d: m.leads,
+        cpl_7d: m.cpl,
+        impressions_7d: m.impressions,
+        clicks_7d: m.clicks,
+      }
+    }).sort((a: any, b: any) => (a.cpl_7d ?? 999999) - (b.cpl_7d ?? 999999))
+  }
+
+  const metaRes = await fetch(
+    `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}?fields=id,name,status,effective_status,daily_budget,lifetime_budget,objective,issues_info&access_token=${token}`,
+  )
+  const meta = await metaRes.json()
+  if (meta?.error) return { error: 'fb_api_error', fb_error: meta.error }
+
+  const [today, last7, last30, ads] = await Promise.all([
+    fetchInsights('today'),
+    fetchInsights('last_7d'),
+    fetchInsights('last_30d'),
+    fetchAds(),
+  ])
+  const cplToday = cplFrom(today)
+  const cpl7 = cplFrom(last7)
+  const cpl30 = cplFrom(last30)
+  const anomalies: string[] = []
+  if (meta.effective_status && !['ACTIVE', 'CAMPAIGN_PAUSED', 'PAUSED'].includes(meta.effective_status)) {
+    anomalies.push(`קמפיין במצב חריג: ${meta.effective_status}`)
+  }
+  if (cplToday && cpl7 && cplToday > cpl7 * 1.5) {
+    anomalies.push(`CPL היום (${cplToday.toFixed(1)}) חורג ב-${(((cplToday / cpl7) - 1) * 100).toFixed(0)}% מהממוצע השבועי`)
+  }
+  const lowCplAds = ads.filter((a: any) => a.cpl_7d != null && a.leads_7d > 0)
+  const recommendations: any[] = []
+  if (lowCplAds.length && ads.some((a: any) => a.effective_status === 'PAUSED' && a.cpl_7d != null)) {
+    recommendations.push({
+      action: 'enable_low_cpl_ads',
+      reason: 'יש מודעות עם CPL נמוך שמושבתות — אפשר להדליק רק אותן אחרי אישור',
+      severity: 'medium',
+      candidate_ad_ids: ads
+        .filter((a: any) => a.effective_status === 'PAUSED' && a.cpl_7d != null && a.leads_7d > 0)
+        .sort((a: any, b: any) => a.cpl_7d - b.cpl_7d)
+        .slice(0, 10)
+        .map((a: any) => ({ ad_id: a.ad_id, ad_name: a.ad_name, cpl_7d: a.cpl_7d, leads_7d: a.leads_7d })),
+    })
+  }
+  return {
+    success: true,
+    source: 'live_meta_inline',
+    campaign: {
+      id: meta.id, name: meta.name, status: meta.status, effective_status: meta.effective_status,
+      objective: meta.objective, daily_budget: meta.daily_budget, lifetime_budget: meta.lifetime_budget,
+    },
+    metrics: {
+      today: { ...today, cpl: cplToday },
+      last_7d: { ...last7, cpl: cpl7 },
+      last_30d: { ...last30, cpl: cpl30 },
+    },
+    ads,
+    anomalies,
+    recommendations,
+    instruction_for_carmen:
+      'הציגי CPL/spend/leads ברמת קמפיין ומודעות. כדי להדליק רק מודעות עם CPL נמוך — השתמשי ב-toggle_facebook_campaign עם campaign_id=ad_id (או fb_resume עם entity_id של המודעה) אחרי אישור מפורש.',
+  }
 }
 
 async function fbGetToken(supabase: any, tenantId: string): Promise<string | null> {
@@ -1388,8 +1649,24 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (agencyIdsFilter) query = query.in('agency_id', agencyIdsFilter)
       if (clientIdsFilter) query = query.in('id', clientIdsFilter)
       if (args.name_search) {
-        const term = String(args.name_search).trim().replace(/[%_]/g, '')
-        query = query.or(`name.ilike.%${term}%,contact_name.ilike.%${term}%`)
+        // Broad search: aliases, ad-account names, ended duplicates — not active-only.
+        const broad = await searchClientsBroadly(supabase, accessibleTenantIds, args.name_search, {
+          limit: args.limit || 50,
+          agencyId: agencyIdsFilter?.length === 1 ? agencyIdsFilter[0] : null,
+          clientIdsFilter,
+        })
+        const scope_note = (callerCampaignerId && !args.all_scopes && !explicitCampaigner && !agencyIdsFilter)
+          ? 'auto-scoped to caller campaigner. name_search includes ended/paused + Meta ad account aliases.'
+          : 'name_search includes ended/paused clients and Meta/Google report / ad-account name matches.'
+        return {
+          count: broad.length,
+          clients: broad.map((c: any) => ({
+            id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone,
+            status: c.status, agency_id: c.agency_id, agency_name: c.agency_name,
+            matched_via: c.matched_via, ad_accounts: c.ad_accounts,
+          })),
+          scope_note,
+        }
       }
       const { data, error } = await query
       if (error) throw error
@@ -1450,21 +1727,40 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const nameMap: Record<string, string> = { agency: 'name', client: 'name', campaigner: 'full_name', lead: 'company_name' }
       const table = tableMap[args.entity_type]
       const nameField = nameMap[args.entity_type]
-      const selectCols = args.entity_type === 'client' || args.entity_type === 'lead'
+
+      // Clients: broad alias + ad-account + inactive/ended search (Kernelios/Cornelius/קרנליוס…).
+      if (args.entity_type === 'client') {
+        let clientIdsFilter: string[] | null = null
+        if (callerCampaignerId && !args.all_scopes && !bypassCampaignerScope) {
+          const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
+          clientIdsFilter = (links || []).map((l: any) => l.client_id)
+          if (clientIdsFilter.length === 0) return { count: 0, results: [], note: 'no clients assigned to you' }
+        }
+        const agencyFilter = args.agency_id
+          || (isTeamManager && !args.all_scopes && managedAgencyIds.length === 1 ? managedAgencyIds[0] : null)
+        const results = await searchClientsBroadly(supabase, accessibleTenantIds, args.search_term, {
+          limit: 20,
+          agencyId: agencyFilter,
+          clientIdsFilter: isTeamManager && !args.all_scopes && managedAgencyIds.length > 1 && !args.agency_id
+            ? null
+            : clientIdsFilter,
+        })
+        const filtered = (isTeamManager && !args.all_scopes && managedAgencyIds.length > 0 && !args.agency_id)
+          ? results.filter((r: any) => r.agency_id && managedAgencyIds.includes(r.agency_id))
+          : results
+        return {
+          count: filtered.length,
+          results: filtered,
+          note: 'includes active+ended/paused, CRM name aliases, and Meta/Google ad-account / report-table name matches',
+        }
+      }
+
+      const selectCols = args.entity_type === 'lead'
         ? `id, ${nameField}, agency_id`
         : `id, ${nameField}`
       let q = supabase.from(table).select(selectCols).in('tenant_id', accessibleTenantIds).ilike(nameField, `%${args.search_term}%`).limit(20)
-      if ((args.entity_type === 'client' || args.entity_type === 'lead') && args.agency_id) {
+      if (args.entity_type === 'lead' && args.agency_id) {
         q = q.eq('agency_id', args.agency_id)
-      }
-      // Auto-scope clients to caller campaigner unless overridden; managers bypass.
-      if (args.entity_type === 'client' && callerCampaignerId && !args.all_scopes && !bypassCampaignerScope) {
-        const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
-        const ids = (links || []).map((l: any) => l.client_id)
-        if (ids.length === 0) return { count: 0, results: [], note: 'no clients assigned to you' }
-        q = q.in('id', ids)
-      } else if (args.entity_type === 'client' && isTeamManager && !args.all_scopes && managedAgencyIds.length > 0) {
-        q = q.in('agency_id', managedAgencyIds)
       }
       const { data, error } = await q
       if (error) throw error
@@ -1555,7 +1851,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
 
       // LIVE first: pull campaign-level insights straight from Meta (synced tables can lag days/weeks).
-      const liveInsights = await fbLiveCampaignInsights(supabase, accessibleTenantIds[0], args.client_id, daysBack)
+      const clientTenantId = await resolveClientTenantId(supabase, args.client_id, accessibleTenantIds[0])
+      const liveInsights = await fbLiveCampaignInsights(supabase, clientTenantId, args.client_id, daysBack)
+        || (clientTenantId !== accessibleTenantIds[0]
+          ? await fbLiveCampaignInsights(supabase, accessibleTenantIds[0], args.client_id, daysBack)
+          : null)
       if (liveInsights) {
         return { count: liveInsights.length, campaigns: liveInsights, period: `${daysBack} days`, source: 'live_meta' }
       }
@@ -1603,7 +1903,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         return { error: 'client_id_required', message: 'יש להעביר client_id' }
       }
       // LIVE first: read campaign status straight from Meta (synced tables can lag).
-      const liveList = await fbLiveCampaignList(supabase, accessibleTenantIds[0], args.client_id)
+      const listTenantId = await resolveClientTenantId(supabase, args.client_id, accessibleTenantIds[0])
+      const liveList = await fbLiveCampaignList(supabase, listTenantId, args.client_id)
+        || (listTenantId !== accessibleTenantIds[0]
+          ? await fbLiveCampaignList(supabase, accessibleTenantIds[0], args.client_id)
+          : null)
       if (liveList) {
         const search = (args.name_search || '').toString().toLowerCase()
         const campaigns = search ? liveList.filter((c: any) => String(c.campaign_name || '').toLowerCase().includes(search)) : liveList
@@ -1663,10 +1967,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (name === 'update_facebook_budget' && args.daily_budget == null && args.lifetime_budget == null) {
         return { error: 'daily_budget או lifetime_budget נדרש' }
       }
+      const toggleLevel = args.level === 'ad' ? 'מודעה' : args.level === 'adset' ? 'ad set' : 'קמפיין'
       const legacyTitles: Record<string, string> = {
         toggle_facebook_campaign: args.status === 'PAUSED'
-          ? `כיבוי קמפיין FB ${args.campaign_id}`
-          : `הדלקת קמפיין FB ${args.campaign_id}`,
+          ? `כיבוי ${toggleLevel} FB ${args.campaign_id}`
+          : `הדלקת ${toggleLevel} FB ${args.campaign_id}`,
         update_facebook_budget: `שינוי תקציב FB ${args.campaign_id} → ${args.daily_budget ?? args.lifetime_budget}`,
         duplicate_facebook_campaign: `שכפול קמפיין FB ${args.campaign_id}`,
       }
@@ -1694,16 +1999,40 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'analyze_facebook_campaign': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
-      const targetTenantId = accessibleTenantIds[0]
+      if (!args.campaign_id) return { error: 'campaign_id_required' }
+      // Prefer live inline analysis (includes ad-level CPL). Fall back to edge fn if present.
+      const inline = await fbAnalyzeCampaignInline(supabase, tenantId, args.client_id, args.campaign_id)
+      if (inline && !inline.error) return inline
+      const targetTenantId = await resolveClientTenantId(supabase, args.client_id, accessibleTenantIds[0])
       const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-analyze`
       const res = await fetch(fnUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
-        body: JSON.stringify({ tenant_id: targetTenantId, campaign_id: args.campaign_id }),
+        body: JSON.stringify({ tenant_id: targetTenantId, client_id: args.client_id, campaign_id: args.campaign_id }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) return { error: 'analyze_failed', details: json }
-      return json
+      if (res.ok) return { ...json, source: json.source || 'fb-campaign-analyze' }
+      // Surface a clear error instead of opaque "Requested function was not found"
+      if (res.status === 404 || /not found/i.test(JSON.stringify(json))) {
+        return inline?.error
+          ? { error: 'analyze_failed', details: inline, hint: 'fb-campaign-analyze edge function missing and live Meta read failed' }
+          : { error: 'analyze_failed', details: json, hint: 'fb-campaign-analyze not deployed' }
+      }
+      return inline?.error ? { error: 'analyze_failed', details: inline } : { error: 'analyze_failed', details: json }
+    }
+    case 'list_facebook_ads': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      if (!args.campaign_id) return { error: 'campaign_id_required' }
+      const analysis = await fbAnalyzeCampaignInline(supabase, tenantId, args.client_id, args.campaign_id)
+      if (analysis?.error) return analysis
+      return {
+        campaign_id: args.campaign_id,
+        campaign_name: analysis.campaign?.name || null,
+        count: (analysis.ads || []).length,
+        ads: analysis.ads || [],
+        instruction_for_carmen:
+          'מייני לפי cpl_7d. להדלקת מודעות נבחרות בלבד — toggle_facebook_campaign עם campaign_id=<ad_id>, level=ad, status=ACTIVE אחרי אישור.',
+      }
     }
     case 'get_campaign_alerts': {
       let q = supabase.from('campaign_alerts')
@@ -2921,8 +3250,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const importanceMap: Record<string, number> = {
         instructions: 95, preferences: 85, personal: 80, projects: 70, clients: 70, workflows: 65, general: 50,
       }
+      // executeTool param is agentId — bare `agent_id` was a ReferenceError ("agent_id is not defined").
       saveAgentMemory({
-        supabase, tenant_id: tenantId, agent_id,
+        supabase, tenant_id: tenantId, agent_id: agentId || null,
         category: cat,
         title: args.key,
         summary: args.content,
@@ -2943,7 +3273,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Hermes-style FTS recall across agent_memory (cross-session, importance-aware)
       const items = await recallAgentMemoryFTS(supabase, {
         tenant_id: tenantId,
-        agent_id,
+        agent_id: agentId || null,
         query_text: args.query || '',
         limit: args.limit || 5,
         min_importance: args.min_importance || 0,
