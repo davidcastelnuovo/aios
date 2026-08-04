@@ -42,7 +42,7 @@ import {
   getUsersFromData,
   hasAddToCartMetric,
 } from "@/lib/adsMetrics";
-import { formatCurrency as formatCurrencyAmount, resolveDashboardCurrency } from "@/lib/currency";
+import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -924,6 +924,7 @@ export default function DashboardView() {
   // Display currency follows ads report settings (e.g. USD Google Ads), not a hard-coded ₪.
   const dashboardCurrency = useMemo(() => resolveDashboardCurrency(tables), [tables]);
   const formatCurrency = (num: number) => formatCurrencyAmount(num, dashboardCurrency);
+  const formatUnitCost = (num: number) => formatUnitCostAmount(num, dashboardCurrency);
 
   // Group records by date for table
   const recordsByDate = useMemo(() => {
@@ -1680,7 +1681,7 @@ export default function DashboardView() {
                                       <TableCell>{formatNumber(c.impressions)}</TableCell>
                                       <TableCell>{formatNumber(c.clicks)}</TableCell>
                                       <TableCell>{ctr.toFixed(2)}%</TableCell>
-                                      <TableCell>{cpc > 0 ? formatCurrency(cpc) : '-'}</TableCell>
+                                      <TableCell>{cpc > 0 ? formatUnitCost(cpc) : '-'}</TableCell>
                                       <TableCell>{formatCurrency(c.spend)}</TableCell>
                                       {googleAdsCampaignType === 'ecommerce' ? (
                                         <>
@@ -1709,7 +1710,7 @@ export default function DashboardView() {
                                   <TableCell>{formatNumber(googleAdsTotals.impressions)}</TableCell>
                                   <TableCell>{formatNumber(googleAdsTotals.clicks)}</TableCell>
                                   <TableCell>{totalCtr.toFixed(2)}%</TableCell>
-                                  <TableCell>{totalCpc > 0 ? formatCurrency(totalCpc) : '-'}</TableCell>
+                                  <TableCell>{totalCpc > 0 ? formatUnitCost(totalCpc) : '-'}</TableCell>
                                   <TableCell>{formatCurrency(googleAdsTotals.spend)}</TableCell>
                                   {googleAdsCampaignType === 'ecommerce' ? (
                                     <>
@@ -1775,7 +1776,9 @@ export default function DashboardView() {
                                   if (val === null || val === undefined) {
                                     displayVal = '-';
                                   } else if (typeof val === 'number') {
-                                    if (['spend', 'cost', 'revenue', 'purchase_value', 'conversions_value', 'conversion_value', 'cpl', 'cost_per_lead', 'cpc', 'cpm'].includes(field.key)) {
+                                    if (['cpc', 'cpm'].includes(field.key)) {
+                                      displayVal = formatUnitCost(val);
+                                    } else if (['spend', 'cost', 'revenue', 'purchase_value', 'conversions_value', 'conversion_value', 'cpl', 'cost_per_lead'].includes(field.key)) {
                                       displayVal = formatCurrency(val);
                                     } else if (['roas', 'engagement_rate', 'ctr'].includes(field.key)) {
                                       displayVal = val.toFixed(2);
@@ -1854,7 +1857,7 @@ export default function DashboardView() {
                                 {dashboardCampaignType === 'ecommerce' ? (
                                   <>
                                     <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
-                                    <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
+                                    <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatUnitCost(metrics.spend / metrics.clicks)}</TableCell>
                                     <TableCell>{metrics.addToCartTracked ? formatNumber(metrics.addToCart) : '-'}</TableCell>
                                     <TableCell>{formatNumber(metrics.results)}</TableCell>
                                     <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
@@ -1869,7 +1872,7 @@ export default function DashboardView() {
                                 ) : (
                                   <>
                                     <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
-                                    <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
+                                    <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatUnitCost(metrics.spend / metrics.clicks)}</TableCell>
                                     <TableCell>{isAnalytics ? '-' : formatNumber(metrics.results)}</TableCell>
                                     <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.cpl)}</TableCell>
                                   </>
@@ -1891,7 +1894,7 @@ export default function DashboardView() {
                             {dashboardCampaignType === 'ecommerce' ? (
                               <>
                                 <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
-                                <TableCell>{totalSummary.clicks > 0 ? formatCurrency(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
+                                <TableCell>{totalSummary.clicks > 0 ? formatUnitCost(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.revenueWoo > 0 ? totalSummary.ordersWoo : (totalSummary.analyticsPurchases || totalSummary.results))}</TableCell>
                                 <TableCell>{formatCurrency(totalSummary.revenue)}</TableCell>
@@ -1904,7 +1907,7 @@ export default function DashboardView() {
                             ) : (
                               <>
                                 <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
-                                <TableCell>{totalSummary.clicks > 0 ? formatCurrency(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
+                                <TableCell>{totalSummary.clicks > 0 ? formatUnitCost(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
                                 <TableCell>{formatNumber(totalSummary.results)}</TableCell>
                                 <TableCell>{formatCurrency(combinedCpl)}</TableCell>
                               </>

@@ -32,7 +32,7 @@ import {
   getUsersFromData,
   hasAddToCartMetric,
 } from "@/lib/adsMetrics";
-import { formatCurrency as formatCurrencyAmount, resolveDashboardCurrency } from "@/lib/currency";
+import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -150,6 +150,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const rawRecords = data?.records || [];
   const dashboardCurrency = useMemo(() => resolveDashboardCurrency(tables), [tables]);
   const formatCurrency = (num: number) => formatCurrencyAmount(num, dashboardCurrency);
+  const formatUnitCost = (num: number) => formatUnitCostAmount(num, dashboardCurrency);
 
   // Deduplicate Facebook: if both facebook_insights AND facebook_ecommerce exist,
   // skip facebook_insights records to avoid double-counting spend/impressions/clicks
@@ -1242,7 +1243,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                                   <TableCell>{formatNumber(c.impressions)}</TableCell>
                                   <TableCell>{formatNumber(c.clicks)}</TableCell>
                                   <TableCell>{ctr.toFixed(2)}%</TableCell>
-                                  <TableCell>{cpc > 0 ? formatCurrency(cpc) : '-'}</TableCell>
+                                  <TableCell>{cpc > 0 ? formatUnitCost(cpc) : '-'}</TableCell>
                                   <TableCell>{formatCurrency(c.spend)}</TableCell>
                                   {googleAdsCampaignType === 'ecommerce' ? (
                                     <>
@@ -1271,7 +1272,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                               <TableCell>{formatNumber(googleAdsTotals.impressions)}</TableCell>
                               <TableCell>{formatNumber(googleAdsTotals.clicks)}</TableCell>
                               <TableCell>{totalCtr.toFixed(2)}%</TableCell>
-                              <TableCell>{totalCpc > 0 ? formatCurrency(totalCpc) : '-'}</TableCell>
+                              <TableCell>{totalCpc > 0 ? formatUnitCost(totalCpc) : '-'}</TableCell>
                               <TableCell>{formatCurrency(googleAdsTotals.spend)}</TableCell>
                               {googleAdsCampaignType === 'ecommerce' ? (
                                 <>
@@ -1352,7 +1353,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                               <>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
-                                <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
+                                <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatUnitCost(metrics.spend / metrics.clicks)}</TableCell>
                                 <TableCell>{metrics.addToCartTracked ? formatNumber(metrics.addToCart) : '-'}</TableCell>
                                 <TableCell>{formatNumber(metrics.results)}</TableCell>
                                 <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
@@ -1368,7 +1369,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                               <>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
-                                <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatCurrency(metrics.spend / metrics.clicks)}</TableCell>
+                                <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatUnitCost(metrics.spend / metrics.clicks)}</TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatNumber(metrics.results)}</TableCell>
                                 <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.cpl)}</TableCell>
                               </>
@@ -1390,7 +1391,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                           <>
                             <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
                             <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
-                            <TableCell>{totalSummary.clicks > 0 ? formatCurrency(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
+                            <TableCell>{totalSummary.clicks > 0 ? formatUnitCost(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
                             <TableCell>{formatNumber(totalSummary.analyticsAddToCart)}</TableCell>
                             <TableCell>{formatNumber(hasWooData ? wooSummary.orderCount : (totalSummary.analyticsPurchases || totalSummary.results))}</TableCell>
                             <TableCell>{formatCurrency(hasWooData ? wooSummary.revenue : totalSummary.revenue)}</TableCell>
@@ -1404,7 +1405,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                           <>
                             <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
                             <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
-                            <TableCell>{totalSummary.clicks > 0 ? formatCurrency(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
+                            <TableCell>{totalSummary.clicks > 0 ? formatUnitCost(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
                             <TableCell>{formatNumber(totalSummary.results)}</TableCell>
                             <TableCell>{formatCurrency(combinedCpl)}</TableCell>
                           </>

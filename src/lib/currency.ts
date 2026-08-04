@@ -42,13 +42,27 @@ export function getCurrencySymbol(code?: string | null): string {
 export function formatCurrency(
   num: number,
   code?: string | null,
-  options?: { maximumFractionDigits?: number },
+  options?: { maximumFractionDigits?: number; minimumFractionDigits?: number },
 ): string {
   return new Intl.NumberFormat("he-IL", {
     style: "currency",
     currency: normalizeCurrencyCode(code),
     maximumFractionDigits: options?.maximumFractionDigits ?? 0,
+    ...(options?.minimumFractionDigits != null
+      ? { minimumFractionDigits: options.minimumFractionDigits }
+      : {}),
   }).format(Number.isFinite(num) ? num : 0);
+}
+
+/**
+ * Unit costs (CPC / CPM) are almost always under $10 — rounding them to whole
+ * currency units (the dashboard default) collapses real values like $0.30 to $0.
+ */
+export function formatUnitCost(num: number, code?: string | null): string {
+  return formatCurrency(num, code, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
 }
 
 /**
