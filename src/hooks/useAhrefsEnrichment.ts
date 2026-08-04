@@ -120,8 +120,6 @@ export function useAhrefsEnrichment() {
       const date3m = threeMonthsAgo.toISOString().split("T")[0];
       const date1y = oneYearAgo.toISOString().split("T")[0];
 
-      console.log('[Ahrefs Enrichment] Date range:', { currentDate, date3m, date1y, originalReportDate: reportDate });
-
       // Fetch both periods in parallel
       const [threeMonthKw, yearlyKw] = await Promise.all([
         fetchKeywordsForPeriod(domain, currentDate, date3m, limit, country, token, anonKey, projectId),
