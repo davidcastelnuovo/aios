@@ -272,11 +272,6 @@ export function PublicSeoMonthlyWorkView({
               </Button>
             </div>
           </div>
-          {!isSeoMonthlyShareSnapshot(selected?.snapshot) && hasAnyWork && (
-            <p className="pt-1 text-[11px] text-muted-foreground">
-              כדי שהמצגת הציבורית תכלול גם את מדדי GSC כמו במערכת — פתחו פעם אחת את המצגת מתוך טאב העבודה החודשית במערכת.
-            </p>
-          )}
         </CardHeader>
       </Card>
 
