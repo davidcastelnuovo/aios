@@ -1,5 +1,4 @@
 // Recall.ai Meeting Bot API helpers (Zoom, Google Meet, Teams).
-import { Webhook } from "https://esm.sh/svix@1.38.0";
 import { detectMeetingPlatform } from "./meeting-url.ts";
 
 const BOT_NAME = "כרמן AI — מסייעת תמלול";
@@ -190,7 +189,7 @@ function formatClock(totalSeconds: number): string {
 }
 
 /** Verify Recall/Svix webhook signature (workspace verification secret). */
-export function verifyRecallWebhook(rawBody: string, headers: Headers): boolean {
+export async function verifyRecallWebhook(rawBody: string, headers: Headers): Promise<boolean> {
   const secret = Deno.env.get("RECALL_WORKSPACE_VERIFICATION_SECRET")
     || Deno.env.get("RECALL_SVIX_WEBHOOK_SECRET");
   if (!secret) {
@@ -198,18 +197,47 @@ export function verifyRecallWebhook(rawBody: string, headers: Headers): boolean 
     return true;
   }
 
+  const msgId = headers.get("webhook-id") ?? headers.get("svix-id");
+  const msgTimestamp = headers.get("webhook-timestamp") ?? headers.get("svix-timestamp");
+  const msgSignature = headers.get("webhook-signature") ?? headers.get("svix-signature");
+  if (!msgId || !msgTimestamp || !msgSignature) return false;
+  if (!secret.startsWith("whsec_")) {
+    console.error("[recall] invalid verification secret format");
+    return false;
+  }
+
   try {
-    const wh = new Webhook(secret);
-    wh.verify(rawBody, {
-      "svix-id": headers.get("svix-id") ?? headers.get("webhook-id") ?? "",
-      "svix-timestamp": headers.get("svix-timestamp") ?? headers.get("webhook-timestamp") ?? "",
-      "svix-signature": headers.get("svix-signature") ?? headers.get("webhook-signature") ?? "",
-    });
-    return true;
+    const base64Part = secret.slice("whsec_".length);
+    const keyBytes = Uint8Array.from(atob(base64Part), (c) => c.charCodeAt(0));
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyBytes,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+
+    const toSign = `${msgId}.${msgTimestamp}.${rawBody}`;
+    const sig = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(toSign));
+    const expected = btoa(String.fromCharCode(...new Uint8Array(sig)));
+
+    for (const versioned of msgSignature.split(" ")) {
+      const [version, signature] = versioned.split(",");
+      if (version !== "v1" || !signature) continue;
+      if (timingSafeEqual(signature, expected)) return true;
+    }
+    return false;
   } catch (e) {
     console.error("[recall] webhook verification failed", e);
     return false;
   }
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 export function mapRecallEventToStatus(event: string): string | null {
