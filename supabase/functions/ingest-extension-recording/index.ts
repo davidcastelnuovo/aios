@@ -6,12 +6,7 @@
 //   transcribe (from audio_file_path) → if client assigned: Hebrew summary →
 //   DOCX → client attachments → auto marketing brief (draft).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  generateMeetingSummary,
-  maybeCreateMarketingBrief,
-  saveSummaryForTarget,
-} from "../_shared/meeting-summary.ts";
-import { matchRecordingToClient } from "../_shared/recording-match.ts";
+import { runRecordingPipeline } from "../_shared/recording-pipeline.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,107 +78,11 @@ Deno.serve(async (req) => {
 
     const background = (async () => {
       try {
-        // 1. Transcribe (transcribe-recording prefers audio_file_path and
-        //    manages transcription_status/transcription_error itself).
-        let transcription: string | null = recording.transcription;
-        if (!transcription) {
-          const transcribeResponse = await fetch(`${SUPABASE_URL}/functions/v1/transcribe-recording`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${SERVICE_ROLE_KEY}`,
-            },
-            body: JSON.stringify({ recording_id }),
-          });
-          if (!transcribeResponse.ok) {
-            console.error("[ingest-extension-recording] transcription failed:", await transcribeResponse.text());
-            return;
-          }
-          const transcribeResult = await transcribeResponse.json();
-          transcription = transcribeResult.text || transcribeResult.transcription || null;
-        }
-
-        if (!transcription || !transcription.trim()) {
-          console.log("[ingest-extension-recording] no transcription produced, stopping");
-          return;
-        }
-
-        const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-        if (!OPENAI_API_KEY) {
-          console.error("[ingest-extension-recording] OPENAI_API_KEY not configured, skipping match/summary");
-          return;
-        }
-
-        // 2. No client assigned → try AI matching (suggest-first: auto-assign
-        //    only on high confidence; otherwise store a suggestion for the feed).
-        let clientId = recording.client_id;
-        if (!clientId) {
-          const match = await matchRecordingToClient(admin, OPENAI_API_KEY, {
-            tenant_id: recording.tenant_id,
-            meeting_topic: recording.meeting_topic,
-            transcription,
-            host_email: recording.host_email,
-          });
-          if (match.matchType === "client" && match.clientId) {
-            if (match.autoAssign) {
-              clientId = match.clientId;
-              await admin.from("zoom_recordings")
-                .update({ client_id: clientId, suggested_client_id: null })
-                .eq("id", recording_id);
-              console.log(`[ingest-extension-recording] auto-assigned to client ${clientId} (high confidence)`);
-            } else {
-              await admin.from("zoom_recordings")
-                .update({ suggested_client_id: match.clientId })
-                .eq("id", recording_id);
-              console.log(`[ingest-extension-recording] suggested client ${match.clientId} (awaiting confirmation)`);
-            }
-          } else if (match.matchType === "internal" && match.campaignerIds.length > 0) {
-            await admin.from("zoom_recordings")
-              .update({ campaigner_ids: match.campaignerIds })
-              .eq("id", recording_id);
-            console.log(`[ingest-extension-recording] tagged as internal (${match.campaignerIds.length} campaigners)`);
-          }
-        }
-
-        // 3. Summary + attachments + marketing brief — only when a client is assigned.
-        if (!clientId) {
-          console.log("[ingest-extension-recording] no client assigned, transcription only");
-          return;
-        }
-
-        const recordingInfo = `נושא הפגישה: ${recording.meeting_topic || "לא צוין"}
-תאריך: ${recording.start_time ? new Date(recording.start_time).toLocaleDateString("he-IL") : "לא צוין"}
-משך: ${recording.duration ? recording.duration + " דקות" : "לא צוין"}
-מארח: ${recording.host_email || "לא צוין"}`;
-
-        const summary = await generateMeetingSummary(OPENAI_API_KEY, transcription, recordingInfo, "");
-
-        const { data: client } = await admin
-          .from("clients")
-          .select("name")
-          .eq("id", clientId)
-          .maybeSingle();
-
-        const { fileUrl } = await saveSummaryForTarget(admin, {
-          tenant_id: recording.tenant_id,
-          target_type: "client",
-          target_id: clientId,
-          target_name: client?.name || "client",
-          summary,
-          recording_id,
-          created_by: user.id,
+        await runRecordingPipeline(admin, {
+          recording,
+          createdByUserId: user.id,
+          briefSource: "chrome_extension",
         });
-
-        // Brief lands as a draft in the strategy stage — human approval required.
-        const brief = await maybeCreateMarketingBrief(admin, OPENAI_API_KEY, {
-          summary,
-          tenant_id: recording.tenant_id,
-          client_id: clientId,
-          recording_id,
-          fileUrl,
-          source: "chrome_extension",
-        });
-        console.log(`[ingest-extension-recording] done: summary saved, brief=${brief.created ? brief.workItemId : "none"}`);
       } catch (err) {
         console.error("[ingest-extension-recording] background error:", err);
         await admin

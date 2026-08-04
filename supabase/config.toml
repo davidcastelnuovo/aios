@@ -313,6 +313,13 @@ verify_jwt = false
 [functions.ingest-extension-recording]
 verify_jwt = true
 
+# Carmen meeting bot (Recall.ai) — Zoom / Meet / Teams.
+[functions.dispatch-meeting-bot]
+verify_jwt = true
+
+[functions.meeting-bot-webhook]
+verify_jwt = false
+
 [functions.publishing-feed]
 verify_jwt = false
 
