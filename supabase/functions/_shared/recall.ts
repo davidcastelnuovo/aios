@@ -76,7 +76,13 @@ export async function createRecallBot(opts: CreateRecallBotOpts): Promise<Recall
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error("[recall] create bot failed", res.status, errText.slice(0, 500));
+    const region = Deno.env.get("RECALL_REGION") || "us-east-1";
+    console.error("[recall] create bot failed", res.status, "region=", region, errText.slice(0, 500));
+    if (res.status === 401 && errText.includes("authentication_failed")) {
+      throw new Error(
+        `Recall API token rejected (401). בדקו ש-RECALL_API_KEY מהטאב API Keys (לא whsec_) וש-RECALL_REGION תואם לאזור בחשבון Recall (כרגע: ${region}). לאירופה: eu-central-1.`,
+      );
+    }
     throw new Error(`Recall create bot failed (${res.status}): ${errText.slice(0, 200)}`);
   }
 
