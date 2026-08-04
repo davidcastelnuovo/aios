@@ -40,6 +40,8 @@ interface TaskBacklogPanelProps {
   campaignersList?: { id: string; full_name: string }[];
   onUpdateClient?: (taskId: string, clientId: string | null) => void;
   onUpdateCampaigner?: (taskId: string, campaignerId: string | null) => void;
+  /** mobileFull = full-height scrollable list for the mobile Tasks page default view */
+  variant?: "desktop" | "mobileFull";
 }
 
 function DraggableBacklogTask({
@@ -239,9 +241,12 @@ export function TaskBacklogPanel({
   campaignersList,
   onUpdateClient,
   onUpdateCampaigner,
+  variant = "desktop",
 }: TaskBacklogPanelProps) {
+  const isMobileFull = variant === "mobileFull";
   // Start collapsed if no tasks, expanded if there are tasks
   const [isExpanded, setIsExpanded] = useState(true);
+  const showExpanded = isMobileFull || isExpanded;
   
   const { setNodeRef, isOver } = useDroppable({
     id: "backlog",
@@ -279,43 +284,51 @@ export function TaskBacklogPanel({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col rounded-xl border transition-all duration-200 shrink-0 h-fit shadow-lg",
+        "flex flex-col rounded-xl border transition-all duration-200 shadow-lg",
         overdueCount > 0 
           ? "bg-destructive/5 border-destructive/30" 
           : "bg-background border-border",
-        isExpanded ? "min-w-[33vw] w-[33vw]" : "w-[60px]",
+        isMobileFull
+          ? "w-full min-w-0 h-full min-h-0 shrink"
+          : cn(
+              "shrink-0 h-fit",
+              isExpanded ? "min-w-[33vw] w-[33vw]" : "w-[60px]",
+            ),
         isOver && (overdueCount > 0 ? "bg-destructive/10" : "bg-accent/50")
       )}
     >
       {/* Header */}
       <div 
         className={cn(
-          "p-3 border-b rounded-t-xl cursor-pointer",
+          "p-3 border-b rounded-t-xl shrink-0",
           overdueCount > 0 
             ? "border-destructive/30 bg-destructive/10" 
             : "border-border bg-muted/50",
-          isExpanded ? "text-center" : "flex flex-col items-center"
+          showExpanded ? "text-center" : "flex flex-col items-center",
+          !isMobileFull && "cursor-pointer",
         )}
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={isMobileFull ? undefined : () => setIsExpanded(!isExpanded)}
       >
-        {isExpanded ? (
+        {showExpanded ? (
           <>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 flex-1 justify-center">
                 <ListTodo className="h-4 w-4 text-primary" />
                 <p className="text-sm font-bold">רשימת משימות</p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsExpanded(false);
-                }}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              {!isMobileFull && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsExpanded(false);
+                  }}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {overdueCount > 0 && (
@@ -338,8 +351,15 @@ export function TaskBacklogPanel({
       </div>
 
       {/* Tasks List - only show when expanded */}
-      {isExpanded && (
-        <div className="p-2 space-y-2 overflow-y-auto overscroll-contain max-h-[200px] md:max-h-[calc(100vh-250px)]">
+      {showExpanded && (
+        <div
+          className={cn(
+            "p-2 space-y-2 overflow-y-auto overscroll-contain",
+            isMobileFull
+              ? "flex-1 min-h-0"
+              : "max-h-[200px] md:max-h-[calc(100vh-250px)]",
+          )}
+        >
           {/* Quick Add Input */}
           {onAddTask && (
             <div className="pb-2 border-b border-border/50 mb-2">
