@@ -180,6 +180,7 @@ const TASK_NOTIFICATION_TYPES = new Set([
   'task_high_priority_reminder_sent',
   'task_completed',
   'task_self_reminder',
+  'task_overdue',
 ])
 const AIOS_APP_URL = 'https://aios.co.il'
 
@@ -218,6 +219,12 @@ function formatTaskNotificationMessage(
   } else if (notificationType === 'task_completed') {
     details.push(
       `המשימה שהגדרת ל${assigneeName || 'קמפיינר'} בוצעה ✅`,
+      `*${task.title}*`,
+      `לקוח: ${clientName}`,
+    )
+  } else if (notificationType === 'task_overdue') {
+    details.push(
+      'תזכורת: המשימה עברה את תאריך היעד ועדיין לא סומנה כבוצעה:',
       `*${task.title}*`,
       `לקוח: ${clientName}`,
     )

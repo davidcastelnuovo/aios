@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { taskNotificationScope, taskReminderAt } from './schedule.ts'
+import { taskNotificationScope, taskOverdueNotifyAt, taskReminderAt } from './schedule.ts'
+
+test('overdue task is notified at 08:30 Israel on the day after due date', () => {
+  const overdueAt = taskOverdueNotifyAt({
+    due_date: '2026-08-03',
+  })
+  assert.equal(overdueAt?.toISOString(), '2026-08-04T05:30:00.000Z')
+})
 
 test('high priority daytime task is reminded exactly five hours later', () => {
   const reminder = taskReminderAt({
