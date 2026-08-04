@@ -614,6 +614,11 @@ const ALL_TOOLS = [
   { name: 'update_calendar_invite', description: 'עדכון פגישה/זימון קיים ביומן — הזזת מועד, שינוי כותרת או הערות. כל המשתתפים מקבלים מייל עדכון אוטומטי. חובה event_id (מ-list_calendar_events). לעדכון מועד ספקי date+time (שעון ישראל).', parameters: { type: 'object', properties: { event_id: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' }, time: { type: 'string', description: 'HH:MM שעון ישראל' }, duration_minutes: { type: 'integer' }, title: { type: 'string' }, notes: { type: 'string' } }, required: ['event_id'] } },
   { name: 'cancel_calendar_invite', description: 'ביטול פגישה ביומן — המשתתפים מקבלים הודעת ביטול. חובה event_id (מ-list_calendar_events). חובה confirmed=true אחרי שהמשתמש אישר במפורש.', parameters: { type: 'object', properties: { event_id: { type: 'string' }, confirmed: { type: 'boolean', description: 'חובה true — רק אחרי אישור מפורש של המשתמש' } }, required: ['event_id', 'confirmed'] } },
   // ===========================
+  // MEETING BOT (Zoom / Meet / Teams)
+  // ===========================
+  { name: 'join_meeting_for_client', description: 'שליחת כרמן (בוט תמלול גלוי) לפגישת Zoom, Google Meet או Microsoft Teams — גם בלי זימון ביומן, רק עם קישור. מתמללת את כל הדוברים, מקליטה, ומייצרת סיכום+בריף אם שויך לקוח. אשרו אותה בחדר ההמתנה אם נדרש.', parameters: { type: 'object', properties: { meeting_url: { type: 'string', description: 'קישור מלא לפגישה (zoom.us/j/..., meet.google.com/..., teams.microsoft.com/...)' }, client_id: { type: 'string', description: 'מזהה לקוח לשיוך הסיכום (מומלץ)' }, lead_id: { type: 'string', description: 'מזהה ליד (אופציונלי, במקום לקוח)' }, meeting_topic: { type: 'string', description: 'שם/נושא הפגישה (אופציונלי)' } }, required: ['meeting_url'] } },
+  { name: 'get_meeting_bot_status', description: 'סטטוס בוט פגישה של כרמן — האם הצטרפה, מקליטה, מעבדת סיכום, או נכשלה. לפי session_id או bot_id.', parameters: { type: 'object', properties: { session_id: { type: 'string' }, bot_id: { type: 'string' } } } },
+  // ===========================
   // CAMPAIGNER MESSAGING
   // ===========================
   { name: 'send_message_to_campaigner', description: 'שליחת הודעת WhatsApp לחבר צוות/קמפיינר לפי campaigner_id. עדיף על send_whatsapp_via_gateway כשרוצים לשלוח לחבר צוות ולא יודעים את מספר הטלפון.', parameters: { type: 'object', properties: { campaigner_id: { type: 'string', description: 'מזהה הקמפיינר (UUID)' }, message_text: { type: 'string', description: 'תוכן ההודעה' } }, required: ['campaigner_id', 'message_text'] } },
@@ -5304,6 +5309,78 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         return { error: `שגיאת Google Calendar: ${(data as any)?.error?.message || resp.status}` }
       }
       return { success: true, message: 'האירוע בוטל — המשתתפים קיבלו הודעת ביטול.' }
+    }
+
+    // ============ MEETING BOT ============
+    case 'join_meeting_for_client': {
+      const { meeting_url, client_id, lead_id, meeting_topic } = args
+      if (!meeting_url?.trim()) return { error: 'meeting_url נדרש — קישור Zoom / Google Meet / Teams' }
+
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/dispatch-meeting-bot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          meeting_url: String(meeting_url).trim(),
+          client_id: client_id || null,
+          lead_id: lead_id || null,
+          meeting_topic: meeting_topic || null,
+          tenant_id: tenantId,
+          created_by: userId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) return { error: data.error || `שגיאה בשליחת הבוט (${res.status})` }
+      return {
+        success: true,
+        session_id: data.session_id,
+        bot_id: data.bot_id,
+        platform: data.platform_label,
+        message: data.message || 'כרמן מצטרפת לפגישה. אשרו אותה בחדר ההמתנה אם נדרש.',
+      }
+    }
+
+    case 'get_meeting_bot_status': {
+      const { session_id, bot_id } = args
+      if (!session_id && !bot_id) return { error: 'session_id או bot_id נדרש' }
+
+      let q = supabase
+        .from('meeting_bot_sessions')
+        .select('id, status, status_detail, platform, meeting_topic, meeting_url, client_id, zoom_recording_id, error, joined_at, ended_at, created_at, external_bot_id')
+        .in('tenant_id', accessibleTenantIds)
+      if (session_id) q = q.eq('id', session_id)
+      else q = q.eq('external_bot_id', bot_id)
+
+      const { data: session, error } = await q.maybeSingle()
+      if (error) return { error: error.message }
+      if (!session) return { error: 'לא נמצאה פגישת בוט' }
+
+      const statusLabels: Record<string, string> = {
+        scheduled: 'מתוזמנת',
+        joining: 'מצטרפת',
+        waiting_room: 'בחדר המתנה — אשרו את כרמן',
+        in_meeting: 'בפגישה ומקליטה',
+        processing: 'מעבדת תמלול וסיכום',
+        done: 'הסתיימה — סיכום מוכן',
+        failed: 'נכשלה',
+        cancelled: 'בוטלה',
+      }
+
+      return {
+        session_id: session.id,
+        bot_id: session.external_bot_id,
+        status: session.status,
+        status_label: statusLabels[session.status] || session.status,
+        platform: session.platform,
+        meeting_topic: session.meeting_topic,
+        client_id: session.client_id,
+        recording_id: session.zoom_recording_id,
+        error: session.error,
+        joined_at: session.joined_at,
+        ended_at: session.ended_at,
+      }
     }
 
     // ============ CAMPAIGNER MESSAGING ============

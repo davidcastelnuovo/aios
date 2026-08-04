@@ -21,6 +21,7 @@ import {
   Download,
   Loader2,
   Upload,
+  Bot,
   FileVideo,
   Folder,
   FolderPlus,
@@ -34,6 +35,7 @@ import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 import { SummaryViewerDialog } from "@/components/recordings/SummaryViewerDialog";
 import { ShareSummaryDialog } from "@/components/recordings/ShareSummaryDialog";
 import { RecordingCard, type FeedRecording, type FolderOption } from "@/components/recordings/RecordingCard";
+import { JoinMeetingBotDialog } from "@/components/recordings/JoinMeetingBotDialog";
 import { cn } from "@/lib/utils";
 
 type SidebarSelection =
@@ -63,6 +65,7 @@ export default function Recordings() {
   });
   const [fetchToDate, setFetchToDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [zoomFetchOpen, setZoomFetchOpen] = useState(false);
+  const [joinBotOpen, setJoinBotOpen] = useState(false);
 
   const [summarizeRec, setSummarizeRec] = useState<FeedRecording | null>(null);
   const [summaryViewRec, setSummaryViewRec] = useState<FeedRecording | null>(null);
@@ -479,6 +482,10 @@ export default function Recordings() {
               משוך מ-Zoom
             </Button>
           )}
+          <Button variant="outline" onClick={() => setJoinBotOpen(true)}>
+            <Bot className="h-4 w-4 ml-2" />
+            שלח את כרמן לפגישה
+          </Button>
           <Button onClick={() => setUploadOpen(true)}>
             <Upload className="h-4 w-4 ml-2" />
             העלה הקלטה
@@ -681,6 +688,14 @@ export default function Recordings() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Carmen meeting bot dialog */}
+      <JoinMeetingBotDialog
+        open={joinBotOpen}
+        onOpenChange={setJoinBotOpen}
+        tenantId={currentTenantId}
+        clients={clients}
+      />
 
       {/* Zoom fetch dialog */}
       <Dialog open={zoomFetchOpen} onOpenChange={setZoomFetchOpen}>
