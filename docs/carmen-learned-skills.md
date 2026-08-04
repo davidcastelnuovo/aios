@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — Send WhatsApp to staff by system mapping
+- **Skin slug:** `wa_send_to_staff_mapping` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Look up and message campaigners, salespeople, and team members by ID/name via DB phone mapping — not only leads/clients or a raw gateway phone. Tools: `lookup_staff_whatsapp`, `send_whatsapp_to_staff` (plus `send_message_to_campaigner` wrapper). Ana (`d6cd8d62-…`, `972545612156`) is the reference authorized campaigner for direct private chat.
+- **How:** (1) `lookup_staff_whatsapp` / `list_campaigners` / `search_entities(campaigner|sales_person)`; (2) `send_whatsapp_to_staff(staff_id|name, message)` — phone resolved from DB only; (3) private Ana replies stay in Ana’s thread (see `wa_private_direct_chat_routing`). Shared helper: `_shared/staff-whatsapp`.
+- **Origin:** Carmen → Cursor DEV TASK — David: tool to WhatsApp staff from system mapping + confirm Ana’s phone.
+
 ### 2026-08-04 — Private WhatsApp direct-chat routing (Ana stays in her thread)
 - **Skin slug:** `wa_private_direct_chat_routing` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Answer authorized private WhatsApp chats (David + Ana) in the **same originating chat**. Ana’s private DMs must not be attributed to David’s chat and must not notify David unless she explicitly asks or escalation is required. Groups still answer whoever addresses Carmen (with phone/identity verification). Outbound third-party guard preserved (David messaging contacts without “כרמן” does not wake Carmen).
