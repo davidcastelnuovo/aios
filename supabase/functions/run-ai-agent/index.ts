@@ -39,6 +39,14 @@ import {
   scoreNameMatch,
   selectStaffMatch,
 } from '../_shared/staff-whatsapp.ts'
+import {
+  OPENAI_BILLING_REFUSAL_HE,
+  buildOpenAiBillingStatus,
+  formatOpenAiBillingWhatsApp,
+  isSuperAdminRole,
+  monthUtcBounds,
+  redactSecretsFromText,
+} from '../_shared/openai-billing.ts'
 
 function scoreNameMatchSafe(fullName: string, query: string): number {
   return scoreNameMatch(fullName, query)
@@ -127,6 +135,114 @@ async function loadStaffWhatsappRoster(
   }
 
   return out
+}
+
+/** Resolve OpenAI Admin API key (org costs/usage). Never log the value. */
+async function resolveOpenAiAdminKey(supabase: any, tenantId: string): Promise<{ key: string | null; source: string | null }> {
+  const fromEnv = Deno.env.get('OPENAI_ADMIN_KEY') || Deno.env.get('OPENAI_ADMIN_API_KEY')
+  if (fromEnv && String(fromEnv).trim()) {
+    return { key: String(fromEnv).trim(), source: 'env:OPENAI_ADMIN_KEY' }
+  }
+  try {
+    const { data } = await supabase
+      .from('tenant_integrations')
+      .select('settings')
+      .eq('tenant_id', tenantId)
+      .eq('integration_type', 'llm')
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const s = (data?.settings || {}) as Record<string, string>
+    const fromSettings = s.openai_admin_api_key || s.openai_admin_key || s.openai_organization_admin_key
+    if (fromSettings && String(fromSettings).trim()) {
+      return { key: String(fromSettings).trim(), source: 'tenant_integrations.llm.settings' }
+    }
+  } catch { /* ignore */ }
+  return { key: null, source: null }
+}
+
+async function openaiAdminGet(pathWithQuery: string, adminKey: string): Promise<{ ok: boolean; status: number; json: any; error?: string }> {
+  try {
+    const res = await fetch(`https://api.openai.com/v1${pathWithQuery}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${adminKey}`,
+        'Content-Type': 'application/json',
+      },
+    })
+    const text = await res.text()
+    let json: any = null
+    try { json = text ? JSON.parse(text) : null } catch { json = null }
+    if (!res.ok) {
+      const msg = redactSecretsFromText(
+        json?.error?.message || json?.message || text || `HTTP ${res.status}`,
+      )
+      return { ok: false, status: res.status, json, error: msg }
+    }
+    return { ok: true, status: res.status, json }
+  } catch (e: any) {
+    return { ok: false, status: 0, json: null, error: redactSecretsFromText(e?.message || String(e)) }
+  }
+}
+
+async function fetchOpenAiBillingStatus(args: {
+  supabase: any
+  tenantId: string
+  includeTokens?: boolean
+}): Promise<any> {
+  const { supabase, tenantId } = args
+  const includeTokens = args.includeTokens !== false
+  const { key, source } = await resolveOpenAiAdminKey(supabase, tenantId)
+  if (!key) {
+    return {
+      ok: false,
+      error: 'חסר מפתח Admin של OpenAI. הגדירי את הסוד OPENAI_ADMIN_KEY ב-Supabase, או את openai_admin_api_key באינטגרציית llm. מפתח sk- רגיל לא מספיק ל-Costs/Usage Admin API.',
+      remaining_credit: null,
+      remaining_credit_available: false,
+      remaining_credit_reason: 'Admin API key missing',
+      setup: {
+        dashboard_admin_keys: 'https://platform.openai.com/settings/organization/admin-keys',
+        billing_dashboard: 'https://platform.openai.com/settings/organization/billing',
+      },
+      summary_he: 'אין מפתח Admin — לא ניתן לשלוף שימוש/עלויות OpenAI מה-API. יתרת קרדיט ממילא לא זמינה ב-API הרשמי.',
+    }
+  }
+
+  const period = monthUtcBounds()
+  // Paginate costs for the whole month (limit 31 daily buckets).
+  const costsQs = `start_time=${period.start_time}&end_time=${period.end_time}&bucket_width=1d&limit=31`
+  const costsRes = await openaiAdminGet(`/organization/costs?${costsQs}`, key)
+
+  let usageRes: { ok: boolean; status: number; json: any; error?: string } | null = null
+  if (includeTokens) {
+    usageRes = await openaiAdminGet(
+      `/organization/usage/completions?${costsQs}`,
+      key,
+    )
+  }
+
+  // Best-effort spend limits (endpoint may 404 depending on account).
+  const limitsRes = await openaiAdminGet(`/organization/spend_limits`, key)
+  const limitsAlt = !limitsRes.ok
+    ? await openaiAdminGet(`/organization/spend_limit`, key)
+    : null
+  const spend = limitsRes.ok ? limitsRes : (limitsAlt?.ok ? limitsAlt : limitsRes)
+
+  const status = buildOpenAiBillingStatus({
+    costs: costsRes.ok ? costsRes.json : null,
+    usage: usageRes?.ok ? usageRes.json : null,
+    spendLimits: spend.ok ? spend.json : null,
+    costsError: costsRes.ok ? null : costsRes.error,
+    usageError: usageRes && !usageRes.ok ? usageRes.error : null,
+    spendLimitsError: spend.ok ? null : spend.error,
+    period,
+    authSource: source,
+  })
+
+  const summary_he = formatOpenAiBillingWhatsApp(status)
+  // Never echo key material
+  return { ...status, summary_he }
 }
 
 async function sendStaffWhatsappMessage(args: {
@@ -333,6 +449,7 @@ const PRIORITY_TOOLS = new Set([
   // Staff WhatsApp — must survive the 128-tool cap (was late in ALL_TOOLS).
   'send_whatsapp_to_staff', 'lookup_staff_whatsapp', 'send_message_to_campaigner',
   'list_campaigners', 'list_sales_people',
+  'get_openai_billing_status',
 ])
 
 function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
@@ -392,6 +509,7 @@ const CORE_TOOLS = new Set([
   // Staff WhatsApp mapping (campaigner / salesperson / team) — not lead/client-only.
   'send_whatsapp_to_staff', 'lookup_staff_whatsapp', 'send_message_to_campaigner',
   'list_campaigners', 'list_sales_people',
+  'get_openai_billing_status',
   // Meta ad inspect/duplicate — must remain reachable even when the embedding
   // router is unavailable (migration not applied) or similarity misses.
   'inspect_facebook_ad', 'fb_duplicate_ad_variants', 'duplicate_facebook_ad_variants',
@@ -472,6 +590,10 @@ async function selectRelevantTools(supabase: any, userText: string, toolDefs: an
       picked.add('list_campaigners')
       picked.add('list_sales_people')
       picked.add('search_entities')
+    }
+    // OpenAI billing / credit / usage (super_admin tool — still must be in schema when asked).
+    if (/(openai|open ai|קרדיט|יתרת|billing|usage|חיוב|כמה.*(נשאר|עולה|הוצא)|api.*(cost|credit|balance))/i.test(userText)) {
+      picked.add('get_openai_billing_status')
     }
     const result = toolDefs.filter((t) => picked.has(t.name))
     if (result.length < 10) return toolDefs // guard against an empty/bad match wiping the toolset
@@ -579,6 +701,7 @@ const ALL_TOOLS = [
   { name: 'lookup_staff_whatsapp', description: 'מיפוי אנשי צוות לשליחת WhatsApp: קמפיינרים, אנשי מכירות ופרופילי צוות עם מספרי טלפון מה-DB. השתמשי לפני send_whatsapp_to_staff כשצריך לבחור לפי שם.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['campaigner', 'sales_person', 'team_member', 'auto'], description: 'סוג ישות (ברירת מחדל auto = הכל)' }, search: { type: 'string', description: 'חיפוש חלקי בשם' }, only_with_phone: { type: 'boolean', description: 'רק מי שיש להם טלפון (ברירת מחדל true)' }, limit: { type: 'integer' } } } },
   { name: 'send_whatsapp_to_staff', description: 'שליחת WhatsApp ישירות לחבר צוות לפי מיפוי המערכת (campaigner / sales_person / team_member). פותרת טלפון מה-DB בלבד — לא ממספר ידני. עדיף על send_message (שמיועד לליד/לקוח) ועל send_whatsapp_via_gateway כשלא יודעים את המספר.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['campaigner', 'sales_person', 'team_member', 'auto'] }, staff_id: { type: 'string', description: 'UUID של הקמפיינר / איש מכירות / פרופיל' }, name: { type: 'string', description: 'שם לחיפוש אם אין staff_id' }, message: { type: 'string', description: 'תוכן ההודעה' }, campaigner_id: { type: 'string', description: 'alias ל-staff_id כשentity_type=campaigner' }, message_text: { type: 'string', description: 'alias ל-message' } }, required: ['message'] } },
   { name: 'send_message_to_campaigner', description: 'שליחת WhatsApp לקמפיינר לפי campaigner_id (עטיפה ל-send_whatsapp_to_staff).', parameters: { type: 'object', properties: { campaigner_id: { type: 'string', description: 'מזהה הקמפיינר (UUID)' }, message_text: { type: 'string', description: 'תוכן ההודעה' }, name: { type: 'string', description: 'אופציונלי — שם אם אין id' } }, required: ['message_text'] } },
+  { name: 'get_openai_billing_status', description: 'סטטוס חיוב/שימוש OpenAI לארגון (super_admin בלבד): עלות החודש הנוכחי, טוקנים אם זמינים, ומגבלות אם זמינות. יתרת קרדיט לא נחשפת ב-API הרשמי — מחזיר unavailable במקום להמציא. דורש OPENAI_ADMIN_KEY (או openai_admin_api_key באינטגרציית llm).', parameters: { type: 'object', properties: { include_tokens: { type: 'boolean', description: 'כלול גם סיכום טוקנים מ-usage/completions (ברירת מחדל true)' } } } },
   // SEARCH
   { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים, אנשי מכירות או לידים לפי שם. ללקוחות: מחפש גם aliases/אנגלית/עברית, שמות חשבונות מודעות Meta, טבלאות דוח, ולקוחות ended/paused — לא רק active. עבור קמפיינר WhatsApp התוצאות מוגבלות אלא אם all_scopes=true.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'sales_person', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' }, include_inactive: { type: 'boolean', description: 'ללקוחות: כלול ended/paused (ברירת מחדל true בחיפוש לפי שם)' } }, required: ['entity_type', 'search_term'] } },
   { name: 'query_system_graph', description: 'חיפוש לקריאה בלבד בגרף הארכיטקטורה של AIOS: קוד, Edge Functions, טבלאות SQL, מודולים וקשרים ביניהם. השתמשי רק לשאלות טכניות על מבנה המערכת, מיקום מימוש, תלות בין רכיבים או השפעת שינוי. הכלי זמין למנהלים בלבד ואינו מחזיר נתוני לקוחות.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מונחים טכניים לחיפוש, רצוי באנגלית ושמות רכיבים מדויקים' }, depth: { type: 'integer', minimum: 0, maximum: 3, description: 'עומק ניווט בקשרים, ברירת מחדל 2' }, limit: { type: 'integer', minimum: 1, maximum: 80, description: 'מספר צמתים מרבי, ברירת מחדל 40' } }, required: ['query'] } },
@@ -5589,6 +5712,28 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
     }
 
+    // ============ OPENAI BILLING (super_admin) ============
+    case 'get_openai_billing_status': {
+      if (!isSuperAdminRole(callerRole)) {
+        return { error: OPENAI_BILLING_REFUSAL_HE, allowed: false }
+      }
+      try {
+        return await fetchOpenAiBillingStatus({
+          supabase,
+          tenantId,
+          includeTokens: args.include_tokens !== false,
+        })
+      } catch (e: any) {
+        return {
+          ok: false,
+          error: redactSecretsFromText(e?.message || 'openai billing failed'),
+          remaining_credit: null,
+          remaining_credit_available: false,
+          summary_he: 'שגיאה בשליפת סטטוס חיוב OpenAI.',
+        }
+      }
+    }
+
     // ============ STAFF / CAMPAIGNER WHATSAPP ============
     case 'lookup_staff_whatsapp': {
       const entityType = args.entity_type || 'auto'
@@ -6625,6 +6770,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     if (!canEscalateDevFixes) {
       filteredTools = filteredTools.filter((t) => !isDevEscalationTool(t.name))
       // Rebuild API list from the filtered native set (MCP added below).
+      toolsForAPI.length = 0
+      toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
+    }
+
+    // OpenAI billing/usage is super_admin-only — hide from everyone else.
+    if (!isSuperAdminRole(callerRole)) {
+      filteredTools = filteredTools.filter((t) => t.name !== 'get_openai_billing_status')
       toolsForAPI.length = 0
       toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
     }

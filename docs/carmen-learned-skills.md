@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — OpenAI billing/usage status (super_admin)
+- **Skin slug:** `openai_billing_status` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Answer David (super_admin) about OpenAI org spend/usage via `get_openai_billing_status`. Reports current-month cost + optional token usage. **Never invents remaining credit** — OpenAI’s public Admin API does not expose prepaid balance (dashboard-only).
+- **How:** Requires `OPENAI_ADMIN_KEY` secret (or `openai_admin_api_key` on the `llm` integration). Calls `GET /v1/organization/costs` (+ usage/completions). Returns `summary_he` for WhatsApp. Shared helper: `_shared/openai-billing`.
+- **Origin:** Carmen → Cursor DEV TASK — David: “כמה קרדיט OpenAI נשאר?” via API/MCP.
+
 ### 2026-08-04 — Send WhatsApp to staff by system mapping
 - **Skin slug:** `wa_send_to_staff_mapping` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Look up and message campaigners, salespeople, and team members by ID/name via DB phone mapping — not only leads/clients or a raw gateway phone. Tools: `lookup_staff_whatsapp`, `send_whatsapp_to_staff` (plus `send_message_to_campaigner` wrapper). Ana (`d6cd8d62-…`, `972545612156`) is the reference authorized campaigner for direct private chat.
