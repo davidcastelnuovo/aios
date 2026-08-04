@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — Expose inspect/duplicate Meta tools in Carmen runtime schema
+- **Skin slug:** `fb_duplicate_ad_variants` (triggers broadened)
+- **What changed:** Tools from PR #325 existed in `ALL_TOOLS` but were invisible on WhatsApp — OpenAI's 128-tool cap truncated late tools (~index 147+) whenever the embedding router fell back to the full set (`agent_tool_embeddings` / `match_agent_tools` were never applied in prod). Fix: move tools next to other FB tools, add to `CORE_TOOLS` + `PRIORITY_TOOLS` (cap + router never drop them), keyword force-include for שכפול/duplicate, apply `create_agent_tool_embeddings` ops migration.
+- **How Carmen retries:** Ask to duplicate Kernelios winning ad → `inspect_facebook_ad` + `fb_duplicate_ad_variants` must appear in the tool schema; queue variants → pending approval.
+- **Origin:** Carmen → Cursor FIX-ON-FAIL — "tools not in current AI tool schema" after PR #325.
+
 ### 2026-08-04 — Duplicate Meta ad with copy variants (approval-gated)
 - **Skin slug:** `fb_duplicate_ad_variants` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Inspect a winning Facebook ad (`inspect_facebook_ad` → adset/page/creative/lead_form), then queue `fb_duplicate_ad_variants` to create N new ads under the same ad set with different primary_text/headline while reusing media + lead form. Optional `daily_budget` (₪) at campaign or adset level. Always returns `pending_approval` — no Meta write until David approves.

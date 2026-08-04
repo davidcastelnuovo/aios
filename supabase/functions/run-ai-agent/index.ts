@@ -123,19 +123,36 @@ function isEscalationMcpTool(name: string | undefined): boolean {
   return name.startsWith('mcp_Cursor__') || name.startsWith('mcp_Claude__') || name.startsWith('mcp_Manus__')
 }
 
+/**
+ * Tools that must survive OpenAI's 128-tool cap + the embedding router.
+ * New Meta tools were previously defined near the end of ALL_TOOLS (~index 147)
+ * and got sliced off whenever the router fell back to the full ~176-tool set.
+ */
+const PRIORITY_TOOLS = new Set([
+  'analyze_facebook_campaign', 'list_facebook_ads', 'inspect_facebook_ad',
+  'fb_duplicate_ad_variants', 'duplicate_facebook_ad_variants',
+  'toggle_facebook_campaign', 'list_facebook_campaigns', 'get_facebook_campaign_data',
+  'update_facebook_budget', 'fb_pause', 'fb_resume', 'fb_update_budget',
+  'execute_pending_approval', 'reject_pending_approval', 'list_pending_approvals',
+])
+
 function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
   if (target.provider !== 'openai' || tools.length <= OPENAI_MAX_TOOLS) return tools
-  // Escalation MCP tools (Cursor/Claude/Manus) are appended after the native
-  // toolset — never drop them when enforcing OpenAI's 128-tool cap.
-  const mustKeep = tools.filter((t) => isEscalationMcpTool(t?.function?.name))
+  // Escalation MCP + PRIORITY Meta/approval tools must never be truncated.
+  const mustKeepEscalation = tools.filter((t) => isEscalationMcpTool(t?.function?.name))
+  const mustKeepPriority = tools.filter((t) => {
+    const n = t?.function?.name
+    return !!n && PRIORITY_TOOLS.has(n) && !isEscalationMcpTool(n)
+  })
   const kept = tools.filter((t) => {
     const n = t?.function?.name
-    if (isEscalationMcpTool(n)) return false // re-add at front below
+    if (!n || isEscalationMcpTool(n) || PRIORITY_TOOLS.has(n)) return false
     return !LOW_PRIORITY_TOOLS.has(n)
   })
-  const room = Math.max(0, OPENAI_MAX_TOOLS - mustKeep.length)
-  const capped = [...mustKeep, ...kept.slice(0, room)]
-  console.log(`[AGENT] OpenAI tool cap: ${tools.length} → ${capped.length} (kept ${mustKeep.length} escalation MCP)`)
+  const reserved = mustKeepEscalation.length + mustKeepPriority.length
+  const room = Math.max(0, OPENAI_MAX_TOOLS - reserved)
+  const capped = [...mustKeepEscalation, ...mustKeepPriority, ...kept.slice(0, room)]
+  console.log(`[AGENT] OpenAI tool cap: ${tools.length} → ${capped.length} (kept ${mustKeepEscalation.length} escalation MCP + ${mustKeepPriority.length} priority)`)
   return capped
 }
 
@@ -173,6 +190,11 @@ const CORE_TOOLS = new Set([
   'list_clients', 'get_client_info', 'list_leads', 'search_entities',
   'create_task', 'list_tasks', 'list_my_agent_tasks', 'create_agent_task',
   'send_message', 'get_dashboard_stats', 'recall_recent_action', 'record_action_episode',
+  // Meta ad inspect/duplicate — must remain reachable even when the embedding
+  // router is unavailable (migration not applied) or similarity misses.
+  'inspect_facebook_ad', 'fb_duplicate_ad_variants', 'duplicate_facebook_ad_variants',
+  'list_facebook_ads', 'analyze_facebook_campaign',
+  'execute_pending_approval', 'reject_pending_approval',
 ])
 
 // Cheap, stable signature of a tool description so embeddings refresh when the
@@ -212,6 +234,17 @@ async function selectRelevantTools(supabase: any, userText: string, toolDefs: an
     if (!data?.length) return toolDefs
     const picked = new Set<string>(data.map((r: any) => r.tool_name))
     for (const c of CORE_TOOLS) picked.add(c)
+    for (const p of PRIORITY_TOOLS) picked.add(p)
+    // Keyword force-include for Meta ad duplication (Hebrew + English).
+    if (/(שכפל|שכפול|וריאצ|קופי|duplicate\s*ad|copy\s*variant|ad\s*variant|inspect.?ad)/i.test(userText)) {
+      picked.add('inspect_facebook_ad')
+      picked.add('fb_duplicate_ad_variants')
+      picked.add('duplicate_facebook_ad_variants')
+      picked.add('list_facebook_ads')
+      picked.add('analyze_facebook_campaign')
+      picked.add('execute_pending_approval')
+      picked.add('reject_pending_approval')
+    }
     const result = toolDefs.filter((t) => picked.has(t.name))
     if (result.length < 10) return toolDefs // guard against an empty/bad match wiping the toolset
     console.log(`[AGENT] tool router: ${toolDefs.length} → ${result.length} relevant tools`)
@@ -326,6 +359,10 @@ const ALL_TOOLS = [
   { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין/ad set/מודעה בפייסבוק. campaign_id יכול להיות גם ad_id. מכניס בקשת אישור לתור — לא מבצע מיד. אחרי אישור — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, campaign_id: { type: 'string', description: 'Facebook campaign_id / adset_id / ad_id' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, level: { type: 'string', enum: ['campaign', 'adset', 'ad'], description: 'ברירת מחדל campaign; עבור מודעה בודדת העבירי level=ad' } }, required: ['client_id', 'campaign_id', 'status'] } },
   { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: היום/7/30 ימים + פירוט מודעות (ad-level) עם spend/leads/CPL. השתמשי לפני הפעלה/כיבוי סלקטיבי של מודעות.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'list_facebook_ads', description: 'רשימת מודעות (ads) תחת קמפיין פייסבוק עם סטטוס ו-CPL/spend/leads ל-7 ימים. להשתמש לפני הדלקה סלקטיבית של מודעות עם CPL נמוך.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
+  // Placed early (near other FB tools) so OpenAI's 128-tool cap cannot drop them.
+  { name: 'inspect_facebook_ad', description: 'קריאה בלבד: פרטי מודעת Meta מקור (adset_id, campaign_id, page_id, creative_id, lead_form_id, טקסט/כותרת נוכחיים). חובה לפני שכפול עם וריאציות קופי.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, ad_id: { type: 'string' } }, required: ['client_id', 'ad_id'] } },
+  { name: 'fb_duplicate_ad_variants', description: 'שכפול מודעת Meta מנצחת ל-N מודעות חדשות באותו ad set, עם וריאציות primary_text/headline — שומר media/page/lead form. דורש אישור (pending_approval). אופציונלי: daily_budget בש"ח + budget_level=campaign|adset.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, source_ad_id: { type: 'string' }, count: { type: 'integer', description: 'כמה מודעות ליצור (עד 8)' }, variants: { type: 'array', description: 'מערך {primary_text, headline?, name?, description?}', items: { type: 'object', properties: { primary_text: { type: 'string' }, headline: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' } }, required: ['primary_text'] } }, daily_budget: { type: 'number', description: 'תקציב יומי בש"ח (למשל 200)' }, budget_level: { type: 'string', enum: ['campaign', 'adset'], description: 'ברירת מחדל campaign' }, status: { type: 'string', enum: ['PAUSED', 'ACTIVE'], description: 'סטטוס המודעות החדשות — ברירת מחדל PAUSED' } }, required: ['client_id', 'source_ad_id', 'variants'] } },
+  { name: 'duplicate_facebook_ad_variants', description: 'Alias ל-fb_duplicate_ad_variants — שכפול מודעה עם וריאציות קופי (דורש אישור).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, source_ad_id: { type: 'string' }, count: { type: 'integer' }, variants: { type: 'array', items: { type: 'object' } }, daily_budget: { type: 'number' }, budget_level: { type: 'string', enum: ['campaign', 'adset'] }, status: { type: 'string', enum: ['PAUSED', 'ACTIVE'] } }, required: ['client_id', 'source_ad_id', 'variants'] } },
   { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת לפני הבקשה. אחרי אישור המשתמש — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED). מכניס בקשת אישור לתור — לא מבצע מיד. אחרי אישור — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'get_campaign_alerts', description: 'שליפת התראות פתוחות על קמפיינים (קמפיין נעצר, מודעה לא מאושרת, CPL חורג, frequency גבוה). השתמש בתחילת בדיקת דופק או כשהמשתמש שואל על מצב הקמפיינים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, only_open: { type: 'boolean', description: 'ברירת מחדל true' } } } },
@@ -508,9 +545,7 @@ const ALL_TOOLS = [
   { name: 'fb_update_budget', description: 'שינוי תקציב יומי או lifetime לקמפיין/ad set. דורש אישור.', parameters: { type: 'object', properties: { entity_id: { type: 'string', description: 'campaign_id או adset_id' }, daily_budget: { type: 'number' }, lifetime_budget: { type: 'number' } }, required: ['entity_id'] } },
   { name: 'fb_pause', description: 'השהיית קמפיין/ad set/מודעה (PAUSED). דורש אישור.', parameters: { type: 'object', properties: { entity_id: { type: 'string' } }, required: ['entity_id'] } },
   { name: 'fb_resume', description: 'הדלקה מחדש (ACTIVE) של קמפיין/ad set/מודעה. דורש אישור.', parameters: { type: 'object', properties: { entity_id: { type: 'string' } }, required: ['entity_id'] } },
-  { name: 'inspect_facebook_ad', description: 'קריאה בלבד: פרטי מודעת Meta מקור (adset_id, campaign_id, page_id, creative_id, lead_form_id, טקסט/כותרת נוכחיים). חובה לפני שכפול עם וריאציות קופי.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, ad_id: { type: 'string' } }, required: ['client_id', 'ad_id'] } },
-  { name: 'fb_duplicate_ad_variants', description: 'שכפול מודעת Meta מנצחת ל-N מודעות חדשות באותו ad set, עם וריאציות primary_text/headline — שומר media/page/lead form. דורש אישור (pending_approval). אופציונלי: daily_budget בש"ח + budget_level=campaign|adset.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, source_ad_id: { type: 'string' }, count: { type: 'integer', description: 'כמה מודעות ליצור (עד 8)' }, variants: { type: 'array', description: 'מערך {primary_text, headline?, name?, description?}', items: { type: 'object', properties: { primary_text: { type: 'string' }, headline: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' } }, required: ['primary_text'] } }, daily_budget: { type: 'number', description: 'תקציב יומי בש"ח (למשל 200)' }, budget_level: { type: 'string', enum: ['campaign', 'adset'], description: 'ברירת מחדל campaign' }, status: { type: 'string', enum: ['PAUSED', 'ACTIVE'], description: 'סטטוס המודעות החדשות — ברירת מחדל PAUSED' } }, required: ['client_id', 'source_ad_id', 'variants'] } },
-  { name: 'duplicate_facebook_ad_variants', description: 'Alias ל-fb_duplicate_ad_variants — שכפול מודעה עם וריאציות קופי (דורש אישור).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, source_ad_id: { type: 'string' }, count: { type: 'integer' }, variants: { type: 'array', items: { type: 'object' } }, daily_budget: { type: 'number' }, budget_level: { type: 'string', enum: ['campaign', 'adset'] }, status: { type: 'string', enum: ['PAUSED', 'ACTIVE'] } }, required: ['client_id', 'source_ad_id', 'variants'] } },
+  // inspect_facebook_ad / fb_duplicate_ad_variants live next to list_facebook_ads (early in ALL_TOOLS).
   // ===========================
   // GOOGLE ADS — pause/resume/budget at campaign level
   // ===========================
