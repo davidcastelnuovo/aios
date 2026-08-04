@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     // Look up the share
     const { data: share, error: shareError } = await supabase
       .from("dashboard_shares")
-      .select("*, crm_dashboards(*, clients(name), agencies(name))")
+      .select("*, crm_dashboards(*, clients(name, website), agencies(name))")
       .eq("share_token", shareToken)
       .eq("is_active", true)
       .single();
@@ -204,6 +204,27 @@ Deno.serve(async (req) => {
     let wooOrders: any[] = [];
     let maskyooSnapshots: any[] = [];
     let maskyooPeriod: { start: string; end: string } | null = null;
+    // Monthly work log — same payload shape as public-table so the shared
+    // dashboard SEO tab can show "עבודה שבוצעה" like the SEO report share link.
+    let seoMonthly: {
+      client_name: string | null;
+      domain: string | null;
+      share_token: string | null;
+      months: Array<{
+        month: string;
+        status: string;
+        work: unknown;
+        notes: string | null;
+        share_token: string | null;
+        snapshot: unknown | null;
+      }>;
+    } = {
+      client_name: dashboard.clients?.name || dashboard.name || null,
+      domain: dashboard.clients?.website || null,
+      share_token: null,
+      months: [],
+    };
+    let seoTargetDomain: string | null = null;
 
     const loadAhrefs = async () => {
       if (!dashboard.client_id) return;
@@ -278,6 +299,11 @@ Deno.serve(async (req) => {
         const linkedGscTableId = seoSettings.linkedGscTableId || null;
         seoLinkedGscSiteUrl = seoSettings.linkedGscSiteUrl || null;
         seoTargetClientId = seoSettings.clientId || seoSettings.client_id || dashboard.client_id || null;
+        seoTargetDomain =
+          seoSettings.targetDomain ||
+          seoSettings.domain ||
+          seoSettings.linkedGscSiteUrl ||
+          null;
 
         const accessibleTenantIds = new Set<string>();
         accessibleTenantIds.add(dashboard.tenant_id);
@@ -377,9 +403,62 @@ Deno.serve(async (req) => {
       }
     };
 
+    const loadSeoMonthly = async () => {
+      const clientId = seoTargetClientId || dashboard.client_id;
+      if (!clientId) return;
+      try {
+        const [{ data: monthlyRows }, { data: monthlyShare }] = await Promise.all([
+          supabase
+            .from("seo_monthly_updates")
+            .select("month, status, work, notes")
+            .eq("client_id", clientId)
+            .order("month", { ascending: false })
+            .limit(12),
+          supabase
+            .from("seo_monthly_shares")
+            .select("share_token, month, is_active, snapshot")
+            .eq("client_id", clientId)
+            .eq("is_active", true)
+            .order("month", { ascending: false })
+            .limit(12),
+        ]);
+        const shareByMonth = new Map<string, any>();
+        for (const share of monthlyShare || []) {
+          shareByMonth.set(String(share.month || "").slice(0, 10), share);
+        }
+        seoMonthly.months = (monthlyRows || []).map((row: any) => {
+          const month = String(row.month || "").slice(0, 10);
+          const share = shareByMonth.get(month);
+          return {
+            month,
+            status: row.status || "stable",
+            work: row.work ?? {},
+            notes: row.notes ?? null,
+            share_token: share?.share_token || null,
+            snapshot: share?.snapshot && typeof share.snapshot === "object" ? share.snapshot : null,
+          };
+        });
+        const now = new Date();
+        const lastMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+        const lastMonth = `${lastMonthDate.getUTCFullYear()}-${String(lastMonthDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
+        const matched =
+          seoMonthly.months.find((m) => m.month === lastMonth && m.share_token) ||
+          seoMonthly.months.find((m) => m.share_token) ||
+          null;
+        seoMonthly.share_token = matched?.share_token || null;
+        seoMonthly.client_name = dashboard.clients?.name || dashboard.name || seoMonthly.client_name;
+        seoMonthly.domain = seoTargetDomain || dashboard.clients?.website || seoMonthly.domain;
+      } catch (e) {
+        console.error("Error fetching seo monthly work for public dashboard:", e);
+      }
+    };
+
     // Kick off independent extras together. GSC multi-period (live API) stays
     // after seo linked resolution because it needs the site URL + tenant list.
-    await Promise.all([loadAhrefs(), loadWoo(), loadSeoLinked()]);
+    // Monthly work can run with the dashboard client_id immediately (parallel).
+    await Promise.all([loadAhrefs(), loadWoo(), loadSeoLinked(), loadSeoMonthly()]);
+    // Refresh domain after seo table settings resolve (loadSeoLinked may set it).
+    if (seoTargetDomain) seoMonthly.domain = seoTargetDomain || seoMonthly.domain;
     await loadMaskyoo();
 
     // Multi-period GSC — only when we have a site URL (SEO ranking deltas).
@@ -515,6 +594,7 @@ Deno.serve(async (req) => {
           force_relevant: seoForceRelevant,
           force_irrelevant: seoForceIrrelevant,
         },
+        seo_monthly: seoMonthly,
         has_email_restriction: false,
       }),
 

@@ -14,10 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, ShoppingCart, Search } from "lucide-react";
+import { Facebook, FileSpreadsheet, TrendingUp, TrendingDown, Minus, BarChart3, RefreshCw, ShoppingCart, Search, FileText } from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
+import { PublicSeoMonthlyWorkView } from "@/components/dynamic-tables/PublicSeoMonthlyWorkView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
 import {
@@ -177,6 +178,8 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   const hasSeoMaskyoo = maskyooSnapshots.length > 0;
   const hasSeoGsc = seoGscRecords.length > 0;
   const hasSeoGa = seoGaRecords.length > 0;
+  const seoMonthly = (data as any)?.seo_monthly || null;
+  const hasMonthlyWork = Array.isArray(seoMonthly?.months) && seoMonthly.months.length > 0;
   console.log('[SharedDashboard] wooSites:', wooSites.length, 'wooOrders:', wooOrders.length, 'seoReports:', ahrefsReports.length, 'seoGA:', seoGaRecords.length, 'seoGSC:', seoGscRecords.length);
 
   // Aggregate GSC records per keyword (sum clicks/impressions, weighted-avg position)
@@ -795,55 +798,30 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       ) : platformFilter === 'woocommerce' ? (
         <PublicWooCommerceView sites={wooSites} orders={wooOrders} />
       ) : platformFilter === 'seo' ? (
-        (hasSeoGa || hasSeoGsc) ? (
-          <Tabs defaultValue="seo" className="w-full">
-            <TabsList className="w-full justify-start gap-1">
-              <TabsTrigger value="seo" className="gap-1.5">
-                <TrendingUp className="h-4 w-4" />
-                SEO
-              </TabsTrigger>
-              {hasSeoGsc && (
-                <TabsTrigger value="gsc" className="gap-1.5">
-                  <Search className="h-4 w-4" />
-                  Search Console
-                </TabsTrigger>
-              )}
-              {hasSeoGa && (
-                <TabsTrigger value="ga" className="gap-1.5">
-                  <BarChart3 className="h-4 w-4" />
-                  Analytics
-                </TabsTrigger>
-              )}
-            </TabsList>
-            <TabsContent value="seo" className="space-y-4">
-              <PublicSeoView
-                tableName={dashboard?.client_name || 'SEO'}
-                reports={ahrefsReports}
-                gscData={seoGscAggregated}
-                gscMultiPeriod={gscMultiPeriod}
-                gaOrganicByMonth={seoGaOrganicByMonth}
-                clientId={dashboard?.client_id || null}
-                forceRelevant={(data as any)?.seo_keyword_relevance?.force_relevant || []}
-                forceIrrelevant={(data as any)?.seo_keyword_relevance?.force_irrelevant || []}
-              />
-              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
-            </TabsContent>
+        <Tabs defaultValue="seo" className="w-full">
+          <TabsList className="w-full justify-start gap-1">
+            <TabsTrigger value="seo" className="gap-1.5">
+              <TrendingUp className="h-4 w-4" />
+              SEO
+            </TabsTrigger>
             {hasSeoGsc && (
-              <TabsContent value="gsc">
-                <PublicGscView records={seoGscRecords} />
-              </TabsContent>
+              <TabsTrigger value="gsc" className="gap-1.5">
+                <Search className="h-4 w-4" />
+                Search Console
+              </TabsTrigger>
             )}
             {hasSeoGa && (
-              <TabsContent value="ga">
-                <GoogleAnalyticsDashboard
-                  records={seoGaRecords}
-                  defaultReportMode={analyticsReportMode}
-                />
-              </TabsContent>
+              <TabsTrigger value="ga" className="gap-1.5">
+                <BarChart3 className="h-4 w-4" />
+                Analytics
+              </TabsTrigger>
             )}
-          </Tabs>
-        ) : (
-          <div className="space-y-4">
+            <TabsTrigger value="monthly-work" className="gap-1.5">
+              <FileText className="h-4 w-4" />
+              עבודה שבוצעה
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="seo" className="space-y-4">
             <PublicSeoView
               tableName={dashboard?.client_name || 'SEO'}
               reports={ahrefsReports}
@@ -855,8 +833,32 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
               forceIrrelevant={(data as any)?.seo_keyword_relevance?.force_irrelevant || []}
             />
             <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={maskyooPeriodLabel} />
-          </div>
-        )
+          </TabsContent>
+          {hasSeoGsc && (
+            <TabsContent value="gsc">
+              <PublicGscView records={seoGscRecords} />
+            </TabsContent>
+          )}
+          {hasSeoGa && (
+            <TabsContent value="ga">
+              <GoogleAnalyticsDashboard
+                records={seoGaRecords}
+                defaultReportMode={analyticsReportMode}
+              />
+            </TabsContent>
+          )}
+          <TabsContent value="monthly-work">
+            <PublicSeoMonthlyWorkView
+              clientName={seoMonthly?.client_name || dashboard?.client_name || dashboard?.name}
+              domain={seoMonthly?.domain || null}
+              months={hasMonthlyWork ? seoMonthly.months : []}
+              shareToken={seoMonthly?.share_token || null}
+              ahrefsReports={ahrefsReports}
+              forceRelevant={(data as any)?.seo_keyword_relevance?.force_relevant || []}
+              forceIrrelevant={(data as any)?.seo_keyword_relevance?.force_irrelevant || []}
+            />
+          </TabsContent>
+        </Tabs>
       ) : (
         <>
           {/* Summary Cards - "All" tab: 7 KPI cards like DashboardView */}
