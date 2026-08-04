@@ -21,6 +21,7 @@ on:
       - 'supabase/ops/fix_clients_seo_keyword_relevance.sql'
       - 'supabase/ops/create_cursor_dispatches.sql'
       - 'supabase/ops/create_cursor_sticky_agents.sql'
+      - 'supabase/ops/create_agent_tool_embeddings.sql'
 
 jobs:
   apply:
@@ -56,7 +57,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/create_cursor_sticky_agents.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/create_agent_tool_embeddings.sql'; then
+              FILE="supabase/ops/create_agent_tool_embeddings.sql"
+              NAME="create_agent_tool_embeddings"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/create_cursor_sticky_agents.sql'; then
               FILE="supabase/ops/create_cursor_sticky_agents.sql"
               NAME="create_cursor_sticky_agents"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/create_cursor_dispatches.sql'; then
