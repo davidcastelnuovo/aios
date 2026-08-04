@@ -14,6 +14,12 @@ import {
   pickAudioUrlFromContainers,
   stripVoiceMarker,
 } from '../_shared/wa-voice-resolve.ts';
+import {
+  outboundThirdPartyGuardDecision,
+  pickPrivateCarmenTarget,
+  resolveInboundLidToPhone,
+  shouldMarkResolvedLidAsOutgoing,
+} from '../_shared/carmen-private-routing.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -684,12 +690,12 @@ Deno.serve(async (req) => {
     }
 
     // Manus can emit phone-app messages as opaque @lid IDs instead of the real phone.
-    // For a direct Carmen flow pinned to this Manus integration and scoped to exactly
-    // one phone, resolve the LID to that configured phone so the Carmen trigger/session
-    // can match instead of being blocked by the random LID number.
-    // fromMeFlag guard: when David sends OUTBOUND to a third party (e.g. Ana), the
-    // to-field is already a real phone and the LID resolver must NOT overwrite it with
-    // a Carmen session phone — that is the root cause of Carmen responding to "Hi Ana".
+    // Resolve DETERMINISTICALLY only (payload real phone / carmen_lid_aliases /
+    // wa_lid_map / single allowed phone). Never attribute an inbound LID to the
+    // "freshest Carmen session" when multiple phones are authorized — that hijacked
+    // Ana's private DMs into David's chat (reply "היי דוד" on David's thread).
+    // fromMeFlag guard: when David sends OUTBOUND to a third party, the to-field is
+    // already a real phone — do not overwrite it.
     if (!isGroup && !pairedFromGreenApi && isLidEvent && !fromMeFlag && !lidAutoResolved) {
       try {
         const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
@@ -702,122 +708,61 @@ Deno.serve(async (req) => {
         const allowedPhones = Array.isArray(cfg.carmen_allowed_phones)
           ? [...new Set(cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, '')).filter(Boolean))]
           : [];
-        const idleMin = Number(cfg.session_timeout_minutes) > 0 ? Number(cfg.session_timeout_minutes) : 5;
-        const since = new Date(Date.now() - idleMin * 60 * 1000).toISOString();
-
-        // Resolution priority for LID events on private Carmen flows:
-        // 0) Explicit LID→phone map in the automation config (carmen_lid_aliases) — the only
-        //    deterministic option on a cold start when several phones are allowed.
-        // 1) Explicit allowed phones (specific_phone scope) — pick fresh session phone, else single allowed phone.
-        // 2) Otherwise (scope=all or no allowed list) — pick the unique fresh active Carmen session
-        //    on this connection. This is what enables continuation messages without re-saying "כרמן".
-        let aliasPhone: string | null = null;
-        let aliasReason = '';
-
         const lidAliases: Record<string, string> = (cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === 'object')
           ? cfg.carmen_lid_aliases
           : {};
         const lidKey = String(counterpartPhone || '').replace(/\D/g, '');
-        if (lidKey && lidAliases[lidKey]) {
-          aliasPhone = String(lidAliases[lidKey]).replace(/\D/g, '');
-          aliasReason = 'configured_lid_alias';
-        }
 
-        if (!aliasPhone && scopeMode === 'specific_phone' && allowedPhones.length >= 1) {
-          if (allowedPhones.length === 1) {
-            aliasPhone = allowedPhones[0] as string;
-            aliasReason = 'single_allowed_phone';
-          } else {
-            const { data: recentSessions } = await supabase
-              .from('carmen_whatsapp_sessions')
-              .select('phone, last_message_at, created_at')
-              .eq('tenant_id', tenantId)
-              .eq('status', 'active')
-              .eq('connection_user_id', connectionUserId)
-              .in('phone', allowedPhones)
-              .gte('last_message_at', since)
-              .order('last_message_at', { ascending: false })
-              .limit(1);
-            if (recentSessions && recentSessions.length > 0) {
-              aliasPhone = String(recentSessions[0].phone);
-              aliasReason = 'fresh_session_within_allowed';
-            }
-          }
-        }
-
-        // Generic resolver: even without specific_phone scope, if exactly one fresh
-        // active Carmen session exists on this connection, attribute the @lid event
-        // to it. This makes continuation messages work in "כרמן ישיר" flows.
-        if (!aliasPhone) {
-          const { data: freshSessions } = await supabase
-            .from('carmen_whatsapp_sessions')
-            .select('phone, last_message_at, created_at, automation_id')
-            .eq('tenant_id', tenantId)
-            .eq('status', 'active')
-            .eq('connection_user_id', connectionUserId)
-            .gte('last_message_at', since)
-            .order('last_message_at', { ascending: false })
-            .limit(2);
-          if (freshSessions && freshSessions.length === 1) {
-            aliasPhone = String(freshSessions[0].phone);
-            aliasReason = 'unique_fresh_session';
-          } else if (freshSessions && freshSessions.length > 1 && carmenAutomation?.id) {
-            // Prefer a session bound to the same Carmen automation we matched.
-            const preferred = freshSessions.find((s: any) => s.automation_id === carmenAutomation.id);
-            if (preferred) {
-              aliasPhone = String(preferred.phone);
-              aliasReason = 'fresh_session_matching_automation';
-            } else {
-              console.log('[manus-wa] LID resolution skipped — multiple fresh sessions, no clear owner', {
-                count: freshSessions.length,
-                preview: messageText.slice(0, 60),
-              });
-            }
-          }
-        }
-
-        if (aliasPhone) {
-          const aliasChatId = `${aliasPhone}@c.us`;
-          const { data: activeAliasSession } = await supabase
-            .from('carmen_whatsapp_sessions')
-            .select('id, last_message_at, created_at')
-            .eq('tenant_id', tenantId)
-            .eq('status', 'active')
-            .eq('connection_user_id', connectionUserId)
-            .eq('chat_id', aliasChatId)
-            .eq('phone', aliasPhone)
-            .order('created_at', { ascending: false })
-            .limit(1)
+        let waLidMapPhone: string | null = null;
+        if (lidKey) {
+          const { data: knownLid } = await supabase
+            .from('wa_lid_map')
+            .select('phone')
+            .eq('lid', lidKey)
             .maybeSingle();
+          if (knownLid?.phone) waLidMapPhone = String(knownLid.phone).replace(/\D/g, '');
+        }
 
-          const lastActivity = activeAliasSession
-            ? new Date(activeAliasSession.last_message_at || activeAliasSession.created_at).getTime()
-            : 0;
-          const hasFreshAliasSession = !!activeAliasSession && (Date.now() - lastActivity) <= idleMin * 60 * 1000;
-          // Support multiple configured wake-words + Whisper spelling variants of "כרמן".
-          const triggerKeywords = (Array.isArray(cfg.trigger_keywords) && cfg.trigger_keywords.length
-            ? cfg.trigger_keywords
-            : [cfg.trigger_keyword || 'כרמן']).map((k: any) => String(k || '').toLowerCase()).filter(Boolean);
-          const lowerMsg = String(messageText || '').toLowerCase();
-          const hasTriggerKeyword = triggerKeywords.some((k: string) => lowerMsg.includes(k)) || /[כק]א?רמן/.test(lowerMsg);
+        const resolved = resolveInboundLidToPhone({
+          lidDigits: lidKey,
+          lidAliases,
+          waLidMapPhone,
+          // Only use single-allowed fallback for specific_phone scope; otherwise leave unresolved
+          allowedPhones: scopeMode === 'specific_phone' ? allowedPhones : (allowedPhones.length === 1 ? allowedPhones : []),
+        });
 
+        if (resolved.phone) {
+          const aliasPhone = resolved.phone;
           counterpartPhone = aliasPhone;
-          counterpartRaw = aliasChatId;
+          counterpartRaw = `${aliasPhone}@c.us`;
           normalized = normalizePhone(aliasPhone);
-
-          if (hasFreshAliasSession || hasTriggerKeyword) {
+          // Inbound LID stays inbound — never flip to "manual outgoing" (that kept
+          // replies on the operator/David thread after a wrong session attribution).
+          if (shouldMarkResolvedLidAsOutgoing()) {
             isOutgoingFromPhone = true;
             sourcePhoneNumber = aliasPhone;
           }
-
+          if (lidKey && lidKey !== aliasPhone) {
+            supabase.from('wa_lid_map')
+              .upsert(
+                { lid: lidKey, phone: aliasPhone, connection_user_id: connectionUserId, source: resolved.reason },
+                { onConflict: 'lid' },
+              )
+              .then(() => {}, () => {});
+          }
           console.log('[manus-wa] resolved LID for Carmen direct flow', {
             fromRaw,
             aliasPhone,
-            aliasReason,
+            aliasReason: resolved.reason,
             scopeMode,
             manualLike: isOutgoingFromPhone,
-            hasFreshAliasSession,
-            hasTriggerKeyword,
+          });
+        } else {
+          console.log('[manus-wa] LID unresolved (deterministic only — no session hijack)', {
+            lid: lidKey,
+            reason: resolved.reason,
+            allowedCount: allowedPhones.length,
+            preview: messageText.slice(0, 60),
           });
         }
       } catch (err) {
@@ -825,45 +770,53 @@ Deno.serve(async (req) => {
       }
     }
 
-    // FALLBACK LID RESOLUTION: when an inbound @lid event arrives and the counterpart
-    // phone is unresolvable (empty OR equals the raw LID number which is NOT a real
-    // phone), but there is an ACTIVE Carmen session on this connection within the
-    // idle window, attribute the message to that session's phone. Without this,
-    // mid-conversation replies (which Manus often delivers as pure LID events) get
-    // dropped by scope filtering and Carmen goes silent until the user types "כרמן" again.
+    // FALLBACK: still only deterministic. Session-based attribution removed — with
+    // multiple authorized direct phones it routed Ana → David.
     const counterpartLooksLikeLid =
       !counterpartPhone ||
       counterpartPhone.replace(/\D/g, '') === fromDigits ||
-      counterpartPhone.replace(/\D/g, '').length > 14; // real phones ≤ 15 digits, LIDs are typically 15+
-    if (!isGroup && isLidEvent && counterpartLooksLikeLid && messageText.trim()) {
+      // Real IL mobiles are ~12 digits (9725…); WhatsApp LIDs are often 14+ (Ana's is 14).
+      counterpartPhone.replace(/\D/g, '').length >= 14;
+    if (!isGroup && isLidEvent && counterpartLooksLikeLid && messageText.trim() && !lidAutoResolved && !pairedFromGreenApi && !fromMeFlag) {
       try {
-        const { data: freshSessions } = await supabase
-          .from('carmen_whatsapp_sessions')
-          .select('phone, chat_id, last_message_at, automation_id')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'active')
-          .eq('connection_user_id', connectionUserId)
-          .gte('last_message_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
-          .order('last_message_at', { ascending: false })
-          .limit(2);
-        if (freshSessions && freshSessions.length === 1) {
-          const aliasPhone = String(freshSessions[0].phone);
-          counterpartPhone = aliasPhone;
-          counterpartRaw = `${aliasPhone}@c.us`;
-          normalized = normalizePhone(aliasPhone);
-          isOutgoingFromPhone = true;
-          sourcePhoneNumber = aliasPhone;
-          console.log('[manus-wa] LID fallback → resolved via active Carmen session', {
-            aliasPhone, body: messageText.slice(0, 60),
-          });
-        } else if (freshSessions && freshSessions.length > 1) {
-          console.log('[manus-wa] LID fallback skipped — multiple fresh sessions', {
-            count: freshSessions.length,
-            preview: messageText.slice(0, 60),
+        const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
+          isGroup: false,
+          chatId: `${counterpartPhone || fromDigits}@c.us`,
+          phoneNumber: counterpartPhone || fromDigits,
+        });
+        const cfg = carmenAutomation?.configuration || {};
+        const allowedPhones = Array.isArray(cfg.carmen_allowed_phones)
+          ? [...new Set(cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, '')).filter(Boolean))]
+          : [];
+        const lidAliases: Record<string, string> = (cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === 'object')
+          ? cfg.carmen_lid_aliases
+          : {};
+        const lidKey = String(counterpartPhone || fromDigits || '').replace(/\D/g, '');
+        let waLidMapPhone: string | null = null;
+        if (lidKey) {
+          const { data: knownLid } = await supabase
+            .from('wa_lid_map')
+            .select('phone')
+            .eq('lid', lidKey)
+            .maybeSingle();
+          if (knownLid?.phone) waLidMapPhone = String(knownLid.phone).replace(/\D/g, '');
+        }
+        const resolved = resolveInboundLidToPhone({
+          lidDigits: lidKey,
+          lidAliases,
+          waLidMapPhone,
+          allowedPhones,
+        });
+        if (resolved.phone) {
+          counterpartPhone = resolved.phone;
+          counterpartRaw = `${resolved.phone}@c.us`;
+          normalized = normalizePhone(resolved.phone);
+          console.log('[manus-wa] LID fallback → deterministic resolve', {
+            aliasPhone: resolved.phone, reason: resolved.reason, body: messageText.slice(0, 60),
           });
         } else {
-          console.log('[manus-wa] LID fallback found no active Carmen session', {
-            counterpartPhone, fromDigits, preview: messageText.slice(0, 60),
+          console.log('[manus-wa] LID fallback left unresolved (no session hijack)', {
+            counterpartPhone, fromDigits, reason: resolved.reason, preview: messageText.slice(0, 60),
           });
         }
       } catch (err) {
@@ -1241,38 +1194,44 @@ Deno.serve(async (req) => {
     }
 
     // ===== Carmen WhatsApp session handling =====
-    // If this came from the operator's personal phone (paired via Green API),
-    // Carmen should reply BACK to the operator's phone — NOT to the device itself.
-    const carmenTargetPhone = pairedFromGreenApi && sourcePhoneNumber
-      ? sourcePhoneNumber
-      : counterpartPhone;
-    const chatIdForCarmen = `${carmenTargetPhone}@c.us`;
+    // Private replies stay in the originating counterpart chat (Ana→Ana, David→David).
+    // Paired Green-API operator mirrors reply to the operator phone. Never fall back
+    // to a hardcoded David chat when the inbound sender is someone else.
+    const privateTarget = pickPrivateCarmenTarget({
+      pairedFromGreenApi,
+      sourcePhoneNumber,
+      counterpartPhone,
+      isOutgoingFromPhone,
+    });
+    const carmenTargetPhone = privateTarget.phone || counterpartPhone;
+    const chatIdForCarmen = privateTarget.chatId || `${carmenTargetPhone}@c.us`;
     const senderName = (payload.senderName || payload.fromName || null) as string | null;
 
     // OUTBOUND-TO-THIRD-PARTY GUARD: David's phone is the Manus gateway, so every
     // outbound message he sends to any contact flows through this webhook. If the
     // message is outbound, has no trigger keyword, and there is no existing Carmen
-    // session for this specific chat, Carmen must not respond. The LID resolver above
-    // may have already (incorrectly) attributed the message to Carmen's chat_id before
-    // this guard was added; this check is the definitive safety net.
+    // session for this specific chat, Carmen must not respond.
     if (isOutgoingFromPhone && !pairedFromGreenApi && !isGroup) {
-      const msgPrefix = String(messageText || '').toLowerCase().replace(/^\s*🎤\s*/, '').trim().slice(0, 80);
-      const hasOwnerTrigger = /[כק]א?רמן|carmen|קלוד|claude/i.test(msgPrefix);
-      if (!hasOwnerTrigger) {
-        const { data: existingCarmenSession } = await supabase
-          .from('carmen_whatsapp_sessions')
-          .select('id')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'active')
-          .eq('connection_user_id', connectionUserId)
-          .eq('chat_id', chatIdForCarmen)
-          .maybeSingle();
-        if (!existingCarmenSession) {
-          console.log('[manus-wa] outbound-to-third-party: no trigger keyword + no active carmen session → skip', {
-            chatIdForCarmen, carmenTargetPhone, bodyPreview: String(messageText).slice(0, 60),
-          });
-          return ok({ received: true, ignored: 'outbound_third_party' });
-        }
+      const { data: existingCarmenSession } = await supabase
+        .from('carmen_whatsapp_sessions')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'active')
+        .eq('connection_user_id', connectionUserId)
+        .eq('chat_id', chatIdForCarmen)
+        .maybeSingle();
+      const guard = outboundThirdPartyGuardDecision({
+        isOutgoingFromPhone,
+        pairedFromGreenApi,
+        isGroup,
+        messageText,
+        hasActiveSessionForChat: !!existingCarmenSession,
+      });
+      if (guard === 'skip') {
+        console.log('[manus-wa] outbound-to-third-party: no trigger keyword + no active carmen session → skip', {
+          chatIdForCarmen, carmenTargetPhone, bodyPreview: String(messageText).slice(0, 60),
+        });
+        return ok({ received: true, ignored: 'outbound_third_party' });
       }
     }
 

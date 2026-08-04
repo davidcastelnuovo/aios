@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — Private WhatsApp direct-chat routing (Ana stays in her thread)
+- **Skin slug:** `wa_private_direct_chat_routing` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Answer authorized private WhatsApp chats (David + Ana) in the **same originating chat**. Ana’s private DMs must not be attributed to David’s chat and must not notify David unless she explicitly asks or escalation is required. Groups still answer whoever addresses Carmen (with phone/identity verification). Outbound third-party guard preserved (David messaging contacts without “כרמן” does not wake Carmen).
+- **How:** Deterministic `@lid` → phone resolve only (`payload` / `carmen_lid_aliases` / `wa_lid_map` / single allowed phone). **Never** “freshest active session” when multiple phones are allowed. `pickPrivateCarmenTarget` keeps replies on the counterpart. Ana LID `79564420182139` → `972545612156`. Shared helper: `_shared/carmen-private-routing`.
+- **Origin:** Carmen → Cursor DEV TASK — Ana private messages were hijacked into David’s chat (“היי דוד”).
+
 ### 2026-08-04 — WhatsApp voice notes: clear transcript + honest capability
 - **Skin slug:** `wa_voice_transcript_capability` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Read WhatsApp voice notes via automatic Whisper transcription. Messages arrive as `🎤 <transcript>` with `_voice` metadata (status/source/message_id). On failure she sees explicit `[הודעת קול · no_audio_url|transcription_failed|…]` — never a silent placeholder. When asked “את קוראת הודעות קול?” she answers from the actual marker, not assumptions.
