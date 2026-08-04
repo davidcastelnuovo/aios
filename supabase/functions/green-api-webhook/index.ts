@@ -4,6 +4,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { handleCarmenMessage, fetchKnownEntityNames } from '../_shared/carmen.ts';
 import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
+import {
+  VOICE_STATUSES,
+  buildVoiceMeta,
+  formatVoiceMessageText,
+} from '../_shared/wa-voice-resolve.ts';
 
 
 const corsHeaders = {
@@ -120,7 +125,7 @@ function extractMessageText(messageData: any, typeMessage: string): string {
   } else if (typeMessage === 'videoMessage') {
     return messageData?.fileMessageData?.caption || messageData?.caption || '[וידאו]';
   } else if (typeMessage === 'audioMessage') {
-    return '[הודעת קול]';
+    return '[הודעת קול · transcription_failed]';
   } else if (typeMessage === 'documentMessage') {
     return messageData?.fileMessageData?.caption || `[מסמך: ${messageData?.fileMessageData?.fileName || messageData?.fileName || 'קובץ'}]`;
   } else if (typeMessage === 'templateMessage') {
@@ -818,8 +823,9 @@ Deno.serve(async (req) => {
       // the OpenAI key from the env secret OR the tenant llm integration. (The
       // old inline call read only Deno.env.get('OPENAI_API_KEY'), which is unset
       // on this project, so every voice note silently became '[הודעת קול]'.)
-      const downloadUrl = messageData.fileMessageData?.downloadUrl;
+      const downloadUrl = messageData.fileMessageData?.downloadUrl || null;
       let transcription = '';
+      let voiceStatus = downloadUrl ? VOICE_STATUSES.TRANSCRIPTION_FAILED : VOICE_STATUSES.NO_AUDIO_URL;
 
       // Transcribe both inbound voice AND the operator's own voice notes sent
       // from the connected account (manual-outgoing) — that's how David talks to
@@ -827,23 +833,51 @@ Deno.serve(async (req) => {
       if (downloadUrl && (isIncoming || isManualOutgoing)) {
         try {
           const audioResponse = await fetch(downloadUrl);
-          if (audioResponse.ok) {
+          if (!audioResponse.ok) {
+            voiceStatus = VOICE_STATUSES.DOWNLOAD_FAILED;
+          } else {
             const audioBlob = await audioResponse.blob();
-            if (audioBlob.size > 0 && audioBlob.size <= 25 * 1024 * 1024) {
+            if (audioBlob.size <= 0 || audioBlob.size > 25 * 1024 * 1024) {
+              voiceStatus = VOICE_STATUSES.EMPTY_AUDIO;
+            } else {
               const t = await aiTranscribe(audioBlob, { language: 'he', filename: 'audio.ogg' });
               if (t && t.trim()) {
                 // Name-aware rewrite: fix garbled client/team names against the real list.
                 const knownNames = await fetchKnownEntityNames(supabaseClient, tenantId);
                 transcription = (await aiCleanTranscript(t, { knownNames })).trim();
+                voiceStatus = VOICE_STATUSES.OK;
+              } else {
+                voiceStatus = VOICE_STATUSES.TRANSCRIPTION_FAILED;
               }
             }
           }
         } catch (transcribeError) {
           console.error('❌ Error transcribing voice message:', transcribeError);
+          voiceStatus = VOICE_STATUSES.TRANSCRIPTION_FAILED;
         }
+      } else if (!downloadUrl) {
+        voiceStatus = VOICE_STATUSES.NO_AUDIO_URL;
       }
 
-      messageText = transcription ? `🎤 ${transcription}` : '[הודעת קול]';
+      messageText = formatVoiceMessageText({
+        transcript: transcription || null,
+        status: voiceStatus,
+        isVoice: true,
+      });
+      // Stash for chat_messages.raw_provider_data._voice (attached at insert).
+      (webhookData as any)._voiceResolve = buildVoiceMeta({
+        status: voiceStatus,
+        transcript: transcription || null,
+        source: voiceStatus === VOICE_STATUSES.OK ? 'direct_whisper' : 'none',
+        messageId: webhookData?.idMessage || null,
+        audioUrl: downloadUrl,
+        isVoice: true,
+      });
+      console.log('[green-api] voice resolve', {
+        status: voiceStatus,
+        hasTranscript: !!transcription,
+        messageId: webhookData?.idMessage || null,
+      });
     } else if (messageType === 'documentMessage') {
       messageText = messageData.fileMessageData?.caption || `[מסמך: ${messageData.fileMessageData?.fileName || 'קובץ'}]`;
     } else if (messageType === 'templateMessage') {
@@ -1374,9 +1408,14 @@ Deno.serve(async (req) => {
 
 
     // Save the message to THIS tenant only
-    const rawDataWithAvatar = senderProfileImage 
-      ? { ...webhookData, senderProfileImage } 
-      : webhookData;
+    const voiceMetaForStore = (webhookData as any)._voiceResolve || null;
+    const rawDataWithAvatar = {
+      ...webhookData,
+      ...(senderProfileImage ? { senderProfileImage } : {}),
+      ...(voiceMetaForStore ? { _voice: voiceMetaForStore } : {}),
+    };
+    // Don't persist the transient resolve helper field.
+    delete (rawDataWithAvatar as any)._voiceResolve;
       
     const { error: insertError } = await supabaseClient
       .from('chat_messages')

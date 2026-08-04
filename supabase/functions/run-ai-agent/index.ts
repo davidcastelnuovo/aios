@@ -31,6 +31,7 @@ import {
   isExplicitRejectionPhrase,
   pickLatestPendingApproval,
 } from '../_shared/wa-approval-flow.ts'
+import { buildVoiceCapabilityPromptRule } from '../_shared/wa-voice-resolve.ts'
 
 
 const corsHeaders = {
@@ -6140,6 +6141,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       systemPrompt += `\n\n🛑 **לא ללופ:** אל תשלחי הודעת המשך מיוזמתך. אל תוסיפי שאלות "האם תרצה ש...". אם המשתמש כתב "סיימנו"/"די"/"תפסיקי"/"תודה" — אל תעני בכלל; המערכת תסגור את הסשן.`
       systemPrompt += `\n\n💬 **סגנון WhatsApp:** קצר, ישיר, ידידותי. בלי markdown, בלי כותרות, בלי רשימות ארוכות.`
       systemPrompt += `\n\n📩 **הודעה אחת לשאלה אחת (חובה):** עני בהודעה אחת בלבד לכל הודעת משתמש. אל תפצלי תשובה אחת לכמה הודעות רצופות. אם המשתמש שאל שתי שאלות באותה הודעה — עני על שתיהן ביחד באותה הודעה אחת (אפשר בשתי שורות). אסור לשלוח הודעת המשך עצמאית אחרי שכבר ענית.`
+      systemPrompt += buildVoiceCapabilityPromptRule()
       systemPrompt += `\n\n🎧 **פרשנות תמלול קולי (חובה):** חלק מההודעות מגיעות מתמלול קולי (לרוב מסומנות ב-🎤) ועלולות להכיל שגיאות תמלול והומופונים — למשל "דיבור"↔"דיוור", "קרמן"↔"כרמן", או שמות לקוחות משובשים. אל תיקחי את התמלול כפשוטו: הביני מה המשתמש *באמת* התכוון מתוך ההקשר והשיחה. אם הכוונה ברורה מספיק — פעלי לפיה. רק אם יש אי-בהירות אמיתית שמשנה את הפעולה (איזה לקוח, מה בדיוק לעדכן) — שאלי שאלת הבהרה אחת קצרה *לפני* שאת מבצעת, במקום לבצע פעולה שגויה.`
       systemPrompt += `\n\n✅ **בדיקה עצמית לפני שליחה (חובה):** לפני כל תשובה עצרי שנייה ובדקי: (1) האם אני עונה על הבקשה *האחרונה* של המשתמש — ולא על משהו קודם בשיחה? (2) אם קראתי לכלי — האם קראתי את התוצאה בפועל והיא הצליחה, או שאני מניחה? (3) האם התשובה שלי באמת *מבצעת* את מה שביקשו, או רק מדברת עליו? אם המשתמש חוזר על אותה בקשה — סימן שפספסת: בצעי אותה עכשיו. אם ביקשו פעולה (בדיקת דופק, עדכון, תזכורת) — בצעי אותה ממש עם הכלים; אסור לכתוב "בוצע/עודכן/נשלח" בלי שבאמת קראת לכלי המתאים וראית שהצליח.`
       systemPrompt += `\n\n🚀 **ראש פרואקטיבי (חובה):** את מנהלת AI עם גישה מלאה למערכת ולכל הכלים — ברירת המחדל שלך היא לבצע ולפתור, לא להתחמק. כשנותנים לך משימה, השתמשי בכלים הדרושים והשלימי אותה מקצה לקצה. אם חסר מידע — חפשי אותו בעצמך (list_*, search_*, kb_*) לפני שאת אומרת "לא מצאתי" או "אין לי גישה". אם דרך אחת נכשלה — נסי דרך אחרת לפני שאת מוותרת. תהיי יוזמת, מעשית ומדויקת.`
@@ -6176,6 +6178,11 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     // Hard rule for both V1 and V2: only allowlisted requesters may escalate
     // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
     systemPrompt += buildDevEscalationPromptRule(canEscalateDevFixes)
+
+    // Voice capability (both prompt versions): answer from 🎤 / explicit failure markers.
+    if (isCarmen && (surface === 'whatsapp' || surface === 'internal_chat' || surface === 'aios')) {
+      systemPrompt += buildVoiceCapabilityPromptRule()
+    }
 
     if (isCarmen && relevantLongTermMemory.length > 0) {
       systemPrompt += `\n\n🧠 === זיכרון ארוך רלוונטי שנשלף אוטומטית ===

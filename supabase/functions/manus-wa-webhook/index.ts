@@ -4,6 +4,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { findCarmenSessionAutomation, groupMessageInvokesCarmen, handleCarmenMessage } from '../_shared/carmen.ts';
 import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
+import {
+  VOICE_STATUSES,
+  buildVoiceMeta,
+  formatVoiceMessageText,
+  hasVoiceTranscriptMarker,
+  isVoicePlaceholder,
+  looksLikeAudioPayload,
+  pickAudioUrlFromContainers,
+  stripVoiceMarker,
+} from '../_shared/wa-voice-resolve.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,34 +26,31 @@ function normalizePhone(p: string): string {
 }
 
 // ── Incoming voice notes → transcript (OpenAI Whisper) ────────────────
-// Graceful: any failure falls back to the '[מדיה]' placeholder, so behaviour
-// never regresses for non-audio media or when transcription is unavailable.
+// Returns structured result: clear 🎤 transcript when available, otherwise an
+// explicit status (no_audio_url / transcription_failed / …) — never silent.
 type MediaAuth = { apiKey?: string; gateway?: string; supabase?: any; tenantId?: string };
+type VoiceResolveResult = {
+  messageText: string;
+  isVoice: boolean;
+  voiceMeta: Record<string, unknown>;
+};
 // Tracks URL-less Manus payloads that were positively matched to a Green API voice transcript.
 // WeakSet keeps the classification request-local without mutating the payload persisted to the database.
 const pairedVoicePayloads = new WeakSet<object>();
-const _AUDIO_URL_FIELDS = ['media_url', 'mediaUrl', 'url', 'fileUrl', 'file_url', 'downloadUrl', 'downloadURL', 'mediaLink', 'media_link', 'link'];
 function pickAudioUrl(payload: any, msgContainer: any): string | null {
-  // Manus wraps media differently across message types; scan the common containers.
-  const containers = [payload, payload?.media, payload?.file, payload?.attachment, payload?.audio,
-    msgContainer, msgContainer?.audioMessage, msgContainer?.message];
-  for (const c of containers) {
-    if (!c || typeof c !== 'object') continue;
-    for (const f of _AUDIO_URL_FIELDS) {
-      const v = c[f];
-      if (typeof v === 'string' && /^https?:\/\//.test(v)) return v;
-    }
-  }
-  return null;
+  return pickAudioUrlFromContainers([
+    payload, payload?.media, payload?.file, payload?.attachment, payload?.audio,
+    msgContainer, msgContainer?.audioMessage, msgContainer?.message,
+  ]);
 }
 function looksAudio(payload: any, msgContainer: any, url: string | null): boolean {
-  if (msgContainer?.audioMessage) return true;
-  const t = (payload?.type ?? payload?.messageType ?? payload?.mediaType ?? msgContainer?.type ?? '').toString().toLowerCase();
-  if (/audio|ptt|voice/.test(t)) return true;
-  const mime = (payload?.mimeType || payload?.mime_type || payload?.media?.mimetype ||
-    msgContainer?.audioMessage?.mimetype || '').toString().toLowerCase();
-  if (/audio|ogg|opus|voice|ptt|mpeg|mp4a|amr/.test(mime)) return true;
-  return !!url && /\.(ogg|opus|mp3|m4a|wav|aac|amr)(\?|$)/i.test(url);
+  return looksLikeAudioPayload({
+    hasAudioMessage: !!msgContainer?.audioMessage,
+    type: payload?.type ?? payload?.messageType ?? payload?.mediaType ?? msgContainer?.type,
+    mime: payload?.mimeType || payload?.mime_type || payload?.media?.mimetype ||
+      msgContainer?.audioMessage?.mimetype,
+    url,
+  });
 }
 // Fetch the media bytes. Manus media URLs sometimes require the instance API key
 // (X-Api-Key), so retry with it if an anonymous fetch is rejected.
@@ -63,9 +70,8 @@ async function fetchMedia(url: string, auth?: MediaAuth): Promise<Blob | null> {
 // The Manus gateway currently emits hasMedia=true for voice notes without a URL,
 // MIME type, or media object. The same WhatsApp message is also delivered to the
 // connected Green API webhook, which downloads and transcribes it. Reuse that
-// transcript by the provider message id instead of degrading the Carmen request
-// to "[מדיה]". Green API transcription includes media download plus two AI calls,
-// so allow enough time for the canonical chat_messages row to be committed.
+// transcript by the provider message id — KEEP the 🎤 marker so Carmen knows
+// this is a voice transcript (stripping it caused her to deny she can read voice).
 async function findPairedGreenTranscript(
   payload: any,
   auth?: MediaAuth,
@@ -85,28 +91,44 @@ async function findPairedGreenTranscript(
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    const text = String(data?.message_text || '').replace(/^🎤\s*/, '').trim();
-    if (text && !/^\[(?:הודעת קול|מדיה|קובץ מדיה|הודעה)\]$/.test(text)) {
+    const raw = String(data?.message_text || '').trim();
+    const text = stripVoiceMarker(raw);
+    if (text && !isVoicePlaceholder(raw) && !isVoicePlaceholder(text)) {
       if (payload && typeof payload === 'object') pairedVoicePayloads.add(payload);
-      return text;
+      // Always re-apply 🎤 — Green rows already have it; keep Carmen context consistent.
+      return formatVoiceMessageText({ transcript: text, status: VOICE_STATUSES.OK, isVoice: true });
+    }
+    // Green already wrote an explicit failure — surface it (don't keep waiting forever).
+    if (raw && isVoicePlaceholder(raw) && /·/.test(raw) && attempt >= 3) {
+      if (payload && typeof payload === 'object') pairedVoicePayloads.add(payload);
+      return raw;
     }
   }
   return null;
 }
 // Diagnostic: when a media message can't be transcribed, persist the payload
 // shape so the exact Manus voice-note format can be pinned down. Best-effort.
-function logMediaDebug(auth: MediaAuth | undefined, payload: any, msgContainer: any, url: string | null, isAudio: boolean) {
+function logMediaDebug(
+  auth: MediaAuth | undefined,
+  payload: any,
+  msgContainer: any,
+  url: string | null,
+  isAudio: boolean,
+  status: string,
+) {
   if (!auth?.supabase) return;
   try {
     auth.supabase.from('error_logs').insert({
       tenant_id: auth.tenantId ?? null,
       source: 'manus-wa-media-debug',
-      error_message: 'voice/media message could not be transcribed → fell back to [מדיה]',
+      error_message: `voice/media resolve status=${status}`,
       context: {
+        status,
         top_keys: Object.keys(payload || {}),
         hasMedia: payload?.hasMedia ?? null,
         type: payload?.type ?? payload?.messageType ?? payload?.mediaType ?? null,
         mimeType: payload?.mimeType ?? payload?.mime_type ?? null,
+        message_id: payload?.messageId ?? payload?.id ?? null,
         picked_url: url,
         looks_audio: isAudio,
         msg_keys: msgContainer ? Object.keys(msgContainer) : null,
@@ -116,33 +138,116 @@ function logMediaDebug(auth: MediaAuth | undefined, payload: any, msgContainer: 
     }).then(() => {}, () => {});
   } catch (_) { /* never let diagnostics break the webhook */ }
 }
-async function resolveMessageText(payload: any, msgContainer: any, auth?: MediaAuth): Promise<string> {
-  if (payload?.body && String(payload.body).trim()) return String(payload.body);
-  if (!payload?.hasMedia) return '';
-  const url = pickAudioUrl(payload, msgContainer);
-  const isAudio = looksAudio(payload, msgContainer, url);
-  try {
-    if (url && isAudio) {
+async function resolveMessageText(
+  payload: any,
+  msgContainer: any,
+  auth?: MediaAuth,
+): Promise<VoiceResolveResult> {
+  const messageId = String(payload?.messageId || payload?.id || '').trim() || null;
+  const body = payload?.body != null ? String(payload.body).trim() : '';
+  const urlEarly = pickAudioUrl(payload, msgContainer);
+  const audioEarly = looksAudio(payload, msgContainer, urlEarly);
+
+  // Prefer body for plain text and non-voice media captions (images/docs).
+  // For voice, ensure the 🎤 marker is present so Carmen knows it's a transcript.
+  if (body && (!payload?.hasMedia || !audioEarly)) {
+    const isVoice = hasVoiceTranscriptMarker(body);
+    const messageText = isVoice
+      ? formatVoiceMessageText({ transcript: body, status: VOICE_STATUSES.OK, isVoice: true })
+      : body;
+    const meta = buildVoiceMeta({
+      status: isVoice ? VOICE_STATUSES.OK : VOICE_STATUSES.TEXT,
+      transcript: isVoice ? stripVoiceMarker(messageText) : null,
+      source: 'body', messageId, isVoice,
+    });
+    return { messageText, isVoice, voiceMeta: meta };
+  }
+  if (body && audioEarly) {
+    const formatted = formatVoiceMessageText({ transcript: body, status: VOICE_STATUSES.OK, isVoice: true });
+    if (payload && typeof payload === 'object') pairedVoicePayloads.add(payload);
+    const meta = buildVoiceMeta({
+      status: VOICE_STATUSES.OK, transcript: stripVoiceMarker(formatted),
+      source: 'body', messageId, audioUrl: urlEarly, isVoice: true,
+    });
+    return { messageText: formatted, isVoice: true, voiceMeta: meta };
+  }
+
+  if (!payload?.hasMedia) {
+    const meta = buildVoiceMeta({ status: VOICE_STATUSES.EMPTY, source: 'none', messageId, isVoice: false });
+    return { messageText: '', isVoice: false, voiceMeta: meta };
+  }
+
+  const url = urlEarly;
+  const isAudio = audioEarly;
+  let status = isAudio
+    ? (url ? VOICE_STATUSES.TRANSCRIPTION_FAILED : VOICE_STATUSES.NO_AUDIO_URL)
+    : VOICE_STATUSES.NOT_VOICE_MEDIA;
+  let source: string = 'none';
+  let transcript: string | null = null;
+
+  if (url && isAudio) {
+    try {
       const blob = await fetchMedia(url, auth);
-      if (blob && blob.size > 0 && blob.size <= 25 * 1024 * 1024) {
+      if (!blob) {
+        status = VOICE_STATUSES.DOWNLOAD_FAILED;
+      } else if (blob.size <= 0 || blob.size > 25 * 1024 * 1024) {
+        status = VOICE_STATUSES.EMPTY_AUDIO;
+      } else {
         const t = await aiTranscribe(blob, { language: 'he', filename: 'voice.ogg' });
-        if (t && t.trim()) return (await aiCleanTranscript(t)).trim();
+        if (t && t.trim()) {
+          transcript = (await aiCleanTranscript(t)).trim();
+          status = VOICE_STATUSES.OK;
+          source = 'direct_whisper';
+        } else {
+          status = VOICE_STATUSES.TRANSCRIPTION_FAILED;
+        }
       }
+    } catch (_) {
+      status = VOICE_STATUSES.TRANSCRIPTION_FAILED;
     }
-  } catch (_) { /* fall through to placeholder */ }
-  const pairedTranscript = await findPairedGreenTranscript(payload, auth);
-  if (pairedTranscript) return pairedTranscript;
-  // Couldn't turn media into text — capture the shape so we can fix it precisely.
-  logMediaDebug(auth, payload, msgContainer, url, isAudio);
-  return '[מדיה]';
+  }
+
+  // URL-less Manus voice notes: reuse Green API transcript (keeps 🎤).
+  if (status !== VOICE_STATUSES.OK) {
+    const paired = await findPairedGreenTranscript(payload, auth);
+    if (paired) {
+      if (isVoicePlaceholder(paired)) {
+        const meta = buildVoiceMeta({
+          status: VOICE_STATUSES.TRANSCRIPTION_FAILED,
+          transcript: null, source: 'green_api_pair', messageId, audioUrl: url, isVoice: true,
+        });
+        meta.message_text = paired;
+        console.log('[manus-wa] voice resolve paired failure', { messageId, status: paired });
+        return { messageText: paired, isVoice: true, voiceMeta: meta };
+      }
+      const meta = buildVoiceMeta({
+        status: VOICE_STATUSES.OK, transcript: stripVoiceMarker(paired),
+        source: 'green_api_pair', messageId, audioUrl: url, isVoice: true,
+      });
+      console.log('[manus-wa] voice resolve ok via green_api_pair', { messageId, len: paired.length });
+      return { messageText: paired, isVoice: true, voiceMeta: meta };
+    }
+  }
+
+  const isVoice = isAudio || pairedVoicePayloads.has(payload);
+  if (status !== VOICE_STATUSES.OK) {
+    logMediaDebug(auth, payload, msgContainer, url, isAudio, status);
+  }
+  const meta = buildVoiceMeta({
+    status, transcript, source: source as any, messageId, audioUrl: url, isVoice,
+  });
+  const messageText = String(meta.message_text || '');
+  console.log('[manus-wa] voice resolve', { messageId, status, isVoice, source, hasTranscript: !!transcript });
+  return { messageText, isVoice, voiceMeta: meta };
 }
 
 // Was the inbound message a voice note? (drives Carmen's voice-out mirroring)
-function messageIsVoice(payload: any, msgContainer: any): boolean {
+function messageIsVoice(payload: any, msgContainer: any, resolved?: VoiceResolveResult): boolean {
+  if (resolved?.isVoice) return true;
   if (payload && typeof payload === 'object' && pairedVoicePayloads.has(payload)) return true;
   if (!payload?.hasMedia) return false;
   const url = pickAudioUrl(payload, msgContainer);
-  return !!(url && looksAudio(payload, msgContainer, url));
+  return looksAudio(payload, msgContainer, url);
 }
 
 // Send Carmen's reply as a voice note too (best-effort, via send-manus-wa-voice)
@@ -364,8 +469,10 @@ Deno.serve(async (req) => {
     let counterpartRaw = isOutgoingFromPhone ? toRaw : fromRaw;
     let counterpartPhone = counterpartRaw.split('@')[0];
     let normalized = normalizePhone(counterpartPhone);
-    const messageText = await resolveMessageText(payload, msgContainer, mediaAuth);
-    const messageId = String(payload.id || '');
+    const resolvedMsg = await resolveMessageText(payload, msgContainer, mediaAuth);
+    const messageText = resolvedMsg.messageText;
+    const voiceMeta = resolvedMsg.voiceMeta;
+    const messageId = String(payload.messageId || payload.id || '');
 
     // AUTO LID RESOLUTION 1/2 — real phone in the payload. Newer Baileys exposes the
     // sender's actual number alongside the LID (senderPn / participantPn); if the
@@ -796,7 +903,9 @@ Deno.serve(async (req) => {
         console.log('[manus-wa group] routed by group → tenant', { groupChatId, botTenant: tenantId, groupTenant: groupTenantId });
       }
 
-      const messageText = await resolveMessageText(payload, msgContainer, { ...mediaAuth, tenantId: groupTenantId });
+      const resolvedGroupMsg = await resolveMessageText(payload, msgContainer, { ...mediaAuth, tenantId: groupTenantId });
+      const messageText = resolvedGroupMsg.messageText;
+      const voiceMeta = resolvedGroupMsg.voiceMeta;
       const senderName = (payload.senderName || payload.fromName || payload.authorName || null) as string | null;
 
       // Extract the REAL sender phone from author/participant fields.
@@ -981,7 +1090,7 @@ Deno.serve(async (req) => {
           isManualOutgoing: isOutgoingFromPhone,
           isGroup: true,
           sourceChannel: 'own_instance',
-          isVoiceMessage: messageIsVoice(payload, msgContainer),
+          isVoiceMessage: messageIsVoice(payload, msgContainer, resolvedGroupMsg),
           sendVoice: makeVoiceSender(groupTenantId),
           sendMessage: async (_chatId: string, message: string) => {
             const settingsAny = (integ.settings as any) || {};
@@ -1069,7 +1178,7 @@ Deno.serve(async (req) => {
       channel: 'whatsapp',
       provider: 'manus_wa',
       sender_phone: counterpartPhone,
-      raw_provider_data: payload,
+      raw_provider_data: { ...(payload || {}), _voice: voiceMeta },
     });
 
     if (insertError) {
@@ -1129,7 +1238,7 @@ Deno.serve(async (req) => {
         isManualOutgoing: isOutgoingFromPhone,
         isGroup: false,
         sourceChannel: 'own_instance',
-        isVoiceMessage: messageIsVoice(payload, msgContainer),
+        isVoiceMessage: messageIsVoice(payload, msgContainer, resolvedMsg),
         sendVoice: makeVoiceSender(tenantId),
         sendMessage: async (_chatId: string, message: string) => {
           try {
