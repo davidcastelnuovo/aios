@@ -16,6 +16,13 @@ import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/r
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 import { asUuidOrNull } from '../_shared/uuid.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
+import {
+  buildDevEscalationPromptRule,
+  DEV_ESCALATION_REFUSAL_HE,
+  isAuthorizedDevRequester,
+  isDevEscalationSkill,
+  isDevEscalationTool,
+} from '../_shared/dev-escalation-auth.ts'
 
 
 const corsHeaders = {
@@ -1361,6 +1368,10 @@ async function tryCreateCalendarEventForTask(
 async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any): Promise<any> {
   // WhatsApp / automations often pass the sentinel "system". Never write that into uuid columns.
   const actorUserId = asUuidOrNull(userId)
+  // Coding-agent escalations are identity-allowlisted (currently David only).
+  if (isDevEscalationTool(name) && !isAuthorizedDevRequester({ campaignerId: callerCampaignerId, userId: actorUserId, phone: callerPhone })) {
+    return { error: 'dev_escalation_forbidden', message: DEV_ESCALATION_REFUSAL_HE }
+  }
   const accessibleTenantIds = await getAccessibleTenantIds(supabase, tenantId)
   // Role-based scope: managers (owner/agency_owner/agency_manager/super_admin) bypass the campaigner narrow-scope.
   const isManagerRole = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
@@ -5414,6 +5425,15 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const isManagerRoleCaller = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
     const isTeamManagerCaller = callerRole === 'team_manager'
 
+    // System/dev-fix escalations (Cursor/Claude/Manus MCP + GitHub agent) —
+    // only allowlisted requesters (currently David). Role alone is not enough.
+    const canEscalateDevFixes = isAuthorizedDevRequester({
+      campaignerId: callerCampaignerId,
+      userId: callerUserId || asUuidOrNull(resolvedUserId),
+      phone: callerPhone,
+    })
+    console.log(`[AGENT] Dev-escalation authorized=${canEscalateDevFixes} (campaigner=${callerCampaignerId || 'none'}, phone=${callerPhone || 'none'})`)
+
     // The server is the source of truth for Command Center continuity. The
     // browser may send a recent in-memory history for a brand-new thread, but
     // once a conversation id exists we reload it from the DB and persist every
@@ -6038,6 +6058,10 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     }
     } // ─── end V1 PROMPT BUILDING (else branch of shouldUseV2Prompt) ───
 
+    // Hard rule for both V1 and V2: only allowlisted requesters may escalate
+    // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
+    systemPrompt += buildDevEscalationPromptRule(canEscalateDevFixes)
+
     if (isCarmen && relevantLongTermMemory.length > 0) {
       systemPrompt += `\n\n🧠 === זיכרון ארוך רלוונטי שנשלף אוטומטית ===
 זהו זיכרון העבודה שלך מהמערכת, לא "מערכת אחרת". השתמשי בו כשהוא רלוונטי לבקשה, אך העדיפי נתוני כלים חיים כשיש סתירה.
@@ -6146,6 +6170,14 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
 
+    // Unauthorized callers must not see native GitHub-agent delegation either.
+    if (!canEscalateDevFixes) {
+      filteredTools = filteredTools.filter((t) => !isDevEscalationTool(t.name))
+      // Rebuild API list from the filtered native set (MCP added below).
+      toolsForAPI.length = 0
+      toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
+    }
+
     // 4b. Load MCP tools for this tenant + agent (Phase 3)
     let mcpExecutors = new Map<string, (args: any) => Promise<any>>()
     try {
@@ -6168,10 +6200,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           if (escalationAgent === 'claude' && (t.name.startsWith('mcp_Manus__') || t.name.startsWith('mcp_Cursor__'))) continue
           if (escalationAgent === 'manus'  && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Cursor__'))) continue
           if (escalationAgent === 'none'   && isEscalationMcp(t.name)) continue
+          // 4b-ii. Hard auth: only David (allowlisted) may see/call coding-agent MCP tools.
+          if (!canEscalateDevFixes && isDevEscalationTool(t.name)) continue
           toolsForAPI.push({ type: 'function', function: t as any })
+          const exec = mcp.executors.get(t.name)
+          if (exec) mcpExecutors.set(t.name, exec)
         }
-        mcpExecutors = mcp.executors
-        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent})`)
+        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent}, dev_auth=${canEscalateDevFixes}, exposed=${[...mcpExecutors.keys()].length})`)
       }
     } catch (e: any) {
       console.error('[AGENT] MCP load failed:', e?.message)
@@ -6189,6 +6224,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     const disabledSkins = ((agent as any).disabled_skins || []) as string[]
     const _matchedSkills = (await resolveActiveSkills(String(command_text || ''), skillTenantId))
       .filter(s => !disabledSkins.includes(s.id))
+      // Unauthorized callers must not get cursor/claude escalation skins that push request_dev_task.
+      .filter(s => canEscalateDevFixes || !isDevEscalationSkill(s.id))
     const matchedSkills = _matchedSkills.map(s => s.id)
     const activeSkillsBlock = _matchedSkills.length > 0
       ? '\n\n' + _matchedSkills.map(s => s.prompt).join('\n\n')
@@ -6203,7 +6240,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       if (skillToolNames.size > 0) {
         const present = new Set(filteredTools.map(t => t.name))
         const missing = ALL_TOOLS.filter(t =>
-          skillToolNames.has(t.name) && !present.has(t.name) && !disabledTools.includes(t.name))
+          skillToolNames.has(t.name) && !present.has(t.name) && !disabledTools.includes(t.name) &&
+          (canEscalateDevFixes || !isDevEscalationTool(t.name)))
         if (missing.length > 0) {
           filteredTools = [...filteredTools, ...missing]
           toolsForAPI.push(...missing.map(t => ({ type: 'function', function: t })))
@@ -6358,7 +6396,11 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
         let result: any
         try {
-          if (mcpExecutors.has(toolName)) {
+          // Defense in depth: even if a tool slipped into the schema, refuse
+          // coding-agent escalations for non-allowlisted requesters.
+          if (isDevEscalationTool(toolName) && !canEscalateDevFixes) {
+            result = { error: 'dev_escalation_forbidden', message: DEV_ESCALATION_REFUSAL_HE }
+          } else if (mcpExecutors.has(toolName)) {
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
             // Prefer profile UUID resolved from WhatsApp phone; never pass literal "system" into uuid columns.
