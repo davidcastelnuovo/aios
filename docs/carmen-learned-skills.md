@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — Dev/system-fix escalations: David-only authorization
+- **Skin slug:** `dev_escalation_auth_only_david` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Enforce that only David may ask her to send system/dev/config/code/DB fixes to Cursor/Claude/Manus/GitHub agent. Non-authorized users get a polite Hebrew refusal; normal CRM tools stay under existing role permissions.
+- **How:** Engine guards in `run-ai-agent`: allowlist by campaigner_id / user_id / phone suffix; strip `mcp_Cursor__*` / `mcp_Claude__*` / `mcp_Manus__*` + `delegate_to_github_agent` from tool schema; suppress `cursor_escalation`/`claude_escalation` skins; hard-refuse at execute time; system-prompt rule for both V1/V2. Shared helper: `_shared/dev-escalation-auth`.
+- **Origin:** Carmen → Cursor DEV TASK — David: "תיקונים במערכת רק משתמשים מורשים וכרגע אני המשתמש המורשה היחידי".
+
 ### 2026-08-04 — Expose inspect/duplicate Meta tools in Carmen runtime schema
 - **Skin slug:** `fb_duplicate_ad_variants` (triggers broadened)
 - **What changed:** Tools from PR #325 existed in `ALL_TOOLS` but were invisible on WhatsApp — OpenAI's 128-tool cap truncated late tools (~index 147+) whenever the embedding router fell back to the full set (`agent_tool_embeddings` / `match_agent_tools` were never applied in prod). Fix: move tools next to other FB tools, add to `CORE_TOOLS` + `PRIORITY_TOOLS` (cap + router never drop them), keyword force-include for שכפול/duplicate, apply `create_agent_tool_embeddings` ops migration.
