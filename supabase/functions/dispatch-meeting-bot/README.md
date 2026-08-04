@@ -14,7 +14,7 @@
 | Secret | חובה | תיאור |
 |--------|------|--------|
 | `RECALL_API_KEY` | כן | API key מ-[Recall.ai](https://www.recall.ai/) |
-| `RECALL_REGION` | לא | ברירת מחדל `us-east-1` |
+| `RECALL_REGION` | **כן (EU)** | `eu-central-1` לאירופה (Frankfurt). ברירת מחדל בקוד: `us-east-1` — בלי הגדרה מקבלים 401 |
 | `RECALL_WORKSPACE_VERIFICATION_SECRET` | מומלץ | `whsec_...` לאימות webhooks |
 | `RECALL_ZOOM_BOT_EMAIL` | לא | רק לפגישות Zoom שדורשות אימייל (למשל `carmen@aios.co.il`) — **לא צריך חשבון Zoom אמיתי** |
 
