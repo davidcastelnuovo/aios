@@ -410,3 +410,176 @@ export function isSeoMonthlyShareSnapshot(raw: unknown): raw is SeoMonthlyShareS
   const o = raw as Record<string, unknown>;
   return o.version === 1 && typeof o.clientName === "string" && typeof o.month === "string";
 }
+
+/**
+ * Keep the in-app published deck (metrics / GSC / keywords) and only refresh the
+ * live monthly work fields — used by public share views so they match the system.
+ */
+export function applyLiveWorkToShareSnapshot(
+  base: SeoMonthlyShareSnapshot,
+  opts: {
+    work: SeoMonthlyWork;
+    status?: SeoMonthlyShareSnapshot["status"];
+    recentLinks?: SeoShareRecentLink[];
+    clientName?: string;
+    domain?: string | null;
+    month?: string;
+    monthLabel?: string;
+  },
+): SeoMonthlyShareSnapshot {
+  return {
+    ...base,
+    version: 1,
+    clientName: opts.clientName?.trim() || base.clientName,
+    domain: opts.domain?.trim() || base.domain,
+    month: opts.month || base.month,
+    monthLabel: opts.monthLabel || base.monthLabel,
+    status: opts.status || base.status,
+    work: sanitizeSeoMonthlyWork(opts.work),
+    recentLinks: opts.recentLinks?.length ? opts.recentLinks : undefined,
+    metrics: Array.isArray(base.metrics) ? base.metrics : [],
+    keywords: Array.isArray(base.keywords) ? base.keywords : [],
+    search: base.search,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function fmtHe(n: number): string {
+  return Math.round(n).toLocaleString("he-IL");
+}
+
+/**
+ * Client-facing performance narrative for the summary slide.
+ * Built from real Search Console / keyword movement — not the free-text work note
+ * (that note is editor-only and must not repeat on the cover).
+ * Always ends on an optimistic forward-looking note.
+ */
+export function buildSeoPerformanceSummary(snapshot: SeoMonthlyShareSnapshot): string {
+  const search = snapshot.search;
+  const sentences: string[] = [];
+
+  const improved = snapshot.keywords.filter((kw) => {
+    if (kw.position == null) return false;
+    if (kw.basePosition != null && Number.isFinite(kw.basePosition)) {
+      return kw.position < kw.basePosition;
+    }
+    if (kw.prevPosition != null && Number.isFinite(kw.prevPosition)) {
+      return kw.position < kw.prevPosition;
+    }
+    return false;
+  }).length;
+
+  const soft = snapshot.keywords.filter((kw) => {
+    if (kw.position == null) return false;
+    if (kw.basePosition != null && Number.isFinite(kw.basePosition)) {
+      return kw.position > kw.basePosition;
+    }
+    if (kw.prevPosition != null && Number.isFinite(kw.prevPosition)) {
+      return kw.position > kw.prevPosition;
+    }
+    return false;
+  }).length;
+
+  const clickDelta =
+    search?.prev != null ? search.totals.clicks - search.prev.clicks : null;
+  const impressionDelta =
+    search?.prev != null ? search.totals.impressions - search.prev.impressions : null;
+  const top20Delta =
+    search?.prev != null ? search.totals.top20 - search.prev.top20 : null;
+
+  const risingSignals =
+    (clickDelta != null && clickDelta > 0 ? 1 : 0) +
+    (impressionDelta != null && impressionDelta > 0 ? 1 : 0) +
+    (top20Delta != null && top20Delta > 0 ? 1 : 0) +
+    (improved > soft ? 1 : 0) +
+    (snapshot.status === "up" ? 1 : 0);
+
+  if (risingSignals > 0 || snapshot.status === "up" || improved > 0) {
+    sentences.push(
+      `בחודש ${snapshot.monthLabel} האתר מגיב לקידום — אנחנו רואים התקדמות אמיתית במיקומים ובחשיפה בגוגל.`,
+    );
+  } else if (snapshot.status === "down" || (soft > improved && soft > 0)) {
+    sentences.push(
+      `בחודש ${snapshot.monthLabel} האתר ממשיך בתהליך הקידום; חלק מהביטויים זזים וחלק עדיין מתבססים, וזה חלק טבעי מהעבודה.`,
+    );
+  } else {
+    sentences.push(
+      `בחודש ${snapshot.monthLabel} האתר מגיב לקידום ואנחנו ממשיכים לבנות נוכחות יציבה בגוגל.`,
+    );
+  }
+
+  if (search) {
+    const bits: string[] = [];
+    if (search.totals.impressions > 0) {
+      bits.push(`${fmtHe(search.totals.impressions)} חשיפות`);
+    }
+    if (search.totals.clicks > 0) {
+      bits.push(`${fmtHe(search.totals.clicks)} קליקים`);
+    }
+    if (search.totals.top20 > 0) {
+      bits.push(`${fmtHe(search.totals.top20)} ביטויים ב-Top 20`);
+    }
+    if (bits.length) {
+      sentences.push(`בפועל נמדדו החודש ${bits.join(", ")}.`);
+    }
+
+    const mom: string[] = [];
+    if (impressionDelta != null && impressionDelta !== 0) {
+      mom.push(
+        impressionDelta > 0
+          ? `עלייה של ${fmtHe(impressionDelta)} בחשיפות מול החודש הקודם`
+          : `ירידה קלה של ${fmtHe(Math.abs(impressionDelta))} בחשיפות מול החודש הקודם`,
+      );
+    }
+    if (clickDelta != null && clickDelta !== 0) {
+      mom.push(
+        clickDelta > 0
+          ? `עלייה של ${fmtHe(clickDelta)} בקליקים`
+          : `ירידה של ${fmtHe(Math.abs(clickDelta))} בקליקים`,
+      );
+    }
+    if (top20Delta != null && top20Delta !== 0) {
+      mom.push(
+        top20Delta > 0
+          ? `${fmtHe(top20Delta)} ביטויים נוספים ב-Top 20`
+          : `${fmtHe(Math.abs(top20Delta))} ביטויים פחות ב-Top 20`,
+      );
+    }
+    if (mom.length) sentences.push(`${mom.join(", ")}.`);
+
+    if (
+      search.base &&
+      search.base.impressions > 0 &&
+      search.totals.impressions > search.base.impressions
+    ) {
+      const growth = Math.round(
+        ((search.totals.impressions - search.base.impressions) / search.base.impressions) * 100,
+      );
+      if (growth > 0) {
+        sentences.push(
+          `מאז תחילת הקידום${search.baseLabel ? ` (${search.baseLabel})` : ""} החשיפות צמחו בכ־${growth}%.`,
+        );
+      }
+    }
+  }
+
+  if (improved > 0) {
+    sentences.push(
+      improved === 1
+        ? "בביטויים המרכזיים אנחנו רואים שיפור במיקום."
+        : `בביטויים המרכזיים אנחנו רואים שיפור במיקום ב־${fmtHe(improved)} ביטויים.`,
+    );
+  }
+  if (soft > 0 && soft >= improved) {
+    sentences.push(
+      "יש גם ביטויים שנסוגו מעט — זה קורה בשוק תחרותי, ואנחנו מטפלים בהם כחלק מהמשך העבודה.",
+    );
+  }
+
+  // Always finish optimistic, even after regressions.
+  sentences.push(
+    "ממשיכים לחזק את המומנטום בחודש הקרוב, עם מיקוד בביטויים שמביאים חשיפות וקליקים — והכיוון הכללי חיובי להמשך.",
+  );
+
+  return sentences.join(" ");
+}

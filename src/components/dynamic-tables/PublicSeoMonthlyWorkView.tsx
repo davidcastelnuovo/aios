@@ -17,7 +17,10 @@ import {
   SeoMonthlySlideshowCaptureStack,
 } from "@/components/seo/SeoMonthlySlideshow";
 import {
+  applyLiveWorkToShareSnapshot,
   buildSeoMonthlyShareSnapshot,
+  isSeoMonthlyShareSnapshot,
+  SeoMonthlyShareSnapshot,
   SeoShareRecentLink,
 } from "@/lib/seoMonthlyShareSnapshot";
 import {
@@ -26,19 +29,23 @@ import {
 } from "@/lib/seoMonthlyWork";
 import { downloadSeoMonthlySlideshowPdf } from "@/lib/seoMonthlyPdf";
 import { filterValidSeoReports } from "@/components/dynamic-tables/seo/reportValidity";
+import { filterSeoReportsByDomain, normalizeSeoDomain } from "@/lib/seoDomain";
 
 type MonthlyRow = {
   month: string;
   status: string;
   work: unknown;
   notes?: string | null;
+  share_token?: string | null;
+  /** Exact deck published from the in-app עבודה חודשית tab. */
+  snapshot?: unknown | null;
 };
 
 type Props = {
   clientName?: string | null;
   domain?: string | null;
   months: MonthlyRow[];
-  /** Optional dedicated slideshow share token (opens fullscreen live deck). */
+  /** @deprecated Prefer per-month share_token on months[]. */
   shareToken?: string | null;
   ahrefsReports?: any[];
   forceRelevant?: string[];
@@ -84,7 +91,6 @@ export function PublicSeoMonthlyWorkView({
     lastCalendarMonth;
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
 
-  // If months arrive after first paint, keep the selection on last-month when still on the initial default.
   const selected =
     sortedMonths.find((m) => m.month === selectedMonth) ||
     sortedMonths.find((m) => m.month === defaultMonth) ||
@@ -131,38 +137,63 @@ export function PublicSeoMonthlyWorkView({
     return out.sort((a, b) => b.month.localeCompare(a.month));
   }, [sortedMonths, selected, selectedMonth, work]);
 
+  const expectedDomain = normalizeSeoDomain(domain);
   const latestReportData = useMemo(() => {
-    const valid = filterValidSeoReports(ahrefsReports || []);
-    return (valid[0]?.report_data as Record<string, unknown> | undefined) || null;
-  }, [ahrefsReports]);
+    const own = filterValidSeoReports(
+      filterSeoReportsByDomain(ahrefsReports || [], expectedDomain),
+    );
+    return (own[0]?.report_data as Record<string, unknown> | undefined) || null;
+  }, [ahrefsReports, expectedDomain]);
 
-  const snapshot = useMemo(
-    () =>
-      buildSeoMonthlyShareSnapshot({
-        clientName: clientName || "לקוח",
-        domain,
-        month: selected?.month || selectedMonth,
-        status:
-          selected?.status === "up" || selected?.status === "down" || selected?.status === "stable"
-            ? selected.status
-            : "stable",
+  const status: SeoMonthlyShareSnapshot["status"] =
+    selected?.status === "up" || selected?.status === "down" || selected?.status === "stable"
+      ? selected.status
+      : "stable";
+
+  /**
+   * Prefer the exact snapshot published from the in-app tab (includes GSC search
+   * metrics/keywords). Only refresh live work/links so public matches the system.
+   */
+  const snapshot = useMemo(() => {
+    const month = selected?.month || selectedMonth;
+    const label = monthLabel(month);
+    const published = isSeoMonthlyShareSnapshot(selected?.snapshot) ? selected!.snapshot : null;
+    if (published) {
+      return applyLiveWorkToShareSnapshot(published, {
         work,
-        reportData: latestReportData,
+        status,
         recentLinks,
-        relevance: { forceRelevant, forceIrrelevant },
-      }),
-    [
-      clientName,
+        clientName: clientName || published.clientName,
+        domain: domain || published.domain,
+        month,
+        monthLabel: label,
+      });
+    }
+    // Fallback when this month was never published from the system yet.
+    return buildSeoMonthlyShareSnapshot({
+      clientName: clientName || "לקוח",
       domain,
-      selected,
-      selectedMonth,
+      month,
+      status,
       work,
-      latestReportData,
+      reportData: latestReportData,
       recentLinks,
-      forceRelevant,
-      forceIrrelevant,
-    ],
-  );
+      relevance: { forceRelevant, forceIrrelevant },
+    });
+  }, [
+    selected,
+    selectedMonth,
+    work,
+    status,
+    recentLinks,
+    clientName,
+    domain,
+    latestReportData,
+    forceRelevant,
+    forceIrrelevant,
+  ]);
+
+  const monthShareToken = selected?.share_token || shareToken || null;
 
   const hasAnyWork =
     !!work.summary?.trim() ||
@@ -220,9 +251,9 @@ export function PublicSeoMonthlyWorkView({
                   ))}
                 </SelectContent>
               </Select>
-              {shareToken && (
+              {monthShareToken && (
                 <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
-                  <a href={`/shared/seo-monthly/${shareToken}`} target="_blank" rel="noreferrer">
+                  <a href={`/shared/seo-monthly/${monthShareToken}`} target="_blank" rel="noreferrer">
                     <ExternalLink className="h-3.5 w-3.5" />
                     מסך מלא
                   </a>
@@ -253,7 +284,11 @@ export function PublicSeoMonthlyWorkView({
       ) : (
         <div className="overflow-hidden rounded-xl border bg-[#071820]">
           <div className="h-[min(70vh,640px)] w-full">
-            <SeoMonthlySlideshow snapshot={snapshot} className="h-full" />
+            <SeoMonthlySlideshow
+              key={`${snapshot.month}-${snapshot.generatedAt}`}
+              snapshot={snapshot}
+              className="h-full"
+            />
           </div>
         </div>
       )}

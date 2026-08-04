@@ -344,7 +344,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
       if (error) throw error;
       return cleaned;
     },
-    onSuccess: (cleaned) => {
+    onSuccess: async (cleaned) => {
       setWork(cleaned);
       setDirty(false);
       toast.success("סיכום העבודה החודשית נשמר");
@@ -354,6 +354,15 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-history", clientId] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest"] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-single", clientId] });
+      // Keep the public share deck identical to the in-app slideshow whenever a share exists.
+      if (existingShare?.share_token) {
+        try {
+          await upsertShare({ work: cleaned });
+          queryClient.invalidateQueries({ queryKey: ["seo-monthly-share", clientId, selectedMonth] });
+        } catch (err) {
+          console.warn("Failed to refresh public SEO monthly snapshot after save", err);
+        }
+      }
     },
     onError: (err: any) => {
       const msg = String(err?.message || "");
@@ -407,14 +416,45 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
       ? `${SHARE_ORIGIN}/shared/seo-monthly/${existingShare.share_token}`
       : null;
 
-  const upsertShare = async (): Promise<string> => {
+  const upsertShare = async (overrides?: { work?: SeoMonthlyWork }): Promise<string> => {
     if (!tenantId || !user?.id) throw new Error("חסר משתמש או טננט");
+    const workForShare = overrides?.work ?? work;
+    // Rebuild recent links from the work we're publishing so the public deck matches.
+    const linksForShare: SeoShareRecentLink[] = [];
+    const seenUrls = new Set<string>();
+    const pushLink = (month: string, link: { id?: string; url?: string; anchor?: string; notes?: string }) => {
+      const url = (link.url || "").trim();
+      if (!url || seenUrls.has(url.toLowerCase())) return;
+      seenUrls.add(url.toLowerCase());
+      let label = month;
+      try {
+        label = format(new Date(`${month}T12:00:00`), "MMMM yyyy", { locale: he });
+      } catch {
+        /* keep raw */
+      }
+      linksForShare.push({
+        id: link.id || `${month}-${url}`,
+        url,
+        anchor: link.anchor?.trim() || undefined,
+        notes: link.notes?.trim() || undefined,
+        month,
+        monthLabel: label,
+      });
+    };
+    for (const link of workForShare.links) pushLink(selectedMonth, link);
+    for (const row of priorMonthsWork || []) {
+      const month = row.month.slice(0, 10);
+      if (month === selectedMonth) continue;
+      for (const link of parseSeoMonthlyWork(row.work).links) pushLink(month, link);
+    }
+    linksForShare.sort((a, b) => b.month.localeCompare(a.month));
+
     const frozen = buildSeoMonthlyShareSnapshot({
       clientName: client?.name || "לקוח",
       domain: reportDomain,
       month: selectedMonth,
       status,
-      work,
+      work: workForShare,
       reportData: latestReportData,
       gsc: {
         current: gsc.current,
@@ -422,7 +462,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
         baseline: gsc.baseline,
         baselineMonth: gsc.baselineMonth,
       },
-      recentLinks,
+      recentLinks: linksForShare,
       relevance: { forceRelevant, forceIrrelevant },
     });
 

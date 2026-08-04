@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import {
   SeoMonthlyShareSnapshot,
   STATUS_LABELS,
+  buildSeoPerformanceSummary,
   onsiteKindLabel,
 } from "@/lib/seoMonthlyShareSnapshot";
 
@@ -87,7 +88,10 @@ export function buildSeoMonthlySlides(snapshot: SeoMonthlyShareSnapshot): Slide[
     slides.push({ kind: "metrics", title: "מדדים מרכזיים" });
   }
   if (snapshot.keywords.length > 0) slides.push({ kind: "keywords", title: "ביטויים מרכזיים" });
-  if (snapshot.work.summary?.trim()) slides.push({ kind: "summary", title: "סיכום" });
+  // Performance narrative (from real metrics) — not the free-text work note.
+  if (snapshot.search || snapshot.metrics.length > 0 || snapshot.keywords.length > 0) {
+    slides.push({ kind: "summary", title: "סיכום ביצועים" });
+  }
   if (snapshot.work.onsite.length > 0) slides.push({ kind: "onsite", title: "עבודה באתר" });
   if (snapshot.work.articles.length > 0) slides.push({ kind: "articles", title: "מאמרים" });
   if ((snapshot.recentLinks?.length || snapshot.work.links.length) > 0) {
@@ -300,11 +304,6 @@ function CoverSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
         <span className="text-[#F4F0E6]/60">מגמה</span>
         <span className="font-semibold text-[#F4F0E6]">{status}</span>
       </div>
-      {snapshot.work.summary?.trim() && (
-        <p className="max-w-2xl text-base leading-relaxed text-[#F4F0E6]/70 md:text-lg">
-          {snapshot.work.summary.trim()}
-        </p>
-      )}
     </div>
   );
 }
@@ -333,7 +332,10 @@ function TrendPill({ value, suffix }: { value: number; suffix?: string }) {
 
 function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const search = snapshot.search;
+  const metricOf = (key: string) => snapshot.metrics.find((m) => m.key === key);
 
+  // Prefer the rich Search Console blob; if a public share only kept metric rows,
+  // rebuild the same headline cards so in-app and share stay aligned.
   const headline = search
     ? [
         {
@@ -365,13 +367,33 @@ function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
           base: search.base?.keywords,
         },
       ]
-    : [];
+    : (
+        [
+          { key: "clicks", label: "קליקים מגוגל", metricKey: "gsc_clicks" },
+          { key: "impressions", label: "חשיפות בגוגל", metricKey: "gsc_impressions" },
+          { key: "top20", label: "ביטויים ב-Top 20", metricKey: "top20" },
+          { key: "keywords", label: "ביטויים עם חשיפות", metricKey: "keywords_total" },
+        ] as const
+      )
+        .map((row) => {
+          const m = metricOf(row.metricKey);
+          if (!m) return null;
+          return {
+            key: row.key,
+            label: row.label,
+            value: m.value,
+            prev: m.prevValue,
+            base: undefined as number | undefined,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => !!row);
 
+  const hasGscHeadline = headline.length > 0;
   // Ahrefs' own traffic estimate is unreliable for small sites and reads as a
   // contradiction next to real Search Console clicks, so hide it when we have GSC.
   const hiddenWithSearch = ["gsc_clicks", "gsc_impressions", "top20", "keywords_total", "org_traffic"];
   const secondary = snapshot.metrics.filter((m) =>
-    search ? !hiddenWithSearch.includes(m.key) : !["gsc_clicks", "gsc_impressions"].includes(m.key),
+    hasGscHeadline ? !hiddenWithSearch.includes(m.key) : !["gsc_clicks", "gsc_impressions"].includes(m.key),
   );
 
   return (
@@ -380,7 +402,7 @@ function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
         <div>
           <h2 className="text-3xl font-bold md:text-4xl">הפרמטרים המרכזיים</h2>
           <p className="mt-2 text-[#F4F0E6]/60">
-            {search ? "נתוני Google Search Console לחודש זה" : "תמונת מצב SEO לחודש זה"}
+            {hasGscHeadline ? "נתוני Google Search Console לחודש זה" : "תמונת מצב SEO לחודש זה"}
           </p>
         </div>
         {search?.baseLabel && (
@@ -390,7 +412,7 @@ function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
         )}
       </div>
 
-      {headline.length > 0 && (
+      {hasGscHeadline && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {headline.map((m) => {
             const pct = growthPct(m.value, m.base);
@@ -540,12 +562,11 @@ function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
 }
 
 function SummarySlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+  const narrative = buildSeoPerformanceSummary(snapshot);
   return (
     <div className="max-w-3xl space-y-6">
-      <h2 className="text-3xl font-bold md:text-4xl">סיכום העבודה</h2>
-      <p className="whitespace-pre-wrap text-xl leading-relaxed text-[#F4F0E6]/85 md:text-2xl">
-        {snapshot.work.summary}
-      </p>
+      <h2 className="text-3xl font-bold md:text-4xl">האתר מגיב לקידום</h2>
+      <p className="text-xl leading-relaxed text-[#F4F0E6]/85 md:text-2xl">{narrative}</p>
     </div>
   );
 }
