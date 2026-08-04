@@ -892,6 +892,23 @@ function phoneTail(value: string | null | undefined): string {
   return String(value || '').replace(/\D/g, '').slice(-9);
 }
 
+async function resolveCarmenIdentityPhone(
+  supabase: any,
+  phoneNumber: string,
+): Promise<string> {
+  let digits = String(phoneNumber || '').replace(/\D/g, '');
+  const tail = phoneTail(digits);
+  if (tail && /^[5-9]\d{8}$/.test(tail)) return digits;
+  if (!digits) return digits;
+  const { data: known } = await supabase
+    .from('wa_lid_map')
+    .select('phone')
+    .eq('lid', digits)
+    .maybeSingle();
+  if (known?.phone) return String(known.phone).replace(/\D/g, '');
+  return digits;
+}
+
 type CarmenTenantStaff = {
   campaignerId: string;
   displayName: string | null;
@@ -977,8 +994,8 @@ async function resolveCarmenGroupIdentity(
   messageText: string,
   _allowedPhones: unknown,
 ): Promise<CarmenIdentityAccess> {
-  const tail = phoneTail(phoneNumber);
-  const digits = String(phoneNumber || '').replace(/\D/g, '');
+  const digits = await resolveCarmenIdentityPhone(supabase, phoneNumber);
+  const tail = phoneTail(digits);
   const { data: group } = await supabase.from('whatsapp_groups')
     .select('id').eq('tenant_id', tenantId).eq('group_chat_id', chatId).maybeSingle();
   const { data: groupClient } = group?.id
