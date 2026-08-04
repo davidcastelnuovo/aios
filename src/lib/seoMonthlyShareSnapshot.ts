@@ -410,3 +410,36 @@ export function isSeoMonthlyShareSnapshot(raw: unknown): raw is SeoMonthlyShareS
   const o = raw as Record<string, unknown>;
   return o.version === 1 && typeof o.clientName === "string" && typeof o.month === "string";
 }
+
+/**
+ * Keep the in-app published deck (metrics / GSC / keywords) and only refresh the
+ * live monthly work fields — used by public share views so they match the system.
+ */
+export function applyLiveWorkToShareSnapshot(
+  base: SeoMonthlyShareSnapshot,
+  opts: {
+    work: SeoMonthlyWork;
+    status?: SeoMonthlyShareSnapshot["status"];
+    recentLinks?: SeoShareRecentLink[];
+    clientName?: string;
+    domain?: string | null;
+    month?: string;
+    monthLabel?: string;
+  },
+): SeoMonthlyShareSnapshot {
+  return {
+    ...base,
+    version: 1,
+    clientName: opts.clientName?.trim() || base.clientName,
+    domain: opts.domain?.trim() || base.domain,
+    month: opts.month || base.month,
+    monthLabel: opts.monthLabel || base.monthLabel,
+    status: opts.status || base.status,
+    work: sanitizeSeoMonthlyWork(opts.work),
+    recentLinks: opts.recentLinks?.length ? opts.recentLinks : undefined,
+    metrics: Array.isArray(base.metrics) ? base.metrics : [],
+    keywords: Array.isArray(base.keywords) ? base.keywords : [],
+    search: base.search,
+    generatedAt: new Date().toISOString(),
+  };
+}

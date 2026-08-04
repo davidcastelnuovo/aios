@@ -198,6 +198,8 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Preserve the in-app published deck (metrics / GSC search / keywords) and only
+    // refresh live work/links — same contract as applyLiveWorkToShareSnapshot in the app.
     const liveSnapshot = {
       ...baseSnapshot,
       version: 1,

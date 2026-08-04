@@ -530,7 +530,15 @@ Deno.serve(async (req) => {
         client_name: string | null;
         domain: string | null;
         share_token: string | null;
-        months: Array<{ month: string; status: string; work: unknown; notes: string | null }>;
+        months: Array<{
+          month: string;
+          status: string;
+          work: unknown;
+          notes: string | null;
+          share_token: string | null;
+          /** Exact in-app deck snapshot (metrics/GSC/keywords) when a share was published. */
+          snapshot: unknown | null;
+        }>;
       } = {
         client_name: clientName,
         domain: targetDomain || clientWebsite,
@@ -549,24 +557,36 @@ Deno.serve(async (req) => {
               .limit(12),
             supabase
               .from("seo_monthly_shares")
-              .select("share_token, month, is_active")
+              .select("share_token, month, is_active, snapshot")
               .eq("client_id", targetClientId)
               .eq("is_active", true)
               .order("month", { ascending: false })
               .limit(12),
           ]);
-          seoMonthly.months = (monthlyRows || []).map((row: any) => ({
-            month: String(row.month || "").slice(0, 10),
-            status: row.status || "stable",
-            work: row.work ?? {},
-            notes: row.notes ?? null,
-          }));
-          const newestWorkMonth = seoMonthly.months[0]?.month || null;
-          const shareRows = monthlyShare || [];
+          const shareByMonth = new Map<string, any>();
+          for (const share of monthlyShare || []) {
+            shareByMonth.set(String(share.month || "").slice(0, 10), share);
+          }
+          seoMonthly.months = (monthlyRows || []).map((row: any) => {
+            const month = String(row.month || "").slice(0, 10);
+            const share = shareByMonth.get(month);
+            return {
+              month,
+              status: row.status || "stable",
+              work: row.work ?? {},
+              notes: row.notes ?? null,
+              share_token: share?.share_token || null,
+              // Prefer the frozen in-app snapshot so the public deck matches the system deck.
+              snapshot: share?.snapshot && typeof share.snapshot === "object" ? share.snapshot : null,
+            };
+          });
+          // Prefer last calendar month's share token (matches default month in the UI).
+          const now = new Date();
+          const lastMonthDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+          const lastMonth = `${lastMonthDate.getUTCFullYear()}-${String(lastMonthDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
           const matched =
-            (newestWorkMonth &&
-              shareRows.find((s: any) => String(s.month || "").slice(0, 10) === newestWorkMonth)) ||
-            shareRows[0] ||
+            seoMonthly.months.find((m) => m.month === lastMonth && m.share_token) ||
+            seoMonthly.months.find((m) => m.share_token) ||
             null;
           seoMonthly.share_token = matched?.share_token || null;
         } catch (e) {
