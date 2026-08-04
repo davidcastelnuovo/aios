@@ -246,9 +246,22 @@ export default function DashboardView() {
       const hasFbInsights = tables.some((t: any) => t.integration_type === 'facebook_insights');
       const skipFbInsights = hasFbEcommerce && hasFbInsights;
 
-      const tablesToFetch = skipFbInsights
-        ? tables.filter((t: any) => t.integration_type !== 'facebook_insights')
-        : tables;
+      // SEO (ahrefs) / Search Console tables are rendered from ahrefs_reports +
+      // dedicated SEO tabs — not from crm_records. Pulling their keyword rows
+      // here made client dashboards with SEO hang on "loading" and look empty.
+      const DASHBOARD_RECORD_TYPES = new Set([
+        'facebook_insights',
+        'facebook_ecommerce',
+        'google_ads',
+        'google_analytics',
+        'tiktok',
+      ]);
+
+      const tablesToFetch = tables.filter((t: any) => {
+        if (!DASHBOARD_RECORD_TYPES.has(t.integration_type)) return false;
+        if (skipFbInsights && t.integration_type === 'facebook_insights') return false;
+        return true;
+      });
 
       const recordsPromises = tablesToFetch.map(async (table: any) => {
         const params = new URLSearchParams({ table_id: table.id, date_filter: dateFilter });
@@ -1247,29 +1260,31 @@ export default function DashboardView() {
             </Tabs>
           )}
 
-          {tablesLoading || recordsLoading ? (
-            <div className="grid gap-4 md:grid-cols-4">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-            </div>
-          ) : platformFilter === 'woocommerce' ? (
+          {platformFilter === 'woocommerce' ? (
             /* WooCommerce tab */
             dashboard?.client_id && currentTenantId ? (
               <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId} dateFilter={dateFilter} customFrom={customFromStr} customTo={customToStr} />
             ) : null
+          ) : platformFilter === 'seo' ? (
+            /* SEO tab: render full SEO report with Ahrefs + GSC + Analytics tabs.
+               Pass clientId only — SeoReportTabs resolves the cross-tenant scope itself
+               via useSeoScope, so shared-agency clients (e.g. YTS) load correctly
+               regardless of which tenant the user opened the dashboard from.
+               Must run BEFORE the tables.length===0 empty state — SEO clients may
+               only have ahrefs_reports and no ads crm_tables. */
+            dashboard?.client_id ? (
+              <SeoReportTabs clientId={dashboard.client_id} />
+            ) : null
+          ) : tablesLoading || recordsLoading ? (
+            <div className="grid gap-4 md:grid-cols-4">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
+            </div>
           ) : tables.length === 0 ? (
             <Card className="p-12 text-center">
               <h3 className="text-lg font-semibold mb-2">אין טבלאות משויכות ללקוח זה</h3>
               <p className="text-muted-foreground mb-4">צור טבלאות ושייך אותן ללקוח כדי לראות נתונים בדשבורד</p>
               <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>עבור לניהול דוחות</Button>
             </Card>
-          ) : platformFilter === 'seo' ? (
-            /* SEO tab: render full SEO report with Ahrefs + GSC + Analytics tabs.
-               Pass clientId only — SeoReportTabs resolves the cross-tenant scope itself
-               via useSeoScope, so shared-agency clients (e.g. YTS) load correctly
-               regardless of which tenant the user opened the dashboard from. */
-            dashboard?.client_id ? (
-              <SeoReportTabs clientId={dashboard.client_id} />
-            ) : null
           ) : platformFilter === 'google_analytics' ? (
             /* Analytics tab: render the same GoogleAnalyticsDashboard used in standalone table view */
             <GoogleAnalyticsDashboard
