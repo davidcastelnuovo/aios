@@ -57,34 +57,29 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { isSeoTaggedClient } from "@/lib/seoClients";
 
-// Session-scoped: owners get a one-time organization-wide starting view on first
+// Session-scoped: owners and SEO viewers get organization-wide starting view on first
 // visit to Clients. Must NOT re-run on every remount — that was wiping the global
 // agency filter whenever anyone navigated back to this module.
-let ownerAgencyDefaultApplied = false;
+let clientsAgencyDefaultApplied = false;
 
 export default function Clients() {
   const { selectedAgency, setSelectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
-  useEffect(() => {
-    if ((isOwner || isSuperAdmin) && !ownerAgencyDefaultApplied) {
-      ownerAgencyDefaultApplied = true;
-      setSelectedAgency("all");
-    }
-  }, [isOwner, isSuperAdmin, setSelectedAgency]);
   // SEO viewer takes precedence over campaigner: any user with SEO role sees all SEO-tagged clients
   // (unless they're also team_manager / owner / super_admin who already see everything)
   const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
   // Restricted viewer: pure campaigner (no SEO / team_manager / owner / super_admin)
   const isRestrictedClientViewer = isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
+  useEffect(() => {
+    if ((isOwner || isSuperAdmin || isSeoOnlyViewer) && !clientsAgencyDefaultApplied) {
+      clientsAgencyDefaultApplied = true;
+      setSelectedAgency("all");
+    }
+  }, [isOwner, isSuperAdmin, isSeoOnlyViewer, setSelectedAgency]);
   // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
   const [searchParams] = useSearchParams();
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
@@ -485,11 +480,7 @@ export default function Clients() {
       const ids = Array.isArray(campaignerClientIds) ? campaignerClientIds : [];
       accessibleClients = clients?.filter(client => ids.includes(client.id));
     } else if (isSeoOnlyViewer) {
-      // SEO users see all SEO-tagged clients (RLS already enforces tenant scope)
-      accessibleClients = clients?.filter((client: any) =>
-        client.is_seo_client === true ||
-        (Array.isArray(client.services) && client.services.includes("seo"))
-      );
+      accessibleClients = clients?.filter((client: any) => isSeoTaggedClient(client));
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all clients in their agencies
       accessibleClients = clients?.filter(client =>
@@ -527,7 +518,7 @@ export default function Clients() {
     ? moodFilteredClients?.filter((client: any) => {
         const services: string[] = Array.isArray(client.services) ? client.services : [];
         if (selectedService === "seo") {
-          return client.is_seo_client === true || services.includes("seo");
+          return isSeoTaggedClient(client);
         }
         return services.includes(selectedService);
       })

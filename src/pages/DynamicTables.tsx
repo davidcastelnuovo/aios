@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { isSeoTaggedClient } from "@/lib/seoClients";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,7 +90,9 @@ export default function DynamicTables() {
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
   const { isCampaigner, isSeo, isOwner, isTeamManager, isSuperAdmin, campaignerId } = useUserRole();
-  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
+  const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
+  const isRestrictedCampaignerViewer =
+    isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFacebookDialog, setShowFacebookDialog] = useState(false);
   const [showFacebookEcommerceDialog, setShowFacebookEcommerceDialog] = useState(false);
@@ -131,7 +134,7 @@ export default function DynamicTables() {
       if (error) throw error;
       return data?.map(ct => ct.client_id) || [];
     },
-    enabled: !!campaignerId && isRestrictedClientViewer,
+    enabled: !!campaignerId && isRestrictedCampaignerViewer,
   });
 
   const canManageTables = isOwner || isTeamManager || isSuperAdmin || isCampaigner;
@@ -178,14 +181,14 @@ export default function DynamicTables() {
       if (agencyIds.length === 0) {
         const { data, error } = await supabase
           .from('clients')
-          .select('id, name, agency_id, website')
+          .select('id, name, agency_id, website, is_seo_client, services')
           .eq('tenant_id', tenantId);
         if (error) throw error;
         return data || [];
       }
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, agency_id, website')
+        .select('id, name, agency_id, website, is_seo_client, services')
         .in('agency_id', agencyIds);
       if (error) throw error;
       return data || [];
@@ -207,15 +210,28 @@ export default function DynamicTables() {
   });
   const editAdAccounts: { id: string; name: string; currency: string }[] = editAdAccountsData?.ad_accounts || [];
 
+  const seoClientIds = useMemo(
+    () => clients.filter((c) => isSeoTaggedClient(c)).map((c) => c.id),
+    [clients],
+  );
+
+  const dialogClientScopeIds = isRestrictedCampaignerViewer
+    ? assignedClientIds
+    : isSeoOnlyViewer
+      ? seoClientIds
+      : undefined;
+
   // Filter clients by selected agency in edit dialog
   const editFilteredClients = useMemo(() => {
     if (!editAgencyId) return [];
-    let filtered = clients.filter(c => c.agency_id === editAgencyId);
-    if (isRestrictedClientViewer && assignedClientIds) {
-      filtered = filtered.filter(c => assignedClientIds.includes(c.id));
+    let filtered = clients.filter((c) => c.agency_id === editAgencyId);
+    if (isRestrictedCampaignerViewer && assignedClientIds) {
+      filtered = filtered.filter((c) => assignedClientIds.includes(c.id));
+    } else if (isSeoOnlyViewer) {
+      filtered = filtered.filter((c) => isSeoTaggedClient(c));
     }
     return filtered;
-  }, [clients, editAgencyId, isRestrictedClientViewer, assignedClientIds]);
+  }, [clients, editAgencyId, isRestrictedCampaignerViewer, isSeoOnlyViewer, assignedClientIds]);
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables', tenantId],
@@ -261,10 +277,14 @@ export default function DynamicTables() {
     
     let result = tables;
 
-    // Campaigners can only see tables linked to their assigned clients
-    if (isRestrictedClientViewer && assignedClientIds) {
-      result = result.filter(table => 
-        table.client_id && assignedClientIds.includes(table.client_id)
+    // Campaigners: assigned clients only. SEO: all SEO-tagged clients.
+    if (isRestrictedCampaignerViewer && assignedClientIds) {
+      result = result.filter((table) =>
+        table.client_id && assignedClientIds.includes(table.client_id),
+      );
+    } else if (isSeoOnlyViewer) {
+      result = result.filter(
+        (table) => table.client_id && seoClientIds.includes(table.client_id),
       );
     }
     
@@ -298,7 +318,7 @@ export default function DynamicTables() {
     }
 
     return result;
-  }, [tables, selectedAgency, isRestrictedClientViewer, assignedClientIds, clientSearch, clients, reportStatusFilter]);
+  }, [tables, selectedAgency, isRestrictedCampaignerViewer, isSeoOnlyViewer, assignedClientIds, seoClientIds, clientSearch, clients, reportStatusFilter]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
@@ -1011,8 +1031,11 @@ export default function DynamicTables() {
                     if (!nameMatch && !clientMatch && !agencyMatch) return false;
                   }
                   // Campaigners can only see dashboards linked to their assigned clients
-                  if (isRestrictedClientViewer && assignedClientIds) {
+                  if (isRestrictedCampaignerViewer && assignedClientIds) {
                     return dashboard.client_id && assignedClientIds.includes(dashboard.client_id);
+                  }
+                  if (isSeoOnlyViewer) {
+                    return dashboard.client_id && seoClientIds.includes(dashboard.client_id);
                   }
                   return true;
                 })
@@ -1104,31 +1127,31 @@ export default function DynamicTables() {
       <SimpleTableDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <FacebookTableDialog
         open={showFacebookDialog}
         onOpenChange={setShowFacebookDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <GoogleAdsTableDialog
         open={showGoogleAdsDialog}
         onOpenChange={setShowGoogleAdsDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <GoogleAnalyticsTableDialog
         open={showGADialog}
         onOpenChange={setShowGADialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <GoogleSearchConsoleTableDialog
         open={showGSCDialog}
         onOpenChange={setShowGSCDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       {/* Edit Dashboard Name Dialog */}
@@ -1392,31 +1415,31 @@ export default function DynamicTables() {
       <AhrefsTableDialog 
         open={showAhrefsDialog} 
         onOpenChange={setShowAhrefsDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <FacebookEcommerceTableDialog
         open={showFacebookEcommerceDialog}
         onOpenChange={setShowFacebookEcommerceDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <CreateDashboardDialog
         open={showCreateDashboardDialog}
         onOpenChange={setShowCreateDashboardDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <SeoReportDialog
         open={showSeoReportDialog}
         onOpenChange={setShowSeoReportDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <TikTokTableDialog
         open={showTikTokDialog}
         onOpenChange={setShowTikTokDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={dialogClientScopeIds}
       />
     </div>
   );

@@ -10,13 +10,16 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
+import { isSeoTaggedClient } from "@/lib/seoClients";
 
 export default function Dashboard() {
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
   const { userAgencyIds } = useUserAgencies();
   const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
-  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
+  const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
+  const isRestrictedCampaignerViewer =
+    isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
   const { t } = useTerminology();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const [selectedClient, setSelectedClient] = useState<string>("all");
@@ -142,7 +145,7 @@ export default function Dashboard() {
     queryKey: ["clients", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      let query = supabase.from("clients").select("id, name, agency_id");
+      let query = supabase.from("clients").select("id, name, agency_id, is_seo_client, services");
       if (crossTenantAgencyIds.length > 0) {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
       } else {
@@ -166,7 +169,7 @@ export default function Dashboard() {
       if (error) throw error;
       return data?.map((ct) => ct.client_id).filter(Boolean) || [];
     },
-    enabled: !!campaignerId && isRestrictedClientViewer,
+    enabled: !!campaignerId && isRestrictedCampaignerViewer,
   });
 
   const { data: suppliers } = useQuery({
@@ -185,7 +188,7 @@ export default function Dashboard() {
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier, isRestrictedClientViewer, assignedClientIds.join(","), crossTenantAgencyIds],
+    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier, isSeoOnlyViewer, isRestrictedCampaignerViewer, assignedClientIds.join(","), crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return null;
       let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
@@ -235,7 +238,7 @@ export default function Dashboard() {
       if (selectedClient !== "all") {
         taskQuery = taskQuery.eq("client_id", selectedClient);
         activeClientsQuery = activeClientsQuery.eq("id", selectedClient);
-      } else if (isRestrictedClientViewer) {
+      } else if (isRestrictedCampaignerViewer) {
         if (assignedClientIds.length > 0) {
           clientQuery = clientQuery.in("id", assignedClientIds);
           taskQuery = taskQuery.in("client_id", assignedClientIds);
@@ -248,6 +251,12 @@ export default function Dashboard() {
           activeClientsQuery = activeClientsQuery.eq("id", emptyId);
           leadsQuery = leadsQuery.eq("id", emptyId);
         }
+      } else if (isSeoOnlyViewer) {
+        clientQuery = clientQuery.or("is_seo_client.eq.true,services.cs.[\"seo\"]");
+        activeClientsQuery = activeClientsQuery.or("is_seo_client.eq.true,services.cs.[\"seo\"]");
+        const emptyId = "00000000-0000-0000-0000-000000000000";
+        taskQuery = taskQuery.eq("client_id", emptyId);
+        leadsQuery = leadsQuery.eq("id", emptyId);
       }
 
       if (selectedSupplier !== "all" && clientTeamData) {
@@ -286,9 +295,15 @@ export default function Dashboard() {
       }
       if (selectedClient !== "all") {
         financeQuery = financeQuery.eq("client_id", selectedClient);
-      } else if (isRestrictedClientViewer) {
+      } else if (isRestrictedCampaignerViewer) {
         if (assignedClientIds.length > 0) {
           financeQuery = financeQuery.in("client_id", assignedClientIds);
+        } else {
+          financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
+        }
+      } else if (isSeoOnlyViewer) {
+        if (activeClientIds.length > 0) {
+          financeQuery = financeQuery.in("client_id", activeClientIds);
         } else {
           financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
         }
@@ -412,11 +427,13 @@ export default function Dashboard() {
   ];
 
   // First filter by user's accessible agencies
-  const accessibleClients = isRestrictedClientViewer
-    ? clients?.filter(c => assignedClientIds.includes(c.id))
-    : !isOwner && userAgencyIds && userAgencyIds.length > 0
-      ? clients?.filter(c => userAgencyIds.includes(c.agency_id))
-      : clients;
+  const accessibleClients = isRestrictedCampaignerViewer
+    ? clients?.filter((c) => assignedClientIds.includes(c.id))
+    : isSeoOnlyViewer
+      ? clients?.filter((c) => isSeoTaggedClient(c))
+      : !isOwner && userAgencyIds && userAgencyIds.length > 0
+        ? clients?.filter((c) => userAgencyIds.includes(c.agency_id))
+        : clients;
 
   // Then filter by selected agency
   const filteredClients = selectedAgency === "all" 
