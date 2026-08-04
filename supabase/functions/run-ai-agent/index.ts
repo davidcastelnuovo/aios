@@ -14,6 +14,7 @@ import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
 import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
+import { asUuidOrNull } from '../_shared/uuid.ts'
 
 
 const corsHeaders = {
@@ -1318,7 +1319,9 @@ async function tryCreateCalendarEventForTask(
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any): Promise<any> {
+  // WhatsApp / automations often pass the sentinel "system". Never write that into uuid columns.
+  const actorUserId = asUuidOrNull(userId)
   const accessibleTenantIds = await getAccessibleTenantIds(supabase, tenantId)
   // Role-based scope: managers (owner/agency_owner/agency_manager/super_admin) bypass the campaigner narrow-scope.
   const isManagerRole = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
@@ -1981,7 +1984,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: name,
         title: legacyTitles[name] || name,
         description: 'פעולת mutating על Meta — דורשת אישור משתמש מפורש (תור אישורים)',
@@ -3057,7 +3060,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: toolName,
         title: autoTitles[name] || name,
         description: 'פעולת אוטומציה — דורשת אישור משתמש מפורש',
@@ -3655,7 +3658,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: name,
         title: acctTitles[name] || name,
         description: 'פעולת הנהלת חשבונות — דורשת אישור משתמש מפורש',
@@ -4272,7 +4275,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'create_automation',
         title: `בניית אוטומציה: ${spec.name}`,
         description: `טריגר: ${spec.trigger_type} | שלבים: ${stepSummary}`,
@@ -4334,13 +4337,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-approval-execute`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY },
-        body: JSON.stringify({ approval_id: approvalId, approved_by: userId }),
+        body: JSON.stringify({ approval_id: approvalId, approved_by: actorUserId }),
       })
       const j = await r.json()
       return j
     }
     case 'reject_pending_approval': {
-      const { error } = await supabase.from('agent_approval_queue').update({ status: 'rejected', approved_by: userId, approved_at: new Date().toISOString(), execution_result: { reason: args.reason || null } }).eq('id', args.approval_id).eq('tenant_id', tenantId)
+      const { error } = await supabase.from('agent_approval_queue').update({ status: 'rejected', approved_by: actorUserId, approved_at: new Date().toISOString(), execution_result: { reason: args.reason || null } }).eq('id', args.approval_id).eq('tenant_id', tenantId)
       if (error) throw error
       return { success: true, approval_id: args.approval_id, status: 'rejected' }
     }
@@ -4373,7 +4376,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: name,
         title: titles[name] || name,
         description: 'פעולת mutating שדורשת אישור משתמש בוואטסאפ',
@@ -4678,7 +4681,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'schedule_campaign_toggle',
         title: `תזמון ${args.action} ל-${args.entity_id}`,
         description: args.cron_expression ? `cron: ${args.cron_expression} (${args.timezone || 'Asia/Jerusalem'})` : `חד-פעמי: ${args.run_at}`,
@@ -4793,7 +4796,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'send_broadcast_now',
         title: `שליחת דיוור: ${bc.name}`,
         description: 'שליחת דיוור WhatsApp מיידית',
@@ -4821,7 +4824,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'schedule_broadcast',
         title: `תזמון דיוור: ${bc.name}`,
         description: `תזמון ל-${args.scheduled_at}`,
@@ -4849,7 +4852,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'cancel_broadcast',
         title: `ביטול דיוור: ${bc.name}`,
         description: `ביטול דיוור בסטטוס ${bc.status}`,
@@ -6185,7 +6188,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           if (mcpExecutors.has(toolName)) {
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
-            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify)
+            // Prefer profile UUID resolved from WhatsApp phone; never pass literal "system" into uuid columns.
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify)
           }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {
