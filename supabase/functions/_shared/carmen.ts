@@ -1209,6 +1209,11 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   const routingAutomationId = activeSession?.automation_id || earlyAutomation?.id || null;
   const routedSend = async (toChatId: string, message: string): Promise<boolean> => {
     let sent = false;
+    // Prefer the destination chat's phone so private replies never fan out to a
+    // stale/hardcoded operator number (Ana DM must stay in Ana's thread).
+    const replyPhone = isGroup
+      ? phoneNumber
+      : ((toChatId || '').split('@')[0].replace(/\D/g, '') || phoneNumber);
     if (routingAutomationId) {
       sent = await sendCarmenReplyViaActionStep({
         supabase,
@@ -1216,7 +1221,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         tenantId,
         connectionUserId,
         chatId: toChatId,
-        phoneNumber,
+        phoneNumber: replyPhone,
         isGroup,
         message,
       });
