@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — WhatsApp voice notes: clear transcript + honest capability
+- **Skin slug:** `wa_voice_transcript_capability` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Read WhatsApp voice notes via automatic Whisper transcription. Messages arrive as `🎤 <transcript>` with `_voice` metadata (status/source/message_id). On failure she sees explicit `[הודעת קול · no_audio_url|transcription_failed|…]` — never a silent placeholder. When asked “את קוראת הודעות קול?” she answers from the actual marker, not assumptions.
+- **How:** Manus pairs Green API transcripts **keeping 🎤**; Green/Manus store `raw_provider_data._voice`; prompt rule `buildVoiceCapabilityPromptRule`. Shared helper `_shared/wa-voice-resolve`.
+- **Origin:** Carmen → Cursor FIX-ON-FAIL — David: Carmen claimed she can’t read voice notes while she had already transcribed his recording.
+
 ### 2026-08-04 — Smooth WhatsApp Meta approval confirm → execute
 - **Skin slug:** `wa_meta_approval_confirm_flow` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** On WhatsApp confirms (`כן` / `מאשר` / `כן מאשר` / `תעשי את זה`), reliably bind to the latest matching pending Meta approval and execute it. If none pending — recover the last prepared request once, show a clear summary, and ask for one final confirmation. Never claim Meta execution without `execute_pending_approval` success.
