@@ -18,6 +18,10 @@ interface InviteUserRequest {
   salesPersonId?: string;
   tenantId?: string;
   baseUrl?: string;
+  /** When true, provision tenant access without sending another email (multi-org invite). */
+  skipEmail?: boolean;
+  /** When false, do not overwrite profiles.campaigner_id / sales_person_id (secondary org). */
+  updateProfileTeamLinks?: boolean;
 }
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
@@ -263,6 +267,8 @@ serve(async (req: Request) => {
       salesPersonId,
       tenantId,
       baseUrl,
+      skipEmail,
+      updateProfileTeamLinks = true,
     }: InviteUserRequest = await req.json();
 
     const email = rawEmail?.trim().toLowerCase();
@@ -380,14 +386,14 @@ serve(async (req: Request) => {
         await supabaseAdmin.from("profiles").update({ full_name: fullName }).eq("id", userId);
       }
 
-      if (effectiveCampaignerId) {
+      if (updateProfileTeamLinks && effectiveCampaignerId) {
         await supabaseAdmin
           .from("profiles")
           .update({ campaigner_id: effectiveCampaignerId })
           .eq("id", userId);
       }
 
-      if (effectiveSalesPersonId) {
+      if (updateProfileTeamLinks && effectiveSalesPersonId) {
         await supabaseAdmin
           .from("profiles")
           .update({ sales_person_id: effectiveSalesPersonId })
@@ -458,19 +464,24 @@ serve(async (req: Request) => {
       }
 
       if (wasAddedToTenant) {
-        const actionLink = await generateAuthLink(
-          supabaseAdmin,
-          email,
-          authRedirect,
-          false,
-        );
-        await sendInvitationEmailViaResend(email, actionLink, orgName, fullName);
+        let emailSent = false;
+        if (!skipEmail) {
+          const actionLink = await generateAuthLink(
+            supabaseAdmin,
+            email,
+            authRedirect,
+            false,
+          );
+          await sendInvitationEmailViaResend(email, actionLink, orgName, fullName);
+          emailSent = true;
+        }
 
         return new Response(
           JSON.stringify({
             success: true,
             message: "המשתמש הקיים נוסף לארגון בהצלחה",
             addedToExistingUser: true,
+            emailSent,
             invitationLink: authRedirect,
           }),
           {
@@ -621,12 +632,15 @@ serve(async (req: Request) => {
       }
     }
 
-    await sendInvitationEmailViaResend(email, actionLink, orgName, fullName);
+    if (!skipEmail) {
+      await sendInvitationEmailViaResend(email, actionLink, orgName, fullName);
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
         message: "User invited successfully",
+        emailSent: !skipEmail,
         invitationLink: authRedirect,
       }),
       {

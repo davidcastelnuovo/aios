@@ -31,7 +31,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Shield, UserPlus, Trash2, Settings, Lock, Mail, Building2, Eye } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
@@ -129,11 +129,11 @@ export default function Users() {
     full_name: string;
     managed_agencies: Array<{ id: string; name: string }>;
   } | null>(null);
-  const [selectedTenantId, setSelectedTenantId] = useState<string>("");
+  const [selectedInviteTenantIds, setSelectedInviteTenantIds] = useState<string[]>([]);
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [resetPasswordUserEmail, setResetPasswordUserEmail] = useState<string>("");
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, tenant: currentTenant } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
 
   const { data: agencies } = useQuery({
@@ -284,6 +284,34 @@ export default function Users() {
     },
     enabled: isSuperAdmin,
   });
+
+  const { data: ownerTenants } = useQuery({
+    queryKey: ["owner-tenants-for-invite", currentUserId],
+    queryFn: async () => {
+      if (!currentUserId) return [];
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("tenant_id, tenants(id, name)")
+        .eq("user_id", currentUserId);
+      if (error) throw error;
+      return (data || [])
+        .map((row: any) => row.tenants)
+        .filter(Boolean);
+    },
+    enabled: !!currentUserId && !isSuperAdmin,
+  });
+
+  const inviteTenantOptions = isSuperAdmin
+    ? (tenants || []).map((t) => ({ id: t.id, name: t.name }))
+    : (ownerTenants || []).map((t: any) => ({ id: t.id, name: t.name }));
+
+  const showMultiTenantInvite = inviteTenantOptions.length > 1 || isSuperAdmin;
+
+  useEffect(() => {
+    if (isInviteDialogOpen && tenantId) {
+      setSelectedInviteTenantIds([tenantId]);
+    }
+  }, [isInviteDialogOpen, tenantId]);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["users-with-roles", tenantId, crossTenantAgencyIds.join(",")],
@@ -628,57 +656,80 @@ export default function Users() {
         throw new Error("No active session");
       }
 
-      // Get tenant_id for non-super-admin users
-      let inviteTenantId: string | undefined;
-      if (isSuperAdmin) {
-        if (!selectedTenantId) {
-          throw new Error("יש לבחור ארגון למשתמש");
+      // Resolve tenant list — current org first, then additional selections
+      let inviteTenantIds: string[];
+      if (isSuperAdmin || showMultiTenantInvite) {
+        if (selectedInviteTenantIds.length === 0) {
+          throw new Error("יש לבחור לפחות ארגון אחד");
         }
-        inviteTenantId = selectedTenantId;
+        inviteTenantIds = [
+          ...(tenantId && selectedInviteTenantIds.includes(tenantId) ? [tenantId] : []),
+          ...selectedInviteTenantIds.filter((id) => id !== tenantId),
+        ];
       } else {
-        inviteTenantId = currentUserTenant?.tenant_id || tenantId;
+        const singleTenantId = currentUserTenant?.tenant_id || tenantId;
+        if (!singleTenantId) throw new Error("לא נמצא ארגון פעיל");
+        inviteTenantIds = [singleTenantId];
       }
 
-      if (!inviteTenantId) {
-        throw new Error("לא נמצא ארגון פעיל");
-      }
+      const results: Array<{ tenantId: string; success: boolean; error?: string }> = [];
+      let emailSent = false;
+      let addedCount = 0;
 
-      const { data, error } = await supabase.functions.invoke("invite-user", {
-        body: { 
-          email,
-          fullName,
-          role,
-          agencyIds,
-          modulePermissions,
-          campaignerId,
-          salesPersonId,
-          tenantId: inviteTenantId,
-          baseUrl: "https://aios.co.il",
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-      
-      if (error) throw error;
-      if (!data.success) {
-        // Check if error is about existing email
-        if (data.error === "EMAIL_EXISTS" || data.error === "EMAIL_EXISTS_IN_TENANT") {
-          throw new Error("EMAIL_EXISTS");
+      for (const targetTenantId of inviteTenantIds) {
+        const isPrimaryTenant = targetTenantId === tenantId;
+
+        const { data, error } = await supabase.functions.invoke("invite-user", {
+          body: {
+            email,
+            fullName,
+            role,
+            agencyIds: isPrimaryTenant ? agencyIds : [],
+            modulePermissions,
+            campaignerId: isPrimaryTenant ? campaignerId : undefined,
+            salesPersonId: isPrimaryTenant ? salesPersonId : undefined,
+            tenantId: targetTenantId,
+            baseUrl: "https://aios.co.il",
+            skipEmail: emailSent,
+            updateProfileTeamLinks: isPrimaryTenant,
+          },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (error) throw error;
+
+        if (data.error === "EMAIL_EXISTS_IN_TENANT") {
+          results.push({ tenantId: targetTenantId, success: false, error: data.error });
+          continue;
         }
-        throw new Error(data.error || data.message || "שגיאה לא ידועה");
+
+        if (!data.success) {
+          throw new Error(data.error || data.message || "שגיאה לא ידועה");
+        }
+
+        results.push({ tenantId: targetTenantId, success: true });
+        addedCount++;
+        if (data.emailSent) emailSent = true;
       }
-      return data;
+
+      if (addedCount === 0) {
+        throw new Error("EMAIL_EXISTS");
+      }
+
+      return { results, emailSent, addedCount, invitationLink: "https://aios.co.il/auth" };
     },
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
       await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
       
-      // Show success message with invitation link if available
-      if (data.invitationLink) {
-        toast.success(`הזמנה נשלחה בהצלחה! לינק ההזמנה: ${data.invitationLink}`);
-      } else {
+      if (data.addedCount > 1) {
+        toast.success(`המשתמש נוסף ל-${data.addedCount} ארגונים${data.emailSent ? " ומייל הזמנה נשלח" : ""}`);
+      } else if (data.emailSent) {
         toast.success("הזמנה נשלחה בהצלחה למייל המשתמש");
+      } else {
+        toast.success("המשתמש נוסף לארגון בהצלחה");
       }
       
       setIsInviteDialogOpen(false);
@@ -686,10 +737,10 @@ export default function Users() {
       setInviteFullName("");
       setInviteRole("campaigner");
       setSelectedAgencies([]);
-      setSelectedModules([]);
+      setSelectedModules(['dashboard', 'clients', 'tasks', 'chat', 'time_tracking']);
       setSelectedCampaignerId("");
       setSelectedSalesPersonId("");
-      setSelectedTenantId("");
+      if (tenantId) setSelectedInviteTenantIds([tenantId]);
     },
     onError: (error: Error) => {
       if (error.message === "EMAIL_EXISTS") {
@@ -885,27 +936,53 @@ export default function Users() {
             </DialogHeader>
             <ScrollArea className="max-h-[calc(90vh-180px)] pl-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pr-4" dir="rtl">
-                {isSuperAdmin && (
+                {showMultiTenantInvite && (
                   <div className="md:col-span-2 p-3 border border-amber-500 bg-amber-50 dark:bg-amber-950 rounded-md">
-                    <Label htmlFor="tenant-select" className="text-amber-900 dark:text-amber-100 font-semibold">בחר ארגון (Tenant)</Label>
-                    <Select
-                      value={selectedTenantId}
-                      onValueChange={setSelectedTenantId}
-                    >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue placeholder="בחר ארגון למשתמש החדש" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {tenants?.map((tenant) => (
-                          <SelectItem key={tenant.id} value={tenant.id}>
-                            {tenant.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                      המשתמש ישוייך לארגון הנבחר
+                    <Label className="text-amber-900 dark:text-amber-100 font-semibold">
+                      ארגונים להזמנה
+                    </Label>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 mb-2">
+                      הארגון שאתה נמצא בו ({currentTenant?.name || "נוכחי"}) מסומן כברירת מחדל. סמן ארגונים נוספים להזמנה מרובה.
                     </p>
+                    <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto bg-background">
+                      {inviteTenantOptions.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">אין ארגונים זמינים</p>
+                      ) : (
+                        inviteTenantOptions.map((org) => (
+                          <div key={org.id} className="flex items-center space-x-2 space-x-reverse">
+                            <input
+                              type="checkbox"
+                              id={`invite-tenant-${org.id}`}
+                              checked={selectedInviteTenantIds.includes(org.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedInviteTenantIds([...selectedInviteTenantIds, org.id]);
+                                } else {
+                                  setSelectedInviteTenantIds(
+                                    selectedInviteTenantIds.filter((id) => id !== org.id),
+                                  );
+                                }
+                              }}
+                              className="rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                            <label
+                              htmlFor={`invite-tenant-${org.id}`}
+                              className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                            >
+                              {org.name}
+                              {org.id === tenantId && (
+                                <Badge variant="outline" className="text-xs">נוכחי</Badge>
+                              )}
+                            </label>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {selectedInviteTenantIds.length > 0 && (
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        נבחרו {selectedInviteTenantIds.length} ארגונים
+                      </p>
+                    )}
                   </div>
                 )}
                 <div>
@@ -1107,7 +1184,7 @@ export default function Users() {
                     salesPersonId: selectedSalesPersonId || undefined,
                   })
                 }
-                disabled={!inviteEmail || inviteUserMutation.isPending}
+                disabled={!inviteEmail || inviteUserMutation.isPending || (showMultiTenantInvite && selectedInviteTenantIds.length === 0)}
                 className="w-full"
               >
                 {inviteUserMutation.isPending ? "שולח..." : "שלח הזמנה"}
