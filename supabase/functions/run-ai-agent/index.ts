@@ -23,6 +23,14 @@ import {
   isDevEscalationSkill,
   isDevEscalationTool,
 } from '../_shared/dev-escalation-auth.ts'
+import {
+  buildApprovalConfirmPromptRule,
+  buildNoPendingRecovery,
+  formatApprovalExecutionReply,
+  isExplicitApprovalPhrase,
+  isExplicitRejectionPhrase,
+  pickLatestPendingApproval,
+} from '../_shared/wa-approval-flow.ts'
 
 
 const corsHeaders = {
@@ -201,7 +209,7 @@ const CORE_TOOLS = new Set([
   // router is unavailable (migration not applied) or similarity misses.
   'inspect_facebook_ad', 'fb_duplicate_ad_variants', 'duplicate_facebook_ad_variants',
   'list_facebook_ads', 'analyze_facebook_campaign',
-  'execute_pending_approval', 'reject_pending_approval',
+  'execute_pending_approval', 'reject_pending_approval', 'list_pending_approvals',
 ])
 
 // Cheap, stable signature of a tool description so embeddings refresh when the
@@ -251,6 +259,17 @@ async function selectRelevantTools(supabase: any, userText: string, toolDefs: an
       picked.add('analyze_facebook_campaign')
       picked.add('execute_pending_approval')
       picked.add('reject_pending_approval')
+      picked.add('list_pending_approvals')
+    }
+    // Explicit WhatsApp confirms ("כן" / "מאשר") must always reach approval tools.
+    if (isExplicitApprovalPhrase(userText) || isExplicitRejectionPhrase(userText)) {
+      picked.add('execute_pending_approval')
+      picked.add('reject_pending_approval')
+      picked.add('list_pending_approvals')
+      picked.add('fb_duplicate_ad_variants')
+      picked.add('duplicate_facebook_ad_variants')
+      picked.add('toggle_facebook_campaign')
+      picked.add('inspect_facebook_ad')
     }
     const result = toolDefs.filter((t) => picked.has(t.name))
     if (result.length < 10) return toolDefs // guard against an empty/bad match wiping the toolset
@@ -584,7 +603,7 @@ const ALL_TOOLS = [
   // APPROVAL FLOW
   // ===========================
   { name: 'list_pending_approvals', description: 'רשימת בקשות אישור פתוחות (פעולות שכרמן ביקשה לבצע ומחכות לאישור משתמש). השתמש כשהמשתמש שולח "אשרי"/"כן" כדי למצוא איזו בקשה לבצע.', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
-  { name: 'execute_pending_approval', description: 'ביצוע בקשת אישור פתוחה — אחרי שהמשתמש אישר בוואטסאפ ("אשרי"/"כן"). הכלי מבצע את הפעולה בפועל ומעדכן את הסטטוס. אם אין approval_id — קח את הפתוח האחרון מ-list_pending_approvals.', parameters: { type: 'object', properties: { approval_id: { type: 'string' } } } },
+  { name: 'execute_pending_approval', description: 'ביצוע בקשת אישור פתוחה — אחרי שהמשתמש אישר בוואטסאפ ("כן"/"מאשר"/"כן מאשר"/"אשרי"/"תעשי את זה"). אם אין approval_id — בוחר אוטומטית את ה-pending האחרון (מעדיף Meta). אם אין pending — מחזיר recovery לשחזור חד-פעמי של אותה בקשה + סיכום; אז הציגי סיכום ובקשי אישור סופי אחד בלבד. אסור לטעון שבוצע אלא אם success=true.', parameters: { type: 'object', properties: { approval_id: { type: 'string' }, tool_name: { type: 'string', description: 'אופציונלי: העדף pending עם tool_name הזה' } } } },
   { name: 'reject_pending_approval', description: 'דחיית בקשת אישור פתוחה — אחרי שהמשתמש סירב.', parameters: { type: 'object', properties: { approval_id: { type: 'string' }, reason: { type: 'string' } }, required: ['approval_id'] } },
   // ===========================
   // CALENDAR INVITES
@@ -2179,6 +2198,40 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         ? ` + תקציב ₪${toolInput.daily_budget}/יום ברמת ${toolInput.budget_level}`
         : ''
       const title = `שכפול מודעה FB ×${variants.length}: ${source.ad_name || args.source_ad_id}${budgetNote}`
+      const variant_previews = variants.map((v: any, i: number) => ({
+        i: i + 1,
+        name: v.name || `${source.ad_name || 'Ad'} · v${i + 1}`,
+        primary_text: v.primary_text,
+        headline: v.headline,
+      }))
+      // Avoid approval loops: reuse an existing pending duplicate for the same source ad.
+      const { data: existingPending } = await supabase.from('agent_approval_queue')
+        .select('id, title, description, tool_name, tool_input, context, created_at')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'pending')
+        .eq('tool_name', 'fb_duplicate_ad_variants')
+        .order('created_at', { ascending: false })
+        .limit(5)
+      const reused = (existingPending || []).find((row: any) =>
+        row?.tool_input?.source_ad_id && String(row.tool_input.source_ad_id) === String(args.source_ad_id)
+      )
+      if (reused) {
+        return {
+          pending_approval: true,
+          approval_id: reused.id,
+          reused_existing: true,
+          action: 'fb_duplicate_ad_variants',
+          summary: reused.title || title,
+          source,
+          variants_count: (reused.tool_input?.variants || variants).length,
+          variant_previews: reused.context?.variant_previews || variant_previews,
+          daily_budget: reused.tool_input?.daily_budget ?? toolInput.daily_budget ?? null,
+          budget_level: reused.tool_input?.budget_level || toolInput.budget_level,
+          new_ads_status: reused.tool_input?.status || toolInput.status,
+          instruction_for_carmen:
+            'כבר יש בקשת אישור פתוחה לאותו שכפול. הציגי את הסיכום הקיים ובקשי "לאשר? (כן/לא)" פעם אחת. אחרי כן — execute_pending_approval עם ה-approval_id הזה. אל תיצרי בקשה חדשה.',
+        }
+      }
       const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
@@ -2193,12 +2246,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           caller_phone: callerPhone,
           client_id: args.client_id,
           source,
-          variant_previews: variants.map((v: any, i: number) => ({
-            i: i + 1,
-            name: v.name || `${source.ad_name || 'Ad'} · v${i + 1}`,
-            primary_text: v.primary_text,
-            headline: v.headline,
-          })),
+          variant_previews,
         },
         status: 'pending',
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -2221,7 +2269,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         budget_level: toolInput.budget_level,
         new_ads_status: toolInput.status,
         instruction_for_carmen:
-          'הציגי לדיוויד: מקור (שם מודעה + adset) + תקציר 4 הוריאציות + תקציב אם יש. בקשי אישור: "לאשר? (כן/לא)". רק אחרי כן — execute_pending_approval. אין מוטציה ב-Meta לפני אישור.',
+          'הציגי לדיוויד: מקור (שם מודעה + adset) + תקציר 4 הוריאציות + תקציב אם יש. בקשי אישור: "לאשר? (כן/לא)". רק אחרי כן — execute_pending_approval. אין מוטציה ב-Meta לפני אישור. אסור לטעון שבוצע בלי success מ-execute_pending_approval.',
       }
     }
     case 'get_campaign_alerts': {
@@ -4503,28 +4551,95 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     // ============ APPROVAL HELPERS ============
     case 'list_pending_approvals': {
       const { data, error } = await supabase.from('agent_approval_queue')
-        .select('id, action_type, title, description, tool_name, tool_input, created_at, status, requested_by')
+        .select('id, action_type, title, description, tool_name, tool_input, context, created_at, status, requested_by')
         .eq('tenant_id', tenantId)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(args.limit || 10)
       if (error) throw error
-      return { count: data.length, approvals: data }
+      const preferred = pickLatestPendingApproval(data || [], { preferMeta: true })
+      return {
+        count: data.length,
+        approvals: data,
+        latest_matching_id: preferred?.id || null,
+        latest_matching: preferred
+          ? { id: preferred.id, tool_name: preferred.tool_name, title: preferred.title, summary: preferred.title || preferred.description }
+          : null,
+        instruction_for_carmen: preferred
+          ? `כשהמשתמש מאשר ("כן"/"מאשר") — קראי ל-execute_pending_approval עם approval_id=${preferred.id}. אל תיצרי בקשה חדשה.`
+          : 'אין pending. אם המשתמש אישר — execute_pending_approval יחזיר recovery לשחזור חד-פעמי.',
+      }
     }
     case 'execute_pending_approval': {
-      let approvalId = args.approval_id
-      if (!approvalId) {
-        const { data } = await supabase.from('agent_approval_queue').select('id').eq('tenant_id', tenantId).eq('status', 'pending').order('created_at', { ascending: false }).limit(1).maybeSingle()
-        approvalId = data?.id
+      let approvalId = asUuidOrNull(args.approval_id)
+      let matchedRow: any = null
+      if (approvalId) {
+        const { data } = await supabase.from('agent_approval_queue')
+          .select('id, status, tool_name, title, description, tool_input, context')
+          .eq('tenant_id', tenantId)
+          .eq('id', approvalId)
+          .maybeSingle()
+        matchedRow = data
+        if (matchedRow && matchedRow.status !== 'pending' && matchedRow.status !== 'executed') {
+          // Stale id — fall through to latest pending
+          approvalId = null
+          matchedRow = null
+        }
       }
-      if (!approvalId) return { success: false, error: 'no_pending_approval' }
+      if (!approvalId) {
+        const { data: pendingRows } = await supabase.from('agent_approval_queue')
+          .select('id, status, tool_name, title, description, tool_input, context, created_at')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(10)
+        matchedRow = pickLatestPendingApproval(pendingRows || [], {
+          preferMeta: true,
+          toolName: args.tool_name || undefined,
+        })
+        approvalId = matchedRow?.id || null
+      }
+      if (!approvalId) {
+        const { data: recent } = await supabase.from('agent_approval_queue')
+          .select('id, status, tool_name, title, description, tool_input, context, created_at')
+          .eq('tenant_id', tenantId)
+          .order('created_at', { ascending: false })
+          .limit(8)
+        const recoveryPayload = buildNoPendingRecovery(recent || [])
+        return {
+          success: false,
+          error: 'no_pending_approval',
+          ...recoveryPayload,
+          claim_execution: false,
+          guardrail: 'אל תטעני שבוצע. שחזרי פעם אחת לכל היותר ובקשי אישור סופי אחד.',
+        }
+      }
+      if (matchedRow?.status === 'executed') {
+        return {
+          success: true,
+          already_executed: true,
+          approval_id: approvalId,
+          result: matchedRow,
+          claim_execution: true,
+        }
+      }
       const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-approval-execute`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY },
         body: JSON.stringify({ approval_id: approvalId, approved_by: actorUserId }),
       })
-      const j = await r.json()
-      return j
+      const j = await r.json().catch(() => ({}))
+      const ok = !!(r.ok && (j?.success === true || j?.already_executed === true))
+      return {
+        ...j,
+        success: ok,
+        approval_id: approvalId,
+        title: matchedRow?.title || j?.title || null,
+        claim_execution: ok,
+        guardrail: ok
+          ? null
+          : 'הביצוע לא הצליח — אסור לכתוב למשתמש שבוצע/נוצר/עודכן ב-Meta.',
+      }
     }
     case 'reject_pending_approval': {
       const { error } = await supabase.from('agent_approval_queue').update({ status: 'rejected', approved_by: actorUserId, approved_at: new Date().toISOString(), execution_result: { reason: args.reason || null } }).eq('id', args.approval_id).eq('tenant_id', tenantId)
@@ -6257,6 +6372,112 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // a rule was just persisted and can acknowledge it briefly without re-saving.
     if (instructionCaptured) {
       systemPrompt += `\n\n🧾 הנחיה חדשה נשמרה לזיכרון אוטומטית: "${instructionCaptured}". אשרי בקצרה ("נרשם") והמשיכי בבקשה.`
+    }
+
+    // ─── WhatsApp Meta approval flow (smooth confirm → execute) ───
+    // When the user explicitly confirms ("כן" / "מאשר" / …), resolve the latest
+    // pending approval and either (a) execute it deterministically for short
+    // confirms, or (b) inject a hard prompt so the model must call execute_pending_approval.
+    const userSaidApprove = isExplicitApprovalPhrase(String(command_text || ''))
+    const userSaidReject = isExplicitRejectionPhrase(String(command_text || ''))
+    let pendingForConfirm: any = null
+    if (isCarmen && (userSaidApprove || userSaidReject)) {
+      const { data: pendingRows } = await supabase.from('agent_approval_queue')
+        .select('id, action_type, title, description, tool_name, tool_input, context, created_at, status')
+        .eq('tenant_id', resolvedTenantId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      pendingForConfirm = pickLatestPendingApproval(pendingRows || [], { preferMeta: true })
+      if (userSaidApprove) {
+        systemPrompt += buildApprovalConfirmPromptRule(pendingForConfirm)
+        if (!pendingForConfirm) {
+          const { data: recent } = await supabase.from('agent_approval_queue')
+            .select('id, status, tool_name, title, description, tool_input, context, created_at')
+            .eq('tenant_id', resolvedTenantId)
+            .order('created_at', { ascending: false })
+            .limit(8)
+          const recoveryPayload = buildNoPendingRecovery(recent || [])
+          systemPrompt += `\n\n${recoveryPayload.instruction_for_carmen}`
+          if (recoveryPayload.recovery) {
+            systemPrompt += `\n[recovery_json]=${JSON.stringify(recoveryPayload.recovery)}`
+          }
+        }
+      } else if (userSaidReject && pendingForConfirm) {
+        systemPrompt += `\n\n🚫 המשתמש דחה. קראי ל-reject_pending_approval עם approval_id=${pendingForConfirm.id}. אל תבצעי את הפעולה.`
+      }
+    }
+
+    // Deterministic path: short WhatsApp confirm + open pending → execute now (no LLM loop).
+    if (
+      isCarmen &&
+      userSaidApprove &&
+      pendingForConfirm &&
+      String(command_text || '').trim().length <= 40
+    ) {
+      console.log(`[AGENT] Auto-executing pending approval ${pendingForConfirm.id} after explicit confirm`)
+      const autoStart = Date.now()
+      const execResult = await executeTool(
+        'execute_pending_approval',
+        { approval_id: pendingForConfirm.id },
+        supabase,
+        resolvedTenantId,
+        callerUserId || asUuidOrNull(resolvedUserId),
+        callerCampaignerId,
+        agent_id,
+        callerRole,
+        callerManagedAgencyIds,
+        callerPhone,
+        wa_notify,
+      )
+      const finalOutput = formatApprovalExecutionReply(execResult, pendingForConfirm)
+      const executionTime = Date.now() - autoStart
+      if (serverConversationId && callerUserId) {
+        const persistedMessages = [
+          ...serverConversationHistory,
+          { role: 'user', content: String(command_text) },
+          { role: 'assistant', content: String(finalOutput || '') },
+        ].slice(-60)
+        await supabase.from('ai_conversations')
+          .update({ messages: persistedMessages, updated_at: new Date().toISOString() })
+          .eq('id', serverConversationId)
+          .eq('user_id', callerUserId)
+          .eq('tenant_id', resolvedTenantId)
+      }
+      if (emit && finalOutput) emit({ type: 'token', content: finalOutput })
+      try {
+        await supabase.from('agent_action_log').insert({
+          tenant_id: resolvedTenantId,
+          agent_id,
+          action_type: 'agent_turn',
+          status: 'success',
+          action_details: {
+            surface,
+            command_preview: String(command_text || '').slice(0, 240),
+            tools_used: ['execute_pending_approval'],
+            tool_count: 1,
+            output_preview: String(finalOutput || '').slice(0, 600),
+            caller_role: callerRole,
+            caller_campaigner_id: callerCampaignerId,
+            auto_approval_execute: true,
+            approval_id: pendingForConfirm.id,
+            exec_success: !!(execResult && (execResult as any).success),
+          },
+          user_id: callerUserId,
+          tool_calls: 1,
+          duration_ms: executionTime,
+        })
+      } catch { /* ignore */ }
+      return new Response(JSON.stringify({
+        success: true,
+        output: finalOutput,
+        agent_name: agent.name,
+        model: resolveModel(agent.engine || 'gemini-3-flash'),
+        execution_time_ms: executionTime,
+        tools_used: ['execute_pending_approval'],
+        tool_log: [{ tool: 'execute_pending_approval', args: { approval_id: pendingForConfirm.id }, result: execResult }],
+        auto_approval_execute: true,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     // Build messages with conversation history

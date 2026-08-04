@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — Smooth WhatsApp Meta approval confirm → execute
+- **Skin slug:** `wa_meta_approval_confirm_flow` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** On WhatsApp confirms (`כן` / `מאשר` / `כן מאשר` / `תעשי את זה`), reliably bind to the latest matching pending Meta approval and execute it. If none pending — recover the last prepared request once, show a clear summary, and ask for one final confirmation. Never claim Meta execution without `execute_pending_approval` success.
+- **How:** Engine: phrase detector + auto-execute short confirms; smarter `execute_pending_approval` / `list_pending_approvals`; reuse existing pending duplicate instead of re-queue loops; prompt guardrails. Shared helper `_shared/wa-approval-flow`.
+- **Origin:** Carmen → Cursor FIX-ON-FAIL — after duplicate-ads approval David got stuck in "no pending / confirm again" loop ("תעשי את זה, וגם תתקני את הפלו שיהיה יותר זורם").
+
 ### 2026-08-04 — Dev/system-fix escalations: David-only authorization
 - **Skin slug:** `dev_escalation_auth_only_david` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Enforce that only David may ask her to send system/dev/config/code/DB fixes to Cursor/Claude/Manus/GitHub agent. Non-authorized users get a polite Hebrew refusal; normal CRM tools stay under existing role permissions.
