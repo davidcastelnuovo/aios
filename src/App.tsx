@@ -34,7 +34,8 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5,
       gcTime: 1000 * 60 * 10,
       refetchOnWindowFocus: false,
-      refetchOnMount: false,
+      // Re-fetch failed queries on mount so stale error state does not flash.
+      refetchOnMount: (query) => query.state.status === "error",
       retry: 1,
     },
   },

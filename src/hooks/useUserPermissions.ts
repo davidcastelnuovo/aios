@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "./useUserRole";
 
@@ -14,7 +14,12 @@ export type ModulePermission = string;
 export function useUserPermissions() {
   const { isOwner, isSuperAdmin, userId } = useUserRole();
 
-  const { data: permissionsData, isLoading: queryLoading, isFetching: permissionsFetching } = useQuery({
+  const {
+    data: permissionsData,
+    isPending: permissionsPending,
+    isFetching: permissionsFetching,
+    isError: permissionsError,
+  } = useQuery({
     queryKey: ["user-permissions", userId],
     queryFn: async () => {
       if (!userId) return { permissions: null, hasAnyPermissions: false };
@@ -40,10 +45,13 @@ export function useUserPermissions() {
       };
     },
     enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 
-  // Global loading: until we know the user id OR query finished
-  const isLoading = !userId || queryLoading;
+  // Block only on first load — keep using cached permissions during background refetch.
+  const isLoading = !userId || permissionsPending;
 
   const hasPermission = (module: ModulePermission): boolean => {
     // While loading or user unknown, do NOT allow (prevents leaks)
@@ -123,5 +131,7 @@ export function useUserPermissions() {
     canViewFinance,
     isLoading,
     isFetching: permissionsFetching,
+    isError: permissionsError,
+    isReady: permissionsData !== undefined,
   };
 }

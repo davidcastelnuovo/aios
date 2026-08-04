@@ -255,7 +255,20 @@ export function AppSidebar() {
 
   const activeMenuTab = effectiveTabs.find(t => t.id === activeTab) || effectiveTabs[0];
 
-  if (isLoadingMenuItems || isLoading) return null;
+  if (isLoadingMenuItems || isLoading) {
+    return (
+      <Sidebar collapsible="icon" side="right">
+        <SidebarHeader className="border-b border-sidebar-border p-4">
+          <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+        </SidebarHeader>
+        <SidebarContent className="p-4 space-y-2">
+          <div className="h-6 w-full bg-muted animate-pulse rounded" />
+          <div className="h-6 w-4/5 bg-muted animate-pulse rounded" />
+          <div className="h-6 w-3/5 bg-muted animate-pulse rounded" />
+        </SidebarContent>
+      </Sidebar>
+    );
+  }
 
   return (
     <Sidebar collapsible="icon" side="right">

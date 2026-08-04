@@ -1,6 +1,11 @@
 import { useParams } from "react-router-dom";
 import { useTenant } from "@/contexts/TenantContext";
 
+function slugFromPathname(pathname = window.location.pathname): string | null {
+  const match = pathname.match(/^\/t\/([^/]+)/);
+  return match ? match[1] : null;
+}
+
 /**
  * Hook to generate tenant-scoped paths
  * Always use this hook when creating navigation links to ensure proper slug-based routing
@@ -9,8 +14,8 @@ export function useTenantPath() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const { currentTenantSlug } = useTenant();
   
-  // Use slug from URL params first, then from context
-  const activeSlug = tenantSlug || currentTenantSlug;
+  // URL params → tenant context → pathname parse (avoids brief /module 404 flashes)
+  const activeSlug = tenantSlug || currentTenantSlug || slugFromPathname();
 
   /**
    * Creates a tenant-scoped path
