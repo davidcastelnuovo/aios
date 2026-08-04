@@ -1546,7 +1546,10 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
   });
 
-  const resolvingTables = tablesLoading || tablesFetching || tables == null;
+  // Only block on the first load. Background refetches (refetchOnMount: always,
+  // window focus, invalidations) must keep showing the cached table — otherwise
+  // SEO/client reports blank out to a skeleton and look "gone".
+  const resolvingTables = tables == null && (tablesLoading || tablesFetching);
 
   if (resolvingTables) {
     return (
