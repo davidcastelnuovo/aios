@@ -28,8 +28,26 @@ async function getFbToken(supabase: any, tenant_id: string): Promise<string | nu
 }
 
 async function getClientAdAccount(supabase: any, tenant_id: string, client_id: string): Promise<string | null> {
-  const { data } = await supabase.from('clients').select('facebook_ad_account_id').eq('id', client_id).eq('tenant_id', tenant_id).maybeSingle();
-  return data?.facebook_ad_account_id || null;
+  // Column is meta_ads_account_id (not facebook_ad_account_id). Also fall back to crm_tables.
+  const { data: cl } = await supabase
+    .from('clients')
+    .select('meta_ads_account_id')
+    .eq('id', client_id)
+    .maybeSingle();
+  if (cl?.meta_ads_account_id) return String(cl.meta_ads_account_id).replace(/^act_/, '');
+
+  const { data: tables } = await supabase
+    .from('crm_tables')
+    .select('integration_settings, last_sync_at')
+    .eq('client_id', client_id)
+    .in('integration_type', ['facebook_insights', 'facebook_ecommerce'])
+    .order('last_sync_at', { ascending: false, nullsFirst: false });
+  for (const t of tables || []) {
+    const s = t?.integration_settings || {};
+    const acc = s.ad_account_id || s.account_id || s.meta_account_id;
+    if (acc) return String(acc).replace(/^act_/, '');
+  }
+  return null;
 }
 
 function err(message: string, status = 400, extra: any = {}) {

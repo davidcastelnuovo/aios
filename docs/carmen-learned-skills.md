@@ -32,6 +32,13 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — Kernelios lookup + FB single-campaign analyze (ad-level)
+- **Skin slug:** `facebook-campaign-analysis` (updated) + `client_alias_broad_search` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** (1) Find Kernelios/Cornelius/קרנליוס/קרניליוס across CRM names, ended duplicates, and Facebook ad account names without repeated prompting. (2) Analyze a specific Facebook campaign with ad-level spend/leads/CPL (`analyze_facebook_campaign` / `list_facebook_ads`) without the old "Requested function was not found" failure. (3) Prepare approval to enable only low-CPL ads (`toggle_facebook_campaign` with `level=ad`, or `fb_resume` with ad `entity_id`).
+- **How:** `list_clients`/`search_entities(type=client)` → expect active `קרניליוס` + ended `KERNELIOS` + Yael/Edvard ad accounts → `analyze_facebook_campaign`/`list_facebook_ads` → sort by `cpl_7d` → `request_approval` / `toggle_facebook_campaign` for selected ad ids only. Never toggle without approval.
+- **Engine fixes:** Inline Meta analysis in `run-ai-agent` (no hard dependency on undeployed `fb-campaign-analyze`); deploy set includes `fb-campaign-analyze`/`carmen-fb-tools`/`toggle-facebook-campaign`; `carmen-fb-tools` uses `meta_ads_account_id`; `save_memory` uses `agentId` (fixes `agent_id is not defined`).
+- **Origin:** Carmen → Cursor DEV TASK — Kernelios lookup flaky + analyze failed when David approved enabling only low-CPL ads.
+
 ### 2026-08-03 — diagnose campaign pulse no_data vs stale sync
 - **Skin slug:** `diagnose_campaign_pulse_status` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When David says a client’s pulse shows “no data” but reports are connected, distinguish true `no_data` (no campaign table) from `warning`/stale sync, and surface available metrics (including ecommerce ROAS/purchases).
