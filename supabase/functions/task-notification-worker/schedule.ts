@@ -65,6 +65,15 @@ function isBeforeMorning(parts: LocalParts) {
     || (parts.hour === MORNING_HOUR && parts.minute < MORNING_MINUTE)
 }
 
+export function taskOverdueNotifyAt(task: {
+  due_date: string | null
+}): Date | null {
+  if (!task.due_date) return null
+  const [year, month, day] = task.due_date.split('-').map(Number)
+  const dayAfterDue = shiftLocalDate({ year, month, day, hour: 0, minute: 0 }, 1)
+  return israelLocalToUtc({ ...dayAfterDue, hour: MORNING_HOUR, minute: MORNING_MINUTE })
+}
+
 export function taskReminderAt(task: {
   priority: number
   created_at: string
