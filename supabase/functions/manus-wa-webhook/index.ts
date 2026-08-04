@@ -25,6 +25,24 @@ function normalizePhone(p: string): string {
   return (p || '').replace(/\D/g, '').slice(-9);
 }
 
+function isIsraeliMobileTail(digits: string): boolean {
+  const tail = String(digits || '').replace(/\D/g, '').slice(-9);
+  return /^[5-9]\d{8}$/.test(tail);
+}
+
+/** True when Manus did not give us a usable participant phone for identity checks. */
+function isUnresolvedGroupAuthor(
+  authorPhone: string,
+  authorRaw: string,
+  groupChatId: string,
+): boolean {
+  const groupDigits = groupChatId.split('@')[0].replace(/\D/g, '');
+  if (!authorPhone) return true;
+  if (authorPhone === groupDigits) return true;
+  if (/@lid/i.test(authorRaw)) return true;
+  return !isIsraeliMobileTail(authorPhone);
+}
+
 // ── Incoming voice notes → transcript (OpenAI Whisper) ────────────────
 // Returns structured result: clear 🎤 transcript when available, otherwise an
 // explicit status (no_audio_url / transcription_failed / …) — never silent.
@@ -914,8 +932,16 @@ Deno.serve(async (req) => {
         payload.author, payload.participant, payload.senderLid, key.participant,
         (msgContainer as any)?.participant, (msgContainer as any)?.author,
       ].filter((v: any) => typeof v === 'string' && v.includes('@')) as string[];
-      const authorRaw = authorCandidates[0] || '';
+      // Prefer a real @c.us participant over an anonymous @lid author when both exist.
+      const authorRaw =
+        authorCandidates.find((c) => c.endsWith('@c.us')) ||
+        authorCandidates.find((c) => !/@lid/i.test(c)) ||
+        authorCandidates[0] ||
+        '';
       let authorPhone = authorRaw ? authorRaw.split('@')[0].replace(/\D/g, '') : '';
+      const lidDigitsForMap = /@lid/i.test(authorRaw)
+        ? authorRaw.split('@')[0].replace(/\D/g, '')
+        : '';
 
       // GROUP AUTHOR LID RESOLUTION — same layers as the private branch above.
       // The "כרמן" trigger comes from group MEMBERS, and members often arrive as
@@ -946,42 +972,70 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Some Manus group events omit author/participant entirely. Green API sees
-      // the same WhatsApp message with senderData.sender, so reuse that canonical
-      // participant instead of passing the group id (or an empty phone) into the
-      // authorization layer. Prefer provider message id; fall back to the same
-      // body within a short window for gateways that use different ids.
-      if (!authorPhone || authorPhone === groupChatId.split('@')[0]) {
+      // Some Manus group events omit author/participant entirely, or deliver only
+      // an unresolved @lid. Green API sees the same WhatsApp message with
+      // senderData.sender, so reuse that canonical participant instead of passing
+      // the group id (or LID digits) into the authorization layer. Prefer provider
+      // message id; fall back to the same body within a short window for gateways
+      // that use different ids. Wait briefly — Green API often arrives after Manus.
+      if (isUnresolvedGroupAuthor(authorPhone, authorRaw, groupChatId)) {
+        await new Promise((resolve) => setTimeout(resolve, 2600));
         try {
           const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-          let pairedQuery = supabase.from('chat_messages')
-            .select('sender_phone, raw_provider_data, created_at')
-            .eq('provider', 'green_api')
-            .gte('created_at', since)
-            .order('created_at', { ascending: false })
-            .limit(5);
+          const groupDigits = groupChatId.split('@')[0].replace(/\D/g, '');
+          const { data: wgRow } = await supabase
+            .from('whatsapp_groups')
+            .select('id')
+            .eq('tenant_id', groupTenantId)
+            .eq('group_chat_id', groupChatId)
+            .maybeSingle();
+          const groupDbId = wgRow?.id as string | undefined;
+
+          const basePairedQuery = () => {
+            let q = supabase.from('chat_messages')
+              .select('sender_phone, raw_provider_data, created_at')
+              .eq('provider', 'green_api')
+              .gte('created_at', since)
+              .order('created_at', { ascending: false })
+              .limit(10);
+            if (groupDbId) q = q.eq('group_id', groupDbId);
+            return q;
+          };
+
+          let pairedQuery = basePairedQuery();
           pairedQuery = messageId
             ? pairedQuery.eq('raw_provider_data->>idMessage', messageId)
             : pairedQuery.eq('message_text', messageText);
           let { data: paired } = await pairedQuery;
           if ((!paired || paired.length === 0) && messageText) {
-            const fallback = await supabase.from('chat_messages')
-              .select('sender_phone, raw_provider_data, created_at')
-              .eq('provider', 'green_api')
-              .eq('message_text', messageText)
-              .gte('created_at', since)
-              .order('created_at', { ascending: false })
-              .limit(5);
+            const fallback = await basePairedQuery().eq('message_text', messageText);
             paired = fallback.data;
           }
           for (const row of paired || []) {
             const participant = String(
               row?.raw_provider_data?.senderData?.sender || row?.sender_phone || '',
             ).split('@')[0].replace(/\D/g, '');
-            if (participant && participant !== groupChatId.split('@')[0]) {
+            if (
+              participant &&
+              participant !== groupDigits &&
+              isIsraeliMobileTail(participant)
+            ) {
+              if (lidDigitsForMap && lidDigitsForMap !== participant) {
+                supabase.from('wa_lid_map')
+                  .upsert(
+                    {
+                      lid: lidDigitsForMap,
+                      phone: participant,
+                      connection_user_id: connectionUserId,
+                      source: 'green_api_pair',
+                    },
+                    { onConflict: 'lid' },
+                  )
+                  .then(() => {}, () => {});
+              }
               authorPhone = participant;
               console.log('[manus-wa group] author resolved from paired Green API event', {
-                messageId, phone: authorPhone,
+                messageId, phone: authorPhone, lid: lidDigitsForMap || null,
               });
               break;
             }
