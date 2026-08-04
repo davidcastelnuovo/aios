@@ -28,6 +28,7 @@ import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncControl";
 
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
+import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -237,20 +238,12 @@ export default function DynamicTables() {
     enabled: !!tenantId,
   });
 
-  // Fetch dashboards
+  // Fetch dashboards across own tenant + shared agencies (e.g. DMM-MC under DMM).
   const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery({
     queryKey: ['crm-dashboards', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from('crm_dashboards')
-        // include the client's agency_id so dashboards that have no explicit
-        // agency_id but belong to a client in an agency still scope correctly.
-        .select('*, clients(name, agency_id), agencies(name)')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
+      return fetchAccessibleDashboards(tenantId);
     },
     enabled: !!tenantId,
   });
@@ -997,7 +990,17 @@ export default function DynamicTables() {
                   // specific agency is selected, show ONLY dashboards of that agency
                   // — previously null-agency dashboards leaked into every agency.
                   if (selectedAgency && selectedAgency !== 'all') {
-                    const effectiveAgencyId = dashboard.agency_id || dashboard.clients?.agency_id || null;
+                    // Prefer the dashboard's agency, then the linked client's agency.
+                    // Also accept client.agency_id from the local clients list when the
+                    // PostgREST embed is null (cross-tenant rows).
+                    const clientFromList = dashboard.client_id
+                      ? clients.find((c) => c.id === dashboard.client_id)
+                      : null;
+                    const effectiveAgencyId =
+                      dashboard.agency_id ||
+                      dashboard.clients?.agency_id ||
+                      clientFromList?.agency_id ||
+                      null;
                     if (effectiveAgencyId !== selectedAgency) {
                       return false;
                     }
@@ -1005,9 +1008,22 @@ export default function DynamicTables() {
                   // Search by dashboard name, client name, or agency name
                   if (dashboardSearch.trim()) {
                     const search = dashboardSearch.trim().toLowerCase();
+                    const clientFromList = dashboard.client_id
+                      ? clients.find((c) => c.id === dashboard.client_id)
+                      : null;
                     const nameMatch = dashboard.name?.toLowerCase().includes(search);
-                    const clientMatch = dashboard.clients?.name?.toLowerCase().includes(search);
-                    const agencyMatch = dashboard.agencies?.name?.toLowerCase().includes(search);
+                    const clientMatch =
+                      dashboard.clients?.name?.toLowerCase().includes(search) ||
+                      clientFromList?.name?.toLowerCase().includes(search);
+                    const agencyName =
+                      dashboard.agencies?.name ||
+                      getAgencyName(
+                        dashboard.agency_id ||
+                          dashboard.clients?.agency_id ||
+                          clientFromList?.agency_id ||
+                          null,
+                      );
+                    const agencyMatch = agencyName?.toLowerCase().includes(search);
                     if (!nameMatch && !clientMatch && !agencyMatch) return false;
                   }
                   // Campaigners can only see dashboards linked to their assigned clients
@@ -1075,18 +1091,36 @@ export default function DynamicTables() {
                           </>
                         )}
                       </Badge>
-                      {dashboard.clients?.name && dashboard.dashboard_type !== 'agency' && (
-                        <Badge variant="outline" className="text-xs">
-                          <User className="h-3 w-3 ml-1" />
-                          {dashboard.clients.name}
-                        </Badge>
-                      )}
-                      {dashboard.agencies?.name && (
-                        <Badge variant="outline" className="text-xs">
-                          <Building2 className="h-3 w-3 ml-1" />
-                          {dashboard.agencies.name}
-                        </Badge>
-                      )}
+                      {(() => {
+                        const clientFromList = dashboard.client_id
+                          ? clients.find((c) => c.id === dashboard.client_id)
+                          : null;
+                        const clientName = dashboard.clients?.name || clientFromList?.name;
+                        const agencyName =
+                          dashboard.agencies?.name ||
+                          getAgencyName(
+                            dashboard.agency_id ||
+                              dashboard.clients?.agency_id ||
+                              clientFromList?.agency_id ||
+                              null,
+                          );
+                        return (
+                          <>
+                            {clientName && dashboard.dashboard_type !== 'agency' && (
+                              <Badge variant="outline" className="text-xs">
+                                <User className="h-3 w-3 ml-1" />
+                                {clientName}
+                              </Badge>
+                            )}
+                            {agencyName && (
+                              <Badge variant="outline" className="text-xs">
+                                <Building2 className="h-3 w-3 ml-1" />
+                                {agencyName}
+                              </Badge>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </CardHeader>
                   <CardContent>

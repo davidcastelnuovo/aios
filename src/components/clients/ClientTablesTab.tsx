@@ -17,6 +17,7 @@ import { ClientReportPanel } from "@/components/clients/ClientReportPanel";
 import { ClientDashboardPanel } from "@/components/clients/ClientDashboardPanel";
 import { ClientReportScheduleSettings } from "@/components/clients/ClientReportScheduleSettings";
 import { getIntegrationIcon } from "@/lib/integrationIcons";
+import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
@@ -81,17 +82,16 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     enabled: !!clientId,
   });
 
-  // All dashboards for the tenant
+  // All dashboards accessible from this tenant (own + shared agencies like DMM-MC)
   const { data: allDashboards = [] } = useQuery({
     queryKey: ["all-dashboards", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("crm_dashboards")
-        .select("id, name, client_id")
-        .eq("tenant_id", tenantId!)
-        .order("name");
-      if (error) throw error;
-      return data || [];
+      const rows = await fetchAccessibleDashboards(tenantId!, {
+        select: "id, name, client_id, tenant_id, agency_id, created_at",
+      });
+      return rows
+        .map((d) => ({ id: d.id, name: d.name, client_id: d.client_id }))
+        .sort((a, b) => (a.name || "").localeCompare(b.name || "", "he"));
     },
     enabled: !!tenantId,
   });
