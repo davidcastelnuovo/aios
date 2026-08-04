@@ -32,6 +32,7 @@ import {
   pickLatestPendingApproval,
 } from '../_shared/wa-approval-flow.ts'
 import { buildVoiceCapabilityPromptRule } from '../_shared/wa-voice-resolve.ts'
+import { extractMeetingUrl } from '../_shared/meeting-url.ts'
 
 
 const corsHeaders = {
@@ -150,6 +151,7 @@ const PRIORITY_TOOLS = new Set([
   'toggle_facebook_campaign', 'list_facebook_campaigns', 'get_facebook_campaign_data',
   'update_facebook_budget', 'fb_pause', 'fb_resume', 'fb_update_budget',
   'execute_pending_approval', 'reject_pending_approval', 'list_pending_approvals',
+  'join_meeting_for_client', 'get_meeting_bot_status',
 ])
 
 function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
@@ -211,6 +213,7 @@ const CORE_TOOLS = new Set([
   'inspect_facebook_ad', 'fb_duplicate_ad_variants', 'duplicate_facebook_ad_variants',
   'list_facebook_ads', 'analyze_facebook_campaign',
   'execute_pending_approval', 'reject_pending_approval', 'list_pending_approvals',
+  'join_meeting_for_client', 'get_meeting_bot_status',
 ])
 
 // Cheap, stable signature of a tool description so embeddings refresh when the
@@ -271,6 +274,11 @@ async function selectRelevantTools(supabase: any, userText: string, toolDefs: an
       picked.add('duplicate_facebook_ad_variants')
       picked.add('toggle_facebook_campaign')
       picked.add('inspect_facebook_ad')
+    }
+    // Meeting join link pasted (Zoom / Meet / Teams) — must reach the Recall bot tool.
+    if (extractMeetingUrl(userText)) {
+      picked.add('join_meeting_for_client')
+      picked.add('get_meeting_bot_status')
     }
     const result = toolDefs.filter((t) => picked.has(t.name))
     if (result.length < 10) return toolDefs // guard against an empty/bad match wiping the toolset
@@ -6564,6 +6572,53 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    // Deterministic path: meeting join URL in message → dispatch Recall bot immediately.
+    const meetingUrl = extractMeetingUrl(String(command_text || ''))
+    if (isCarmen && meetingUrl) {
+      console.log(`[AGENT] Auto-dispatching meeting bot for URL: ${meetingUrl.slice(0, 80)}`)
+      const autoStart = Date.now()
+      const execResult = await executeTool(
+        'join_meeting_for_client',
+        { meeting_url: meetingUrl },
+        supabase,
+        resolvedTenantId,
+        callerUserId || asUuidOrNull(resolvedUserId),
+        callerCampaignerId,
+        agent_id,
+        callerRole,
+        callerManagedAgencyIds,
+        callerPhone,
+        wa_notify,
+      )
+      const finalOutput = execResult?.success
+        ? String(execResult.message || 'כרמן מצטרפת לפגישה. אשרו אותי בחדר ההמתנה אם נדרש.')
+        : `לא הצלחתי להצטרף לפגישה: ${execResult?.error || 'שגיאה לא ידועה'}`
+      const executionTime = Date.now() - autoStart
+      if (serverConversationId && callerUserId) {
+        const persistedMessages = [
+          ...serverConversationHistory,
+          { role: 'user', content: String(command_text) },
+          { role: 'assistant', content: finalOutput },
+        ].slice(-60)
+        await supabase.from('ai_conversations')
+          .update({ messages: persistedMessages, updated_at: new Date().toISOString() })
+          .eq('id', serverConversationId)
+          .eq('user_id', callerUserId)
+          .eq('tenant_id', resolvedTenantId)
+      }
+      if (emit && finalOutput) emit({ type: 'token', content: finalOutput })
+      return new Response(JSON.stringify({
+        success: !!execResult?.success,
+        output: finalOutput,
+        agent_name: agent.name,
+        model: resolveModel(agent.engine || 'gemini-3-flash'),
+        execution_time_ms: executionTime,
+        tools_used: ['join_meeting_for_client'],
+        tool_log: [{ tool: 'join_meeting_for_client', args: { meeting_url: meetingUrl }, result: execResult }],
+        auto_meeting_join: true,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     // Build messages with conversation history
     let messages: any[] = [{ role: 'system', content: systemPrompt }]
     
@@ -6636,6 +6691,9 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         if (cappedTools.length > 0) payload.tools = cappedTools
         if (round === 0 && isStoredPulseRequest && cappedTools.some((t: any) => t.function?.name === 'get_latest_campaign_pulse')) {
           payload.tool_choice = { type: 'function', function: { name: 'get_latest_campaign_pulse' } }
+        }
+        if (round === 0 && extractMeetingUrl(String(command_text || '')) && cappedTools.some((t: any) => t.function?.name === 'join_meeting_for_client')) {
+          payload.tool_choice = { type: 'function', function: { name: 'join_meeting_for_client' } }
         }
 
         console.log(`[AGENT] Round ${round + 1}/${maxRounds}, provider=${llm.label}`)
