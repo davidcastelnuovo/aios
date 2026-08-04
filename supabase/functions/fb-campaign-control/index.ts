@@ -7,6 +7,7 @@ const corsHeaders = {
   'Content-Type': 'application/json',
 };
 
+// Deployed with carmen FB campaign tooling (analyze + selective ad enable).
 async function getFbToken(supabase: any, tenant_id: string): Promise<string | null> {
   let { data: integ } = await supabase
     .from('tenant_integrations')
@@ -82,3 +83,4 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: String(err?.message || err) }), { status: 500, headers: corsHeaders });
   }
 });
+

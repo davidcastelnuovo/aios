@@ -14,6 +14,15 @@ import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
 import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
+import { asUuidOrNull } from '../_shared/uuid.ts'
+import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
+import {
+  buildDevEscalationPromptRule,
+  DEV_ESCALATION_REFUSAL_HE,
+  isAuthorizedDevRequester,
+  isDevEscalationSkill,
+  isDevEscalationTool,
+} from '../_shared/dev-escalation-auth.ts'
 
 
 const corsHeaders = {
@@ -121,19 +130,36 @@ function isEscalationMcpTool(name: string | undefined): boolean {
   return name.startsWith('mcp_Cursor__') || name.startsWith('mcp_Claude__') || name.startsWith('mcp_Manus__')
 }
 
+/**
+ * Tools that must survive OpenAI's 128-tool cap + the embedding router.
+ * New Meta tools were previously defined near the end of ALL_TOOLS (~index 147)
+ * and got sliced off whenever the router fell back to the full ~176-tool set.
+ */
+const PRIORITY_TOOLS = new Set([
+  'analyze_facebook_campaign', 'list_facebook_ads', 'inspect_facebook_ad',
+  'fb_duplicate_ad_variants', 'duplicate_facebook_ad_variants',
+  'toggle_facebook_campaign', 'list_facebook_campaigns', 'get_facebook_campaign_data',
+  'update_facebook_budget', 'fb_pause', 'fb_resume', 'fb_update_budget',
+  'execute_pending_approval', 'reject_pending_approval', 'list_pending_approvals',
+])
+
 function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
   if (target.provider !== 'openai' || tools.length <= OPENAI_MAX_TOOLS) return tools
-  // Escalation MCP tools (Cursor/Claude/Manus) are appended after the native
-  // toolset — never drop them when enforcing OpenAI's 128-tool cap.
-  const mustKeep = tools.filter((t) => isEscalationMcpTool(t?.function?.name))
+  // Escalation MCP + PRIORITY Meta/approval tools must never be truncated.
+  const mustKeepEscalation = tools.filter((t) => isEscalationMcpTool(t?.function?.name))
+  const mustKeepPriority = tools.filter((t) => {
+    const n = t?.function?.name
+    return !!n && PRIORITY_TOOLS.has(n) && !isEscalationMcpTool(n)
+  })
   const kept = tools.filter((t) => {
     const n = t?.function?.name
-    if (isEscalationMcpTool(n)) return false // re-add at front below
+    if (!n || isEscalationMcpTool(n) || PRIORITY_TOOLS.has(n)) return false
     return !LOW_PRIORITY_TOOLS.has(n)
   })
-  const room = Math.max(0, OPENAI_MAX_TOOLS - mustKeep.length)
-  const capped = [...mustKeep, ...kept.slice(0, room)]
-  console.log(`[AGENT] OpenAI tool cap: ${tools.length} → ${capped.length} (kept ${mustKeep.length} escalation MCP)`)
+  const reserved = mustKeepEscalation.length + mustKeepPriority.length
+  const room = Math.max(0, OPENAI_MAX_TOOLS - reserved)
+  const capped = [...mustKeepEscalation, ...mustKeepPriority, ...kept.slice(0, room)]
+  console.log(`[AGENT] OpenAI tool cap: ${tools.length} → ${capped.length} (kept ${mustKeepEscalation.length} escalation MCP + ${mustKeepPriority.length} priority)`)
   return capped
 }
 
@@ -171,6 +197,11 @@ const CORE_TOOLS = new Set([
   'list_clients', 'get_client_info', 'list_leads', 'search_entities',
   'create_task', 'list_tasks', 'list_my_agent_tasks', 'create_agent_task',
   'send_message', 'get_dashboard_stats', 'recall_recent_action', 'record_action_episode',
+  // Meta ad inspect/duplicate — must remain reachable even when the embedding
+  // router is unavailable (migration not applied) or similarity misses.
+  'inspect_facebook_ad', 'fb_duplicate_ad_variants', 'duplicate_facebook_ad_variants',
+  'list_facebook_ads', 'analyze_facebook_campaign',
+  'execute_pending_approval', 'reject_pending_approval',
 ])
 
 // Cheap, stable signature of a tool description so embeddings refresh when the
@@ -210,6 +241,17 @@ async function selectRelevantTools(supabase: any, userText: string, toolDefs: an
     if (!data?.length) return toolDefs
     const picked = new Set<string>(data.map((r: any) => r.tool_name))
     for (const c of CORE_TOOLS) picked.add(c)
+    for (const p of PRIORITY_TOOLS) picked.add(p)
+    // Keyword force-include for Meta ad duplication (Hebrew + English).
+    if (/(שכפל|שכפול|וריאצ|קופי|duplicate\s*ad|copy\s*variant|ad\s*variant|inspect.?ad)/i.test(userText)) {
+      picked.add('inspect_facebook_ad')
+      picked.add('fb_duplicate_ad_variants')
+      picked.add('duplicate_facebook_ad_variants')
+      picked.add('list_facebook_ads')
+      picked.add('analyze_facebook_campaign')
+      picked.add('execute_pending_approval')
+      picked.add('reject_pending_approval')
+    }
     const result = toolDefs.filter((t) => picked.has(t.name))
     if (result.length < 10) return toolDefs // guard against an empty/bad match wiping the toolset
     console.log(`[AGENT] tool router: ${toolDefs.length} → ${result.length} relevant tools`)
@@ -314,15 +356,20 @@ const ALL_TOOLS = [
   // MESSAGES
   { name: 'send_message', description: 'שליחת הודעת WhatsApp ללקוח או ליד', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, message_text: { type: 'string' } }, required: ['contact_type', 'contact_id', 'message_text'] } },
   // SEARCH
-  { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. עבור client: אם הקורא הוא קמפיינר WhatsApp, התוצאות מוגבלות אוטומטית ללקוחות שלו אלא אם הועבר all_scopes=true. ניתן לסנן clients/leads לפי agency_id.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' } }, required: ['entity_type', 'search_term'] } },
+  { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. ללקוחות: מחפש גם aliases/אנגלית/עברית, שמות חשבונות מודעות Meta, טבלאות דוח, ולקוחות ended/paused — לא רק active. עבור קמפיינר WhatsApp התוצאות מוגבלות אלא אם all_scopes=true.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' }, include_inactive: { type: 'boolean', description: 'ללקוחות: כלול ended/paused (ברירת מחדל true בחיפוש לפי שם)' } }, required: ['entity_type', 'search_term'] } },
   { name: 'query_system_graph', description: 'חיפוש לקריאה בלבד בגרף הארכיטקטורה של AIOS: קוד, Edge Functions, טבלאות SQL, מודולים וקשרים ביניהם. השתמשי רק לשאלות טכניות על מבנה המערכת, מיקום מימוש, תלות בין רכיבים או השפעת שינוי. הכלי זמין למנהלים בלבד ואינו מחזיר נתוני לקוחות.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מונחים טכניים לחיפוש, רצוי באנגלית ושמות רכיבים מדויקים' }, depth: { type: 'integer', minimum: 0, maximum: 3, description: 'עומק ניווט בקשרים, ברירת מחדל 2' }, limit: { type: 'integer', minimum: 1, maximum: 80, description: 'מספר צמתים מרבי, ברירת מחדל 40' } }, required: ['query'] } },
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
   { name: 'send_message_to_manus', description: 'שליחת הודעה ישירה ל-Manus agent פעיל (תקשורת ישירה). משמש לשאלות, עדכונים, או המשך שיחה עם Manus על משימה קיימת. מחזיר מיידית ללא המתנה לתשובה.', parameters: { type: 'object', properties: { message: { type: 'string', description: 'ההודעה לשליחה ל-Manus' }, task_id: { type: 'string', description: 'מזהה המשימה הקיימת (אופציונלי — אם לא מוגדר ישתמש ב-agent-default)' } }, required: ['message'] } },
   { name: 'get_facebook_campaign_data', description: 'שליפת נתוני קמפיינים מפייסבוק לצורך ניתוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days: { type: 'integer', description: 'מספר ימים אחורה (ברירת מחדל 30)' } } } },
   { name: 'list_facebook_campaigns', description: 'רשימת קמפיינים פעילים/מושבתים של לקוח עם campaign_id, שם וסטטוס. השתמש כדי למצוא את ה-campaign_id לפני toggle.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הקמפיין' } }, required: ['client_id'] } },
-  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. אחרי שהמשתמש מאשר ("כן"), קראי ל-execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string', description: 'Facebook campaign ID (מספרי, לא שם)' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] } }, required: ['client_id', 'campaign_id', 'status'] } },
-  { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: השוואת היום מול 7 ימים מול 30 ימים, מטריקות (CPL, CTR, frequency, spend), זיהוי חריגות והמלצות לפעולה. השתמש לפני שמציעים פעולה כדי לבסס המלצה.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
+  { name: 'toggle_facebook_campaign', description: 'הפעלה (ACTIVE) או השהיה (PAUSED) של קמפיין/ad set/מודעה בפייסבוק. campaign_id יכול להיות גם ad_id. מכניס בקשת אישור לתור — לא מבצע מיד. אחרי אישור — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, campaign_id: { type: 'string', description: 'Facebook campaign_id / adset_id / ad_id' }, status: { type: 'string', enum: ['ACTIVE', 'PAUSED'] }, level: { type: 'string', enum: ['campaign', 'adset', 'ad'], description: 'ברירת מחדל campaign; עבור מודעה בודדת העבירי level=ad' } }, required: ['client_id', 'campaign_id', 'status'] } },
+  { name: 'analyze_facebook_campaign', description: 'ניתוח עומק של קמפיין פייסבוק יחיד: היום/7/30 ימים + פירוט מודעות (ad-level) עם spend/leads/CPL. השתמשי לפני הפעלה/כיבוי סלקטיבי של מודעות.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
+  { name: 'list_facebook_ads', description: 'רשימת מודעות (ads) תחת קמפיין פייסבוק עם סטטוס ו-CPL/spend/leads ל-7 ימים. להשתמש לפני הדלקה סלקטיבית של מודעות עם CPL נמוך.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
+  // Placed early (near other FB tools) so OpenAI's 128-tool cap cannot drop them.
+  { name: 'inspect_facebook_ad', description: 'קריאה בלבד: פרטי מודעת Meta מקור (adset_id, campaign_id, page_id, creative_id, lead_form_id, טקסט/כותרת נוכחיים). חובה לפני שכפול עם וריאציות קופי.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, ad_id: { type: 'string' } }, required: ['client_id', 'ad_id'] } },
+  { name: 'fb_duplicate_ad_variants', description: 'שכפול מודעת Meta מנצחת ל-N מודעות חדשות באותו ad set, עם וריאציות primary_text/headline — שומר media/page/lead form. דורש אישור (pending_approval). אופציונלי: daily_budget בש"ח + budget_level=campaign|adset.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, source_ad_id: { type: 'string' }, count: { type: 'integer', description: 'כמה מודעות ליצור (עד 8)' }, variants: { type: 'array', description: 'מערך {primary_text, headline?, name?, description?}', items: { type: 'object', properties: { primary_text: { type: 'string' }, headline: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' } }, required: ['primary_text'] } }, daily_budget: { type: 'number', description: 'תקציב יומי בש"ח (למשל 200)' }, budget_level: { type: 'string', enum: ['campaign', 'adset'], description: 'ברירת מחדל campaign' }, status: { type: 'string', enum: ['PAUSED', 'ACTIVE'], description: 'סטטוס המודעות החדשות — ברירת מחדל PAUSED' } }, required: ['client_id', 'source_ad_id', 'variants'] } },
+  { name: 'duplicate_facebook_ad_variants', description: 'Alias ל-fb_duplicate_ad_variants — שכפול מודעה עם וריאציות קופי (דורש אישור).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, source_ad_id: { type: 'string' }, count: { type: 'integer' }, variants: { type: 'array', items: { type: 'object' } }, daily_budget: { type: 'number' }, budget_level: { type: 'string', enum: ['campaign', 'adset'] }, status: { type: 'string', enum: ['PAUSED', 'ACTIVE'] } }, required: ['client_id', 'source_ad_id', 'variants'] } },
   { name: 'update_facebook_budget', description: 'עדכון תקציב יומי או כולל לקמפיין פייסבוק. מכניס בקשת אישור לתור — לא מבצע מיד. חריגה של מעל 20% או מעל 500 ש"ח דורשת התרעה מפורשת לפני הבקשה. אחרי אישור המשתמש — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number', description: 'תקציב יומי בשקלים (לא במיקרו-יחידות)' }, lifetime_budget: { type: 'number' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'duplicate_facebook_campaign', description: 'שכפול קמפיין פייסבוק (במצב PAUSED). מכניס בקשת אישור לתור — לא מבצע מיד. אחרי אישור — execute_pending_approval.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח שהקמפיין שייך אליו' }, campaign_id: { type: 'string' }, name_suffix: { type: 'string' } }, required: ['client_id', 'campaign_id'] } },
   { name: 'get_campaign_alerts', description: 'שליפת התראות פתוחות על קמפיינים (קמפיין נעצר, מודעה לא מאושרת, CPL חורג, frequency גבוה). השתמש בתחילת בדיקת דופק או כשהמשתמש שואל על מצב הקמפיינים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, only_open: { type: 'boolean', description: 'ברירת מחדל true' } } } },
@@ -505,6 +552,7 @@ const ALL_TOOLS = [
   { name: 'fb_update_budget', description: 'שינוי תקציב יומי או lifetime לקמפיין/ad set. דורש אישור.', parameters: { type: 'object', properties: { entity_id: { type: 'string', description: 'campaign_id או adset_id' }, daily_budget: { type: 'number' }, lifetime_budget: { type: 'number' } }, required: ['entity_id'] } },
   { name: 'fb_pause', description: 'השהיית קמפיין/ad set/מודעה (PAUSED). דורש אישור.', parameters: { type: 'object', properties: { entity_id: { type: 'string' } }, required: ['entity_id'] } },
   { name: 'fb_resume', description: 'הדלקה מחדש (ACTIVE) של קמפיין/ad set/מודעה. דורש אישור.', parameters: { type: 'object', properties: { entity_id: { type: 'string' } }, required: ['entity_id'] } },
+  // inspect_facebook_ad / fb_duplicate_ad_variants live next to list_facebook_ads (early in ALL_TOOLS).
   // ===========================
   // GOOGLE ADS — pause/resume/budget at campaign level
   // ===========================
@@ -564,11 +612,11 @@ const ALL_TOOLS = [
 const FB_GRAPH_VERSION = 'v21.0'
 
 async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientId: string): Promise<string | null> {
-  // 1. crm_tables (clients connected via the facebook sync/report-table flow).
+  // client_id is globally unique — do not require tenant_id match. Shared/partner
+  // tenants often hold the CRM row while Carmen runs under David's home tenant.
   const { data } = await supabase
     .from('crm_tables')
     .select('integration_settings, last_sync_at')
-    .eq('tenant_id', tenantId)
     .eq('client_id', clientId)
     .in('integration_type', ['facebook_insights', 'facebook_ecommerce'])
     .order('last_sync_at', { ascending: false, nullsFirst: false })
@@ -582,10 +630,270 @@ async function fbResolveClientAdAccount(supabase: any, tenantId: string, clientI
     .from('clients')
     .select('meta_ads_account_id')
     .eq('id', clientId)
-    .eq('tenant_id', tenantId)
     .maybeSingle()
   if (cl?.meta_ads_account_id) return String(cl.meta_ads_account_id).replace(/^act_/, '')
   return null
+}
+
+/** Resolve which tenant owns a client (for FB token / shared integrations). */
+async function resolveClientTenantId(supabase: any, clientId: string, fallbackTenantId: string): Promise<string> {
+  const { data } = await supabase.from('clients').select('tenant_id').eq('id', clientId).maybeSingle()
+  return data?.tenant_id || fallbackTenantId
+}
+
+/** Expand Hebrew/English aliases so "קרנליוס" / Cornelius / Kernelios all match. */
+function expandClientSearchTerms(raw: string): string[] {
+  const term = String(raw || '').trim()
+  if (!term) return []
+  const terms = new Set<string>([term])
+  const lower = term.toLocaleLowerCase('he')
+  const aliasGroups = [
+    ['kernelios', 'kernel', 'cornelius', 'קרנליוס', 'קרניליוס', 'yael kernelios', 'edvard kernelios', 'KERNELIOS'],
+  ]
+  for (const group of aliasGroups) {
+    if (group.some((alias) => lower.includes(alias.toLocaleLowerCase('he')) || alias.toLocaleLowerCase('he').includes(lower))) {
+      for (const alias of group) terms.add(alias)
+    }
+  }
+  // Common Hebrew typo: קרנליוס ↔ קרניליוס
+  if (/קרנל/.test(term)) {
+    terms.add('קרנליוס')
+    terms.add('קרניליוס')
+    terms.add('KERNELIOS')
+    terms.add('Cornelius')
+  }
+  return Array.from(terms)
+}
+
+/**
+ * Broad client lookup: CRM name/contact, crm_tables name, Meta ad account names,
+ * all statuses (including ended). Used by search_entities / list_clients name search.
+ */
+async function searchClientsBroadly(
+  supabase: any,
+  accessibleTenantIds: string[],
+  searchTerm: string,
+  opts: { limit?: number; agencyId?: string | null; clientIdsFilter?: string[] | null } = {},
+): Promise<any[]> {
+  const limit = Math.min(Math.max(opts.limit || 20, 1), 50)
+  const terms = expandClientSearchTerms(searchTerm)
+  if (!terms.length || !accessibleTenantIds.length) return []
+
+  const orName = terms
+    .map((t) => t.replace(/[%_,]/g, ''))
+    .filter(Boolean)
+    .flatMap((t) => [`name.ilike.%${t}%`, `contact_name.ilike.%${t}%`])
+    .join(',')
+
+  let clientQ = supabase
+    .from('clients')
+    .select('id, name, contact_name, phone, status, agency_id, tenant_id, meta_ads_account_id, agencies(name)')
+    .in('tenant_id', accessibleTenantIds)
+    .or(orName)
+    .limit(limit)
+  if (opts.agencyId) clientQ = clientQ.eq('agency_id', opts.agencyId)
+  if (opts.clientIdsFilter?.length) clientQ = clientQ.in('id', opts.clientIdsFilter)
+  const { data: byName, error: nameErr } = await clientQ
+  if (nameErr) throw nameErr
+
+  // Also match Facebook report tables / ad account names (e.g. "Yael Kernelios LTD").
+  const tableOr = terms
+    .map((t) => t.replace(/[%_,]/g, ''))
+    .filter(Boolean)
+    .flatMap((t) => [
+      `name.ilike.%${t}%`,
+      `integration_settings->>ad_account_name.ilike.%${t}%`,
+    ])
+    .join(',')
+  let tablesQ = supabase
+    .from('crm_tables')
+    .select('id, name, client_id, integration_type, integration_settings, clients(id, name, contact_name, phone, status, agency_id, tenant_id, meta_ads_account_id, agencies(name))')
+    .in('tenant_id', accessibleTenantIds)
+    .in('integration_type', ['facebook_insights', 'facebook_ecommerce', 'google_ads'])
+    .or(tableOr)
+    .limit(limit)
+  if (opts.clientIdsFilter?.length) tablesQ = tablesQ.in('client_id', opts.clientIdsFilter)
+  const { data: byTable } = await tablesQ
+
+  const byId = new Map<string, any>()
+  for (const c of byName || []) {
+    byId.set(c.id, {
+      id: c.id,
+      name: c.name,
+      contact_name: c.contact_name,
+      phone: c.phone,
+      status: c.status,
+      agency_id: c.agency_id,
+      agency_name: c.agencies?.name ?? null,
+      tenant_id: c.tenant_id,
+      meta_ads_account_id: c.meta_ads_account_id,
+      matched_via: ['client_name'],
+      ad_accounts: [] as any[],
+    })
+  }
+  for (const t of byTable || []) {
+    const c: any = t.clients
+    if (!c?.id) continue
+    if (opts.agencyId && c.agency_id !== opts.agencyId) continue
+    const settings = t.integration_settings || {}
+    const adAccount = {
+      table_id: t.id,
+      table_name: t.name,
+      integration_type: t.integration_type,
+      ad_account_id: settings.ad_account_id || settings.account_id || null,
+      ad_account_name: settings.ad_account_name || null,
+      account_status: settings.account_status || null,
+    }
+    const existing = byId.get(c.id)
+    if (existing) {
+      existing.matched_via = Array.from(new Set([...(existing.matched_via || []), 'ad_account_or_report_table']))
+      existing.ad_accounts.push(adAccount)
+    } else {
+      byId.set(c.id, {
+        id: c.id,
+        name: c.name,
+        contact_name: c.contact_name,
+        phone: c.phone,
+        status: c.status,
+        agency_id: c.agency_id,
+        agency_name: c.agencies?.name ?? null,
+        tenant_id: c.tenant_id,
+        meta_ads_account_id: c.meta_ads_account_id,
+        matched_via: ['ad_account_or_report_table'],
+        ad_accounts: [adAccount],
+      })
+    }
+  }
+
+  // Prefer active, then onboarding, then ended/paused — but always return duplicates.
+  const statusRank: Record<string, number> = { active: 0, onboarding: 1, paused: 2, ended: 3 }
+  return Array.from(byId.values())
+    .sort((a, b) => (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9) || String(a.name).localeCompare(String(b.name), 'he'))
+    .slice(0, limit)
+}
+
+/** Deep single-campaign analysis + ad-level CPL (inline Graph; no edge-fn dependency). */
+async function fbAnalyzeCampaignInline(
+  supabase: any,
+  tenantId: string,
+  clientId: string,
+  campaignId: string,
+): Promise<any> {
+  const tokenTenant = await resolveClientTenantId(supabase, clientId, tenantId)
+  let token = await fbGetToken(supabase, tokenTenant)
+  if (!token && tokenTenant !== tenantId) token = await fbGetToken(supabase, tenantId)
+  if (!token) return { error: 'fb_not_connected' }
+
+  const fields = 'spend,impressions,clicks,ctr,cpc,cpm,frequency,actions,cost_per_action_type'
+  const cplFrom = (ins: any) => {
+    if (!ins) return null
+    const leadAction = (ins.cost_per_action_type || []).find((a: any) =>
+      ['lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead', 'leadgen.other'].includes(a.action_type)
+      || String(a.action_type || '').endsWith('.lead')
+    )
+    if (leadAction) return Number(leadAction.value)
+    const leads = fbLeadsFromActions(ins.actions || [])
+    const spend = Number(ins.spend || 0)
+    return leads > 0 ? Number((spend / leads).toFixed(2)) : null
+  }
+  const fetchInsights = async (date_preset: string) => {
+    const r = await fetch(`https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}/insights?fields=${fields}&date_preset=${date_preset}&access_token=${token}`)
+    const j = await r.json()
+    return j?.data?.[0] || null
+  }
+  const fetchAds = async () => {
+    const r = await fetch(
+      `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}/ads?fields=id,name,effective_status,status&limit=200&access_token=${token}`,
+    )
+    const j = await r.json()
+    if (!r.ok || j?.error || !Array.isArray(j?.data)) return []
+    const ads = j.data
+    // Ad-level insights for last_7d
+    const insightsUrl = `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}/insights?level=ad&date_preset=last_7d&fields=ad_id,ad_name,spend,actions,impressions,clicks&limit=200&access_token=${token}`
+    const ir = await fetch(insightsUrl)
+    const ij = await ir.json()
+    const byAd = new Map<string, any>()
+    for (const row of (ij?.data || [])) {
+      const leads = fbLeadsFromActions(row.actions || [])
+      const spend = Number(row.spend || 0)
+      byAd.set(String(row.ad_id), {
+        spend,
+        leads,
+        impressions: Number(row.impressions || 0),
+        clicks: Number(row.clicks || 0),
+        cpl: leads > 0 ? Number((spend / leads).toFixed(2)) : null,
+      })
+    }
+    return ads.map((ad: any) => {
+      const m = byAd.get(String(ad.id)) || { spend: 0, leads: 0, impressions: 0, clicks: 0, cpl: null }
+      return {
+        ad_id: ad.id,
+        ad_name: ad.name,
+        status: ad.status,
+        effective_status: ad.effective_status,
+        spend_7d: m.spend,
+        leads_7d: m.leads,
+        cpl_7d: m.cpl,
+        impressions_7d: m.impressions,
+        clicks_7d: m.clicks,
+      }
+    }).sort((a: any, b: any) => (a.cpl_7d ?? 999999) - (b.cpl_7d ?? 999999))
+  }
+
+  const metaRes = await fetch(
+    `https://graph.facebook.com/${FB_GRAPH_VERSION}/${campaignId}?fields=id,name,status,effective_status,daily_budget,lifetime_budget,objective,issues_info&access_token=${token}`,
+  )
+  const meta = await metaRes.json()
+  if (meta?.error) return { error: 'fb_api_error', fb_error: meta.error }
+
+  const [today, last7, last30, ads] = await Promise.all([
+    fetchInsights('today'),
+    fetchInsights('last_7d'),
+    fetchInsights('last_30d'),
+    fetchAds(),
+  ])
+  const cplToday = cplFrom(today)
+  const cpl7 = cplFrom(last7)
+  const cpl30 = cplFrom(last30)
+  const anomalies: string[] = []
+  if (meta.effective_status && !['ACTIVE', 'CAMPAIGN_PAUSED', 'PAUSED'].includes(meta.effective_status)) {
+    anomalies.push(`קמפיין במצב חריג: ${meta.effective_status}`)
+  }
+  if (cplToday && cpl7 && cplToday > cpl7 * 1.5) {
+    anomalies.push(`CPL היום (${cplToday.toFixed(1)}) חורג ב-${(((cplToday / cpl7) - 1) * 100).toFixed(0)}% מהממוצע השבועי`)
+  }
+  const lowCplAds = ads.filter((a: any) => a.cpl_7d != null && a.leads_7d > 0)
+  const recommendations: any[] = []
+  if (lowCplAds.length && ads.some((a: any) => a.effective_status === 'PAUSED' && a.cpl_7d != null)) {
+    recommendations.push({
+      action: 'enable_low_cpl_ads',
+      reason: 'יש מודעות עם CPL נמוך שמושבתות — אפשר להדליק רק אותן אחרי אישור',
+      severity: 'medium',
+      candidate_ad_ids: ads
+        .filter((a: any) => a.effective_status === 'PAUSED' && a.cpl_7d != null && a.leads_7d > 0)
+        .sort((a: any, b: any) => a.cpl_7d - b.cpl_7d)
+        .slice(0, 10)
+        .map((a: any) => ({ ad_id: a.ad_id, ad_name: a.ad_name, cpl_7d: a.cpl_7d, leads_7d: a.leads_7d })),
+    })
+  }
+  return {
+    success: true,
+    source: 'live_meta_inline',
+    campaign: {
+      id: meta.id, name: meta.name, status: meta.status, effective_status: meta.effective_status,
+      objective: meta.objective, daily_budget: meta.daily_budget, lifetime_budget: meta.lifetime_budget,
+    },
+    metrics: {
+      today: { ...today, cpl: cplToday },
+      last_7d: { ...last7, cpl: cpl7 },
+      last_30d: { ...last30, cpl: cpl30 },
+    },
+    ads,
+    anomalies,
+    recommendations,
+    instruction_for_carmen:
+      'הציגי CPL/spend/leads ברמת קמפיין ומודעות. כדי להדליק רק מודעות עם CPL נמוך — השתמשי ב-toggle_facebook_campaign עם campaign_id=ad_id (או fb_resume עם entity_id של המודעה) אחרי אישור מפורש.',
+  }
 }
 
 async function fbGetToken(supabase: any, tenantId: string): Promise<string | null> {
@@ -1057,7 +1365,13 @@ async function tryCreateCalendarEventForTask(
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any): Promise<any> {
+  // WhatsApp / automations often pass the sentinel "system". Never write that into uuid columns.
+  const actorUserId = asUuidOrNull(userId)
+  // Coding-agent escalations are identity-allowlisted (currently David only).
+  if (isDevEscalationTool(name) && !isAuthorizedDevRequester({ campaignerId: callerCampaignerId, userId: actorUserId, phone: callerPhone })) {
+    return { error: 'dev_escalation_forbidden', message: DEV_ESCALATION_REFUSAL_HE }
+  }
   const accessibleTenantIds = await getAccessibleTenantIds(supabase, tenantId)
   // Role-based scope: managers (owner/agency_owner/agency_manager/super_admin) bypass the campaigner narrow-scope.
   const isManagerRole = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
@@ -1388,8 +1702,27 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (agencyIdsFilter) query = query.in('agency_id', agencyIdsFilter)
       if (clientIdsFilter) query = query.in('id', clientIdsFilter)
       if (args.name_search) {
-        const term = String(args.name_search).trim().replace(/[%_]/g, '')
-        query = query.or(`name.ilike.%${term}%,contact_name.ilike.%${term}%`)
+        // Broad search: aliases, ad-account names, ended duplicates — not active-only.
+        const broadRaw = await searchClientsBroadly(supabase, accessibleTenantIds, args.name_search, {
+          limit: Math.max(args.limit || 50, 50),
+          agencyId: agencyIdsFilter?.length === 1 ? agencyIdsFilter[0] : null,
+          clientIdsFilter,
+        })
+        const broad = (agencyIdsFilter && agencyIdsFilter.length > 1)
+          ? broadRaw.filter((c: any) => c.agency_id && agencyIdsFilter.includes(c.agency_id))
+          : broadRaw
+        const scope_note = (callerCampaignerId && !args.all_scopes && !explicitCampaigner && !agencyIdsFilter)
+          ? 'auto-scoped to caller campaigner. name_search includes ended/paused + Meta ad account aliases.'
+          : 'name_search includes ended/paused clients and Meta/Google report / ad-account name matches.'
+        return {
+          count: broad.length,
+          clients: broad.slice(0, args.limit || 50).map((c: any) => ({
+            id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone,
+            status: c.status, agency_id: c.agency_id, agency_name: c.agency_name,
+            matched_via: c.matched_via, ad_accounts: c.ad_accounts,
+          })),
+          scope_note,
+        }
       }
       const { data, error } = await query
       if (error) throw error
@@ -1450,21 +1783,40 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const nameMap: Record<string, string> = { agency: 'name', client: 'name', campaigner: 'full_name', lead: 'company_name' }
       const table = tableMap[args.entity_type]
       const nameField = nameMap[args.entity_type]
-      const selectCols = args.entity_type === 'client' || args.entity_type === 'lead'
+
+      // Clients: broad alias + ad-account + inactive/ended search (Kernelios/Cornelius/קרנליוס…).
+      if (args.entity_type === 'client') {
+        let clientIdsFilter: string[] | null = null
+        if (callerCampaignerId && !args.all_scopes && !bypassCampaignerScope) {
+          const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
+          clientIdsFilter = (links || []).map((l: any) => l.client_id)
+          if (clientIdsFilter.length === 0) return { count: 0, results: [], note: 'no clients assigned to you' }
+        }
+        const agencyFilter = args.agency_id
+          || (isTeamManager && !args.all_scopes && managedAgencyIds.length === 1 ? managedAgencyIds[0] : null)
+        const results = await searchClientsBroadly(supabase, accessibleTenantIds, args.search_term, {
+          limit: 20,
+          agencyId: agencyFilter,
+          clientIdsFilter: isTeamManager && !args.all_scopes && managedAgencyIds.length > 1 && !args.agency_id
+            ? null
+            : clientIdsFilter,
+        })
+        const filtered = (isTeamManager && !args.all_scopes && managedAgencyIds.length > 0 && !args.agency_id)
+          ? results.filter((r: any) => r.agency_id && managedAgencyIds.includes(r.agency_id))
+          : results
+        return {
+          count: filtered.length,
+          results: filtered,
+          note: 'includes active+ended/paused, CRM name aliases, and Meta/Google ad-account / report-table name matches',
+        }
+      }
+
+      const selectCols = args.entity_type === 'lead'
         ? `id, ${nameField}, agency_id`
         : `id, ${nameField}`
       let q = supabase.from(table).select(selectCols).in('tenant_id', accessibleTenantIds).ilike(nameField, `%${args.search_term}%`).limit(20)
-      if ((args.entity_type === 'client' || args.entity_type === 'lead') && args.agency_id) {
+      if (args.entity_type === 'lead' && args.agency_id) {
         q = q.eq('agency_id', args.agency_id)
-      }
-      // Auto-scope clients to caller campaigner unless overridden; managers bypass.
-      if (args.entity_type === 'client' && callerCampaignerId && !args.all_scopes && !bypassCampaignerScope) {
-        const { data: links } = await supabase.from('client_team').select('client_id').eq('campaigner_id', callerCampaignerId)
-        const ids = (links || []).map((l: any) => l.client_id)
-        if (ids.length === 0) return { count: 0, results: [], note: 'no clients assigned to you' }
-        q = q.in('id', ids)
-      } else if (args.entity_type === 'client' && isTeamManager && !args.all_scopes && managedAgencyIds.length > 0) {
-        q = q.in('agency_id', managedAgencyIds)
       }
       const { data, error } = await q
       if (error) throw error
@@ -1555,7 +1907,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
 
       // LIVE first: pull campaign-level insights straight from Meta (synced tables can lag days/weeks).
-      const liveInsights = await fbLiveCampaignInsights(supabase, accessibleTenantIds[0], args.client_id, daysBack)
+      const clientTenantId = await resolveClientTenantId(supabase, args.client_id, accessibleTenantIds[0])
+      const liveInsights = await fbLiveCampaignInsights(supabase, clientTenantId, args.client_id, daysBack)
+        || (clientTenantId !== accessibleTenantIds[0]
+          ? await fbLiveCampaignInsights(supabase, accessibleTenantIds[0], args.client_id, daysBack)
+          : null)
       if (liveInsights) {
         return { count: liveInsights.length, campaigns: liveInsights, period: `${daysBack} days`, source: 'live_meta' }
       }
@@ -1603,7 +1959,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         return { error: 'client_id_required', message: 'יש להעביר client_id' }
       }
       // LIVE first: read campaign status straight from Meta (synced tables can lag).
-      const liveList = await fbLiveCampaignList(supabase, accessibleTenantIds[0], args.client_id)
+      const listTenantId = await resolveClientTenantId(supabase, args.client_id, accessibleTenantIds[0])
+      const liveList = await fbLiveCampaignList(supabase, listTenantId, args.client_id)
+        || (listTenantId !== accessibleTenantIds[0]
+          ? await fbLiveCampaignList(supabase, accessibleTenantIds[0], args.client_id)
+          : null)
       if (liveList) {
         const search = (args.name_search || '').toString().toLowerCase()
         const campaigns = search ? liveList.filter((c: any) => String(c.campaign_name || '').toLowerCase().includes(search)) : liveList
@@ -1663,17 +2023,18 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (name === 'update_facebook_budget' && args.daily_budget == null && args.lifetime_budget == null) {
         return { error: 'daily_budget או lifetime_budget נדרש' }
       }
+      const toggleLevel = args.level === 'ad' ? 'מודעה' : args.level === 'adset' ? 'ad set' : 'קמפיין'
       const legacyTitles: Record<string, string> = {
         toggle_facebook_campaign: args.status === 'PAUSED'
-          ? `כיבוי קמפיין FB ${args.campaign_id}`
-          : `הדלקת קמפיין FB ${args.campaign_id}`,
+          ? `כיבוי ${toggleLevel} FB ${args.campaign_id}`
+          : `הדלקת ${toggleLevel} FB ${args.campaign_id}`,
         update_facebook_budget: `שינוי תקציב FB ${args.campaign_id} → ${args.daily_budget ?? args.lifetime_budget}`,
         duplicate_facebook_campaign: `שכפול קמפיין FB ${args.campaign_id}`,
       }
       const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: name,
         title: legacyTitles[name] || name,
         description: 'פעולת mutating על Meta — דורשת אישור משתמש מפורש (תור אישורים)',
@@ -1694,16 +2055,174 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'analyze_facebook_campaign': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
-      const targetTenantId = accessibleTenantIds[0]
+      if (!args.campaign_id) return { error: 'campaign_id_required' }
+      // Prefer live inline analysis (includes ad-level CPL). Fall back to edge fn if present.
+      const inline = await fbAnalyzeCampaignInline(supabase, tenantId, args.client_id, args.campaign_id)
+      if (inline && !inline.error) return inline
+      const targetTenantId = await resolveClientTenantId(supabase, args.client_id, accessibleTenantIds[0])
       const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fb-campaign-analyze`
       const res = await fetch(fnUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
-        body: JSON.stringify({ tenant_id: targetTenantId, campaign_id: args.campaign_id }),
+        body: JSON.stringify({ tenant_id: targetTenantId, client_id: args.client_id, campaign_id: args.campaign_id }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) return { error: 'analyze_failed', details: json }
-      return json
+      if (res.ok) return { ...json, source: json.source || 'fb-campaign-analyze' }
+      // Surface a clear error instead of opaque "Requested function was not found"
+      if (res.status === 404 || /not found/i.test(JSON.stringify(json))) {
+        return inline?.error
+          ? { error: 'analyze_failed', details: inline, hint: 'fb-campaign-analyze edge function missing and live Meta read failed' }
+          : { error: 'analyze_failed', details: json, hint: 'fb-campaign-analyze not deployed' }
+      }
+      return inline?.error ? { error: 'analyze_failed', details: inline } : { error: 'analyze_failed', details: json }
+    }
+    case 'list_facebook_ads': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      if (!args.campaign_id) return { error: 'campaign_id_required' }
+      const analysis = await fbAnalyzeCampaignInline(supabase, tenantId, args.client_id, args.campaign_id)
+      if (analysis?.error) return analysis
+      return {
+        campaign_id: args.campaign_id,
+        campaign_name: analysis.campaign?.name || null,
+        count: (analysis.ads || []).length,
+        ads: analysis.ads || [],
+        instruction_for_carmen:
+          'מייני לפי cpl_7d. להדלקת מודעות נבחרות בלבד — toggle_facebook_campaign עם campaign_id=<ad_id>, level=ad, status=ACTIVE אחרי אישור. לשכפול מודעה מנצחת עם קופי חדש — inspect_facebook_ad ואז fb_duplicate_ad_variants (דורש אישור).',
+      }
+    }
+    case 'inspect_facebook_ad': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      if (!args.ad_id) return { error: 'ad_id_required' }
+      const tokenTenant = await resolveClientTenantId(supabase, args.client_id, tenantId)
+      let token = await fbGetToken(supabase, tokenTenant)
+      if (!token && tokenTenant !== tenantId) token = await fbGetToken(supabase, tenantId)
+      if (!token) return { error: 'fb_not_connected' }
+      const adRes = await fetch(
+        `https://graph.facebook.com/${FB_GRAPH_VERSION}/${args.ad_id}?fields=id,name,adset_id,campaign_id,account_id,status,effective_status,creative{id,name,object_story_spec,asset_feed_spec,effective_object_story_id,thumbnail_url}&access_token=${token}`,
+      )
+      const ad = await adRes.json()
+      if (!adRes.ok || ad?.error) {
+        return { error: 'source_ad_unavailable', details: ad?.error || ad, ad_id: args.ad_id }
+      }
+      if (!ad?.creative?.id) return { error: 'source_creative_unavailable', ad_id: args.ad_id }
+      if (!ad.creative.object_story_spec && !ad.creative.asset_feed_spec) {
+        return { error: 'source_creative_unsupported', ad_id: args.ad_id, creative_id: ad.creative.id }
+      }
+      const summary = summarizeSourceAd(ad, ad.creative)
+      // Enrich with campaign/adset names + budgets when available
+      let campaign: any = null
+      let adset: any = null
+      if (ad.campaign_id) {
+        const cr = await fetch(`https://graph.facebook.com/${FB_GRAPH_VERSION}/${ad.campaign_id}?fields=id,name,status,effective_status,daily_budget,lifetime_budget&access_token=${token}`)
+        campaign = await cr.json().catch(() => null)
+        if (campaign?.error) campaign = null
+      }
+      if (ad.adset_id) {
+        const ar = await fetch(`https://graph.facebook.com/${FB_GRAPH_VERSION}/${ad.adset_id}?fields=id,name,status,effective_status,daily_budget,lifetime_budget,campaign_id&access_token=${token}`)
+        adset = await ar.json().catch(() => null)
+        if (adset?.error) adset = null
+      }
+      return {
+        ...summary,
+        campaign: campaign ? {
+          id: campaign.id, name: campaign.name, status: campaign.status,
+          daily_budget_agorot: campaign.daily_budget != null ? Number(campaign.daily_budget) : null,
+          daily_budget_ils: campaign.daily_budget != null ? Number(campaign.daily_budget) / 100 : null,
+        } : null,
+        adset: adset ? {
+          id: adset.id, name: adset.name, status: adset.status,
+          daily_budget_agorot: adset.daily_budget != null ? Number(adset.daily_budget) : null,
+          daily_budget_ils: adset.daily_budget != null ? Number(adset.daily_budget) / 100 : null,
+        } : null,
+        instruction_for_carmen:
+          'לשכפול עם וריאציות קופי: fb_duplicate_ad_variants(client_id, source_ad_id, variants[{primary_text,headline}], count?, daily_budget?). מחזיר pending_approval — אל תבצעי בלי אישור.',
+      }
+    }
+    case 'fb_duplicate_ad_variants':
+    case 'duplicate_facebook_ad_variants': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      if (!args.source_ad_id) return { error: 'source_ad_id_required' }
+      let variants: any[]
+      try {
+        variants = normalizeAdCopyVariants(args)
+      } catch (e: any) {
+        return { error: String(e?.message || e) }
+      }
+      // Prefetch source summary for the approval card (read-only; no mutation yet).
+      const tokenTenant = await resolveClientTenantId(supabase, args.client_id, tenantId)
+      let token = await fbGetToken(supabase, tokenTenant)
+      if (!token && tokenTenant !== tenantId) token = await fbGetToken(supabase, tenantId)
+      if (!token) return { error: 'fb_not_connected' }
+      const adRes = await fetch(
+        `https://graph.facebook.com/${FB_GRAPH_VERSION}/${args.source_ad_id}?fields=id,name,adset_id,campaign_id,account_id,status,effective_status,creative{id,name,object_story_spec,asset_feed_spec}&access_token=${token}`,
+      )
+      const ad = await adRes.json()
+      if (!adRes.ok || ad?.error) {
+        return { error: 'source_ad_unavailable', details: ad?.error || ad, source_ad_id: args.source_ad_id }
+      }
+      if (!ad?.adset_id) return { error: 'source_ad_missing_adset', source_ad_id: args.source_ad_id }
+      if (!ad?.creative?.id) return { error: 'source_creative_unavailable', source_ad_id: args.source_ad_id }
+      if (!ad.creative.object_story_spec && !ad.creative.asset_feed_spec) {
+        return { error: 'source_creative_unsupported', source_ad_id: args.source_ad_id, creative_id: ad.creative.id }
+      }
+      const source = summarizeSourceAd(ad, ad.creative)
+      const toolInput = {
+        client_id: args.client_id,
+        source_ad_id: args.source_ad_id,
+        count: variants.length,
+        variants,
+        daily_budget: args.daily_budget != null ? Number(args.daily_budget) : undefined,
+        budget_level: args.budget_level === 'adset' ? 'adset' : 'campaign',
+        status: args.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED',
+      }
+      const budgetNote = toolInput.daily_budget != null
+        ? ` + תקציב ₪${toolInput.daily_budget}/יום ברמת ${toolInput.budget_level}`
+        : ''
+      const title = `שכפול מודעה FB ×${variants.length}: ${source.ad_name || args.source_ad_id}${budgetNote}`
+      const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+        tenant_id: tenantId,
+        agent_id: agentId || null,
+        requested_by: actorUserId,
+        action_type: 'fb_duplicate_ad_variants',
+        title,
+        description: `שכפול מודעה מנצחת עם וריאציות קופי באותו ad set — שומר page/media/lead form. מודעות חדשות: ${toolInput.status}.`,
+        tool_name: 'fb_duplicate_ad_variants',
+        tool_input: toolInput,
+        context: {
+          caller_role: callerRole,
+          caller_phone: callerPhone,
+          client_id: args.client_id,
+          source,
+          variant_previews: variants.map((v: any, i: number) => ({
+            i: i + 1,
+            name: v.name || `${source.ad_name || 'Ad'} · v${i + 1}`,
+            primary_text: v.primary_text,
+            headline: v.headline,
+          })),
+        },
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      }).select('id').single()
+      if (aqErr) throw aqErr
+      return {
+        pending_approval: true,
+        approval_id: aqRow.id,
+        action: 'fb_duplicate_ad_variants',
+        summary: title,
+        source,
+        variants_count: variants.length,
+        variant_previews: variants.map((v: any, i: number) => ({
+          i: i + 1,
+          primary_text: v.primary_text,
+          headline: v.headline,
+          name: v.name || null,
+        })),
+        daily_budget: toolInput.daily_budget ?? null,
+        budget_level: toolInput.budget_level,
+        new_ads_status: toolInput.status,
+        instruction_for_carmen:
+          'הציגי לדיוויד: מקור (שם מודעה + adset) + תקציר 4 הוריאציות + תקציב אם יש. בקשי אישור: "לאשר? (כן/לא)". רק אחרי כן — execute_pending_approval. אין מוטציה ב-Meta לפני אישור.',
+      }
     }
     case 'get_campaign_alerts': {
       let q = supabase.from('campaign_alerts')
@@ -2725,7 +3244,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: toolName,
         title: autoTitles[name] || name,
         description: 'פעולת אוטומציה — דורשת אישור משתמש מפורש',
@@ -2921,8 +3440,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const importanceMap: Record<string, number> = {
         instructions: 95, preferences: 85, personal: 80, projects: 70, clients: 70, workflows: 65, general: 50,
       }
+      // executeTool param is agentId — bare `agent_id` was a ReferenceError ("agent_id is not defined").
       saveAgentMemory({
-        supabase, tenant_id: tenantId, agent_id,
+        supabase, tenant_id: tenantId, agent_id: agentId || null,
         category: cat,
         title: args.key,
         summary: args.content,
@@ -2943,7 +3463,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Hermes-style FTS recall across agent_memory (cross-session, importance-aware)
       const items = await recallAgentMemoryFTS(supabase, {
         tenant_id: tenantId,
-        agent_id,
+        agent_id: agentId || null,
         query_text: args.query || '',
         limit: args.limit || 5,
         min_importance: args.min_importance || 0,
@@ -3322,7 +3842,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: name,
         title: acctTitles[name] || name,
         description: 'פעולת הנהלת חשבונות — דורשת אישור משתמש מפורש',
@@ -3939,7 +4459,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'create_automation',
         title: `בניית אוטומציה: ${spec.name}`,
         description: `טריגר: ${spec.trigger_type} | שלבים: ${stepSummary}`,
@@ -4001,13 +4521,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const r = await fetch(`${SUPABASE_URL}/functions/v1/carmen-approval-execute`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json', apikey: SUPABASE_SERVICE_ROLE_KEY },
-        body: JSON.stringify({ approval_id: approvalId, approved_by: userId }),
+        body: JSON.stringify({ approval_id: approvalId, approved_by: actorUserId }),
       })
       const j = await r.json()
       return j
     }
     case 'reject_pending_approval': {
-      const { error } = await supabase.from('agent_approval_queue').update({ status: 'rejected', approved_by: userId, approved_at: new Date().toISOString(), execution_result: { reason: args.reason || null } }).eq('id', args.approval_id).eq('tenant_id', tenantId)
+      const { error } = await supabase.from('agent_approval_queue').update({ status: 'rejected', approved_by: actorUserId, approved_at: new Date().toISOString(), execution_result: { reason: args.reason || null } }).eq('id', args.approval_id).eq('tenant_id', tenantId)
       if (error) throw error
       return { success: true, approval_id: args.approval_id, status: 'rejected' }
     }
@@ -4040,7 +4560,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: name,
         title: titles[name] || name,
         description: 'פעולת mutating שדורשת אישור משתמש בוואטסאפ',
@@ -4345,7 +4865,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data, error } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'schedule_campaign_toggle',
         title: `תזמון ${args.action} ל-${args.entity_id}`,
         description: args.cron_expression ? `cron: ${args.cron_expression} (${args.timezone || 'Asia/Jerusalem'})` : `חד-פעמי: ${args.run_at}`,
@@ -4460,7 +4980,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'send_broadcast_now',
         title: `שליחת דיוור: ${bc.name}`,
         description: 'שליחת דיוור WhatsApp מיידית',
@@ -4488,7 +5008,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'schedule_broadcast',
         title: `תזמון דיוור: ${bc.name}`,
         description: `תזמון ל-${args.scheduled_at}`,
@@ -4516,7 +5036,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,
-        requested_by: userId,
+        requested_by: actorUserId,
         action_type: 'cancel_broadcast',
         title: `ביטול דיוור: ${bc.name}`,
         description: `ביטול דיוור בסטטוס ${bc.status}`,
@@ -4904,6 +5424,15 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     }
     const isManagerRoleCaller = !!callerRole && ['owner','agency_owner','agency_manager','super_admin'].includes(callerRole)
     const isTeamManagerCaller = callerRole === 'team_manager'
+
+    // System/dev-fix escalations (Cursor/Claude/Manus MCP + GitHub agent) —
+    // only allowlisted requesters (currently David). Role alone is not enough.
+    const canEscalateDevFixes = isAuthorizedDevRequester({
+      campaignerId: callerCampaignerId,
+      userId: callerUserId || asUuidOrNull(resolvedUserId),
+      phone: callerPhone,
+    })
+    console.log(`[AGENT] Dev-escalation authorized=${canEscalateDevFixes} (campaigner=${callerCampaignerId || 'none'}, phone=${callerPhone || 'none'})`)
 
     // The server is the source of truth for Command Center continuity. The
     // browser may send a recent in-memory history for a brand-new thread, but
@@ -5529,6 +6058,10 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     }
     } // ─── end V1 PROMPT BUILDING (else branch of shouldUseV2Prompt) ───
 
+    // Hard rule for both V1 and V2: only allowlisted requesters may escalate
+    // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
+    systemPrompt += buildDevEscalationPromptRule(canEscalateDevFixes)
+
     if (isCarmen && relevantLongTermMemory.length > 0) {
       systemPrompt += `\n\n🧠 === זיכרון ארוך רלוונטי שנשלף אוטומטית ===
 זהו זיכרון העבודה שלך מהמערכת, לא "מערכת אחרת". השתמשי בו כשהוא רלוונטי לבקשה, אך העדיפי נתוני כלים חיים כשיש סתירה.
@@ -5637,6 +6170,14 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
 
+    // Unauthorized callers must not see native GitHub-agent delegation either.
+    if (!canEscalateDevFixes) {
+      filteredTools = filteredTools.filter((t) => !isDevEscalationTool(t.name))
+      // Rebuild API list from the filtered native set (MCP added below).
+      toolsForAPI.length = 0
+      toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
+    }
+
     // 4b. Load MCP tools for this tenant + agent (Phase 3)
     let mcpExecutors = new Map<string, (args: any) => Promise<any>>()
     try {
@@ -5659,10 +6200,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           if (escalationAgent === 'claude' && (t.name.startsWith('mcp_Manus__') || t.name.startsWith('mcp_Cursor__'))) continue
           if (escalationAgent === 'manus'  && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Cursor__'))) continue
           if (escalationAgent === 'none'   && isEscalationMcp(t.name)) continue
+          // 4b-ii. Hard auth: only David (allowlisted) may see/call coding-agent MCP tools.
+          if (!canEscalateDevFixes && isDevEscalationTool(t.name)) continue
           toolsForAPI.push({ type: 'function', function: t as any })
+          const exec = mcp.executors.get(t.name)
+          if (exec) mcpExecutors.set(t.name, exec)
         }
-        mcpExecutors = mcp.executors
-        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent})`)
+        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent}, dev_auth=${canEscalateDevFixes}, exposed=${[...mcpExecutors.keys()].length})`)
       }
     } catch (e: any) {
       console.error('[AGENT] MCP load failed:', e?.message)
@@ -5680,6 +6224,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     const disabledSkins = ((agent as any).disabled_skins || []) as string[]
     const _matchedSkills = (await resolveActiveSkills(String(command_text || ''), skillTenantId))
       .filter(s => !disabledSkins.includes(s.id))
+      // Unauthorized callers must not get cursor/claude escalation skins that push request_dev_task.
+      .filter(s => canEscalateDevFixes || !isDevEscalationSkill(s.id))
     const matchedSkills = _matchedSkills.map(s => s.id)
     const activeSkillsBlock = _matchedSkills.length > 0
       ? '\n\n' + _matchedSkills.map(s => s.prompt).join('\n\n')
@@ -5694,7 +6240,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       if (skillToolNames.size > 0) {
         const present = new Set(filteredTools.map(t => t.name))
         const missing = ALL_TOOLS.filter(t =>
-          skillToolNames.has(t.name) && !present.has(t.name) && !disabledTools.includes(t.name))
+          skillToolNames.has(t.name) && !present.has(t.name) && !disabledTools.includes(t.name) &&
+          (canEscalateDevFixes || !isDevEscalationTool(t.name)))
         if (missing.length > 0) {
           filteredTools = [...filteredTools, ...missing]
           toolsForAPI.push(...missing.map(t => ({ type: 'function', function: t })))
@@ -5849,10 +6396,15 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
         let result: any
         try {
-          if (mcpExecutors.has(toolName)) {
+          // Defense in depth: even if a tool slipped into the schema, refuse
+          // coding-agent escalations for non-allowlisted requesters.
+          if (isDevEscalationTool(toolName) && !canEscalateDevFixes) {
+            result = { error: 'dev_escalation_forbidden', message: DEV_ESCALATION_REFUSAL_HE }
+          } else if (mcpExecutors.has(toolName)) {
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
-            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, resolvedUserId, callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify)
+            // Prefer profile UUID resolved from WhatsApp phone; never pass literal "system" into uuid columns.
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify)
           }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {

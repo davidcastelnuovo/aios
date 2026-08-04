@@ -2,6 +2,12 @@
 // All write actions require confirmed=true. Approval gating is handled upstream by run-ai-agent
 // via agent_approval_queue; this function performs the actual API call once approved.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import {
+  applyVariantToAssetFeedSpec,
+  applyVariantToObjectStorySpec,
+  normalizeAdCopyVariants,
+  summarizeSourceAd,
+} from '../_shared/fb-ad-duplicate.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,9 +33,39 @@ async function getFbToken(supabase: any, tenant_id: string): Promise<string | nu
   return integ?.api_key || null;
 }
 
+/** Prefer client-owning tenant token (shared/partner orgs), then caller tenant. */
+async function resolveFbToken(supabase: any, tenant_id: string, client_id?: string | null): Promise<string | null> {
+  if (client_id) {
+    const { data: cl } = await supabase.from('clients').select('tenant_id').eq('id', client_id).maybeSingle();
+    if (cl?.tenant_id) {
+      const t = await getFbToken(supabase, cl.tenant_id);
+      if (t) return t;
+    }
+  }
+  return getFbToken(supabase, tenant_id);
+}
+
 async function getClientAdAccount(supabase: any, tenant_id: string, client_id: string): Promise<string | null> {
-  const { data } = await supabase.from('clients').select('facebook_ad_account_id').eq('id', client_id).eq('tenant_id', tenant_id).maybeSingle();
-  return data?.facebook_ad_account_id || null;
+  // Column is meta_ads_account_id (not facebook_ad_account_id). Also fall back to crm_tables.
+  const { data: cl } = await supabase
+    .from('clients')
+    .select('meta_ads_account_id')
+    .eq('id', client_id)
+    .maybeSingle();
+  if (cl?.meta_ads_account_id) return String(cl.meta_ads_account_id).replace(/^act_/, '');
+
+  const { data: tables } = await supabase
+    .from('crm_tables')
+    .select('integration_settings, last_sync_at')
+    .eq('client_id', client_id)
+    .in('integration_type', ['facebook_insights', 'facebook_ecommerce'])
+    .order('last_sync_at', { ascending: false, nullsFirst: false });
+  for (const t of tables || []) {
+    const s = t?.integration_settings || {};
+    const acc = s.ad_account_id || s.account_id || s.meta_account_id;
+    if (acc) return String(acc).replace(/^act_/, '');
+  }
+  return null;
 }
 
 function err(message: string, status = 400, extra: any = {}) {
@@ -65,7 +101,7 @@ Deno.serve(async (req) => {
     if (!tenant_id || !action) return err('tenant_id and action required');
     if (!confirmed) return err('not_confirmed', 403, { message: 'דורש אישור מפורש (confirmed=true)' });
 
-    const token = await getFbToken(supabase, tenant_id);
+    const token = await resolveFbToken(supabase, tenant_id, body.client_id);
     if (!token) return err('fb_not_connected', 400);
 
     let result: any = {};
@@ -202,8 +238,123 @@ Deno.serve(async (req) => {
         result = { entity_id, status };
         break;
       }
+      case 'duplicate_ad_variants': {
+        // Clone source ad N times under the same ad set, new creatives with copy variants.
+        // Preserves page / media / lead form from source creative. New ads default PAUSED.
+        const {
+          source_ad_id,
+          daily_budget,
+          budget_level = 'campaign',
+          status: adStatus = 'PAUSED',
+        } = body;
+        if (!source_ad_id) return err('source_ad_id required');
+
+        let variants: any[];
+        try {
+          variants = normalizeAdCopyVariants(body);
+        } catch (e: any) {
+          return err(String(e?.message || e), 400);
+        }
+
+        const ad = await fbGet(
+          source_ad_id,
+          'id,name,adset_id,campaign_id,account_id,status,effective_status,creative{id,name,object_story_spec,asset_feed_spec,effective_object_story_id}',
+          token,
+        );
+        if (ad?.error) return err('source_ad_unavailable', 400, { fb_error: ad.error });
+        if (!ad?.adset_id) return err('source_ad_missing_adset', 400, { ad_id: source_ad_id });
+        if (!ad?.account_id) return err('source_ad_missing_account', 400, { ad_id: source_ad_id });
+
+        const creative = ad.creative || {};
+        if (!creative?.id) return err('source_creative_unavailable', 400, { ad_id: source_ad_id });
+        if (!creative.object_story_spec && !creative.asset_feed_spec) {
+          return err('source_creative_unsupported', 400, {
+            ad_id: source_ad_id,
+            creative_id: creative.id,
+            hint: 'Creative has neither object_story_spec nor asset_feed_spec — cannot clone copy safely',
+          });
+        }
+
+        const accountId = String(ad.account_id).replace(/^act_/, '');
+        const sourceSummary = summarizeSourceAd(ad, creative);
+        const created: any[] = [];
+        const errors: any[] = [];
+
+        for (let i = 0; i < variants.length; i++) {
+          const variant = variants[i];
+          const adName = variant.name || `${ad.name || 'Ad'} · v${i + 1}`;
+          try {
+            const creativeParams: Record<string, any> = {
+              name: `${creative.name || ad.name || 'Creative'} · v${i + 1}`,
+            };
+            if (creative.object_story_spec) {
+              creativeParams.object_story_spec = applyVariantToObjectStorySpec(creative.object_story_spec, variant);
+            } else {
+              // Advantage+/dynamic creatives — clone feed assets, swap first body/title only.
+              creativeParams.asset_feed_spec = applyVariantToAssetFeedSpec(creative.asset_feed_spec, variant);
+            }
+
+            const cr = await fbPost(`act_${accountId}/adcreatives`, creativeParams, token);
+            if (!cr.ok) {
+              errors.push({ index: i, stage: 'creative', variant: adName, fb_error: cr.json?.error });
+              continue;
+            }
+            const newCreativeId = cr.json.id;
+            const ar = await fbPost(`act_${accountId}/ads`, {
+              name: adName,
+              adset_id: ad.adset_id,
+              creative: { creative_id: newCreativeId },
+              status: adStatus === 'ACTIVE' ? 'ACTIVE' : 'PAUSED',
+            }, token);
+            if (!ar.ok) {
+              errors.push({ index: i, stage: 'ad', variant: adName, creative_id: newCreativeId, fb_error: ar.json?.error });
+              continue;
+            }
+            created.push({
+              index: i,
+              ad_id: ar.json.id,
+              creative_id: newCreativeId,
+              name: adName,
+              primary_text: variant.primary_text,
+              headline: variant.headline,
+              status: adStatus === 'ACTIVE' ? 'ACTIVE' : 'PAUSED',
+            });
+          } catch (e: any) {
+            errors.push({ index: i, stage: 'exception', variant: adName, error: String(e?.message || e) });
+          }
+        }
+
+        let budget_update: any = null;
+        if (daily_budget != null && Number.isFinite(Number(daily_budget))) {
+          const level = String(budget_level || 'campaign').toLowerCase();
+          const entityId = level === 'adset' ? ad.adset_id : (ad.campaign_id || ad.adset_id);
+          if (entityId) {
+            const br = await fbPost(entityId, {
+              daily_budget: Math.round(Number(daily_budget) * 100),
+            }, token);
+            budget_update = br.ok
+              ? { entity_id: entityId, level, daily_budget: Number(daily_budget), ok: true }
+              : { entity_id: entityId, level, ok: false, fb_error: br.json?.error };
+          }
+        }
+
+        if (!created.length) {
+          return err('duplicate_ad_variants_failed', 400, { source: sourceSummary, errors });
+        }
+
+        result = {
+          source: sourceSummary,
+          created_count: created.length,
+          requested_count: variants.length,
+          created,
+          errors: errors.length ? errors : undefined,
+          budget_update,
+          note: 'New ads reuse source ad set + media/lead form; copy text/headline changed per variant. Default status PAUSED.',
+        };
+        break;
+      }
       default:
-        return err('invalid_action', 400, { valid: ['create_campaign','create_adset','create_ad','create_creative_from_media','replace_lead_form','update_budget','pause','resume'] });
+        return err('invalid_action', 400, { valid: ['create_campaign','create_adset','create_ad','create_creative_from_media','replace_lead_form','update_budget','pause','resume','duplicate_ad_variants'] });
     }
 
     await supabase.from('agent_action_log').insert({

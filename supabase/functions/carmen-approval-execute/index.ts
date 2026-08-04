@@ -2,6 +2,7 @@
 // Routes to carmen-fb-tools / carmen-google-tools / carmen-save-media based on tool_name.
 // Used by run-ai-agent (when Carmen calls execute_pending_approval) and by campaign-scheduler-cron.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { asUuidOrNull } from '../_shared/uuid.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,6 +22,8 @@ const TOOL_TO_FUNCTION: Record<string, { fn: string; action?: string }> = {
   fb_update_budget: { fn: 'carmen-fb-tools', action: 'update_budget' },
   fb_pause: { fn: 'carmen-fb-tools', action: 'pause' },
   fb_resume: { fn: 'carmen-fb-tools', action: 'resume' },
+  fb_duplicate_ad_variants: { fn: 'carmen-fb-tools', action: 'duplicate_ad_variants' },
+  duplicate_facebook_ad_variants: { fn: 'carmen-fb-tools', action: 'duplicate_ad_variants' },
   // Legacy Meta tools (same queue gate; mapped to carmen-fb-tools / fb-campaign-control)
   update_facebook_budget: { fn: 'carmen-fb-tools', action: 'update_budget' },
   gads_pause: { fn: 'carmen-google-tools', action: 'pause' },
@@ -50,7 +53,8 @@ Deno.serve(async (req) => {
     // Accept `_approval_id` too: resume-agent-run (the UI approval path) invokes
     // this function with {...tool_input, _approval_id} when routing via agent_tools.
     const approval_id = body.approval_id || body._approval_id;
-    const approved_by = body.approved_by;
+    // Never write literal "system" into uuid columns (WhatsApp / automation callers).
+    const approved_by = asUuidOrNull(body.approved_by);
     if (!approval_id) return new Response(JSON.stringify({ error: 'approval_id required' }), { status: 400, headers: corsHeaders });
 
     const { data: row, error } = await supabase.from('agent_approval_queue').select('*').eq('id', approval_id).maybeSingle();

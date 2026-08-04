@@ -410,3 +410,166 @@ export function isSeoMonthlyShareSnapshot(raw: unknown): raw is SeoMonthlyShareS
   const o = raw as Record<string, unknown>;
   return o.version === 1 && typeof o.clientName === "string" && typeof o.month === "string";
 }
+
+/**
+ * Keep the in-app published deck (metrics / GSC / keywords) and only refresh the
+ * live monthly work fields — used by public share views so they match the system.
+ */
+export function applyLiveWorkToShareSnapshot(
+  base: SeoMonthlyShareSnapshot,
+  opts: {
+    work: SeoMonthlyWork;
+    status?: SeoMonthlyShareSnapshot["status"];
+    recentLinks?: SeoShareRecentLink[];
+    clientName?: string;
+    domain?: string | null;
+    month?: string;
+    monthLabel?: string;
+  },
+): SeoMonthlyShareSnapshot {
+  return {
+    ...base,
+    version: 1,
+    clientName: opts.clientName?.trim() || base.clientName,
+    domain: opts.domain?.trim() || base.domain,
+    month: opts.month || base.month,
+    monthLabel: opts.monthLabel || base.monthLabel,
+    status: opts.status || base.status,
+    work: sanitizeSeoMonthlyWork(opts.work),
+    recentLinks: opts.recentLinks?.length ? opts.recentLinks : undefined,
+    metrics: Array.isArray(base.metrics) ? base.metrics : [],
+    keywords: Array.isArray(base.keywords) ? base.keywords : [],
+    search: base.search,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function fmtHe(n: number): string {
+  return Math.round(n).toLocaleString("he-IL");
+}
+
+/**
+ * Client-facing performance + forward-looking narrative for the summary slide.
+ * Compact recap from real GSC/keyword movement, then clear next-month plans.
+ * The free-text "סיכום כללי" belongs on the cover (הקדמה), not here.
+ */
+export function buildSeoPerformanceSummary(snapshot: SeoMonthlyShareSnapshot): string {
+  const search = snapshot.search;
+  const sentences: string[] = [];
+
+  const improved = snapshot.keywords.filter((kw) => {
+    if (kw.position == null) return false;
+    if (kw.basePosition != null && Number.isFinite(kw.basePosition)) {
+      return kw.position < kw.basePosition;
+    }
+    if (kw.prevPosition != null && Number.isFinite(kw.prevPosition)) {
+      return kw.position < kw.prevPosition;
+    }
+    return false;
+  }).length;
+
+  const soft = snapshot.keywords.filter((kw) => {
+    if (kw.position == null) return false;
+    if (kw.basePosition != null && Number.isFinite(kw.basePosition)) {
+      return kw.position > kw.basePosition;
+    }
+    if (kw.prevPosition != null && Number.isFinite(kw.prevPosition)) {
+      return kw.position > kw.prevPosition;
+    }
+    return false;
+  }).length;
+
+  const clickDelta =
+    search?.prev != null ? search.totals.clicks - search.prev.clicks : null;
+  const impressionDelta =
+    search?.prev != null ? search.totals.impressions - search.prev.impressions : null;
+  const top20Delta =
+    search?.prev != null ? search.totals.top20 - search.prev.top20 : null;
+
+  const risingSignals =
+    (clickDelta != null && clickDelta > 0 ? 1 : 0) +
+    (impressionDelta != null && impressionDelta > 0 ? 1 : 0) +
+    (top20Delta != null && top20Delta > 0 ? 1 : 0) +
+    (improved > soft ? 1 : 0) +
+    (snapshot.status === "up" ? 1 : 0);
+
+  // ── Short recap (what we see now) ──────────────────────────────────────────
+  if (risingSignals > 0 || snapshot.status === "up" || improved > 0) {
+    sentences.push(
+      `לסיכום ${snapshot.monthLabel}: האתר מגיב לקידום, עם התקדמות במיקומים ובחשיפה.`,
+    );
+  } else if (snapshot.status === "down" || (soft > improved && soft > 0)) {
+    sentences.push(
+      `לסיכום ${snapshot.monthLabel}: יש תנודתיות טבעית בחלק מהביטויים, והבסיס ממשיך להיבנות.`,
+    );
+  } else {
+    sentences.push(
+      `לסיכום ${snapshot.monthLabel}: האתר מגיב לקידום ושומר על נוכחות יציבה בגוגל.`,
+    );
+  }
+
+  if (search) {
+    const bits: string[] = [];
+    if (search.totals.impressions > 0) bits.push(`${fmtHe(search.totals.impressions)} חשיפות`);
+    if (search.totals.clicks > 0) bits.push(`${fmtHe(search.totals.clicks)} קליקים`);
+    if (search.totals.top20 > 0) bits.push(`${fmtHe(search.totals.top20)} ב-Top 20`);
+    if (bits.length) sentences.push(`החודש נמדדו ${bits.join(" · ")}.`);
+
+    const highlights: string[] = [];
+    if (impressionDelta != null && impressionDelta > 0) {
+      highlights.push(`+${fmtHe(impressionDelta)} חשיפות מול חודש קודם`);
+    }
+    if (clickDelta != null && clickDelta > 0) {
+      highlights.push(`+${fmtHe(clickDelta)} קליקים`);
+    }
+    if (top20Delta != null && top20Delta > 0) {
+      highlights.push(`+${fmtHe(top20Delta)} ביטויים ב-Top 20`);
+    }
+    if (improved > 0) {
+      highlights.push(
+        improved === 1 ? "שיפור במיקום בביטוי מרכזי" : `שיפור מיקום ב־${fmtHe(improved)} ביטויים`,
+      );
+    }
+    if (highlights.length) sentences.push(`${highlights.join(", ")}.`);
+    if (soft > 0 && soft >= improved) {
+      sentences.push("חלק מהביטויים נסוגו מעט — מטפלים בהם בהמשך.");
+    }
+  } else if (improved > 0) {
+    sentences.push(
+      improved === 1
+        ? "בביטויים המרכזיים נרשם שיפור במיקום."
+        : `בביטויים המרכזיים נרשם שיפור במיקום ב־${fmtHe(improved)} ביטויים.`,
+    );
+  }
+
+  // ── Forward plans (always the emphasis) ────────────────────────────────────
+  const planBits: string[] = [];
+  if (snapshot.work.onsite.length > 0) {
+    planBits.push("המשך חיזוק עמודים ותיקוני תוכן באתר");
+  }
+  if (snapshot.work.articles.length > 0) {
+    planBits.push("המשך תוכן ומאמרים סביב הביטויים החזקים");
+  }
+  if ((snapshot.recentLinks?.length || snapshot.work.links.length) > 0) {
+    planBits.push("בניית קישורים איכותיים נוספים");
+  }
+  if (soft > 0) {
+    planBits.push("טיפול בביטויים שנחלשו והחזרת מומנטום");
+  }
+  if (search && search.totals.top20 > 0) {
+    planBits.push("דחיפת ביטויים קרובים ל-Top 10 / Top 3");
+  }
+  if (!planBits.length) {
+    planBits.push(
+      "המשך מיקוד בביטויים שמביאים חשיפות וקליקים",
+      "חיזוק עמודים מרכזיים",
+      "הרחבת נוכחות אורגנית",
+    );
+  }
+
+  const uniquePlans = Array.from(new Set(planBits)).slice(0, 3);
+  sentences.push(`תכניות להמשך: ${uniquePlans.join("; ")}.`);
+  sentences.push("הכיוון קדימה חיובי — ממשיכים לבנות מומנטום בחודש הקרוב.");
+
+  return sentences.join(" ");
+}

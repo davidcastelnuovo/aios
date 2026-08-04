@@ -147,6 +147,8 @@ function buildAdOpsCapabilities(): string {
 - fb_replace_lead_form — החלפת טופס לידים במודעה קיימת.
 - fb_update_budget — שינוי תקציב יומי/lifetime.
 - fb_pause / fb_resume — כיבוי/הדלקה של campaign / adset / ad.
+- inspect_facebook_ad — קריאה: adset/page/creative/lead_form של מודעת מקור.
+- fb_duplicate_ad_variants — שכפול מודעה מנצחת ל-N מודעות עם וריאציות קופי (שומר media/lead form). דורש אישור.
 
 🔍 **Google Ads** — gads_pause / gads_resume / gads_update_budget (ברמת קמפיין).
 
