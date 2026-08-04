@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "./useCurrentTenant";
 import { useViewAs } from "@/contexts/ViewAsContext";
@@ -21,7 +21,12 @@ export function useUserRole() {
 
   const effectiveUserId = isViewingAs ? viewAsUserId : session?.user?.id;
 
-  const { data: roles, isLoading, isFetching: rolesFetching } = useQuery({
+  const {
+    data: roles,
+    isPending: rolesPending,
+    isFetching: rolesFetching,
+    isError: rolesError,
+  } = useQuery({
     queryKey: ["user-roles", effectiveUserId, tenantId, isViewingAs],
     queryFn: async () => {
       if (!effectiveUserId) return [];
@@ -38,6 +43,7 @@ export function useUserRole() {
     enabled: !!effectiveUserId && !!tenantId,
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 
   // Any role can be linked to a campaigner record (including owners/managers).
@@ -95,7 +101,10 @@ export function useUserRole() {
     isSalesPerson: hasRole("sales_person"),
     isSuperAdmin: hasRole("super_admin"),
     isSeo: hasRole("seo"),
-    isLoading,
+    isLoading: rolesPending,
+    isFetching: rolesFetching,
+    isError: rolesError,
+    isReady: roles !== undefined,
     userId: effectiveUserId,
     authenticatedUserId: session?.user?.id,
     userEmail: session?.user?.email,

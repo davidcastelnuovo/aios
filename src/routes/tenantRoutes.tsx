@@ -91,6 +91,11 @@ function gate(
   );
 }
 
+/** Unknown subpath under /t/:slug — stay in shell, redirect to home (avoids global 404 flash). */
+function TenantUnknownRoute() {
+  return <Navigate to="home" replace />;
+}
+
 /** Tenant-scoped routes. AppLayout + auth shell persist across child navigations. */
 export function tenantRoutes() {
   return (
@@ -179,6 +184,7 @@ export function tenantRoutes() {
         <Route path="wordpress-settings" element={gate(<WordPressSettings />, "lead_integrations")} />
         <Route path="landing-page-submissions" element={<LandingPageSubmissions />} />
         <Route path="unified-settings" element={gate(<UnifiedSettings />, "lead_integrations")} />
+        <Route path="*" element={<TenantUnknownRoute />} />
       </Route>
     </>
   );

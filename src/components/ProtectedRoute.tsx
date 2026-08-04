@@ -19,8 +19,8 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
   const { userId, isLoading: sessionLoading } = useCurrentUser();
   const authenticated = !sessionLoading && !!userId;
 
-  const { hasPermission, isLoading: permissionsLoading, isFetching: permissionsFetching } = useUserPermissions();
-  const { roles, isLoading: rolesLoading, isFetching: rolesFetching } = useUserRole();
+  const { hasPermission, isLoading: permissionsLoading, isReady: permissionsReady } = useUserPermissions();
+  const { isLoading: rolesLoading, isReady: rolesReady } = useUserRole();
   const { buildPath } = useTenantPath();
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
@@ -64,7 +64,10 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
     return <Navigate to="/auth" replace />;
   }
 
-  if (permissionsLoading || permissionsFetching || rolesLoading || rolesFetching) {
+  // Only block the shell on first bootstrap — not on background refetches (prevents flash).
+  const permissionsResolving = permissionsLoading && !permissionsReady;
+  const rolesResolving = rolesLoading && !rolesReady;
+  if (permissionsResolving || rolesResolving) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>

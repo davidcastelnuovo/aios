@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { shouldShowQueryError } from "@/lib/queryUi";
 import { supabase } from "@/integrations/supabase/client";
 import { Globe, FileText, Calendar, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -506,7 +506,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     }
   }, [clientId, domain, selectedReport, queryClient, gscData]);
 
-  if (isLoading) {
+  if (isLoading || reportsFetching) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" dir="rtl">
         {[1, 2, 3, 4].map(i => (
@@ -519,7 +519,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     );
   }
 
-  if (reportsError && !reportsFetching && !isLoading) {
+  if (shouldShowQueryError(!!reportsError, reportsFetching, false, isLoading)) {
     return (
       <Card className="p-8 text-center" dir="rtl">
         <FileText className="h-12 w-12 mx-auto text-destructive mb-3" />

@@ -11,6 +11,7 @@ import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
 import { format, subDays, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { shouldShowQueryError } from "@/lib/queryUi";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -1545,7 +1546,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     },
   });
 
-  if (tablesLoading) {
+  const resolvingTables = tablesLoading || tablesFetching || tables == null;
+
+  if (resolvingTables) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Skeleton className="h-8 w-48 mb-4" />
@@ -1554,7 +1557,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     );
   }
 
-  if (tablesError && !tablesFetching && !tablesLoading) {
+  if (shouldShowQueryError(!!tablesError, tablesFetching, false, tablesLoading)) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Card className="p-12 text-center">
