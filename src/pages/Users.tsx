@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useViewAs } from "@/contexts/ViewAsContext";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -131,13 +130,10 @@ export default function Users() {
   } | null>(null);
   const [selectedInviteTenantIds, setSelectedInviteTenantIds] = useState<string[]>([]);
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
-  /** organization = tenant_users only; shared = also staff linked via shared agencies (e.g. DMM-MC) */
-  const [userScopeFilter, setUserScopeFilter] = useState<"organization" | "shared">("organization");
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [resetPasswordUserEmail, setResetPasswordUserEmail] = useState<string>("");
   const { tenantId, tenant: currentTenant } = useCurrentTenant();
-  const { crossTenantAgencyIds, hasCrossTenantAccess } = useCrossTenantAgencyIds();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", tenantId, currentUserId],
@@ -317,10 +313,12 @@ export default function Users() {
   }, [isInviteDialogOpen, tenantId]);
 
   const { data: users, isLoading } = useQuery({
-    queryKey: ["users-with-roles", tenantId, userScopeFilter, crossTenantAgencyIds.join(",")],
+    queryKey: ["users-with-roles", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
 
+      // Strict tenant isolation: only users explicitly in tenant_users for this org.
+      // Cross-tenant staff (shared agencies) appear in team/clients/tasks — not here.
       const { data: tenantUsers, error: tenantUsersError } = await supabase
         .from("tenant_users")
         .select("user_id")
@@ -328,37 +326,7 @@ export default function Users() {
 
       if (tenantUsersError) throw tenantUsersError;
 
-      const organizationMemberIds = new Set((tenantUsers || []).map((tu) => tu.user_id));
-      const visibleUserIds = new Set(organizationMemberIds);
-      const sharedOnlyUserIds = new Set<string>();
-
-      // Optional: include cross-tenant staff linked to shared agencies (DMM ↔ MC)
-      if (userScopeFilter === "shared" && crossTenantAgencyIds.length > 0) {
-        const [{ data: crossCampaigners }, { data: crossSales }] = await Promise.all([
-          supabase.from("campaigner_agencies").select("campaigner_id").in("agency_id", crossTenantAgencyIds),
-          supabase.from("sales_person_agencies").select("sales_person_id").in("agency_id", crossTenantAgencyIds),
-        ]);
-        const campaignerIds = (crossCampaigners || []).map((r: any) => r.campaigner_id);
-        const salesIds = (crossSales || []).map((r: any) => r.sales_person_id);
-
-        const orParts: string[] = [];
-        if (campaignerIds.length > 0) orParts.push(`campaigner_id.in.(${campaignerIds.join(",")})`);
-        if (salesIds.length > 0) orParts.push(`sales_person_id.in.(${salesIds.join(",")})`);
-        if (orParts.length > 0) {
-          const { data: crossProfiles } = await supabase
-            .from("profiles")
-            .select("id")
-            .or(orParts.join(","));
-          (crossProfiles || []).forEach((p: any) => {
-            if (!organizationMemberIds.has(p.id)) {
-              sharedOnlyUserIds.add(p.id);
-            }
-            visibleUserIds.add(p.id);
-          });
-        }
-      }
-
-      const tenantUserIdsArr = Array.from(visibleUserIds);
+      const tenantUserIdsArr = (tenantUsers || []).map((tu) => tu.user_id);
       if (tenantUserIdsArr.length === 0) return [];
 
       const { data: profiles, error: profilesError } = await supabase
@@ -380,7 +348,7 @@ export default function Users() {
       const { data: userRoles, error: rolesError } = await supabase
         .from("user_roles")
         .select("user_id, role, tenant_id")
-        .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
+        .eq("tenant_id", tenantId);
 
       if (rolesError) throw rolesError;
 
@@ -396,9 +364,7 @@ export default function Users() {
 
       return profiles.map((profile: any) => {
         const userRoleRecords = (userRoles || []).filter((r) => r.user_id === profile.id);
-        const tenantScoped = userRoleRecords.filter((r) => r.tenant_id === tenantId);
-        const roleSource = tenantScoped.length > 0 ? tenantScoped : userRoleRecords.filter((r) => !r.tenant_id);
-        const roles = [...new Set(roleSource.map((r) => r.role as UserRole))];
+        const roles = [...new Set(userRoleRecords.map((r) => r.role as UserRole))];
         
         // Get agencies for this user
         const userAgencyIds: string[] = [];
@@ -422,18 +388,22 @@ export default function Users() {
           campaigner_name: profile.campaigners?.full_name,
           sales_person_name: profile.sales_people?.full_name,
           agency_ids: [...new Set(userAgencyIds)],
-          is_shared_agency_user: sharedOnlyUserIds.has(profile.id),
         };
       });
     },
   });
 
-  // Filter users by scope, agency, search (dedupe by id)
+  const tenantAgencyIdSet = new Set((agencies || []).map((a: any) => a.id));
+
+  const organizationUsers = (users || []).map((user) => ({
+    ...user,
+    agency_ids: (user.agency_ids || []).filter((id: string) => tenantAgencyIdSet.has(id)),
+  }));
+
   const filteredUsers = (() => {
     const seen = new Set<string>();
     const term = userSearchTerm.trim().toLowerCase();
-    return (users?.filter((user) => {
-      if (userScopeFilter === "organization" && user.is_shared_agency_user) return false;
+    return (organizationUsers.filter((user) => {
       if (agencyFilter !== "all" && !user.agency_ids?.includes(agencyFilter)) return false;
       if (term) {
         const hay = `${user.full_name || ""} ${user.email || ""}`.toLowerCase();
@@ -442,27 +412,11 @@ export default function Users() {
       if (seen.has(user.id)) return false;
       seen.add(user.id);
       return true;
-    }) ?? []);
+    }));
   })();
 
   const userListFilters = (
     <div className="mb-4 flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-center">
-      <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
-        <Label className="text-sm font-medium shrink-0">הצג:</Label>
-        <Select value={userScopeFilter} onValueChange={(v) => setUserScopeFilter(v as "organization" | "shared")}>
-          <SelectTrigger className="w-full sm:w-[220px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="end">
-            <SelectItem value="organization">
-              משתמשי {currentTenant?.name || "הארגון"}
-            </SelectItem>
-            {hasCrossTenantAccess && (
-              <SelectItem value="shared">כולל צוות מסוכנות משותפות</SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-      </div>
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
         <Label className="text-sm font-medium shrink-0">סנן לפי סוכנות:</Label>
         <Select value={agencyFilter} onValueChange={setAgencyFilter}>
@@ -489,8 +443,7 @@ export default function Users() {
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        {filteredUsers.length} משתמשים
-        {userScopeFilter === "organization" ? " בארגון" : " (כולל משותפים)"}
+        {filteredUsers.length} משתמשים ב{currentTenant?.name || "ארגון"}
       </p>
     </div>
   );
@@ -938,8 +891,8 @@ export default function Users() {
             {isSuperAdmin 
               ? "ניהול ארגונים ומשתמשים במערכת SaaS" 
               : isMobile 
-                ? `ארגון: ${currentUserTenant?.tenants?.name || "שלך"}`
-                : `כל המשתמשים שמוזמנים כאן ישתייכו לארגון "${currentUserTenant?.tenants?.name || "שלך"}" ולא יקבלו חשבון נפרד`}
+                ? `רק משתמשים רשומים ב-${currentTenant?.name || "ארגון שלך"}`
+                : `ניהול גישות והרשאות — רק משתמשים ששייכים ל"${currentTenant?.name || "ארגון שלך"}". צוות מסוכנות משותפות מופיע בלקוחות/משימות, לא כאן.`}
           </p>
           
           {/* Super Admin Access Control */}
@@ -1529,14 +1482,7 @@ export default function Users() {
                         </Button>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span>{user.email}</span>
-                        {user.is_shared_agency_user && (
-                          <Badge variant="outline" className="text-xs">משותף</Badge>
-                        )}
-                      </div>
-                    </TableCell>
+                    <TableCell>{user.email}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
                         {user.roles?.map((role: UserRole) => (
@@ -2012,14 +1958,7 @@ export default function Users() {
                             </Button>
                           </div>
                         </TableCell>
-                        <TableCell>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span>{user.email}</span>
-                        {user.is_shared_agency_user && (
-                          <Badge variant="outline" className="text-xs">משותף</Badge>
-                        )}
-                      </div>
-                    </TableCell>
+                        <TableCell>{user.email}</TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {user.roles?.map((role: UserRole) => (
