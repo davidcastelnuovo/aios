@@ -216,12 +216,21 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         return existingRow.share_token as string;
       }
 
+      // Shares must live on the dashboard's home tenant (DMM for DMM-MC),
+      // not the UI tenant — otherwise MC creates orphan shares RLS can't manage.
+      const { data: dashRow } = await supabase
+        .from("crm_dashboards")
+        .select("tenant_id")
+        .eq("id", dashboard.id)
+        .maybeSingle();
+      const shareTenantId = (dashRow as any)?.tenant_id || tenantId;
+
       const newToken = generateReadableToken(dashboard.name);
       const { data, error } = await supabase
         .from("dashboard_shares")
         .insert({
           dashboard_id: dashboard.id,
-          tenant_id: tenantId,
+          tenant_id: shareTenantId,
           created_by: user.id,
           allowed_emails: [],
           share_token: newToken,

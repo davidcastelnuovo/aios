@@ -291,21 +291,22 @@ export default function DashboardView() {
     enabled: tables.length > 0 && isCustomReady,
   });
 
-  // Check if client has SEO (Ahrefs) reports
+  // Check if client has SEO (Ahrefs) reports — do NOT filter by UI tenant.
+  // Shared-agency clients (DMM-MC) store ahrefs_reports on the home tenant;
+  // RLS + client_id is enough, and a UI-tenant filter hid the SEO tab from MC.
   const { data: hasSeoReports = false } = useQuery({
     queryKey: ['has-seo-reports', dashboard?.client_id],
     queryFn: async () => {
-      if (!dashboard?.client_id || !currentTenantId) return false;
+      if (!dashboard?.client_id) return false;
       const { count, error } = await supabase
         .from('ahrefs_reports')
         .select('id', { count: 'exact', head: true })
         .eq('client_id', dashboard.client_id)
-        .eq('tenant_id', currentTenantId)
         .limit(1);
       if (error) return false;
       return (count || 0) > 0;
     },
-    enabled: !!dashboard?.client_id && !!currentTenantId,
+    enabled: !!dashboard?.client_id,
   });
 
   // SEO clients default to "last 30 days" (monthly SEO reports)
@@ -319,21 +320,20 @@ export default function DashboardView() {
 
 
   const { data: hasWooCommerce = false } = useQuery({
-    queryKey: ['has-woocommerce', dashboard?.client_id, currentTenantId],
+    queryKey: ['has-woocommerce', dashboard?.client_id],
     queryFn: async () => {
-      if (!dashboard?.client_id || !currentTenantId) return false;
+      if (!dashboard?.client_id) return false;
       const { count, error } = await (supabase
         .from('social_media_wordpress_sites' as any)
         .select('id', { count: 'exact', head: true })
         .eq('client_id', dashboard.client_id)
-        .eq('tenant_id', currentTenantId)
         .eq('woocommerce_enabled', true)
         .eq('is_active', true)
         .limit(1));
       if (error) return false;
       return (count || 0) > 0;
     },
-    enabled: !!dashboard?.client_id && !!currentTenantId,
+    enabled: !!dashboard?.client_id,
   });
 
   // WooCommerce summary range — UTC boundaries to match Woo admin & WooCommerceDashboard.
@@ -405,14 +405,14 @@ export default function DashboardView() {
   }, [dateFilter, customDateRange.from, customDateRange.to]);
 
   const { data: wooSummary = { revenue: 0, orders: 0 } } = useQuery({
-    queryKey: ['woo-summary-for-totals', dashboard?.client_id, currentTenantId, dateFilter, customFromStr, customToStr],
+    queryKey: ['woo-summary-for-totals', dashboard?.client_id, dateFilter, customFromStr, customToStr],
     queryFn: async () => {
-      if (!dashboard?.client_id || !currentTenantId) return { revenue: 0, orders: 0 };
+      if (!dashboard?.client_id) return { revenue: 0, orders: 0 };
+      // No UI-tenant filter — shared-agency WP sites live on the home tenant.
       const { data: sites } = await (supabase
         .from('social_media_wordpress_sites' as any)
         .select('id')
         .eq('client_id', dashboard.client_id)
-        .eq('tenant_id', currentTenantId)
         .eq('woocommerce_enabled', true)
         .eq('is_active', true));
       const siteIds = (sites as any[] || []).map((s: any) => s.id);
@@ -429,7 +429,7 @@ export default function DashboardView() {
       const revenue = valid.reduce((s: number, o: any) => s + Number(o.total || 0), 0);
       return { revenue, orders: valid.length };
     },
-    enabled: !!dashboard?.client_id && !!currentTenantId && hasWooCommerce,
+    enabled: !!dashboard?.client_id && hasWooCommerce,
   });
 
   // Available platforms for tab rendering
@@ -998,12 +998,11 @@ export default function DashboardView() {
 
       // Fetch WooCommerce sites for this client and sync each
       const wooTasks: { label: string; promise: Promise<any> }[] = [];
-      if (dashboard?.client_id && currentTenantId) {
+      if (dashboard?.client_id) {
         const { data: sites } = await supabase
           .from('social_media_wordpress_sites' as any)
           .select('id, site_name')
           .eq('client_id', dashboard.client_id)
-          .eq('tenant_id', currentTenantId)
           .eq('woocommerce_enabled', true)
           .eq('is_active', true);
         ((sites as any[]) || []).forEach((s: any) => {

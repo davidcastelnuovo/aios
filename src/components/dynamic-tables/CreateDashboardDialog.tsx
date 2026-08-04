@@ -41,6 +41,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { resolveDashboardHomeTenant } from "@/lib/crmDashboards";
 
 interface CreateDashboardDialogProps {
   open: boolean;
@@ -150,10 +151,21 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
         throw new Error('Missing client selection');
       }
 
+      // Shared agencies (DMM-MC) must store the dashboard on the agency home
+      // tenant — same rule as crm-tables — otherwise MC creates orphans that
+      // DMM never sees and the list depends on cross-tenant unions forever.
+      const homeTenantId = dashboardType === 'organization'
+        ? tenantId
+        : await resolveDashboardHomeTenant({
+            uiTenantId: tenantId,
+            agencyId,
+            clientId: dashboardType === 'client' ? clientId : null,
+          });
+
       const { data, error } = await supabase
         .from('crm_dashboards')
         .insert({
-          tenant_id: tenantId,
+          tenant_id: homeTenantId,
           name: name.trim(),
           agency_id: dashboardType === 'organization' ? null : agencyId,
           client_id: dashboardType === 'client' ? clientId : null,
