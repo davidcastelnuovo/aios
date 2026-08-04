@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — FB toggle approval UUID "system" fix
+- **Skin slug:** n/a (engine bug — `facebook-campaign-analysis` flow already covers the procedure)
+- **What changed:** WhatsApp sessions pass `user_id="system"`. `toggle_facebook_campaign` / `fb_pause` / `fb_resume` and other mutating tools were inserting that literal into `agent_approval_queue.requested_by` (uuid) → `invalid input syntax for type uuid: "system"`. Now uses `asUuidOrNull` (null for system) and prefers the profile UUID resolved from David's WhatsApp phone. Same sanitize on `approved_by` in `carmen-approval-execute`.
+- **How Carmen retries:** After listing ads (`list_facebook_ads`), call `toggle_facebook_campaign` / `fb_resume` for selected low-CPL ad ids — pending approval rows should create successfully; then `execute_pending_approval` after David says כן.
+- **Origin:** Carmen → Cursor FIX-ON-FAIL — Kernelios selective ad enable approvals failed after analyze worked (PR #323).
+
 ### 2026-08-04 — Kernelios lookup + FB single-campaign analyze (ad-level)
 - **Skin slug:** `facebook-campaign-analysis` (updated) + `client_alias_broad_search` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** (1) Find Kernelios/Cornelius/קרנליוס/קרניליוס across CRM names, ended duplicates, and Facebook ad account names without repeated prompting. (2) Analyze a specific Facebook campaign with ad-level spend/leads/CPL (`analyze_facebook_campaign` / `list_facebook_ads`) without the old "Requested function was not found" failure. (3) Prepare approval to enable only low-CPL ads (`toggle_facebook_campaign` with `level=ad`, or `fb_resume` with ad `entity_id`).
