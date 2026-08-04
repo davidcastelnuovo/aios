@@ -342,7 +342,7 @@ export default function Users() {
 
       const { data: userRoles, error: rolesError } = await supabase
         .from("user_roles")
-        .select("user_id, role")
+        .select("user_id, role, tenant_id")
         .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
 
       if (rolesError) throw rolesError;
@@ -359,7 +359,9 @@ export default function Users() {
 
       return profiles.map((profile: any) => {
         const userRoleRecords = (userRoles || []).filter((r) => r.user_id === profile.id);
-        const roles = userRoleRecords.map(r => r.role as UserRole);
+        const tenantScoped = userRoleRecords.filter((r) => r.tenant_id === tenantId);
+        const roleSource = tenantScoped.length > 0 ? tenantScoped : userRoleRecords.filter((r) => !r.tenant_id);
+        const roles = [...new Set(roleSource.map((r) => r.role as UserRole))];
         
         // Get agencies for this user
         const userAgencyIds: string[] = [];
@@ -388,11 +390,16 @@ export default function Users() {
     },
   });
 
-  // Filter users by selected agency
-  const filteredUsers = users?.filter(user => {
-    if (agencyFilter === "all") return true;
-    return user.agency_ids?.includes(agencyFilter);
-  });
+  // Filter users by selected agency (dedupe by id)
+  const filteredUsers = (() => {
+    const seen = new Set<string>();
+    return (users?.filter(user => {
+      if (agencyFilter !== "all" && !user.agency_ids?.includes(agencyFilter)) return false;
+      if (seen.has(user.id)) return false;
+      seen.add(user.id);
+      return true;
+    }) ?? []);
+  })();
 
   const addRoleMutation = useMutation({
     mutationFn: async ({
@@ -622,16 +629,18 @@ export default function Users() {
       }
 
       // Get tenant_id for non-super-admin users
-      let tenantId = undefined;
+      let inviteTenantId: string | undefined;
       if (isSuperAdmin) {
-        // Super admin must select a tenant
         if (!selectedTenantId) {
           throw new Error("יש לבחור ארגון למשתמש");
         }
-        tenantId = selectedTenantId;
-      } else if (currentUserTenant?.tenant_id) {
-        // Regular owner uses their own tenant
-        tenantId = currentUserTenant.tenant_id;
+        inviteTenantId = selectedTenantId;
+      } else {
+        inviteTenantId = currentUserTenant?.tenant_id || tenantId;
+      }
+
+      if (!inviteTenantId) {
+        throw new Error("לא נמצא ארגון פעיל");
       }
 
       const { data, error } = await supabase.functions.invoke("invite-user", {
@@ -643,7 +652,7 @@ export default function Users() {
           modulePermissions,
           campaignerId,
           salesPersonId,
-          tenantId,
+          tenantId: inviteTenantId,
           baseUrl: "https://aios.co.il",
         },
         headers: {
@@ -654,7 +663,7 @@ export default function Users() {
       if (error) throw error;
       if (!data.success) {
         // Check if error is about existing email
-        if (data.error === "EMAIL_EXISTS") {
+        if (data.error === "EMAIL_EXISTS" || data.error === "EMAIL_EXISTS_IN_TENANT") {
           throw new Error("EMAIL_EXISTS");
         }
         throw new Error(data.error || data.message || "שגיאה לא ידועה");
@@ -688,7 +697,7 @@ export default function Users() {
           action: {
             label: "מחק משתמש קיים",
             onClick: () => {
-              if (window.confirm(`האם אתה בטוח שברצונך למחוק את המשתמש ${inviteEmail}? זה ימחק אותו לגמרי מהמערכת.`)) {
+              if (window.confirm(`האם להסיר את ${inviteEmail} מהארגון?`)) {
                 deleteUserMutation.mutate({ email: inviteEmail });
               }
             },
@@ -705,8 +714,12 @@ export default function Users() {
       mutationFn: async ({ userId, email }: { userId?: string; email?: string }) => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("No active session");
+
+        const removeTenantId = tenantId || currentUserTenant?.tenant_id;
+        if (!removeTenantId) throw new Error("לא נמצא ארגון פעיל");
+
         const { data, error } = await supabase.functions.invoke("delete-user", {
-          body: { userId, email },
+          body: { userId, email, tenantId: removeTenantId, removeFromTenantOnly: true },
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
@@ -716,10 +729,9 @@ export default function Users() {
         return data;
       },
       onSuccess: async () => {
-        // Force refetch both queries
         await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
         await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
-        toast.success("המשתמש נמחק בהצלחה");
+        toast.success("המשתמש הוסר מהארגון בהצלחה");
       },
       onError: (error: Error) => {
         toast.error("שגיאה במחיקת משתמש: " + error.message);
@@ -738,6 +750,7 @@ export default function Users() {
         body: { 
           email,
           resend: true,
+          tenantId: tenantId || currentUserTenant?.tenant_id,
           baseUrl: "https://aios.co.il",
         },
         headers: {
@@ -867,7 +880,7 @@ export default function Users() {
             <DialogHeader>
               <DialogTitle>הזמן משתמש חדש לארגון שלך</DialogTitle>
               <DialogDescription>
-                המשתמש יקבל מייל עם קישור ליצירת חשבון והצטרפות לארגון שלך (MarketingCaptain).
+                המשתמש יקבל מייל מ-AIOS עם קישור ליצירת חשבון והצטרפות לארגון. תפקיד, הרשאות ואיש צוות ייווצרו אוטומטית.
               </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[calc(90vh-180px)] pl-4">
@@ -916,33 +929,15 @@ export default function Users() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="campaigner">איש צוות (אופציונלי)</Label>
-                  <Select
-                    value={selectedCampaignerId || "none"}
-                    onValueChange={(value) => setSelectedCampaignerId(value === "none" ? "" : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחר קמפיינר" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ללא שיוך</SelectItem>
-                      {campaigners?.map((campaigner) => (
-                        <SelectItem key={campaigner.id} value={campaigner.id}>
-                          {campaigner.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
                   <Label htmlFor="invite-role">תפקיד</Label>
                   <Select
                     value={inviteRole}
                     onValueChange={(value) => {
                       const newRole = value as UserRole;
                       setInviteRole(newRole);
-                      // Reset agencies when role changes
                       setSelectedAgencies([]);
+                      setSelectedCampaignerId("");
+                      setSelectedSalesPersonId("");
                       
                       // *** FIX: Set default modules based on role ***
                       if (newRole === 'campaigner') {
@@ -979,7 +974,40 @@ export default function Users() {
                   </Select>
                 </div>
 
-                {/* Sales Person Selection */}
+                {inviteRole !== "campaigner" && inviteRole !== "sales_person" && (
+                  <div>
+                    <Label htmlFor="campaigner">איש צוות (אופציונלי)</Label>
+                    <Select
+                      value={selectedCampaignerId || "none"}
+                      onValueChange={(value) => setSelectedCampaignerId(value === "none" ? "" : value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר קמפיינר" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">ללא שיוך</SelectItem>
+                        {campaigners?.map((campaigner) => (
+                          <SelectItem key={campaigner.id} value={campaigner.id}>
+                            {campaigner.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {(inviteRole === "campaigner" || inviteRole === "sales_person") && (
+                  <div className="md:col-span-2 p-3 border rounded-md bg-muted/40">
+                    <p className="text-sm text-muted-foreground">
+                      {inviteRole === "campaigner"
+                        ? "רשומת קמפיינר (איש צוות) תיווצר אוטומטית מהשם והאימייל — לא צריך ליצור בנפרד."
+                        : "רשומת איש מכירות תיווצר אוטומטית מהשם והאימייל."}
+                    </p>
+                  </div>
+                )}
+
+                {/* Sales Person Selection — only when role is not sales_person */}
+                {inviteRole !== "sales_person" && (
                 <div>
                   <Label htmlFor="sales-person">איש מכירות משויך (אופציונלי)</Label>
                   <Select
@@ -999,6 +1027,7 @@ export default function Users() {
                     </SelectContent>
                   </Select>
                 </div>
+                )}
 
                 <div className="md:col-span-2">
                   <Label>סוכנויות</Label>
@@ -1317,13 +1346,13 @@ export default function Users() {
                             variant="destructive"
                             size="sm"
                             onClick={() => {
-                              if (confirm(`האם למחוק את ${user.email}? פעולה זו תמחק את המשתמש לחלוטין מהמערכת.`)) {
+                              if (confirm(`האם להסיר את ${user.email} מהארגון?`)) {
                                 deleteUserMutation.mutate({ userId: user.id });
                               }
                             }}
                             disabled={deleteUserMutation.isPending}
                             className="flex-1"
-                            title="מחק משתמש"
+                            title="הסר מהארגון"
                           >
                             <Trash2 className="h-3 w-3 ml-1" />
                             מחק
@@ -1577,12 +1606,12 @@ export default function Users() {
                           variant="destructive"
                           size="icon"
                           onClick={() => {
-                            if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}? פעולה זו תמחק את המשתמש לחלוטין מהמערכת.`)) {
+                            if (confirm(`האם להסיר את ${user.email} מהארגון?`)) {
                               deleteUserMutation.mutate({ userId: user.id });
                             }
                           }}
                           disabled={deleteUserMutation.isPending}
-                          title="מחק משתמש לחלוטין"
+                          title="הסר מהארגון"
                           className="flex-shrink-0"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1809,7 +1838,7 @@ export default function Users() {
                             variant="destructive"
                             size="sm"
                             onClick={() => {
-                              if (confirm(`האם למחוק את ${user.email}?`)) {
+                              if (confirm(`האם להסיר את ${user.email} מהארגון?`)) {
                                 deleteUserMutation.mutate({ userId: user.id });
                               }
                             }}
@@ -2084,7 +2113,7 @@ export default function Users() {
                                 variant="destructive"
                                 size="sm"
                                 onClick={() => {
-                                  if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}?`)) {
+                                  if (confirm(`האם להסיר את ${user.email} מהארגון?`)) {
                                     deleteUserMutation.mutate({ userId: user.id });
                                   }
                                 }}
