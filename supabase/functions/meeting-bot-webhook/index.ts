@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
 
   const rawBody = await req.text();
 
-  const verified = verifyRecallWebhook(rawBody, req.headers);
+  const verified = await verifyRecallWebhook(rawBody, req.headers);
   if (!verified) {
     console.error("[meeting-bot-webhook] invalid signature");
     return json({ error: "Invalid signature" }, 403);
