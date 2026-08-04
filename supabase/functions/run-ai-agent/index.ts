@@ -33,6 +33,184 @@ import {
 } from '../_shared/wa-approval-flow.ts'
 import { buildVoiceCapabilityPromptRule } from '../_shared/wa-voice-resolve.ts'
 import { extractMeetingUrl } from '../_shared/meeting-url.ts'
+import {
+  formatStaffContact,
+  normalizeStaffPhone,
+  scoreNameMatch,
+  selectStaffMatch,
+} from '../_shared/staff-whatsapp.ts'
+
+function scoreNameMatchSafe(fullName: string, query: string): number {
+  return scoreNameMatch(fullName, query)
+}
+
+/** Load campaigners / sales_people / tenant profiles as a unified staff roster. */
+async function loadStaffWhatsappRoster(
+  supabase: any,
+  accessibleTenantIds: string[],
+  tenantId: string,
+  entityType: string = 'auto',
+): Promise<Array<{ id: string; full_name: string; phone: string | null; entity_type: string; role?: any; email?: string | null }>> {
+  const want = entityType || 'auto'
+  const out: Array<{ id: string; full_name: string; phone: string | null; entity_type: string; role?: any; email?: string | null }> = []
+
+  if (want === 'auto' || want === 'campaigner') {
+    const { data } = await supabase
+      .from('campaigners')
+      .select('id, full_name, phone, email, role')
+      .in('tenant_id', accessibleTenantIds)
+      .order('full_name')
+      .limit(200)
+    for (const r of data || []) {
+      out.push({
+        id: r.id,
+        full_name: r.full_name,
+        phone: r.phone,
+        email: r.email,
+        role: r.role,
+        entity_type: 'campaigner',
+      })
+    }
+  }
+
+  if (want === 'auto' || want === 'sales_person') {
+    const { data } = await supabase
+      .from('sales_people')
+      .select('id, full_name, phone, email')
+      .in('tenant_id', accessibleTenantIds)
+      .order('full_name')
+      .limit(200)
+    for (const r of data || []) {
+      out.push({
+        id: r.id,
+        full_name: r.full_name,
+        phone: r.phone,
+        email: r.email,
+        entity_type: 'sales_person',
+      })
+    }
+  }
+
+  if (want === 'auto' || want === 'team_member') {
+    // Profiles linked to this tenant (team logins). Prefer profile.phone; else linked campaigner/sales phone.
+    const { data: tus } = await supabase
+      .from('tenant_users')
+      .select('user_id')
+      .eq('tenant_id', tenantId)
+      .limit(200)
+    const userIds = (tus || []).map((t: any) => t.user_id).filter(Boolean)
+    if (userIds.length) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, campaigner_id, sales_person_id, email')
+        .in('id', userIds)
+        .limit(200)
+      for (const p of profiles || []) {
+        let phone = p.phone
+        if (!normalizeStaffPhone(phone) && p.campaigner_id) {
+          const hit = out.find((x) => x.entity_type === 'campaigner' && x.id === p.campaigner_id)
+          phone = hit?.phone || phone
+        }
+        if (!normalizeStaffPhone(phone) && p.sales_person_id) {
+          const hit = out.find((x) => x.entity_type === 'sales_person' && x.id === p.sales_person_id)
+          phone = hit?.phone || phone
+        }
+        out.push({
+          id: p.id,
+          full_name: p.full_name || 'Team member',
+          phone,
+          email: p.email,
+          entity_type: 'team_member',
+        })
+      }
+    }
+  }
+
+  return out
+}
+
+async function sendStaffWhatsappMessage(args: {
+  supabase: any
+  tenantId: string
+  phone: string
+  message: string
+}): Promise<{ error?: string; integration_id?: string; provider?: string; [k: string]: any }> {
+  const { supabase, tenantId, phone, message } = args
+  const normalized = normalizeStaffPhone(phone)
+  if (!normalized) return { error: 'מספר טלפון לא תקין' }
+
+  const { data: integrations } = await supabase
+    .from('tenant_integrations')
+    .select('id, integration_type, settings')
+    .eq('tenant_id', tenantId)
+    .in('integration_type', ['manus_wa', 'manuswa', 'greenapi', 'green_api'])
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  if (!integrations?.length) {
+    return { error: 'לא נמצאה אינטגרציית WhatsApp פעילה בטננט. חבר WhatsApp תחת הגדרות אינטגרציות.' }
+  }
+
+  // Prefer Manus WA (Carmen's direct line), then Green API.
+  const ordered = [...integrations].sort((a: any, b: any) => {
+    const rank = (t: string) => (/manus/i.test(t) ? 0 : 1)
+    return rank(a.integration_type) - rank(b.integration_type)
+  })
+
+  const errors: string[] = []
+  for (const integration of ordered) {
+    const type = String(integration.integration_type || '')
+    try {
+      if (/manus/i.test(type)) {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+          body: JSON.stringify({
+            action: 'send_message',
+            integrationId: integration.id,
+            phone: normalized,
+            message,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok) {
+          return { integration_id: integration.id, provider: type, ...data }
+        }
+        // Fallback to send-manus-wa-message
+        const res2 = await fetch(`${SUPABASE_URL}/functions/v1/send-manus-wa-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+          body: JSON.stringify({
+            integrationId: integration.id,
+            tenantId,
+            phoneNumber: normalized,
+            message,
+          }),
+        })
+        const data2 = await res2.json().catch(() => ({}))
+        if (res2.ok) {
+          return { integration_id: integration.id, provider: 'send-manus-wa-message', ...data2 }
+        }
+        errors.push(`${type}: ${data.error || data2.error || res.status}`)
+      } else {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+          body: JSON.stringify({ phone: normalized, message, tenantId, integrationId: integration.id }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok) {
+          return { integration_id: integration.id, provider: type, ...data }
+        }
+        errors.push(`${type}: ${data.error || res.status}`)
+      }
+    } catch (e: any) {
+      errors.push(`${type}: ${e?.message || e}`)
+    }
+  }
+  return { error: `שליחה נכשלה: ${errors.join(' | ') || 'unknown'}` }
+}
 
 
 const corsHeaders = {
@@ -152,6 +330,9 @@ const PRIORITY_TOOLS = new Set([
   'update_facebook_budget', 'fb_pause', 'fb_resume', 'fb_update_budget',
   'execute_pending_approval', 'reject_pending_approval', 'list_pending_approvals',
   'join_meeting_for_client', 'get_meeting_bot_status',
+  // Staff WhatsApp — must survive the 128-tool cap (was late in ALL_TOOLS).
+  'send_whatsapp_to_staff', 'lookup_staff_whatsapp', 'send_message_to_campaigner',
+  'list_campaigners', 'list_sales_people',
 ])
 
 function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
@@ -208,6 +389,9 @@ const CORE_TOOLS = new Set([
   'list_clients', 'get_client_info', 'list_leads', 'search_entities',
   'create_task', 'list_tasks', 'list_my_agent_tasks', 'create_agent_task',
   'send_message', 'get_dashboard_stats', 'recall_recent_action', 'record_action_episode',
+  // Staff WhatsApp mapping (campaigner / salesperson / team) — not lead/client-only.
+  'send_whatsapp_to_staff', 'lookup_staff_whatsapp', 'send_message_to_campaigner',
+  'list_campaigners', 'list_sales_people',
   // Meta ad inspect/duplicate — must remain reachable even when the embedding
   // router is unavailable (migration not applied) or similarity misses.
   'inspect_facebook_ad', 'fb_duplicate_ad_variants', 'duplicate_facebook_ad_variants',
@@ -279,6 +463,15 @@ async function selectRelevantTools(supabase: any, userText: string, toolDefs: an
     if (extractMeetingUrl(userText)) {
       picked.add('join_meeting_for_client')
       picked.add('get_meeting_bot_status')
+    }
+    // Staff / team WhatsApp send (Hebrew + English).
+    if (/(שלח.*(וואטסאפ|whatsapp|הודע).*(קמפיינר|איש מכירות|צוות|עובד|אנה)|whatsapp.*(staff|campaigner|sales|team)|שלח.*(לאנה|לקמפיינר|לאיש מכירות)|lookup_staff|send_whatsapp_to_staff)/i.test(userText)) {
+      picked.add('send_whatsapp_to_staff')
+      picked.add('lookup_staff_whatsapp')
+      picked.add('send_message_to_campaigner')
+      picked.add('list_campaigners')
+      picked.add('list_sales_people')
+      picked.add('search_entities')
     }
     const result = toolDefs.filter((t) => picked.has(t.name))
     if (result.length < 10) return toolDefs // guard against an empty/bad match wiping the toolset
@@ -383,8 +576,11 @@ const ALL_TOOLS = [
   { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } },
   // MESSAGES
   { name: 'send_message', description: 'שליחת הודעת WhatsApp ללקוח או ליד', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, message_text: { type: 'string' } }, required: ['contact_type', 'contact_id', 'message_text'] } },
+  { name: 'lookup_staff_whatsapp', description: 'מיפוי אנשי צוות לשליחת WhatsApp: קמפיינרים, אנשי מכירות ופרופילי צוות עם מספרי טלפון מה-DB. השתמשי לפני send_whatsapp_to_staff כשצריך לבחור לפי שם.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['campaigner', 'sales_person', 'team_member', 'auto'], description: 'סוג ישות (ברירת מחדל auto = הכל)' }, search: { type: 'string', description: 'חיפוש חלקי בשם' }, only_with_phone: { type: 'boolean', description: 'רק מי שיש להם טלפון (ברירת מחדל true)' }, limit: { type: 'integer' } } } },
+  { name: 'send_whatsapp_to_staff', description: 'שליחת WhatsApp ישירות לחבר צוות לפי מיפוי המערכת (campaigner / sales_person / team_member). פותרת טלפון מה-DB בלבד — לא ממספר ידני. עדיף על send_message (שמיועד לליד/לקוח) ועל send_whatsapp_via_gateway כשלא יודעים את המספר.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['campaigner', 'sales_person', 'team_member', 'auto'] }, staff_id: { type: 'string', description: 'UUID של הקמפיינר / איש מכירות / פרופיל' }, name: { type: 'string', description: 'שם לחיפוש אם אין staff_id' }, message: { type: 'string', description: 'תוכן ההודעה' }, campaigner_id: { type: 'string', description: 'alias ל-staff_id כשentity_type=campaigner' }, message_text: { type: 'string', description: 'alias ל-message' } }, required: ['message'] } },
+  { name: 'send_message_to_campaigner', description: 'שליחת WhatsApp לקמפיינר לפי campaigner_id (עטיפה ל-send_whatsapp_to_staff).', parameters: { type: 'object', properties: { campaigner_id: { type: 'string', description: 'מזהה הקמפיינר (UUID)' }, message_text: { type: 'string', description: 'תוכן ההודעה' }, name: { type: 'string', description: 'אופציונלי — שם אם אין id' } }, required: ['message_text'] } },
   // SEARCH
-  { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם. ללקוחות: מחפש גם aliases/אנגלית/עברית, שמות חשבונות מודעות Meta, טבלאות דוח, ולקוחות ended/paused — לא רק active. עבור קמפיינר WhatsApp התוצאות מוגבלות אלא אם all_scopes=true.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' }, include_inactive: { type: 'boolean', description: 'ללקוחות: כלול ended/paused (ברירת מחדל true בחיפוש לפי שם)' } }, required: ['entity_type', 'search_term'] } },
+  { name: 'search_entities', description: 'חיפוש סוכנויות, לקוחות, קמפיינרים, אנשי מכירות או לידים לפי שם. ללקוחות: מחפש גם aliases/אנגלית/עברית, שמות חשבונות מודעות Meta, טבלאות דוח, ולקוחות ended/paused — לא רק active. עבור קמפיינר WhatsApp התוצאות מוגבלות אלא אם all_scopes=true.', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'sales_person', 'lead'] }, search_term: { type: 'string' }, agency_id: { type: 'string', description: 'הגבלה לסוכנות מסוימת (רלוונטי ל-client/lead)' }, all_scopes: { type: 'boolean', description: 'דרוס את סקופ הקמפיינר והחזר תוצאות מכל הארגון.' }, include_inactive: { type: 'boolean', description: 'ללקוחות: כלול ended/paused (ברירת מחדל true בחיפוש לפי שם)' } }, required: ['entity_type', 'search_term'] } },
   { name: 'query_system_graph', description: 'חיפוש לקריאה בלבד בגרף הארכיטקטורה של AIOS: קוד, Edge Functions, טבלאות SQL, מודולים וקשרים ביניהם. השתמשי רק לשאלות טכניות על מבנה המערכת, מיקום מימוש, תלות בין רכיבים או השפעת שינוי. הכלי זמין למנהלים בלבד ואינו מחזיר נתוני לקוחות.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מונחים טכניים לחיפוש, רצוי באנגלית ושמות רכיבים מדויקים' }, depth: { type: 'integer', minimum: 0, maximum: 3, description: 'עומק ניווט בקשרים, ברירת מחדל 2' }, limit: { type: 'integer', minimum: 1, maximum: 80, description: 'מספר צמתים מרבי, ברירת מחדל 40' } }, required: ['query'] } },
   // MANUS AI - Complex task delegation
   { name: 'delegate_to_manus', description: 'שליחת משימה מורכבת ל-Manus AI לביצוע ברקע (מחקר שוק, ניתוח קמפיינים, יצירת תוכן, ניתוח נתונים). המשימה רצה ברקע ועשויה לקחת דקות עד שעות.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של המשימה לביצוע' }, context_data: { type: 'string', description: 'נתוני הקשר רלוונטיים (למשל נתוני קמפיינים)' } }, required: ['prompt'] } },
@@ -629,7 +825,7 @@ const ALL_TOOLS = [
   // ===========================
   // CAMPAIGNER MESSAGING
   // ===========================
-  { name: 'send_message_to_campaigner', description: 'שליחת הודעת WhatsApp לחבר צוות/קמפיינר לפי campaigner_id. עדיף על send_whatsapp_via_gateway כשרוצים לשלוח לחבר צוות ולא יודעים את מספר הטלפון.', parameters: { type: 'object', properties: { campaigner_id: { type: 'string', description: 'מזהה הקמפיינר (UUID)' }, message_text: { type: 'string', description: 'תוכן ההודעה' } }, required: ['campaigner_id', 'message_text'] } },
+  // send_message_to_campaigner / send_whatsapp_to_staff / lookup_staff_whatsapp — defined near send_message (CORE/PRIORITY) so the OpenAI 128-tool cap cannot drop them.
 ]
 
 
@@ -1812,8 +2008,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return { sent_to: contactName, phone }
     }
     case 'search_entities': {
-      const tableMap: Record<string, string> = { agency: 'agencies', client: 'clients', campaigner: 'campaigners', lead: 'leads' }
-      const nameMap: Record<string, string> = { agency: 'name', client: 'name', campaigner: 'full_name', lead: 'company_name' }
+      const tableMap: Record<string, string> = { agency: 'agencies', client: 'clients', campaigner: 'campaigners', sales_person: 'sales_people', lead: 'leads' }
+      const nameMap: Record<string, string> = { agency: 'name', client: 'name', campaigner: 'full_name', sales_person: 'full_name', lead: 'company_name' }
       const table = tableMap[args.entity_type]
       const nameField = nameMap[args.entity_type]
 
@@ -1846,7 +2042,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       const selectCols = args.entity_type === 'lead'
         ? `id, ${nameField}, agency_id`
-        : `id, ${nameField}`
+        : (args.entity_type === 'campaigner' || args.entity_type === 'sales_person')
+          ? `id, ${nameField}, phone, email`
+          : `id, ${nameField}`
       let q = supabase.from(table).select(selectCols).in('tenant_id', accessibleTenantIds).ilike(nameField, `%${args.search_term}%`).limit(20)
       if (args.entity_type === 'lead' && args.agency_id) {
         q = q.eq('agency_id', args.agency_id)
@@ -5391,28 +5589,74 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
     }
 
-    // ============ CAMPAIGNER MESSAGING ============
+    // ============ STAFF / CAMPAIGNER WHATSAPP ============
+    case 'lookup_staff_whatsapp': {
+      const entityType = args.entity_type || 'auto'
+      const onlyWithPhone = args.only_with_phone !== false
+      const limit = Math.min(Math.max(Number(args.limit) || 40, 1), 100)
+      const search = String(args.search || '').trim()
+      const roster = await loadStaffWhatsappRoster(supabase, accessibleTenantIds, tenantId, entityType)
+      let rows = roster.map(formatStaffContact).filter(Boolean) as any[]
+      if (onlyWithPhone) rows = rows.filter((r) => r.has_phone)
+      if (search) {
+        rows = rows
+          .filter((r) => scoreNameMatchSafe(r.full_name, search) > 0)
+          .sort((a, b) => scoreNameMatchSafe(b.full_name, search) - scoreNameMatchSafe(a.full_name, search))
+      }
+      rows = rows.slice(0, limit)
+      return {
+        count: rows.length,
+        staff: rows,
+        note: 'השתמשי ב-send_whatsapp_to_staff עם staff_id או name מהרשימה. הטלפון נמשך מה-DB בלבד.',
+      }
+    }
+
+    case 'send_whatsapp_to_staff':
     case 'send_message_to_campaigner': {
-      const { campaigner_id, message_text } = args
-      if (!campaigner_id || !message_text) return { error: 'campaigner_id ו-message_text נדרשים' }
+      const message = String(args.message || args.message_text || '').trim()
+      if (!message) return { error: 'message / message_text נדרש' }
 
-      const { data: campaigner } = await supabase.from('campaigners').select('id, full_name, phone').in('tenant_id', accessibleTenantIds).eq('id', campaigner_id).maybeSingle()
-      if (!campaigner) return { error: 'קמפיינר לא נמצא' }
-      if (!campaigner.phone) return { error: `לא נמצא מספר טלפון עבור ${campaigner.full_name}` }
+      const entityType = name === 'send_message_to_campaigner'
+        ? 'campaigner'
+        : (args.entity_type || 'auto')
+      const staffId = args.staff_id || args.campaigner_id || null
+      const staffName = args.name || null
+      if (!staffId && !staffName) {
+        return { error: 'נדרש staff_id/campaigner_id או name. אפשר קודם lookup_staff_whatsapp / list_campaigners.' }
+      }
 
-      // Find an active WhatsApp integration for this tenant
-      const { data: integrations } = await supabase.from('tenant_integrations').select('id, settings').eq('tenant_id', tenantId).in('integration_type', ['greenapi', 'manus_wa', 'manuswa']).eq('is_active', true).order('created_at', { ascending: false }).limit(1)
-      const integration = integrations?.[0]
-      if (!integration?.id) return { error: 'לא נמצאה אינטגרציית WhatsApp פעילה בטננט. חבר WhatsApp תחת הגדרות אינטגרציות.' }
+      const roster = await loadStaffWhatsappRoster(supabase, accessibleTenantIds, tenantId, entityType)
+      const picked = selectStaffMatch(roster, { id: staffId, name: staffName, entityType })
+      if (picked.ambiguous?.length) {
+        return {
+          ambiguous: true,
+          matches: picked.ambiguous.map(formatStaffContact),
+          message: 'נמצאו כמה אנשי צוות — צייני staff_id או entity_type מדויק',
+        }
+      }
+      if (!picked.match) {
+        return { error: staffId ? 'איש צוות לא נמצא לפי id' : `לא נמצא איש צוות בשם "${staffName}"` }
+      }
+      const contact = formatStaffContact(picked.match)
+      if (!contact?.phone) {
+        return { error: `לא נמצא מספר טלפון עבור ${contact?.full_name || 'איש הצוות'} במערכת` }
+      }
 
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/manage-manus-wa`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-        body: JSON.stringify({ action: 'send_message', integrationId: integration.id, phone: campaigner.phone, message: message_text }),
+      const sendResult = await sendStaffWhatsappMessage({
+        supabase,
+        tenantId,
+        phone: contact.phone,
+        message,
       })
-      const data = await res.json()
-      if (!res.ok) return { error: data.error || `שליחה נכשלה [${res.status}]` }
-      return { success: true, campaigner_id, campaigner_name: campaigner.full_name, phone: campaigner.phone, ...data }
+      if (sendResult.error) return sendResult
+      return {
+        success: true,
+        entity_type: contact.entity_type,
+        staff_id: contact.id,
+        staff_name: contact.full_name,
+        phone: contact.phone,
+        ...sendResult,
+      }
     }
 
     // ============ MASKYOO CALLS REPORTING ============
