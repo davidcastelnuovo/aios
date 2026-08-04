@@ -181,6 +181,7 @@ const TASK_NOTIFICATION_TYPES = new Set([
   'task_completed',
   'task_self_reminder',
   'task_overdue',
+  'task_overdue_sent',
 ])
 const AIOS_APP_URL = 'https://aios.co.il'
 
@@ -227,6 +228,14 @@ function formatTaskNotificationMessage(
       'תזכורת: המשימה עברה את תאריך היעד ועדיין לא סומנה כבוצעה:',
       `*${task.title}*`,
       `לקוח: ${clientName}`,
+    )
+  } else if (notificationType === 'task_overdue_sent') {
+    details.push(
+      `נשלחה עכשיו תזכורת ל${assigneeName || 'קמפיינר'} על משימה שעברה את תאריך היעד ועדיין פתוחה:`,
+      `*${task.title}*`,
+      `לקוח: ${clientName}`,
+      '',
+      'אעדכן אותך כשהמשימה תסומן כבוצעה.',
     )
   } else {
     details.push(
@@ -314,7 +323,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     campaigner = data
   }
 
-  const notifyCreator = ['task_high_priority_reminder_sent', 'task_completed'].includes(notificationType)
+  const notifyCreator = ['task_high_priority_reminder_sent', 'task_completed', 'task_overdue_sent'].includes(notificationType)
   let recipient: { id: string | null; full_name: string; phone: string } | null = null
   if (notifyCreator) {
     if (!task.created_by) {

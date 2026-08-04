@@ -1,6 +1,9 @@
 -- Route overdue task follow-ups through the same Carmen notification worker
 -- as assignment/reminder notifications, and reset the marker when due date moves.
 
+ALTER TABLE public.tasks
+  ADD COLUMN IF NOT EXISTS overdue_creator_notified_at timestamptz;
+
 CREATE OR REPLACE FUNCTION public.notify_task_notification_worker()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -25,6 +28,7 @@ BEGIN
 
     IF OLD.due_date IS DISTINCT FROM NEW.due_date AND NEW.status <> 'done' THEN
       NEW.overdue_notified_at := NULL;
+      NEW.overdue_creator_notified_at := NULL;
     END IF;
 
     IF OLD.self_reminder_at IS DISTINCT FROM NEW.self_reminder_at THEN

@@ -16,6 +16,7 @@ type NotificationType =
   | 'task_completed'
   | 'task_self_reminder'
   | 'task_overdue'
+  | 'task_overdue_sent'
 
 type TaskRow = {
   id: string
@@ -36,6 +37,7 @@ type TaskRow = {
   high_priority_creator_notified_at: string | null
   completion_creator_notified_at: string | null
   overdue_notified_at: string | null
+  overdue_creator_notified_at: string | null
 }
 
 async function invokeNotification(taskId: string, triggerType: NotificationType) {
@@ -68,6 +70,7 @@ async function claimAndSend(
     | 'completion_creator_notified_at'
     | 'self_reminder_sent_at'
     | 'overdue_notified_at'
+    | 'overdue_creator_notified_at'
   >,
   triggerType: NotificationType,
 ) {
@@ -99,7 +102,7 @@ async function claimAndSend(
 async function fetchTask(supabase: ReturnType<typeof createClient>, taskId: string) {
   const { data, error } = await supabase
     .from('tasks')
-    .select('id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at,overdue_notified_at')
+    .select('id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at,overdue_notified_at,overdue_creator_notified_at')
     .eq('id', taskId)
     .maybeSingle()
   if (error) throw error
@@ -151,6 +154,7 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
     if (!task.high_priority_reminder_sent_at) silentMarkers.high_priority_reminder_sent_at = handledAt
     if (!task.high_priority_creator_notified_at) silentMarkers.high_priority_creator_notified_at = handledAt
     if (!task.overdue_notified_at) silentMarkers.overdue_notified_at = handledAt
+    if (!task.overdue_creator_notified_at) silentMarkers.overdue_creator_notified_at = handledAt
     if (task.status === 'done' && !task.completion_creator_notified_at) {
       silentMarkers.completion_creator_notified_at = handledAt
     }
@@ -226,6 +230,18 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
   }
 
   if (
+    isManagedAssignment
+    &&
+    task.created_by
+    && task.overdue_notified_at
+    && Date.parse(task.overdue_notified_at) <= oneMinuteAgo
+    && !task.overdue_creator_notified_at
+  ) {
+    results.push(await claimAndSend(supabase, task, 'overdue_creator_notified_at', 'task_overdue_sent'))
+    task.overdue_creator_notified_at = new Date().toISOString()
+  }
+
+  if (
     isSelfAssigned
     && task.status !== 'done'
     && task.self_reminder_at
@@ -261,8 +277,8 @@ Deno.serve(async (req) => {
       if (task) tasks = [task]
     } else {
       const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString()
-      const taskColumns = 'id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at,overdue_notified_at'
-      const [assignments, reminders, reminderReceipts, completions, selfReminders, overdueTasks] = await Promise.all([
+      const taskColumns = 'id,tenant_id,title,status,priority,created_at,due_date,due_time,created_by,campaigner_id,sales_person_id,self_reminder_at,self_reminder_sent_at,assignment_notification_sent_at,high_priority_reminder_sent_at,high_priority_creator_notified_at,completion_creator_notified_at,overdue_notified_at,overdue_creator_notified_at'
+      const [assignments, reminders, reminderReceipts, overdueReceipts, completions, selfReminders, overdueTasks] = await Promise.all([
         supabase
           .from('tasks')
           .select(taskColumns)
@@ -283,6 +299,13 @@ Deno.serve(async (req) => {
           .not('created_by', 'is', null)
           .lte('high_priority_reminder_sent_at', oneMinuteAgo)
           .is('high_priority_creator_notified_at', null)
+          .limit(25),
+        supabase
+          .from('tasks')
+          .select(taskColumns)
+          .not('created_by', 'is', null)
+          .lte('overdue_notified_at', oneMinuteAgo)
+          .is('overdue_creator_notified_at', null)
           .limit(25),
         supabase
           .from('tasks')
@@ -310,7 +333,7 @@ Deno.serve(async (req) => {
           .limit(25),
       ])
 
-      const queryErrors = [assignments.error, reminders.error, reminderReceipts.error, completions.error, selfReminders.error, overdueTasks.error].filter(Boolean)
+      const queryErrors = [assignments.error, reminders.error, reminderReceipts.error, overdueReceipts.error, completions.error, selfReminders.error, overdueTasks.error].filter(Boolean)
       if (queryErrors.length) throw queryErrors[0]
 
       const unique = new Map<string, TaskRow>()
@@ -318,6 +341,7 @@ Deno.serve(async (req) => {
         ...(assignments.data || []),
         ...(reminders.data || []),
         ...(reminderReceipts.data || []),
+        ...(overdueReceipts.data || []),
         ...(completions.data || []),
         ...(selfReminders.data || []),
         ...(overdueTasks.data || []),
