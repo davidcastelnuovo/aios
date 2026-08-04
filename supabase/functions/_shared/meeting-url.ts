@@ -33,6 +33,15 @@ export function isSupportedMeetingUrl(url: string): boolean {
   return detectMeetingPlatform(url) !== "unknown";
 }
 
+/** Pull the first Zoom / Meet / Teams join URL from free text (e.g. WhatsApp). */
+export function extractMeetingUrl(text: string): string | null {
+  const m = text.match(
+    /https?:\/\/(?:[\w.-]+\.)?(?:zoom\.us\/\S+|meet\.google\.com\/\S+|teams\.microsoft\.com\/\S+|teams\.live\.com\/\S+)/i,
+  );
+  if (!m) return null;
+  return m[0].replace(/[)\]},.!?]+$/g, "");
+}
+
 export function platformLabel(platform: MeetingPlatform): string {
   return PLATFORM_LABELS[platform];
 }

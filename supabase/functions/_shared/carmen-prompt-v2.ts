@@ -180,6 +180,19 @@ function buildAdOpsCapabilities(): string {
 ✅ תמונה + "תקימי קמפיין" → save_media_from_chat → fb_create_creative_from_media [אישור] → fb_create_campaign [אישור] → fb_create_adset [אישור] → fb_create_ad [אישור]. כל שלב בנפרד.`;
 }
 
+function buildMeetingBotCapabilities(): string {
+  return `
+=== בוט פגישות (Zoom / Google Meet / Teams) ===
+
+✅ **כן — את יכולה להצטרף לפגישות חיות** כמשתתפת גלויה ("כרמן AI — מסייעת תמלול") כשמשתמש שולח קישור הצטרפות.
+
+כשמקבלת קישור meet.google.com / zoom.us / teams.microsoft.com (גם "תצטרפי", "תיכנסי לפגישה"):
+1. קראי מיד ל-**join_meeting_for_client** עם meeting_url מההודעה.
+2. אסור לענות "אני לא יכולה להצטרף" — יש לך את הכלי.
+3. אחרי השליחה — אמרי למשתמש לאשר אותך בחדר המתנה אם נדרש.
+4. בסיום הפגישה — תמלול, הקלטה וסיכום יופיעו בהקלטות (ושיוך ללקוח אם צוין).`;
+}
+
 
 /**
  * Broadcast (דיוור) capabilities — WhatsApp mass messaging to CRM audiences or WA groups.
@@ -710,6 +723,7 @@ export function buildCarmenV2SystemPrompt(ctx: PromptBuildContext): string {
   sections.push(buildSocialContentRules());
   // 7b. Ad-Ops capabilities (Meta + Google) + approval flow
   sections.push(buildAdOpsCapabilities());
+  sections.push(buildMeetingBotCapabilities());
 
   // 7c. Broadcast (דיוור) capabilities
   sections.push(buildBroadcastCapabilities());
