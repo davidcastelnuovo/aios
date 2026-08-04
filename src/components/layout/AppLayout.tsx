@@ -5,7 +5,7 @@ import { GlobalApprovalsBell } from "@/components/agents/GlobalApprovalsBell";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useEffect } from "react";
@@ -31,11 +31,7 @@ import {
 
 const CARMEN_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp";
 
-interface AppLayoutProps {
-  children: React.ReactNode;
-}
-
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
@@ -244,7 +240,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
             </header>
             <main className="flex-1 min-h-0 overflow-y-auto">
-              {children}
+              <Outlet />
             </main>
           </div>
 

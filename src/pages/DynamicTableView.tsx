@@ -1554,7 +1554,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     );
   }
 
-  if (tablesError) {
+  if (tablesError && !tablesFetching && !tablesLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
         <Card className="p-12 text-center">

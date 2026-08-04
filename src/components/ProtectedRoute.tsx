@@ -19,8 +19,8 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
   const { userId, isLoading: sessionLoading } = useCurrentUser();
   const authenticated = !sessionLoading && !!userId;
 
-  const { hasPermission, isLoading: permissionsLoading } = useUserPermissions();
-  const { roles, isLoading: rolesLoading } = useUserRole();
+  const { hasPermission, isLoading: permissionsLoading, isFetching: permissionsFetching } = useUserPermissions();
+  const { roles, isLoading: rolesLoading, isFetching: rolesFetching } = useUserRole();
   const { buildPath } = useTenantPath();
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
@@ -64,7 +64,7 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
     return <Navigate to="/auth" replace />;
   }
 
-  if (permissionsLoading || rolesLoading) {
+  if (permissionsLoading || permissionsFetching || rolesLoading || rolesFetching) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>

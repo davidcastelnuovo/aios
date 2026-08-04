@@ -14,7 +14,7 @@ export type ModulePermission = string;
 export function useUserPermissions() {
   const { isOwner, isSuperAdmin, userId } = useUserRole();
 
-  const { data: permissionsData, isLoading: queryLoading } = useQuery({
+  const { data: permissionsData, isLoading: queryLoading, isFetching: permissionsFetching } = useQuery({
     queryKey: ["user-permissions", userId],
     queryFn: async () => {
       if (!userId) return { permissions: null, hasAnyPermissions: false };
@@ -122,5 +122,6 @@ export function useUserPermissions() {
     hasPermission,
     canViewFinance,
     isLoading,
+    isFetching: permissionsFetching,
   };
 }

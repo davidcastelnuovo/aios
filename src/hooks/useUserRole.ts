@@ -21,7 +21,7 @@ export function useUserRole() {
 
   const effectiveUserId = isViewingAs ? viewAsUserId : session?.user?.id;
 
-  const { data: roles, isLoading } = useQuery({
+  const { data: roles, isLoading, isFetching: rolesFetching } = useQuery({
     queryKey: ["user-roles", effectiveUserId, tenantId, isViewingAs],
     queryFn: async () => {
       if (!effectiveUserId) return [];
