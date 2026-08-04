@@ -5,6 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Deployed with carmen FB campaign tooling (analyze + selective ad enable).
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -98,3 +99,4 @@ Deno.serve(async (req) => {
     );
   }
 });
+
