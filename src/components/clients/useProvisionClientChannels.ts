@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CLIENT_CHANNELS, isChannelActive, type ChannelFieldKey } from "@/config/clientChannels";
+import { resolveDashboardHomeTenant } from "@/lib/crmDashboards";
 
 // Per integration_type: how to build the crm_tables row the existing sync
 // functions + viewers expect (matches what the manual "create table" dialogs write).
@@ -205,8 +206,13 @@ export function useProvisionClientChannels() {
         .eq("dashboard_type", "client")
         .maybeSingle();
       if (!dash && tenantId) {
+        const homeTenantId = await resolveDashboardHomeTenant({
+          uiTenantId: tenantId,
+          agencyId,
+          clientId,
+        });
         const { error: dashErr } = await supabase.from("crm_dashboards").insert({
-          tenant_id: tenantId,
+          tenant_id: homeTenantId,
           name: `דשבורד - ${c.name}`,
           agency_id: agencyId,
           client_id: clientId,

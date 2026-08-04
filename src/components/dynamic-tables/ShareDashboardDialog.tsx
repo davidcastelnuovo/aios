@@ -23,25 +23,36 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
   const queryClient = useQueryClient();
 
   // Look up the dashboard's linked client website to derive a default slug.
-  const { data: clientWebsite } = useQuery({
-    queryKey: ["dashboard-client-website", dashboardId],
+  // Load the dashboard's home tenant + client website. Shares must be stored
+  // under dashboard.tenant_id (not the UI tenant) so MC can manage DMM-hosted
+  // DMM-MC dashboards without creating a second orphan share row.
+  const { data: dashboardMeta } = useQuery({
+    queryKey: ["dashboard-share-meta", dashboardId],
     queryFn: async () => {
       const { data: dash } = await supabase
         .from("crm_dashboards")
-        .select("client_id")
+        .select("client_id, tenant_id")
         .eq("id", dashboardId)
         .maybeSingle();
       const clientId = (dash as any)?.client_id;
-      if (!clientId) return null;
-      const { data: client } = await supabase
-        .from("clients")
-        .select("website")
-        .eq("id", clientId)
-        .maybeSingle();
-      return client?.website ?? null;
+      let website: string | null = null;
+      if (clientId) {
+        const { data: client } = await supabase
+          .from("clients")
+          .select("website")
+          .eq("id", clientId)
+          .maybeSingle();
+        website = client?.website ?? null;
+      }
+      return {
+        tenantId: ((dash as any)?.tenant_id as string | undefined) || tenantId,
+        website,
+      };
     },
     enabled: open,
   });
+  const clientWebsite = dashboardMeta?.website ?? null;
+  const shareTenantId = dashboardMeta?.tenantId || tenantId;
 
   const { data: shares = [], isLoading } = useQuery({
     queryKey: ["dashboard-shares", dashboardId],
@@ -74,7 +85,7 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
         .from("dashboard_shares")
         .insert({
           dashboard_id: dashboardId,
-          tenant_id: tenantId,
+          tenant_id: shareTenantId,
           created_by: user.id,
           allowed_emails: [],
           share_token: readableToken,
