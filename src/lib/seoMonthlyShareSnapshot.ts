@@ -449,10 +449,9 @@ function fmtHe(n: number): string {
 }
 
 /**
- * Client-facing performance narrative for the summary slide.
- * Built from real Search Console / keyword movement — not the free-text work note
- * (that note is editor-only and must not repeat on the cover).
- * Always ends on an optimistic forward-looking note.
+ * Client-facing performance + forward-looking narrative for the summary slide.
+ * Compact recap from real GSC/keyword movement, then clear next-month plans.
+ * The free-text "סיכום כללי" belongs on the cover (הקדמה), not here.
  */
 export function buildSeoPerformanceSummary(snapshot: SeoMonthlyShareSnapshot): string {
   const search = snapshot.search;
@@ -494,92 +493,83 @@ export function buildSeoPerformanceSummary(snapshot: SeoMonthlyShareSnapshot): s
     (improved > soft ? 1 : 0) +
     (snapshot.status === "up" ? 1 : 0);
 
+  // ── Short recap (what we see now) ──────────────────────────────────────────
   if (risingSignals > 0 || snapshot.status === "up" || improved > 0) {
     sentences.push(
-      `בחודש ${snapshot.monthLabel} האתר מגיב לקידום — אנחנו רואים התקדמות אמיתית במיקומים ובחשיפה בגוגל.`,
+      `לסיכום ${snapshot.monthLabel}: האתר מגיב לקידום, עם התקדמות במיקומים ובחשיפה.`,
     );
   } else if (snapshot.status === "down" || (soft > improved && soft > 0)) {
     sentences.push(
-      `בחודש ${snapshot.monthLabel} האתר ממשיך בתהליך הקידום; חלק מהביטויים זזים וחלק עדיין מתבססים, וזה חלק טבעי מהעבודה.`,
+      `לסיכום ${snapshot.monthLabel}: יש תנודתיות טבעית בחלק מהביטויים, והבסיס ממשיך להיבנות.`,
     );
   } else {
     sentences.push(
-      `בחודש ${snapshot.monthLabel} האתר מגיב לקידום ואנחנו ממשיכים לבנות נוכחות יציבה בגוגל.`,
+      `לסיכום ${snapshot.monthLabel}: האתר מגיב לקידום ושומר על נוכחות יציבה בגוגל.`,
     );
   }
 
   if (search) {
     const bits: string[] = [];
-    if (search.totals.impressions > 0) {
-      bits.push(`${fmtHe(search.totals.impressions)} חשיפות`);
-    }
-    if (search.totals.clicks > 0) {
-      bits.push(`${fmtHe(search.totals.clicks)} קליקים`);
-    }
-    if (search.totals.top20 > 0) {
-      bits.push(`${fmtHe(search.totals.top20)} ביטויים ב-Top 20`);
-    }
-    if (bits.length) {
-      sentences.push(`בפועל נמדדו החודש ${bits.join(", ")}.`);
-    }
+    if (search.totals.impressions > 0) bits.push(`${fmtHe(search.totals.impressions)} חשיפות`);
+    if (search.totals.clicks > 0) bits.push(`${fmtHe(search.totals.clicks)} קליקים`);
+    if (search.totals.top20 > 0) bits.push(`${fmtHe(search.totals.top20)} ב-Top 20`);
+    if (bits.length) sentences.push(`החודש נמדדו ${bits.join(" · ")}.`);
 
-    const mom: string[] = [];
-    if (impressionDelta != null && impressionDelta !== 0) {
-      mom.push(
-        impressionDelta > 0
-          ? `עלייה של ${fmtHe(impressionDelta)} בחשיפות מול החודש הקודם`
-          : `ירידה קלה של ${fmtHe(Math.abs(impressionDelta))} בחשיפות מול החודש הקודם`,
+    const highlights: string[] = [];
+    if (impressionDelta != null && impressionDelta > 0) {
+      highlights.push(`+${fmtHe(impressionDelta)} חשיפות מול חודש קודם`);
+    }
+    if (clickDelta != null && clickDelta > 0) {
+      highlights.push(`+${fmtHe(clickDelta)} קליקים`);
+    }
+    if (top20Delta != null && top20Delta > 0) {
+      highlights.push(`+${fmtHe(top20Delta)} ביטויים ב-Top 20`);
+    }
+    if (improved > 0) {
+      highlights.push(
+        improved === 1 ? "שיפור במיקום בביטוי מרכזי" : `שיפור מיקום ב־${fmtHe(improved)} ביטויים`,
       );
     }
-    if (clickDelta != null && clickDelta !== 0) {
-      mom.push(
-        clickDelta > 0
-          ? `עלייה של ${fmtHe(clickDelta)} בקליקים`
-          : `ירידה של ${fmtHe(Math.abs(clickDelta))} בקליקים`,
-      );
+    if (highlights.length) sentences.push(`${highlights.join(", ")}.`);
+    if (soft > 0 && soft >= improved) {
+      sentences.push("חלק מהביטויים נסוגו מעט — מטפלים בהם בהמשך.");
     }
-    if (top20Delta != null && top20Delta !== 0) {
-      mom.push(
-        top20Delta > 0
-          ? `${fmtHe(top20Delta)} ביטויים נוספים ב-Top 20`
-          : `${fmtHe(Math.abs(top20Delta))} ביטויים פחות ב-Top 20`,
-      );
-    }
-    if (mom.length) sentences.push(`${mom.join(", ")}.`);
-
-    if (
-      search.base &&
-      search.base.impressions > 0 &&
-      search.totals.impressions > search.base.impressions
-    ) {
-      const growth = Math.round(
-        ((search.totals.impressions - search.base.impressions) / search.base.impressions) * 100,
-      );
-      if (growth > 0) {
-        sentences.push(
-          `מאז תחילת הקידום${search.baseLabel ? ` (${search.baseLabel})` : ""} החשיפות צמחו בכ־${growth}%.`,
-        );
-      }
-    }
-  }
-
-  if (improved > 0) {
+  } else if (improved > 0) {
     sentences.push(
       improved === 1
-        ? "בביטויים המרכזיים אנחנו רואים שיפור במיקום."
-        : `בביטויים המרכזיים אנחנו רואים שיפור במיקום ב־${fmtHe(improved)} ביטויים.`,
-    );
-  }
-  if (soft > 0 && soft >= improved) {
-    sentences.push(
-      "יש גם ביטויים שנסוגו מעט — זה קורה בשוק תחרותי, ואנחנו מטפלים בהם כחלק מהמשך העבודה.",
+        ? "בביטויים המרכזיים נרשם שיפור במיקום."
+        : `בביטויים המרכזיים נרשם שיפור במיקום ב־${fmtHe(improved)} ביטויים.`,
     );
   }
 
-  // Always finish optimistic, even after regressions.
-  sentences.push(
-    "ממשיכים לחזק את המומנטום בחודש הקרוב, עם מיקוד בביטויים שמביאים חשיפות וקליקים — והכיוון הכללי חיובי להמשך.",
-  );
+  // ── Forward plans (always the emphasis) ────────────────────────────────────
+  const planBits: string[] = [];
+  if (snapshot.work.onsite.length > 0) {
+    planBits.push("המשך חיזוק עמודים ותיקוני תוכן באתר");
+  }
+  if (snapshot.work.articles.length > 0) {
+    planBits.push("המשך תוכן ומאמרים סביב הביטויים החזקים");
+  }
+  if ((snapshot.recentLinks?.length || snapshot.work.links.length) > 0) {
+    planBits.push("בניית קישורים איכותיים נוספים");
+  }
+  if (soft > 0) {
+    planBits.push("טיפול בביטויים שנחלשו והחזרת מומנטום");
+  }
+  if (search && search.totals.top20 > 0) {
+    planBits.push("דחיפת ביטויים קרובים ל-Top 10 / Top 3");
+  }
+  if (!planBits.length) {
+    planBits.push(
+      "המשך מיקוד בביטויים שמביאים חשיפות וקליקים",
+      "חיזוק עמודים מרכזיים",
+      "הרחבת נוכחות אורגנית",
+    );
+  }
+
+  const uniquePlans = Array.from(new Set(planBits)).slice(0, 3);
+  sentences.push(`תכניות להמשך: ${uniquePlans.join("; ")}.`);
+  sentences.push("הכיוון קדימה חיובי — ממשיכים לבנות מומנטום בחודש הקרוב.");
 
   return sentences.join(" ");
 }

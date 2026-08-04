@@ -88,9 +88,9 @@ export function buildSeoMonthlySlides(snapshot: SeoMonthlyShareSnapshot): Slide[
     slides.push({ kind: "metrics", title: "מדדים מרכזיים" });
   }
   if (snapshot.keywords.length > 0) slides.push({ kind: "keywords", title: "ביטויים מרכזיים" });
-  // Performance narrative (from real metrics) — not the free-text work note.
+  // Performance + forward plan (from real metrics). Cover carries סיכום כללי separately.
   if (snapshot.search || snapshot.metrics.length > 0 || snapshot.keywords.length > 0) {
-    slides.push({ kind: "summary", title: "סיכום ביצועים" });
+    slides.push({ kind: "summary", title: "סיכום ומבט קדימה" });
   }
   if (snapshot.work.onsite.length > 0) slides.push({ kind: "onsite", title: "עבודה באתר" });
   if (snapshot.work.articles.length > 0) slides.push({ kind: "articles", title: "מאמרים" });
@@ -290,6 +290,7 @@ function SlideChrome({
 
 function CoverSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const status = STATUS_LABELS[snapshot.status];
+  const intro = snapshot.work.summary?.trim() || "";
   return (
     <div className="max-w-3xl space-y-6">
       <p className="text-sm tracking-[0.2em] text-[#D4A574]">דוח SEO חודשי</p>
@@ -304,6 +305,14 @@ function CoverSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
         <span className="text-[#F4F0E6]/60">מגמה</span>
         <span className="font-semibold text-[#F4F0E6]">{status}</span>
       </div>
+      {intro && (
+        <div className="max-w-2xl space-y-2">
+          <p className="text-xs tracking-[0.16em] text-[#D4A574]/90">הקדמה</p>
+          <p className="whitespace-pre-wrap text-base leading-relaxed text-[#F4F0E6]/75 md:text-lg">
+            {intro}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -565,7 +574,7 @@ function SummarySlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const narrative = buildSeoPerformanceSummary(snapshot);
   return (
     <div className="max-w-3xl space-y-6">
-      <h2 className="text-3xl font-bold md:text-4xl">האתר מגיב לקידום</h2>
+      <h2 className="text-3xl font-bold md:text-4xl">סיכום ומבט קדימה</h2>
       <p className="text-xl leading-relaxed text-[#F4F0E6]/85 md:text-2xl">{narrative}</p>
     </div>
   );
