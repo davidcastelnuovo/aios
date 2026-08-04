@@ -131,10 +131,13 @@ export default function Users() {
   } | null>(null);
   const [selectedInviteTenantIds, setSelectedInviteTenantIds] = useState<string[]>([]);
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
+  /** organization = tenant_users only; shared = also staff linked via shared agencies (e.g. DMM-MC) */
+  const [userScopeFilter, setUserScopeFilter] = useState<"organization" | "shared">("organization");
+  const [userSearchTerm, setUserSearchTerm] = useState("");
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [resetPasswordUserEmail, setResetPasswordUserEmail] = useState<string>("");
   const { tenantId, tenant: currentTenant } = useCurrentTenant();
-  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+  const { crossTenantAgencyIds, hasCrossTenantAccess } = useCrossTenantAgencyIds();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", tenantId, currentUserId],
@@ -314,11 +317,10 @@ export default function Users() {
   }, [isInviteDialogOpen, tenantId]);
 
   const { data: users, isLoading } = useQuery({
-    queryKey: ["users-with-roles", tenantId, crossTenantAgencyIds.join(",")],
+    queryKey: ["users-with-roles", tenantId, userScopeFilter, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
       if (!tenantId) return [];
 
-      // First, get user IDs that belong to this tenant
       const { data: tenantUsers, error: tenantUsersError } = await supabase
         .from("tenant_users")
         .select("user_id")
@@ -326,10 +328,12 @@ export default function Users() {
 
       if (tenantUsersError) throw tenantUsersError;
 
-      const tenantUserIds = new Set((tenantUsers || []).map(tu => tu.user_id));
+      const organizationMemberIds = new Set((tenantUsers || []).map((tu) => tu.user_id));
+      const visibleUserIds = new Set(organizationMemberIds);
+      const sharedOnlyUserIds = new Set<string>();
 
-      // Add cross-tenant users: profiles linked (campaigner/sales_person) to shared agencies
-      if (crossTenantAgencyIds.length > 0) {
+      // Optional: include cross-tenant staff linked to shared agencies (DMM ↔ MC)
+      if (userScopeFilter === "shared" && crossTenantAgencyIds.length > 0) {
         const [{ data: crossCampaigners }, { data: crossSales }] = await Promise.all([
           supabase.from("campaigner_agencies").select("campaigner_id").in("agency_id", crossTenantAgencyIds),
           supabase.from("sales_person_agencies").select("sales_person_id").in("agency_id", crossTenantAgencyIds),
@@ -345,11 +349,16 @@ export default function Users() {
             .from("profiles")
             .select("id")
             .or(orParts.join(","));
-          (crossProfiles || []).forEach((p: any) => tenantUserIds.add(p.id));
+          (crossProfiles || []).forEach((p: any) => {
+            if (!organizationMemberIds.has(p.id)) {
+              sharedOnlyUserIds.add(p.id);
+            }
+            visibleUserIds.add(p.id);
+          });
         }
       }
 
-      const tenantUserIdsArr = Array.from(tenantUserIds);
+      const tenantUserIdsArr = Array.from(visibleUserIds);
       if (tenantUserIdsArr.length === 0) return [];
 
       const { data: profiles, error: profilesError } = await supabase
@@ -408,26 +417,83 @@ export default function Users() {
 
         return {
           ...profile,
-          roles, // Array of roles
-          role: roles[0], // Primary role for compatibility
+          roles,
+          role: roles[0],
           campaigner_name: profile.campaigners?.full_name,
           sales_person_name: profile.sales_people?.full_name,
-          agency_ids: [...new Set(userAgencyIds)], // Remove duplicates
+          agency_ids: [...new Set(userAgencyIds)],
+          is_shared_agency_user: sharedOnlyUserIds.has(profile.id),
         };
       });
     },
   });
 
-  // Filter users by selected agency (dedupe by id)
+  // Filter users by scope, agency, search (dedupe by id)
   const filteredUsers = (() => {
     const seen = new Set<string>();
-    return (users?.filter(user => {
+    const term = userSearchTerm.trim().toLowerCase();
+    return (users?.filter((user) => {
+      if (userScopeFilter === "organization" && user.is_shared_agency_user) return false;
       if (agencyFilter !== "all" && !user.agency_ids?.includes(agencyFilter)) return false;
+      if (term) {
+        const hay = `${user.full_name || ""} ${user.email || ""}`.toLowerCase();
+        if (!hay.includes(term)) return false;
+      }
       if (seen.has(user.id)) return false;
       seen.add(user.id);
       return true;
     }) ?? []);
   })();
+
+  const userListFilters = (
+    <div className="mb-4 flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-center">
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
+        <Label className="text-sm font-medium shrink-0">הצג:</Label>
+        <Select value={userScopeFilter} onValueChange={(v) => setUserScopeFilter(v as "organization" | "shared")}>
+          <SelectTrigger className="w-full sm:w-[220px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            <SelectItem value="organization">
+              משתמשי {currentTenant?.name || "הארגון"}
+            </SelectItem>
+            {hasCrossTenantAccess && (
+              <SelectItem value="shared">כולל צוות מסוכנות משותפות</SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
+        <Label className="text-sm font-medium shrink-0">סנן לפי סוכנות:</Label>
+        <Select value={agencyFilter} onValueChange={setAgencyFilter}>
+          <SelectTrigger className="w-full sm:w-[220px]">
+            <SelectValue placeholder="כל הסוכנויות" />
+          </SelectTrigger>
+          <SelectContent align="end">
+            <SelectItem value="all">כל הסוכנויות</SelectItem>
+            {agencies?.map((agency) => (
+              <SelectItem key={agency.id} value={agency.id}>
+                {agency.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:flex-1 sm:max-w-xs">
+        <Label className="text-sm font-medium shrink-0">חיפוש:</Label>
+        <Input
+          value={userSearchTerm}
+          onChange={(e) => setUserSearchTerm(e.target.value)}
+          placeholder="שם או אימייל..."
+          className="w-full"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {filteredUsers.length} משתמשים
+        {userScopeFilter === "organization" ? " בארגון" : " (כולל משותפים)"}
+      </p>
+    </div>
+  );
 
   const addRoleMutation = useMutation({
     mutationFn: async ({
@@ -864,7 +930,10 @@ export default function Users() {
     <div className="container mx-auto py-4 md:py-6 px-4 md:px-6 space-y-4 md:space-y-6" dir="rtl">
       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
         <div className="flex-1">
-          <h1 className="text-2xl md:text-3xl font-bold">ניהול משתמשים בארגון</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">
+            ניהול משתמשים
+            {currentTenant?.name ? ` — ${currentTenant.name}` : ""}
+          </h1>
           <p className="text-xs md:text-sm text-muted-foreground mt-1">
             {isSuperAdmin 
               ? "ניהול ארגונים ומשתמשים במערכת SaaS" 
@@ -1203,22 +1272,7 @@ export default function Users() {
           </TabsList>
           
           <TabsContent value="users" className="mt-4 md:mt-6">
-            <div className="mb-4 flex gap-4 items-center">
-              <Label className="text-sm font-medium">סנן לפי סוכנות:</Label>
-              <Select value={agencyFilter} onValueChange={setAgencyFilter}>
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="כל הסוכנויות" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  <SelectItem value="all">כל הסוכנויות</SelectItem>
-                  {agencies?.map((agency) => (
-                    <SelectItem key={agency.id} value={agency.id}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {userListFilters}
             {isLoading ? (
               <Card className="p-6 text-center">טוען...</Card>
             ) : isMobile ? (
@@ -1475,7 +1529,14 @@ export default function Users() {
                         </Button>
                       </div>
                     </TableCell>
-                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span>{user.email}</span>
+                        {user.is_shared_agency_user && (
+                          <Badge variant="outline" className="text-xs">משותף</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
                         {user.roles?.map((role: UserRole) => (
@@ -1750,22 +1811,7 @@ export default function Users() {
           <Card className="p-6 text-center">טוען...</Card>
         ) : (
           <>
-            <div className="mb-4 flex gap-4 items-center">
-              <Label className="text-sm font-medium">סנן לפי סוכנות:</Label>
-              <Select value={agencyFilter} onValueChange={setAgencyFilter}>
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="כל הסוכנויות" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  <SelectItem value="all">כל הסוכנויות</SelectItem>
-                  {agencies?.map((agency) => (
-                    <SelectItem key={agency.id} value={agency.id}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {userListFilters}
             {isMobile ? (
               <div className="space-y-4">
                 {filteredUsers?.map((user: any) => (
@@ -1966,7 +2012,14 @@ export default function Users() {
                             </Button>
                           </div>
                         </TableCell>
-                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span>{user.email}</span>
+                        {user.is_shared_agency_user && (
+                          <Badge variant="outline" className="text-xs">משותף</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {user.roles?.map((role: UserRole) => (
