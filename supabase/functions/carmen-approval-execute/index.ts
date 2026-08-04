@@ -22,6 +22,8 @@ const TOOL_TO_FUNCTION: Record<string, { fn: string; action?: string }> = {
   fb_update_budget: { fn: 'carmen-fb-tools', action: 'update_budget' },
   fb_pause: { fn: 'carmen-fb-tools', action: 'pause' },
   fb_resume: { fn: 'carmen-fb-tools', action: 'resume' },
+  fb_duplicate_ad_variants: { fn: 'carmen-fb-tools', action: 'duplicate_ad_variants' },
+  duplicate_facebook_ad_variants: { fn: 'carmen-fb-tools', action: 'duplicate_ad_variants' },
   // Legacy Meta tools (same queue gate; mapped to carmen-fb-tools / fb-campaign-control)
   update_facebook_budget: { fn: 'carmen-fb-tools', action: 'update_budget' },
   gads_pause: { fn: 'carmen-google-tools', action: 'pause' },

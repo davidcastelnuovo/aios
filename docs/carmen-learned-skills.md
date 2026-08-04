@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-04 — Duplicate Meta ad with copy variants (approval-gated)
+- **Skin slug:** `fb_duplicate_ad_variants` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Inspect a winning Facebook ad (`inspect_facebook_ad` → adset/page/creative/lead_form), then queue `fb_duplicate_ad_variants` to create N new ads under the same ad set with different primary_text/headline while reusing media + lead form. Optional `daily_budget` (₪) at campaign or adset level. Always returns `pending_approval` — no Meta write until David approves.
+- **How:** (1) `list_facebook_ads` / pick winner; (2) `inspect_facebook_ad(client_id, ad_id)`; (3) draft 4 copy variants; (4) `fb_duplicate_ad_variants(client_id, source_ad_id, variants, count?, daily_budget?)` → show summary → on כן `execute_pending_approval`. New ads default `PAUSED`.
+- **Origin:** Carmen → Cursor DEV TASK — Kernelios campaign `קריאייטיבים חדשים | Test` winning ad `האיום לא מחכה- כהה` needed 4 copy variants; no safe duplicate-with-variants tool existed.
+
 ### 2026-08-04 — FB toggle approval UUID "system" fix
 - **Skin slug:** n/a (engine bug — `facebook-campaign-analysis` flow already covers the procedure)
 - **What changed:** WhatsApp sessions pass `user_id="system"`. `toggle_facebook_campaign` / `fb_pause` / `fb_resume` and other mutating tools were inserting that literal into `agent_approval_queue.requested_by` (uuid) → `invalid input syntax for type uuid: "system"`. Now uses `asUuidOrNull` (null for system) and prefers the profile UUID resolved from David's WhatsApp phone. Same sanitize on `approved_by` in `carmen-approval-execute`.
