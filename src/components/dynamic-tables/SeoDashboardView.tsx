@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { shouldShowQueryError } from "@/lib/queryUi";
 import { supabase } from "@/integrations/supabase/client";
 import { Globe, FileText, Calendar, RefreshCw } from "lucide-react";
