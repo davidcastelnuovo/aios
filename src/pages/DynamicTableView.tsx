@@ -60,6 +60,7 @@ import { CURRENCY_OPTIONS, getCurrencySymbol, normalizeCurrencyCode, type Curren
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
 import { getLeadsFromData } from "@/lib/adsMetrics";
+import { edgeFunctionErrorMessage } from "@/lib/edgeFunctionError";
 import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 
@@ -964,7 +965,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         method: 'POST',
         body: { table_id: table.id },
       });
-      if (response.error) throw response.error;
+      if (response.error) {
+        throw new Error(await edgeFunctionErrorMessage(response.error, 'הסנכרון נכשל'));
+      }
       return response.data;
     },
     onSuccess: (data) => {
@@ -978,7 +981,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         syncMakeGoogleAdsMutation.mutate();
         return;
       }
-      toast.error('שגיאה בסנכרון מ-Google Ads: ' + error.message);
+      toast.error('שגיאה בסנכרון מ-Google Ads: ' + error.message, { duration: 12000 });
     },
   });
 
@@ -2320,13 +2323,17 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       </SelectTrigger>
                       <SelectContent>
                         {(Array.isArray(googleAdsAccounts) ? googleAdsAccounts : []).map((account: any) => (
-                          <SelectItem key={account.id} value={String(account.id)}>
+                          <SelectItem key={account.id} value={String(account.id)} disabled={!!account.manager}>
                             {account.name} ({account.id})
+                            {account.manager ? ' • חשבון ניהול (MCC) — אין בו נתוני קמפיינים' : ''}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    חשבונות ניהול (MCC) אינם ניתנים לבחירה — Google לא מחזירה נתוני קמפיינים עבורם.
+                  </p>
                 </div>
                 <div>
                   <Label>טווח סנכרון</Label>
@@ -2381,6 +2388,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                     if (!table?.id || !selectedGoogleAccount) return;
                     const cleanId = selectedGoogleAccount.replace(/\D/g, '');
                     const currency = normalizeCurrencyCode(selectedCurrency);
+                    const knownAccount = (Array.isArray(googleAdsAccounts) ? googleAdsAccounts : [])
+                      .find((acc: any) => String(acc.id) === cleanId);
+                    if (knownAccount?.manager) {
+                      toast.error('החשבון שנבחר הוא חשבון ניהול (MCC). Google לא מחזירה נתוני קמפיינים עבורו — יש לבחור את חשבון הפרסום עצמו.');
+                      return;
+                    }
                     try {
                       // Merge-only patch so sync metadata (last_sync_at, manager_id, diag)
                       // is not wiped by a stale full settings blob from the UI.
@@ -2392,6 +2405,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                             customer_id: cleanId,
                             date_range: selectedSyncDateRange,
                             currency,
+                            // Carry the account's MCC so the sync logs in through the right
+                            // manager instead of rediscovering it by trial and error.
+                            ...(knownAccount?.manager_id ? { manager_id: String(knownAccount.manager_id) } : {}),
                           },
                         },
                       });
@@ -2421,6 +2437,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                                   customer_id: cleanId,
                                   date_range: selectedSyncDateRange,
                                   currency,
+                                  ...(knownAccount?.manager_id ? { manager_id: String(knownAccount.manager_id) } : {}),
                                 },
                               }
                             : t,

@@ -29,6 +29,7 @@ import { Loader2, AlertCircle, Check, ChevronsUpDown, Search } from "lucide-reac
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { edgeFunctionErrorMessage } from "@/lib/edgeFunctionError";
 
 interface GoogleAdsTableDialogProps {
   open: boolean;
@@ -179,14 +180,16 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
       // Trigger initial sync (direct API)
       try {
         toast.info('מסנכרן נתונים מ-Google Ads...');
-        await supabase.functions.invoke('sync-google-ads-data', {
+        const syncResponse = await supabase.functions.invoke('sync-google-ads-data', {
           method: 'POST',
           body: { table_id: data.id },
         });
+        if (syncResponse.error) throw syncResponse.error;
         toast.success('הנתונים סונכרנו בהצלחה');
       } catch (err) {
         console.error('Initial sync failed:', err);
-        toast.error('הטבלה נוצרה אך הסנכרון נכשל - נסה לסנכרן ידנית');
+        const reason = await edgeFunctionErrorMessage(err, 'נסה לסנכרן ידנית');
+        toast.error('הטבלה נוצרה אך הסנכרון נכשל: ' + reason, { duration: 12000 });
       }
 
       handleClose();
@@ -206,6 +209,11 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
     
     if (!selectedAccount) {
       toast.error('יש לבחור חשבון Google Ads');
+      return;
+    }
+
+    if (accounts.find((acc) => acc.id === selectedAccount)?.manager) {
+      toast.error('החשבון שנבחר הוא חשבון ניהול (MCC). יש לבחור את חשבון הפרסום עצמו.');
       return;
     }
 
@@ -361,14 +369,19 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
                           const formattedAccountId = account.id.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
 
                           return (
-                            <SelectItem key={account.id} value={account.id}>
-                              {account.name} ({formattedAccountId}) • {account.currency} {account.manager ? '(MCC)' : ''}
+                            <SelectItem key={account.id} value={account.id} disabled={account.manager}>
+                              {account.name} ({formattedAccountId}) • {account.currency}
+                              {account.manager ? ' • חשבון ניהול (MCC) — אין בו נתוני קמפיינים' : ''}
                               {account.integration_email ? ` • ${account.integration_email}` : ''}
                             </SelectItem>
                           );
                         })}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    חשבונות ניהול (MCC) אינם ניתנים לבחירה — Google לא מחזירה נתוני קמפיינים עבורם.
+                    יש לבחור את חשבון הפרסום עצמו.
+                  </p>
                 </>
               )}
             </div>
