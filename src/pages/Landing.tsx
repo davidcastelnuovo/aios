@@ -68,7 +68,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
 
 const Landing = () => {
   const navigate = useNavigate();
-  const [demoDialogOpen, setDemoDialogOpen] = useState(false);
+  const [waitlistDialogOpen, setWaitlistDialogOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isAppInstalled, setIsAppInstalled] = useState(false);
 
@@ -212,10 +212,10 @@ const Landing = () => {
                 </Button>
               </Link>
               <Button 
-                onClick={() => setDemoDialogOpen(true)}
+                onClick={() => setWaitlistDialogOpen(true)}
                 className="bg-[#36d399] hover:bg-[#36d399]/90 text-[#0A1526] font-semibold"
               >
-                הזמן דמו
+                הרשמה לרשימת המתנה
               </Button>
             </div>
           </div>
@@ -263,9 +263,10 @@ const Landing = () => {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
               <AnimatedJoinButton 
-                text="הזמן דמו" 
-                hoverText="עכשיו!" 
-                onClick={() => setDemoDialogOpen(true)} 
+                text="הרשמה לרשימת המתנה" 
+                hoverText="הצטרפו!" 
+                width={320}
+                onClick={() => setWaitlistDialogOpen(true)} 
               />
               <Link to="/auth">
                 <Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white font-semibold hover:bg-white/20 text-lg px-8 py-6 rounded-xl backdrop-blur-sm">
@@ -384,15 +385,16 @@ const Landing = () => {
             
             <div className="relative">
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-                מוכנים להתחיל?
+                רוצים להצטרף?
               </h2>
               <p className="text-white/60 text-lg mb-8">
-                הצטרפו לעשרות סוכנויות שכבר משתמשות ב-AfterLead
+                הירשמו לרשימת המתנה ונעדכן אתכם כשהגישה תיפתח
               </p>
               <AnimatedJoinButton 
-                text="הזמן דמו" 
-                hoverText="חינם!" 
-                onClick={() => setDemoDialogOpen(true)} 
+                text="הרשמה לרשימת המתנה" 
+                hoverText="הצטרפו!" 
+                width={320}
+                onClick={() => setWaitlistDialogOpen(true)} 
               />
             </div>
           </div>
@@ -422,7 +424,7 @@ const Landing = () => {
       </footer>
 
       {/* Demo Request Dialog */}
-      <DemoRequestDialog open={demoDialogOpen} onOpenChange={setDemoDialogOpen} />
+      <DemoRequestDialog open={waitlistDialogOpen} onOpenChange={setWaitlistDialogOpen} />
     </div>
   );
 };

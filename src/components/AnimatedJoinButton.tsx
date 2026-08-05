@@ -4,12 +4,14 @@ interface AnimatedJoinButtonProps {
   text?: string;
   hoverText?: string;
   onClick?: () => void;
+  width?: number;
 }
 
 const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({ 
   text = "Join Today", 
   hoverText = "Join Now",
-  onClick 
+  onClick,
+  width = 200,
 }) => {
   const textChars = text.split('');
   const hoverChars = hoverText.split('');
@@ -35,7 +37,7 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           letter-spacing: -1px;
           border: 0;
           position: relative;
-          width: 200px;
+          width: ${width}px;
           height: 65px;
           transform: rotate(-2deg) skewX(2deg);
         }
