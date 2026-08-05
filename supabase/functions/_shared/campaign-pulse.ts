@@ -148,3 +148,72 @@ export function classifyCampaignPulseStatus(input: ClassifyPulseInput): {
 
   return { status, flags, stalePlatforms }
 }
+
+export type PulseStatusCounts = {
+  total: number
+  healthy: number
+  warning: number
+  critical: number
+  no_data: number
+  /** warning + no_data — matches morning WA digest "לתשומת לב" bucket. */
+  attention: number
+}
+
+export function countPulseStatuses(rows: Array<{ status?: string | null }>): PulseStatusCounts {
+  const count = (status: string) => rows.filter((row) => row.status === status).length
+  const warning = count('warning')
+  const no_data = count('no_data')
+  return {
+    total: rows.length,
+    healthy: count('healthy'),
+    warning,
+    critical: count('critical'),
+    no_data,
+    attention: warning + no_data,
+  }
+}
+
+/**
+ * Short WhatsApp pulse message: status counts + dashboard link only.
+ * Policy: never paste per-client Markdown tables on WhatsApp.
+ */
+export function buildPulseWhatsAppDigest(
+  rows: Array<{ status?: string | null; client_name?: string | null }>,
+  dashboardUrl: string,
+): string {
+  const counts = countPulseStatuses(rows)
+  if (rows.length === 1) {
+    const statusLabel: Record<string, string> = {
+      healthy: '🟢 תקין',
+      warning: '🟡 תשומת לב',
+      critical: '🔴 קריטי',
+      no_data: '🟡 אין טבלת קמפיין מחוברת',
+    }
+    const row = rows[0]
+    const label = statusLabel[String(row.status || '')] || String(row.status || '—')
+    const name = row.client_name ? ` — ${row.client_name}` : ''
+    return [
+      `*בדיקת דופק${name}*`,
+      `סטטוס: ${label}`,
+      '',
+      'פירוט מלא בדשבורד בדיקת דופק:',
+      dashboardUrl,
+      '',
+      'טבלאות לא מחוברות ופירוט לפי לקוח — בדשבורד בלבד (לא בוואטסאפ).',
+    ].join('\n')
+  }
+  return [
+    '*בדיקת דופק הושלמה*',
+    `נבדקו ${counts.total} לקוחות קמפיין פעילים: 🟢 ${counts.healthy} תקינים | 🟡 ${counts.attention} לתשומת לב | 🔴 ${counts.critical} קריטיים`,
+    '',
+    'צפה בדשבורד בדיקת דופק:',
+    dashboardUrl,
+    '',
+    'טבלאות לא מחוברות ופירוט לפי לקוח — בדשבורד בלבד (לא בוואטסאפ).',
+  ].join('\n')
+}
+
+/** Surfaces that must never receive the full pulse Markdown table. */
+export function pulseSurfacePrefersWhatsAppDigest(surface: string | null | undefined): boolean {
+  return surface === 'whatsapp' || surface === 'task'
+}

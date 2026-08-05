@@ -2,6 +2,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import {
   CAMPAIGN_TABLE_TYPES,
+  buildPulseWhatsAppDigest,
   classifyCampaignPulseStatus,
   clientCampaignServices as servicesFromClient,
   effectiveIsEcommerce,
@@ -81,21 +82,6 @@ async function getLastMetaCampaignChange(
   } finally {
     clearTimeout(timer)
   }
-}
-
-/** Short WA message: counts + dashboard link only (no per-client list). */
-function buildDashboardLinkMessage(rows: any[], dashboardUrl: string): string {
-  const count = (status: string) => rows.filter((row) => row.status === status).length
-  const attention = count('warning') + count('no_data')
-  return [
-    '*בדיקת דופק הושלמה*',
-    `נבדקו ${rows.length} לקוחות קמפיין פעילים: 🟢 ${count('healthy')} תקינים | 🟡 ${attention} לתשומת לב | 🔴 ${count('critical')} קריטיים`,
-    '',
-    `צפה בדשבורד בדיקת דופק:`,
-    dashboardUrl,
-    '',
-    'טבלאות לא מחוברות ופירוט לפי לקוח — בדשבורד בלבד (לא בוואטסאפ).',
-  ].join('\n')
 }
 
 function bearerAuthorized(authHeader: string | null): boolean {
@@ -376,7 +362,7 @@ Deno.serve(async (req) => {
     const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
     const tenantSlug = tenantRow?.slug || tenantId
     const dashboardUrl = `https://aios.co.il/${tenantSlug}/dmm-dashboard`
-    const digest = buildDashboardLinkMessage(snapshots, dashboardUrl)
+    const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl)
     let sent = false
     let deliveryClaimed = false
     if (deliveryRequested && setting.campaign_pulse_enabled && forceDelivery) {
