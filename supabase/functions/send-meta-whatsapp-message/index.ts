@@ -1,5 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
-import { DEFAULT_META_GRAPH_VERSION, digitsOnly, renderTemplateText } from "../_shared/meta-whatsapp.ts";
+import {
+  DEFAULT_META_GRAPH_VERSION,
+  digitsOnly,
+  explainMetaWhatsAppError,
+  renderTemplateText,
+} from "../_shared/meta-whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,7 +56,12 @@ Deno.serve(async (request) => {
       senderUserId,
       template,
     } = body;
-    if (clientId && leadId) return reply({ error: "choose_client_or_lead" }, 400);
+    // Automations that already resolved a destination phone (lead→client alerts)
+    // often pass both client_id and lead_id for threading. Only require an
+    // exclusive choice when the caller expects us to look up the phone from one entity.
+    if (clientId && leadId && !phoneNumber) {
+      return reply({ error: "choose_client_or_lead" }, 400);
+    }
     if (groupId) return reply({ error: "Meta WhatsApp Cloud API does not support groups" }, 400);
     if (isServiceRole) {
       if (typeof senderUserId !== "string" || !senderUserId) {
@@ -182,11 +192,19 @@ Deno.serve(async (request) => {
     }
     if (!graphResponse.ok || result?.error) {
       const code = result?.error?.code;
-      const friendly =
-        code === 131047
-          ? "חלון השירות של 24 שעות נסגר. יש לשלוח תבנית WhatsApp מאושרת."
-          : result?.error?.error_user_msg || result?.error?.message || "Meta WhatsApp send failed";
-      return reply({ error: friendly, meta_error: result?.error ?? result }, graphResponse.status || 502);
+      const detail =
+        result?.error?.error_user_msg ||
+        result?.error?.error_data?.details ||
+        result?.error?.message ||
+        null;
+      const explained = explainMetaWhatsAppError(code, detail);
+      return reply({
+        error: explained.messageHe,
+        error_label: explained.labelHe,
+        ops_hint: explained.opsHintHe,
+        retryable: explained.retryable,
+        meta_error: result?.error ?? result,
+      }, graphResponse.status || 502);
     }
 
     const messageId = result?.messages?.[0]?.id ?? null;

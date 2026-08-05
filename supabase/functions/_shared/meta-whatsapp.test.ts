@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   dropUnresolvedTemplateLines,
+  explainMetaWhatsAppError,
+  extractMetaErrorCodeFromMessage,
   sanitizeTemplateParameter,
   shouldApplyDeliveryStatus,
 } from './meta-whatsapp.ts'
@@ -51,4 +53,33 @@ test('delivery status only moves forward, and failure always wins', () => {
   assert.equal(shouldApplyDeliveryStatus('read', 'delivered'), false)
   assert.equal(shouldApplyDeliveryStatus('read', 'failed'), true)
   assert.equal(shouldApplyDeliveryStatus('sent', 'bogus'), false)
+})
+
+test('explainMetaWhatsAppError: 131049 engagement is not retryable', () => {
+  const explained = explainMetaWhatsAppError(131049)
+  assert.equal(explained.code, '131049')
+  assert.equal(explained.retryable, false)
+  assert.match(explained.messageHe, /131049/)
+  assert.match(explained.opsHintHe, /Quality Rating|מעורבות|איכות/)
+})
+
+test('explainMetaWhatsAppError: 131042 payment points to billing', () => {
+  const explained = explainMetaWhatsAppError('131042')
+  assert.equal(explained.retryable, false)
+  assert.match(explained.opsHintHe, /Billing|תשלום/)
+})
+
+test('extractMetaErrorCodeFromMessage reads Hebrew delivery log text', () => {
+  assert.equal(
+    extractMetaErrorCodeFromMessage(
+      'Meta לא מסרה את ההודעה (קוד 131049): In order to maintain a healthy ecosystem engagement',
+    ),
+    '131049',
+  )
+  assert.equal(
+    extractMetaErrorCodeFromMessage(
+      '(#200) You do not have the necessary permissions to send messages',
+    ),
+    '200',
+  )
 })

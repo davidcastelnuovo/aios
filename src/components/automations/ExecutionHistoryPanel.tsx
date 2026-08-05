@@ -35,6 +35,10 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import {
+  classifyMetaWhatsAppErrorMessage,
+  summarizeMetaFailureClasses,
+} from "@/lib/metaWhatsAppErrors";
 
 interface ExecutionHistoryPanelProps {
   open: boolean;
@@ -133,25 +137,40 @@ export function ExecutionHistoryPanel({
   // message and only later report that it was never delivered. Recovering those
   // one by one is impractical when a provider outage stalls a whole morning.
   const failedLogs = logs.filter((log) => log.success === false && log.payload);
+  // Meta engagement/payment failures get worse when retried blindly — only
+  // re-queue runs that look retryable (or have no classified Meta code).
+  const retryableFailedLogs = failedLogs.filter((log) => {
+    const info = classifyMetaWhatsAppErrorMessage(log.error_message);
+    return !info || info.retryable;
+  });
+  const metaFailureSummary = summarizeMetaFailureClasses(logs);
 
   const handleRetryAllFailed = async () => {
-    if (!failedLogs.length) return;
+    if (!retryableFailedLogs.length) {
+      toast({
+        title: "אין כשלונות שכדאי להריץ מחדש",
+        description:
+          "רוב הכשלונות הם מגבלת Meta (מעורבות/תשלום) — ריצה חוזרת לא תעזור עד שמתקנים ב-Business Manager.",
+        variant: "destructive",
+      });
+      return;
+    }
     setRetryingFailed(true);
-    setRetryProgress({ done: 0, total: failedLogs.length });
+    setRetryProgress({ done: 0, total: retryableFailedLogs.length });
     let succeeded = 0;
     try {
       // Sequential: a provider that is rate limiting or refusing sends should not
       // be hit with the whole backlog at once.
-      for (const [index, log] of failedLogs.entries()) {
+      for (const [index, log] of retryableFailedLogs.entries()) {
         const { error } = await supabase.functions.invoke("trigger-automation", {
           body: { automationId, payload: log.payload, _rerun: true },
         });
         if (!error) succeeded += 1;
-        setRetryProgress({ done: index + 1, total: failedLogs.length });
+        setRetryProgress({ done: index + 1, total: retryableFailedLogs.length });
       }
       toast({
         title: "ההרצות החוזרות הופעלו",
-        description: `${succeeded} מתוך ${failedLogs.length} נשלחו מחדש. בדוק את ההיסטוריה לתוצאה.`,
+        description: `${succeeded} מתוך ${retryableFailedLogs.length} נשלחו מחדש (דילגנו על כשלונות Meta לא-retryable).`,
       });
       setTimeout(() => refetch(), 2000);
     } catch (err) {
@@ -180,12 +199,27 @@ export function ExecutionHistoryPanel({
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
+          {metaFailureSummary.length > 0 && (
+            <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-right dark:border-amber-900 dark:bg-amber-950/30">
+              <p className="text-xs font-medium text-amber-900 dark:text-amber-100">
+                כשלונות Meta אחרונים (לא בהכרח באג בתור)
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {metaFailureSummary.slice(0, 4).map((row) => (
+                  <li key={row.code} className="text-[11px] text-amber-800 dark:text-amber-200">
+                    {row.labelHe} ({row.code}): {row.count}
+                    {!row.retryable ? " · לא להריץ מחדש" : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {failedLogs.length > 0 && (
             <Button
               variant="outline"
               size="sm"
               className="mt-2 w-full gap-2"
-              disabled={retryingFailed}
+              disabled={retryingFailed || retryableFailedLogs.length === 0}
               onClick={handleRetryAllFailed}
             >
               {retryingFailed ? (
@@ -196,7 +230,7 @@ export function ExecutionHistoryPanel({
               ) : (
                 <>
                   <Play className="h-4 w-4" />
-                  הרץ מחדש את כל הכשלונות ({failedLogs.length})
+                  הרץ מחדש כשלונות שניתנים לניסיון ({retryableFailedLogs.length}/{failedLogs.length})
                 </>
               )}
             </Button>
@@ -224,6 +258,14 @@ export function ExecutionHistoryPanel({
                 const isFlow = response?.flow === true;
                 const agentOutput = response?.agent_output;
                 const triggeredAt = new Date(log.triggered_at);
+                const metaError = !log.success
+                  ? classifyMetaWhatsAppErrorMessage(log.error_message)
+                  : null;
+                const metaPhone =
+                  flowSteps.find((s: any) => s?.response?.phone_number)?.response?.phone_number ||
+                  payload?.client_phone ||
+                  payload?.phone;
+                const metaClient = payload?.client_name;
 
                 return (
                   <Collapsible key={log.id} open={isExpanded} onOpenChange={() => toggleLog(log.id)}>
@@ -244,8 +286,13 @@ export function ExecutionHistoryPanel({
                                 <span className="text-xs text-muted-foreground">
                                   {triggeredAt.toLocaleTimeString("he-IL")}
                                 </span>
+                                {metaClient && (
+                                  <span className="truncate text-xs text-muted-foreground">
+                                    {metaClient}
+                                  </span>
+                                )}
                               </div>
-                              <div className="flex items-center gap-2 mt-0.5">
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 {log.execution_time_ms && (
                                   <span className="text-xs text-muted-foreground">
                                     {log.execution_time_ms}ms
@@ -256,11 +303,20 @@ export function ExecutionHistoryPanel({
                                     {flowSteps.filter((s: any) => s.success).length}/{flowSteps.length} שלבים
                                   </span>
                                 )}
-                                {log.error_message && (
+                                {metaPhone && (
+                                  <Badge variant="outline" className="text-[10px] h-4" dir="ltr">
+                                    {metaPhone}
+                                  </Badge>
+                                )}
+                                {metaError ? (
+                                  <Badge variant="destructive" className="text-[10px] h-4">
+                                    {metaError.labelHe}
+                                  </Badge>
+                                ) : log.error_message ? (
                                   <Badge variant="destructive" className="text-[10px] h-4">
                                     שגיאה
                                   </Badge>
-                                )}
+                                ) : null}
                               </div>
                             </div>
                             {isExpanded ? (
@@ -296,6 +352,11 @@ export function ExecutionHistoryPanel({
                           <div className="rounded-md bg-destructive/10 border border-destructive/20 p-2">
                             <p className="text-xs text-destructive font-medium">שגיאה:</p>
                             <p className="text-xs text-destructive mt-0.5">{log.error_message}</p>
+                            {metaError?.opsHintHe && (
+                              <p className="text-[11px] text-destructive/90 mt-1.5 leading-relaxed">
+                                {metaError.opsHintHe}
+                              </p>
+                            )}
                           </div>
                         )}
 
@@ -304,6 +365,11 @@ export function ExecutionHistoryPanel({
                           <div className="rounded-md bg-muted/50 p-2">
                             <p className="text-xs font-medium text-muted-foreground mb-1">נתונים שנשלחו:</p>
                             <div className="flex flex-wrap gap-1">
+                              {payload.client_name && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  לקוח: {payload.client_name}
+                                </Badge>
+                              )}
                               {payload.contact_name && (
                                 <Badge variant="outline" className="text-[10px]">
                                   {payload.contact_name}
@@ -314,9 +380,14 @@ export function ExecutionHistoryPanel({
                                   {payload.company_name}
                                 </Badge>
                               )}
-                              {payload.phone && (
+                              {(payload.client_phone || payload.phone) && (
                                 <Badge variant="outline" className="text-[10px]" dir="ltr">
-                                  {payload.phone}
+                                  {payload.client_phone || payload.phone}
+                                </Badge>
+                              )}
+                              {payload.lead_name && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  ליד: {payload.lead_name}
                                 </Badge>
                               )}
                               {payload.lead_id && (
@@ -394,14 +465,26 @@ export function ExecutionHistoryPanel({
                                   {/* WhatsApp step details */}
                                   {(step.action_type === "send_whatsapp" ||
                                     step.action_type === "send_greenapi_message" ||
-                                    step.action_type === "send_meta_whatsapp_message") && step.response && (
-                                    <div className="mt-1 text-[10px] text-muted-foreground">
+                                    step.action_type === "send_meta_whatsapp_message" ||
+                                    step.action_type === "send_manus_message") && step.response && (
+                                    <div className="mt-1 text-[10px] text-muted-foreground space-x-2 space-x-reverse">
+                                      {step.response.phone_number && (
+                                        <span dir="ltr">אל: {step.response.phone_number}</span>
+                                      )}
+                                      {step.response.provider && (
+                                        <span>{step.response.provider}</span>
+                                      )}
+                                      {step.response.result?.messageId && (
+                                        <span dir="ltr" className="break-all">
+                                          id: {String(step.response.result.messageId).slice(0, 24)}…
+                                        </span>
+                                      )}
                                       {step.response.subscriber_id && (
                                         <span>Subscriber: {step.response.subscriber_id}</span>
                                       )}
                                       {step.response.message_sent !== undefined && (
-                                        <span className="mr-2">
-                                          {step.response.message_sent ? "✅ נשלח" : "❌ לא נשלח"}
+                                        <span>
+                                          {step.response.message_sent ? "נשלח" : "לא נשלח"}
                                         </span>
                                       )}
                                     </div>
