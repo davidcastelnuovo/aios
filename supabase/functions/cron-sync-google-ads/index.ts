@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${supabaseServiceKey}`,
           },
-          body: JSON.stringify({ source: 'google_ads_sync' }),
+          body: JSON.stringify({ deliver: false, source: 'google_ads_sync' }),
         });
         if (!pulseResponse.ok) {
           console.error('[cron-google-ads] pulse calculation failed:', await pulseResponse.text());

@@ -43,6 +43,8 @@ async function getLastMetaCampaignChange(
 ): Promise<{ at: string | null; type: string | null; actor: string | null; object: string | null; availability: string }> {
   if (!adAccountId) return { at: null, type: null, actor: null, object: null, availability: 'ad_account_not_connected' }
   if (!token) return { at: null, type: null, actor: null, object: null, availability: 'meta_token_unavailable' }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 2500)
   try {
     const account = String(adAccountId).replace(/^act_/, '')
     const since = new Date(Date.now() - 30 * 86400000).toISOString()
@@ -53,7 +55,10 @@ async function getLastMetaCampaignChange(
       limit: '100',
       access_token: token,
     })
-    const response = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/act_${account}/activities?${params}`)
+    const response = await fetch(
+      `https://graph.facebook.com/${META_GRAPH_VERSION}/act_${account}/activities?${params}`,
+      { signal: controller.signal },
+    )
     const payload = await response.json()
     if (!response.ok || payload?.error || !Array.isArray(payload?.data)) {
       console.warn('[campaign-pulse] Meta activities unavailable', account, payload?.error?.code || response.status)
@@ -73,87 +78,24 @@ async function getLastMetaCampaignChange(
   } catch (error) {
     console.warn('[campaign-pulse] Meta activities error', error instanceof Error ? error.message : String(error))
     return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
+  } finally {
+    clearTimeout(timer)
   }
 }
 
-const ONBOARDING_STATUS_LABELS: Record<string, string> = {
-  research_meeting: 'פגישת מחקר',
-  receiving_access: 'קבלת גישות',
-  setup_and_content: 'הקמה ותוכן',
-  campaign_live: 'הקמפיין עלה לאוויר',
-}
-
-function formatTaskDueDate(value: string | null): string {
-  if (!value) return ''
-  return `, יעד ${new Date(`${value}T12:00:00Z`).toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem' })}`
-}
-
-function buildDigest(rows: any[], onboardingClients: any[]): string {
+/** Short WA message: counts + dashboard link only (no per-client list). */
+function buildDashboardLinkMessage(rows: any[], dashboardUrl: string): string {
   const count = (status: string) => rows.filter((row) => row.status === status).length
-  const statusDisplay: Record<string, { icon: string; label: string; priority: number }> = {
-    critical: { icon: '🔴', label: 'קריטי', priority: 0 },
-    warning: { icon: '🟡', label: 'תשומת לב', priority: 1 },
-    no_data: { icon: '🟡', label: 'תשומת לב', priority: 1 },
-    healthy: { icon: '🟢', label: 'תקין', priority: 2 },
-  }
-  const lines = [
-    '*עדכון קמפיינים אוטומטי*',
-    `נבדקו ${rows.length} לקוחות פעילים: 🟢 ${count('healthy')} תקינים | 🟡 ${count('warning') + count('no_data')} דורשים תשומת לב | 🔴 ${count('critical')} קריטיים`,
-  ]
-  const agencies = new Map<string, any[]>()
-  for (const row of rows) {
-    const agency = row.agency_name || 'ללא סוכנות'
-    agencies.set(agency, [...(agencies.get(agency) || []), row])
-  }
-  for (const [agency, agencyRows] of agencies) {
-    lines.push('', `*${agency}*`)
-    const sortedRows = [...agencyRows].sort((a, b) =>
-      (statusDisplay[a.status]?.priority ?? 3) - (statusDisplay[b.status]?.priority ?? 3)
-      || String(a.client_name).localeCompare(String(b.client_name), 'he')
-    )
-    for (const row of sortedRows) {
-      const display = statusDisplay[row.status] || { icon: '🟡', label: 'תשומת לב' }
-      const metric = row.is_ecommerce
-        ? `ROAS ${row.roas_7d ?? '—'}`
-        : `CPL ₪${row.cpl_7d ?? '—'}`
-      const detail = (row.flags || []).length ? ` — ${(row.flags || []).join(', ')}` : ''
-      const metaChange = row.meta_change_availability === 'not_applicable'
-        ? ''
-        : row.last_meta_change_at
-          ? ` — שינוי Meta אחרון: ${new Date(row.last_meta_change_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`
-          : ` — שינוי Meta אחרון: ${row.meta_change_availability === 'no_campaign_change_in_30d' ? 'לא נמצא ב-30 יום' : 'לא זמין'}`
-      lines.push(`${display.icon} *${row.client_name}* — ${display.label} — ${metric}${metaChange}${detail}`)
-    }
-  }
-  lines.push('', '*לקוחות בקליטה*')
-  if (!onboardingClients.length) {
-    lines.push('אין כרגע לקוחות בקליטה.')
-  } else {
-    const onboardingAgencies = new Map<string, any[]>()
-    for (const client of onboardingClients) {
-      const agency = client.agency_name || 'ללא סוכנות'
-      onboardingAgencies.set(agency, [...(onboardingAgencies.get(agency) || []), client])
-    }
-    for (const [agency, clients] of onboardingAgencies) {
-      lines.push(`_${agency}_`)
-      for (const client of [...clients].sort((a, b) =>
-        String(a.client_name).localeCompare(String(b.client_name), 'he')
-      )) {
-        const stage = ONBOARDING_STATUS_LABELS[client.onboarding_status] || 'שלב לא הוגדר'
-        lines.push(`• *${client.client_name}* — ${stage}`)
-        if (!client.open_tasks.length) {
-          lines.push('  אין משימות פתוחות')
-          continue
-        }
-        for (const task of client.open_tasks) {
-          const progress = task.status === 'in_progress' ? 'בתהליך' : 'פתוחה'
-          lines.push(`  ↳ ${task.title} (${progress}${formatTaskDueDate(task.due_date)})`)
-        }
-      }
-    }
-  }
-  lines.push('מקור: הנתונים המסונכרנים ב-AIOS. ללא הפעלת כרמן וללא קריאת API נוספת.')
-  return lines.join('\n')
+  const attention = count('warning') + count('no_data')
+  return [
+    '*בדיקת דופק הושלמה*',
+    `נבדקו ${rows.length} לקוחות קמפיין פעילים: 🟢 ${count('healthy')} תקינים | 🟡 ${attention} לתשומת לב | 🔴 ${count('critical')} קריטיים`,
+    '',
+    `צפה בדשבורד בדיקת דופק:`,
+    dashboardUrl,
+    '',
+    'טבלאות לא מחוברות ופירוט לפי לקוח — בדשבורד בלבד (לא בוואטסאפ).',
+  ].join('\n')
 }
 
 Deno.serve(async (req) => {
@@ -167,7 +109,9 @@ Deno.serve(async (req) => {
   let body: any = {}
   try { body = await req.json() } catch { /* empty cron body */ }
   const deliveryRequested = body.deliver !== false
-  const forceDelivery = body.force_delivery === true && body.source === 'approved_manual_trigger'
+  const forceDelivery = body.force_delivery === true && (
+    body.source === 'approved_manual_trigger' || body.source === 'morning_cron'
+  )
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
     .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
@@ -257,27 +201,12 @@ Deno.serve(async (req) => {
       tables.push(table)
       activeTablesByClient.set(table.client_id, tables)
     }
-    // A client with campaign services but no report table must be surfaced as a
-    // missing connection. A client whose existing campaign tables are all
-    // explicitly switched off is intentionally excluded from Carmen's report.
-    const reportableClients = campaignClients.filter((client: any) => {
-      const services = clientCampaignServices(client)
-      const configured = (tableResult.data || []).filter((table: any) =>
-        table.client_id === client.id && tableMatchesServices(table, services)
-      )
-      const expectedPlatforms = [
-        ...(services.has('ppc_meta') ? ['meta'] : []),
-        ...(services.has('ppc_google') ? ['google'] : []),
-      ]
-      return expectedPlatforms.some((platform) => {
-        const platformConfigured = configured.filter((table: any) => platform === 'google'
-          ? table.integration_type === 'google_ads'
-          : table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce')
-        return platformConfigured.length === 0 || platformConfigured.some((table: any) => table.campaign_active !== false)
-      })
-    })
+    // Include EVERY active client with ppc_meta/ppc_google — never drop clients
+    // because Meta activity timed out or all tables were paused.
+    const reportableClients = campaignClients
     const metaToken = await getMetaToken(supabase, tenantId)
     let metaActivityCalls = 0
+    const MAX_META_ACTIVITY_CALLS = 25
 
     const now = new Date()
     const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
@@ -288,103 +217,124 @@ Deno.serve(async (req) => {
     const d30Str = d30.toISOString().slice(0, 10)
     const snapshots: any[] = []
     for (const client of reportableClients) {
-      const activeTables = activeTablesByClient.get(client.id) || []
-      const tableIds = activeTables.map((table: any) => table.id)
-      const metaTable = activeTables.find((table: any) =>
-        table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce'
-      )
-      const tableSettings = metaTable?.integration_settings || {}
-      const adAccountId = tableSettings.ad_account_id || tableSettings.account_id || tableSettings.meta_account_id || null
-      if (adAccountId && metaToken) metaActivityCalls += 1
-      const lastMetaChange = metaTable
-        ? await getLastMetaCampaignChange(metaToken, adAccountId)
-        : { at: null, type: null, actor: null, object: null, availability: 'not_applicable' }
-      let records: any[] = []
-      if (tableIds.length) {
-        // Prefer a server-side date filter so long histories cannot push the
-        // recent window out of the default page. Fall back to an unfiltered
-        // wider page + client filter if the JSON-path filter is empty/errors.
-        const filtered = await supabase.from('crm_records').select('data')
-          .in('table_id', tableIds)
-          .filter('data->>date', 'gte', d30Str)
-          .limit(5000)
-        if (!filtered.error && (filtered.data?.length || 0) > 0) {
-          records = filtered.data || []
-        } else {
-          if (filtered.error) {
-            console.warn('[campaign-pulse] crm_records date filter failed', client.id, filtered.error.message)
-          }
-          const fallback = await supabase.from('crm_records').select('data')
-            .in('table_id', tableIds)
-            .limit(5000)
-          records = fallback.data || []
-          if (fallback.error) {
-            console.warn('[campaign-pulse] crm_records fallback failed', client.id, fallback.error.message)
+      try {
+        const activeTables = activeTablesByClient.get(client.id) || []
+        const tableIds = activeTables.map((table: any) => table.id)
+        const metaTable = activeTables.find((table: any) =>
+          table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce'
+        )
+        const tableSettings = metaTable?.integration_settings || {}
+        const adAccountId = tableSettings.ad_account_id || tableSettings.account_id || tableSettings.meta_account_id || null
+        let lastMetaChange = { at: null as string | null, type: null as string | null, actor: null as string | null, object: null as string | null, availability: 'not_applicable' }
+        if (metaTable) {
+          if (adAccountId && metaToken && metaActivityCalls < MAX_META_ACTIVITY_CALLS) {
+            metaActivityCalls += 1
+            lastMetaChange = await getLastMetaCampaignChange(metaToken, adAccountId)
+          } else if (adAccountId && metaToken) {
+            lastMetaChange = { at: null, type: null, actor: null, object: null, availability: 'meta_api_skipped_budget' }
+          } else {
+            lastMetaChange = await getLastMetaCampaignChange(metaToken, adAccountId)
           }
         }
+        let records: any[] = []
+        if (tableIds.length) {
+          const filtered = await supabase.from('crm_records').select('data')
+            .in('table_id', tableIds)
+            .filter('data->>date', 'gte', d30Str)
+            .limit(5000)
+          if (!filtered.error && (filtered.data?.length || 0) > 0) {
+            records = filtered.data || []
+          } else {
+            if (filtered.error) {
+              console.warn('[campaign-pulse] crm_records date filter failed', client.id, filtered.error.message)
+            }
+            const fallback = await supabase.from('crm_records').select('data')
+              .in('table_id', tableIds)
+              .limit(5000)
+            records = fallback.data || []
+            if (fallback.error) {
+              console.warn('[campaign-pulse] crm_records fallback failed', client.id, fallback.error.message)
+            }
+          }
+        }
+        const recent = records.filter((row: any) => row.data?.date && row.data.date >= d30Str)
+        const current = recent.filter((row: any) => row.data.date >= d7Str)
+        const previous = recent.filter((row: any) => row.data.date >= d14Str && row.data.date < d7Str)
+        const sum = (rows: any[], fields: string[]) =>
+          rows.reduce((total, row) => {
+            const field = fields.find((candidate) => row.data?.[candidate] !== undefined && row.data?.[candidate] !== null)
+            return total + (field ? Number(row.data[field]) || 0 : 0)
+          }, 0)
+        const spend7 = sum(current, ['spend', 'cost'])
+        const leads7 = sum(current, ['leads', 'conversions', 'all_conversions'])
+        const previousSpend = sum(previous, ['spend', 'cost'])
+        const previousLeads = sum(previous, ['leads', 'conversions', 'all_conversions'])
+        const cpl7 = leads7 > 0 ? spend7 / leads7 : null
+        const previousCpl = previousLeads > 0 ? previousSpend / previousLeads : null
+        const cplChange = cpl7 !== null && previousCpl ? ((cpl7 - previousCpl) / previousCpl) * 100 : null
+        const purchases = sum(current, ['purchases'])
+        const revenue = sum(current, ['purchase_value', 'conversions_value', 'revenue'])
+        const roas = spend7 > 0 ? revenue / spend7 : null
+        const freshest = recent.map((row: any) => row.data?.date).filter(Boolean).sort().reverse()[0] || null
+        const configuredForClient = (tableResult.data || []).filter((table: any) =>
+          table.client_id === client.id && tableMatchesServices(table, clientCampaignServices(client))
+        )
+        const isEcommerce = effectiveIsEcommerce(client.is_ecommerce, activeTables)
+        const { status, flags, stalePlatforms } = classifyCampaignPulseStatus({
+          activeTables,
+          hasConfiguredCampaignTable: configuredForClient.length > 0,
+          recentRecordCount: recent.length,
+          isEcommerce,
+          spend7,
+          leads7,
+          purchases7: purchases,
+          roas,
+          cplChangePct: cplChange,
+          nowMs: now.getTime(),
+        })
+        console.log('[campaign-pulse] client classified', {
+          client_id: client.id,
+          client_name: client.name,
+          status,
+          tables: activeTables.map((table: any) => ({
+            id: table.id,
+            type: table.integration_type,
+            campaign_active: table.campaign_active,
+          })),
+          recent_records: recent.length,
+          is_ecommerce: isEcommerce,
+          stale_platforms: stalePlatforms,
+          flags,
+        })
+        snapshots.push({
+          tenant_id: tenantId, agency_id: client.agency_id, client_id: client.id,
+          calculated_at: now.toISOString(), data_fresh_through: freshest, status,
+          is_ecommerce: isEcommerce, spend_7d: round(spend7), leads_7d: round(leads7),
+          cpl_7d: round(cpl7), cpl_change_pct: round(cplChange, 1), purchases_7d: round(purchases),
+          revenue_7d: round(revenue), roas_7d: round(roas), flags, source: 'synced_crm',
+          last_meta_change_at: lastMetaChange.at,
+          last_meta_change_type: lastMetaChange.type,
+          last_meta_change_actor: lastMetaChange.actor,
+          last_meta_change_object: lastMetaChange.object,
+          meta_change_availability: lastMetaChange.availability,
+          client_name: client.name, agency_name: (client.agencies as any)?.name || null,
+        })
+      } catch (clientError) {
+        console.error('[campaign-pulse] client failed — writing no_data row', client.id, clientError)
+        snapshots.push({
+          tenant_id: tenantId, agency_id: client.agency_id, client_id: client.id,
+          calculated_at: now.toISOString(), data_fresh_through: null, status: 'no_data',
+          is_ecommerce: !!client.is_ecommerce, spend_7d: 0, leads_7d: 0,
+          cpl_7d: null, cpl_change_pct: null, purchases_7d: 0,
+          revenue_7d: 0, roas_7d: null,
+          flags: ['שגיאה בחישוב דופק — נסה שוב'],
+          source: 'synced_crm',
+          last_meta_change_at: null, last_meta_change_type: null,
+          last_meta_change_actor: null, last_meta_change_object: null,
+          meta_change_availability: 'meta_api_unavailable',
+          client_name: client.name, agency_name: (client.agencies as any)?.name || null,
+        })
       }
-      const recent = records.filter((row: any) => row.data?.date && row.data.date >= d30Str)
-      const current = recent.filter((row: any) => row.data.date >= d7Str)
-      const previous = recent.filter((row: any) => row.data.date >= d14Str && row.data.date < d7Str)
-      const sum = (rows: any[], fields: string[]) =>
-        rows.reduce((total, row) => {
-          const field = fields.find((candidate) => row.data?.[candidate] !== undefined && row.data?.[candidate] !== null)
-          return total + (field ? Number(row.data[field]) || 0 : 0)
-        }, 0)
-      const spend7 = sum(current, ['spend', 'cost'])
-      const leads7 = sum(current, ['leads', 'conversions', 'all_conversions'])
-      const previousSpend = sum(previous, ['spend', 'cost'])
-      const previousLeads = sum(previous, ['leads', 'conversions', 'all_conversions'])
-      const cpl7 = leads7 > 0 ? spend7 / leads7 : null
-      const previousCpl = previousLeads > 0 ? previousSpend / previousLeads : null
-      const cplChange = cpl7 !== null && previousCpl ? ((cpl7 - previousCpl) / previousCpl) * 100 : null
-      const purchases = sum(current, ['purchases'])
-      const revenue = sum(current, ['purchase_value', 'conversions_value', 'revenue'])
-      const roas = spend7 > 0 ? revenue / spend7 : null
-      const freshest = recent.map((row: any) => row.data?.date).filter(Boolean).sort().reverse()[0] || null
-      const configuredForClient = (tableResult.data || []).filter((table: any) =>
-        table.client_id === client.id && tableMatchesServices(table, clientCampaignServices(client))
-      )
-      const isEcommerce = effectiveIsEcommerce(client.is_ecommerce, activeTables)
-      const { status, flags, stalePlatforms } = classifyCampaignPulseStatus({
-        activeTables,
-        hasConfiguredCampaignTable: configuredForClient.length > 0,
-        recentRecordCount: recent.length,
-        isEcommerce,
-        spend7,
-        leads7,
-        purchases7: purchases,
-        roas,
-        cplChangePct: cplChange,
-        nowMs: now.getTime(),
-      })
-      console.log('[campaign-pulse] client classified', {
-        client_id: client.id,
-        client_name: client.name,
-        status,
-        tables: activeTables.map((table: any) => ({
-          id: table.id,
-          type: table.integration_type,
-          campaign_active: table.campaign_active,
-        })),
-        recent_records: recent.length,
-        is_ecommerce: isEcommerce,
-        stale_platforms: stalePlatforms,
-        flags,
-      })
-      snapshots.push({
-        tenant_id: tenantId, agency_id: client.agency_id, client_id: client.id,
-        calculated_at: now.toISOString(), data_fresh_through: freshest, status,
-        is_ecommerce: isEcommerce, spend_7d: round(spend7), leads_7d: round(leads7),
-        cpl_7d: round(cpl7), cpl_change_pct: round(cplChange, 1), purchases_7d: round(purchases),
-        revenue_7d: round(revenue), roas_7d: round(roas), flags, source: 'synced_crm',
-        last_meta_change_at: lastMetaChange.at,
-        last_meta_change_type: lastMetaChange.type,
-        last_meta_change_actor: lastMetaChange.actor,
-        last_meta_change_object: lastMetaChange.object,
-        meta_change_availability: lastMetaChange.availability,
-        client_name: client.name, agency_name: (client.agencies as any)?.name || null,
-      })
     }
     const currentClientIds = snapshots.map((snapshot) => snapshot.client_id)
     let staleSnapshotsQuery = supabase.from('campaign_pulse_snapshots')
@@ -404,7 +354,10 @@ Deno.serve(async (req) => {
         .upsert(rows, { onConflict: 'tenant_id,client_id' })
       if (error) { results.push({ tenant_id: tenantId, error: error.message }); continue }
     }
-    const digest = buildDigest(snapshots, onboardingClients)
+    const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
+    const tenantSlug = tenantRow?.slug || tenantId
+    const dashboardUrl = `https://aios.co.il/${tenantSlug}/dmm-dashboard`
+    const digest = buildDashboardLinkMessage(snapshots, dashboardUrl)
     let sent = false
     let deliveryClaimed = false
     if (deliveryRequested && setting.campaign_pulse_enabled && forceDelivery) {
@@ -431,7 +384,14 @@ Deno.serve(async (req) => {
     }
     await supabase.from('heartbeat_logs').insert({
       tenant_id: tenantId, tasks_reviewed: snapshots.length,
-      actions_taken: [{ type: 'deterministic_campaign_pulse', sent, ai_used: false, external_api_calls: metaActivityCalls }],
+      actions_taken: [{
+        type: 'deterministic_campaign_pulse',
+        sent,
+        ai_used: false,
+        external_api_calls: metaActivityCalls,
+        dashboard_url: dashboardUrl,
+        clients_checked: snapshots.length,
+      }],
       summary: digest, duration_ms: Date.now() - started,
     })
     results.push({

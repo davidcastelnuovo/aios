@@ -51,7 +51,11 @@ export function calculateHealthScore(input: HealthInput): HealthResult {
   let score = 100;
   const flags: FlagKey[] = [];
 
-  const hasPerformance = input.services.includes('performance');
+  // Legacy 'performance' plus current service codes ppc_meta / ppc_google.
+  const hasPerformance =
+    input.services.includes('performance')
+    || input.services.includes('ppc_meta')
+    || input.services.includes('ppc_google');
   const hasSeo = input.services.includes('seo');
 
   // ─── Communication ────────────────────────────────────────────

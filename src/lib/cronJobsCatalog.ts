@@ -35,6 +35,12 @@ export const CRON_JOB_CATALOG: Record<string, CronJobMeta> = {
     category: "sync",
     icon: "📊",
   },
+  "campaign-pulse-morning-0730": {
+    label: "בדיקת דופק בוקר",
+    description: "מחשב בדיקת דופק דטרמיניסטית ב-07:30 ושולח לוואטסאפ קישור לדשבורד בדיקת דופק (בלי רשימת לקוחות).",
+    category: "carmen",
+    icon: "💗",
+  },
   "cron-sync-facebook-ecommerce-daily": {
     label: "סנכרון Facebook eCommerce",
     description: "מושך נתוני eCommerce מ-Facebook פעם ביום (05:00).",
