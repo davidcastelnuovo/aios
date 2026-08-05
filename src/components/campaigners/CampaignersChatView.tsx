@@ -11,7 +11,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2, Pencil, Check, X, ChevronDown } from "lucide-react";
+import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2, Pencil, Check, X, ChevronDown, ArrowRight } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -35,6 +37,7 @@ function getInitials(name: string) {
 }
 
 export function CampaignersChatView({ initialCampaignerId }: { initialCampaignerId?: string } = {}) {
+  const isMobile = useIsMobile();
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const { selectedAgency } = useAgency();
@@ -186,17 +189,25 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
   }, [campaigners, selectedAgency, activeFilter, search]);
 
   const selected = useMemo(
-    () => filteredCampaigners.find((c: any) => c.id === selectedId) || filteredCampaigners[0] || null,
+    () => filteredCampaigners.find((c: any) => c.id === selectedId) || null,
     [filteredCampaigners, selectedId]
   );
+
+  // Auto-select first campaigner on desktop only — mobile starts on the list screen
+  useEffect(() => {
+    if (!isMobile && !selectedId && filteredCampaigners.length > 0) {
+      setSelectedId(filteredCampaigners[0].id);
+    }
+  }, [isMobile, filteredCampaigners, selectedId]);
 
   const calculateTotal = (c: any) =>
     (c?.client_team || []).reduce((t: number, a: any) => t + (a.campaigner_payment || 0), 0);
 
   return (
-    <div dir="rtl" className="flex h-[calc(100vh-8rem)] min-h-0 max-h-full border rounded-lg overflow-hidden bg-background">
-      {/* Right column - list (first child = right in RTL) */}
-      <aside className="w-[25%] min-w-[240px] max-w-[25%] border-l flex flex-col bg-muted/20 overflow-hidden">
+    <div dir="rtl" className="flex h-[calc(100vh-8rem)] min-h-0 max-h-full border rounded-lg overflow-hidden bg-background w-full max-w-full">
+      {/* List — full screen on mobile until a campaigner is selected */}
+      {(!isMobile || !selectedId) && (
+      <aside className={cn("border-l flex flex-col bg-muted/20 overflow-hidden min-h-0", isMobile ? "w-full flex-1" : "w-[25%] min-w-[240px] max-w-[25%]")}>
         <div className="p-3 border-b space-y-2 shrink-0">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -227,7 +238,7 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
           ) : (
             <div className="divide-y w-full">
               {filteredCampaigners.map((c: any) => {
-                const isSelected = selected?.id === c.id;
+                const isSelected = c.id === selectedId;
                 const agencyNames = (c.campaigner_agencies || [])
                   .map((ca: any) => ca?.agencies?.name)
                   .filter(Boolean)
@@ -267,8 +278,10 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
           )}
         </div>
       </aside>
+      )}
 
-      {/* Left column - details */}
+      {/* Detail — full screen on mobile after selecting a campaigner */}
+      {(!isMobile || selectedId) && (
       <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden bg-card">
         {!selected ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -278,8 +291,13 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
           <>
             {/* Header */}
             <div className="p-4 border-b flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <Avatar className="h-12 w-12">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {isMobile && (
+                  <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSelectedId(null)} aria-label="חזרה לרשימה">
+                    <ArrowRight className="h-5 w-5" />
+                  </Button>
+                )}
+                <Avatar className="h-12 w-12 shrink-0">
                   <AvatarFallback className={selected.active ? "bg-success/10 text-success" : "bg-muted"}>
                     {getInitials(selected.full_name)}
                   </AvatarFallback>
@@ -460,6 +478,7 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
           </>
         )}
       </div>
+      )}
     </div>
   );
 }
