@@ -1277,10 +1277,11 @@ export function WeeklyTaskBoard() {
                 )}
               </Button>
               <Button
-                variant="default"
+                variant={mobileCalendarOpen ? "default" : "outline"}
                 size="icon"
-                onClick={() => setMobileCalendarOpen(true)}
-                aria-label="פתח יומן"
+                onClick={() => setMobileCalendarOpen((open) => !open)}
+                aria-label={mobileCalendarOpen ? "סגור יומן" : "פתח יומן"}
+                aria-pressed={mobileCalendarOpen}
                 title="יומן"
                 className="shrink-0"
               >
