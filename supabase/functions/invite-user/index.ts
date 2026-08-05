@@ -16,8 +16,206 @@ interface InviteUserRequest {
   resend?: boolean;
   campaignerId?: string;
   salesPersonId?: string;
-  tenantId?: string; // For inviting users to a specific tenant
-  baseUrl?: string; // Base URL for invitation link
+  tenantId?: string;
+  baseUrl?: string;
+  /** When true, provision tenant access without sending another email (multi-org invite). */
+  skipEmail?: boolean;
+  /** When false, do not overwrite profiles.campaigner_id / sales_person_id (secondary org). */
+  updateProfileTeamLinks?: boolean;
+}
+
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+const DEFAULT_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") ?? "noreply@aios.co.il";
+const DEFAULT_FROM_NAME = Deno.env.get("RESEND_FROM_NAME") ?? "AIOS";
+
+function safeOrigin(baseUrl?: string): string {
+  const baseUrlInput = baseUrl || "https://aios.co.il";
+  try {
+    return new URL(baseUrlInput).origin;
+  } catch {
+    return baseUrlInput.split("/").slice(0, 3).join("/");
+  }
+}
+
+async function findUserIdByEmail(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  email: string,
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .ilike("email", normalized)
+    .maybeSingle();
+  if (profile?.id) return profile.id;
+
+  // Fallback: paginated auth lookup (avoid single listUsers() over entire user base)
+  let page = 1;
+  const perPage = 200;
+  while (page <= 10) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) {
+      console.error("listUsers error:", error);
+      break;
+    }
+    const match = data?.users?.find((u) => u.email?.toLowerCase() === normalized);
+    if (match?.id) return match.id;
+    if (!data?.users?.length || data.users.length < perPage) break;
+    page++;
+  }
+  return null;
+}
+
+async function sendInvitationEmailViaResend(
+  to: string,
+  actionLink: string,
+  orgName: string,
+  fullName?: string,
+): Promise<void> {
+  if (!RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY is not configured");
+  }
+
+  const greeting = fullName ? `שלום ${fullName},` : "שלום,";
+  const html = `
+    <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+      <h1 style="color: #111; font-size: 22px;">הוזמנת להצטרף ל${orgName}</h1>
+      <p style="font-size: 16px; color: #444; line-height: 1.6;">${greeting}</p>
+      <p style="font-size: 16px; color: #444; line-height: 1.6;">
+        הוזמנת להצטרף למערכת AIOS בארגון <strong>${orgName}</strong>.
+        לחץ על הכפתור להתחברות ויצירת חשבון:
+      </p>
+      <p style="margin: 28px 0;">
+        <a href="${actionLink}"
+           style="background-color: #2563eb; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+          הצטרף ל-AIOS
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #888;">
+        אם הכפתור לא עובד, העתק את הקישור לדפדפן:<br/>
+        <a href="${actionLink}" style="color: #2563eb;">${actionLink}</a>
+      </p>
+    </div>
+  `;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: `${DEFAULT_FROM_NAME} <${DEFAULT_FROM_EMAIL}>`,
+      to: [to],
+      subject: `הזמנה להצטרף ל${orgName} — AIOS`,
+      html,
+    }),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error("Resend error:", json);
+    throw new Error("Failed to send invitation email via Resend");
+  }
+}
+
+async function generateAuthLink(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  email: string,
+  redirectTo: string,
+  isNewUser: boolean,
+  invitationId?: string,
+): Promise<string> {
+  const linkType = isNewUser ? "invite" : "magiclink";
+  const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+    type: linkType,
+    email,
+    options: {
+      redirectTo,
+      data: invitationId ? { invitation_id: invitationId } : undefined,
+    },
+  });
+
+  if (error) {
+    console.error("generateLink error:", error);
+    throw new Error(error.message || "Failed to generate invitation link");
+  }
+
+  const actionLink = data?.properties?.action_link;
+  if (!actionLink) {
+    throw new Error("No action link returned from auth");
+  }
+  return actionLink;
+}
+
+async function autoCreateCampaigner(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  tenantId: string,
+  email: string,
+  fullName?: string,
+  agencyIds?: string[],
+): Promise<string | undefined> {
+  const displayName = fullName?.trim() || email.split("@")[0] || "קמפיינר";
+  const { data: newCampaigner, error } = await supabaseAdmin
+    .from("campaigners")
+    .insert({
+      full_name: displayName,
+      email: email,
+      active: true,
+      tenant_id: tenantId,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating campaigner:", error);
+    return undefined;
+  }
+
+  if (agencyIds && agencyIds.length > 0) {
+    const rows = agencyIds.map((agencyId) => ({
+      campaigner_id: newCampaigner.id,
+      agency_id: agencyId,
+    }));
+    await supabaseAdmin.from("campaigner_agencies").insert(rows);
+  }
+
+  return newCampaigner.id;
+}
+
+async function autoCreateSalesPerson(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  tenantId: string,
+  email: string,
+  fullName?: string,
+  agencyIds?: string[],
+): Promise<string | undefined> {
+  const displayName = fullName?.trim() || email.split("@")[0] || "איש מכירות";
+  const { data: newSalesPerson, error } = await supabaseAdmin
+    .from("sales_people")
+    .insert({
+      full_name: displayName,
+      email: email,
+      active: true,
+      tenant_id: tenantId,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating sales_people record:", error);
+    return undefined;
+  }
+
+  if (agencyIds && agencyIds.length > 0) {
+    const rows = agencyIds.map((agencyId) => ({
+      sales_person_id: newSalesPerson.id,
+      agency_id: agencyId,
+    }));
+    await supabaseAdmin.from("sales_person_agencies").insert(rows);
+  }
+
+  return newSalesPerson.id;
 }
 
 serve(async (req: Request) => {
@@ -36,7 +234,6 @@ serve(async (req: Request) => {
       },
     });
 
-    // Verify requesting user via Supabase Auth (validates token is not revoked)
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       throw new Error("Missing authorization header");
@@ -49,7 +246,6 @@ serve(async (req: Request) => {
     }
     const requesterId = requesterUser.id;
 
-    // Check if the user is an owner or agency_owner
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
@@ -60,8 +256,22 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can invite users");
     }
 
-    const { email, fullName, role, agencyIds, modulePermissions, resend, campaignerId, salesPersonId, tenantId, baseUrl }: InviteUserRequest = await req.json();
+    const {
+      email: rawEmail,
+      fullName,
+      role,
+      agencyIds,
+      modulePermissions,
+      resend,
+      campaignerId,
+      salesPersonId,
+      tenantId,
+      baseUrl,
+      skipEmail,
+      updateProfileTeamLinks = true,
+    }: InviteUserRequest = await req.json();
 
+    const email = rawEmail?.trim().toLowerCase();
     if (!email) {
       throw new Error("Email is required");
     }
@@ -79,204 +289,208 @@ serve(async (req: Request) => {
       }
     }
 
-    // If resend is true, we don't need role validation
+    const { data: tenantRow } = await supabaseAdmin
+      .from("tenants")
+      .select("name")
+      .eq("id", tenantIdFinal)
+      .maybeSingle();
+    const orgName = tenantRow?.name || "AIOS";
+
+    const authRedirect = `${safeOrigin(baseUrl).replace(/\/+$/, "")}/auth`;
+
     if (!resend) {
       if (!role) {
         throw new Error("Role is required for new invites");
       }
-
-      // Validate role
       const validRoles = ["owner", "agency_owner", "team_manager", "campaigner", "sales_person", "super_admin", "seo"];
       if (!validRoles.includes(role)) {
         throw new Error("Invalid role");
       }
     }
 
-
-    // Auto-create sales_people record if role is sales_person and no salesPersonId provided
-    let effectiveSalesPersonId = salesPersonId;
-    if (role === 'sales_person' && !salesPersonId && fullName) {
-      const { data: newSalesPerson, error: spError } = await supabaseAdmin
-        .from("sales_people")
-        .insert({
-          full_name: fullName,
-          email: email,
-          active: true,
-          tenant_id: tenantIdFinal,
-        })
-        .select()
-        .single();
-      
-      if (spError) {
-        console.error("Error creating sales_people record:", spError);
-      } else if (newSalesPerson) {
-        effectiveSalesPersonId = newSalesPerson.id;
-        
-        // Link to agencies if provided
-        if (agencyIds && agencyIds.length > 0) {
-          const spAgenciesToInsert = agencyIds.map((agencyId) => ({
-            sales_person_id: newSalesPerson.id,
-            agency_id: agencyId,
-          }));
-          await supabaseAdmin
-            .from("sales_person_agencies")
-            .insert(spAgenciesToInsert);
-        }
+    // Resend invitation email only (user already in tenant)
+    if (resend) {
+      const existingUserId = await findUserIdByEmail(supabaseAdmin, email);
+      if (!existingUserId) {
+        throw new Error("User not found");
       }
+
+      const { data: tenantUser } = await supabaseAdmin
+        .from("tenant_users")
+        .select("id")
+        .eq("user_id", existingUserId)
+        .eq("tenant_id", tenantIdFinal)
+        .maybeSingle();
+
+      if (!tenantUser) {
+        throw new Error("User is not in this organization");
+      }
+
+      const actionLink = await generateAuthLink(
+        supabaseAdmin,
+        email,
+        authRedirect,
+        false,
+      );
+      await sendInvitationEmailViaResend(email, actionLink, orgName, fullName);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Invitation resent successfully",
+          invitationLink: authRedirect,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    // Check if user already exists
-    const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
-    const userExists = existingUser?.users?.some(u => u.email === email);
+    // Auto-create team member records when role requires them
+    let effectiveCampaignerId = campaignerId;
+    if (role === "campaigner" && !campaignerId) {
+      effectiveCampaignerId = await autoCreateCampaigner(
+        supabaseAdmin,
+        tenantIdFinal,
+        email,
+        fullName,
+        agencyIds,
+      );
+    }
 
-    if (userExists) {
-      
-      // Get existing user ID
-      const existingUserData = existingUser?.users?.find(u => u.email === email);
-      const userId = existingUserData?.id;
-      
-      if (!userId) {
-        throw new Error("Could not find user ID");
-      }
+    let effectiveSalesPersonId = salesPersonId;
+    if (role === "sales_person" && !salesPersonId) {
+      effectiveSalesPersonId = await autoCreateSalesPerson(
+        supabaseAdmin,
+        tenantIdFinal,
+        email,
+        fullName,
+        agencyIds,
+      );
+    }
 
-      // Ensure profile exists with pending status
+    const existingUserId = await findUserIdByEmail(supabaseAdmin, email);
+
+    if (existingUserId) {
+      const userId = existingUserId;
+
       await supabaseAdmin
         .from("profiles")
-        .upsert({ id: userId, email, full_name: fullName || null, status: 'pending' }, { onConflict: "id" });
+        .upsert(
+          { id: userId, email, full_name: fullName || null, status: "pending" },
+          { onConflict: "id" },
+        );
 
-      // Update user profile if fullName provided
       if (fullName) {
+        await supabaseAdmin.from("profiles").update({ full_name: fullName }).eq("id", userId);
+      }
+
+      if (updateProfileTeamLinks && effectiveCampaignerId) {
         await supabaseAdmin
           .from("profiles")
-          .update({ full_name: fullName })
+          .update({ campaigner_id: effectiveCampaignerId })
           .eq("id", userId);
       }
 
-      // Update campaigner_id if provided
-      if (campaignerId) {
-        await supabaseAdmin
-          .from("profiles")
-          .update({ campaigner_id: campaignerId })
-          .eq("id", userId);
-      }
-
-      // Update sales_person_id if provided (use effectiveSalesPersonId which may be auto-created)
-      if (effectiveSalesPersonId) {
+      if (updateProfileTeamLinks && effectiveSalesPersonId) {
         await supabaseAdmin
           .from("profiles")
           .update({ sales_person_id: effectiveSalesPersonId })
           .eq("id", userId);
       }
 
-      // Update role if provided
       if (role) {
-        // Delete existing roles
         await supabaseAdmin
           .from("user_roles")
           .delete()
-          .eq("user_id", userId);
+          .eq("user_id", userId)
+          .eq("tenant_id", tenantIdFinal);
 
-        // Insert new role
         await supabaseAdmin
           .from("user_roles")
-          .insert({ user_id: userId, role });
+          .insert({ user_id: userId, role, tenant_id: tenantIdFinal });
       }
 
-      // Update module permissions if provided
       if (modulePermissions && modulePermissions.length > 0) {
-        // Delete existing permissions
-        await supabaseAdmin
-          .from("user_permissions")
-          .delete()
-          .eq("user_id", userId);
-
-        // Insert new permissions
+        await supabaseAdmin.from("user_permissions").delete().eq("user_id", userId);
         const permissionsToInsert = modulePermissions.map((module) => ({
           user_id: userId,
-          module: module,
+          module,
           can_access: true,
         }));
-
-        await supabaseAdmin
-          .from("user_permissions")
-          .insert(permissionsToInsert);
+        await supabaseAdmin.from("user_permissions").insert(permissionsToInsert);
       }
 
-      // Update campaigner agencies if provided
-      if (campaignerId && agencyIds && agencyIds.length > 0) {
-        // Delete existing campaigner agencies
+      if (effectiveCampaignerId && agencyIds && agencyIds.length > 0) {
         await supabaseAdmin
           .from("campaigner_agencies")
           .delete()
-          .eq("campaigner_id", campaignerId);
-
-        // Insert new campaigner agencies
-        const campaignerAgenciesToInsert = agencyIds.map((agencyId) => ({
-          campaigner_id: campaignerId,
+          .eq("campaigner_id", effectiveCampaignerId);
+        const rows = agencyIds.map((agencyId) => ({
+          campaigner_id: effectiveCampaignerId,
           agency_id: agencyId,
         }));
-
-        await supabaseAdmin
-          .from("campaigner_agencies")
-          .insert(campaignerAgenciesToInsert);
+        await supabaseAdmin.from("campaigner_agencies").insert(rows);
       }
 
-      // Update sales person agencies if provided (use effectiveSalesPersonId)
       if (effectiveSalesPersonId && agencyIds && agencyIds.length > 0) {
-        // Delete existing sales person agencies
         await supabaseAdmin
           .from("sales_person_agencies")
           .delete()
           .eq("sales_person_id", effectiveSalesPersonId);
-
-        // Insert new sales person agencies
-        const salesPersonAgenciesToInsert = agencyIds.map((agencyId) => ({
+        const rows = agencyIds.map((agencyId) => ({
           sales_person_id: effectiveSalesPersonId,
           agency_id: agencyId,
         }));
-
-        await supabaseAdmin
-          .from("sales_person_agencies")
-          .insert(salesPersonAgenciesToInsert);
+        await supabaseAdmin.from("sales_person_agencies").insert(rows);
       }
 
-      // Check if user is in the tenant
       const { data: tenantUser } = await supabaseAdmin
         .from("tenant_users")
-        .select("*")
+        .select("id")
         .eq("user_id", userId)
         .eq("tenant_id", tenantIdFinal)
         .maybeSingle();
 
-      // Add user to tenant if not already there
       let wasAddedToTenant = false;
       if (!tenantUser) {
-        await supabaseAdmin
-          .from("tenant_users")
-          .insert({
-            user_id: userId,
-            tenant_id: tenantIdFinal,
-            role: role || "member",
-          });
+        await supabaseAdmin.from("tenant_users").insert({
+          user_id: userId,
+          tenant_id: tenantIdFinal,
+          role: role || "member",
+        });
         wasAddedToTenant = true;
       }
 
-      // If user was added to a new tenant, return success
       if (wasAddedToTenant) {
+        let emailSent = false;
+        if (!skipEmail) {
+          const actionLink = await generateAuthLink(
+            supabaseAdmin,
+            email,
+            authRedirect,
+            false,
+          );
+          await sendInvitationEmailViaResend(email, actionLink, orgName, fullName);
+          emailSent = true;
+        }
+
         return new Response(
           JSON.stringify({
             success: true,
             message: "המשתמש הקיים נוסף לארגון בהצלחה",
             addedToExistingUser: true,
+            emailSent,
+            invitationLink: authRedirect,
           }),
           {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          },
         );
       }
 
-      // User already exists in this tenant - return error
       return new Response(
         JSON.stringify({
           success: false,
@@ -286,31 +500,27 @@ serve(async (req: Request) => {
         {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
-    // Create invitation token for new user
-    const token_value = crypto.randomUUID();
-    
-    // Store invitation metadata
     const invitationMetadata = {
       email,
       fullName,
       role,
       agencyIds: agencyIds || [],
       modulePermissions: modulePermissions || [],
-      campaignerId,
-      salesPersonId,
+      campaignerId: effectiveCampaignerId,
+      salesPersonId: effectiveSalesPersonId,
     };
-    
+
     const { data: invitation, error: tokenError } = await supabaseAdmin
       .from("invitation_tokens")
       .insert({
-        token: token_value,
+        token: crypto.randomUUID(),
         tenant_id: tenantIdFinal,
         created_by: requesterId,
-        email: email,
+        email,
         metadata: invitationMetadata,
       })
       .select()
@@ -321,133 +531,122 @@ serve(async (req: Request) => {
       throw tokenError;
     }
 
+    // Create auth user via generateLink (no Supabase email) — send via Resend only
+    const inviteLinkData = await supabaseAdmin.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        redirectTo: authRedirect,
+        data: { invitation_id: invitation.id },
+      },
+    });
 
-    // Build simple invitation link to auth page
-    const baseUrlInput2 = baseUrl || "https://aios.co.il";
-    let safeBaseUrl2: string;
-    try {
-      const u = new URL(baseUrlInput2);
-      safeBaseUrl2 = u.origin;
-    } catch {
-      const parts = baseUrlInput2.split("/").slice(0, 3);
-      safeBaseUrl2 = parts.join("/");
+    if (inviteLinkData.error) {
+      console.error("generateLink invite error:", inviteLinkData.error);
+      throw new Error(inviteLinkData.error.message || "Failed to create invited user");
     }
-    const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth`;
 
-    // Send invitation email via Supabase Auth
-    try {
-      const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        redirectTo: invitationLink,
-        data: {
-          invitation_id: invitation.id,
-        }
-      });
+    const newUserId = inviteLinkData.data?.user?.id ?? await findUserIdByEmail(supabaseAdmin, email);
+    const actionLink = inviteLinkData.data?.properties?.action_link;
 
-      if (inviteError) {
-        console.error("Error sending invitation email:", inviteError);
-        throw new Error(inviteError.message || "Failed to send invitation email");
-      } else {
-        const newUserId = inviteData?.user?.id;
-        if (newUserId) {
-          // Create profile with pending status so the user appears in the org list immediately
-          await supabaseAdmin
-            .from("profiles")
-            .upsert({ id: newUserId, email, full_name: fullName || null, status: 'pending' }, { onConflict: "id" });
+    if (!actionLink) {
+      throw new Error("No invitation link generated");
+    }
 
-          if (role) {
-            await supabaseAdmin
-              .from("user_roles")
-              .upsert({ user_id: newUserId, role, tenant_id: tenantIdFinal }, { onConflict: 'user_id,role,tenant_id' });
-          }
+    if (newUserId) {
+      await supabaseAdmin
+        .from("profiles")
+        .upsert(
+          { id: newUserId, email, full_name: fullName || null, status: "pending" },
+          { onConflict: "id" },
+        );
 
-          // Link invited user to tenant immediately so owners can see them
-          const { data: existingTU } = await supabaseAdmin
-            .from("tenant_users")
-            .select("id")
-            .eq("user_id", newUserId)
-            .eq("tenant_id", tenantIdFinal)
-            .maybeSingle();
-          if (!existingTU) {
-            await supabaseAdmin
-              .from("tenant_users")
-              .insert({ user_id: newUserId, tenant_id: tenantIdFinal, role: role || 'member' });
-          }
-
-          // *** CRITICAL FIX: Insert module permissions immediately for new users ***
-          if (modulePermissions && modulePermissions.length > 0) {
-            const permissionsToInsert = modulePermissions.map((module) => ({
-              user_id: newUserId,
-              module: module,
-              can_access: true,
-            }));
-
-            const { error: permError } = await supabaseAdmin
-              .from("user_permissions")
-              .insert(permissionsToInsert);
-            
-            if (permError) {
-              console.error("Error inserting permissions:", permError);
-            } else {
-            }
-          }
-
-          // Optionally attach campaigner/sales person ids provided
-          if (campaignerId) {
-            await supabaseAdmin
-              .from("profiles")
-              .update({ campaigner_id: campaignerId })
-              .eq("id", newUserId);
-          }
-          // Use effectiveSalesPersonId which may be auto-created
-          if (effectiveSalesPersonId) {
-            await supabaseAdmin
-              .from("profiles")
-              .update({ sales_person_id: effectiveSalesPersonId })
-              .eq("id", newUserId);
-          }
-
-          // Link campaigner to agencies if provided
-          if (campaignerId && agencyIds && agencyIds.length > 0) {
-            const campaignerAgenciesToInsert = agencyIds.map((agencyId) => ({
-              campaigner_id: campaignerId,
-              agency_id: agencyId,
-            }));
-
-            await supabaseAdmin
-              .from("campaigner_agencies")
-              .upsert(campaignerAgenciesToInsert, { onConflict: 'campaigner_id,agency_id' });
-          }
-
-          // Link sales person to agencies if provided (use effectiveSalesPersonId)
-          if (effectiveSalesPersonId && agencyIds && agencyIds.length > 0) {
-            const salesPersonAgenciesToInsert = agencyIds.map((agencyId) => ({
-              sales_person_id: effectiveSalesPersonId,
-              agency_id: agencyId,
-            }));
-
-            await supabaseAdmin
-              .from("sales_person_agencies")
-              .upsert(salesPersonAgenciesToInsert, { onConflict: 'sales_person_id,agency_id' });
-          }
-        }
+      if (role) {
+        await supabaseAdmin
+          .from("user_roles")
+          .upsert(
+            { user_id: newUserId, role, tenant_id: tenantIdFinal },
+            { onConflict: "user_id,role,tenant_id" },
+          );
       }
-    } catch (e) {
-      console.error("Invitation email exception:", e);
+
+      const { data: existingTU } = await supabaseAdmin
+        .from("tenant_users")
+        .select("id")
+        .eq("user_id", newUserId)
+        .eq("tenant_id", tenantIdFinal)
+        .maybeSingle();
+
+      if (!existingTU) {
+        await supabaseAdmin.from("tenant_users").insert({
+          user_id: newUserId,
+          tenant_id: tenantIdFinal,
+          role: role || "member",
+        });
+      }
+
+      if (modulePermissions && modulePermissions.length > 0) {
+        const permissionsToInsert = modulePermissions.map((module) => ({
+          user_id: newUserId,
+          module,
+          can_access: true,
+        }));
+        const { error: permError } = await supabaseAdmin
+          .from("user_permissions")
+          .insert(permissionsToInsert);
+        if (permError) console.error("Error inserting permissions:", permError);
+      }
+
+      if (effectiveCampaignerId) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ campaigner_id: effectiveCampaignerId })
+          .eq("id", newUserId);
+      }
+
+      if (effectiveSalesPersonId) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ sales_person_id: effectiveSalesPersonId })
+          .eq("id", newUserId);
+      }
+
+      if (effectiveCampaignerId && agencyIds && agencyIds.length > 0) {
+        const rows = agencyIds.map((agencyId) => ({
+          campaigner_id: effectiveCampaignerId,
+          agency_id: agencyId,
+        }));
+        await supabaseAdmin
+          .from("campaigner_agencies")
+          .upsert(rows, { onConflict: "campaigner_id,agency_id" });
+      }
+
+      if (effectiveSalesPersonId && agencyIds && agencyIds.length > 0) {
+        const rows = agencyIds.map((agencyId) => ({
+          sales_person_id: effectiveSalesPersonId,
+          agency_id: agencyId,
+        }));
+        await supabaseAdmin
+          .from("sales_person_agencies")
+          .upsert(rows, { onConflict: "sales_person_id,agency_id" });
+      }
     }
 
-    // Return success with invitation link
-    const directInvitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth`;
+    if (!skipEmail) {
+      await sendInvitationEmailViaResend(email, actionLink, orgName, fullName);
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
         message: "User invited successfully",
-        invitationLink: directInvitationLink,
+        emailSent: !skipEmail,
+        invitationLink: authRedirect,
       }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error: any) {
     console.error("Error in invite-user function:", error);
@@ -457,21 +656,13 @@ serve(async (req: Request) => {
         error: error.message,
       }),
       {
-        status: error.message === "Unauthorized" || error.message === "Only owners and agency owners can invite users" ? 403 : 500,
+        status:
+          error.message === "Unauthorized" ||
+          error.message === "Only owners and agency owners can invite users"
+            ? 403
+            : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });
-
-// Helper function to get role name in Hebrew
-function getRoleNameInHebrew(role: string): string {
-  const roleNames: Record<string, string> = {
-    owner: "בעלים",
-    agency_owner: "בעלים סוכנות",
-    team_manager: "מנהל צוות",
-    campaigner: "קמפיינר",
-    sales_person: "איש מכירות",
-  };
-  return roleNames[role] || role;
-}

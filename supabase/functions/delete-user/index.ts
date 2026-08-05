@@ -10,6 +10,22 @@ const corsHeaders = {
 interface DeleteUserRequest {
   userId?: string;
   email?: string;
+  tenantId?: string;
+  /** When true (default from UI), remove from tenant only. When false, delete globally. */
+  removeFromTenantOnly?: boolean;
+}
+
+async function findUserIdByEmail(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  email: string,
+): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .ilike("email", normalized)
+    .maybeSingle();
+  return profile?.id ?? null;
 }
 
 serve(async (req: Request) => {
@@ -28,7 +44,6 @@ serve(async (req: Request) => {
       },
     });
 
-    // Get the authorization header to verify the requesting user is an owner
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       throw new Error("Missing authorization header");
@@ -41,7 +56,6 @@ serve(async (req: Request) => {
       throw new Error("Unauthorized");
     }
 
-    // Check if the user is an owner or agency_owner
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
@@ -52,7 +66,7 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can delete users");
     }
 
-    const { userId, email }: DeleteUserRequest = await req.json();
+    const { userId, email, tenantId, removeFromTenantOnly = true }: DeleteUserRequest = await req.json();
 
     if (!userId && !email) {
       throw new Error("User ID or email is required");
@@ -60,14 +74,9 @@ serve(async (req: Request) => {
 
     let targetUserId = userId;
 
-    // If email provided, find the user ID from auth
     if (email && !targetUserId) {
-      const { data: users } = await supabaseAdmin.auth.admin.listUsers();
-      const targetUser = users?.users?.find(u => u.email === email);
-      
-      if (targetUser) {
-        targetUserId = targetUser.id;
-      } else {
+      targetUserId = await findUserIdByEmail(supabaseAdmin, email) ?? undefined;
+      if (!targetUserId) {
         throw new Error(`User with email ${email} not found`);
       }
     }
@@ -76,80 +85,119 @@ serve(async (req: Request) => {
       throw new Error("Could not determine user ID");
     }
 
-    // Prevent deleting yourself
     if (targetUserId === user.id) {
       throw new Error("Cannot delete yourself");
     }
 
+    // Tenant-scoped removal (default) — fast, does not touch auth
+    if (removeFromTenantOnly && tenantId) {
+      await supabaseAdmin
+        .from("user_managed_agencies")
+        .delete()
+        .eq("user_id", targetUserId);
 
-    // First, get the user's profile to check for campaigner_id
-    const { data: profile } = await supabaseAdmin
+      await supabaseAdmin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", targetUserId)
+        .eq("tenant_id", tenantId);
+
+      await supabaseAdmin
+        .from("tenant_users")
+        .delete()
+        .eq("user_id", targetUserId)
+        .eq("tenant_id", tenantId);
+
+      // Clear active tenant if it was this one
+      await supabaseAdmin
+        .from("user_active_tenant")
+        .delete()
+        .eq("user_id", targetUserId)
+        .eq("tenant_id", tenantId);
+
+    // Mark unused invitations for this tenant
+    const { data: targetProfile } = await supabaseAdmin
       .from("profiles")
-      .select("campaigner_id")
+      .select("email")
       .eq("id", targetUserId)
       .maybeSingle();
 
-    // Delete from user_managed_agencies
-    const { error: managedError } = await supabaseAdmin
+    const targetEmail = (email ?? targetProfile?.email)?.trim().toLowerCase();
+    if (targetEmail) {
+      await supabaseAdmin
+        .from("invitation_tokens")
+        .update({ used: true })
+        .eq("email", targetEmail)
+        .eq("tenant_id", tenantId)
+        .eq("used", false);
+    }
+
+      const { count: remainingTenants } = await supabaseAdmin
+        .from("tenant_users")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", targetUserId);
+
+      // If user has no tenants left and profile is pending, clean up profile row
+      if (remainingTenants === 0) {
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("status")
+          .eq("id", targetUserId)
+          .maybeSingle();
+
+        if (profile?.status === "pending") {
+          await supabaseAdmin.from("user_permissions").delete().eq("user_id", targetUserId);
+          await supabaseAdmin.from("profiles").delete().eq("id", targetUserId);
+          await supabaseAdmin.auth.admin.deleteUser(targetUserId);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "User removed from organization",
+          removedFromTenant: true,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // Full global delete
+    await supabaseAdmin
       .from("user_managed_agencies")
       .delete()
       .eq("user_id", targetUserId);
-    
-    if (managedError) {
-      console.error("Error deleting managed agencies:", managedError);
-    }
 
-    // Delete from user_roles
-    const { error: userRolesError } = await supabaseAdmin
+    await supabaseAdmin
       .from("user_roles")
       .delete()
       .eq("user_id", targetUserId);
-    
-    if (userRolesError) {
-      console.error("Error deleting user roles:", userRolesError);
-    }
 
-    // Delete from user_permissions
-    const { error: permissionsError } = await supabaseAdmin
+    await supabaseAdmin
       .from("user_permissions")
       .delete()
       .eq("user_id", targetUserId);
-    
-    if (permissionsError) {
-      console.error("Error deleting user permissions:", permissionsError);
-    }
 
-    // Delete from tenant_users
-    const { error: tenantError } = await supabaseAdmin
+    await supabaseAdmin
       .from("tenant_users")
       .delete()
       .eq("user_id", targetUserId);
-    
-    if (tenantError) {
-      console.error("Error deleting tenant users:", tenantError);
-    }
 
-    // Delete from profiles (this will trigger cascade if set up)
-    const { error: profileError } = await supabaseAdmin
+    await supabaseAdmin
       .from("profiles")
       .delete()
       .eq("id", targetUserId);
-    
-    if (profileError) {
-      console.error("Error deleting profile:", profileError);
-    }
 
-    // Try to delete user from auth
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
 
     if (deleteError) {
-      // If user not found in auth, it's okay - we already cleaned up the database
-      if (deleteError.message?.includes("User not found") || deleteError.status === 404) {
-      } else {
+      if (!deleteError.message?.includes("User not found") && deleteError.status !== 404) {
         console.error("Error deleting user from auth:", deleteError);
         throw deleteError;
       }
-    } else {
     }
 
     return new Response(
@@ -160,7 +208,7 @@ serve(async (req: Request) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error: any) {
     console.error("Error in delete-user function:", error);
@@ -170,9 +218,13 @@ serve(async (req: Request) => {
         error: error.message,
       }),
       {
-        status: error.message === "Unauthorized" || error.message === "Only owners and agency owners can delete users" ? 403 : 500,
+        status:
+          error.message === "Unauthorized" ||
+          error.message === "Only owners and agency owners can delete users"
+            ? 403
+            : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });
