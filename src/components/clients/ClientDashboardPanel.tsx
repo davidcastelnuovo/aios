@@ -613,9 +613,9 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   };
 
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-4 min-w-0" dir="rtl">
       {/* Screenshot preview (replaces iframe) */}
-      <div className="border rounded-lg overflow-hidden bg-muted/10 min-h-[400px] flex items-center justify-center">
+      <div className="border rounded-lg bg-muted/10 min-h-[200px] sm:min-h-[400px] flex items-center justify-center overflow-x-auto">
         {screenshotUrl ? (
           <img
             src={screenshotUrl}
@@ -637,7 +637,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         )}
       </div>
 
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         <Button
           type="button"
           variant="outline"

@@ -612,9 +612,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   };
 
   return (
-    <div className="space-y-3" dir="rtl">
+    <div className="space-y-3 min-w-0" dir="rtl">
       {/* Screenshot Preview */}
-      <div className="relative border rounded-lg overflow-hidden bg-muted/20" style={{ minHeight: 200 }}>
+      <div className="relative border rounded-lg bg-muted/20 overflow-x-auto" style={{ minHeight: 200 }}>
         {screenshotUrl ? (
           <img
             src={screenshotUrl}
@@ -639,7 +639,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
           size="sm"

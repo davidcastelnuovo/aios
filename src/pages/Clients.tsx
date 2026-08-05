@@ -118,6 +118,8 @@ export default function Clients() {
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [chatSelectedClientId, setChatSelectedClientId] = useState<string | null>(null);
+  const hideMobilePageHeader = isMobile && viewMode === "chat" && !!chatSelectedClientId;
 
   // Bulk Meta page sync
   const [showBulkMetaSync, setShowBulkMetaSync] = useState(false);
@@ -626,7 +628,11 @@ export default function Clients() {
   };
 
   return (
-    <div className="flex h-full min-h-0 max-h-full flex-col gap-2 md:gap-4 overflow-hidden p-2 md:p-4">
+    <div className={cn(
+      "flex h-full min-h-0 max-h-full flex-col overflow-hidden",
+      isMobile && viewMode === "chat" ? "p-0 gap-0" : "gap-2 md:gap-4 p-2 md:p-4",
+    )}>
+      {!hideMobilePageHeader && (
       <div className="flex items-center justify-between gap-2 shrink-0">
         <h2 className="text-xl md:text-2xl font-bold">לקוחות</h2>
 
@@ -872,6 +878,7 @@ export default function Clients() {
           </Sheet>
         </div>
       </div>
+      )}
 
       {/* Import dialogs opened from dropdown */}
       {showImportCSV && <ImportClientsCSV externalOpen={showImportCSV} onExternalOpenChange={setShowImportCSV} />}
@@ -1020,6 +1027,7 @@ export default function Clients() {
           getClientFinancialData={getClientFinancialData}
           initialClientId={pendingChatClientId ?? deepLinkClientId}
           initialTab={deepLinkTab}
+          onSelectedClientChange={setChatSelectedClientId}
         />
       ) : viewMode === "grid" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
