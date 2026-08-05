@@ -210,3 +210,106 @@ export function shouldApplyDeliveryStatus(previous: unknown, next: unknown): boo
   if (!nextRank) return false;
   return nextRank > (DELIVERY_STATUS_RANK[String(previous ?? "")] ?? 0);
 }
+
+export type MetaWhatsAppErrorExplanation = {
+  code: string | null;
+  /** Short Hebrew label for UI badges */
+  labelHe: string;
+  /** Full Hebrew message to store / show */
+  messageHe: string;
+  /** What ops should do (Hebrew) */
+  opsHintHe: string;
+  /** Blind retry usually makes Meta quality worse */
+  retryable: boolean;
+};
+
+/**
+ * Map Meta Cloud API / delivery webhook error codes to Hebrew ops guidance.
+ * Codes seen on lead→client alerts: 131049 (engagement), 131042 (payment),
+ * 131026 (undeliverable), 131047 (24h window), 200 (permissions).
+ */
+export function explainMetaWhatsAppError(
+  code: unknown,
+  fallbackDetail?: string | null,
+): MetaWhatsAppErrorExplanation {
+  const codeStr = code === null || code === undefined || code === ""
+    ? null
+    : String(code);
+  const detail = String(fallbackDetail ?? "").trim();
+
+  const table: Record<string, Omit<MetaWhatsAppErrorExplanation, "code">> = {
+    "131049": {
+      labelHe: "מגבלת מעורבות Meta",
+      messageHe:
+        "Meta חסמה את המסירה (קוד 131049) — מגבלת מעורבות/איכות על הודעות שיווקיות לנמען זה.",
+      opsHintHe:
+        "לא באג בתור של AIOS. בדקו Quality Rating של מספר ה-WhatsApp ב-Meta Business, הפחיתו נפח תבניות לנמענים שלא מגיבים, וודאו שהנמען לא חסם את המספר. ריצה חוזרת מיידית עלולה להחמיר.",
+      retryable: false,
+    },
+    "131042": {
+      labelHe: "בעיית תשלום Meta",
+      messageHe:
+        "Meta לא שלחה בגלל בעיית תשלום/חיוב בחשבון WhatsApp Business (קוד 131042).",
+      opsHintHe:
+        "היכנסו ל-Meta Business Suite → WhatsApp Manager → Billing ותקנו אמצעי תשלום / חוב. עד שזה יתוקן כל השליחות ייכשלו.",
+      retryable: false,
+    },
+    "131026": {
+      labelHe: "מספר לא ניתן למשלוח",
+      messageHe: "Meta דיווחה שההודעה לא ניתנת למשלוח (קוד 131026).",
+      opsHintHe:
+        "בדקו שמספר הלקוח תקין (כולל קידומת מדינה), שהמספר פעיל ב-WhatsApp, ושאינו חסום.",
+      retryable: false,
+    },
+    "131047": {
+      labelHe: "חלון 24 שעות",
+      messageHe: "חלון השירות של 24 שעות נסגר. יש לשלוח תבנית WhatsApp מאושרת.",
+      opsHintHe: "העבירו את שלב האוטומציה ל-send_mode=template עם תבנית מאושרת.",
+      retryable: true,
+    },
+    "131009": {
+      labelHe: "פרמטר לא תקין",
+      messageHe: "Meta דחתה פרמטר לא תקין בהודעה (קוד 131009).",
+      opsHintHe: "בדקו את מספר הטלפון ומשתני התבנית ב-Make/Webhook (אין ערכי placeholder).",
+      retryable: false,
+    },
+    "131008": {
+      labelHe: "חסר פרמטר בתבנית",
+      messageHe: "חסר פרמטר חובה בתבנית WhatsApp (קוד 131008).",
+      opsHintHe: "ודאו שכל משתני התבנית מגיעים מ-Make (שם לקוח, טלפון ליד וכו').",
+      retryable: true,
+    },
+    "200": {
+      labelHe: "אין הרשאה ל-WABA",
+      messageHe: "אין הרשאה לשלוח בשם חשבון ה-WhatsApp Business (קוד 200).",
+      opsHintHe:
+        "חדשו את חיבור Meta WhatsApp ב-AIOS, או בדקו שמשתמש הטוקן עדיין מנהל של ה-WABA.",
+      retryable: false,
+    },
+  };
+
+  const known = codeStr ? table[codeStr] : undefined;
+  if (known) {
+    return { code: codeStr, ...known };
+  }
+
+  return {
+    code: codeStr,
+    labelHe: codeStr ? `שגיאת Meta ${codeStr}` : "שגיאת Meta",
+    messageHe: detail
+      ? (codeStr ? `Meta שגיאה (קוד ${codeStr}): ${detail}` : `Meta שגיאה: ${detail}`)
+      : (codeStr ? `Meta שגיאה (קוד ${codeStr})` : "Meta WhatsApp send failed"),
+    opsHintHe: "בדקו את היסטוריית הריצות ואת סטטוס המספר ב-Meta Business Manager.",
+    retryable: false,
+  };
+}
+
+/** Extract a Meta error code from an automation_logs.error_message string. */
+export function extractMetaErrorCodeFromMessage(message: unknown): string | null {
+  const text = String(message ?? "");
+  const match =
+    text.match(/\(קוד\s*(\d+)\)/) ||
+    text.match(/\(#(\d+)\)/) ||
+    text.match(/\b(1310\d{2}|1320\d{2}|200)\b/);
+  return match?.[1] ?? null;
+}

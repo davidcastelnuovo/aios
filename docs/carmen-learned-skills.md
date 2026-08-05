@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-05 — Meta WA lead→client alerts: diagnose 131049/131042 (not silent queue)
+- **Skin slug:** `meta_wa_lead_alert_delivery_diagnosis` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Explain when Make/Webhook lead alerts via official Meta WhatsApp fail for some clients: check automation `התראת ליד ללקוח מ-Make / Webhook` → `automation_logs`. Dominant codes: **131049** (Meta engagement/quality limit — not AIOS queue), **131042** (Meta Billing). Ops: fix WABA billing/quality; prefer GREEN number (`DMM` +972-77); don’t blind-retry 131049.
+- **How:** Path = `automation-lead-webhook` → `trigger-automation` (`send_meta_whatsapp_message`, `phone_field=client_phone`) → `send-meta-whatsapp-message` → delivery webhook → `mark_automation_log_delivery_failure`. Helpers: `explainMetaWhatsAppError`, Automations → היסטוריית ריצות (Meta summary banner).
+- **Origin:** Carmen → Cursor DEV TASK — David: official WA API lead alerts not reaching some clients.
+
 ### 2026-08-05 — DMM notify/pulse recipient = Felix (not David fallback)
 - **Skin slug:** `dmm_notify_recipient_routing` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Know that DMM outbound pulse/health digests go to Felix (`972558833168`) via `tenant_heartbeat_settings.campaign_pulse_phone`, not to David. David only receives a DMM notify when he is the explicit `chat_id` / preferred recipient. Cross-tenant “newest session” owner fallback is refused.

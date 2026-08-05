@@ -3278,13 +3278,34 @@ async function executeMetaWhatsappMessage(supabase: any, config: any, data: any,
   if (!senderUserId) throw new Error('לא נמצא משתמש לשיוך שליחת Meta WhatsApp')
 
   const phoneNumber = resolveMetaDestinationPhone(config, data)
+  if (phoneNumber.length < 10 || phoneNumber.length > 15) {
+    throw new Error(
+      `מספר הטלפון של הנמען אינו תקין (${phoneNumber}). בדקו את client_phone ב-Make/Webhook.`,
+    )
+  }
+  const clientName = String(data?.client_name ?? '').trim()
+  if (clientName === 'שם הלקוח' || clientName.toLowerCase() === 'test') {
+    console.warn('[meta-whatsapp] placeholder client_name in lead alert payload', {
+      tenantId,
+      clientName,
+      phoneNumber,
+    })
+  }
+
+  // Prefer attaching the outbound chat row to the client when this is a
+  // lead→client alert (phone_field=client_phone). Keep lead_id for context
+  // when present — send-meta allows both once phoneNumber is set.
+  const phoneField = String(config.phone_field || 'phone')
+  const sendingToClient = phoneField === 'client_phone' || phoneField === 'recipient_phone'
   const payload: Record<string, unknown> = {
     tenantId,
     integrationId: integration.id,
     senderUserId,
     phoneNumber,
     clientId: data?.client_id || null,
-    leadId: data?.lead_id || data?.id || null,
+    leadId: sendingToClient
+      ? (data?.lead_id || null)
+      : (data?.lead_id || data?.id || null),
   }
 
   if (sendMode === 'template') {
@@ -3327,7 +3348,11 @@ async function executeMetaWhatsappMessage(supabase: any, config: any, data: any,
   })
   const result = await response.json().catch(() => ({}))
   if (!response.ok || result?.error) {
-    throw new Error(result?.error || `Meta WhatsApp send failed (${response.status})`)
+    const parts = [
+      result?.error || `Meta WhatsApp send failed (${response.status})`,
+      result?.ops_hint ? `תפעול: ${result.ops_hint}` : null,
+    ].filter(Boolean)
+    throw new Error(parts.join(' — '))
   }
 
   return {
