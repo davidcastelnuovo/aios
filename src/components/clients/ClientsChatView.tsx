@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy, Loader2, Video } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy, Loader2, Video, ArrowRight } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
 import { CreateOrgForClientDialog } from "@/components/clients/CreateOrgForClientDialog";
 import { AssignPhoneFromWhatsAppDialog } from "@/components/chat/AssignPhoneFromWhatsAppDialog";
@@ -74,13 +75,21 @@ export function ClientsChatView({
   initialClientId,
   initialTab,
 }: ClientsChatViewProps) {
+  const isMobile = useIsMobile();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(
-    initialClientId ?? clients[0]?.id ?? null
+    initialClientId ?? null
   );
   const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(initialTab ?? "details");
+
+  // Auto-select first client on desktop only — mobile starts on the list screen
+  useEffect(() => {
+    if (!isMobile && !selectedClientId && clients.length > 0) {
+      setSelectedClientId(clients[0].id);
+    }
+  }, [isMobile, clients, selectedClientId]);
 
   // Guard: redirect away from "business" tab if user lacks finance view permission
   useEffect(() => {
@@ -431,9 +440,10 @@ export function ClientsChatView({
   };
 
   return (
-    <div className="flex h-full min-h-0 max-h-full border rounded-lg overflow-hidden bg-background" dir="rtl">
-      {/* Right side - Client list (25%) */}
-      <div className="w-[25%] min-w-[240px] border-s flex flex-col bg-muted/20 overflow-hidden min-h-0" dir="rtl">
+    <div className="flex h-full min-h-0 max-h-full border rounded-lg overflow-hidden bg-background w-full max-w-full" dir="rtl">
+      {/* Client list — full screen on mobile until a client is selected */}
+      {(!isMobile || !selectedClientId) && (
+      <div className={cn("border-s flex flex-col bg-muted/20 overflow-hidden min-h-0", isMobile ? "w-full flex-1" : "w-[25%] min-w-[240px] max-w-[25%]")} dir="rtl">
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center gap-2">
@@ -631,12 +641,19 @@ export function ClientsChatView({
           </div>
         </div>
       </div>
-      {/* Left side - Client detail panel (75%) */}
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+      )}
+      {/* Client detail — full screen on mobile after selecting a client */}
+      {(!isMobile || selectedClientId) && (
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
         {selectedClient ? (
           <>
             {/* Toolbar */}
             <div className="flex items-center gap-2 p-3 border-b bg-background/95 backdrop-blur-sm flex-wrap">
+              {isMobile && (
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSelectedClientId(null)} aria-label="חזרה לרשימה">
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              )}
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
@@ -1345,6 +1362,7 @@ export function ClientsChatView({
           </div>
         )}
       </div>
+      )}
 
       {/* Call dialog */}
       {selectedClient?.phone && (
