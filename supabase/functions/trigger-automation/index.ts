@@ -2467,57 +2467,82 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     throw new Error(`Subscriber ID לא תקין (לא מספר): ${subscriberId}`)
   }
   
-  // Update custom fields if mapping is provided
-  const customFieldUpdates: any[] = []
-  
+  // Update custom fields if mapping is provided.
+  // Legacy meeting keys (date/time/location/contact) stay supported; lead-alert
+  // automations use custom_fields: [{ field_id|field_name, value_template }].
+  const customFieldUpdates: Array<{ field_id?: number; field_name?: string; field_value: string }> = []
+
   if (field_mapping?.date && data.meeting_date) {
     customFieldUpdates.push({
       field_id: parseInt(field_mapping.date),
-      field_value: data.meeting_date
+      field_value: String(data.meeting_date),
     })
   }
-  
+
   if (field_mapping?.time && data.meeting_time) {
     customFieldUpdates.push({
       field_id: parseInt(field_mapping.time),
-      field_value: data.meeting_time
+      field_value: String(data.meeting_time),
     })
   }
-  
+
   if (field_mapping?.location && data.meeting_location) {
     customFieldUpdates.push({
       field_id: parseInt(field_mapping.location),
-      field_value: data.meeting_location
+      field_value: String(data.meeting_location),
     })
   }
-  
+
   if (field_mapping?.contact && data.contact_name) {
     customFieldUpdates.push({
       field_id: parseInt(field_mapping.contact),
-      field_value: data.contact_name
+      field_value: String(data.contact_name),
     })
   }
-  
-  // Update custom fields
+
+  const customFields = Array.isArray(config.custom_fields) ? config.custom_fields : []
+  for (const entry of customFields) {
+    if (!entry || typeof entry !== 'object') continue
+    const fieldId = Number.parseInt(String(entry.field_id ?? '').trim(), 10)
+    const fieldName = typeof entry.field_name === 'string' ? entry.field_name.trim() : ''
+    const template = String(entry.value_template ?? entry.value ?? '')
+    if (!template || (!Number.isFinite(fieldId) && !fieldName)) continue
+    const resolved = replaceTemplateVariables(template, { ...data }, undefined).trim()
+    if (!resolved) continue
+    customFieldUpdates.push({
+      ...(Number.isFinite(fieldId) ? { field_id: fieldId } : {}),
+      ...(fieldName ? { field_name: fieldName } : {}),
+      field_value: resolved,
+    })
+  }
+
   if (customFieldUpdates.length > 0) {
-    
     for (const fieldUpdate of customFieldUpdates) {
-      const fieldResponse = await fetch(`${baseUrl}/subscriber/setCustomField`, {
+      const useByName = !fieldUpdate.field_id && fieldUpdate.field_name
+      const endpoint = useByName ? 'subscriber/setCustomFieldByName' : 'subscriber/setCustomField'
+      const body = useByName
+        ? {
+          subscriber_id: subscriberIdNum,
+          field_name: fieldUpdate.field_name,
+          field_value: fieldUpdate.field_value,
+        }
+        : {
+          subscriber_id: subscriberIdNum,
+          field_id: fieldUpdate.field_id,
+          field_value: fieldUpdate.field_value,
+        }
+      const fieldResponse = await fetch(`${baseUrl}/${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          subscriber_id: subscriberIdNum,
-          field_id: fieldUpdate.field_id,
-          field_value: fieldUpdate.field_value,
-        }),
+        body: JSON.stringify(body),
       })
-      
+
       if (!fieldResponse.ok) {
         const errorText = await fieldResponse.text()
-        console.error(`Failed to set custom field ${fieldUpdate.field_id}:`, errorText)
+        console.error(`Failed to set custom field ${fieldUpdate.field_id || fieldUpdate.field_name}:`, errorText)
       }
     }
   }
