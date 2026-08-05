@@ -407,7 +407,7 @@ Deno.serve(async (req) => {
 
   const deliveries: Array<{ tenant_id: string; sent: boolean; error?: string }> = [];
   const { data: deliverySettings } = await supabase.from('tenant_heartbeat_settings')
-    .select('tenant_id')
+    .select('tenant_id, campaign_pulse_phone')
     .eq('campaign_pulse_enabled', true);
   for (const setting of deliverySettings || []) {
     const claim = await supabase.rpc('claim_health_digest_delivery', { p_tenant_id: setting.tenant_id });
@@ -417,6 +417,7 @@ Deno.serve(async (req) => {
       const delivery = await supabase.rpc('claude_notify_david', {
         p_message: digest,
         p_tenant: setting.tenant_id,
+        p_chat_id: setting.campaign_pulse_phone || null,
       });
       const sent = !delivery.error && delivery.data?.queued === true;
       deliveries.push({

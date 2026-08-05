@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     body.source === 'approved_manual_trigger' || body.source === 'morning_cron'
   )
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
-    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at')
+    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
   const { data: settings, error: settingsError } = await settingsQuery
   if (settingsError) return json({ error: settingsError.message }, 500)
@@ -373,12 +373,13 @@ Deno.serve(async (req) => {
       if (claim.error) console.error('Failed to claim campaign pulse delivery:', claim.error.message)
     }
     if (deliveryClaimed) {
-      // Reuse the tenant's existing "Carmen Direct" automation and its most
-      // recent direct chat. This keeps the sender, recipient and provider
-      // identical to Carmen's normal replies (Manus WA or Green API).
+      // Deliver via Carmen Direct, but pin the recipient when
+      // campaign_pulse_phone is set (e.g. Felix on DMM). claude-notify also
+      // refuses cross-tenant owner fallback (David's newest session on DMM).
       const delivery = await supabase.rpc('claude_notify_david', {
         p_message: digest,
         p_tenant: tenantId,
+        p_chat_id: setting.campaign_pulse_phone || null,
       })
       sent = !delivery.error && delivery.data?.queued === true
       if (!sent) {
