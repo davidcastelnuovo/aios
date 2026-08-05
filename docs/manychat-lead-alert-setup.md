@@ -12,28 +12,48 @@ AIOS already created these via the ManyChat API on page **DMM-WA**:
 
 Tag: **`aios_lead_alert`** (ID `93553458`)
 
+Automation: **התראת ליד ללקוח מ-Make / Webhook** (`314a7c5a-d7e3-4b24-9a18-095615906e08`)
+
+## Status checklist
+
+| Step | Owner | Status |
+|---|---|---|
+| Custom fields + tag in ManyChat | AIOS API | ✅ Done |
+| `send_whatsapp` supports `custom_fields` + `phone_field=client_phone` | AIOS code | ✅ Done |
+| Flow builder UI: tag / phone field / “מלא התראת ליד” | AIOS UI | ✅ Done |
+| removeTag before addTag (repeat alerts re-fire) | AIOS code | ✅ Done |
+| **ManyChat Flow: Tag added → WhatsApp template** | **David (UI only)** | ⏳ **Blocking** |
+| Switch Make step from Meta → `send_whatsapp` | AIOS (after Flow live) | ⏳ Waiting |
+
 ## What you still create in ManyChat (UI only)
 
-ManyChat does not let the API build a WhatsApp-template Flow. One Flow is enough:
+ManyChat does not let the API build a WhatsApp-template Flow. One automation is enough:
 
-1. **Automations → New automation**
-2. Trigger: **Tag added** → choose `aios_lead_alert`
-3. Action: **Send WhatsApp Message** → template `new_lead_alert_he` / `lead_alert_compact_he`
+1. **Automations → New automation** (Rules / Custom trigger)
+2. Trigger: **Tag applied** → choose `aios_lead_alert`
+3. Action: **Send WhatsApp Message** → template used for lead alerts  
+   Prefer the same copy as Meta: `new_lead_alert_he` / `lead_alert_compact_he`  
+   (must exist & be APPROVED on the **DMM-WA / 77** WhatsApp channel in ManyChat)
 4. Map template variables:
    - `{{1}}` → User field `client_name`
    - `{{2}}` → User field `lead_name`
    - `{{3}}` → User field `lead_phone`
    - `{{4}}` → User field `lead_email`
    - `{{5}}` → User field `form_qa_summary`
-5. Publish / activate
+5. Set the rule to allow **multiple times** per contact (not once-only)
+6. Optional cleanup: **Remove tag** `aios_lead_alert` after send  
+   (AIOS also removes the tag before re-adding, so either side is enough)
+7. Publish / activate
 
-Optional cleanup step after send: **Remove tag** `aios_lead_alert` so the same contact can be alerted again later.
+When the Flow is live — tell AIOS/Cursor and we’ll switch the Make automation + probe one test lead to your phone.
 
 ## AIOS automation config (ready to apply)
 
 ```json
 {
   "manychat_tag_id": "93553458",
+  "phone_mode": "field",
+  "phone_field": "client_phone",
   "custom_fields": [
     { "field_id": 14845212, "field_name": "client_name", "value_template": "{{client_name}}" },
     { "field_id": 14845211, "field_name": "lead_name", "value_template": "{{lead_name}}" },
@@ -44,4 +64,21 @@ Optional cleanup step after send: **Remove tag** `aios_lead_alert` so the same c
 }
 ```
 
-After the Flow is live, switch the Make lead-alert step from `send_meta_whatsapp_message` to `send_whatsapp` with the config above (recipient = client WhatsApp subscriber / `client_phone`).
+In the Flow Builder: change the send step action to **שלח WhatsApp (ManyChat)** and click **מלא התראת ליד (DMM)**, or apply the JSON above.
+
+## Why phone_field matters
+
+Make/Webhook payloads look like:
+
+- `client_phone` = who should get the alert (the client)
+- `phone` / `lead_phone` = the new lead
+
+Without `phone_field=client_phone`, ManyChat would look up the **lead** (or fail). That field is required for this automation.
+
+## Probe plan (after switch)
+
+1. Keep Meta step until ManyChat Flow is confirmed.
+2. Switch step → `send_whatsapp` with config above.
+3. Fire one test webhook to David’s WhatsApp (`972507677613`) or a safe client.
+4. Confirm: ManyChat subscriber fields filled → tag applied → template delivered from **DMM 77**.
+5. Only then leave Meta disconnected for this automation.
