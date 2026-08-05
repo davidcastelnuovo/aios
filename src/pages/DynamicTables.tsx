@@ -68,6 +68,7 @@ import { toast } from "sonner";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useUserRole } from "@/hooks/useUserRole";
+import { resolveListCategory } from "@/lib/crmTableCategories";
 
 interface CrmTable {
   id: string;
@@ -484,16 +485,18 @@ export default function DynamicTables() {
 
   const groupedTables = useMemo(() => {
     if (!filteredTables) return {};
-    
+
     const groups: Record<string, CrmTable[]> = {};
-    filteredTables.forEach(table => {
-      const category = table.category || 'ללא קבוצה';
+    filteredTables.forEach((table) => {
+      // Derive from integration_type so Facebook Ecommerce / Google Ads ecommerce
+      // never sit under "Facebook Insights" just because category was mis-set.
+      const category = resolveListCategory(table);
       if (!groups[category]) {
         groups[category] = [];
       }
       groups[category].push(table);
     });
-    
+
     return groups;
   }, [filteredTables]);
 
@@ -514,7 +517,13 @@ export default function DynamicTables() {
   // Soft branded color scheme per category
   const getCategoryStyle = (category: string): { gradient: string; iconBg: string; iconColor: string; border: string; icon: any } => {
     const c = category.toLowerCase();
-    if (c.includes('facebook') && c.includes('ecom')) {
+    // Canonical ecommerce bucket (Hebrew) + legacy "Facebook Ecommerce" labels
+    if (
+      c.includes('איקומרס') ||
+      c === 'ecommerce' ||
+      c.includes('ecom') ||
+      (c.includes('facebook') && c.includes('ecom'))
+    ) {
       return {
         gradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30',
         iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',

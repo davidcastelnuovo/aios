@@ -28,6 +28,7 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
+import { defaultCategoryForCreate, ECOMMERCE_CATEGORY } from "@/lib/crmTableCategories";
 
 interface FacebookEcommerceTableDialogProps {
   open: boolean;
@@ -162,7 +163,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
         body: {
           name: tableName,
           slug,
-          category: category || "Facebook Ecommerce",
+          category: category.trim() || defaultCategoryForCreate("facebook_ecommerce"),
           integration_type: "facebook_ecommerce",
           integration_settings: {
             ad_account_id: validatedAccount.id,
@@ -317,7 +318,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
 
             <div className="space-y-2">
               <Label>קטגוריה (אופציונלי)</Label>
-              <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder="Facebook Ecommerce" />
+              <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder={ECOMMERCE_CATEGORY} />
             </div>
 
             <div className="space-y-2">
