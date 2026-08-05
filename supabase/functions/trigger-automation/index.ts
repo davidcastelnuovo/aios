@@ -2409,6 +2409,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     
     
     try {
+      // Set both whatsapp_phone AND phone so findBySystemField can re-find this
+      // contact later. phone requires has_opt_in_sms + consent_phrase.
       const createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
         method: 'POST',
         headers: {
@@ -2416,8 +2418,9 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          first_name: contactRecord?.contact_name || 'Unknown',
+          first_name: contactRecord?.contact_name || data?.client_name || data?.contact_name || 'Unknown',
           whatsapp_phone: whatsappPhone,
+          phone: `972${last9Digits}`,
           has_opt_in_sms: true,
           // Some ManyChat accounts deny importing email. Don't attempt it here.
           has_opt_in_email: false,
@@ -2448,22 +2451,55 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         const errStr = JSON.stringify(createResult)
         console.error('Failed to create subscriber:', createResult)
 
-        if (errStr.includes('wa_id') || errStr.includes('WhatsApp ID already exists')) {
-          
-          // Mark with special status to indicate this specific scenario
-          const specialStatus = 'EXISTING_WA_SUBSCRIBER'
-          if (contactType === 'lead' && contactRecord?.id) {
+        if (errStr.includes('wa_id') || errStr.includes('WhatsApp ID already exists') || /already exists/i.test(errStr)) {
+          // Recover: search again by phone_number custom field AND system phone.
+          // Many WA-only contacts were created without system `phone`, so the first
+          // findBySystemField miss is expected until phone_number is populated.
+          const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
+          const recoverCandidates = [
+            whatsappPhone,
+            `972${last9Digits}`,
+            `0${last9Digits}`,
+            last9Digits,
+          ]
+          if (fieldId) {
+            subscriberId = await findSubscriberByCustomFieldMC(apiKey, fieldId, recoverCandidates)
+          }
+          if (!subscriberId) {
+            for (const phoneFormat of recoverCandidates) {
+              const searchUrl = `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(phoneFormat)}`
+              const searchResponse = await fetch(searchUrl, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Content-Type': 'application/json',
+                },
+              })
+              if (!searchResponse.ok) continue
+              const searchResult = await searchResponse.json()
+              const foundId = extractSubscriberId(searchResult)
+              if (foundId) {
+                subscriberId = foundId
+                break
+              }
+            }
+          }
+          if (subscriberId) {
+            await setPhoneCustomFieldMC(apiKey, subscriberId, whatsappPhone)
+            if (contactType === 'lead' && contactRecord?.id) {
+              await supabase.from('leads').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
+            } else if (contactType === 'client' && contactRecord?.id) {
+              await supabase.from('clients').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
+            }
+          } else if (contactType === 'lead' && contactRecord?.id) {
             await supabase.from('leads')
-              .update({ manychat_subscriber_id: specialStatus })
+              .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
               .eq('id', contactRecord.id)
           } else if (contactType === 'client' && contactRecord?.id) {
             await supabase.from('clients')
-              .update({ manychat_subscriber_id: specialStatus })
+              .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
               .eq('id', contactRecord.id)
           }
-          
-          // Don't throw - this is a known ManyChat limitation, not an error
-          // The subscriber exists but cannot be found via API
         }
       }
     } catch (createError) {
