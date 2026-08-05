@@ -44,23 +44,12 @@ import {
 } from "@/lib/adsMetrics";
 import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
+import { COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
 
-const DATE_FILTERS = [
-  { value: 'today', label: 'היום' },
-  { value: 'yesterday', label: 'אתמול' },
-  { value: 'this_week', label: 'השבוע' },
-  { value: 'last_week', label: 'שבוע שעבר' },
-  { value: 'last_7_days', label: '7 ימים אחרונים' },
-  { value: 'last_14_days', label: '14 יום אחרונים' },
-  { value: 'last_30_days', label: '30 יום אחרונים' },
-  { value: 'last_70_days', label: '70 יום אחרונים' },
-  { value: 'this_month', label: 'החודש הנוכחי' },
-  { value: 'last_month', label: 'חודש קודם' },
-  { value: 'custom', label: 'טווח מותאם אישית' },
-];
+const DATE_FILTERS = COMBINED_DASHBOARD_DATE_FILTERS;
 
 const PLATFORM_CONFIG: Record<string, { name: string; color: string; bgColor: string }> = {
   facebook_insights: { name: 'Facebook', color: 'text-blue-600', bgColor: 'bg-blue-100' },
