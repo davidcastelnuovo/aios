@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
@@ -160,6 +161,8 @@ export function WeeklyTaskBoard() {
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
   const [quickAddSlot, setQuickAddSlot] = useState<{ date: Date; time: string } | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useState("");
+  // Mobile: full task list by default; calendar opens only via the calendar icon.
+  const [mobileCalendarOpen, setMobileCalendarOpen] = useState(false);
 
   // Full task type from DB
   type FullTask = Task & {
@@ -1233,11 +1236,9 @@ export function WeeklyTaskBoard() {
       {/* Board with Overdue Panel */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Mobile Layout */}
+        {/* Mobile Layout — full task list by default; calendar opens from icon only */}
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
-          {/* Header: Title + Navigation + Filters */}
-          <div className="flex flex-wrap items-center gap-2 justify-between">
-            {/* Quick campaigner filter - mobile */}
+          <div className="flex flex-wrap items-center gap-2 justify-between shrink-0">
             <Select
               value={filters.campaignerId}
               onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
@@ -1258,30 +1259,15 @@ export function WeeklyTaskBoard() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-wrap items-center gap-2 justify-between">
+          <div className="flex items-center gap-2 justify-between shrink-0">
+            <h1 className="text-xl font-bold">משימות</h1>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">משימות</h1>
-              <Button variant="outline" size="icon" onClick={goToPrev}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={goToNext}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={goToToday}>
-                <CalendarDays className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold truncate">
-                {viewMode === "daily" && format(currentDate, "EEEE, dd/MM", { locale: he })}
-                {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
-                {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
-              </h2>
               <Button
                 variant="outline"
                 size="icon"
                 onClick={() => setFiltersDialogOpen(true)}
                 className="relative"
+                aria-label="פילטרים"
               >
                 <Filter className="h-4 w-4" />
                 {activeFiltersCount > 0 && (
@@ -1290,28 +1276,24 @@ export function WeeklyTaskBoard() {
                   </Badge>
                 )}
               </Button>
-              <ToggleGroup
-                type="single"
-                value={viewMode}
-                onValueChange={handleViewModeChange}
-                className="border rounded-lg"
+              <Button
+                variant={mobileCalendarOpen ? "default" : "outline"}
+                size="icon"
+                onClick={() => setMobileCalendarOpen((open) => !open)}
+                aria-label={mobileCalendarOpen ? "סגור יומן" : "פתח יומן"}
+                aria-pressed={mobileCalendarOpen}
+                title="יומן"
+                className="shrink-0"
               >
-                <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="px-2">
-                  <List className="h-4 w-4" />
-                </ToggleGroupItem>
-                <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="px-2">
-                  <LayoutGrid className="h-4 w-4" />
-                </ToggleGroupItem>
-                <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="px-2">
-                  <Calendar className="h-4 w-4" />
-                </ToggleGroupItem>
-              </ToggleGroup>
+                <CalendarDays className="h-5 w-5" />
+              </Button>
             </div>
           </div>
 
-          {/* Task Backlog Panel - full width, max 40% with internal scroll */}
-          <div className="w-full max-h-[40%] overflow-y-auto overscroll-contain border rounded-xl bg-muted/30 [&>div]:!w-full [&>div]:!min-w-0 shrink-0">
+          {/* Full-height task list (default mobile view) */}
+          <div className="flex-1 min-h-0 overflow-hidden">
             <TaskBacklogPanel
+              variant="mobileFull"
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
                 toggleComplete.mutate({ taskId, completed })
@@ -1328,68 +1310,118 @@ export function WeeklyTaskBoard() {
               onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
             />
           </div>
-          
-          {/* Calendar - single day in weekly mode, full width */}
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-            {viewMode === "daily" && (
-              <DailyView
-                date={currentDate}
-                tasks={dailyTasks}
-                onToggleComplete={(taskId, completed) =>
-                  toggleComplete.mutate({ taskId, completed })
-                }
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-                onDropOnSlot={(taskId, time) => {
-                  updateDueDate.mutate({
-                    taskId,
-                    newDate: format(currentDate, "yyyy-MM-dd"),
-                    newTime: time + ":00",
-                  });
-                }}
-              />
-            )}
 
-            {viewMode === "weekly" && (
-              <DayColumn
-                date={currentDate}
-                tasks={currentRangeTasks}
-                onAddTask={(title, date) => addTask.mutate({ title, date })}
-                onToggleComplete={(taskId, completed) =>
-                  toggleComplete.mutate({ taskId, completed })
-                }
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-                onDurationChange={(taskId, duration) =>
-                  updateDuration.mutate({ taskId, duration })
-                }
-                onCalendarEventClick={(event) => {
-                  setSelectedCalendarEvent(event);
-                  setCalendarEventDialogOpen(true);
-                }}
-                onSlotDoubleClick={handleSlotDoubleClick}
-                isLoading={isLoading || addTask.isPending}
-                isCurrentDay={isToday(currentDate)}
-                calendarEvents={filteredCalendarEvents}
-              />
-            )}
+          <Sheet open={mobileCalendarOpen} onOpenChange={setMobileCalendarOpen}>
+            <SheetContent
+              side="bottom"
+              className="h-[92dvh] max-h-[92dvh] p-3 flex flex-col gap-2 rounded-t-2xl md:hidden"
+            >
+              <SheetHeader className="space-y-2 text-right shrink-0 pr-8">
+                <SheetTitle className="flex items-center gap-2 justify-start">
+                  <CalendarDays className="h-5 w-5" />
+                  יומן משימות
+                </SheetTitle>
+                <div className="flex flex-wrap items-center gap-2 justify-between">
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" onClick={goToPrev} aria-label="הקודם">
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={goToNext} aria-label="הבא">
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={goToToday} className="gap-1">
+                      <CalendarDays className="h-4 w-4" />
+                      היום
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold truncate">
+                      {viewMode === "daily" && format(currentDate, "EEEE, dd/MM", { locale: he })}
+                      {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
+                      {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
+                    </span>
+                    <ToggleGroup
+                      type="single"
+                      value={viewMode}
+                      onValueChange={handleViewModeChange}
+                      className="border rounded-lg"
+                    >
+                      <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="px-2">
+                        <List className="h-4 w-4" />
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="px-2">
+                        <LayoutGrid className="h-4 w-4" />
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="px-2">
+                        <Calendar className="h-4 w-4" />
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  </div>
+                </div>
+              </SheetHeader>
 
-            {viewMode === "monthly" && (
-              <MonthlyView
-                currentDate={currentDate}
-                tasks={currentRangeTasks}
-                onDayClick={handleDayClick}
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-              />
-            )}
-          </div>
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+                {viewMode === "daily" && (
+                  <DailyView
+                    date={currentDate}
+                    tasks={dailyTasks}
+                    onToggleComplete={(taskId, completed) =>
+                      toggleComplete.mutate({ taskId, completed })
+                    }
+                    onTaskClick={(task) => {
+                      setSelectedTask(task);
+                      setDialogOpen(true);
+                    }}
+                    onDropOnSlot={(taskId, time) => {
+                      updateDueDate.mutate({
+                        taskId,
+                        newDate: format(currentDate, "yyyy-MM-dd"),
+                        newTime: time + ":00",
+                      });
+                    }}
+                  />
+                )}
+
+                {viewMode === "weekly" && (
+                  <DayColumn
+                    date={currentDate}
+                    tasks={currentRangeTasks}
+                    onAddTask={(title, date) => addTask.mutate({ title, date })}
+                    onToggleComplete={(taskId, completed) =>
+                      toggleComplete.mutate({ taskId, completed })
+                    }
+                    onTaskClick={(task) => {
+                      setSelectedTask(task);
+                      setDialogOpen(true);
+                    }}
+                    onDurationChange={(taskId, duration) =>
+                      updateDuration.mutate({ taskId, duration })
+                    }
+                    onCalendarEventClick={(event) => {
+                      setSelectedCalendarEvent(event);
+                      setCalendarEventDialogOpen(true);
+                    }}
+                    onSlotDoubleClick={handleSlotDoubleClick}
+                    isLoading={isLoading || addTask.isPending}
+                    isCurrentDay={isToday(currentDate)}
+                    calendarEvents={filteredCalendarEvents}
+                  />
+                )}
+
+                {viewMode === "monthly" && (
+                  <MonthlyView
+                    currentDate={currentDate}
+                    tasks={currentRangeTasks}
+                    onDayClick={handleDayClick}
+                    onTaskClick={(task) => {
+                      setSelectedTask(task);
+                      setDialogOpen(true);
+                    }}
+                  />
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
 
         {/* Desktop: Side by side with sticky panel */}
