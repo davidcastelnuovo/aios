@@ -153,6 +153,15 @@ Deno.serve(async (req) => {
             const dayOfWeek = now.getDay();
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
             break;
+          case 'last_week': {
+            const dow = now.getDay();
+            const startOfThisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+            since = new Date(startOfThisWeek);
+            since.setDate(startOfThisWeek.getDate() - 7);
+            until = new Date(startOfThisWeek);
+            until.setDate(startOfThisWeek.getDate() - 1);
+            break;
+          }
           case 'last_7_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
             until = today;
