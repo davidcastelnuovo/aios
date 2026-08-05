@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-05 — Group replies only when addressed (not talked about)
+- **Skin slug:** `group_response_only_when_addressed` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** In WhatsApp groups, wake only on direct address/ask (`כרמן תבדקי`, `כרמן תצטרפי`, `כרמן?`). Stay silent when people talk about her in third person (`כרמן אמורה…`, `למה כרמן שלחה…`, `דיברנו על כרמן`).
+- **How:** Deterministic gate `groupMessageInvokesCarmen` in `_shared/carmen.ts` (used by Manus + Green group paths). Uncertain → no reply. Meeting join still works when she is asked (`כרמן תצטרפי` + Zoom/Meet).
+- **Origin:** Carmen → Cursor — David: pulse fired in Daniel’s group when they talked about Carmen, not to her.
+
 ### 2026-08-05 — Pulse check on WhatsApp = short digest only
 - **Skin slug:** `pulse_check` (global + tenant overrides updated)
 - **What Carmen can now do:** On WhatsApp / scheduled tasks, answer “בדיקת דופק” with `whatsapp_digest` only (status counts + dashboard link). Never paste a full Markdown client table. Full detail stays on `/dmm-dashboard`.

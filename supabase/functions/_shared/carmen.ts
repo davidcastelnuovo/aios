@@ -100,11 +100,75 @@ function messageHasTrigger(normalizedMsg: string, triggerKeywords: string[]): bo
   return CARMEN_NAME_VARIANT_RE.test(prefix);
 }
 
-// Group turns are intentionally stricter than private sessions: every message
-// must address Carmen explicitly using one of the supported Hebrew spellings.
+// Hebrew-safe boundary (JS \b is ASCII-only and breaks on Hebrew).
+const HB = String.raw`(?:^|[\s,.:;!?()[\]{}"'׳״،؛؟-])`;
+const HE = String.raw`(?=$|[\s,.:;!?()[\]{}"'׳״،؛؟-])`;
+
+// Whole-word Carmen name (כרמן / קרמן / קארמן / כארמן).
+const CARMEN_NAME_WORD_RE = new RegExp(`${HB}[כק]א?רמן${HE}`, 'u');
+
+// Third-person / reporting about Carmen ("כרמן אמורה…", "כרמן שלחה…").
+const CARMEN_THIRD_PERSON_RE = new RegExp(
+  `${HB}[כק]א?רמן\\s+(?:אמורה|אמורות|אמורים|אמור|צריכה|צריכות|צריכים|צריך|שלחה|שלחו|שלח|אמרה|אמרו|אמר|ענתה|ענו|ענה|הגיבה|הגיבו|הגיב|עשתה|עשו|עשה|רוצה|יודעת|יודעים|יודע|יכולה|יכולים|יכול|הייתה|היו|היה|תהיה|יהיה|לא\\s+אמורה)${HE}`,
+  'u',
+);
+
+const CARMEN_ABOUT_RE = new RegExp(`${HB}(?:על|בלי)\\s+[כק]א?רמן${HE}`, 'u');
+
+const CARMEN_WHY_WHEN_RE = new RegExp(
+  `${HB}(?:למה|מתי|איפה|איך)\\s+[כק]א?רמן${HE}`,
+  'u',
+);
+
+// Direct 2nd-person ask / imperative right after the name.
+const CARMEN_DIRECT_AFTER_NAME_RE = new RegExp(
+  `${HB}[כק]א?רמן\\s*[,:!?]?\\s*(?:ת[א-ת]{2,}|בבקשה|please|בואי|בוא|עזרי|עזור|את${HE}|ראית|שמעת)`,
+  'u',
+);
+
+const MEETING_URL_RE =
+  /https?:\/\/(?:[\w.-]+\.)?(?:zoom\.us\/\S+|meet\.google\.com\/\S+|teams\.microsoft\.com\/\S+|teams\.live\.com\/\S+)/i;
+
+/**
+ * Group turns wake Carmen only when she is DIRECTLY addressed / asked to act.
+ * Talking ABOUT her in third person must stay silent. If uncertain → false.
+ */
 export function groupMessageInvokesCarmen(message: string): boolean {
   const content = String(message || '').replace(/^\s*🎤\s*/, '').trim();
-  return /(?:^|[\s,.:;!?()[\]{}"'׳״،؛؟-])[כק]א?רמן(?=$|[\s,.:;!?()[\]{}"'׳״،؛؟-])/u.test(content);
+  if (!content) return false;
+  if (!CARMEN_NAME_WORD_RE.test(content)) return false;
+
+  // Reporting / third person — never wake.
+  if (CARMEN_THIRD_PERSON_RE.test(content)) return false;
+  if (CARMEN_ABOUT_RE.test(content)) return false;
+  if (CARMEN_WHY_WHEN_RE.test(content)) return false;
+
+  // Clear direct command / request: "כרמן תבדקי…", "כרמן תצטרפי", "כרמן תבקשי…"
+  if (CARMEN_DIRECT_AFTER_NAME_RE.test(content)) return true;
+
+  // Vocative at start of message.
+  if (/^\s*[כק]א?רמן(?:\s*[,:!?]|$|\s)/u.test(content)) {
+    const after = content.replace(/^\s*[כק]א?רמן\s*[,:!]?\s*/u, '').trim();
+    if (!after) return true; // bare "כרמן"
+    if (/^[?!]/.test(after)) return true;
+    // Question directed at her: "כרמן מה מצב…?"
+    if (/^(מה|איך|מתי|איפה|למה|האם|יש|אפשר|תוכלי|את)(?:$|[\s,.:;!?])/u.test(after)) return true;
+    // Meeting join link right after addressing her.
+    if (MEETING_URL_RE.test(after)) return true;
+    // Uncertain remainder after the name → stay silent.
+    return false;
+  }
+
+  // Mid-message meeting join still requires an explicit ask: "כרמן תצטרפי <url>"
+  if (
+    MEETING_URL_RE.test(content) &&
+    /[כק]א?רמן\s*[,:!]?\s*(?:תצטרפ|בואי|בוא|join)(?:$|[\s,.:;!?])/iu.test(content)
+  ) {
+    return true;
+  }
+
+  // Name appears mid-sentence without a clear direct ask → do not respond.
+  return false;
 }
 
 // Detect meta-instruction style messages (long lists of "תעני..." rules) that
