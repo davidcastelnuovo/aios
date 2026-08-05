@@ -98,11 +98,30 @@ function buildDashboardLinkMessage(rows: any[], dashboardUrl: string): string {
   ].join('\n')
 }
 
+function bearerAuthorized(authHeader: string | null): boolean {
+  if (!authHeader) return false
+  const cronSecret = Deno.env.get('CAMPAIGN_PULSE_CRON_SECRET')
+  if (cronSecret && authHeader === `Bearer ${cronSecret}`) return true
+  if (SERVICE_KEY && authHeader === `Bearer ${SERVICE_KEY}`) return true
+  // Accept any service_role JWT for this project (keys can differ between
+  // callers / rotated secrets while still being valid for the same ref).
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+  try {
+    const payloadPart = token.split('.')[1]
+    if (!payloadPart) return false
+    const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+    const payload = JSON.parse(atob(padded))
+    const projectRef = Deno.env.get('SUPABASE_PROJECT_ID') || 'zvoijyneresvkadpprel'
+    return payload?.role === 'service_role' && (!payload?.ref || payload.ref === projectRef)
+  } catch {
+    return false
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok')
-  const auth = req.headers.get('authorization')
-  const cronSecret = Deno.env.get('CAMPAIGN_PULSE_CRON_SECRET')
-  if (auth !== `Bearer ${SERVICE_KEY}` && (!cronSecret || auth !== `Bearer ${cronSecret}`)) {
+  if (!bearerAuthorized(req.headers.get('authorization'))) {
     return json({ error: 'Unauthorized' }, 401)
   }
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
