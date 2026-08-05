@@ -94,7 +94,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
     : null;
 
   // Fetch agencies
-  const { data: agencies } = useTableDialogAgencies({ enabled: open });
+  const { data: agencies } = useTableDialogAgencies({ includeShared: true, enabled: open });
 
   // Fetch all clients the current user may access. RLS includes cross-tenant
   // clients shared through agencies, so the user can search by client name

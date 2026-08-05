@@ -81,7 +81,7 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
     }
   }, [sites, selectedSite]);
 
-  const { data: agencies } = useTableDialogAgencies({ enabled: open });
+  const { data: agencies } = useTableDialogAgencies({ includeShared: true, enabled: open });
 
   const { data: rawClients } = useAgencyClients(selectedAgency || null);
 
