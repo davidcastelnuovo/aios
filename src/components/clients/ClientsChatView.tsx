@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy, Loader2, Video, ArrowRight } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Mail, Globe, CheckSquare, Trash2, MessageSquare, FileText, DollarSign, X, Edit, Pencil, Check, Users, Plus, UserPlus, BarChart3, FolderOpen, Link, KeyRound, Calendar as CalendarIcon, Copy, Loader2, Video, ArrowRight, Menu } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DuplicateClientDialog } from "@/components/forms/DuplicateClientDialog";
 import { CreateOrgForClientDialog } from "@/components/clients/CreateOrgForClientDialog";
@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
@@ -67,6 +68,21 @@ const MOOD_CONFIG: Record<string, { emoji: string; text: string }> = {
   not_progressing: { emoji: "😔", text: "לא מתקדם" },
 };
 
+const CLIENT_TAB_OPTIONS = [
+  { value: "details", label: "פרטי לקוח", icon: FileText },
+  { value: "connections", label: "חיבורים", icon: Link },
+  { value: "business", label: "מידע עסקי", icon: DollarSign, financeOnly: true },
+  { value: "docs", label: "מסמכים", icon: FolderOpen },
+  { value: "credentials", label: "ססמאות", icon: KeyRound },
+  { value: "meeting", label: "פגישה", icon: CalendarIcon },
+  { value: "recordings", label: "הקלטות", icon: Video },
+  { value: "report", label: "דוחות", icon: BarChart3 },
+  { value: "updates", label: "עדכונים", icon: MessageSquare },
+  { value: "calls", label: "שיחות", icon: Phone },
+  { value: "wordpress", label: "אתר", icon: Globe },
+  { value: "whatsapp", label: "WhatsApp", icon: MessageSquare },
+] as const;
+
 export function ClientsChatView({
   clients,
   agencies,
@@ -83,6 +99,7 @@ export function ClientsChatView({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(initialTab ?? "details");
+  const [tabMenuOpen, setTabMenuOpen] = useState(false);
 
   // Auto-select first client on desktop only — mobile starts on the list screen
   useEffect(() => {
@@ -332,6 +349,13 @@ export function ClientsChatView({
   const getMoodInfo = (mood: string | null) => MOOD_CONFIG[mood || "happy"] || MOOD_CONFIG.happy;
   const getAgencyName = (agencyId: string) => agencies?.find((a: any) => a.id === agencyId)?.name || "";
 
+  const visibleClientTabs = useMemo(
+    () => CLIENT_TAB_OPTIONS.filter((tab) => !tab.financeOnly || canViewFinance),
+    [canViewFinance],
+  );
+  const activeTabLabel =
+    visibleClientTabs.find((tab) => tab.value === activeTab)?.label ?? "פרטי לקוח";
+
   const updateClientField = async (clientId: string, field: string, value: any) => {
     try {
       const { error, data } = await supabase.from("clients").update({ [field]: value }).eq("id", clientId).select();
@@ -440,12 +464,12 @@ export function ClientsChatView({
   };
 
   return (
-    <div className="flex h-full min-h-0 max-h-full border rounded-lg overflow-hidden bg-background w-full max-w-full" dir="rtl">
+    <div className={cn("flex h-full min-h-0 max-h-full overflow-hidden bg-background w-full max-w-full", isMobile ? "border-0 rounded-none" : "border rounded-lg")} dir="rtl">
       {/* Client list — full screen on mobile until a client is selected */}
       {(!isMobile || !selectedClientId) && (
       <div className={cn("border-s flex flex-col bg-muted/20 overflow-hidden min-h-0", isMobile ? "w-full flex-1" : "w-[25%] min-w-[240px] max-w-[25%]")} dir="rtl">
         {/* List header with search */}
-        <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
+        <div className={cn("border-b bg-background/80 backdrop-blur-sm shrink-0", isMobile ? "p-2" : "p-3")}>
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -648,29 +672,66 @@ export function ClientsChatView({
         {selectedClient ? (
           <>
             {/* Toolbar */}
-            <div className="flex items-center gap-2 p-3 border-b bg-background/95 backdrop-blur-sm flex-wrap">
+            <div className={cn("flex items-center gap-2 border-b bg-background/95 backdrop-blur-sm shrink-0 flex-wrap", isMobile ? "p-2" : "p-3")}>
               {isMobile && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSelectedClientId(null)} aria-label="חזרה לרשימה">
                   <ArrowRight className="h-5 w-5" />
                 </Button>
               )}
-              <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {!isMobile && (
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
                   style={{ backgroundColor: getStatusInfo(selectedClient.status).color }}
                 >
                   {(selectedClientDisplayName || "?")[0]}
                 </div>
-                <div className="min-w-0">
+                )}
+                <div className="min-w-0 flex-1">
                   <EditableClientName
                     clientId={selectedClient.id}
                     currentName={selectedClientDisplayName}
-                    agencyName={selectedClient.agencies?.name}
+                    agencyName={isMobile ? undefined : selectedClient.agencies?.name}
                   />
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 flex-wrap">
+              {isMobile && (
+                <Sheet open={tabMenuOpen} onOpenChange={setTabMenuOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1 max-w-[42vw]">
+                      <span className="truncate text-xs">{activeTabLabel}</span>
+                      <Menu className="h-4 w-4 shrink-0" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" dir="rtl" className="w-[min(88vw,22rem)] p-4">
+                    <SheetHeader className="text-right">
+                      <SheetTitle>{selectedClientDisplayName}</SheetTitle>
+                    </SheetHeader>
+                    <div className="mt-4 space-y-1">
+                      {visibleClientTabs.map((tab) => {
+                        const Icon = tab.icon;
+                        return (
+                          <Button
+                            key={tab.value}
+                            variant={activeTab === tab.value ? "default" : "ghost"}
+                            className="w-full justify-start gap-2"
+                            onClick={() => {
+                              setActiveTab(tab.value);
+                              setTabMenuOpen(false);
+                            }}
+                          >
+                            <Icon className="h-4 w-4 shrink-0" />
+                            {tab.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              )}
+
+              <div className={cn("flex items-center gap-1.5", isMobile ? "hidden" : "flex-wrap")}>
                 {/* Status selector */}
                 <Select
                   value={selectedClient.status}
@@ -803,6 +864,47 @@ export function ClientsChatView({
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
+
+              {isMobile && (
+                <div className="flex items-center gap-1.5 w-full">
+                  <Select
+                    value={selectedClient.status}
+                    onValueChange={(value) => handleStatusChange(selectedClient.id, value)}
+                  >
+                    <SelectTrigger
+                      className="h-8 text-xs flex-1 border-2 font-medium"
+                      style={{
+                        backgroundColor: getStatusInfo(selectedClient.status).color,
+                        color: "#fff",
+                      }}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      {Object.entries(STATUS_CONFIG).map(([key, { label, color }]) => (
+                        <SelectItem key={key} value={key} style={{ backgroundColor: color, color: "#fff" }}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={selectedClient.mood_status || "happy"}
+                    onValueChange={(value) => handleMoodChange(selectedClient.id, value)}
+                  >
+                    <SelectTrigger className="h-8 text-xs flex-1 border-2 font-medium">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      {Object.entries(MOOD_CONFIG).map(([key, { emoji, text }]) => (
+                        <SelectItem key={key} value={key}>
+                          {emoji} {text}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             {/* Inline action area — forms/confirmations render here instead of as popups */}
@@ -854,6 +956,7 @@ export function ClientsChatView({
 
             {/* Detail tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              {!isMobile && (
               <TabsList className={cn("mx-4 mt-3 grid w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto", canViewFinance ? "grid-cols-12" : "grid-cols-11")}>
                 <TabsTrigger value="details" className="text-xs gap-1">
                   <FileText className="h-3.5 w-3.5" />
@@ -906,8 +1009,9 @@ export function ClientsChatView({
                   WhatsApp
                 </TabsTrigger>
               </TabsList>
+              )}
 
-              <ScrollArea className={cn("h-0 flex-1 min-h-0 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
+              <ScrollArea className={cn("h-0 flex-1 min-h-0", isMobile ? "p-2" : "p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
                 <TabsContent value="details" className="mt-0 space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     {/* Timeline - shown first in DOM but appears on LEFT in RTL layout */}
