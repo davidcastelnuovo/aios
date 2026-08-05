@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import { QuickTaskInput } from "./QuickTaskInput";
+import { QuickTaskInput, QuickTaskPayload } from "./QuickTaskInput";
 
 interface Task {
   id: string;
@@ -34,10 +34,11 @@ interface TaskBacklogPanelProps {
   tasks: Task[];
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onTaskClick: (task: Task) => void;
-  onAddTask?: (title: string) => void;
+  onAddTask?: (payload: QuickTaskPayload) => void;
   isLoading?: boolean;
   clientsList?: { id: string; name: string }[];
   campaignersList?: { id: string; full_name: string }[];
+  defaultCampaignerId?: string | null;
   onUpdateClient?: (taskId: string, clientId: string | null) => void;
   onUpdateCampaigner?: (taskId: string, campaignerId: string | null) => void;
   /** mobileFull = full-height scrollable list for the mobile Tasks page default view */
@@ -242,6 +243,7 @@ export function TaskBacklogPanel({
   onUpdateClient,
   onUpdateCampaigner,
   variant = "desktop",
+  defaultCampaignerId,
 }: TaskBacklogPanelProps) {
   const isMobileFull = variant === "mobileFull";
   // Start collapsed if no tasks, expanded if there are tasks
@@ -258,20 +260,27 @@ export function TaskBacklogPanel({
   // 3. Unscheduled = no due_date at all
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  const sortNewestFirst = (a: Task, b: Task) => {
+    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+    if (bTime !== aTime) return bTime - aTime;
+    return b.id.localeCompare(a.id);
+  };
   
   const overdueTasks = tasks.filter(t => {
     if (!t.due_date) return false;
     const dueDate = new Date(t.due_date);
     return dueDate < today;
-  });
+  }).sort(sortNewestFirst);
   
   const untimedTasks = tasks.filter(t => {
     if (!t.due_date) return false;
     const dueDate = new Date(t.due_date);
     return dueDate >= today && !t.due_time;
-  });
+  }).sort(sortNewestFirst);
   
-  const unscheduledTasks = tasks.filter(t => !t.due_date);
+  const unscheduledTasks = tasks.filter(t => !t.due_date).sort(sortNewestFirst);
   
   const overdueCount = overdueTasks.length;
   const untimedCount = untimedTasks.length;
@@ -366,23 +375,26 @@ export function TaskBacklogPanel({
               <QuickTaskInput
                 onAddTask={onAddTask}
                 disabled={isLoading}
+                clientsList={clientsList}
+                campaignersList={campaignersList}
+                defaultCampaignerId={defaultCampaignerId}
               />
             </div>
           )}
-          {/* Overdue section */}
-          {overdueCount > 0 && (
+          {/* Unscheduled first — newest quick-add tasks appear at the top */}
+          {unscheduledCount > 0 && (
             <>
               <div className="flex items-center gap-1 px-1">
-                <AlertTriangle className="h-3 w-3 text-destructive" />
-                <span className="text-xs font-medium text-destructive">באיחור</span>
+                <Clock className="h-3 w-3 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground">ללא תאריך</span>
               </div>
-              {overdueTasks.map((task) => (
+              {unscheduledTasks.map((task) => (
                 <DraggableBacklogTask
                   key={task.id}
                   task={task}
                   onToggleComplete={onToggleComplete}
                   onClick={() => onTaskClick(task)}
-                  isOverdue
+                  isOverdue={false}
                   clientsList={clientsList}
                   campaignersList={campaignersList}
                   onUpdateClient={onUpdateClient}
@@ -391,7 +403,7 @@ export function TaskBacklogPanel({
               ))}
             </>
           )}
-          
+
           {/* Untimed section - has date but no time */}
           {untimedCount > 0 && (
             <>
@@ -415,20 +427,20 @@ export function TaskBacklogPanel({
             </>
           )}
 
-          {/* Unscheduled section - no date at all */}
-          {unscheduledCount > 0 && (
+          {/* Overdue section */}
+          {overdueCount > 0 && (
             <>
               <div className="flex items-center gap-1 px-1 mt-2">
-                <Clock className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">ללא תאריך</span>
+                <AlertTriangle className="h-3 w-3 text-destructive" />
+                <span className="text-xs font-medium text-destructive">באיחור</span>
               </div>
-              {unscheduledTasks.map((task) => (
+              {overdueTasks.map((task) => (
                 <DraggableBacklogTask
                   key={task.id}
                   task={task}
                   onToggleComplete={onToggleComplete}
                   onClick={() => onTaskClick(task)}
-                  isOverdue={false}
+                  isOverdue
                   clientsList={clientsList}
                   campaignersList={campaignersList}
                   onUpdateClient={onUpdateClient}
