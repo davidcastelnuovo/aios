@@ -34,6 +34,16 @@ import {
 import { buildVoiceCapabilityPromptRule } from '../_shared/wa-voice-resolve.ts'
 import { extractMeetingUrl } from '../_shared/meeting-url.ts'
 import {
+  clientCampaignServices,
+  tableMatchesServices,
+} from '../_shared/campaign-pulse.ts'
+import {
+  clientHasService,
+  evaluateFacebookReportConnect,
+  evaluateGoogleAdsReportConnect,
+  normalizeMetaAdAccountId,
+} from '../_shared/facebook-connect-guards.ts'
+import {
   formatStaffContact,
   normalizeStaffPhone,
   scoreNameMatch,
@@ -838,8 +848,8 @@ const ALL_TOOLS = [
   { name: 'prioritize_tasks', description: 'ניתוח משימות פתוחות והצעת סדר עדיפויות לפי דדליינים, יעדים ועומס', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
   // FACEBOOK AD ACCOUNTS
   { name: 'list_facebook_ad_accounts', description: 'שליפת כל חשבונות המודעות מפייסבוק. מחזיר id, name, status, currency.', parameters: { type: 'object', properties: {} } },
-  { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת דוח facebook_insights ב-CRM', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX)' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } },
-  { name: 'list_unconnected_clients', description: 'רשימת לקוחות פעילים שאין להם עדיין טבלת דוח פייסבוק (facebook_insights) ב-CRM. שימושי לזיהוי לקוחות שצריכים חיבור.', parameters: { type: 'object', properties: {} } },
+  { name: 'create_facebook_report_table', description: 'חיבור חשבון מודעות פייסבוק ללקוח — יוצר טבלת facebook_insights. דורש: services כולל ppc_meta, ו-meta_ads_account_id שמור על הלקוח שתואם בדיוק ל-ad_account_id. אסור לנחש חשבון לפי שם.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות פייסבוק (act_XXXXX) — חייב להתאים ל-meta_ads_account_id של הלקוח' }, ad_account_name: { type: 'string', description: 'שם חשבון המודעות' } }, required: ['client_id', 'ad_account_id', 'ad_account_name'] } },
+  { name: 'list_unconnected_clients', description: 'רשימת לקוחות עם שירות ppc_meta שעדיין חסרה להם טבלת Meta (facebook_insights/facebook_ecommerce). מחזיר ready_to_connect (יש meta_ads_account_id) ו-needs_account_id (חסר מזהה — אסור לחבר בניחוש). לקוחות בלי ppc_meta לא נכללים.', parameters: { type: 'object', properties: {} } },
   { name: 'check_ad_accounts_health', description: 'בדיקת תקינות חשבונות מודעות פייסבוק לכל הלקוחות בסקופ הקורא. מחזיר לכל לקוח: status (active/disabled/closed), has_spend_7d (האם יש הוצאה ב-7 ימים אחרונים), all_paused (האם כל הקמפיינים מושהים), token_ok (האם הטוקן תקף), flags (מערך של בעיות). השתמשי ב-pulse check ובכל בקשת "תקינות/מצב חשבונות מודעות".', parameters: { type: 'object', properties: { client_id: { type: 'string' }, agency_id: { type: 'string' } } } },
   // INTEGRATIONS MANAGEMENT
   { name: 'list_integrations', description: 'רשימת אינטגרציות מוגדרות בטננט (סוג, סטטוס פעיל, הגדרות בסיסיות). שימושי כשרוצים לדעת מה מחובר ומה לא.', parameters: { type: 'object', properties: { type: { type: 'string', description: 'סינון לפי סוג אינטגרציה' }, only_active: { type: 'boolean' } } } },
@@ -908,7 +918,7 @@ const ALL_TOOLS = [
   { name: 'gads_update_budget', description: 'שינוי תקציב יומי לקמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number' } }, required: ['customer_id','campaign_id','daily_budget'] } },
   { name: 'list_google_ad_accounts', description: 'שליפת כל חשבונות Google Ads המחוברים לטננט. מחזיר customer_id, name, status, client_id (אם משויך ללקוח).', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'סינון לפי לקוח ספציפי (אופציונלי)' } } } },
   { name: 'list_google_campaigns', description: 'רשימת קמפיינים בחשבון Google Ads (חי מ-API). ספקי customer_id או client_id (ייפתר דרך clients.google_ads_account_id).', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, client_id: { type: 'string' }, name_search: { type: 'string' }, status: { type: 'string', enum: ['ENABLED', 'PAUSED', 'REMOVED', 'ALL'] } }, required: [] } },
-  { name: 'create_google_ads_report_table', description: 'יצירת טבלת דוח Google Ads ב-CRM ללקוח (integration_type=google_ads). לא מריץ sync — קראי ל-sync_google_ads_report אחרי.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads' }, account_name: { type: 'string' }, date_range: { type: 'string', description: 'ברירת מחדל last_30_days' } }, required: ['client_id', 'customer_id'] } },
+  { name: 'create_google_ads_report_table', description: 'יצירת טבלת דוח Google Ads ב-CRM. דורש: services כולל ppc_google, ו-google_ads_account_id שמור על הלקוח שתואם בדיוק ל-customer_id. אסור לנחש חשבון לפי שם. לא מריץ sync — קראי ל-sync_google_ads_report אחרי.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads — חייב להתאים ל-google_ads_account_id של הלקוח' }, account_name: { type: 'string' }, date_range: { type: 'string', description: 'ברירת מחדל last_30_days' } }, required: ['client_id', 'customer_id'] } },
   { name: 'sync_google_ads_report', description: 'סנכרון נתוני Google Ads לטבלת CRM. זהה לפי table_id או client_id (טבלת google_ads של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
   { name: 'sync_facebook_insights', description: 'סנכרון נתוני Facebook Insights לטבלת CRM. זהה לפי table_id או client_id (טבלת facebook_insights של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
   { name: 'connect_google_ads_account', description: 'שיוך חשבון Google Ads (customer_id) ללקוח ב-CRM. שומר את המזהה ב-clients.google_ads_account_id.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads (ספרות בלבד, ללא מקפים)' } }, required: ['client_id', 'customer_id'] } },
@@ -2770,7 +2780,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         rows: normalizedRows,
         formatted_markdown: normalizedRows.length ? tableLines.join('\n') : null,
         instructions_to_agent: normalizedRows.length
-          ? 'החזירי את formatted_markdown בדיוק כפי שהוא, ללא סיכום במקום הטבלה וללא השמטת עמודות. לפני הטבלה צייני במשפט אחד מתי חושב הדוח. אחרי הטבלה אפשר להוסיף עד 3 חריגים בלבד. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.'
+          ? 'החזירי את formatted_markdown בדיוק כפי שהוא, ללא סיכום במקום הטבלה וללא השמטת עמודות. לפני הטבלה צייני במשפט אחד מתי חושב הדוח (אלגוריתם מתמטי — לא AI). אחרי הטבלה אפשר להוסיף עד 3 חריגים בלבד. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק. אסור להוסיף לקוחות "לא מחוברים" שלא מופיעים בטבלה.'
           : 'לא נמצא Snapshot שמור. אמרי שאין בדיקת דופק זמינה. אסור ליצור בדיקה חדשה, להריץ כלי חלופי או להמציא נתונים.',
       }
     }
@@ -2795,7 +2805,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Own tenant's clients + shared-tenant clients ONLY within agencies shared via
       // agency_tenant_access. A tenant-wide scope here floods the report with the
       // partner tenant's entire client base and scrambles the per-agency grouping.
-      const perfSel = 'id, name, agency_id, is_ecommerce, agencies(name)'
+      const perfSel = 'id, name, agency_id, is_ecommerce, services, agencies(name)'
       const perfFilters = (q: any) => {
         q = q.in('status', ['active'])  // pulse/health reports must exclude paused/ended/onboarding clients
         if (args.client_id) q = q.eq('id', args.client_id)
@@ -2826,9 +2836,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         if (sharedClients?.length) targetClients = targetClients.concat(sharedClients)
       }
 
+      // Only clients with ppc_meta / ppc_google — SEO/empty services must never appear as "לא מחוברים".
+      targetClients = (targetClients || []).filter((c: any) => clientCampaignServices(c.services).size > 0)
+
       const clientIds = (targetClients || []).map((c: any) => c.id)
       if (clientIds.length === 0) {
-        return { scope: { agency_name: agencyNameLabel, total_active_clients: 0 }, coverage_summary: { synced: 0, not_connected: 0 }, synced_clients: [], not_connected_clients: [] }
+        return { scope: { agency_name: agencyNameLabel, total_active_clients: 0 }, coverage_summary: { synced: 0, not_connected: 0 }, synced_clients: [], not_connected_clients: [], note: 'no clients with ppc_meta/ppc_google in scope' }
       }
 
       // 2. Find campaign tables by SCHEMA (spend + campaign_name/id), not by slug
@@ -2854,9 +2867,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const not_connected_clients: any[] = []
 
       for (const client of (targetClients || [])) {
-        const tables = tablesByClient.get(client.id) || []
+        const services = clientCampaignServices(client.services)
+        const allTables = tablesByClient.get(client.id) || []
+        // Only tables that match the client's expected campaign services count as connected.
+        const tables = allTables.filter((t: any) => tableMatchesServices({
+          integration_type: t.integration_type,
+        }, services))
         if (tables.length === 0) {
-          not_connected_clients.push({ client_id: client.id, client_name: client.name, reason: 'no_campaign_table' })
+          not_connected_clients.push({
+            client_id: client.id,
+            client_name: client.name,
+            agency_name: client.agencies?.name ?? null,
+            reason: 'no_campaign_table_for_services',
+            expected_services: Array.from(services),
+          })
           continue
         }
 
@@ -4376,20 +4400,36 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'create_facebook_report_table': {
       const { client_id, ad_account_id, ad_account_name } = args
-      // Check if table already exists for this client
+      if (!client_id) return { error: 'client_id נדרש' }
+      await assertCallerCanAccessClient(supabase, client_id, callerScope)
+
+      // Get client first — data gates (ppc_meta + matching meta_ads_account_id) before insert.
+      const { data: client } = await supabase
+        .from('clients')
+        .select('name, agency_id, services, meta_ads_account_id')
+        .eq('id', client_id)
+        .single()
+      if (!client) return { error: 'לקוח לא נמצא' }
+
+      const gate = evaluateFacebookReportConnect(client, ad_account_id)
+      if (!gate.ok) {
+        return { error: gate.error, code: gate.code, refused: true }
+      }
+      const normalizedAdAccountId = gate.normalized_ad_account_id
+      const storedAdAccountLabel = `act_${normalizedAdAccountId}`
+
+      // Already connected for Meta if insights OR ecommerce table exists.
       const { data: existing } = await supabase
         .from('crm_tables')
-        .select('id, name')
+        .select('id, name, integration_type')
         .in('tenant_id', accessibleTenantIds)
         .eq('client_id', client_id)
-        .eq('integration_type', 'facebook_insights')
+        .in('integration_type', ['facebook_insights', 'facebook_ecommerce'])
+        .limit(1)
         .maybeSingle()
       if (existing) {
-        return { already_exists: true, table_id: existing.id, name: existing.name, message: `כבר קיימת טבלת דוח פייסבוק ללקוח זה: ${existing.name}` }
+        return { already_exists: true, table_id: existing.id, name: existing.name, message: `כבר קיימת טבלת דוח Meta ללקוח זה: ${existing.name}` }
       }
-      // Get client name for the table name
-      const { data: client } = await supabase.from('clients').select('name, agency_id').eq('id', client_id).single()
-      if (!client) return { error: 'לקוח לא נמצא' }
 
       const tableName = client.name
       const slug = `facebook-${client_id.substring(0, 8)}`
@@ -4403,18 +4443,26 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         tenant_id: tableTenantId,
         name: tableName,
         slug,
-        description: `דוח ביצועי מודעות פייסבוק עבור ${client.name} (${ad_account_name})`,
+        description: `דוח ביצועי מודעות פייסבוק עבור ${client.name} (${ad_account_name || storedAdAccountLabel})`,
         icon: 'BarChart3',
         // Must match UI buckets in DynamicTables — never a generic "דוחות" silo.
         category: 'Facebook Insights',
         integration_type: 'facebook_insights',
-        integration_settings: { ad_account_id, ad_account_name },
+        integration_settings: { ad_account_id: storedAdAccountLabel, ad_account_name: ad_account_name || storedAdAccountLabel },
         agency_id: client.agency_id || null,
         client_id,
         created_by: userId !== 'system' ? userId : null,
       }).select('id, name, slug').single()
       if (error) throw error
-      return { success: true, table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name }
+      return {
+        success: true,
+        table_id: table.id,
+        name: table.name,
+        slug: table.slug,
+        ad_account_id: storedAdAccountLabel,
+        client_name: client.name,
+        data_source: 'clients.meta_ads_account_id',
+      }
     }
     case 'check_ad_accounts_health': {
       // 1. Resolve client scope: own tenant + shared-agency clients only (see
@@ -4586,10 +4634,10 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
     }
     case 'list_unconnected_clients': {
-      // Get active clients that don't have a facebook_insights table
+      // Only ppc_meta clients missing a Meta report table. Never list SEO/empty-service clients.
       const { data: allClients, error: clientsErr } = await supabase
         .from('clients')
-        .select('id, name, agency_id, agencies(name)')
+        .select('id, name, agency_id, services, meta_ads_account_id, agencies(name)')
         .in('tenant_id', accessibleTenantIds)
         .in('status', ['active', 'onboarding'])
         .order('name')
@@ -4599,14 +4647,42 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .from('crm_tables')
         .select('client_id')
         .in('tenant_id', accessibleTenantIds)
-        .eq('integration_type', 'facebook_insights')
+        .in('integration_type', ['facebook_insights', 'facebook_ecommerce'])
         .not('client_id', 'is', null)
 
       const connectedClientIds = new Set((connectedTables || []).map((t: any) => t.client_id))
-      const unconnected = (allClients || []).filter((c: any) => !connectedClientIds.has(c.id))
-        .map((c: any) => ({ id: c.id, name: c.name, agency_name: c.agencies?.name }))
+      const ppcMetaMissing = (allClients || []).filter((c: any) =>
+        clientHasService(c.services, 'ppc_meta') && !connectedClientIds.has(c.id)
+      )
 
-      return { count: unconnected.length, unconnected_clients: unconnected }
+      const ready_to_connect = ppcMetaMissing
+        .filter((c: any) => !!normalizeMetaAdAccountId(c.meta_ads_account_id))
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          agency_name: c.agencies?.name || null,
+          meta_ads_account_id: normalizeMetaAdAccountId(c.meta_ads_account_id),
+        }))
+      const needs_account_id = ppcMetaMissing
+        .filter((c: any) => !normalizeMetaAdAccountId(c.meta_ads_account_id))
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          agency_name: c.agencies?.name || null,
+          meta_ads_account_id: null,
+        }))
+
+      return {
+        count_ready: ready_to_connect.length,
+        count_needs_account_id: needs_account_id.length,
+        // Backward-compatible alias: ONLY clients that are safe to auto-connect (have stored account id).
+        count: ready_to_connect.length,
+        unconnected_clients: ready_to_connect,
+        ready_to_connect,
+        needs_account_id,
+        instructions_to_agent:
+          'חברי אוטומטית רק לקוחות מ-ready_to_connect, עם ad_account_id = meta_ads_account_id שלהם. לקוחות ב-needs_account_id — אסור לנחש חשבון לפי שם; בקשי מזהה או צרי משימה לקמפיינר. לקוחות בלי ppc_meta לא רלוונטיים בכלל.',
+      }
     }
     case 'list_integrations': {
       let q = supabase.from('tenant_integrations').select('id, integration_type, is_active, settings, last_sync_at, created_at').in('tenant_id', accessibleTenantIds)
@@ -5207,9 +5283,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
     case 'create_google_ads_report_table': {
       const client_id = args.client_id
-      const customer_id = String(args.customer_id || '').replace(/-/g, '')
-      if (!client_id || !customer_id) return { error: 'client_id ו-customer_id נדרשים' }
+      const customer_id_raw = args.customer_id
+      if (!client_id || !customer_id_raw) return { error: 'client_id ו-customer_id נדרשים' }
       await assertCallerCanAccessClient(supabase, client_id, callerScope)
+      const { data: client } = await supabase
+        .from('clients')
+        .select('name, agency_id, services, google_ads_account_id')
+        .eq('id', client_id)
+        .single()
+      if (!client) return { error: 'לקוח לא נמצא' }
+      const gate = evaluateGoogleAdsReportConnect(client, customer_id_raw)
+      if (!gate.ok) {
+        return { error: gate.error, code: gate.code, refused: true }
+      }
+      const customer_id = gate.normalized_ad_account_id
       const { data: existing } = await supabase
         .from('crm_tables')
         .select('id, name')
@@ -5220,8 +5307,6 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (existing) {
         return { already_exists: true, table_id: existing.id, name: existing.name, message: `כבר קיימת טבלת דוח Google Ads ללקוח זה: ${existing.name}` }
       }
-      const { data: client } = await supabase.from('clients').select('name, agency_id').eq('id', client_id).single()
-      if (!client) return { error: 'לקוח לא נמצא' }
       const accountName = args.account_name || customer_id
       const slug = `google-ads-${client_id.substring(0, 8)}`
       let tableTenantId = tenantId
@@ -5252,9 +5337,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         created_by: userId !== 'system' ? userId : null,
       }).select('id, name, slug').single()
       if (error) throw error
-      // Also pin google_ads_account_id on client if empty
-      await supabase.from('clients').update({ google_ads_account_id: customer_id }).eq('id', client_id).is('google_ads_account_id', null)
-      return { success: true, table_id: table.id, name: table.name, slug: table.slug, customer_id, client_name: client.name, next: 'קראי ל-sync_google_ads_report עם table_id כדי למשוך נתונים' }
+      return {
+        success: true,
+        table_id: table.id,
+        name: table.name,
+        slug: table.slug,
+        customer_id,
+        client_name: client.name,
+        data_source: 'clients.google_ads_account_id',
+        next: 'קראי ל-sync_google_ads_report עם table_id כדי למשוך נתונים',
+      }
     }
 
     case 'sync_google_ads_report':
@@ -6397,13 +6489,12 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
    - note: תמיד צייני סיבה מדויקת (ירידה ב-X%, אין תקשורת Y ימים, SEO ירד)
 4. בשילוב שירותים — בדקי כל שירות בנפרד, דווחי על הגרוע
 5. גם אם מצב לא משתנה — עדכני תאריך תקשורת (חובה)`,
-        'facebook-account-setup': `את מומחית חיבור חשבונות מודעות פייסבוק ללקוחות. בצעי את השלבים הבאים:
-1. הריצי list_unconnected_clients כדי לראות אילו לקוחות פעילים עדיין לא מחוברים לפייסבוק.
-2. הריצי list_facebook_ad_accounts כדי לשלוף את כל חשבונות המודעות הזמינים.
-3. נסי להתאים לפי שם — השוואת שם הלקוח לשם חשבון המודעות (fuzzy match, התעלמי מרווחים ותווים מיוחדים).
-4. אם יש התאמה ברורה — חברי אוטומטית עם create_facebook_report_table.
-5. אם אין התאמה ברורה — צרי משימה לקמפיינר עם create_task שמפרטת את שם הלקוח ורשימת החשבונות האפשריים.
-6. דווחי סיכום: כמה חוברו אוטומטית, כמה דורשים חיבור ידני.`,
+        'facebook-account-setup': `את מומחית חיבור חשבונות מודעות פייסבוק ללקוחות — רק לפי נתונים שמורים, בלי ניחושים.
+1. הריצי list_unconnected_clients. הכלי מחזיר רק לקוחות עם שירות ppc_meta שחסרה להם טבלת Meta.
+2. ready_to_connect — יש meta_ads_account_id שמור: חברי עם create_facebook_report_table רק עם אותו מזהה (ad_account_id = meta_ads_account_id). אסור לבחור חשבון אחר מ-list_facebook_ad_accounts לפי שם.
+3. needs_account_id — חסר מזהה על הלקוח: אסור לנחש/fuzzy-match. בקשי מזהה מדויק או צרי משימה לקמפיינר.
+4. לקוחות בלי ppc_meta — לא רלוונטיים; אל תזכירי אותם כ"לא מחוברים".
+5. דווחי סיכום מספרי מהפלט בלבד: כמה חוברו, כמה ממתינים למזהה.`,
       }
       const taskSkillPrompts = (task_skills as string[]).map((s: string) => TASK_SKILLS_PROMPTS[s]).filter(Boolean)
       if (taskSkillPrompts.length > 0) {
@@ -6511,13 +6602,12 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
    - note: תמיד צייני סיבה מדויקת (ירידה ב-X%, אין תקשורת Y ימים, SEO ירד)
 4. בשילוב שירותים — בדקי כל שירות בנפרד, דווחי על הגרוע
 5. גם אם מצב לא משתנה — עדכני תאריך תקשורת (חובה)`,
-        'facebook-account-setup': `את מומחית חיבור חשבונות מודעות פייסבוק ללקוחות. בצעי את השלבים הבאים:
-1. הריצי list_unconnected_clients כדי לראות אילו לקוחות פעילים עדיין לא מחוברים לפייסבוק.
-2. הריצי list_facebook_ad_accounts כדי לשלוף את כל חשבונות המודעות הזמינים.
-3. נסי להתאים לפי שם — השוואת שם הלקוח לשם חשבון המודעות (fuzzy match, התעלמי מרווחים ותווים מיוחדים).
-4. אם יש התאמה ברורה — חברי אוטומטית עם create_facebook_report_table.
-5. אם אין התאמה ברורה — צרי משימה לקמפיינר עם create_task שמפרטת את שם הלקוח ורשימת החשבונות האפשריים.
-6. דווחי סיכום: כמה חוברו אוטומטית, כמה דורשים חיבור ידני.`,
+        'facebook-account-setup': `את מומחית חיבור חשבונות מודעות פייסבוק ללקוחות — רק לפי נתונים שמורים, בלי ניחושים.
+1. הריצי list_unconnected_clients. הכלי מחזיר רק לקוחות עם שירות ppc_meta שחסרה להם טבלת Meta.
+2. ready_to_connect — יש meta_ads_account_id שמור: חברי עם create_facebook_report_table רק עם אותו מזהה (ad_account_id = meta_ads_account_id). אסור לבחור חשבון אחר מ-list_facebook_ad_accounts לפי שם.
+3. needs_account_id — חסר מזהה על הלקוח: אסור לנחש/fuzzy-match. בקשי מזהה מדויק או צרי משימה לקמפיינר.
+4. לקוחות בלי ppc_meta — לא רלוונטיים; אל תזכירי אותם כ"לא מחוברים".
+5. דווחי סיכום מספרי מהפלט בלבד: כמה חוברו, כמה ממתינים למזהה.`,
       }
       const skillPrompts = activeSkills.map((s: string) => SKILLS_PROMPTS[s]).filter(Boolean)
       if (skillPrompts.length > 0) {
