@@ -25,6 +25,7 @@ import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
+import { defaultCategoryForCreate, ECOMMERCE_CATEGORY } from "@/lib/crmTableCategories";
 import { Loader2, AlertCircle, Check, ChevronsUpDown, Search } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -161,7 +162,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
         body: {
           name: tableName,
           slug,
-          category: category || 'Google Ads',
+          category: category.trim() || defaultCategoryForCreate('google_ads', { campaignType }),
           integration_type: 'google_ads',
           integration_settings: integrationSettings,
           agency_id: resolvedAgencyId,
@@ -397,7 +398,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: 
               id="category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              placeholder="Google Ads"
+              placeholder={campaignType === 'ecommerce' ? ECOMMERCE_CATEGORY : 'Google Ads'}
             />
           </div>
 
