@@ -7,7 +7,9 @@ const corsHeaders = {
 };
 
 const PAGE_SIZE = 100;
-const FUNCTION_VERSION = "1.1.0"; // deployed 2026-07-05
+const UPSERT_CHUNK = 50;
+const FUNCTION_VERSION = "1.2.0"; // 2026-08-05: UA + batch upsert + resilient sync log
+const USER_AGENT = `AIOS-WooSync/${FUNCTION_VERSION}`;
 
 // ---- WooCommerce API helper ----
 async function wooFetch(
@@ -17,13 +19,18 @@ async function wooFetch(
   endpoint: string,
   params: Record<string, string | number> = {}
 ) {
-  const url = new URL(`${siteUrl}/wp-json/wc/v3/${endpoint}`);
+  const url = new URL(`${siteUrl.replace(/\/$/, "")}/wp-json/wc/v3/${endpoint}`);
   url.searchParams.set("consumer_key", consumerKey);
   url.searchParams.set("consumer_secret", consumerSecret);
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, String(v));
   }
-  const resp = await fetch(url.toString());
+  const resp = await fetch(url.toString(), {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+    },
+  });
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`WooCommerce API error ${resp.status}: ${text}`);
@@ -37,11 +44,12 @@ async function fetchAllPages(
   key: string,
   secret: string,
   endpoint: string,
-  extraParams: Record<string, string | number> = {}
+  extraParams: Record<string, string | number> = {},
+  maxPages = 200
 ) {
   const results: any[] = [];
   let page = 1;
-  while (true) {
+  while (page <= maxPages) {
     const data = await wooFetch(siteUrl, key, secret, endpoint, {
       per_page: PAGE_SIZE,
       page,
@@ -55,6 +63,19 @@ async function fetchAllPages(
   return results;
 }
 
+async function upsertChunks(
+  supabase: any,
+  table: string,
+  rows: Record<string, unknown>[],
+  onConflict: string
+) {
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
+    const chunk = rows.slice(i, i + UPSERT_CHUNK);
+    const { error } = await supabase.from(table).upsert(chunk, { onConflict });
+    if (error) throw error;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -65,8 +86,8 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const body = await req.json();
-    const { site_id, tenant_id: bodyTenantId } = body;
+    const body = await req.json().catch(() => ({}));
+    const { site_id, tenant_id: bodyTenantId } = body || {};
 
     // Build query — either by site_id or by tenant_id (for cron)
     let sitesQuery = supabase
@@ -88,7 +109,7 @@ serve(async (req) => {
     if (sitesError) throw sitesError;
     if (!sites || sites.length === 0) {
       return new Response(
-        JSON.stringify({ message: "No WooCommerce sites found", sites_processed: 0 }),
+        JSON.stringify({ message: "No WooCommerce sites found", sites_processed: 0, version: FUNCTION_VERSION }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -106,17 +127,20 @@ serve(async (req) => {
         continue;
       }
 
-      // Create sync log entry
-      const { data: logEntry } = await supabase
+      // Create sync log entry (schema has no sync_type in prod — do not send it)
+      const { data: logEntry, error: logErr } = await supabase
         .from("woocommerce_sync_log")
         .insert({
           tenant_id,
           site_id: siteId,
-          sync_type: "full",
           status: "running",
+          started_at: new Date().toISOString(),
         })
-        .select()
+        .select("id")
         .single();
+      if (logErr) {
+        console.warn(`[woo-sync] sync_log insert failed for ${siteId}:`, logErr.message);
+      }
 
       const logId = logEntry?.id;
       let ordersCount = 0;
@@ -127,15 +151,14 @@ serve(async (req) => {
         // ---- Determine incremental window ----
         // Use modified_after = last successful sync minus 1h overlap (safety),
         // fallback to last 30 days if no previous sync.
-        const lastSyncAt: string | null = site.woo_last_sync_at || null;
+        const lastSyncAt: string | null = site.woo_last_sync_at || site.last_woocommerce_sync_at || null;
         const fallbackDate = new Date();
         fallbackDate.setDate(fallbackDate.getDate() - 30);
         const sinceDate = lastSyncAt
           ? new Date(new Date(lastSyncAt).getTime() - 60 * 60 * 1000)
           : fallbackDate;
-        // WooCommerce expects ISO8601 without milliseconds, in site timezone agnostic form
         const modifiedAfter = sinceDate.toISOString().split(".")[0];
-        console.log(`[woo-sync] site ${siteId} — incremental since ${modifiedAfter}`);
+        console.log(`[woo-sync] v${FUNCTION_VERSION} site ${siteId} — incremental since ${modifiedAfter}`);
 
         // ---- Sync Orders (incremental by modified_after) ----
         const orders = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "orders", {
@@ -143,118 +166,108 @@ serve(async (req) => {
           orderby: "modified",
           order: "asc",
         });
-        for (const order of orders) {
-          const record = {
-            tenant_id,
-            site_id: siteId,
-            woo_order_id: order.id,
-            order_number: String(order.number || order.id),
-            status: order.status,
-            currency: order.currency,
-            total: parseFloat(order.total) || 0,
-            subtotal: parseFloat(order.subtotal) || 0,
-            total_tax: parseFloat(order.total_tax) || 0,
-            shipping_total: parseFloat(order.shipping_total) || 0,
-            discount_total: parseFloat(order.discount_total) || 0,
-            customer_id: order.customer_id || null,
-            customer_email: order.billing?.email || null,
-            customer_first_name: order.billing?.first_name || null,
-            customer_last_name: order.billing?.last_name || null,
-            customer_phone: order.billing?.phone || null,
-            billing: order.billing || {},
-            shipping: order.shipping || {},
-            line_items: order.line_items || [],
-            payment_method: order.payment_method || null,
-            payment_method_title: order.payment_method_title || null,
-            date_created: order.date_created || null,
-            date_modified: order.date_modified || null,
-            date_completed: order.date_completed || null,
-            date_paid: order.date_paid || null,
-            raw_data: order,
-            synced_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          await supabase
-            .from("woocommerce_orders")
-            .upsert(record, { onConflict: "site_id,woo_order_id" });
-        }
-        ordersCount = orders.length;
+        const orderRows = orders.map((order: any) => ({
+          tenant_id,
+          site_id: siteId,
+          woo_order_id: order.id,
+          order_number: String(order.number || order.id),
+          status: order.status,
+          currency: order.currency,
+          total: parseFloat(order.total) || 0,
+          subtotal: parseFloat(order.subtotal) || 0,
+          total_tax: parseFloat(order.total_tax) || 0,
+          shipping_total: parseFloat(order.shipping_total) || 0,
+          discount_total: parseFloat(order.discount_total) || 0,
+          customer_id: order.customer_id || null,
+          customer_email: order.billing?.email || null,
+          customer_first_name: order.billing?.first_name || null,
+          customer_last_name: order.billing?.last_name || null,
+          customer_phone: order.billing?.phone || null,
+          billing: order.billing || {},
+          shipping: order.shipping || {},
+          line_items: order.line_items || [],
+          payment_method: order.payment_method || null,
+          payment_method_title: order.payment_method_title || null,
+          date_created: order.date_created || null,
+          date_modified: order.date_modified || null,
+          date_completed: order.date_completed || null,
+          date_paid: order.date_paid || null,
+          // Omit full raw_data — line_items/billing already cover dashboard needs and
+          // huge payloads were a major cause of edge-function idle timeouts.
+          synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        await upsertChunks(supabase, "woocommerce_orders", orderRows, "site_id,woo_order_id");
+        ordersCount = orderRows.length;
 
         // ---- Sync Products ----
         const products = await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "products", {
           modified_after: modifiedAfter,
         });
-        for (const product of products) {
-          const record = {
-            tenant_id,
-            site_id: siteId,
-            woo_product_id: product.id,
-            name: product.name,
-            slug: product.slug,
-            status: product.status,
-            type: product.type,
-            sku: product.sku || null,
-            price: parseFloat(product.price) || null,
-            regular_price: parseFloat(product.regular_price) || null,
-            sale_price: parseFloat(product.sale_price) || null,
-            stock_quantity: product.stock_quantity ?? null,
-            stock_status: product.stock_status,
-            total_sales: product.total_sales || 0,
-            categories: product.categories || [],
-            images: product.images || [],
-            raw_data: product,
-            synced_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          await supabase
-            .from("woocommerce_products")
-            .upsert(record, { onConflict: "site_id,woo_product_id" });
-        }
-        productsCount = products.length;
+        const productRows = products.map((product: any) => ({
+          tenant_id,
+          site_id: siteId,
+          woo_product_id: product.id,
+          name: product.name,
+          slug: product.slug,
+          status: product.status,
+          type: product.type,
+          sku: product.sku || null,
+          price: parseFloat(product.price) || null,
+          regular_price: parseFloat(product.regular_price) || null,
+          sale_price: parseFloat(product.sale_price) || null,
+          stock_quantity: product.stock_quantity ?? null,
+          stock_status: product.stock_status,
+          total_sales: product.total_sales || 0,
+          categories: product.categories || [],
+          images: product.images || [],
+          synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        await upsertChunks(supabase, "woocommerce_products", productRows, "site_id,woo_product_id");
+        productsCount = productRows.length;
 
-        // ---- Sync Customers ----
-        // Customers: WooCommerce doesn't support modified_after on customers reliably.
-        // Use orderby=registered_date desc and only first few pages on incremental syncs;
-        // for first sync (no lastSyncAt) pull all.
-        const customers = lastSyncAt
-          ? await wooFetch(site_url, woo_consumer_key, woo_consumer_secret, "customers", {
-              per_page: PAGE_SIZE,
-              orderby: "registered_date",
-              order: "desc",
-            })
-          : await fetchAllPages(site_url, woo_consumer_key, woo_consumer_secret, "customers");
-        for (const customer of customers) {
-          const record = {
-            tenant_id,
-            site_id: siteId,
-            woo_customer_id: customer.id,
-            email: customer.email,
-            first_name: customer.first_name,
-            last_name: customer.last_name,
-            username: customer.username,
-            role: customer.role,
-            orders_count: customer.orders_count || 0,
-            total_spent: parseFloat(customer.total_spent) || 0,
-            avatar_url: customer.avatar_url || null,
-            billing: customer.billing || {},
-            shipping: customer.shipping || {},
-            raw_data: customer,
-            synced_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-          await supabase
-            .from("woocommerce_customers")
-            .upsert(record, { onConflict: "site_id,woo_customer_id" });
-        }
-        customersCount = customers.length;
+        // ---- Sync Customers (capped — full historical pull is too slow for the edge limit) ----
+        // Prefer recent registrations; dashboards primarily need order-side metrics.
+        const customerMaxPages = lastSyncAt ? 1 : 5;
+        const customers = await fetchAllPages(
+          site_url,
+          woo_consumer_key,
+          woo_consumer_secret,
+          "customers",
+          { orderby: "registered_date", order: "desc" },
+          customerMaxPages
+        );
+        const customerRows = customers.map((customer: any) => ({
+          tenant_id,
+          site_id: siteId,
+          woo_customer_id: customer.id,
+          email: customer.email,
+          first_name: customer.first_name,
+          last_name: customer.last_name,
+          username: customer.username,
+          role: customer.role,
+          orders_count: customer.orders_count || 0,
+          total_spent: parseFloat(customer.total_spent) || 0,
+          avatar_url: customer.avatar_url || null,
+          billing: customer.billing || {},
+          shipping: customer.shipping || {},
+          synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        await upsertChunks(supabase, "woocommerce_customers", customerRows, "site_id,woo_customer_id");
+        customersCount = customerRows.length;
 
-        // Update site last sync time
+        const syncedAt = new Date().toISOString();
+        // Update site last sync time (both column names used in the wild)
         await supabase
           .from("social_media_wordpress_sites")
-          .update({ woo_last_sync_at: new Date().toISOString() })
+          .update({
+            woo_last_sync_at: syncedAt,
+            last_woocommerce_sync_at: syncedAt,
+          })
           .eq("id", siteId);
 
-        // Update sync log — success
         if (logId) {
           await supabase
             .from("woocommerce_sync_log")
@@ -263,7 +276,7 @@ serve(async (req) => {
               orders_synced: ordersCount,
               products_synced: productsCount,
               customers_synced: customersCount,
-              finished_at: new Date().toISOString(),
+              finished_at: syncedAt,
             })
             .eq("id", logId);
         }
@@ -283,6 +296,9 @@ serve(async (req) => {
             .update({
               status: "error",
               error_message: siteError.message,
+              orders_synced: ordersCount,
+              products_synced: productsCount,
+              customers_synced: customersCount,
               finished_at: new Date().toISOString(),
             })
             .eq("id", logId);
@@ -291,11 +307,11 @@ serve(async (req) => {
       }
     }
 
-    // Return first site's stats if single site sync
     const first = summaries[0] || {};
     return new Response(
       JSON.stringify({
-        success: true,
+        success: !summaries.some((s) => s.error),
+        version: FUNCTION_VERSION,
         sites_processed: summaries.length,
         orders_synced: first.orders_synced ?? 0,
         products_synced: first.products_synced ?? 0,
@@ -307,7 +323,7 @@ serve(async (req) => {
   } catch (error: any) {
     console.error("sync-woocommerce-data error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message, version: FUNCTION_VERSION }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
