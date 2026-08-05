@@ -11,20 +11,33 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2, Pencil, Check, X, ChevronDown, ArrowRight } from "lucide-react";
+import { Megaphone, Phone, Mail, Briefcase, Search, Users, ListChecks, Calendar as CalendarIcon, Building2, Pencil, Check, X, ChevronDown, ArrowRight, CheckSquare, ExternalLink } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
-import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
+import { EditClientDialog } from "@/components/forms/EditClientDialog";
+import AddTaskForm from "@/components/forms/AddTaskForm";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CampaignerTasksTab } from "./CampaignerTasksTab";
 import { CampaignerMeetingTab } from "./CampaignerMeetingTab";
 import { toast } from "sonner";
 
 type ActiveFilter = "active" | "inactive" | "all";
+type ClientStatusFilter = "active_only" | "all";
+
+function isActiveClientStatus(status: string | null | undefined) {
+  return status === "active" || status === "onboarding";
+}
+
+const CLIENT_STATUS_LABELS: Record<string, string> = {
+  active: "פעיל",
+  onboarding: "בקליטה",
+  paused: "מושהה",
+  ended: "הסתיים",
+};
 
 function getInitials(name: string) {
   return name
@@ -41,12 +54,13 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const { selectedAgency } = useAgency();
-  const { canViewFinance } = useUserPermissions();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
+  const [clientStatusFilter, setClientStatusFilter] = useState<ClientStatusFilter>("active_only");
   const [selectedId, setSelectedId] = useState<string | null>(initialCampaignerId ?? null);
   const [editOpen, setEditOpen] = useState(false);
+  const [viewClientId, setViewClientId] = useState<string | null>(null);
 
   const { data: agenciesList } = useQuery({
     queryKey: ["agencies-for-campaigners", tenantId, crossTenantAgencyIds.join(",")],
@@ -200,8 +214,25 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
     }
   }, [isMobile, filteredCampaigners, selectedId]);
 
-  const calculateTotal = (c: any) =>
-    (c?.client_team || []).reduce((t: number, a: any) => t + (a.campaigner_payment || 0), 0);
+  const visibleClientTeam = useMemo(() => {
+    const team = selected?.client_team || [];
+    if (clientStatusFilter === "all") return team;
+    return team.filter((assignment: any) => isActiveClientStatus(assignment.clients?.status));
+  }, [selected?.client_team, clientStatusFilter]);
+
+  const { data: viewClient } = useQuery({
+    queryKey: ["client-for-edit-dialog", viewClientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("id", viewClientId!)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!viewClientId,
+  });
 
   return (
     <div dir="rtl" className="flex h-[calc(100vh-8rem)] min-h-0 max-h-full border rounded-lg overflow-hidden bg-background w-full max-w-full">
@@ -267,7 +298,7 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
                           <span className="block text-xs text-muted-foreground truncate">{agencyNames}</span>
                         )}
                         <span className="block text-xs text-muted-foreground mt-0.5 truncate">
-                          לקוחות משויכים: {c.client_team?.length || 0}
+                          לקוחות פעילים: {(c.client_team || []).filter((ct: any) => isActiveClientStatus(ct.clients?.status)).length}
                         </span>
                       </div>
                     </div>
@@ -415,39 +446,82 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
                 </TabsContent>
 
 
-                <TabsContent value="clients" className="mt-0">
-                  {selected.client_team && selected.client_team.length > 0 ? (
+                <TabsContent value="clients" className="mt-0 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Select
+                      value={clientStatusFilter}
+                      onValueChange={(value) => setClientStatusFilter(value as ClientStatusFilter)}
+                    >
+                      <SelectTrigger className="h-8 w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="active_only">פעילים ובקליטה</SelectItem>
+                        <SelectItem value="all">כל הלקוחות</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-xs text-muted-foreground">
+                      {visibleClientTeam.length} לקוחות
+                    </span>
+                  </div>
+
+                  {visibleClientTeam.length > 0 ? (
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead className="text-right">שם לקוח</TableHead>
-                            {canViewFinance() && <TableHead className="text-right">סכום</TableHead>}
+                            <TableHead className="text-right w-[100px]">סטטוס</TableHead>
+                            <TableHead className="text-right w-[140px]">פעולות</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {selected.client_team.map((assignment: any) => (
-                            <TableRow key={assignment.id}>
-                              <TableCell className="font-medium">{assignment.clients?.name ?? "—"}</TableCell>
-                              {canViewFinance() && (
+                          {visibleClientTeam.map((assignment: any) => {
+                            const client = assignment.clients;
+                            if (!client?.id) return null;
+                            return (
+                              <TableRow key={assignment.id}>
+                                <TableCell className="font-medium">{client.name ?? "—"}</TableCell>
                                 <TableCell>
-                                  {(assignment.campaigner_payment || 0).toLocaleString("he-IL")} ₪
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {CLIENT_STATUS_LABELS[client.status] || client.status || "—"}
+                                  </Badge>
                                 </TableCell>
-                              )}
-                            </TableRow>
-                          ))}
-                          {canViewFinance() && (
-                            <TableRow className="font-semibold bg-muted/50">
-                              <TableCell>סה"כ</TableCell>
-                              <TableCell>{calculateTotal(selected).toLocaleString("he-IL")} ₪</TableCell>
-                            </TableRow>
-                          )}
+                                <TableCell>
+                                  <div className="flex items-center gap-1 justify-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 px-2 gap-1"
+                                      onClick={() => setViewClientId(client.id)}
+                                    >
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                      פרטים
+                                    </Button>
+                                    <AddTaskForm
+                                      clientId={client.id}
+                                      agencyId={client.agency_id || undefined}
+                                      defaultCampaignerId={selected.id}
+                                      triggerButton={
+                                        <Button variant="ghost" size="sm" className="h-8 px-2 gap-1">
+                                          <CheckSquare className="h-3.5 w-3.5" />
+                                          משימה
+                                        </Button>
+                                      }
+                                    />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </div>
                   ) : (
                     <div className="text-sm text-muted-foreground text-center py-8">
-                      אין לקוחות פעילים משויכים
+                      {clientStatusFilter === "active_only"
+                        ? "אין לקוחות פעילים משויכים"
+                        : "אין לקוחות משויכים"}
                     </div>
                   )}
                 </TabsContent>
@@ -475,6 +549,16 @@ export function CampaignersChatView({ initialCampaignerId }: { initialCampaigner
               open={editOpen}
               onOpenChange={setEditOpen}
             />
+
+            {viewClient && (
+              <EditClientDialog
+                client={viewClient}
+                open={!!viewClientId}
+                onOpenChange={(open) => {
+                  if (!open) setViewClientId(null);
+                }}
+              />
+            )}
           </>
         )}
       </div>

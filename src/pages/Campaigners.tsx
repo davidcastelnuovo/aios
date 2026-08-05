@@ -1,16 +1,13 @@
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 import { Megaphone, Phone, Mail, Briefcase, ChevronDown, ChevronUp, LayoutGrid, MessageSquare, Pencil } from "lucide-react";
 import { AddCampaignerForm } from "@/components/forms/AddCampaignerForm";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { toast } from "sonner";
-import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -29,9 +26,6 @@ export default function Campaigners() {
     setViewMode("chat");
   };
   const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
-  const [tempAmounts, setTempAmounts] = useState<Record<string, number>>({});
-  const { canViewFinance } = useUserPermissions();
-  const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const { selectedAgency } = useAgency();
@@ -95,43 +89,6 @@ export default function Campaigners() {
       campaigner.campaigner_agencies?.some((ca: any) => ca.agency_id === selectedAgency)
     );
   }, [campaigners, selectedAgency]);
-
-  const updatePaymentMutation = useMutation({
-    mutationFn: async ({ clientTeamId, amount }: { clientTeamId: string; amount: number }) => {
-      const { error } = await supabase
-        .from("client_team")
-        .update({ campaigner_payment: amount })
-        .eq("id", clientTeamId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
-      toast.success("הסכום עודכן בהצלחה");
-    },
-    onError: () => {
-      toast.error("שגיאה בעדכון הסכום");
-    },
-  });
-
-  const handleAmountChange = (clientTeamId: string, value: string) => {
-    const amount = parseFloat(value) || 0;
-    setTempAmounts(prev => ({ ...prev, [clientTeamId]: amount }));
-  };
-
-  const handleAmountBlur = (clientTeamId: string, originalAmount: number) => {
-    const newAmount = tempAmounts[clientTeamId];
-    if (newAmount !== undefined && newAmount !== originalAmount) {
-      updatePaymentMutation.mutate({ clientTeamId, amount: newAmount });
-    }
-  };
-
-  const calculateTotal = (campaignerId: string) => {
-    const campaigner = campaigners?.find(c => c.id === campaignerId);
-    if (!campaigner?.client_team) return 0;
-    return campaigner.client_team.reduce((total: number, assignment: any) => {
-      return total + (assignment.campaigner_payment || 0);
-    }, 0);
-  };
 
   const toggleCampaigner = (campaignerId: string) => {
     setExpandedCampaigner(expandedCampaigner === campaignerId ? null : campaignerId);
@@ -257,33 +214,14 @@ export default function Campaigners() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead className="text-right">שם לקוח</TableHead>
-                                {canViewFinance() && <TableHead className="text-right">סכום</TableHead>}
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {campaigner.client_team.map((assignment: any) => (
                                 <TableRow key={assignment.id}>
                                   <TableCell className="font-medium">{assignment.clients?.name ?? "—"}</TableCell>
-                                  {canViewFinance() && (
-                                    <TableCell>
-                                      <Input
-                                        type="number"
-                                        placeholder="0"
-                                        value={tempAmounts[assignment.id] ?? assignment.campaigner_payment ?? ''}
-                                        onChange={(e) => handleAmountChange(assignment.id, e.target.value)}
-                                        onBlur={() => handleAmountBlur(assignment.id, assignment.campaigner_payment || 0)}
-                                        className="max-w-[150px]"
-                                      />
-                                    </TableCell>
-                                  )}
                                 </TableRow>
                               ))}
-                              {canViewFinance() && (
-                                <TableRow className="font-semibold bg-muted/50">
-                                  <TableCell>סה"כ</TableCell>
-                                  <TableCell>{calculateTotal(campaigner.id).toLocaleString('he-IL')} ₪</TableCell>
-                                </TableRow>
-                              )}
                             </TableBody>
                           </Table>
                         </div>
