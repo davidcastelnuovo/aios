@@ -4393,13 +4393,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       const tableName = client.name
       const slug = `facebook-${client_id.substring(0, 8)}`
+      // Prefer the agency home tenant (shared agencies like DMM-MC live on DMM).
+      let tableTenantId = tenantId
+      if (client.agency_id) {
+        const { data: agencyRow } = await supabase.from('agencies').select('tenant_id').eq('id', client.agency_id).maybeSingle()
+        if (agencyRow?.tenant_id) tableTenantId = agencyRow.tenant_id
+      }
       const { data: table, error } = await supabase.from('crm_tables').insert({
-        tenant_id: tenantId,
+        tenant_id: tableTenantId,
         name: tableName,
         slug,
         description: `דוח ביצועי מודעות פייסבוק עבור ${client.name} (${ad_account_name})`,
         icon: 'BarChart3',
-        category: 'דוחות',
+        // Must match UI buckets in DynamicTables — never a generic "דוחות" silo.
+        category: 'Facebook Insights',
         integration_type: 'facebook_insights',
         integration_settings: { ad_account_id, ad_account_name },
         agency_id: client.agency_id || null,
@@ -5217,13 +5224,19 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (!client) return { error: 'לקוח לא נמצא' }
       const accountName = args.account_name || customer_id
       const slug = `google-ads-${client_id.substring(0, 8)}`
+      let tableTenantId = tenantId
+      if (client.agency_id) {
+        const { data: agencyRow } = await supabase.from('agencies').select('tenant_id').eq('id', client.agency_id).maybeSingle()
+        if (agencyRow?.tenant_id) tableTenantId = agencyRow.tenant_id
+      }
       const { data: table, error } = await supabase.from('crm_tables').insert({
-        tenant_id: tenantId,
+        tenant_id: tableTenantId,
         name: client.name,
         slug,
         description: `דוח Google Ads עבור ${client.name} (${accountName})`,
         icon: 'BarChart3',
-        category: 'דוחות',
+        // Must match UI buckets in DynamicTables — never a generic "דוחות" silo.
+        category: 'Google Ads',
         integration_type: 'google_ads',
         integration_settings: {
           customer_id,
