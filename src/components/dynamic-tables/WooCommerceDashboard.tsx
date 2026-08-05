@@ -99,22 +99,23 @@ const getDateRange = (filter: string, customFrom?: string, customTo?: string): {
   return { start, end };
 };
 
-export function WooCommerceDashboard({ clientId, tenantId, dateFilter, customFrom, customTo }: Props) {
-  // Find linked WooCommerce sites for the client
+export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter, customFrom, customTo }: Props) {
+  // Find linked WooCommerce sites for the client.
+  // Filter by client_id only — shared-agency WP sites may live on the agency
+  // home tenant while the viewer session is on another tenant in the same agency.
   const { data: sites = [] } = useQuery({
-    queryKey: ['woo-sites-for-client', clientId, tenantId],
+    queryKey: ['woo-sites-for-client', clientId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('social_media_wordpress_sites' as any)
         .select('id, site_name, site_url, woo_last_sync_at')
         .eq('client_id', clientId)
-        .eq('tenant_id', tenantId)
         .eq('woocommerce_enabled', true)
         .eq('is_active', true);
       if (error) throw error;
       return data as any[];
     },
-    enabled: !!clientId && !!tenantId,
+    enabled: !!clientId,
   });
 
   const siteIds = sites.map((s: any) => s.id);

@@ -239,11 +239,12 @@ Deno.serve(async (req) => {
 
     const loadWoo = async () => {
       if (!dashboard.client_id) return;
+      // client_id only — WP/Woo sites for shared-agency clients may live on the
+      // agency home tenant while the dashboard row is on another tenant.
       const { data: sites } = await supabase
         .from("social_media_wordpress_sites")
         .select("id, site_name, site_url, woo_last_sync_at")
         .eq("client_id", dashboard.client_id)
-        .eq("tenant_id", dashboard.tenant_id)
         .eq("woocommerce_enabled", true)
         .eq("is_active", true);
       wooSites = sites || [];
