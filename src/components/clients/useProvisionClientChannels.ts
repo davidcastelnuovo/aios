@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { CLIENT_CHANNELS, isChannelActive, type ChannelFieldKey } from "@/config/clientChannels";
+import { CLIENT_CHANNELS, type ChannelFieldKey } from "@/config/clientChannels";
 import { resolveDashboardHomeTenant } from "@/lib/crmDashboards";
+import { normalizeSeoDomain } from "@/lib/seoDomain";
+import {
+  isSeoClient,
+  pickGaPropertyForDomain,
+  pickGscSiteForDomain,
+  shouldCreateDashboardForConnections,
+} from "@/lib/clientConnectionProvision";
 
 // Per integration_type: how to build the crm_tables row the existing sync
 // functions + viewers expect (matches what the manual "create table" dialogs write).
@@ -61,9 +68,6 @@ const TABLE_META: Record<
   },
 };
 
-// Mirrors getSyncFunction in ClientReportPanel: only these integrations have a
-// sync-to-records function. GA/Ahrefs/Search Console load their data live on
-// render, so there is nothing to pre-sync for them.
 function syncFunctionFor(integrationType: string): string | null {
   switch (integrationType) {
     case "facebook_insights":
@@ -76,39 +80,174 @@ function syncFunctionFor(integrationType: string): string | null {
   }
 }
 
+export interface ProvisionOptions {
+  /**
+   * When false, create/update crm_tables only — skip the unified client dashboard.
+   * Defaults to true when more than one connection is filled; callers may override.
+   */
+  createDashboard?: boolean;
+  /** When true (default), SEO clients resolve GA/GSC/Ahrefs from `website`. */
+  resolveSeoFromWebsite?: boolean;
+}
+
 export interface ProvisionSummary {
   created: string[];
   updated: string[];
   skipped: string[];
   synced: string[];
+  resolved: string[];
   dashboardCreated: boolean;
+  createDashboard: boolean;
+}
+
+async function resolveActiveIntegrationId(
+  tenantId: string,
+  integrationType: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("tenant_integrations")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", integrationType)
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as any)?.id ?? null;
+}
+
+/**
+ * For SEO clients (or when website is set and SEO fields are empty), look up
+ * matching Ahrefs domain / GSC site / GA4 property from the website host.
+ */
+async function resolveSeoAccountsFromWebsite(
+  client: Record<string, any>,
+  tenantId: string | null,
+): Promise<{ updates: Partial<Record<ChannelFieldKey, string>>; resolved: string[] }> {
+  const updates: Partial<Record<ChannelFieldKey, string>> = {};
+  const resolved: string[] = [];
+  const domain = normalizeSeoDomain(client.website);
+  if (!domain || !tenantId) return { updates, resolved };
+
+  if (!String(client.ahrefs_domain || "").trim()) {
+    updates.ahrefs_domain = domain;
+    resolved.push(`Ahrefs ← ${domain}`);
+  }
+
+  // Search Console
+  if (!String(client.gsc_site_url || "").trim()) {
+    try {
+      const gscId = await resolveActiveIntegrationId(tenantId, "google_search_console");
+      if (gscId) {
+        const { data, error } = await supabase.functions.invoke(
+          "google-search-console-auth?action=get_sites",
+          { body: { integrationId: gscId } },
+        );
+        if (!error) {
+          const sites = Array.isArray(data?.sites) ? data.sites : [];
+          const siteUrl = pickGscSiteForDomain(sites, domain);
+          if (siteUrl) {
+            updates.gsc_site_url = siteUrl;
+            resolved.push(`Search Console ← ${siteUrl}`);
+          }
+        }
+      }
+    } catch {
+      // non-fatal — user can fill manually
+    }
+  }
+
+  // Google Analytics — match property display name to the domain
+  if (!String(client.ga_property_id || "").trim()) {
+    try {
+      const gaId = await resolveActiveIntegrationId(tenantId, "google_analytics");
+      if (gaId) {
+        const { data, error } = await supabase.functions.invoke(
+          "google-analytics-auth?action=get_properties",
+          { body: { integrationId: gaId } },
+        );
+        if (!error) {
+          const properties = Array.isArray(data?.properties) ? data.properties : [];
+          const propertyId = pickGaPropertyForDomain(properties, domain);
+          if (propertyId) {
+            updates.ga_property_id = propertyId;
+            resolved.push(`Analytics ← ${propertyId}`);
+          }
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
+  return { updates, resolved };
 }
 
 export function useProvisionClientChannels() {
   const qc = useQueryClient();
   const [provisioning, setProvisioning] = useState(false);
 
-  const provision = async (clientId: string): Promise<ProvisionSummary> => {
+  const provision = async (
+    clientId: string,
+    options: ProvisionOptions = {},
+  ): Promise<ProvisionSummary> => {
     setProvisioning(true);
-    const summary: ProvisionSummary = { created: [], updated: [], skipped: [], synced: [], dashboardCreated: false };
-    // Tables provisioned this run, to trigger an initial sync for the ones that support it.
+    const summary: ProvisionSummary = {
+      created: [],
+      updated: [],
+      skipped: [],
+      synced: [],
+      resolved: [],
+      dashboardCreated: false,
+      createDashboard: true,
+    };
     const provisioned: Array<{ id: string; integrationType: string; label: string }> = [];
     try {
       const { data: client, error: clientErr } = await supabase
         .from("clients")
         .select(
-          "id, name, tenant_id, agency_id, services, website, ga_property_id, google_ads_account_id, meta_ads_account_id, ahrefs_domain, gsc_site_url"
+          "id, name, tenant_id, agency_id, services, website, ga_property_id, google_ads_account_id, meta_ads_account_id, ahrefs_domain, gsc_site_url",
         )
         .eq("id", clientId)
         .single();
       if (clientErr || !client) throw clientErr || new Error("הלקוח לא נמצא");
 
-      const c = client as Record<string, any>;
+      const c = { ...(client as Record<string, any>) };
       const services: string[] = Array.isArray(c.services) ? c.services : [];
       const tenantId: string | null = c.tenant_id ?? null;
       const agencyId: string | null = c.agency_id ?? null;
 
-      // Resolve the tenant's connected integration row per type (for integrationId).
+      // SEO clients: auto-resolve GA / GSC / Ahrefs from the website host.
+      const wantResolve = options.resolveSeoFromWebsite !== false;
+      if (wantResolve && isSeoClient(services) && String(c.website || "").trim()) {
+        const { updates, resolved } = await resolveSeoAccountsFromWebsite(c, tenantId);
+        if (Object.keys(updates).length > 0) {
+          const { error: upErr } = await supabase
+            .from("clients")
+            .update(updates as never)
+            .eq("id", clientId);
+          if (!upErr) {
+            Object.assign(c, updates);
+            summary.resolved.push(...resolved);
+          }
+        }
+      }
+
+      const createDashboard =
+        options.createDashboard ??
+        shouldCreateDashboardForConnections(
+          {
+            website: c.website,
+            ga_property_id: c.ga_property_id,
+            google_ads_account_id: c.google_ads_account_id,
+            meta_ads_account_id: c.meta_ads_account_id,
+            ahrefs_domain: c.ahrefs_domain,
+            gsc_site_url: c.gsc_site_url,
+          },
+          services,
+        );
+      summary.createDashboard = createDashboard;
+
       const integrationIdByType: Record<string, string> = {};
       if (tenantId) {
         const { data: integrations } = await supabase
@@ -122,28 +261,30 @@ export function useProvisionClientChannels() {
         }
       }
 
-      // Existing tables already linked to this client (idempotency).
-      // Scope to the client's tenant explicitly (not the global active-tenant row).
       const listRes = await supabase.functions.invoke(
         tenantId ? `crm-tables?tenant_id=${tenantId}` : "crm-tables",
-        { method: "GET" }
+        { method: "GET" },
       );
       if (listRes.error) throw listRes.error;
       const existing = (Array.isArray(listRes.data) ? listRes.data : []).filter(
-        (t: any) => t.client_id === clientId
+        (t: any) => t.client_id === clientId,
       );
 
-      const activeChannels = CLIENT_CHANNELS.filter((ch) => isChannelActive(ch, services));
-      for (const channel of activeChannels) {
+      // Provision every channel that has a filled identifier — not only those
+      // matching clients.services (the Connections tab shows all channels).
+      for (const channel of CLIENT_CHANNELS) {
         for (const tbl of channel.tables) {
           const meta = TABLE_META[tbl.integrationType];
           if (!meta) continue;
           const idValue: string = (c[tbl.requiresField as ChannelFieldKey] ?? "").toString().trim();
           if (!idValue) {
-            summary.skipped.push(`${meta.label}: חסר מזהה`);
             continue;
           }
           const integrationId = integrationIdByType[tbl.integrationType];
+          if (meta.needsIntegrationId && !integrationId) {
+            summary.skipped.push(`${meta.label}: אין אינטגרציה מחוברת לטננט`);
+            continue;
+          }
           const settings = meta.build(idValue, integrationId);
 
           const found = existing.find((t: any) => t.integration_type === tbl.integrationType);
@@ -183,48 +324,46 @@ export function useProvisionClientChannels() {
         }
       }
 
-      // Best-effort initial sync for integrations that support it (Facebook / Google Ads).
-      // Failures here never fail provisioning — the table still exists and can be synced later.
       for (const p of provisioned) {
         const syncFn = syncFunctionFor(p.integrationType);
         if (!syncFn) continue;
         try {
-          // Both sync functions read snake_case table_id — camelCase tableId
-          // made every initial provisioning sync fail silently with 400.
           const res = await supabase.functions.invoke(syncFn, { body: { table_id: p.id } });
           if (!res.error) summary.synced.push(p.label);
         } catch {
-          // ignore — manual sync remains available in the report panel
+          // ignore — manual sync remains available
         }
       }
 
-      // Ensure a unified client dashboard exists.
-      const { data: dash } = await supabase
-        .from("crm_dashboards")
-        .select("id")
-        .eq("client_id", clientId)
-        .eq("dashboard_type", "client")
-        .maybeSingle();
-      if (!dash && tenantId) {
-        const homeTenantId = await resolveDashboardHomeTenant({
-          uiTenantId: tenantId,
-          agencyId,
-          clientId,
-        });
-        const { error: dashErr } = await supabase.from("crm_dashboards").insert({
-          tenant_id: homeTenantId,
-          name: `דשבורד - ${c.name}`,
-          agency_id: agencyId,
-          client_id: clientId,
-          dashboard_type: "client",
-          settings: {},
-        } as never);
-        if (!dashErr) summary.dashboardCreated = true;
+      if (createDashboard) {
+        const { data: dash } = await supabase
+          .from("crm_dashboards")
+          .select("id")
+          .eq("client_id", clientId)
+          .eq("dashboard_type", "client")
+          .maybeSingle();
+        if (!dash && tenantId) {
+          const homeTenantId = await resolveDashboardHomeTenant({
+            uiTenantId: tenantId,
+            agencyId,
+            clientId,
+          });
+          const { error: dashErr } = await supabase.from("crm_dashboards").insert({
+            tenant_id: homeTenantId,
+            name: `דשבורד - ${c.name}`,
+            agency_id: agencyId,
+            client_id: clientId,
+            dashboard_type: "client",
+            settings: {},
+          } as never);
+          if (!dashErr) summary.dashboardCreated = true;
+        }
       }
 
       qc.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
       qc.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
       qc.invalidateQueries({ queryKey: ["client-dashboards", clientId] });
+      qc.invalidateQueries({ queryKey: ["client-connections", clientId] });
       return summary;
     } finally {
       setProvisioning(false);

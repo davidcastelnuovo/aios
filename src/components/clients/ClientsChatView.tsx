@@ -760,8 +760,10 @@ export function ClientsChatView({
                   className="h-8 w-8"
                   disabled={provisioning}
                   onClick={async () => {
-                    const summary = await provision(selectedClient.id);
+                    // Chat shortcut always wants the full package (tables + dashboard).
+                    const summary = await provision(selectedClient.id, { createDashboard: true });
                     const parts: string[] = [];
+                    if (summary.resolved?.length) parts.push(`זוהו: ${summary.resolved.join(", ")}`);
                     if (summary.created.length) parts.push(`נוצרו: ${summary.created.join(", ")}`);
                     if (summary.updated.length) parts.push(`עודכנו: ${summary.updated.join(", ")}`);
                     if (summary.dashboardCreated) parts.push("דשבורד נוצר");

@@ -9,12 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Megaphone, Share2, Link2, Loader2, LayoutDashboard, Wand2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Megaphone, Share2, Link2, Loader2, LayoutDashboard, Wand2, CheckCircle2, FileSpreadsheet } from "lucide-react";
 import {
   CLIENT_CHANNELS,
   ALL_CHANNEL_FIELD_KEYS,
   type ChannelFieldKey,
 } from "@/config/clientChannels";
+import {
+  countFilledConnections,
+  shouldCreateDashboardForConnections,
+} from "@/lib/clientConnectionProvision";
 
 interface Props {
   clientId: string;
@@ -60,20 +64,28 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
     if (key === "meta_ads_account_id") setResolvedPage(null);
   };
 
-  const saveClientFields = async () => {
-    setSaving(true);
-    // Persist all channel fields regardless of active services
+  const persistClientFields = async () => {
     const payload: Record<string, string | null> = {};
     for (const key of ALL_CHANNEL_FIELD_KEYS) {
       const val = fieldValue(key).trim();
       payload[key] = val || null;
     }
     const { error } = await supabase.from("clients").update(payload as never).eq("id", clientId);
-    setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("נשמר");
+    if (error) throw new Error(error.message);
     setEdits({});
     conns.invalidate();
+  };
+
+  const saveClientFields = async () => {
+    setSaving(true);
+    try {
+      await persistClientFields();
+      toast.success("נשמר");
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "שגיאה בשמירה");
+    } finally {
+      setSaving(false);
+    }
   };
 
   /**
@@ -113,15 +125,32 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
     }
   };
 
+  const currentFields = (): Record<ChannelFieldKey, string> => {
+    const out = {} as Record<ChannelFieldKey, string>;
+    for (const key of ALL_CHANNEL_FIELD_KEYS) out[key] = fieldValue(key);
+    return out;
+  };
+
+  const services: string[] = Array.isArray(c?.services) ? c.services : [];
+  const filledCount = countFilledConnections(currentFields(), services);
+  const createDashboard = shouldCreateDashboardForConnections(currentFields(), services);
+
   const handleProvision = async () => {
     try {
-      const summary = await provision(clientId);
+      // Persist unsaved connection edits first so provision reads them.
+      if (Object.keys(edits).length > 0) {
+        await persistClientFields();
+      }
+      const summary = await provision(clientId, { createDashboard });
       const parts: string[] = [];
+      if (summary.resolved.length) parts.push(`זוהו: ${summary.resolved.join(", ")}`);
       if (summary.created.length) parts.push(`נוצרו: ${summary.created.join(", ")}`);
       if (summary.updated.length) parts.push(`עודכנו: ${summary.updated.join(", ")}`);
       if (summary.dashboardCreated) parts.push("דשבורד נוצר");
+      else if (!summary.createDashboard) parts.push("טבלה בלבד (בלי דשבורד)");
       if (summary.skipped.length) parts.push(`דולגו: ${summary.skipped.join(", ")}`);
       toast.success(parts.length ? parts.join(" · ") : "אין ערוצים עם מזהים להקמה");
+      conns.invalidate();
       onProvisioned?.();
     } catch (err: unknown) {
       toast.error((err as Error)?.message || "שגיאה בהקצאת ערוצים");
@@ -222,14 +251,43 @@ export function ClientConnectionsTab({ clientId, tenantId, onProvisioned }: Prop
         );
       })}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={saveClientFields} disabled={saving}>
           {saving ? "שומר..." : "שמור חיבורים"}
         </Button>
-        <Button size="sm" variant="secondary" onClick={handleProvision} disabled={provisioning}>
-          {provisioning ? <Loader2 className="ml-1 h-4 w-4 animate-spin" /> : <LayoutDashboard className="ml-1 h-4 w-4" />}
-          {provisioning ? "מקצה..." : "צור טבלאות + דשבורד"}
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={handleProvision}
+          disabled={provisioning || filledCount === 0}
+          title={
+            filledCount === 0
+              ? "יש למלא לפחות חיבור אחד"
+              : createDashboard
+                ? "יותר מחיבור אחד — יוצר טבלאות נפרדות + דשבורד מאוחד"
+                : "חיבור אחד — יוצר טבלה בלבד בלי דשבורד"
+          }
+        >
+          {provisioning ? (
+            <Loader2 className="ml-1 h-4 w-4 animate-spin" />
+          ) : createDashboard ? (
+            <LayoutDashboard className="ml-1 h-4 w-4" />
+          ) : (
+            <FileSpreadsheet className="ml-1 h-4 w-4" />
+          )}
+          {provisioning
+            ? "מקצה..."
+            : createDashboard
+              ? "צור טבלאות + דשבורד"
+              : "צור טבלה"}
         </Button>
+        {filledCount > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {filledCount === 1
+              ? "חיבור אחד · טבלה בלבד"
+              : `${filledCount} חיבורים · טבלאות + דשבורד`}
+          </span>
+        )}
       </div>
 
       {/* Social pages — always shown */}
