@@ -311,7 +311,7 @@ serve(async (req: Request) => {
 
 
     // Step 4: Send invitation email
-    const invitationUrl = `${req.headers.get("origin") || supabaseUrl}/auth?token=${invitationToken}`;
+    const invitationUrl = `${req.headers.get("origin") || supabaseUrl}/auth?token=${invitationToken}&type=invite`;
     
 
     // TODO: Send actual email using your email service

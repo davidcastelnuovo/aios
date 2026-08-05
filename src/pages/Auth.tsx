@@ -1,19 +1,28 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Building2 } from "lucide-react";
 import { resolveTenantSlug } from "@/hooks/useResolveTenant";
 
-// Helper function to build tenant path - requires slug
-const buildTenantPath = (slug: string, path: string) => {
-  return `/t/${slug}/${path}`;
-};
+const buildTenantPath = (slug: string, path: string) => `/t/${slug}/${path}`;
+
+const AUTH_REDIRECT = `${window.location.origin}/auth`;
+
+async function processPendingInvitation(accessToken: string) {
+  try {
+    const { error } = await supabase.functions.invoke("process-user-invitation", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (error) console.error("Error processing invitation:", error);
+  } catch (e) {
+    console.error("Exception processing invitation:", e);
+  }
+}
 
 export default function Auth() {
   const [email, setEmail] = useState("");
@@ -23,154 +32,127 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [updatePasswordMode, setUpdatePasswordMode] = useState(false);
-  // MFA state
   const [mfaRequired, setMfaRequired] = useState(false);
   const [factorId, setFactorId] = useState<string | null>(null);
   const [mfaCode, setMfaCode] = useState("");
-  // While true we are still checking for / forwarding an existing session,
-  // so we show a spinner instead of flashing the login form on every visit.
   const [checkingSession, setCheckingSession] = useState(true);
+  const [inviteBanner, setInviteBanner] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
-const [searchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
+  const authType = searchParams.get("type");
+  const needsPasswordSetup = authType === "recovery" || authType === "invite";
+  const inviteToken = searchParams.get("token");
 
-// Single, deterministic auth-callback handler.
-//
-// The OAuth/recovery `?code=` is exchanged exactly once by supabase-js itself
-// (detectSessionInUrl is on by default). We must NOT call exchangeCodeForSession
-// manually as well — a PKCE code is single-use, so a second exchange fails and
-// bounces the user back to the login screen (the "log in twice" bug). Here we
-// only react to the resulting auth state and navigate once, to /tasks.
-useEffect(() => {
-  const isRecovery = searchParams.get("type") === "recovery";
-  // On an OAuth/recovery return the URL carries a `?code=` that supabase-js
-  // exchanges asynchronously. Until that finishes a session-less
-  // INITIAL_SESSION can fire, so we must keep the spinner up (not flash the
-  // form) while a code is pending.
-  const hasOAuthCode = !!searchParams.get("code");
-  let navigated = false;
+  const navigateToApp = useCallback(
+    async (userId: string, accessToken?: string) => {
+      if (accessToken) {
+        await processPendingInvitation(accessToken);
+      }
 
-  // Safety net: never leave the user stuck on the spinner if no auth event
-  // ever resolves (e.g. an already-used PKCE code).
-  const spinnerTimeout = setTimeout(() => setCheckingSession(false), 4000);
+      const slug = await resolveTenantSlug(userId, 5);
+      if (slug) {
+        navigate(buildTenantPath(slug, "tasks"), { replace: true });
+        return true;
+      }
 
-  const goToApp = async (session: { user: { id: string }; access_token: string }) => {
-    if (navigated || isRecovery) return;
-    navigated = true;
-    // We have a session — keep the clean spinner up while we resolve the
-    // tenant, instead of showing the login form behind it.
-    setCheckingSession(true);
-
-    // Process pending invitation (no-op when there isn't one)
-    try {
-      const { error } = await supabase.functions.invoke("process-user-invitation", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (error) console.error("Error processing invitation:", error);
-    } catch (e) {
-      console.error("Exception processing invitation:", e);
-    }
-
-    const slug = await resolveTenantSlug(session.user.id, 5);
-    if (slug) {
-      // All users land on the tasks module by default.
-      navigate(buildTenantPath(slug, "tasks"), { replace: true });
-    } else {
-      navigated = false; // allow a later event to retry
-      setCheckingSession(false); // drop the spinner so the user isn't stuck
       toast({
         title: "שגיאה",
         description: "לא נמצא ארגון עבור המשתמש. נא לפנות לתמיכה.",
         variant: "destructive",
       });
-    }
-  };
+      return false;
+    },
+    [navigate, toast],
+  );
 
-  // Subscribe BEFORE checking the current session so we never miss the
-  // SIGNED_IN that fires once supabase-js finishes the URL code exchange.
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    if (event === "PASSWORD_RECOVERY" || isRecovery) {
-      setUpdatePasswordMode(true);
-      setCheckingSession(false);
-      return;
-    }
-    if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
-      goToApp(session as any);
-    } else if ((event === "INITIAL_SESSION" && !hasOAuthCode) || event === "SIGNED_OUT") {
-      // No session to forward and nothing pending — show the login form.
-      setCheckingSession(false);
-    }
-  });
+  // Load invitation context from ?token= for pre-fill and banner
+  useEffect(() => {
+    if (!inviteToken) return;
 
-  // Covers the "already authenticated, landed on /auth" case.
-  (async () => {
-    if (isRecovery) {
-      setUpdatePasswordMode(true);
-      setCheckingSession(false);
-      return;
-    }
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      goToApp(session as any);
-    } else if (!hasOAuthCode) {
-      setCheckingSession(false);
-    }
-  })();
+    (async () => {
+      const { data, error } = await supabase
+        .from("invitation_tokens")
+        .select("email, metadata, tenants(name)")
+        .eq("token", inviteToken)
+        .eq("used", false)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle();
 
-  return () => {
-    clearTimeout(spinnerTimeout);
-    subscription.unsubscribe();
-  };
-}, [searchParams, navigate, toast]);
+      if (error || !data) return;
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      toast({
-        title: "שגיאה",
-        description: error.message,
-        variant: "destructive",
-      });
-      setLoading(false);
-      return;
-    }
-    
-    // Process invitation if exists
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      if (session?.session) {
-        const { data: invData, error: invError } = await supabase.functions.invoke("process-user-invitation", {
-          headers: {
-            Authorization: `Bearer ${session.session.access_token}`,
-          },
-        });
-        
-        if (invError) {
-          console.error("Error processing invitation:", invError);
-        } else if (invData?.error === "NO_INVITATION") {
-          console.info("No invitation found after sign up; proceeding without invitation.");
-        }
+      if (data.email) setEmail(data.email);
+
+      const orgName =
+        (data.tenants as { name?: string } | null)?.name ||
+        (data.metadata as { tenant_name?: string } | null)?.tenant_name;
+      const invitedName = (data.metadata as { fullName?: string } | null)?.fullName;
+
+      if (orgName) {
+        setInviteBanner(
+          invitedName
+            ? `שלום ${invitedName}, הוזמנת להצטרף ל${orgName}. בדוק את המייל שלך לקישור ההתחברות, או התחבר אם כבר הגדרת סיסמה.`
+            : `הוזמנת להצטרף ל${orgName}. בדוק את המייל שלך לקישור ההתחברות, או התחבר אם כבר הגדרת סיסמה.`,
+        );
       }
-    } catch (e) {
-      console.error("Exception processing invitation:", e);
-    }
+    })();
+  }, [inviteToken]);
 
-    toast({
-      title: "ברוך הבא!",
-      description: "החשבון נוצר בהצלחה",
+  useEffect(() => {
+    const hasOAuthCode = !!searchParams.get("code");
+    let navigated = false;
+
+    const spinnerTimeout = setTimeout(() => setCheckingSession(false), 4000);
+
+    const goToApp = async (session: { user: { id: string }; access_token: string }) => {
+      if (navigated || needsPasswordSetup) return;
+      navigated = true;
+      setCheckingSession(true);
+      const ok = await navigateToApp(session.user.id, session.access_token);
+      if (!ok) {
+        navigated = false;
+        setCheckingSession(false);
+      }
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || needsPasswordSetup) {
+        setUpdatePasswordMode(true);
+        setCheckingSession(false);
+        return;
+      }
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+        goToApp(session);
+      } else if ((event === "INITIAL_SESSION" && !hasOAuthCode) || event === "SIGNED_OUT") {
+        setCheckingSession(false);
+      }
     });
-    
-    // Session established - onAuthStateChange will handle navigation
-    // Keep loading state to prevent UI flash during navigation
-  };
+
+    (async () => {
+      if (needsPasswordSetup) {
+        setUpdatePasswordMode(true);
+        setCheckingSession(false);
+        return;
+      }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        goToApp(session);
+      } else if (!hasOAuthCode) {
+        setCheckingSession(false);
+      }
+    })();
+
+    return () => {
+      clearTimeout(spinnerTimeout);
+      subscription.unsubscribe();
+    };
+  }, [searchParams, needsPasswordSetup, navigateToApp]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error, data } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       toast({
         title: "שגיאה",
@@ -181,11 +163,9 @@ useEffect(() => {
       return;
     }
 
-    // Check if MFA is required
     const { data: { currentLevel, nextLevel } } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-    
-    if (nextLevel === 'aal2' && currentLevel !== 'aal2') {
-      // MFA is required
+
+    if (nextLevel === "aal2" && currentLevel !== "aal2") {
       const factors = await supabase.auth.mfa.listFactors();
       if (factors.data?.totp && factors.data.totp.length > 0) {
         setFactorId(factors.data.totp[0].id);
@@ -195,28 +175,11 @@ useEffect(() => {
       }
     }
 
-    // Process invitation if exists
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      if (session?.session) {
-        const { data: invData, error: invError } = await supabase.functions.invoke("process-user-invitation", {
-          headers: {
-            Authorization: `Bearer ${session.session.access_token}`,
-          },
-        });
-        
-        if (invError) {
-          console.error("Error processing invitation:", invError);
-        } else if (invData?.error === "NO_INVITATION") {
-          console.info("No invitation found at sign in; continuing regular flow.");
-        }
-      }
-    } catch (e) {
-      console.error("Exception processing invitation:", e);
+    const { data: session } = await supabase.auth.getSession();
+    if (session?.session) {
+      await navigateToApp(session.session.user.id, session.session.access_token);
     }
-
-    // Session established - onAuthStateChange will handle navigation
-    // Keep loading state to prevent UI flash during navigation
+    setLoading(false);
   };
 
   const handleMFAVerify = async (e: React.FormEvent) => {
@@ -241,43 +204,25 @@ useEffect(() => {
 
     setLoading(true);
     try {
-      // Create a challenge
       const challenge = await supabase.auth.mfa.challenge({ factorId });
       if (challenge.error) throw challenge.error;
 
-      // Verify the code
       const { error } = await supabase.auth.mfa.verify({
         factorId,
         challengeId: challenge.data.id,
         code: mfaCode,
       });
-
       if (error) throw error;
 
-      toast({
-        title: "הצלחה!",
-        description: "התחברת בהצלחה",
-      });
+      toast({ title: "הצלחה!", description: "התחברת בהצלחה" });
 
       const { data: session } = await supabase.auth.getSession();
       if (session?.session) {
-        const slug = await resolveTenantSlug(session.session.user.id);
-        if (slug) {
-          navigate(buildTenantPath(slug, "dashboard"));
-        } else {
-          toast({
-            title: "שגיאה",
-            description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
-            variant: "destructive",
-          });
-        }
+        await navigateToApp(session.session.user.id, session.session.access_token);
       }
-    } catch (error: any) {
-      toast({
-        title: "שגיאה",
-        description: error.message || "הקוד שגוי, נסה שוב",
-        variant: "destructive",
-      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "הקוד שגוי, נסה שוב";
+      toast({ title: "שגיאה", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -286,29 +231,21 @@ useEffect(() => {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
-      const { data, error } = await supabase.functions.invoke("send-temporary-password", {
-        body: { email }
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${AUTH_REDIRECT}?type=recovery`,
       });
-      
       if (error) throw error;
-      
-      if (data?.success) {
-        toast({
-          title: "הצלחה",
-          description: data.message || "סיסמה זמנית נשלחה למייל שלך",
-        });
-        setResetMode(false);
-      } else {
-        throw new Error(data?.error || "שגיאה בשליחת סיסמה זמנית");
-      }
-    } catch (error: any) {
+
       toast({
-        title: "שגיאה",
-        description: error.message || "שגיאה בשליחת סיסמה זמנית",
-        variant: "destructive",
+        title: "נשלח קישור לאיפוס סיסמה",
+        description: "בדוק את תיבת המייל שלך ולחץ על הקישור כדי להגדיר סיסמה חדשה.",
       });
+      setResetMode(false);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "שגיאה בשליחת קישור איפוס";
+      toast({ title: "שגיאה", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -318,25 +255,20 @@ useEffect(() => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth`,
-        },
+        provider: "google",
+        options: { redirectTo: AUTH_REDIRECT },
       });
       if (error) throw error;
-    } catch (error: any) {
-      toast({
-        title: "שגיאה",
-        description: error.message || "שגיאה בהתחברות עם Google",
-        variant: "destructive",
-      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "שגיאה בהתחברות עם Google";
+      toast({ title: "שגיאה", description: message, variant: "destructive" });
       setLoading(false);
     }
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (newPassword !== confirmPassword) {
       toast({
         title: "שגיאה",
@@ -356,63 +288,23 @@ useEffect(() => {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
 
     if (error) {
-      toast({
-        title: "שגיאה",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "שגיאה", description: error.message, variant: "destructive" });
       setLoading(false);
       return;
     }
 
-    // Process invitation if exists
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      if (session?.session) {
-        const { data: invData, error: invError } = await supabase.functions.invoke("process-user-invitation", {
-          headers: {
-            Authorization: `Bearer ${session.session.access_token}`,
-          },
-        });
-        
-        if (invError) {
-          console.error("Error processing invitation:", invError);
-        } else if (invData?.error === "NO_INVITATION") {
-          console.info("No invitation found after password update; continuing.");
-        }
-      }
-    } catch (e) {
-      console.error("Exception processing invitation:", e);
-    }
+    toast({ title: "הסיסמה עודכנה", description: "הסיסמה שלך עודכנה בהצלחה" });
 
-    toast({
-      title: "הסיסמה עודכנה",
-      description: "הסיסמה שלך עודכנה בהצלחה",
-    });
-    
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user, session } } = await supabase.auth.getUser();
     if (user) {
-      const slug = await resolveTenantSlug(user.id);
-      if (slug) {
-        navigate(buildTenantPath(slug, "dashboard"));
-      } else {
-        toast({
-          title: "שגיאה",
-          description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
-          variant: "destructive",
-        });
-      }
+      await navigateToApp(user.id, session?.access_token);
     }
     setLoading(false);
   };
 
-  // While we still don't know whether there's an existing session (or we're
-  // forwarding one), show a spinner instead of flashing the login form.
   if (checkingSession && !updatePasswordMode) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
@@ -436,8 +328,19 @@ useEffect(() => {
           </div>
         </CardHeader>
         <CardContent>
+          {inviteBanner && !updatePasswordMode && (
+            <p className="mb-4 rounded-md bg-primary/10 px-3 py-2 text-sm text-foreground">
+              {inviteBanner}
+            </p>
+          )}
+
           {updatePasswordMode ? (
             <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {authType === "invite"
+                  ? "ברוך הבא! הגדר סיסמה כדי להשלים את ההצטרפות."
+                  : "הגדר סיסמה חדשה לחשבון שלך."}
+              </p>
               <div className="space-y-2">
                 <Label htmlFor="new-password">סיסמה חדשה</Label>
                 <Input
@@ -468,254 +371,155 @@ useEffect(() => {
                 {loading ? "מעדכן..." : "הגדר סיסמה"}
               </Button>
             </form>
-          ) : (
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">התחברות</TabsTrigger>
-              <TabsTrigger value="signup">הרשמה</TabsTrigger>
-            </TabsList>
-            <TabsContent value="signin">
-              {mfaRequired ? (
-                <form onSubmit={handleMFAVerify} className="space-y-4">
-                  <div className="space-y-2 text-center">
-                    <h3 className="text-lg font-semibold">אימות דו-שלבי</h3>
-                    <p className="text-sm text-muted-foreground">
-                      הזן את הקוד בן 6 הספרות מאפליקציית ה-Authenticator שלך
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="mfa-code">קוד אימות</Label>
-                    <Input
-                      id="mfa-code"
-                      type="text"
-                      maxLength={6}
-                      value={mfaCode}
-                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
-                      placeholder="123456"
-                      className="font-mono text-lg tracking-wider text-center"
-                      autoComplete="off"
-                      autoFocus
-                      disabled={loading}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading || mfaCode.length !== 6}>
-                    {loading ? "מאמת..." : "אמת"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={() => {
-                      setMfaRequired(false);
-                      setMfaCode("");
-                      setFactorId(null);
-                    }}
-                  >
-                    חזור להתחברות
-                  </Button>
-                </form>
-              ) : resetMode ? (
-                <form onSubmit={handleResetPassword} className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      נשלח לך סיסמה זמנית למייל. לאחר ההתחברות מומלץ לשנות את הסיסמה דרך "האזור האישי".
-                    </p>
-                    <Label htmlFor="email-reset">אימייל</Label>
-                    <Input
-                      id="email-reset"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      disabled={loading}
-                      placeholder="הכנס את כתובת המייל שלך"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "שולח..." : "שלח סיסמה זמנית"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={() => setResetMode(false)}
-                  >
-                    חזור להתחברות
-                  </Button>
-                </form>
-              ) : (
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email-signin">אימייל</Label>
-                    <Input
-                      id="email-signin"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password-signin">סיסמה</Label>
-                    <Input
-                      id="password-signin"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      disabled={loading}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "מתחבר..." : "התחבר"}
-                  </Button>
-                  
-                  <div className="relative my-4">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-muted-foreground">או</span>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleGoogleSignIn}
-                    disabled={loading}
-                  >
-                    <svg className="ml-2 h-5 w-5" viewBox="0 0 24 24">
-                      <path
-                        fill="currentColor"
-                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      />
-                      <path
-                        fill="currentColor"
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      />
-                      <path
-                        fill="currentColor"
-                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      />
-                      <path
-                        fill="currentColor"
-                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      />
-                    </svg>
-                    התחבר עם Google
-                  </Button>
-
-                  <div className="flex flex-col gap-2 mt-4">
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="w-full text-sm"
-                      onClick={() => setResetMode(true)}
-                    >
-                      שכחתי סיסמה
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="w-full text-sm text-muted-foreground"
-                      onClick={() => {
-                        setResetMode(true);
-                        toast({
-                          title: "משתמש קיים?",
-                          description: "הכנס את המייל שלך ונשלח לך קישור ליצירת סיסמה",
-                        });
-                      }}
-                    >
-                      משתמש קיים? צור סיסמה
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </TabsContent>
-            <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email-signup">אימייל</Label>
-                  <Input
-                    id="email-signup"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-signup">סיסמה</Label>
-                  <Input
-                    id="password-signup"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loading}
-                    minLength={6}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "נרשם..." : "הרשם"}
-                </Button>
-                
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">או</span>
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleGoogleSignIn}
+          ) : mfaRequired ? (
+            <form onSubmit={handleMFAVerify} className="space-y-4">
+              <div className="space-y-2 text-center">
+                <h3 className="text-lg font-semibold">אימות דו-שלבי</h3>
+                <p className="text-sm text-muted-foreground">
+                  הזן את הקוד בן 6 הספרות מאפליקציית ה-Authenticator שלך
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="mfa-code">קוד אימות</Label>
+                <Input
+                  id="mfa-code"
+                  type="text"
+                  maxLength={6}
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="123456"
+                  className="font-mono text-lg tracking-wider text-center"
+                  autoComplete="off"
+                  autoFocus
                   disabled={loading}
-                >
-                  <svg className="ml-2 h-5 w-5" viewBox="0 0 24 24">
-                    <path
-                      fill="currentColor"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    />
-                  </svg>
-                  הרשם עם Google
-                </Button>
-                
-                <div className="text-center text-sm mt-4">
-                  <span className="text-muted-foreground">רוצה לפתוח ארגון חדש? </span>
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="p-0 h-auto font-normal"
-                    onClick={() => navigate("/signup")}
-                    disabled={loading}
-                  >
-                    הירשם כאן
-                  </Button>
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading || mfaCode.length !== 6}>
+                {loading ? "מאמת..." : "אמת"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setMfaRequired(false);
+                  setMfaCode("");
+                  setFactorId(null);
+                }}
+              >
+                חזור להתחברות
+              </Button>
+            </form>
+          ) : resetMode ? (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground mb-4">
+                  נשלח לך קישור לאיפוס סיסמה למייל. לחץ על הקישור כדי להגדיר סיסמה חדשה.
+                </p>
+                <Label htmlFor="email-reset">אימייל</Label>
+                <Input
+                  id="email-reset"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  placeholder="הכנס את כתובת המייל שלך"
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "שולח..." : "שלח קישור לאיפוס סיסמה"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => setResetMode(false)}
+              >
+                חזור להתחברות
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleSignIn} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email-signin">אימייל</Label>
+                <Input
+                  id="email-signin"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password-signin">סיסמה</Label>
+                <Input
+                  id="password-signin"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "מתחבר..." : "התחבר"}
+              </Button>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
                 </div>
-              </form>
-            </TabsContent>
-          </Tabs>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">או</span>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+              >
+                <svg className="ml-2 h-5 w-5" viewBox="0 0 24 24">
+                  <path
+                    fill="currentColor"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="currentColor"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="currentColor"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  />
+                  <path
+                    fill="currentColor"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  />
+                </svg>
+                התחבר עם Google
+              </Button>
+
+              <Button
+                type="button"
+                variant="link"
+                className="w-full text-sm"
+                onClick={() => setResetMode(true)}
+              >
+                שכחתי סיסמה
+              </Button>
+
+              <p className="text-center text-sm text-muted-foreground pt-2">
+                רוצה לפתוח ארגון חדש?{" "}
+                <Link to="/signup" className="text-primary underline-offset-4 hover:underline">
+                  הירשם כאן
+                </Link>
+              </p>
+            </form>
           )}
         </CardContent>
       </Card>

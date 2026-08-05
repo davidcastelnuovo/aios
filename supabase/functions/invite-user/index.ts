@@ -332,12 +332,13 @@ serve(async (req: Request) => {
       const parts = baseUrlInput2.split("/").slice(0, 3);
       safeBaseUrl2 = parts.join("/");
     }
-    const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth`;
+    const authRedirect = `${safeBaseUrl2.replace(/\/+$/, "")}/auth?type=invite`;
+    const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth?token=${token_value}`;
 
     // Send invitation email via Supabase Auth
     try {
       const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        redirectTo: invitationLink,
+        redirectTo: authRedirect,
         data: {
           invitation_id: invitation.id,
         }
@@ -435,14 +436,11 @@ serve(async (req: Request) => {
       console.error("Invitation email exception:", e);
     }
 
-    // Return success with invitation link
-    const directInvitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth`;
-
     return new Response(
       JSON.stringify({
         success: true,
         message: "User invited successfully",
-        invitationLink: directInvitationLink,
+        invitationLink,
       }),
       {
         status: 200,
