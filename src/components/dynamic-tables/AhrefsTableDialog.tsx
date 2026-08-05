@@ -55,7 +55,7 @@ export function AhrefsTableDialog({ open, onOpenChange, assignedClientIds }: Ahr
   });
 
   // Fetch agencies
-  const { data: agencies } = useTableDialogAgencies({ enabled: open });
+  const { data: agencies } = useTableDialogAgencies({ includeShared: true, enabled: open });
 
   // Fetch clients based on selected agency
   const { data: rawClients } = useAgencyClients(selectedAgency || null);

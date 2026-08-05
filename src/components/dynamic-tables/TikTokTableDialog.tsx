@@ -59,7 +59,7 @@ export function TikTokTableDialog({ open, onOpenChange, assignedClientIds }: Pro
     enabled: open && !!tenantId,
   });
 
-  const { data: agencies = [] } = useTableDialogAgencies({ enabled: open });
+  const { data: agencies = [] } = useTableDialogAgencies({ includeShared: true, enabled: open });
 
   const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
   const clients = assignedClientIds

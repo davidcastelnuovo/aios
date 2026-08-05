@@ -109,7 +109,7 @@ export function EditTableDialog({ open, onOpenChange, table, tenantId, onSaved }
     );
   }, [gaProperties, propertySearch]);
 
-  const { data: agencies = [] } = useTableDialogAgencies({ enabled: open });
+  const { data: agencies = [] } = useTableDialogAgencies({ includeShared: true, enabled: open });
   const { data: clients = [] } = useAgencyClients(agencyId || null);
 
   const handleSave = async () => {

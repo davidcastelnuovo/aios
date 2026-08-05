@@ -37,16 +37,18 @@ export function useAgencyClients(
 }
 
 /**
- * Fetch the current tenant's agencies (id + name, ordered by name).
- * When `includeShared` is true, cross-tenant shared agencies (via
- * `agency_tenant_access`) are merged in, deduped, and sorted by Hebrew name.
+ * Fetch agencies available in table-create/edit dialogs.
+ *
+ * Defaults to including cross-tenant shared agencies (via
+ * `agency_tenant_access`) so MarketingCaptain can pick DMM-MC, etc.
+ * Pass `includeShared: false` only when a dialog must stay tenant-local.
  */
 export function useTableDialogAgencies(options?: {
   includeShared?: boolean;
   enabled?: boolean;
 }) {
   const { tenantId } = useCurrentTenant();
-  const includeShared = !!options?.includeShared;
+  const includeShared = options?.includeShared ?? true;
 
   return useQuery({
     queryKey: ["agencies", tenantId, { shared: includeShared }],
@@ -62,25 +64,35 @@ export function useTableDialogAgencies(options?: {
 
       if (!includeShared) return ownedAgencies || [];
 
+      // 1) Which agencies are shared INTO this tenant?
       const { data: sharedAccess, error: sharedError } = await supabase
         .from("agency_tenant_access")
-        .select(`
-          agency_id,
-          agencies (
-            id,
-            name
-          )
-        `)
+        .select("agency_id")
         .eq("accessing_tenant_id", tenantId);
       if (sharedError) throw sharedError;
 
-      const sharedAgencies = (sharedAccess || [])
-        .map((row: any) => (Array.isArray(row.agencies) ? row.agencies[0] : row.agencies))
-        .filter(Boolean)
-        .map((agency: any) => ({ id: agency.id, name: agency.name }));
+      const sharedIds = Array.from(
+        new Set(
+          (sharedAccess || [])
+            .map((row: any) => row.agency_id as string | null)
+            .filter((id): id is string => !!id),
+        ),
+      ).filter((id) => !(ownedAgencies || []).some((a) => a.id === id));
 
-      const mergedAgencies = [...(ownedAgencies || []), ...sharedAgencies].filter(
-        (agency, index, arr) => arr.findIndex((item) => item.id === agency.id) === index
+      if (sharedIds.length === 0) {
+        return (ownedAgencies || []).sort((a, b) => a.name.localeCompare(b.name, "he"));
+      }
+
+      // 2) Resolve names via agencies SELECT (requires shared-agency RLS for owners).
+      //    Prefer a direct id filter over an embed — clearer when RLS blocks a row.
+      const { data: sharedAgencies, error: sharedAgenciesError } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .in("id", sharedIds);
+      if (sharedAgenciesError) throw sharedAgenciesError;
+
+      const mergedAgencies = [...(ownedAgencies || []), ...(sharedAgencies || [])].filter(
+        (agency, index, arr) => arr.findIndex((item) => item.id === agency.id) === index,
       );
 
       return mergedAgencies.sort((a, b) => a.name.localeCompare(b.name, "he"));

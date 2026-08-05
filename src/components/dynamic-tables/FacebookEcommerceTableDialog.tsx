@@ -90,7 +90,7 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
     "facebook_lead_ads",
     { enabled: open },
   );
-  const { data: agencies = [] } = useTableDialogAgencies({ enabled: open });
+  const { data: agencies = [] } = useTableDialogAgencies({ includeShared: true, enabled: open });
   const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
   const clients = assignedClientIds ? rawClients.filter((client) => assignedClientIds.includes(client.id)) : rawClients;
 

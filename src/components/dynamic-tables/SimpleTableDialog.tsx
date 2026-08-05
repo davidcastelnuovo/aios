@@ -50,7 +50,7 @@ export function SimpleTableDialog({ open, onOpenChange, assignedClientIds }: Sim
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
 
   // Fetch agencies
-  const { data: agencies = [] } = useTableDialogAgencies({ enabled: open });
+  const { data: agencies = [] } = useTableDialogAgencies({ includeShared: true, enabled: open });
 
   // Fetch clients based on selected agency
   const { data: rawClients = [] } = useAgencyClients(
