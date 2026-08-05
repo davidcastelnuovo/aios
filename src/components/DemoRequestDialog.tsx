@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Calendar, User, Phone, Mail, Building2, MessageSquare } from "lucide-react";
+import { User, Phone, Mail, Building2, MessageSquare, Users } from "lucide-react";
 
 interface DemoRequestDialogProps {
   open: boolean;
@@ -35,7 +35,7 @@ const DemoRequestDialog = ({ open, onOpenChange }: DemoRequestDialogProps) => {
     // Simulate sending (in production, this would call an edge function)
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    toast.success("הבקשה נשלחה בהצלחה! ניצור איתך קשר בהקדם");
+    toast.success("נרשמתם לרשימת המתנה! ניצור איתכם קשר בהקדם");
     setFormData({ name: "", phone: "", email: "", company: "", message: "" });
     onOpenChange(false);
     setIsSubmitting(false);
@@ -46,11 +46,11 @@ const DemoRequestDialog = ({ open, onOpenChange }: DemoRequestDialogProps) => {
       <DialogContent dir="rtl" className="sm:max-w-md bg-[#0A1526] border-white/10 text-white">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
-            <Calendar className="h-6 w-6 text-[#36d399]" />
-            הזמנת דמו
+            <Users className="h-6 w-6 text-[#36d399]" />
+            הרשמה לרשימת המתנה
           </DialogTitle>
           <DialogDescription className="text-center text-white/60">
-            השאירו פרטים ונחזור אליכם לתיאום הדגמה
+            השאירו פרטים ונעדכן אתכם כשהגישה תיפתח
           </DialogDescription>
         </DialogHeader>
 
@@ -135,7 +135,7 @@ const DemoRequestDialog = ({ open, onOpenChange }: DemoRequestDialogProps) => {
             disabled={isSubmitting}
             className="w-full bg-[#36d399] hover:bg-[#36d399]/90 text-[#0A1526] font-semibold py-6 text-lg"
           >
-            {isSubmitting ? "שולח..." : "שלח בקשה"}
+            {isSubmitting ? "שולח..." : "הצטרפו לרשימה"}
           </Button>
         </form>
       </DialogContent>
