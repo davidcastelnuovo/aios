@@ -85,10 +85,8 @@ async function buildTenantHealthDigest(supabase: any, tenantId: string, checks: 
       const active = configured.filter((table: any) => table.campaign_active !== false);
       if (configured.length > 0 && active.length === 0) continue;
       const platformLabel = platform === 'meta' ? 'Meta' : 'Google';
-      if (active.length === 0) {
-        issues.push(`🔴 *${client.name}* — ${platformLabel}: אין דוח קמפיין מחובר`);
-        continue;
-      }
+      // Missing report tables are shown on the Pulse Dashboard only — never WA.
+      if (active.length === 0) continue;
       activeConnections += active.length;
       for (const table of active) {
         if (!isAccountConnected(table)) {
@@ -120,7 +118,7 @@ async function buildTenantHealthDigest(supabase: any, tenantId: string, checks: 
   } else {
     lines.push(`נמצאו ${issues.length} נקודות לטיפול:`, '', ...issues);
   }
-  lines.push('', 'לקוחות SEO בלבד וקמפיינים שסומנו כבויים אינם נכללים בבדיקה.');
+  lines.push('', 'לקוחות SEO בלבד וקמפיינים שסומנו כבויים אינם נכללים. טבלאות לא מחוברות — בדשבורד בדיקת דופק בלבד.');
   return lines.join('\n');
 }
 

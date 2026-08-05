@@ -1,17 +1,10 @@
 /**
- * DMMDashboard — Agency CRM Overview
- *
- * Main screen for the DMM agency CRM.
- * Shows all active clients with:
- *  - Traffic-light status (🟢/🟡/🔴)
- *  - Health Score (0–100)
- *  - Active Flags
- *  - Last communication date
- *  - Quick action buttons (update communication / update SEO)
+ * דשבורד בדיקת דופק — deterministic campaign pulse from campaign_pulse_snapshots.
+ * Format matches Carmen's get_latest_campaign_pulse table.
  */
 
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -19,8 +12,6 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
-import { differenceInDays, format } from "date-fns";
-import { he } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,124 +30,121 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ExternalLink, Search, RefreshCw, TrendingUp, TrendingDown, Minus, Pencil } from "lucide-react";
-import { ManualHealthEditDialog } from "@/components/clients/ManualHealthEditDialog";
+import { ExternalLink, Link2, RefreshCw, Search } from "lucide-react";
+import { toast } from "sonner";
+import { SERVICE_LABELS, type OverallStatus } from "@/lib/healthScore";
 import {
-  calculateHealthScore,
-  getEffectiveStatus,
-  FLAG_LABELS,
-  FLAG_COLORS,
-  OVERALL_STATUS_CONFIG,
-  TIER_COLORS,
-  SERVICE_LABELS,
-  COMMUNICATION_STATUS_LABELS,
-  COMMUNICATION_STATUS_COLORS,
-  SEO_STATUS_LABELS,
-  SEO_STATUS_COLORS,
-  type FlagKey,
-  type OverallStatus,
-} from "@/lib/healthScore";
+  buildPulseDashboardUrl,
+  clientHasCampaignService,
+  formatMetaChange,
+  formatPulseChange,
+  formatPulseEfficiency,
+  formatPulseMoney,
+  formatPulseOutcomes,
+  pulseStatusLabel,
+  pulseStatusToOverall,
+  type PulseSnapshotRow,
+} from "@/lib/pulseDashboard";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface ClientRow {
+type ClientBase = {
   id: string;
   name: string;
-  tier: string | null;
-  services: string[];
-  mood_status: string | null;
   status: string;
-  // joined
+  agency_id: string | null;
+  services: string[];
   campaignerName: string;
-  // computed
-  communicationStatus: "normal" | "sensitive" | "complaint" | null;
-  lastCommDate: string | null;
-  daysSinceComm: number | null;
-  seoHistory: Array<"up" | "stable" | "down">;
-  performanceChangePct: number | null;
-  healthScore: number;
-  overallStatus: OverallStatus;
-  effectiveStatus: OverallStatus;
-  flags: FlagKey[];
-}
-
-type CRMClientFields = {
-  id: string;
-  tier?: string | null;
-  services?: string[] | null;
-  mood_status?: string | null;
-  is_seo_client?: boolean | null;
+  agencyName: string;
 };
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+type PulseRow = ClientBase & {
+  pulse: PulseSnapshotRow | null;
+  overall: OverallStatus;
+  flags: string[];
+};
 
-/** Map mood_status values from Carmen to communication status for health score */
-function mapMoodToCommStatus(mood: string | null): 'normal' | 'sensitive' | 'complaint' | null {
-  if (!mood) return null;
-  switch (mood) {
-    case 'normal': case 'sensitive': case 'complaint': return mood;
-    case 'happy': return 'normal';
-    case 'wavering': return 'sensitive';
-    case 'churn_risk': return 'complaint';
-    default: return null;
-  }
+function StatusDot({ status }: { status: OverallStatus }) {
+  const label = status === "red" ? "דורש טיפול" : status === "yellow" ? "לתשומת לב" : "תקין";
+  const dot = status === "red" ? "🔴" : status === "yellow" ? "🟡" : "🟢";
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-xl cursor-default">{dot}</span>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 function isSeoTaggedClient(client: { is_seo_client?: boolean | null; services?: string[] | null }) {
   return client.is_seo_client === true || (Array.isArray(client.services) && client.services.includes("seo"));
 }
 
-function StatusDot({ status }: { status: OverallStatus }) {
-  const cfg = OVERALL_STATUS_CONFIG[status];
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="text-xl cursor-default">{cfg.dot}</span>
-        </TooltipTrigger>
-        <TooltipContent>{cfg.label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
-function ScoreBadge({ score, status }: { score: number; status: OverallStatus }) {
-  const colors: Record<OverallStatus, string> = {
-    green: "bg-green-100 text-green-800 border-green-300",
-    yellow: "bg-yellow-100 text-yellow-800 border-yellow-300",
-    red: "bg-red-100 text-red-800 border-red-300",
-  };
-  return (
-    <Badge variant="outline" className={`font-bold text-base px-2 ${colors[status]}`}>
-      {score}
-    </Badge>
-  );
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function DMMDashboard() {
   const { tenantId } = useCurrentTenant();
   const navigate = useNavigate();
-  const { buildPath } = useTenantPath();
+  const { buildPath, tenantSlug } = useTenantPath();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
   const { userAgencyIds } = useUserAgencies();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
-  const [filterTier, setFilterTier] = useState<"all" | "A" | "B" | "C">("all");
-  const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "social" | "full_social" | "social_meta" | "automation">("all");
-  const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
+  const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
 
-  // Navigate to the client module with the selected client pre-opened
-  function openClientCard(clientId: string, tab: "updates" | "details" = "updates") {
-    navigate(buildPath(`/clients?clientId=${clientId}&tab=${tab}`));
+  // Sync agency from shareable URL (?agency=...)
+  useEffect(() => {
+    const agencyFromUrl = searchParams.get("agency");
+    if (agencyFromUrl && agencyFromUrl !== selectedAgency) {
+      setSelectedAgency(agencyFromUrl);
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const current = searchParams.get("agency");
+    if (selectedAgency && selectedAgency !== "all") {
+      if (current !== selectedAgency) {
+        const next = new URLSearchParams(searchParams);
+        next.set("agency", selectedAgency);
+        setSearchParams(next, { replace: true });
+      }
+    } else if (current) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("agency");
+      setSearchParams(next, { replace: true });
+    }
+  }, [selectedAgency]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openClientCard(clientId: string) {
+    navigate(buildPath(`/clients?clientId=${clientId}&tab=updates`));
   }
 
-  // ── Fetch cross-tenant agency IDs ──────────────────────────────────────────
+  async function copyShareLink() {
+    if (!tenantSlug) {
+      toast.error("לא נמצא slug של הטננט");
+      return;
+    }
+    const url = buildPulseDashboardUrl(
+      window.location.origin,
+      tenantSlug,
+      selectedAgency && selectedAgency !== "all" ? selectedAgency : null,
+    );
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(
+        selectedAgency && selectedAgency !== "all"
+          ? "קישור הסוכנות הועתק"
+          : "קישור הדשבורד הועתק",
+      );
+    } catch {
+      toast.error("לא ניתן להעתיק קישור");
+    }
+  }
+
   const { data: crossTenantAgencyIds = [] } = useQuery({
     queryKey: ["cross-tenant-agencies", tenantId],
     queryFn: async () => {
@@ -172,22 +160,16 @@ export default function DMMDashboard() {
     staleTime: 300_000,
   });
 
-  // ── Fetch clients (base: always-safe fields) ──────────────────────────────
-  const { data: rawClients = [], isLoading: clientsLoading, refetch } = useQuery({
-    queryKey: ["dmm-clients", tenantId, selectedAgency, userAgencyIds, crossTenantAgencyIds, isSeo],
+  const { data: rawClients = [], isLoading: clientsLoading, refetch: refetchClients } = useQuery({
+    queryKey: ["pulse-dash-clients", tenantId, selectedAgency, userAgencyIds, crossTenantAgencyIds, isSeo],
     queryFn: async () => {
       if (!tenantId) return [];
-
-      // Build list of all agency IDs the user can access (own tenant + cross-tenant)
-      const allAccessibleAgencyIds = [
-        ...(userAgencyIds ?? []),
-        ...crossTenantAgencyIds,
-      ];
-
+      const allAccessibleAgencyIds = [...(userAgencyIds ?? []), ...crossTenantAgencyIds];
       let query = supabase
         .from("clients")
         .select(`
           id, name, status, agency_id, is_seo_client, services,
+          agencies ( name ),
           client_team (
             campaigner_id,
             campaigners ( full_name )
@@ -196,25 +178,15 @@ export default function DMMDashboard() {
         .in("status", ["active", "onboarding"])
         .order("name");
 
-      // Agency filter
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
-      } else if (isOwner || isSuperAdmin) {
-        // Owners/super admins: show own tenant + cross-tenant agencies
-        if (crossTenantAgencyIds.length > 0) {
-          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
-        } else {
-          query = query.eq("tenant_id", tenantId);
-        }
-      } else if (isSeo) {
-        // SEO users must see all SEO-tagged clients in their tenant even without direct assignment.
+      } else if (isOwner || isSuperAdmin || isSeo) {
         if (crossTenantAgencyIds.length > 0) {
           query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
         } else {
           query = query.eq("tenant_id", tenantId);
         }
       } else if (allAccessibleAgencyIds.length > 0) {
-        // Non-owner users: restrict to their agencies (includes cross-tenant)
         query = query.in("agency_id", allAccessibleAgencyIds);
       } else {
         query = query.eq("tenant_id", tenantId);
@@ -228,277 +200,154 @@ export default function DMMDashboard() {
     staleTime: 30_000,
   });
 
-  // ── Campaigner client filtering ───────────────────────────────────────────
   const needsCampaignerFilter = isCampaigner && !isSeo && !isOwner && !isTeamManager && !isSuperAdmin;
-  
-  const campaignerClientIds = useMemo(() => {
-    if (!needsCampaignerFilter || !campaignerId) return null;
-    const ids = new Set<string>();
-    rawClients.forEach((c: any) => {
-      c.client_team?.forEach((ct: any) => {
-        if (ct.campaigner_id === campaignerId) {
-          ids.add(c.id);
-        }
-      });
-    });
-    return ids;
-  }, [rawClients, needsCampaignerFilter, campaignerId]);
-
   const filteredByRole = useMemo(() => {
     if (isSeo && !isOwner && !isTeamManager && !isSuperAdmin) {
       return rawClients.filter((c: any) => isSeoTaggedClient(c));
     }
-    if (!needsCampaignerFilter || !campaignerClientIds) return rawClients;
-    return rawClients.filter((c: any) => campaignerClientIds.has(c.id));
-  }, [rawClients, isSeo, isOwner, isTeamManager, isSuperAdmin, needsCampaignerFilter, campaignerClientIds]);
-
-  // ── Fetch CRM extended fields (tier, services, mood_status) ────────────────
-  // These columns are added by migration 20260407_dmm_crm_adaptation.sql
-  // If migration hasn't run yet, errors are silently ignored — fields stay null/empty
-  const { data: crmFields = [] } = useQuery({
-    queryKey: ["dmm-clients-crm-fields", tenantId, selectedAgency, crossTenantAgencyIds],
-    queryFn: async () => {
-      if (!tenantId) return [];
-      try {
-        let query = supabase
-          .from("clients")
-          .select("id, tier, services, mood_status, is_seo_client")
-          .in("status", ["active", "onboarding"]);
-        
-        if (selectedAgency && selectedAgency !== "all") {
-          query = query.eq("agency_id", selectedAgency);
-        } else if (crossTenantAgencyIds.length > 0) {
-          query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
-        } else {
-          query = query.eq("tenant_id", tenantId);
-        }
-        
-        const { data, error } = await query;
-        if (error) return [];
-        return data ?? [];
-      } catch {
-        return [];
-      }
-    },
-    enabled: !!tenantId,
-    staleTime: 60_000,
-  });
+    if (!needsCampaignerFilter || !campaignerId) return rawClients;
+    return rawClients.filter((c: any) =>
+      c.client_team?.some((ct: any) => ct.campaigner_id === campaignerId),
+    );
+  }, [rawClients, isSeo, isOwner, isTeamManager, isSuperAdmin, needsCampaignerFilter, campaignerId]);
 
   const clientIds = filteredByRole.map((c: any) => c.id);
 
-  // ── Fetch latest communication log per client ──────────────────────────────
-  const { data: commLogs = [] } = useQuery({
-    queryKey: ["communication-logs-latest", clientIds.join(","), tenantId],
+  const { data: pulseRows = [], refetch: refetchPulse, dataUpdatedAt } = useQuery({
+    queryKey: ["pulse-dash-snapshots", tenantId, clientIds.join(","), selectedAgency],
     queryFn: async () => {
-      if (!clientIds.length || !tenantId) return [];
+      if (!tenantId || !clientIds.length) return [] as PulseSnapshotRow[];
+      // Snapshots may live on this tenant or a partner tenant for shared agencies.
       const { data, error } = await (supabase as any)
-        .from("communication_logs")
-        .select("client_id, status, created_at")
-        .in("client_id", clientIds)
-        .order("created_at", { ascending: false });
+        .from("campaign_pulse_snapshots")
+        .select(
+          "client_id, agency_id, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability",
+        )
+        .in("client_id", clientIds);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as PulseSnapshotRow[];
     },
-    enabled: clientIds.length > 0 && !!tenantId,
-    staleTime: 60_000,
+    enabled: !!tenantId && clientIds.length > 0,
+    staleTime: 30_000,
   });
 
-  // ── Fetch SEO history per client ───────────────────────────────────────────
-  const { data: seoUpdates = [] } = useQuery({
-    queryKey: ["seo-monthly-latest", clientIds.join(","), tenantId],
-    queryFn: async () => {
-      if (!clientIds.length || !tenantId) return [];
-      const { data, error } = await (supabase as any)
-        .from("seo_monthly_updates")
-        .select("client_id, month, status")
-        .in("client_id", clientIds)
-        .order("month", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-    enabled: clientIds.length > 0 && !!tenantId,
-    staleTime: 60_000,
-  });
-
-  // ── Fetch campaign performance data from CRM tables ────────────────────────
-  const { data: perfData = {} } = useQuery({
-    queryKey: ["dmm-performance-data", clientIds.join(","), tenantId],
-    queryFn: async () => {
-      if (!clientIds.length || !tenantId) return {};
-      // 1. Get all Facebook CRM tables for this tenant
-      const { data: crmTables } = await supabase
-        .from("crm_tables")
-        .select("id, client_id")
-        .eq("tenant_id", tenantId)
-        .ilike("slug", "%facebook%");
-      if (!crmTables?.length) return {};
-
-      // 2. Get records for those tables
-      const tableIds = crmTables.map((t: any) => t.id);
-      const { data: records } = await supabase
-        .from("crm_records")
-        .select("table_id, data")
-        .in("table_id", tableIds)
-        .eq("tenant_id", tenantId);
-      if (!records?.length) return {};
-
-      // 3. Build client→table mapping
-      const tableToClient: Record<string, string> = {};
-      for (const t of crmTables) {
-        if (t.client_id) tableToClient[t.id] = t.client_id;
+  const pulseByClient = useMemo(() => {
+    const map = new Map<string, PulseSnapshotRow>();
+    for (const row of pulseRows) {
+      const prev = map.get(row.client_id);
+      if (!prev || String(row.calculated_at || "") > String(prev.calculated_at || "")) {
+        map.set(row.client_id, row);
       }
+    }
+    return map;
+  }, [pulseRows]);
 
-      // 4. Group records by client and compute 7d vs older daily avg spend change
-      const now = new Date();
-      const d7 = new Date(now); d7.setDate(d7.getDate() - 7);
-      const d30 = new Date(now); d30.setDate(d30.getDate() - 30);
-      const d7Str = d7.toISOString().split("T")[0];
-      const d30Str = d30.toISOString().split("T")[0];
-
-      const byClient: Record<string, { spend7: number; spendOlder: number; days7: number; daysOlder: number }> = {};
-      for (const r of records) {
-        const clientId = tableToClient[r.table_id];
-        if (!clientId) continue;
-        const date = (r.data as any)?.date;
-        if (!date || date < d30Str) continue;
-        if (!byClient[clientId]) byClient[clientId] = { spend7: 0, spendOlder: 0, days7: 0, daysOlder: 0 };
-        const spend = parseFloat((r.data as any)?.spend) || 0;
-        if (date >= d7Str) {
-          byClient[clientId].spend7 += spend;
-          byClient[clientId].days7++;
-        } else {
-          byClient[clientId].spendOlder += spend;
-          byClient[clientId].daysOlder++;
-        }
-      }
-
-      const result: Record<string, number | null> = {};
-      for (const [cid, d] of Object.entries(byClient)) {
-        if (d.daysOlder > 0 && d.days7 > 0) {
-          const dailyAvg7 = d.spend7 / d.days7;
-          const dailyAvgOlder = d.spendOlder / d.daysOlder;
-          result[cid] = dailyAvgOlder > 0
-            ? Math.round((dailyAvg7 - dailyAvgOlder) / dailyAvgOlder * 1000) / 10
-            : null;
-        } else {
-          result[cid] = null;
-        }
-      }
-      return result;
-    },
-    enabled: clientIds.length > 0 && !!tenantId,
-    staleTime: 120_000,
-  });
-
-  // ── Build enriched client rows ─────────────────────────────────────────────
-  const clients: ClientRow[] = useMemo(() => {
+  const rows: PulseRow[] = useMemo(() => {
     return filteredByRole.map((c: any) => {
-      // Merge CRM extended fields (tier, services, mood_status)
-      // Falls back to null/empty if migration hasn't run yet
-      const ext = (crmFields.find((f: any) => f.id === c.id) ?? {}) as CRMClientFields;
-      const tier: string | null = ext.tier ?? null;
-      const services: string[] = ext.services ?? c.services ?? [];
-      if ((ext.is_seo_client ?? c.is_seo_client) === true && !services.includes("seo")) {
-        services.push("seo");
-      }
-      const mood_status: string | null = ext.mood_status ?? null;
-
-      // Latest comm log
-      const latestComm = commLogs.find((l: any) => l.client_id === c.id) ?? null;
-      const daysSinceComm = latestComm
-        ? differenceInDays(new Date(), new Date(latestComm.created_at))
-        : null;
-
-      // SEO history (last 3 months)
-      const seoHistory = seoUpdates
-        .filter((s: any) => s.client_id === c.id)
-        .slice(0, 3)
-        .map((s: any) => s.status as "up" | "stable" | "down");
-
-      // Campaigner name
-      const campaignerName =
-        c.client_team?.[0]?.campaigners?.full_name ?? "—";
-
-      // Performance change from CRM records
-      const performanceChangePct = (perfData as Record<string, number | null>)[c.id] ?? null;
-
-      // Health score — uses mood_status as fallback comm status if no log exists
-      const mappedMood = mapMoodToCommStatus(mood_status);
-      const result = calculateHealthScore({
-        communicationStatus: latestComm?.status ?? mappedMood,
-        daysSinceLastCommunication: daysSinceComm,
-        services,
-        performanceChangePct,
-        daysSinceLastCampaignTouch: null,
-        seoHistory,
-      });
-
-      const effectiveStatus = getEffectiveStatus(result);
-
+      const services: string[] = Array.isArray(c.services) ? [...c.services] : [];
+      if (c.is_seo_client === true && !services.includes("seo")) services.push("seo");
+      const pulse = pulseByClient.get(c.id) ?? null;
+      const hasCampaign = clientHasCampaignService(services);
+      const overall = pulse
+        ? pulseStatusToOverall(pulse.status)
+        : hasCampaign
+          ? "yellow"
+          : "green";
+      const flags = [
+        ...(pulse?.flags || []),
+        ...(!pulse && hasCampaign ? ["ממתין לבדיקת דופק"] : []),
+      ];
       return {
         id: c.id,
         name: c.name,
-        tier,
-        services,
-        mood_status,
         status: c.status,
-        campaignerName,
-        communicationStatus: latestComm?.status ?? mappedMood,
-        lastCommDate: latestComm?.created_at ?? null,
-        daysSinceComm,
-        seoHistory,
-        performanceChangePct,
-        healthScore: result.score,
-        overallStatus: result.status,
-        effectiveStatus,
-        flags: result.flags,
-      } as ClientRow;
+        agency_id: c.agency_id,
+        services,
+        campaignerName: c.client_team?.[0]?.campaigners?.full_name ?? "—",
+        agencyName: c.agencies?.name ?? "—",
+        pulse,
+        overall,
+        flags,
+      } as PulseRow;
     });
-  }, [filteredByRole, crmFields, commLogs, seoUpdates, perfData]);
+  }, [filteredByRole, pulseByClient]);
 
-  // ── Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    return clients
+    return rows
       .filter((c) => {
         if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
-        if (filterStatus !== "all" && c.effectiveStatus !== filterStatus) return false;
-        if (filterTier !== "all" && c.tier !== filterTier) return false;
-        if (filterService !== "all" && !c.services.includes(filterService)) return false;
+        if (filterStatus !== "all" && c.overall !== filterStatus) return false;
+        if (filterService === "campaign" && !clientHasCampaignService(c.services)) return false;
+        if (filterService !== "all" && filterService !== "campaign" && !c.services.includes(filterService)) {
+          return false;
+        }
         return true;
       })
-      .sort((a, b) => a.healthScore - b.healthScore); // worst first
-  }, [clients, search, filterStatus, filterTier, filterService]);
+      .sort((a, b) => {
+        const rank = (s: OverallStatus) => (s === "red" ? 0 : s === "yellow" ? 1 : 2);
+        return rank(a.overall) - rank(b.overall) || a.name.localeCompare(b.name, "he");
+      });
+  }, [rows, search, filterStatus, filterService]);
 
-  // ── Summary counts ─────────────────────────────────────────────────────────
-  const summary = useMemo(() => ({
-    red: clients.filter((c) => c.effectiveStatus === "red").length,
-    yellow: clients.filter((c) => c.effectiveStatus === "yellow").length,
-    green: clients.filter((c) => c.effectiveStatus === "green").length,
-  }), [clients]);
+  const summary = useMemo(() => {
+    const base = filterService === "campaign"
+      ? rows.filter((c) => clientHasCampaignService(c.services))
+      : rows;
+    return {
+      red: base.filter((c) => c.overall === "red").length,
+      yellow: base.filter((c) => c.overall === "yellow").length,
+      green: base.filter((c) => c.overall === "green").length,
+      total: base.length,
+      missingPulse: base.filter((c) => clientHasCampaignService(c.services) && !c.pulse).length,
+    };
+  }, [rows, filterService]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  const freshness = useMemo(() => {
+    const times = pulseRows.map((r) => r.calculated_at).filter(Boolean) as string[];
+    if (!times.length) return null;
+    const latest = times.sort().reverse()[0];
+    return new Date(latest).toLocaleString("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  }, [pulseRows]);
 
   if (clientsLoading) {
-    return <div className="flex justify-center p-12 text-muted-foreground">טוען נתוני לקוחות...</div>;
+    return <div className="flex justify-center p-12 text-muted-foreground">טוען בדיקת דופק...</div>;
   }
 
   return (
     <div className="p-4 space-y-4" dir="rtl">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">דשבורד CRM סוכנות</h1>
+          <h1 className="text-2xl font-bold">דשבורד בדיקת דופק</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {clients.length} לקוחות פעילים
+            {summary.total} לקוחות קמפיין פעילים
+            {freshness ? ` · עודכן ${freshness}` : ""}
+            {summary.missingPulse > 0 ? ` · ${summary.missingPulse} ממתינים לחישוב` : ""}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 ml-1" />
-          רענן
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => copyShareLink()}>
+            <Link2 className="h-4 w-4 ml-1" />
+            העתק קישור
+            {selectedAgency && selectedAgency !== "all" ? " לסוכנות" : ""}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              refetchClients();
+              refetchPulse();
+            }}
+          >
+            <RefreshCw className="h-4 w-4 ml-1" />
+            רענן
+          </Button>
+        </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3">
         <Card
           className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-red-50"
@@ -538,9 +387,7 @@ export default function DMMDashboard() {
         </Card>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
-        {/* Agency filter - uses global AgencyContext */}
         {agencies && agencies.length > 1 && (
           <Select value={selectedAgency} onValueChange={setSelectedAgency}>
             <SelectTrigger className="w-[180px]">
@@ -574,201 +421,151 @@ export default function DMMDashboard() {
             <SelectItem value="green">🟢 תקין</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={filterTier} onValueChange={(v) => setFilterTier(v as any)}>
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="כל הדרגות" />
-          </SelectTrigger>
-          <SelectContent className="bg-background">
-            <SelectItem value="all">כל הדרגות</SelectItem>
-            <SelectItem value="A">Tier A</SelectItem>
-            <SelectItem value="B">Tier B</SelectItem>
-            <SelectItem value="C">Tier C</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="כל השירותים" />
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="שירותים" />
           </SelectTrigger>
           <SelectContent className="bg-background">
+            <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
             <SelectItem value="all">כל השירותים</SelectItem>
             <SelectItem value="ppc_google">PPC Google</SelectItem>
             <SelectItem value="ppc_meta">PPC Meta</SelectItem>
             <SelectItem value="seo">SEO</SelectItem>
-            <SelectItem value="social">Social</SelectItem>
-            <SelectItem value="full_social">Full Social</SelectItem>
-            <SelectItem value="social_meta">Social Meta</SelectItem>
-            <SelectItem value="automation">Automation</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Table */}
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="text-right w-8">סטטוס</TableHead>
+                <TableHead className="text-right">סוכנות</TableHead>
                 <TableHead className="text-right">לקוח</TableHead>
                 <TableHead className="text-right">קמפיינר</TableHead>
                 <TableHead className="text-right">שירותים</TableHead>
-                <TableHead className="text-right w-16">ציון</TableHead>
-                <TableHead className="text-right">Flags</TableHead>
-                <TableHead className="text-right">בדיקת דופק</TableHead>
+                <TableHead className="text-right">הוצאה 7 ימים</TableHead>
+                <TableHead className="text-right">לידים/רכישות</TableHead>
+                <TableHead className="text-right">CPL/ROAS</TableHead>
+                <TableHead className="text-right">שינוי</TableHead>
+                <TableHead className="text-right">נתונים עד</TableHead>
+                <TableHead className="text-right">שינוי במטה</TableHead>
+                <TableHead className="text-right">הערה</TableHead>
                 <TableHead className="text-right">פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={13} className="text-center text-muted-foreground py-10">
                     אין לקוחות להצגה
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((client) => (
-                  <TableRow
-                    key={client.id}
-                    className={
-                      client.effectiveStatus === "red"
-                        ? "bg-red-50/40"
-                        : client.effectiveStatus === "yellow"
-                        ? "bg-yellow-50/30"
-                        : ""
-                    }
-                  >
-                    {/* Status dot */}
-                    <TableCell className="text-center">
-                      <StatusDot status={client.effectiveStatus} />
-                    </TableCell>
-
-                    {/* Client name + tier */}
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{client.name}</span>
-                        {client.tier && (
-                          <Badge
-                            variant="outline"
-                            className={`text-xs px-1.5 ${TIER_COLORS[client.tier] || ""}`}
-                          >
-                            {client.tier}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    {/* Campaigner */}
-                    <TableCell className="text-sm text-muted-foreground">
-                      {client.campaignerName}
-                    </TableCell>
-
-                    {/* Services */}
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {client.services.map((svc) => (
-                          <Badge key={svc} variant="secondary" className="text-xs">
-                            {SERVICE_LABELS[svc] || svc}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-
-                    {/* Health Score */}
-                    <TableCell>
-                      <ScoreBadge score={client.healthScore} status={client.effectiveStatus} />
-                    </TableCell>
-
-                    {/* Flags */}
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1 max-w-[260px]">
-                        {client.flags.slice(0, 4).map((flag) => (
-                          <Badge
-                            key={flag}
-                            variant="outline"
-                            className={`text-xs ${FLAG_COLORS[flag] || ""}`}
-                          >
-                            {FLAG_LABELS[flag]}
-                          </Badge>
-                        ))}
-                        {client.flags.length > 4 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{client.flags.length - 4}
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    {/* Pulse check – date only */}
-                    <TableCell>
-                      {client.lastCommDate ? (
-                        <span className="text-xs text-muted-foreground">
-                          {client.daysSinceComm === 0
-                            ? "היום"
-                            : `לפני ${client.daysSinceComm} ימים`}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-
-                    {/* Actions */}
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
+                filtered.map((client) => {
+                  const pulse = client.pulse;
+                  return (
+                    <TableRow
+                      key={client.id}
+                      className={
+                        client.overall === "red"
+                          ? "bg-red-50/40"
+                          : client.overall === "yellow"
+                            ? "bg-yellow-50/30"
+                            : ""
+                      }
+                    >
+                      <TableCell className="text-center">
+                        <StatusDot status={client.overall} />
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {client.agencyName}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium whitespace-nowrap">{client.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {pulse ? pulseStatusLabel(pulse.status) : "🟡 ממתין לבדיקה"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                        {client.campaignerName}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {client.services.map((svc) => (
+                            <Badge key={svc} variant="secondary" className="text-xs">
+                              {SERVICE_LABELS[svc] || svc}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums">
+                        {pulse ? formatPulseMoney(pulse.spend_7d) : "—"}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums">
+                        {pulse ? formatPulseOutcomes(pulse) : "—"}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums">
+                        {pulse ? formatPulseEfficiency(pulse) : "—"}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums">
+                        {pulse ? formatPulseChange(pulse.cpl_change_pct) : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {pulse?.data_fresh_through || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[180px]">
+                        {pulse ? formatMetaChange(pulse) : "—"}
+                        {pulse?.last_meta_change_actor ? (
+                          <div className="text-muted-foreground">מי: {pulse.last_meta_change_actor}</div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-[220px]">
+                          {client.flags.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          ) : (
+                            client.flags.slice(0, 4).map((flag) => (
+                              <Badge
+                                key={flag}
                                 variant="outline"
-                                size="sm"
-                                className="h-8 px-2"
-                                onClick={() => setEditingClient(client)}
+                                className={`text-xs ${
+                                  flag.includes("אין טבלת") || flag.includes("ממתין")
+                                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                                    : ""
+                                }`}
                               >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>עריכה ידנית</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 px-2 gap-1"
-                                onClick={() => openClientCard(client.id, "updates")}
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                <span className="text-xs">פתח כרטיס</span>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>פתח כרטיס לקוח במודול לקוחות</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                                {flag}
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2 gap-1"
+                          onClick={() => openClientCard(client.id)}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          <span className="text-xs">פתח כרטיס</span>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-
-      {/* Manual Health Edit Dialog */}
-      {editingClient && (
-        <ManualHealthEditDialog
-          open={!!editingClient}
-          onOpenChange={(open) => { if (!open) setEditingClient(null); }}
-          clientId={editingClient.id}
-          clientName={editingClient.name}
-          currentScore={editingClient.healthScore}
-          currentFlags={editingClient.flags}
-          currentMood={editingClient.mood_status}
-          onSaved={() => refetch()}
-        />
-      )}
-
+      {dataUpdatedAt ? (
+        <p className="text-xs text-muted-foreground">
+          טבלאות לא מחוברות מוצגות כאן ליד הלקוח (צהוב) — לא נשלחות בוואטסאפ.
+        </p>
+      ) : null}
     </div>
   );
 }

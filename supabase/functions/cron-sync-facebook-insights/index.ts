@@ -710,13 +710,14 @@ Deno.serve(async (req) => {
       // call and does not invoke run-ai-agent/Carmen.
       const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+      // Refresh snapshots only — WA link is delivered by the 07:30 morning cron.
       const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${serviceKey}`,
         },
-        body: '{}',
+        body: JSON.stringify({ deliver: false, source: 'post_facebook_sync' }),
       });
       if (!pulseResponse.ok) {
         console.error('Failed to calculate deterministic campaign pulse:', await pulseResponse.text());

@@ -919,7 +919,7 @@ export default function AgentTasksPage() {
                             <div className="rounded-lg border bg-background p-3 space-y-3">
                               <div className="flex items-center justify-between gap-3">
                                 <div>
-                                  <Label className="text-xs font-medium">עדכון קמפיינים פעמיים ביום</Label>
+                                  <Label className="text-xs font-medium">בדיקת דופק יומית + קישור לדשבורד (07:30)</Label>
                                   <p className="text-[11px] text-muted-foreground mt-0.5">
                                     מחושב מהמידע המסונכרן, ללא כרמן וללא קריאת API נוספת
                                   </p>
