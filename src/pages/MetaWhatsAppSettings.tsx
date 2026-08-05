@@ -23,6 +23,7 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { IntegrationVisibilitySelector } from "@/components/forms/IntegrationVisibilitySelector";
 import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
 import { MetaWhatsAppTemplates } from "@/components/whatsapp/MetaWhatsAppTemplates";
+import { MetaWhatsAppWarming } from "@/components/whatsapp/MetaWhatsAppWarming";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -93,6 +94,8 @@ type Integration = {
     coexistence_enabled?: boolean;
     history_sync_progress?: number;
     history_sync_error?: string | null;
+    warm_auto_reply_enabled?: boolean;
+    warm_auto_reply_text?: string;
   } | null;
 };
 
@@ -1048,6 +1051,15 @@ export default function MetaWhatsAppSettings() {
                     tenantId={tenantId!}
                     integrationId={integration.id}
                     displayPhone={settings.display_phone_number}
+                  />
+                  <Separator />
+                  <MetaWhatsAppWarming
+                    tenantId={tenantId!}
+                    integrationId={integration.id}
+                    displayPhone={settings.display_phone_number}
+                    qualityRating={settings.quality_rating}
+                    initialAutoReplyEnabled={settings.warm_auto_reply_enabled === true}
+                    initialThanksText={settings.warm_auto_reply_text}
                   />
                   <Separator />
                   {integration.user_id === userId && (

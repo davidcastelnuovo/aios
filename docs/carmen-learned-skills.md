@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-05 — Meta WA number warming / lead opt-in (DMM +972-77)
+- **Skin slug:** `meta_wa_number_warming_optin` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Guide David through warming an official Meta WhatsApp number (prefer DMM GREEN +972-77): create APPROVED template `lead_optin_confirm_he` with quick-reply «אני מאשר/ת קבלת לידים», run a controlled warm campaign with explicit admin confirm phrase, enable inbound auto-thanks, then point Make lead alerts at that integration. Never blind-retry 131049/131042.
+- **How:** UI `Meta WhatsApp → חימום מספר`; edge `meta-whatsapp-warm`; tables `wa_warm_*`; webhook auto-reply via `warm_auto_reply_*` settings. Ops doc: `docs/meta-whatsapp-number-warming.md`.
+- **Origin:** Carmen → Cursor DEV TASK — warm/bleach official WA number for lead alerts after Meta 131049/billing issues.
+
 ### 2026-08-05 — Meta WA lead→client alerts: diagnose 131049/131042 (not silent queue)
 - **Skin slug:** `meta_wa_lead_alert_delivery_diagnosis` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Explain when Make/Webhook lead alerts via official Meta WhatsApp fail for some clients: check automation `התראת ליד ללקוח מ-Make / Webhook` → `automation_logs`. Dominant codes: **131049** (Meta engagement/quality limit — not AIOS queue), **131042** (Meta Billing). Ops: fix WABA billing/quality; prefer GREEN number (`DMM` +972-77); don’t blind-retry 131049.

@@ -29,6 +29,32 @@ export function normalizedPhoneCandidates(value: unknown): string[] {
   return [...candidates].filter(Boolean);
 }
 
+/** Payload/id from a quick-reply / interactive button tap (for opt-in matching). */
+export function inboundButtonPayload(message: MetaWhatsAppMessage): string | null {
+  const type = String(message.type ?? "");
+  if (type === "button") {
+    const payload = String(message.button?.payload ?? "").trim();
+    if (payload) return payload;
+    const text = String(message.button?.text ?? "").trim();
+    return text || null;
+  }
+  if (type === "interactive") {
+    const id = String(message.interactive?.button_reply?.id ?? "").trim();
+    if (id) return id;
+    const title = String(message.interactive?.button_reply?.title ?? "").trim();
+    return title || null;
+  }
+  return null;
+}
+
+export const LEAD_OPTIN_BUTTON_PAYLOAD = "LEAD_OPTIN_YES";
+export const LEAD_OPTIN_TEMPLATE_NAME = "lead_optin_confirm_he";
+export const DEFAULT_LEAD_OPTIN_BODY =
+  "היי, לקבלת לידים ועדכונים מהמערכת שלנו, נא לאשר קבלת לידים מהמספר הזה.";
+export const DEFAULT_LEAD_OPTIN_BUTTON_TEXT = "אני מאשר/ת קבלת לידים";
+export const DEFAULT_LEAD_THANKS_TEXT =
+  "תודה שפניתם אלינו. זהו מספר טלפון לשליחת לידים ועדכונים. תודה שאישרתם קבלת לידים.";
+
 export function messageText(message: MetaWhatsAppMessage): string {
   const type = String(message.type ?? "unknown");
   if (type === "text") return String(message.text?.body ?? "");
