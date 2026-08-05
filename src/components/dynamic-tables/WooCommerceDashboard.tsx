@@ -99,7 +99,7 @@ const getDateRange = (filter: string, customFrom?: string, customTo?: string): {
   return { start, end };
 };
 
-export function WooCommerceDashboard({ clientId, tenantId, dateFilter, customFrom, customTo }: Props) {
+export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter, customFrom, customTo }: Props) {
   // Find linked WooCommerce sites for the client.
   // Filter by client_id only — shared-agency WP sites may live on the agency
   // home tenant while the viewer session is on another tenant in the same agency.
