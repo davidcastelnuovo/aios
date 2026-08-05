@@ -2,7 +2,10 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { handleCarmenMessage } from "../_shared/carmen.ts";
 import {
   collectWebhookMessages,
+  DEFAULT_LEAD_THANKS_TEXT,
   digitsOnly,
+  inboundButtonPayload,
+  LEAD_OPTIN_BUTTON_PAYLOAD,
   messageText,
   normalizedPhoneCandidates,
   shouldApplyDeliveryStatus,
@@ -342,6 +345,110 @@ Deno.serve(async (request) => {
             throw insertError;
           }
           processed++;
+
+          // Lead-number warming: opt-in button / inbound auto-reply before Carmen.
+          if (item.source === "live" && item.direction === "inbound") {
+            try {
+              const warmEnabled = settings.warm_auto_reply_enabled === true;
+              const buttonPayload = inboundButtonPayload(item.message);
+              const optinPayload = String(
+                settings.warm_optin_button_payload ?? LEAD_OPTIN_BUTTON_PAYLOAD,
+              );
+              const isOptIn =
+                (buttonPayload &&
+                  (buttonPayload === optinPayload ||
+                    buttonPayload.includes("LEAD_OPTIN") ||
+                    /מאשר/.test(buttonPayload))) ||
+                /מאשר.*ליד|מאשר\/ת קבלת לידים/i.test(messageText(item.message));
+
+              if (warmEnabled || isOptIn) {
+                const thanksText = String(
+                  settings.warm_auto_reply_text ?? DEFAULT_LEAD_THANKS_TEXT,
+                ).trim() || DEFAULT_LEAD_THANKS_TEXT;
+                const phone = digitsOnly(item.peerPhone);
+
+                if (isOptIn && phone) {
+                  await admin.from("wa_warm_opt_ins").upsert({
+                    tenant_id: integration.tenant_id,
+                    integration_id: integration.id,
+                    phone,
+                    contact_name: contactNames.get(item.peerPhone) || null,
+                    source: "button",
+                    opted_in_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  }, { onConflict: "tenant_id,integration_id,phone" });
+
+                  await admin.from("wa_warm_recipients")
+                    .update({
+                      status: "opted_in",
+                      replied_at: new Date().toISOString(),
+                      opted_in_at: new Date().toISOString(),
+                    })
+                    .eq("tenant_id", integration.tenant_id)
+                    .eq("phone", phone)
+                    .in("status", ["sent", "delivered", "read", "pending"]);
+                }
+
+                // Dedup auto-reply: at most once per 20 hours per phone.
+                let shouldThanks = warmEnabled || isOptIn;
+                if (shouldThanks && phone) {
+                  const { data: prior } = await admin.from("wa_warm_opt_ins")
+                    .select("last_auto_reply_at")
+                    .eq("tenant_id", integration.tenant_id)
+                    .eq("integration_id", integration.id)
+                    .eq("phone", phone)
+                    .maybeSingle();
+                  if (prior?.last_auto_reply_at) {
+                    const age = Date.now() - new Date(prior.last_auto_reply_at).getTime();
+                    if (age < 20 * 3600 * 1000 && !isOptIn) shouldThanks = false;
+                  }
+                }
+
+                if (shouldThanks) {
+                  const senderUserId = integration.user_id;
+                  if (senderUserId) {
+                    const thanksRes = await fetch(`${supabaseUrl}/functions/v1/send-meta-whatsapp-message`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${serviceKey}`,
+                      },
+                      body: JSON.stringify({
+                        tenantId: integration.tenant_id,
+                        integrationId: integration.id,
+                        senderUserId,
+                        phoneNumber: item.peerPhone,
+                        message: thanksText,
+                      }),
+                    });
+                    if (thanksRes.ok && phone) {
+                      const optInRow: Record<string, unknown> = {
+                        tenant_id: integration.tenant_id,
+                        integration_id: integration.id,
+                        phone,
+                        contact_name: contactNames.get(item.peerPhone) || null,
+                        source: isOptIn ? "button" : "inbound_text",
+                        last_auto_reply_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                      };
+                      if (isOptIn) optInRow.opted_in_at = new Date().toISOString();
+                      await admin.from("wa_warm_opt_ins").upsert(optInRow, {
+                        onConflict: "tenant_id,integration_id,phone",
+                      });
+                    } else if (!thanksRes.ok) {
+                      console.error("Warm thanks reply failed", await thanksRes.text().catch(() => ""));
+                    }
+                  }
+                }
+
+                if (settings.warm_suppress_carmen !== false && warmEnabled) {
+                  continue; // skip Carmen on lead-alert numbers
+                }
+              }
+            } catch (warmError) {
+              console.error("Warm/opt-in handling failed", warmError);
+            }
+          }
 
           // Carmen on Meta WhatsApp. The Cloud API has no group messaging, so this
           // line is 1:1 only by construction. When the connection is shared,

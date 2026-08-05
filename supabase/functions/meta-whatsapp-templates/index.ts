@@ -209,6 +209,32 @@ Deno.serve(async (request) => {
       const components: Array<Record<string, unknown>> = [bodyComponent];
       if (footerText) components.push({ type: "FOOTER", text: footerText });
 
+      // Optional QUICK_REPLY buttons (e.g. lead opt-in warm template).
+      const quickReplies: Array<{ text: string; payload?: string }> = Array.isArray(template.quick_replies)
+        ? template.quick_replies
+          .map((row: any) => ({
+            text: String(row?.text ?? "").trim(),
+            payload: row?.payload ? String(row.payload).trim() : undefined,
+          }))
+          .filter((row: { text: string }) => row.text.length > 0)
+        : [];
+      if (quickReplies.length > 3) {
+        return reply({ error: "max_3_quick_reply_buttons" }, 400);
+      }
+      if (quickReplies.some((row) => row.text.length > 25)) {
+        return reply({ error: "quick_reply_text_max_25_chars" }, 400);
+      }
+      if (quickReplies.length) {
+        components.push({
+          type: "BUTTONS",
+          buttons: quickReplies.map((row) => ({
+            type: "QUICK_REPLY",
+            text: row.text,
+            ...(row.payload ? { payload: row.payload } : {}),
+          })),
+        });
+      }
+
       const result = await graphRequest(
         new URL(baseUrl),
         tokenRow.access_token,

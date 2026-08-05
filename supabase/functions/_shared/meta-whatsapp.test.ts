@@ -4,6 +4,8 @@ import {
   dropUnresolvedTemplateLines,
   explainMetaWhatsAppError,
   extractMetaErrorCodeFromMessage,
+  inboundButtonPayload,
+  LEAD_OPTIN_BUTTON_PAYLOAD,
   sanitizeTemplateParameter,
   shouldApplyDeliveryStatus,
 } from './meta-whatsapp.ts'
@@ -82,4 +84,16 @@ test('extractMetaErrorCodeFromMessage reads Hebrew delivery log text', () => {
     ),
     '200',
   )
+})
+
+test('inboundButtonPayload reads quick-reply and interactive ids', () => {
+  assert.equal(
+    inboundButtonPayload({ type: 'button', button: { payload: LEAD_OPTIN_BUTTON_PAYLOAD, text: 'אני מאשר/ת קבלת לידים' } }),
+    LEAD_OPTIN_BUTTON_PAYLOAD,
+  )
+  assert.equal(
+    inboundButtonPayload({ type: 'interactive', interactive: { button_reply: { id: 'LEAD_OPTIN_YES', title: 'אני מאשר/ת קבלת לידים' } } }),
+    'LEAD_OPTIN_YES',
+  )
+  assert.equal(inboundButtonPayload({ type: 'text', text: { body: 'שלום' } }), null)
 })

@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -93,7 +94,12 @@ const templateBody = (template: MetaTemplate) =>
 
 const supportsDirectSend = (template: MetaTemplate) => {
   if (template.parameter_format === "named") return false;
-  if (!template.components?.every((component) => ["BODY", "FOOTER"].includes(component.type.toUpperCase()))) {
+  // BODY/FOOTER + optional BUTTONS (quick-reply opt-in templates).
+  if (
+    !template.components?.every((component) =>
+      ["BODY", "FOOTER", "BUTTONS"].includes(component.type.toUpperCase()),
+    )
+  ) {
     return false;
   }
   const body = templateBody(template);
@@ -121,6 +127,7 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
     language: "he",
     body: "",
     footer: "",
+    withOptInButton: false,
   });
   const [examples, setExamples] = useState<string[]>([]);
   const [recipientPhone, setRecipientPhone] = useState("");
@@ -161,7 +168,14 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
   }, [sendTemplate?.id, sendVariableKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetCreateForm = () => {
-    setForm({ name: "", category: "UTILITY", language: "he", body: "", footer: "" });
+    setForm({
+      name: "",
+      category: "UTILITY",
+      language: "he",
+      body: "",
+      footer: "",
+      withOptInButton: false,
+    });
     setExamples([]);
   };
 
@@ -179,6 +193,13 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
             body_text: form.body,
             footer_text: form.footer,
             examples,
+            ...(form.withOptInButton
+              ? {
+                  quick_replies: [
+                    { text: "אני מאשר/ת קבלת לידים", payload: "LEAD_OPTIN_YES" },
+                  ],
+                }
+              : {}),
           },
         },
       });
@@ -478,6 +499,22 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
               {(form.footer.includes("{{") || form.footer.includes("}}")) && (
                 <p className="text-xs text-destructive">שורת סיום אינה תומכת במשתנים.</p>
               )}
+            </div>
+            <div className="flex items-start gap-2 rounded-md border p-3">
+              <Checkbox
+                id="optin-quick-reply"
+                checked={form.withOptInButton}
+                onCheckedChange={(value) => setForm({ ...form, withOptInButton: value === true })}
+              />
+              <div className="space-y-1">
+                <Label htmlFor="optin-quick-reply" className="font-normal">
+                  הוסף כפתור אישור קבלת לידים (Quick Reply)
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  טקסט הכפתור: «אני מאשר/ת קבלת לידים» · payload: LEAD_OPTIN_YES.
+                  מומלץ לתבנית <code dir="ltr">lead_optin_confirm_he</code>.
+                </p>
+              </div>
             </div>
           </div>
           <DialogFooter>
