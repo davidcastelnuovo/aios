@@ -235,7 +235,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
 
   return (
-    <div className="space-y-3" dir="rtl">
+    <div className="space-y-3 min-w-0" dir="rtl">
       {/* Reports and dashboards are independent surfaces. Keeping their
           selectors separate prevents similarly named items from replacing
           each other's active state. */}
@@ -263,7 +263,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       )}
 
       {/* Tabs row + manage-links toggle */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
         <Button
           variant="ghost"
           size="sm"
@@ -375,8 +375,8 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
       {/* Active item content — report/dashboard first, schedule settings below */}
       {activeItem && activeItem.kind === "dashboard" && (
-        <div className="border rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
+        <div className="border rounded-lg min-w-0">
+          <div className="flex items-center justify-between px-3 py-2 bg-muted/40 flex-wrap gap-2">
             <div className="flex items-center gap-2">
               {(activeItem.raw.integration_type === "facebook_insights" ||
                 activeItem.raw.integration_type === "facebook_ecommerce" ||
@@ -427,8 +427,8 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       )}
 
       {activeItem && activeItem.kind === "table" && (
-        <div className="border rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 bg-muted/40">
+        <div className="border rounded-lg min-w-0">
+          <div className="flex items-center justify-between px-3 py-2 bg-muted/40 flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"

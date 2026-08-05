@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -52,6 +51,7 @@ interface ClientsChatViewProps {
   getClientFinancialData?: (clientId: string) => any;
   initialClientId?: string;  // deep-link: open this client on mount
   initialTab?: "updates" | "details"; // deep-link: open this tab on mount
+  onSelectedClientChange?: (clientId: string | null) => void;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -90,6 +90,7 @@ export function ClientsChatView({
   getClientFinancialData,
   initialClientId,
   initialTab,
+  onSelectedClientChange,
 }: ClientsChatViewProps) {
   const isMobile = useIsMobile();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(
@@ -107,6 +108,10 @@ export function ClientsChatView({
       setSelectedClientId(clients[0].id);
     }
   }, [isMobile, clients, selectedClientId]);
+
+  useEffect(() => {
+    onSelectedClientChange?.(selectedClientId);
+  }, [onSelectedClientChange, selectedClientId]);
 
   // Guard: redirect away from "business" tab if user lacks finance view permission
   useEffect(() => {
@@ -1011,7 +1016,13 @@ export function ClientsChatView({
               </TabsList>
               )}
 
-              <ScrollArea className={cn("h-0 flex-1 min-h-0", isMobile ? "p-2" : "p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
+              <div
+                className={cn(
+                  "flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain",
+                  isMobile ? "p-2" : "p-4",
+                  (activeTab === "whatsapp" || activeTab === "calls") && "hidden",
+                )}
+              >
                 <TabsContent value="details" className="mt-0 space-y-6">
                   <div className="grid grid-cols-2 gap-4">
                     {/* Timeline - shown first in DOM but appears on LEFT in RTL layout */}
@@ -1411,7 +1422,7 @@ export function ClientsChatView({
                 <TabsContent value="wordpress" className="mt-0">
                   <ClientWordPressTab clientId={selectedClient.id} />
                 </TabsContent>
-              </ScrollArea>
+              </div>
 
               {activeTab === "calls" && (
                 <div className="flex-1 min-h-0 overflow-hidden p-4">
