@@ -7,6 +7,7 @@ import {
   maybeCreateMarketingBrief,
   saveSummaryForTarget,
 } from "../_shared/meeting-summary.ts";
+import { resolveOpenAIKey } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,7 +88,7 @@ serve(async (req) => {
     }
 
     // Generate summary using OpenAI
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const OPENAI_API_KEY = await resolveOpenAIKey();
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
     let summary: string;

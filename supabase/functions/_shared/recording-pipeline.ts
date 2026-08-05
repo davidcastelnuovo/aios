@@ -5,6 +5,7 @@ import {
   saveSummaryForTarget,
 } from "./meeting-summary.ts";
 import { matchRecordingToClient } from "./recording-match.ts";
+import { resolveOpenAIKey } from "./ai.ts";
 
 export interface RecordingRow {
   id: string;
@@ -58,7 +59,7 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
     return;
   }
 
-  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  const OPENAI_API_KEY = await resolveOpenAIKey();
   if (!OPENAI_API_KEY) {
     console.error("[recording-pipeline] OPENAI_API_KEY not configured");
     return;
