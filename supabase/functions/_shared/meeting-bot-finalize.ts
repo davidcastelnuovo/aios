@@ -73,8 +73,20 @@ export async function finalizeMeetingBotSession(
   const { videoUrl, audioUrl, transcriptUrl, transcriptStatus, durationSeconds } =
     extractRecallDownloads(botData);
 
+  const endedAt = session.ended_at ? new Date(session.ended_at).getTime() : Date.now();
+  const waitedTooLong = Date.now() - endedAt > TRANSCRIPT_WAIT_TIMEOUT_MS;
+
   if (!videoUrl && !audioUrl && !transcriptUrl) {
-    // Bot never captured anything (kicked before recording, denied permission…).
+    // Either the recording is still being assembled, or the bot never captured
+    // anything (kicked before recording, permission denied…). Only the second
+    // case is terminal, and waiting is how we tell them apart.
+    if (!waitedTooLong) {
+      await admin.from("meeting_bot_sessions").update({
+        status: "processing",
+        updated_at: new Date().toISOString(),
+      }).eq("id", session.id);
+      return { outcome: "awaiting_transcript", detail: "no media available yet" };
+    }
     // status_detail already carries Recall's sub_code, so leave it in place.
     await admin.from("meeting_bot_sessions").update({
       status: "done",
@@ -180,9 +192,6 @@ export async function finalizeMeetingBotSession(
   // No transcript yet. Recall's own artifact is still the best source, so wait
   // for a later retry rather than burning a Whisper pass on partial media.
   if (!transcription) {
-    const endedAt = session.ended_at ? new Date(session.ended_at).getTime() : Date.now();
-    const waitedTooLong = Date.now() - endedAt > TRANSCRIPT_WAIT_TIMEOUT_MS;
-
     if (!waitedTooLong && transcriptStatus !== "failed") {
       await admin.from("meeting_bot_sessions").update({
         status: "processing",

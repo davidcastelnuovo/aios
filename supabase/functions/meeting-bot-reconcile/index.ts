@@ -46,8 +46,9 @@ Deno.serve(async (req) => {
     query = query.eq("id", sessionId);
   } else {
     const cutoff = new Date(Date.now() - MIN_AGE_SECONDS * 1000).toISOString();
+    // Only `processing` — a bot still in the call must not be finalized early.
     query = query
-      .in("status", ["processing", "in_meeting"])
+      .eq("status", "processing")
       .lt("updated_at", cutoff)
       .order("updated_at", { ascending: true })
       .limit(BATCH_SIZE);
