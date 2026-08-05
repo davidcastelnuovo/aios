@@ -48,6 +48,7 @@ const dateRangeOptions = [
   { value: "today", label: "היום" },
   { value: "yesterday", label: "אתמול" },
   { value: "this_week", label: "השבוע" },
+  { value: "last_week", label: "שבוע שעבר" },
   { value: "last_7_days", label: "7 ימים אחרונים" },
   { value: "last_14_days", label: "14 יום" },
   { value: "last_30_days", label: "30 יום (ברירת מחדל)" },

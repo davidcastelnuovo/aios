@@ -36,6 +36,8 @@ import { ExternalLink, Link2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { SERVICE_LABELS, type OverallStatus } from "@/lib/healthScore";
 import {
+  aggregatePulseMetricsFromRecords,
+  applyPeriodMetricsToSnapshot,
   buildPulseDashboardUrl,
   clientHasCampaignService,
   formatMetaChange,
@@ -43,8 +45,12 @@ import {
   formatPulseEfficiency,
   formatPulseMoney,
   formatPulseOutcomes,
+  getPulsePeriodBounds,
+  PULSE_PERIOD_OPTIONS,
+  pulseSpendColumnLabel,
   pulseStatusLabel,
   pulseStatusToOverall,
+  type PulsePeriod,
   type PulseSnapshotRow,
 } from "@/lib/pulseDashboard";
 
@@ -95,6 +101,8 @@ export default function DMMDashboard() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
+  const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
+  const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
 
   // Sync agency from shareable URL (?agency=...)
   useEffect(() => {
@@ -231,6 +239,74 @@ export default function DMMDashboard() {
     staleTime: 30_000,
   });
 
+  // Calendar periods (השבוע / שבוע שעבר) re-aggregate from crm_records.
+  // last_7_days keeps the deterministic snapshot (matches WA digest).
+  const needsPeriodOverride = period !== "last_7_days";
+  const { data: periodMetricsByClient = new Map<string, ReturnType<typeof aggregatePulseMetricsFromRecords>>(), refetch: refetchPeriod } = useQuery({
+    queryKey: [
+      "pulse-dash-period",
+      tenantId,
+      clientIds.join(","),
+      period,
+      periodBounds.startDate,
+      periodBounds.endDate,
+      periodBounds.prevStartDate,
+    ],
+    queryFn: async () => {
+      const empty = new Map<string, ReturnType<typeof aggregatePulseMetricsFromRecords>>();
+      if (!tenantId || !clientIds.length || !needsPeriodOverride) return empty;
+
+      const { data: tables, error: tablesError } = await supabase
+        .from("crm_tables")
+        .select("id, client_id")
+        .in("client_id", clientIds)
+        .in("integration_type", ["facebook_insights", "facebook_ecommerce", "google_ads"]);
+      if (tablesError) throw tablesError;
+      if (!tables?.length) return empty;
+
+      const tableIds = tables.map((t) => t.id);
+      const tableToClient = new Map(tables.map((t) => [t.id, t.client_id as string]));
+
+      const { data: records, error: recordsError } = await supabase
+        .from("crm_records")
+        .select("table_id, data")
+        .in("table_id", tableIds)
+        .filter("data->>date", "gte", periodBounds.prevStartDate)
+        .filter("data->>date", "lte", periodBounds.endDate)
+        .limit(20000);
+      if (recordsError) throw recordsError;
+
+      const byClient = new Map<string, { data?: Record<string, unknown> | null }[]>();
+      for (const row of records ?? []) {
+        const clientId = tableToClient.get(row.table_id);
+        if (!clientId) continue;
+        const list = byClient.get(clientId) || [];
+        list.push({ data: (row.data as Record<string, unknown>) ?? null });
+        byClient.set(clientId, list);
+      }
+
+      const ecommerceByClient = new Map<string, boolean>();
+      for (const snap of pulseRows) {
+        ecommerceByClient.set(snap.client_id, !!snap.is_ecommerce);
+      }
+
+      const out = new Map<string, ReturnType<typeof aggregatePulseMetricsFromRecords>>();
+      for (const [clientId, clientRecords] of byClient) {
+        out.set(
+          clientId,
+          aggregatePulseMetricsFromRecords(
+            clientRecords,
+            periodBounds,
+            ecommerceByClient.get(clientId) ?? false,
+          ),
+        );
+      }
+      return out;
+    },
+    enabled: !!tenantId && clientIds.length > 0 && needsPeriodOverride,
+    staleTime: 30_000,
+  });
+
   const pulseByClient = useMemo(() => {
     const map = new Map<string, PulseSnapshotRow>();
     for (const row of pulseRows) {
@@ -239,8 +315,24 @@ export default function DMMDashboard() {
         map.set(row.client_id, row);
       }
     }
+    if (needsPeriodOverride) {
+      for (const [clientId, base] of map) {
+        const metrics = periodMetricsByClient.get(clientId) ?? {
+          spend_7d: 0,
+          leads_7d: 0,
+          cpl_7d: null,
+          cpl_change_pct: null,
+          purchases_7d: 0,
+          revenue_7d: 0,
+          roas_7d: null,
+          data_fresh_through: null,
+          record_count: 0,
+        };
+        map.set(clientId, applyPeriodMetricsToSnapshot(base, metrics));
+      }
+    }
     return map;
-  }, [pulseRows]);
+  }, [pulseRows, periodMetricsByClient, needsPeriodOverride]);
 
   const rows: PulseRow[] = useMemo(() => {
     return filteredByRole.map((c: any) => {
@@ -324,7 +416,12 @@ export default function DMMDashboard() {
           <h1 className="text-2xl font-bold">דשבורד בדיקת דופק</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
             {summary.total} לקוחות קמפיין פעילים
-            {freshness ? ` · עודכן ${freshness}` : ""}
+            {` · ${periodBounds.label}`}
+            {period !== "last_7_days"
+              ? ` (${periodBounds.startDate}–${periodBounds.endDate})`
+              : freshness
+                ? ` · עודכן ${freshness}`
+                : ""}
             {summary.missingPulse > 0 ? ` · ${summary.missingPulse} ממתינים לחישוב` : ""}
           </p>
         </div>
@@ -340,6 +437,7 @@ export default function DMMDashboard() {
             onClick={() => {
               refetchClients();
               refetchPulse();
+              if (needsPeriodOverride) refetchPeriod();
             }}
           >
             <RefreshCw className="h-4 w-4 ml-1" />
@@ -401,6 +499,16 @@ export default function DMMDashboard() {
             </SelectContent>
           </Select>
         )}
+        <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
+          <SelectTrigger className="w-[170px]">
+            <SelectValue placeholder="טווח זמן" />
+          </SelectTrigger>
+          <SelectContent className="bg-background">
+            {PULSE_PERIOD_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -445,7 +553,7 @@ export default function DMMDashboard() {
                 <TableHead className="text-right">לקוח</TableHead>
                 <TableHead className="text-right">קמפיינר</TableHead>
                 <TableHead className="text-right">שירותים</TableHead>
-                <TableHead className="text-right">הוצאה 7 ימים</TableHead>
+                <TableHead className="text-right">{pulseSpendColumnLabel(period)}</TableHead>
                 <TableHead className="text-right">לידים/רכישות</TableHead>
                 <TableHead className="text-right">CPL/ROAS</TableHead>
                 <TableHead className="text-right">שינוי</TableHead>
