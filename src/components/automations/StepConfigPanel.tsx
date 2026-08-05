@@ -1035,30 +1035,14 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
             </div>
           )}
 
-          {/* Message template for ManyChat WhatsApp */}
+          {/* ManyChat WhatsApp (tag → Flow) */}
           {node.action_type === "send_whatsapp" && (
-            <div className="space-y-2">
-              <Label className="text-right block">תבנית הודעה</Label>
-              <Textarea
-                value={node.configuration?.message_template || ""}
-                onChange={(e) => handleConfigChange("message_template", e.target.value)}
-                placeholder="שלום {{contact_name}}..."
-                className="text-right"
-                rows={4}
-              />
-              <div className="text-xs text-muted-foreground text-right space-y-1">
-                <p>
-                  <span className="font-semibold">שדות מערכת:</span>{" "}
-                  {availableFields.filter(f => !f.key.startsWith("fb_")).map((f) => `{{${f.key}}}`).join(", ")}
-                </p>
-                {availableFields.some(f => f.key.startsWith("fb_")) && (
-                  <p>
-                    <span className="font-semibold text-blue-600">שדות פייסבוק:</span>{" "}
-                    <span className="text-blue-600">{availableFields.filter(f => f.key.startsWith("fb_")).map((f) => `{{${f.key}}}`).join(", ")}</span>
-                  </p>
-                )}
-              </div>
-            </div>
+            <ManyChatWhatsAppActionConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              availableFields={availableFields}
+              onConfigChange={handleConfigChange}
+            />
           )}
 
           {/* Green API WhatsApp config with connection selector + field mapping */}
@@ -1296,7 +1280,185 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
   );
 }
 
-// Sub-component for Green API action configuration
+const LEAD_ALERT_MANYCHAT_FIELDS = [
+  { field_id: 14845212, field_name: "client_name", value_template: "{{client_name}}" },
+  { field_id: 14845211, field_name: "lead_name", value_template: "{{lead_name}}" },
+  { field_id: 14845213, field_name: "lead_phone", value_template: "{{lead_phone}}" },
+  { field_id: 14845214, field_name: "lead_email", value_template: "{{lead_email}}" },
+  { field_id: 14845215, field_name: "form_qa_summary", value_template: "{{form_qa_summary}}" },
+] as const;
+
+/** ManyChat send = set custom fields + apply tag (Flow in ManyChat UI sends the WA template). */
+function ManyChatWhatsAppActionConfig({
+  tenantId,
+  configuration,
+  availableFields,
+  onConfigChange,
+}: {
+  tenantId: string | undefined;
+  configuration: Record<string, any>;
+  availableFields: { key: string; label: string }[];
+  onConfigChange: (key: string, value: any) => void;
+}) {
+  const { buildPath } = useTenantPath();
+  const phoneMode = configuration?.phone_mode || (configuration?.phone_field ? "field" : "contact");
+  const customFields: Array<{ field_id?: number; field_name?: string; value_template?: string }> =
+    Array.isArray(configuration?.custom_fields) ? configuration.custom_fields : [];
+
+  const { data: tags = [], isLoading: loadingTags } = useQuery({
+    queryKey: ["manychat-tags-for-flow", tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("get-manychat-tags", {
+        body: { tenantId },
+      });
+      if (error) throw error;
+      return Array.isArray(data?.tags) ? data.tags : [];
+    },
+  });
+
+  const phoneFields = availableFields.filter(
+    (field) => field.key === "phone" || field.key.includes("phone"),
+  );
+
+  return (
+    <div className="space-y-4 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => window.open(buildPath("/manychat-settings"), "_blank", "noopener,noreferrer")}
+        >
+          הגדרות ManyChat
+        </Button>
+        <p className="text-right text-xs font-semibold text-sky-700">
+          שליחה דרך ManyChat (טאג → Flow)
+        </p>
+      </div>
+      <p className="text-right text-[11px] text-muted-foreground">
+        AIOS ממלא Custom Fields ומוסיף טאג. את תבנית ה-WhatsApp שולחים ב-Flow בתוך ManyChat
+        (טריגר: Tag added). לפרטים: docs/manychat-lead-alert-setup.md
+      </p>
+
+      <div className="space-y-2">
+        <Label className="block text-right">טאג להפעלה *</Label>
+        {loadingTags ? (
+          <p className="text-xs text-muted-foreground">טוען טאגים...</p>
+        ) : (
+          <Select
+            value={configuration?.manychat_tag_id ? String(configuration.manychat_tag_id) : ""}
+            onValueChange={(v) => onConfigChange("manychat_tag_id", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר טאג ב-ManyChat" />
+            </SelectTrigger>
+            <SelectContent>
+              {tags.map((tag: { id: number; name: string }) => (
+                <SelectItem key={tag.id} value={String(tag.id)}>
+                  {tag.name} ({tag.id})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label className="block text-right">מספר נמען</Label>
+        <RadioGroup
+          value={phoneMode}
+          onValueChange={(v) => {
+            onConfigChange("phone_mode", v);
+            if (v === "contact") onConfigChange("phone_field", undefined);
+            if (v === "field" && !configuration?.phone_field) {
+              onConfigChange("phone_field", phoneFields[0]?.key || "client_phone");
+            }
+          }}
+          className="grid gap-2"
+        >
+          <label className="flex items-center justify-end gap-2 text-sm">
+            <span>מהליד/לקוח המקושר לטריגר</span>
+            <RadioGroupItem value="contact" />
+          </label>
+          <label className="flex items-center justify-end gap-2 text-sm">
+            <span>משדה ב-payload (למשל client_phone)</span>
+            <RadioGroupItem value="field" />
+          </label>
+        </RadioGroup>
+        {phoneMode === "field" && (
+          <Select
+            value={configuration?.phone_field || ""}
+            onValueChange={(v) => onConfigChange("phone_field", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר שדה טלפון" />
+            </SelectTrigger>
+            <SelectContent>
+              {(phoneFields.length ? phoneFields : [
+                { key: "client_phone", label: "client_phone" },
+                { key: "phone", label: "phone" },
+              ]).map((field) => (
+                <SelectItem key={field.key} value={field.key}>
+                  {field.label || field.key}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              onConfigChange("custom_fields", [...LEAD_ALERT_MANYCHAT_FIELDS]);
+              onConfigChange("manychat_tag_id", configuration?.manychat_tag_id || "93553458");
+              onConfigChange("phone_mode", "field");
+              onConfigChange("phone_field", "client_phone");
+            }}
+          >
+            מלא התראת ליד (DMM)
+          </Button>
+          <Label className="text-right">Custom Fields ל-ManyChat</Label>
+        </div>
+        <p className="text-right text-[11px] text-muted-foreground">
+          ממולאים לפני הוספת הטאג. הכפתור ממלא את שדות AIOS ל־aios_lead_alert.
+        </p>
+        {customFields.length > 0 ? (
+          <div className="space-y-1 rounded border bg-background/60 p-2 text-[11px]" dir="ltr">
+            {customFields.map((field, idx) => (
+              <div key={`${field.field_id || field.field_name}-${idx}`} className="flex justify-between gap-2">
+                <span className="text-muted-foreground truncate">{field.value_template}</span>
+                <span className="font-medium shrink-0">
+                  {field.field_name || field.field_id}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-right text-xs text-muted-foreground">אין מיפוי שדות — רק הטאג יופעל.</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-right block">הערת טקסט (אופציונלי / ישן)</Label>
+        <Textarea
+          value={configuration?.message_template || ""}
+          onChange={(e) => onConfigChange("message_template", e.target.value)}
+          placeholder="לא נשלח ישירות — השליחה דרך Flow ב-ManyChat"
+          className="text-right"
+          rows={2}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Sub-component for Meta WhatsApp action configuration
 function MetaWhatsAppActionConfig({
   tenantId,
   configuration,

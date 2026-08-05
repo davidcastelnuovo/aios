@@ -2117,6 +2117,14 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   let contactPhone: string | null = null
   let contactRecord: any = null
   let contactType: 'lead' | 'client' | null = null
+
+  // Lead→client alerts (Make/Webhook) pass phone_field=client_phone with no
+  // client_id/lead_id. Resolve that phone before CRM lookups so we tag the client,
+  // not the lead. Only honor an explicit phone_field — never guess from payload.
+  const phoneField = typeof config.phone_field === 'string' ? config.phone_field.trim() : ''
+  if (phoneField && data?.[phoneField] != null && String(data[phoneField]).trim()) {
+    contactPhone = String(data[phoneField]).trim()
+  }
   
   // Helper to check if subscriber ID is valid (not a sync conflict status)
   const isValidSubscriberId = (id: string | null | undefined): boolean => {
@@ -2259,27 +2267,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   // NEW LOGIC: ALWAYS verify by phone_number custom field first
   // This is the "single source of truth" approach
   // ============================================
-  if (data.lead_id) {
-    const { data: lead } = await supabase
-      .from('leads')
-      .select('id, manychat_subscriber_id, contact_name, phone')
-      .eq('id', data.lead_id)
-      .single()
-    contactRecord = lead
-    contactType = 'lead'
-    contactPhone = lead?.phone
-    
-    // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
-    if (contactPhone) {
-      const savedId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null;
-      
-      // This function searches by phone_number custom field and fixes mismatches
-      const verifiedId = await verifyAndFixSubscriberId(contactPhone, savedId, 'lead', lead.id);
-      if (verifiedId) {
-        subscriberId = verifiedId;
-      }
-    }
-  } else if (data.client_id) {
+  if (data.client_id) {
+    // Prefer client when present — lead-alert webhooks may include both ids.
     const { data: client } = await supabase
       .from('clients')
       .select('id, manychat_subscriber_id, contact_name, phone')
@@ -2287,7 +2276,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       .single()
     contactRecord = client
     contactType = 'client'
-    contactPhone = client?.phone
+    if (!contactPhone) contactPhone = client?.phone ?? null
     
     // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
     if (contactPhone) {
@@ -2299,6 +2288,30 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         subscriberId = verifiedId;
       }
     }
+  } else if (data.lead_id) {
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('id, manychat_subscriber_id, contact_name, phone')
+      .eq('id', data.lead_id)
+      .single()
+    contactRecord = lead
+    contactType = 'lead'
+    if (!contactPhone) contactPhone = lead?.phone ?? null
+    
+    // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
+    if (contactPhone) {
+      const savedId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null;
+      
+      // This function searches by phone_number custom field and fixes mismatches
+      const verifiedId = await verifyAndFixSubscriberId(contactPhone, savedId, 'lead', lead.id);
+      if (verifiedId) {
+        subscriberId = verifiedId;
+      }
+    }
+  }
+
+  if (!contactPhone && data.phone != null && String(data.phone).trim()) {
+    contactPhone = String(data.phone).trim()
   }
 
   
@@ -2554,6 +2567,23 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       throw new Error(`Tag ID לא תקין (לא מספר): ${manychat_tag_id}`)
     }
 
+    // ManyChat "Tag Applied" does not re-fire if the tag is already present.
+    // Remove first so repeat lead alerts to the same client still trigger the Flow.
+    try {
+      await fetch(`${baseUrl}/subscriber/removeTag`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriber_id: subscriberIdNum,
+          tag_id: tagIdNum,
+        }),
+      })
+    } catch (removeErr) {
+      console.warn('[send_whatsapp] removeTag before addTag failed (continuing):', removeErr)
+    }
     
     const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
       method: 'POST',
