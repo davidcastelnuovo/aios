@@ -23,6 +23,7 @@ on:
       - 'supabase/ops/create_cursor_dispatches.sql'
       - 'supabase/ops/create_cursor_sticky_agents.sql'
       - 'supabase/ops/create_agent_tool_embeddings.sql'
+      - 'supabase/ops/fix_woocommerce_client_scoped_select.sql'
       - 'supabase/ops/create_meeting_bot_sessions.sql'
 
 jobs:
@@ -59,7 +60,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/create_meeting_bot_sessions.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/fix_woocommerce_client_scoped_select.sql'; then
+              FILE="supabase/ops/fix_woocommerce_client_scoped_select.sql"
+              NAME="fix_woocommerce_client_scoped_select"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/create_meeting_bot_sessions.sql'; then
               FILE="supabase/ops/create_meeting_bot_sessions.sql"
               NAME="create_meeting_bot_sessions"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_crm_dashboards_shared_agency_writes.sql'; then
