@@ -32,6 +32,7 @@ import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
 import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
+import type { QuickTaskPayload } from "./QuickTaskInput";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -451,12 +452,27 @@ export function WeeklyTaskBoard() {
 
   // Add task mutation
   const addTask = useMutation({
-    mutationFn: async ({ title, date, time }: { title: string; date: Date | null; time?: string }) => {
+    mutationFn: async ({
+      title,
+      date,
+      time,
+      clientId,
+      campaignerId,
+      selfReminderAt,
+    }: {
+      title: string;
+      date: Date | null;
+      time?: string;
+      clientId?: string | null;
+      campaignerId?: string | null;
+      selfReminderAt?: string | null;
+    }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
       if (!firstAgency?.id) throw new Error("NO_AGENCY");
 
       const myCampaignerId = userProfile?.campaigner_id || null;
       const mySalesPersonId = userProfile?.sales_person_id || null;
+      const assignedCampaignerId = campaignerId ?? myCampaignerId;
 
       // Validate date is a valid Date object
       const validDate = date instanceof Date && !isNaN(date.getTime()) ? date : null;
@@ -467,10 +483,13 @@ export function WeeklyTaskBoard() {
         priority: 5,
         tenant_id: tenantId,
         agency_id: firstAgency.id,
-        campaigner_id: myCampaignerId,
-        sales_person_id: myCampaignerId ? null : mySalesPersonId,
-        client_id: null,
+        campaigner_id: assignedCampaignerId,
+        sales_person_id: assignedCampaignerId ? null : mySalesPersonId,
+        client_id: clientId ?? null,
       };
+      if (selfReminderAt) {
+        insertData.self_reminder_at = selfReminderAt;
+      }
       if (validDate) {
         insertData.due_date = format(validDate, "yyyy-MM-dd");
         // Only save time if we have a valid date
@@ -558,12 +577,18 @@ export function WeeklyTaskBoard() {
     },
   });
 
-  const handleBacklogAddTask = (title: string) => {
+  const handleBacklogAddTask = (payload: QuickTaskPayload) => {
     if (!canQuickAddTask) {
       toast.error("המערכת עדיין נטענת, נסי שוב בעוד רגע");
       return;
     }
-    addTask.mutate({ title, date: null });
+    addTask.mutate({
+      title: payload.title,
+      date: null,
+      clientId: payload.clientId,
+      campaignerId: payload.campaignerId,
+      selfReminderAt: payload.selfReminderAt,
+    });
   };
 
   // Toggle complete mutation
@@ -1308,6 +1333,7 @@ export function WeeklyTaskBoard() {
               campaignersList={campaignersList}
               onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
               onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
+              defaultCampaignerId={userProfile?.campaigner_id ?? null}
             />
           </div>
 
@@ -1444,6 +1470,7 @@ export function WeeklyTaskBoard() {
                 campaignersList={campaignersList}
                 onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
                 onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
+                defaultCampaignerId={userProfile?.campaigner_id ?? null}
               />
             </div>
 
