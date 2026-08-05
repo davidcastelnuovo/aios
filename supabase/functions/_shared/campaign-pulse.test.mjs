@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildPulseWhatsAppDigest,
   classifyCampaignPulseStatus,
+  countPulseStatuses,
   effectiveIsEcommerce,
   resolveLastSyncAt,
   isSyncStale,
+  pulseSurfacePrefersWhatsAppDigest,
 } from "./campaign-pulse.ts";
 
 const NOW = Date.parse("2026-08-03T12:00:00.000Z");
@@ -173,4 +176,34 @@ test("stale platform on otherwise healthy client becomes warning", () => {
   });
   assert.equal(result.status, "warning");
   assert.ok(result.flags.some((flag) => flag.includes("Meta")));
+});
+
+test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)", () => {
+  const digest = buildPulseWhatsAppDigest(
+    [
+      { status: "healthy" },
+      { status: "warning" },
+      { status: "no_data" },
+      { status: "critical" },
+    ],
+    "https://aios.co.il/marketingcaptain/dmm-dashboard",
+  );
+  assert.match(digest, /בדיקת דופק הושלמה/);
+  assert.match(digest, /🟢 1 תקינים/);
+  assert.match(digest, /🟡 2 לתשומת לב/);
+  assert.match(digest, /🔴 1 קריטיים/);
+  assert.match(digest, /https:\/\/aios\.co\.il\/marketingcaptain\/dmm-dashboard/);
+  assert.match(digest, /לא בוואטסאפ/);
+  assert.equal(digest.includes("| סוכנות |"), false);
+  assert.equal(digest.includes("חושבה ב־"), false);
+  const counts = countPulseStatuses([
+    { status: "healthy" },
+    { status: "warning" },
+    { status: "no_data" },
+    { status: "critical" },
+  ]);
+  assert.equal(counts.attention, 2);
+  assert.equal(pulseSurfacePrefersWhatsAppDigest("whatsapp"), true);
+  assert.equal(pulseSurfacePrefersWhatsAppDigest("task"), true);
+  assert.equal(pulseSurfacePrefersWhatsAppDigest("internal_chat"), false);
 });

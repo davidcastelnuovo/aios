@@ -47,6 +47,11 @@ import {
   monthUtcBounds,
   redactSecretsFromText,
 } from '../_shared/openai-billing.ts'
+import {
+  buildPulseWhatsAppDigest,
+  countPulseStatuses,
+  pulseSurfacePrefersWhatsAppDigest,
+} from '../_shared/campaign-pulse.ts'
 
 function scoreNameMatchSafe(fullName: string, query: string): number {
   return scoreNameMatch(fullName, query)
@@ -730,7 +735,7 @@ const ALL_TOOLS = [
   { name: 'hide_social_comment', description: 'הסתרת תגובה (FB בלבד). דורש confirmed=true.', parameters: { type: 'object', properties: { comment_row_id: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['comment_row_id', 'confirmed'] } },
   { name: 'sync_social_pages', description: 'סנכרון מחדש של כל העמודים (כולל Page Access Tokens) מפייסבוק. הרץ אחרי חיבור חדש או כשעמוד חסר.', parameters: { type: 'object', properties: { client_id: { type: 'string' } } } },
   { name: 'analyze_campaign_performance', description: 'ניתוח ביצועי קמפיינים מטבלאות CRM. מזהה טבלאות קמפיין לפי שדות (spend+campaign_name) ולא לפי שם — תופס גם טבלאות בעברית. מחזיר coverage_summary (כמה לקוחות מסונכרנים מתוך הסקופ), synced_clients (עם spend/CPL/שינוי 7 מול 30 יום) ו-not_connected_clients (לקוחות שאין להם טבלת קמפיין). חובה לדווח על שני הסלוטים, ולא רק על מי שיש לו נתונים.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח ספציפי' }, agency_id: { type: 'string', description: 'סינון לסוכנות מסוימת' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (case-insensitive, חיפוש חלקי)' } } } },
-  { name: 'get_latest_campaign_pulse', description: 'שליפת תמונת הדופק האחרונה שכבר חושבה ונשמרה, ללא קריאת API חיצונית וללא חישוב מחדש. זה הכלי הראשון לשאלות על מצב לקוח/סוכנות/קמפיינים. מחזיר freshness ומקור; רק אם המשתמש מבקש נתונים חיים או ניתוח עמוק יש לעבור ל-analyze_campaign_performance.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, client_name: { type: 'string', description: 'חיפוש חלקי בשם הלקוח' }, agency_id: { type: 'string' }, agency_name: { type: 'string', description: 'חיפוש חלקי בשם הסוכנות' }, status: { type: 'string', enum: ['healthy', 'warning', 'critical', 'no_data'] } } } },
+  { name: 'get_latest_campaign_pulse', description: 'שליפת תמונת הדופק האחרונה שכבר חושבה ונשמרה. בוואטסאפ מחזיר whatsapp_digest קצר (סיכום סטטוסים + קישור לדשבורד) בלבד — בלי טבלת לקוחות. בדשבורד הפנימי אפשר גם formatted_markdown. רק אם המשתמש מבקש נתונים חיים/ניתוח עמוק עבור לקוח — analyze_campaign_performance.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, client_name: { type: 'string', description: 'חיפוש חלקי בשם הלקוח' }, agency_id: { type: 'string' }, agency_name: { type: 'string', description: 'חיפוש חלקי בשם הסוכנות' }, status: { type: 'string', enum: ['healthy', 'warning', 'critical', 'no_data'] } } } },
   // MASKYOO CALLS REPORTING
   { name: 'get_maskyoo_calls_report', description: 'דוח שיחות מסקיו לדוחות SEO. מחזיר ספירות שיחות נכנסות לפי לקוח וקטגוריה (organic/paid) מ-seo_call_snapshots. אם אין snapshot — שולף ישירות מ-call_logs. מחזיר השוואה בין תקופות אם period_compare=true.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח (אופציונלי — בלעדיו מחזיר כל הלקוחות)' }, client_name: { type: 'string', description: 'חיפוש לקוח לפי שם אם אין client_id' }, period_start: { type: 'string', description: 'תחילת תקופה YYYY-MM-DD (ברירת מחדל: תחילת החודש הנוכחי)' }, period_end: { type: 'string', description: 'סוף תקופה YYYY-MM-DD (ברירת מחדל: היום)' }, category: { type: 'string', enum: ['organic', 'paid', 'all'], description: 'ברירת מחדל: all' }, period_compare: { type: 'boolean', description: 'אם true — מחזיר גם תקופה קודמת מקבילה להשוואה' } } } },
   { name: 'sync_maskyoo_cdr', description: 'סנכרון CDRs (Call Detail Records) מ-API של מסקיו אל call_logs. הרץ כשהנתונים לא עדכניים. מחזיר כמה רשומות נוספו.', parameters: { type: 'object', properties: { from_date: { type: 'string', description: 'YYYY-MM-DD — תאריך התחלה לסנכרון (ברירת מחדל 7 ימים אחורה)' } } } },
@@ -1717,7 +1722,7 @@ async function tryCreateCalendarEventForTask(
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any, surface?: string | null): Promise<any> {
   // WhatsApp / automations often pass the sentinel "system". Never write that into uuid columns.
   const actorUserId = asUuidOrNull(userId)
   // Coding-agent escalations are identity-allowlisted (currently David only).
@@ -2760,6 +2765,48 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           return `| ${escapeCell(row.agency_name)} | ${escapeCell(row.client_name)} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(row.data_fresh_through)} | ${escapeCell(metaChange)} | ${escapeCell(row.last_meta_change_actor)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
         }),
       ]
+      const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
+      const tenantSlug = tenantRow?.slug || tenantId
+      const dashboardUrl = `https://aios.co.il/${tenantSlug}/dmm-dashboard`
+      const statusCounts = countPulseStatuses(normalizedRows)
+      const whatsappDigest = normalizedRows.length
+        ? buildPulseWhatsAppDigest(normalizedRows, dashboardUrl)
+        : null
+      const preferDigest = pulseSurfacePrefersWhatsAppDigest(surface)
+      if (!normalizedRows.length) {
+        return {
+          data_source: 'deterministic_campaign_pulse_cache',
+          external_api_called: false,
+          ai_used_to_calculate: false,
+          auto_refreshed: false,
+          count: 0,
+          freshness: null,
+          status_counts: statusCounts,
+          dashboard_url: dashboardUrl,
+          whatsapp_digest: null,
+          rows: preferDigest ? undefined : [],
+          formatted_markdown: null,
+          instructions_to_agent:
+            'לא נמצא Snapshot שמור. אמרי שאין בדיקת דופק זמינה. אסור ליצור בדיקה חדשה, להריץ כלי חלופי או להמציא נתונים.',
+        }
+      }
+      if (preferDigest) {
+        // WhatsApp / agent-task: short digest only — never hand the model a full table to paste.
+        return {
+          data_source: 'deterministic_campaign_pulse_cache',
+          external_api_called: false,
+          ai_used_to_calculate: false,
+          auto_refreshed: false,
+          count: normalizedRows.length,
+          freshness: normalizedRows[0]?.calculated_at || null,
+          status_counts: statusCounts,
+          dashboard_url: dashboardUrl,
+          whatsapp_digest: whatsappDigest,
+          formatted_markdown: null,
+          instructions_to_agent:
+            'בוואטסאפ החזירי את whatsapp_digest כלשונו בלבד. אסור טבלת Markdown, אסור פירוט לקוח-לקוח, אסור להדביק rows. הפירוט בדשבורד בלבד (dashboard_url). אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק ללקוח ספציפי.',
+        }
+      }
       return {
         data_source: 'deterministic_campaign_pulse_cache',
         external_api_called: false,
@@ -2767,11 +2814,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         auto_refreshed: false,
         count: normalizedRows.length,
         freshness: normalizedRows[0]?.calculated_at || null,
+        status_counts: statusCounts,
+        dashboard_url: dashboardUrl,
+        whatsapp_digest: whatsappDigest,
         rows: normalizedRows,
-        formatted_markdown: normalizedRows.length ? tableLines.join('\n') : null,
-        instructions_to_agent: normalizedRows.length
-          ? 'החזירי את formatted_markdown בדיוק כפי שהוא, ללא סיכום במקום הטבלה וללא השמטת עמודות. לפני הטבלה צייני במשפט אחד מתי חושב הדוח. אחרי הטבלה אפשר להוסיף עד 3 חריגים בלבד. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.'
-          : 'לא נמצא Snapshot שמור. אמרי שאין בדיקת דופק זמינה. אסור ליצור בדיקה חדשה, להריץ כלי חלופי או להמציא נתונים.',
+        formatted_markdown: tableLines.join('\n'),
+        instructions_to_agent:
+          'בדשבורד הפנימי אפשר להציג את formatted_markdown. בוואטסאפ — רק whatsapp_digest (סיכום + קישור), בלי טבלה. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.',
       }
     }
     case 'analyze_campaign_performance': {
@@ -6716,6 +6765,14 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 • תשובות קצרות לשאלות פשוטות נשארות קצרות — טבלה רק כשיש באמת נתונים טבלאיים.`
     }
 
+    // WhatsApp / scheduled tasks: pulse must stay short (counts + dashboard link).
+    if (isCarmen && (surface === 'whatsapp' || surface === 'task')) {
+      systemPrompt += `\n\n📱 === בדיקת דופק בוואטסאפ (חובה) ===
+• אחרי get_latest_campaign_pulse — החזירי רק את whatsapp_digest כלשונו.
+• אסור טבלת Markdown, אסור "בדיקת דופק אחרונה — חושבה ב־…" + פירוט לקוחות, אסור להמציא שורות מה-rows.
+• הפירוט המלא רק בדשבורד בדיקת דופק (הקישור ב-whatsapp_digest / dashboard_url).`
+    }
+
     // 4. Filter tools
     const allowedTools = (agent.allowed_tools || []) as string[]
     let filteredTools = allowedTools.length > 0
@@ -6930,6 +6987,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         callerManagedAgencyIds,
         callerPhone,
         wa_notify,
+        surface,
       )
       const finalOutput = formatApprovalExecutionReply(execResult, pendingForConfirm)
       const executionTime = Date.now() - autoStart
@@ -6998,6 +7056,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         callerManagedAgencyIds,
         callerPhone,
         wa_notify,
+        surface,
       )
       const finalOutput = execResult?.success
         ? String(execResult.message || 'כרמן מצטרפת לפגישה. אשרו אותי בחדר ההמתנה אם נדרש.')
@@ -7176,7 +7235,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
             // Prefer profile UUID resolved from WhatsApp phone; never pass literal "system" into uuid columns.
-            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify)
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify, surface)
           }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {

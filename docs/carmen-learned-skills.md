@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-05 — Pulse check on WhatsApp = short digest only
+- **Skin slug:** `pulse_check` (global + tenant overrides updated)
+- **What Carmen can now do:** On WhatsApp / scheduled tasks, answer “בדיקת דופק” with `whatsapp_digest` only (status counts + dashboard link). Never paste a full Markdown client table. Full detail stays on `/dmm-dashboard`.
+- **How:** `get_latest_campaign_pulse` returns `whatsapp_digest` + `dashboard_url`; on `surface=whatsapp|task` it omits `formatted_markdown`/`rows`. Shared helper: `_shared/campaign-pulse.buildPulseWhatsAppDigest`. Morning cron `campaign-pulse-snapshot` already used the same digest.
+- **Origin:** Carmen → Cursor — David: “אמרנו שכבר לא שולחים ככה” after a long WA Markdown pulse table.
+
 ### 2026-08-04 — OpenAI billing/usage status (super_admin)
 - **Skin slug:** `openai_billing_status` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Answer David (super_admin) about OpenAI org spend/usage via `get_openai_billing_status`. Reports current-month cost + optional token usage. **Never invents remaining credit** — OpenAI’s public Admin API does not expose prepaid balance (dashboard-only).
