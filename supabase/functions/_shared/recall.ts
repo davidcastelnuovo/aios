@@ -36,6 +36,9 @@ export async function createRecallBot(opts: CreateRecallBotOpts): Promise<Recall
     metadata: opts.metadata ?? {},
     recording_config: {
       video_mixed_mp4: {},
+      // Mixed audio is a small artifact we can hand to Whisper when Recall's own
+      // transcript is unavailable — the mp4 is far too large for that fallback.
+      audio_mixed_mp3: {},
       transcript: {
         provider: {
           recallai_streaming: {
@@ -105,16 +108,27 @@ export async function retrieveRecallBot(botId: string): Promise<Record<string, u
 // deno-lint-ignore no-explicit-any
 export function extractRecallDownloads(bot: Record<string, any>): {
   videoUrl: string | null;
+  audioUrl: string | null;
   transcriptUrl: string | null;
+  transcriptStatus: string | null;
   durationSeconds: number | null;
 } {
+  const empty = {
+    videoUrl: null,
+    audioUrl: null,
+    transcriptUrl: null,
+    transcriptStatus: null,
+    durationSeconds: null,
+  };
   const recordings = Array.isArray(bot.recordings) ? bot.recordings : [];
   const rec = recordings[0];
-  if (!rec) return { videoUrl: null, transcriptUrl: null, durationSeconds: null };
+  if (!rec) return empty;
 
   const shortcuts = rec.media_shortcuts || {};
   const videoUrl = shortcuts?.video_mixed?.data?.download_url ?? null;
+  const audioUrl = shortcuts?.audio_mixed?.data?.download_url ?? null;
   const transcriptUrl = shortcuts?.transcript?.data?.download_url ?? null;
+  const transcriptStatus = shortcuts?.transcript?.status?.code ?? null;
 
   let durationSeconds: number | null = null;
   if (rec.started_at && rec.completed_at) {
@@ -124,7 +138,66 @@ export function extractRecallDownloads(bot: Record<string, any>): {
     );
   }
 
-  return { videoUrl, transcriptUrl, durationSeconds };
+  return { videoUrl, audioUrl, transcriptUrl, transcriptStatus, durationSeconds };
+}
+
+// A pause this long inside one participant's word stream starts a new line.
+const UTTERANCE_GAP_SECONDS = 3;
+
+interface RecallWord {
+  text?: string;
+  start_timestamp?: { relative?: number };
+}
+
+interface RecallParticipantSegment {
+  participant?: { id?: number; name?: string };
+  words?: RecallWord[];
+}
+
+/**
+ * Recall's v1.11 transcript download is a top-level array of per-participant
+ * segments, each holding a flat `words` list. Split those words into utterances
+ * on pauses so the result reads as a speaker timeline rather than one long line.
+ */
+function participantSegmentsToLines(
+  segments: RecallParticipantSegment[],
+  nameById: Map<number, string>,
+): { at: number; line: string }[] {
+  const lines: { at: number; line: string }[] = [];
+
+  for (const seg of segments) {
+    const speaker = seg.participant?.name
+      || nameById.get(seg.participant?.id ?? -1)
+      || "משתתף";
+    const words = Array.isArray(seg.words) ? seg.words : [];
+
+    let startAt: number | null = null;
+    let prevAt = 0;
+    let buffer: string[] = [];
+
+    const flush = () => {
+      const text = buffer.join(" ").trim();
+      if (text && startAt !== null) lines.push({ at: startAt, line: `[${formatClock(startAt)}] ${speaker}: ${text}` });
+      buffer = [];
+      startAt = null;
+    };
+
+    for (const word of words) {
+      const text = (word.text || "").trim();
+      if (!text) continue;
+      const at = word.start_timestamp?.relative ?? prevAt;
+      if (startAt === null) startAt = at;
+      else if (at - prevAt > UTTERANCE_GAP_SECONDS) {
+        flush();
+        startAt = at;
+      }
+      buffer.push(text);
+      prevAt = at;
+    }
+    flush();
+  }
+
+  return lines;
 }
 
 /** Convert Recall transcript JSON to our speaker-timeline text format. */
@@ -136,6 +209,14 @@ export function recallTranscriptToText(data: any): string {
   const nameById = new Map<number, string>();
   for (const p of participants) {
     if (p.id != null) nameById.set(p.id, p.name || `משתתף ${p.id}`);
+  }
+
+  // v1.11 download schema: top-level array of { participant, words }.
+  if (Array.isArray(data)) {
+    return participantSegmentsToLines(data as RecallParticipantSegment[], nameById)
+      .sort((a, b) => a.at - b.at)
+      .map((l) => l.line)
+      .join("\n");
   }
 
   // Newer schema: array of utterances with participant + words

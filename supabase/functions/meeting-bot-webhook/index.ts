@@ -1,14 +1,7 @@
 // Recall.ai webhook: bot lifecycle + post-meeting ingest into zoom_recordings pipeline.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  extractRecallDownloads,
-  mapRecallEventToStatus,
-  recallTranscriptToText,
-  retrieveRecallBot,
-  verifyRecallWebhook,
-} from "../_shared/recall.ts";
-import { runRecordingPipeline } from "../_shared/recording-pipeline.ts";
-import { platformLabel } from "../_shared/meeting-url.ts";
+import { mapRecallEventToStatus, verifyRecallWebhook } from "../_shared/recall.ts";
+import { finalizeMeetingBotSession } from "../_shared/meeting-bot-finalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,8 +57,13 @@ Deno.serve(async (req) => {
     return json({ received: true });
   }
 
+  // `bot.done` only means the bot left — with a streaming transcript the artifact
+  // is often still processing, so `transcript.done` is the other trigger to ingest.
+  const isIngestEvent = event === "bot.done" || event === "transcript.done" ||
+    event === "recording.done";
+
   const newStatus = mapRecallEventToStatus(event);
-  if (newStatus && event !== "bot.done") {
+  if (newStatus && !isIngestEvent) {
     const update: Record<string, unknown> = {
       status: event === "bot.fatal" ? "failed" : newStatus,
       status_detail: subCode,
@@ -77,96 +75,26 @@ Deno.serve(async (req) => {
     return json({ received: true });
   }
 
-  if (event !== "bot.done") return json({ received: true });
+  if (!isIngestEvent) return json({ received: true });
+  if (session.status === "done") return json({ received: true, skipped: "already done" });
 
-  // bot.done — download media, create recording, run pipeline (async).
   const background = (async () => {
     try {
       await admin.from("meeting_bot_sessions").update({
         status: "processing",
-        ended_at: new Date().toISOString(),
+        ended_at: session.ended_at ?? new Date().toISOString(),
       }).eq("id", session.id);
 
-      const botData = await retrieveRecallBot(botId);
-      const { videoUrl, transcriptUrl, durationSeconds } = extractRecallDownloads(botData);
-
-      let transcription: string | null = null;
-      if (transcriptUrl) {
-        try {
-          const trRes = await fetch(transcriptUrl);
-          if (trRes.ok) {
-            const trJson = await trRes.json();
-            transcription = recallTranscriptToText(trJson);
-          }
-        } catch (trErr) {
-          console.error("[meeting-bot-webhook] transcript download failed", trErr);
-        }
-      }
-
-      let filePath: string | null = null;
-      if (videoUrl) {
-        const vidRes = await fetch(videoUrl);
-        if (vidRes.ok) {
-          const blob = await vidRes.blob();
-          filePath = `${session.tenant_id}/meeting_bot/${session.id}.mp4`;
-          const { error: upErr } = await admin.storage.from("recordings").upload(filePath, blob, {
-            contentType: "video/mp4",
-            upsert: true,
-          });
-          if (upErr) {
-            console.error("[meeting-bot-webhook] video upload failed", upErr);
-            filePath = null;
-          }
-        }
-      }
-
-      const durationMin = durationSeconds ? Math.max(1, Math.round(durationSeconds / 60)) : null;
-      const topic = session.meeting_topic || `${platformLabel(session.platform)} — כרמן`;
-
-      const { data: recording, error: recErr } = await admin
-        .from("zoom_recordings")
-        .insert({
-          tenant_id: session.tenant_id,
-          client_id: session.client_id,
-          lead_id: session.lead_id,
-          meeting_id: botId,
-          meeting_topic: topic,
-          start_time: session.joined_at || session.scheduled_start || new Date().toISOString(),
-          duration: durationMin,
-          source: "meeting_bot",
-          file_path: filePath,
-          recording_url: videoUrl,
-          transcription: transcription,
-          transcription_status: transcription ? "completed" : "pending",
-        })
-        .select("id, tenant_id, client_id, meeting_topic, start_time, duration, host_email, transcription")
-        .single();
-
-      if (recErr || !recording) {
-        throw new Error(recErr?.message || "Failed to create zoom_recordings row");
-      }
-
-      await admin.from("meeting_bot_sessions").update({
-        zoom_recording_id: recording.id,
-      }).eq("id", session.id);
-
-      await runRecordingPipeline(admin, {
-        recording,
-        createdByUserId: session.created_by,
-        briefSource: "meeting_bot",
-        skipTranscribe: !!transcription,
-      });
-
-      await admin.from("meeting_bot_sessions").update({
-        status: "done",
-        updated_at: new Date().toISOString(),
-      }).eq("id", session.id);
+      const result = await finalizeMeetingBotSession(admin, session);
+      console.log(`[meeting-bot-webhook] ${event} → ${result.outcome}: ${result.detail}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[meeting-bot-webhook] processing error:", msg);
+      // Leave it recoverable — meeting-bot-reconcile retries `processing` rows.
       await admin.from("meeting_bot_sessions").update({
-        status: "failed",
+        status: "processing",
         error: msg,
+        updated_at: new Date().toISOString(),
       }).eq("id", session.id);
     }
   })();
