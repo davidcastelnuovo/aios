@@ -29,6 +29,19 @@ function getDateRange(filter: string, integrationType?: string | null): { startD
       startDate = yesterdayStr;
       endDate = yesterdayStr;
       break;
+    case "this_week": {
+      // Week starts Sunday (UTC calendar day) — matches SharedDashboard / DashboardView.
+      const dow = today.getUTCDay();
+      startDate = new Date(Date.UTC(y, m, d - dow)).toISOString().split("T")[0];
+      endDate = todayStr;
+      break;
+    }
+    case "last_week": {
+      const dow = today.getUTCDay();
+      startDate = new Date(Date.UTC(y, m, d - dow - 7)).toISOString().split("T")[0];
+      endDate = new Date(Date.UTC(y, m, d - dow - 1)).toISOString().split("T")[0];
+      break;
+    }
     case "last_7_days": {
       // Ads platforms: match Facebook's "Last 7 days" — 7 full days ending yesterday.
       if (["facebook_insights", "facebook_ecommerce", "google_ads"].includes(String(integrationType || ""))) {

@@ -30,6 +30,7 @@ import { Loader2, AlertCircle, Check, ChevronsUpDown, Search } from "lucide-reac
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { ADS_TABLE_CREATE_DATE_RANGE_OPTIONS } from "@/lib/dashboardDateFilters";
 
 interface GoogleAdsTableDialogProps {
   open: boolean;
@@ -49,16 +50,7 @@ interface GoogleAdsAccount {
   integration_email?: string | null;
 }
 
-const dateRangeOptions = [
-  { value: "today", label: "היום" },
-  { value: "yesterday", label: "אתמול" },
-  { value: "this_week", label: "השבוע" },
-  { value: "last_week", label: "שבוע שעבר" },
-  { value: "last_7_days", label: "7 ימים אחרונים" },
-  { value: "last_14_days", label: "14 יום" },
-  { value: "last_30_days", label: "30 יום (ברירת מחדל)" },
-  { value: "this_month", label: "החודש הנוכחי" },
-];
+const dateRangeOptions = ADS_TABLE_CREATE_DATE_RANGE_OPTIONS;
 
 export function GoogleAdsTableDialog({ open, onOpenChange, assignedClientIds }: GoogleAdsTableDialogProps) {
   const navigate = useNavigate();

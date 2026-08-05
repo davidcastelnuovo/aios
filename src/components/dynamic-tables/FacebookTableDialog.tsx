@@ -28,6 +28,7 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
+import { ADS_TABLE_CREATE_DATE_RANGE_OPTIONS } from "@/lib/dashboardDateFilters";
 
 interface FacebookTableDialogProps {
   open: boolean;
@@ -44,16 +45,7 @@ interface AdAccount {
   business_name?: string | null;
 }
 
-const dateRangeOptions = [
-  { value: "today", label: "היום" },
-  { value: "yesterday", label: "אתמול" },
-  { value: "this_week", label: "השבוע" },
-  { value: "last_week", label: "שבוע שעבר" },
-  { value: "last_7_days", label: "7 ימים אחרונים" },
-  { value: "last_14_days", label: "14 יום" },
-  { value: "last_30_days", label: "30 יום (ברירת מחדל)" },
-  { value: "this_month", label: "החודש הנוכחי" },
-];
+const dateRangeOptions = ADS_TABLE_CREATE_DATE_RANGE_OPTIONS;
 
 const visibilityIcon = (value: string | null) => {
   if (value === "org") return <Globe className="h-3 w-3 text-blue-500" />;

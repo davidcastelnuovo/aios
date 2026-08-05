@@ -39,15 +39,9 @@ import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
 
-const DATE_FILTERS = [
-  { value: 'today', label: 'היום' },
-  { value: 'yesterday', label: 'אתמול' },
-  { value: 'last_7_days', label: '7 ימים אחרונים' },
-  { value: 'last_30_days', label: '30 יום אחרונים' },
-  { value: 'last_70_days', label: '70 יום אחרונים' },
-  { value: 'this_month', label: 'החודש הנוכחי' },
-  { value: 'last_month', label: 'חודש קודם' },
-];
+import { SHARED_COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
+
+const DATE_FILTERS = SHARED_COMBINED_DASHBOARD_DATE_FILTERS;
 
 const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
   facebook_insights: { name: 'Facebook', color: 'text-blue-600' },
