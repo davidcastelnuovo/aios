@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-05 — DMM notify/pulse recipient = Felix (not David fallback)
+- **Skin slug:** `dmm_notify_recipient_routing` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Know that DMM outbound pulse/health digests go to Felix (`972558833168`) via `tenant_heartbeat_settings.campaign_pulse_phone`, not to David. David only receives a DMM notify when he is the explicit `chat_id` / preferred recipient. Cross-tenant “newest session” owner fallback is refused.
+- **How:** Configure/verify `campaign_pulse_phone` on Agent Tasks → heartbeat. Delivery path: `campaign-pulse-snapshot` / `carmen-health-probe` → `claude_notify_david` → `claude-notify` → `resolveCarmenNotifyTarget` (preferred → pulse phone → tenant campaigner/manager session → refuse). Shared helper: `_shared/carmen-notify-target`.
+- **Origin:** Carmen → Cursor DEV TASK — David: “כרמן dmm ממשיכה לשלוח לי עדכונים במקום לפליקס”.
+
 ### 2026-08-05 — Group replies only when addressed (not talked about)
 - **Skin slug:** `group_response_only_when_addressed` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** In WhatsApp groups, wake only on direct address/ask (`כרמן תבדקי`, `כרמן תצטרפי`, `כרמן?`). Stay silent when people talk about her in third person (`כרמן אמורה…`, `למה כרמן שלחה…`, `דיברנו על כרמן`).

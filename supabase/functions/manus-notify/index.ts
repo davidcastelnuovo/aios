@@ -1,14 +1,19 @@
 // manus-notify — lets Manus (running autonomously) push a guaranteed
-// WhatsApp update to David when it finishes a task, independent of Carmen's
+// WhatsApp update when it finishes a task, independent of Carmen's
 // live session.
 //
-// Mirrors claude-notify exactly — same auth, same sendViaActionStep logic.
+// Mirrors claude-notify — same recipient resolution (never cross-tenant
+// owner fallback), same sendViaActionStep logic.
 //
 // Auth: Authorization: Bearer == MANUS_MCP_BEARER (same shared secret as manus-mcp).
 //
 // Body: { tenant_id, message, chat_id? }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import {
+  normalizeNotifyPhone,
+  resolveCarmenNotifyTarget,
+} from "../_shared/carmen-notify-target.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -32,8 +37,6 @@ function bearerFrom(req: Request): string | undefined {
   return m ? m[1].trim() : undefined;
 }
 
-// Send a message through the automation's configured action step —
-// the same mechanism Carmen uses for her own replies.
 async function sendViaActionStep(sb: any, args: {
   automationId: string;
   tenantId: string;
@@ -101,7 +104,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
-  // Auth: same bearer as manus-mcp
   const required = Deno.env.get("MANUS_MCP_BEARER");
   if (required && bearerFrom(req) !== required) {
     return json({ error: "unauthorized" }, 401);
@@ -118,35 +120,88 @@ Deno.serve(async (req) => {
 
   const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-  // Resolve the chat to notify: explicit chat_id, else the tenant's most recent
-  // non-group Carmen session (the human who was last talking to Carmen).
-  let q = sb
-    .from("carmen_whatsapp_sessions")
-    .select("chat_id, phone, connection_user_id, automation_id")
-    .eq("tenant_id", tenantId)
-    .order("last_message_at", { ascending: false })
-    .limit(1);
+  const [{ data: heartbeat }, { data: sessions }, { data: campaigners }] = await Promise.all([
+    sb.from("tenant_heartbeat_settings")
+      .select("campaign_pulse_phone")
+      .eq("tenant_id", tenantId)
+      .maybeSingle(),
+    sb.from("carmen_whatsapp_sessions")
+      .select("chat_id, phone, sender_name, connection_user_id, automation_id, last_message_at")
+      .eq("tenant_id", tenantId)
+      .neq("phone", "")
+      .order("last_message_at", { ascending: false })
+      .limit(40),
+    sb.from("campaigners")
+      .select("full_name, phone, role, active")
+      .eq("tenant_id", tenantId)
+      .eq("active", true)
+      .limit(200),
+  ]);
 
-  if (explicitChatId) q = q.eq("chat_id", explicitChatId);
-  else q = q.neq("phone", ""); // non-group sessions carry a phone number
+  const staff = (campaigners || [])
+    .filter((c: any) => !!normalizeNotifyPhone(c.phone))
+    .map((c: any) => ({
+      phone: c.phone as string,
+      full_name: c.full_name as string | null,
+      role: Array.isArray(c.role) ? (c.role[0] ?? null) : (c.role ?? null),
+    }));
 
-  const { data: sess } = await q;
-  const s = sess?.[0];
+  const target = resolveCarmenNotifyTarget({
+    preferredPhone: explicitChatId,
+    campaignPulsePhone: heartbeat?.campaign_pulse_phone ?? null,
+    sessions: (sessions || []).map((s: any) => ({
+      chat_id: s.chat_id,
+      phone: s.phone,
+      sender_name: s.sender_name,
+      updated_at: s.last_message_at,
+    })),
+    staff,
+  });
 
-  if (!s?.chat_id || !s?.automation_id) {
-    return json({ ok: false, sent: false, reason: "no resolvable Carmen WhatsApp chat for this tenant" });
+  if (target.source === "none" || !target.phone) {
+    return json({
+      ok: false,
+      sent: false,
+      reason: target.reason || "no resolvable Carmen WhatsApp recipient for this tenant",
+      source: target.source,
+    });
   }
 
-  const isGroup = String(s.chat_id).endsWith("@g.us");
+  const matchedSession = (sessions || []).find((s: any) =>
+    normalizeNotifyPhone(s.chat_id) === target.phone ||
+    normalizeNotifyPhone(s.phone) === target.phone
+  ) || null;
+  const bridgeSession = matchedSession || (sessions || []).find((s: any) => s.automation_id) || null;
+
+  if (!bridgeSession?.automation_id) {
+    return json({
+      ok: false,
+      sent: false,
+      reason: "no Carmen WhatsApp automation/session bridge for this tenant",
+      source: target.source,
+      chat_id: target.chatId,
+    });
+  }
+
+  const chatId = matchedSession?.chat_id || target.chatId;
+  const phoneNumber = normalizeNotifyPhone(matchedSession?.phone) || target.phone;
+  const isGroup = String(chatId).endsWith("@g.us");
   const sent = await sendViaActionStep(sb, {
-    automationId: s.automation_id,
+    automationId: bridgeSession.automation_id,
     tenantId,
-    connectionUserId: s.connection_user_id || "",
-    chatId: s.chat_id,
-    phoneNumber: s.phone || "",
+    connectionUserId: bridgeSession.connection_user_id || "",
+    chatId,
+    phoneNumber,
     isGroup,
     message,
   });
 
-  return json({ ok: sent, sent, chat_id: s.chat_id });
+  return json({
+    ok: sent,
+    sent,
+    chat_id: chatId,
+    phone: phoneNumber,
+    contact_name: target.contactName,
+    source: target.source,
+  });
 });
