@@ -27,6 +27,19 @@ https://zvoijyneresvkadpprel.supabase.co/functions/v1/meeting-bot-webhook
 
 אירועים: `bot.joining_call`, `bot.in_waiting_room`, `bot.in_call_recording`, `bot.call_ended`, `bot.done`, `bot.fatal`
 
+מומלץ להוסיף גם `transcript.done` ו-`recording.done`: `bot.done` נשלח כשהבוט יוצא מהפגישה, אבל התמלול עדיין בעיבוד — במיוחד בפגישות ארוכות.
+
+## השלמה אוטומטית (`meeting-bot-reconcile`)
+
+cron כל דקה מאתר סשנים שנתקעו ב-`processing` (התמלול לא היה מוכן ב-`bot.done`, או שהעתקת וידאו ארוך חרגה ממשאבי הפונקציה) ומסיים אותם מול Recall. אפשר להריץ ידנית לסשן מסוים:
+
+```bash
+curl -X POST "$SUPABASE_URL/functions/v1/meeting-bot-reconcile" \
+  -H "Authorization: Bearer $ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"..."}'
+```
+
 ## אימייל — מתי צריך?
 
 - **רוב הפגישות (Zoom רגיל, Meet, Teams):** לא צריך אימייל — רק קישור.

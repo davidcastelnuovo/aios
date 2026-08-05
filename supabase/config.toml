@@ -320,6 +320,10 @@ verify_jwt = true
 [functions.meeting-bot-webhook]
 verify_jwt = false
 
+# Cron-driven retry for bot sessions the webhook could not finish.
+[functions.meeting-bot-reconcile]
+verify_jwt = false
+
 [functions.publishing-feed]
 verify_jwt = false
 
