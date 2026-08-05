@@ -15,7 +15,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 const SIDEBAR_COOKIE_NAME = "sidebar:state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
-const SIDEBAR_WIDTH_MOBILE = "12rem";
+/** Mobile drawer — use most of the screen so Hebrew menu labels fit without truncation */
+const SIDEBAR_WIDTH_MOBILE = "min(88vw, 22rem)";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
@@ -156,7 +157,7 @@ const Sidebar = React.forwardRef<
         <SheetContent
           data-sidebar="sidebar"
           data-mobile="true"
-          className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          className="w-[--sidebar-width] max-w-none sm:max-w-none bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden [&_[data-sidebar=menu-button]>span:last-child]:whitespace-normal [&_[data-sidebar=menu-button]>span:last-child]:overflow-visible [&_[data-sidebar=menu-sub-button]>span:last-child]:whitespace-normal [&_[data-sidebar=menu-sub-button]>span:last-child]:overflow-visible"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
