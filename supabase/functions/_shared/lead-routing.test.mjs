@@ -12,12 +12,25 @@ assert.equal(isScreeningQuestionKey("details"), false);
 assert.equal(isScreeningQuestionKey("שם"), false);
 assert.equal(isScreeningQuestionKey("טלפון"), false);
 assert.equal(isScreeningQuestionKey("הגעה לראשון לציון?"), true);
+assert.equal(isScreeningQuestionKey("מספר טלפון"), false);
+assert.equal(isScreeningQuestionKey("ליד חדש מקמפיין פייסבוק"), false);
+assert.equal(isScreeningQuestionKey("מאיפה אתם בארץ"), true);
 
 assert.deepEqual(
   parseQaText("הגעה לראשון לציון?: כן • ניסיון במכירות?: לא • שם: שאנאיה • טלפון: 0508266089"),
   {
     "הגעה לראשון לציון?": "כן",
     "ניסיון במכירות?": "לא",
+  },
+);
+
+assert.deepEqual(
+  parseQaText(
+    "ליד חדש מקמפיין פייסבוק: מיטב שטרן\nשם: Ainzley Tiu\nמספר טלפון: +972544260275\nמאיפה אתם בארץ: Yes\nהאם מדובר ב: שיפוץ",
+  ),
+  {
+    "מאיפה אתם בארץ": "Yes",
+    "האם מדובר ב": "שיפוץ",
   },
 );
 
