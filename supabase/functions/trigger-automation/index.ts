@@ -162,6 +162,141 @@ async function setPhoneCustomFieldMC(apiKey: string, subscriberId: string, phone
   }
 }
 
+  baseUrl: string,
+  apiKey: string,
+  subscriberId: number,
+): Promise<Record<string, string>> {
+  try {
+    const infoRes = await fetch(
+      `${baseUrl}/subscriber/getInfo?subscriber_id=${encodeURIComponent(String(subscriberId))}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+    if (!infoRes.ok) return {}
+    const info = await infoRes.json()
+    const rows = info?.data?.custom_fields
+    if (!Array.isArray(rows)) return {}
+    return Object.fromEntries(
+      rows.map((row: { name?: string; value?: unknown }) => [String(row.name ?? ''), String(row.value ?? '')]),
+    )
+  } catch {
+    return {}
+  }
+}
+
+async function writeManyChatCustomFields(
+  baseUrl: string,
+  apiKey: string,
+  subscriberId: number,
+  updates: Array<{ field_id?: number; field_name?: string; field_value: string }>,
+): Promise<boolean> {
+  const batchFields = updates
+    .filter((fieldUpdate) => Number.isFinite(fieldUpdate.field_id))
+    .map((fieldUpdate) => ({
+      field_id: fieldUpdate.field_id,
+      field_value: fieldUpdate.field_value,
+    }))
+
+  if (batchFields.length > 0) {
+    try {
+      const batchResponse = await fetch(`${baseUrl}/subscriber/setCustomFields`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriber_id: subscriberId,
+          fields: batchFields,
+        }),
+      })
+      if (batchResponse.ok) return true
+      console.error('setCustomFields batch failed:', await batchResponse.text())
+    } catch (batchErr) {
+      console.error('setCustomFields batch error:', batchErr)
+    }
+  }
+
+  for (const fieldUpdate of updates) {
+    const useByName = !fieldUpdate.field_id && fieldUpdate.field_name
+    const endpoint = useByName ? 'subscriber/setCustomFieldByName' : 'subscriber/setCustomField'
+    const body = useByName
+      ? {
+        subscriber_id: subscriberId,
+        field_name: fieldUpdate.field_name,
+        field_value: fieldUpdate.field_value,
+      }
+      : {
+        subscriber_id: subscriberId,
+        field_id: fieldUpdate.field_id,
+        field_value: fieldUpdate.field_value,
+      }
+    try {
+      const fieldResponse = await fetch(`${baseUrl}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+      if (!fieldResponse.ok) {
+        console.error(
+          `Failed to set custom field ${fieldUpdate.field_id || fieldUpdate.field_name}:`,
+          await fieldResponse.text(),
+        )
+      }
+    } catch (fieldErr) {
+      console.error(`setCustomField error ${fieldUpdate.field_id || fieldUpdate.field_name}:`, fieldErr)
+    }
+  }
+  return true
+}
+
+function leadAlertFieldMismatches(
+  actual: Record<string, string>,
+  expected: Record<string, string>,
+): string[] {
+  const mismatches: string[] = []
+  for (const [name, value] of Object.entries(expected)) {
+    if (actual[name] !== value) {
+      mismatches.push(`${name}: expected "${value}" got "${actual[name] ?? ''}"`)
+    }
+  }
+  return mismatches
+}
+
+async function syncManyChatLeadAlertFields(
+  baseUrl: string,
+  apiKey: string,
+  subscriberId: number,
+  updates: Array<{ field_id?: number; field_name?: string; field_value: string }>,
+): Promise<{ ok: boolean; mismatches: string[]; fields: Record<string, string> }> {
+  const expected = Object.fromEntries(
+    updates
+      .filter((fieldUpdate) => fieldUpdate.field_name)
+      .map((fieldUpdate) => [String(fieldUpdate.field_name), fieldUpdate.field_value]),
+  )
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await writeManyChatCustomFields(baseUrl, apiKey, subscriberId, updates)
+    await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 500 : 800))
+    const fields = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberId)
+    const mismatches = leadAlertFieldMismatches(fields, expected)
+    if (!mismatches.length) return { ok: true, mismatches: [], fields }
+    console.warn(`[send_whatsapp] field verify attempt ${attempt + 1} failed:`, mismatches.join('; '))
+  }
+
+  const fields = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberId)
+  const mismatches = leadAlertFieldMismatches(fields, expected)
+  return { ok: false, mismatches, fields }
+}
+
 interface AutomationPayload {
   trigger_type?: string
   data?: any
@@ -2089,7 +2224,7 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
 // Execute send WhatsApp action via ManyChat
 async function executeSendWhatsapp(supabase: any, config: any, data: any, tenantId: string) {
   
-  const { manychat_tag_id, field_mapping } = config
+  const { manychat_tag_id, manychat_flow_ns, field_mapping } = config
   
   // Get ManyChat integration settings for this tenant
   const { data: integration, error: integrationError } = await supabase
@@ -2571,72 +2706,72 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   }
 
   if (customFieldUpdates.length > 0) {
-    // Prefer batch write so the WhatsApp Flow never reads a half-updated contact.
-    const batchFields = customFieldUpdates
-      .filter((fieldUpdate) => Number.isFinite(fieldUpdate.field_id))
-      .map((fieldUpdate) => ({
-        field_id: fieldUpdate.field_id,
-        field_value: fieldUpdate.field_value,
-      }))
-    let batchOk = false
-    if (batchFields.length > 0) {
-      try {
-        const batchResponse = await fetch(`${baseUrl}/subscriber/setCustomFields`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            subscriber_id: subscriberIdNum,
-            fields: batchFields,
-          }),
-        })
-        batchOk = batchResponse.ok
-        if (!batchOk) {
-          console.error('setCustomFields batch failed:', await batchResponse.text())
-        }
-      } catch (batchErr) {
-        console.error('setCustomFields batch error:', batchErr)
-      }
+    const sync = await syncManyChatLeadAlertFields(
+      baseUrl,
+      apiKey,
+      subscriberIdNum,
+      customFieldUpdates,
+    )
+    if (!sync.ok) {
+      console.error('[send_whatsapp] custom fields not verified before send:', sync.mismatches)
+      throw new Error(
+        `שדות ManyChat לא התעדכנו לפני שליחה (${sync.mismatches.slice(0, 2).join('; ')})`,
+      )
     }
-
-    if (!batchOk) {
-      for (const fieldUpdate of customFieldUpdates) {
-        const useByName = !fieldUpdate.field_id && fieldUpdate.field_name
-        const endpoint = useByName ? 'subscriber/setCustomFieldByName' : 'subscriber/setCustomField'
-        const body = useByName
-          ? {
-            subscriber_id: subscriberIdNum,
-            field_name: fieldUpdate.field_name,
-            field_value: fieldUpdate.field_value,
-          }
-          : {
-            subscriber_id: subscriberIdNum,
-            field_id: fieldUpdate.field_id,
-            field_value: fieldUpdate.field_value,
-          }
-        const fieldResponse = await fetch(`${baseUrl}/${endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        })
-
-        if (!fieldResponse.ok) {
-          const errorText = await fieldResponse.text()
-          console.error(`Failed to set custom field ${fieldUpdate.field_id || fieldUpdate.field_name}:`, errorText)
-        }
-      }
-    }
-
-    // Brief settle so ManyChat's tag-triggered Flow reads the new field values.
-    await new Promise((resolve) => setTimeout(resolve, 400))
   }
-  
-  // Add tag to trigger ManyChat automation (instead of sending a Flow)
+
+  const flowNs = typeof manychat_flow_ns === 'string' ? manychat_flow_ns.trim() : ''
+  if (flowNs) {
+    const flowResponse = await fetch(`${baseUrl}/sending/sendFlow`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        subscriber_id: subscriberIdNum,
+        flow_ns: flowNs,
+      }),
+    })
+    const flowResult = await flowResponse.json().catch(() => ({}))
+    if (!flowResponse.ok || flowResult?.status !== 'success') {
+      throw new Error(`שגיאה בשליחת Flow ב-ManyChat: ${JSON.stringify(flowResult)}`)
+    }
+
+    // Optional post-send tag cleanup (Flow may also remove the tag).
+    if (manychat_tag_id) {
+      const tagIdNum = Number.parseInt(String(manychat_tag_id).trim(), 10)
+      if (Number.isFinite(tagIdNum)) {
+        try {
+          await fetch(`${baseUrl}/subscriber/removeTag`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              subscriber_id: subscriberIdNum,
+              tag_id: tagIdNum,
+            }),
+          })
+        } catch (removeErr) {
+          console.warn('[send_whatsapp] post-send removeTag failed (continuing):', removeErr)
+        }
+      }
+    }
+
+    return {
+      success: true,
+      subscriber_id: subscriberId,
+      fields_updated: customFieldUpdates.length,
+      delivery: 'sendFlow',
+      flow_ns: flowNs,
+      flow_result: flowResult,
+      destination_phone: contactPhone,
+    }
+  }
+
+  // Legacy: tag-triggered Flow (race-prone — prefer manychat_flow_ns).
   if (manychat_tag_id) {
     const tagIdNum = Number.parseInt(String(manychat_tag_id).trim(), 10)
     if (!Number.isFinite(tagIdNum)) {
@@ -2703,8 +2838,10 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       success: true,
       subscriber_id: subscriberId,
       fields_updated: customFieldUpdates.length,
+      delivery: 'tag',
       tag_id: manychat_tag_id,
-      tag_result: tagResult
+      tag_result: tagResult,
+      destination_phone: contactPhone,
     }
   }
   
