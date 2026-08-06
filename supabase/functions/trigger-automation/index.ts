@@ -162,6 +162,7 @@ async function setPhoneCustomFieldMC(apiKey: string, subscriberId: string, phone
   }
 }
 
+async function readManyChatSubscriberFields(
   baseUrl: string,
   apiKey: string,
   subscriberId: number,
