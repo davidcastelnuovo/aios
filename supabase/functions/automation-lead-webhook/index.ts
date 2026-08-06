@@ -135,12 +135,15 @@ Deno.serve(async (request) => {
       configuration.client_id || payload.client_id,
     );
     const routing = buildLeadRoutingPayload(routedClient, formData);
+    // Make may send client_phone per alert (campaigners test on their own number).
+    // Payload destination always wins over CRM client.phone from resolveLeadClient.
+    const payloadClientPhone = firstString(payload, ["client_phone", "recipient_phone"]);
+    if (payloadClientPhone) routing.client_phone = payloadClientPhone;
     if (!routedClient) {
       // Make/Zapier scenarios often already know the destination client.
       // The per-flow secret makes these trusted fields safe to accept while
       // avoiding a UUID lookup table in every existing scenario.
       routing.client_name = firstString(payload, ["client_name", "recipient_name"]);
-      routing.client_phone = firstString(payload, ["client_phone", "recipient_phone"]);
       routing.client_email = firstString(payload, ["client_email", "recipient_email"]);
     }
     const externalId = firstString(payload, ["external_id", "leadgen_id", "lead_id", "id"]);
