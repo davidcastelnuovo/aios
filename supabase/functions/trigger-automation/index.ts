@@ -324,6 +324,55 @@ async function syncManyChatLeadAlertFields(
   return { ok: false, mismatches, fields }
 }
 
+async function touchManyChatSubscriberForLeadAlert(
+  baseUrl: string,
+  apiKey: string,
+  subscriberId: number,
+  leadName: string,
+  clientName: string,
+): Promise<void> {
+  const firstName = (leadName || clientName || '').trim()
+  if (!firstName) return
+  try {
+    await fetch(`${baseUrl}/subscriber/updateSubscriber`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        subscriber_id: subscriberId,
+        first_name: firstName.slice(0, 250),
+      }),
+    })
+  } catch (err) {
+    console.warn('[send_whatsapp] updateSubscriber touch failed (continuing):', err)
+  }
+}
+
+async function removeManyChatTag(
+  baseUrl: string,
+  apiKey: string,
+  subscriberId: number,
+  tagId: number,
+): Promise<void> {
+  try {
+    await fetch(`${baseUrl}/subscriber/removeTag`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        subscriber_id: subscriberId,
+        tag_id: tagId,
+      }),
+    })
+  } catch (removeErr) {
+    console.warn('[send_whatsapp] removeTag failed (continuing):', removeErr)
+  }
+}
+
 interface AutomationPayload {
   trigger_type?: string
   data?: any
@@ -2745,10 +2794,57 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       .map((fieldUpdate) => [String(fieldUpdate.field_name), fieldUpdate.field_value]),
   )
 
+  await touchManyChatSubscriberForLeadAlert(
+    baseUrl,
+    apiKey,
+    subscriberIdNum,
+    resolvedFields.lead_name ?? '',
+    resolvedFields.client_name ?? '',
+  )
+
   const flowNs = typeof manychat_flow_ns === 'string' ? manychat_flow_ns.trim() : ''
+  const tagIdNum = Number.parseInt(String(manychat_tag_id ?? '').trim(), 10)
+  const hasTag = Number.isFinite(tagIdNum)
+  // Tag trigger runs the ManyChat automation/Flow that should re-map user fields
+  // before the template step. sendFlow snapshots stale vars on existing subscribers.
+  const preferTagDelivery = hasTag && config.manychat_delivery !== 'sendFlow'
+
+  if (preferTagDelivery) {
+    await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum)
+    if (customFieldUpdates.length > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+    }
+
+    const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        subscriber_id: subscriberIdNum,
+        tag_id: tagIdNum,
+      }),
+    })
+    const tagResult = await tagResponse.json().catch(() => ({}))
+    if (!tagResponse.ok || tagResult?.status !== 'success') {
+      throw new Error(`שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`)
+    }
+
+    return {
+      success: true,
+      subscriber_id: subscriberId,
+      fields_updated: customFieldUpdates.length,
+      resolved_fields: resolvedFields,
+      delivery: 'tag',
+      tag_id: manychat_tag_id,
+      flow_ns: flowNs || null,
+      tag_result: tagResult,
+      destination_phone: contactPhone,
+    }
+  }
+
   if (flowNs) {
-    // ManyChat sendFlow can snapshot stale template variables on existing subscribers
-    // even after setCustomFields + getInfo verify; pause before triggering the Flow.
     if (customFieldUpdates.length > 0) {
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
@@ -2768,26 +2864,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       throw new Error(`שגיאה בשליחת Flow ב-ManyChat: ${JSON.stringify(flowResult)}`)
     }
 
-    // Optional post-send tag cleanup (Flow may also remove the tag).
-    if (manychat_tag_id) {
-      const tagIdNum = Number.parseInt(String(manychat_tag_id).trim(), 10)
-      if (Number.isFinite(tagIdNum)) {
-        try {
-          await fetch(`${baseUrl}/subscriber/removeTag`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              subscriber_id: subscriberIdNum,
-              tag_id: tagIdNum,
-            }),
-          })
-        } catch (removeErr) {
-          console.warn('[send_whatsapp] post-send removeTag failed (continuing):', removeErr)
-        }
-      }
+    if (hasTag) {
+      await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum)
     }
 
     return {
@@ -2802,31 +2880,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     }
   }
 
-  // Legacy: tag-triggered Flow (race-prone — prefer manychat_flow_ns).
-  if (manychat_tag_id) {
-    const tagIdNum = Number.parseInt(String(manychat_tag_id).trim(), 10)
-    if (!Number.isFinite(tagIdNum)) {
-      throw new Error(`Tag ID לא תקין (לא מספר): ${manychat_tag_id}`)
+  if (hasTag) {
+    await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum)
+    if (customFieldUpdates.length > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 3000))
     }
 
-    // ManyChat "Tag Applied" does not re-fire if the tag is already present.
-    // Remove first so repeat lead alerts to the same client still trigger the Flow.
-    try {
-      await fetch(`${baseUrl}/subscriber/removeTag`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subscriber_id: subscriberIdNum,
-          tag_id: tagIdNum,
-        }),
-      })
-    } catch (removeErr) {
-      console.warn('[send_whatsapp] removeTag before addTag failed (continuing):', removeErr)
-    }
-    
     const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
       method: 'POST',
       headers: {
@@ -2838,49 +2897,30 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         tag_id: tagIdNum,
       }),
     })
-    
-    const tagResult = await tagResponse.json()
-    
-    if (!tagResponse.ok) {
+    const tagResult = await tagResponse.json().catch(() => ({}))
+    if (!tagResponse.ok || tagResult?.status !== 'success') {
       throw new Error(`שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`)
     }
 
-    // Verify (best-effort) that the tag is visible on the subscriber right after applying.
-    // This helps debug cases where we tag the wrong subscriber (e.g., Messenger vs WhatsApp).
-    try {
-      const infoUrl = `${baseUrl}/subscriber/getInfo?subscriber_id=${encodeURIComponent(String(subscriberIdNum))}`
-      const infoRes = await fetch(infoUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (infoRes.ok) {
-        const info = await infoRes.json()
-      } else {
-        const err = await infoRes.text()
-      }
-    } catch (e) {
-    }
-    
     return {
       success: true,
       subscriber_id: subscriberId,
       fields_updated: customFieldUpdates.length,
+      resolved_fields: resolvedFields,
       delivery: 'tag',
       tag_id: manychat_tag_id,
       tag_result: tagResult,
       destination_phone: contactPhone,
     }
   }
-  
+
   return {
     success: true,
     subscriber_id: subscriberId,
     fields_updated: customFieldUpdates.length,
-    message: 'No tag configured'
+    resolved_fields: resolvedFields,
+    message: 'No tag or flow configured',
+    destination_phone: contactPhone,
   }
 }
 

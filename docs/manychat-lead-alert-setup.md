@@ -29,11 +29,33 @@ Automation: **התראת ליד ללקוח מ-Make / Webhook** (`314a7c5a-d7e3-4
 
 AIOS now:
 1. Finds/creates the **client** subscriber by `client_phone`
-2. Writes all 5 custom fields (empty → `-`)
-3. **Verifies** fields on the contact (retries once)
-4. Calls **`sendFlow`** (`content20260805211918_552368` = Flow «ליד חדש ללקוח»)
+2. Clears + writes all 5 custom fields (empty → `-`)
+3. **Verifies** fields on the contact (retries + stable reads)
+4. **Adds tag** `aios_lead_alert` (remove first) so the ManyChat Flow runs
 
-The tag `aios_lead_alert` is optional cleanup only — **do not rely on Tag Applied** to send (race with stale fields).
+The Flow **must** re-map fields before sending the template (see below). Do **not** rely on `sendFlow` alone for existing contacts — ManyChat can send stale template variables.
+
+## ManyChat Flow: required steps before template
+
+Edit Flow **«ליד חדש ללקוח»** (or the automation triggered by tag `aios_lead_alert`):
+
+1. **Trigger:** Tag applied → `aios_lead_alert` (AIOS adds this tag after writing fields)
+2. **Actions (before template):** Set Custom Field for each user field — forces refresh on existing contacts:
+   - `lead_name` ← User Field `lead_name`
+   - `lead_phone` ← User Field `lead_phone`
+   - `lead_email` ← User Field `lead_email`
+   - `client_name` ← User Field `client_name`
+   - `form_qa_summary` ← User Field `form_qa_summary`
+3. **Smart Delay:** 2 seconds
+4. **Send WhatsApp template** `new_lead_alert_he` with mapping:
+   - `{{1}}` → `client_name`
+   - `{{2}}` → `lead_name`
+   - `{{3}}` → `lead_phone`
+   - `{{4}}` → `lead_email`
+   - `{{5}}` → `form_qa_summary`
+5. Optional: Remove tag `aios_lead_alert` after send
+
+Without steps 2–3, existing subscribers keep showing the **previous lead's** parameters.
 
 ## What you still need in ManyChat (UI only)
 
