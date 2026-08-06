@@ -373,6 +373,93 @@ async function removeManyChatTag(
   }
 }
 
+const manyChatSleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function readManyChatSubscriberTagIds(
+  baseUrl: string,
+  apiKey: string,
+  subscriberId: number,
+): Promise<number[]> {
+  try {
+    const infoRes = await fetch(
+      `${baseUrl}/subscriber/getInfo?subscriber_id=${encodeURIComponent(String(subscriberId))}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+    if (!infoRes.ok) return []
+    const info = await infoRes.json()
+    const tags = info?.data?.tags
+    if (!Array.isArray(tags)) return []
+    return tags
+      .map((tag: { id?: unknown }) => Number(tag?.id))
+      .filter((id: number) => Number.isFinite(id))
+  } catch {
+    return []
+  }
+}
+
+async function waitForManyChatTagRemoved(
+  baseUrl: string,
+  apiKey: string,
+  subscriberId: number,
+  tagId: number,
+  opts?: { maxAttempts?: number; intervalMs?: number },
+): Promise<{ removed: boolean; attempts: number }> {
+  const maxAttempts = opts?.maxAttempts ?? 12
+  const intervalMs = opts?.intervalMs ?? 750
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const tagIds = await readManyChatSubscriberTagIds(baseUrl, apiKey, subscriberId)
+    if (!tagIds.includes(tagId)) {
+      return { removed: true, attempts: attempt + 1 }
+    }
+    if (attempt === 0 || attempt % 3 === 0) {
+      await removeManyChatTag(baseUrl, apiKey, subscriberId, tagId)
+    }
+    await manyChatSleep(intervalMs)
+  }
+
+  return { removed: false, attempts: maxAttempts }
+}
+
+async function retriggerManyChatTag(
+  baseUrl: string,
+  apiKey: string,
+  subscriberId: number,
+  tagId: number,
+): Promise<{ tag_result: unknown; tag_wait: { removed: boolean; attempts: number } }> {
+  await removeManyChatTag(baseUrl, apiKey, subscriberId, tagId)
+  const tagWait = await waitForManyChatTagRemoved(baseUrl, apiKey, subscriberId, tagId)
+  if (!tagWait.removed) {
+    console.warn(
+      `[send_whatsapp] tag ${tagId} still on subscriber ${subscriberId} after wait; addTag anyway`,
+    )
+  }
+
+  const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      subscriber_id: subscriberId,
+      tag_id: tagId,
+    }),
+  })
+  const tagResult = await tagResponse.json().catch(() => ({}))
+  if (!tagResponse.ok || tagResult?.status !== 'success') {
+    throw new Error(`שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`)
+  }
+
+  return { tag_result: tagResult, tag_wait: tagWait }
+}
+
 interface AutomationPayload {
   trigger_type?: string
   data?: any
@@ -2810,26 +2897,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   const preferTagDelivery = hasTag && config.manychat_delivery !== 'sendFlow'
 
   if (preferTagDelivery) {
-    await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum)
-    if (customFieldUpdates.length > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 3000))
-    }
-
-    const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        subscriber_id: subscriberIdNum,
-        tag_id: tagIdNum,
-      }),
-    })
-    const tagResult = await tagResponse.json().catch(() => ({}))
-    if (!tagResponse.ok || tagResult?.status !== 'success') {
-      throw new Error(`שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`)
-    }
+    const { tag_result: tagResult, tag_wait: tagWait } = await retriggerManyChatTag(
+      baseUrl,
+      apiKey,
+      subscriberIdNum,
+      tagIdNum,
+    )
 
     return {
       success: true,
@@ -2840,6 +2913,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       tag_id: manychat_tag_id,
       flow_ns: flowNs || null,
       tag_result: tagResult,
+      tag_wait: tagWait,
       destination_phone: contactPhone,
     }
   }
@@ -2881,26 +2955,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   }
 
   if (hasTag) {
-    await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum)
-    if (customFieldUpdates.length > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 3000))
-    }
-
-    const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        subscriber_id: subscriberIdNum,
-        tag_id: tagIdNum,
-      }),
-    })
-    const tagResult = await tagResponse.json().catch(() => ({}))
-    if (!tagResponse.ok || tagResult?.status !== 'success') {
-      throw new Error(`שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`)
-    }
+    const { tag_result: tagResult, tag_wait: tagWait } = await retriggerManyChatTag(
+      baseUrl,
+      apiKey,
+      subscriberIdNum,
+      tagIdNum,
+    )
 
     return {
       success: true,
@@ -2910,6 +2970,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       delivery: 'tag',
       tag_id: manychat_tag_id,
       tag_result: tagResult,
+      tag_wait: tagWait,
       destination_phone: contactPhone,
     }
   }
