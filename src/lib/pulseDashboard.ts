@@ -119,7 +119,9 @@ export function formatMetaChange(row: PulseSnapshotRow): string {
 
 /** Build shareable authenticated pulse dashboard URL for a tenant + optional agency. */
 export function buildPulseDashboardUrl(origin: string, tenantSlug: string, agencyId?: string | null): string {
-  const base = `${origin.replace(/\/$/, "")}/${tenantSlug}/dmm-dashboard`;
+  // App routes live under `/t/:tenantSlug/...` — without `/t/` TenantUnknownRoute
+  // redirects unknown paths to home.
+  const base = `${origin.replace(/\/$/, "")}/t/${tenantSlug}/dmm-dashboard`;
   if (agencyId && agencyId !== "all") {
     return `${base}?agency=${encodeURIComponent(agencyId)}`;
   }

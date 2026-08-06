@@ -48,6 +48,7 @@ import {
   redactSecretsFromText,
 } from '../_shared/openai-billing.ts'
 import {
+  buildPulseDashboardAbsoluteUrl,
   buildPulseWhatsAppDigest,
   countPulseStatuses,
   pulseSurfacePrefersWhatsAppDigest,
@@ -2767,7 +2768,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       ]
       const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
       const tenantSlug = tenantRow?.slug || tenantId
-      const dashboardUrl = `https://aios.co.il/${tenantSlug}/dmm-dashboard`
+      const dashboardUrl = buildPulseDashboardAbsoluteUrl(tenantSlug)
       const statusCounts = countPulseStatuses(normalizedRows)
       const whatsappDigest = normalizedRows.length
         ? buildPulseWhatsAppDigest(normalizedRows, dashboardUrl)
