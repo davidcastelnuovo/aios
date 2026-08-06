@@ -2261,6 +2261,17 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   if (phoneField && data?.[phoneField] != null && String(data[phoneField]).trim()) {
     contactPhone = String(data[phoneField]).trim()
   }
+
+  const phoneLast9 = (value: string | null | undefined): string =>
+    String(value ?? '').replace(/\D/g, '').slice(-9)
+
+  // When phone_field sends a different destination (e.g. campaigner testing on their
+  // own number), resolve ManyChat by that phone only — do not link CRM records.
+  const destinationMatchesContactRecord = (): boolean => {
+    if (!contactRecord?.phone || !contactPhone) return true
+    return phoneLast9(contactPhone) === phoneLast9(contactRecord.phone)
+  }
+  const shouldLinkSubscriberToCrm = (): boolean => !phoneField || destinationMatchesContactRecord()
   
   // Helper to check if subscriber ID is valid (not a sync conflict status)
   const isValidSubscriberId = (id: string | null | undefined): boolean => {
@@ -2321,23 +2332,26 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         
         // Update the database with the correct ID
         const table = type === 'lead' ? 'leads' : 'clients';
-        const { error: updateError } = await supabase
-          .from(table)
-          .update({ manychat_subscriber_id: foundId })
-          .eq('id', recordId);
-        
-        if (updateError) {
-          console.error(`❌ CRITICAL: Failed to fix ${type} ${recordId}:`, updateError);
-          throw new Error(`ID Mismatch detected for ${type} ${recordId}: Saved=${savedId}, Found=${foundId}. Fix failed: ${updateError.message}`);
-        } else {
+        if (shouldLinkSubscriberToCrm()) {
+          const { error: updateError } = await supabase
+            .from(table)
+            .update({ manychat_subscriber_id: foundId })
+            .eq('id', recordId);
+          
+          if (updateError) {
+            console.error(`❌ CRITICAL: Failed to fix ${type} ${recordId}:`, updateError);
+            throw new Error(`ID Mismatch detected for ${type} ${recordId}: Saved=${savedId}, Found=${foundId}. Fix failed: ${updateError.message}`);
+          }
         }
       } else if (!savedId) {
         // No saved ID - save the found one
-        const table = type === 'lead' ? 'leads' : 'clients';
-        await supabase
-          .from(table)
-          .update({ manychat_subscriber_id: foundId })
-          .eq('id', recordId);
+        if (shouldLinkSubscriberToCrm()) {
+          const table = type === 'lead' ? 'leads' : 'clients';
+          await supabase
+            .from(table)
+            .update({ manychat_subscriber_id: foundId })
+            .eq('id', recordId);
+        }
       } else {
       }
       
@@ -2412,10 +2426,10 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       .single()
     contactRecord = client
     contactType = 'client'
-    if (!contactPhone) contactPhone = client?.phone ?? null
+    if (!contactPhone && !phoneField) contactPhone = client?.phone ?? null
     
     // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
-    if (contactPhone) {
+    if (contactPhone && shouldLinkSubscriberToCrm()) {
       const savedId = isValidSubscriberId(client?.manychat_subscriber_id) ? client.manychat_subscriber_id : null;
       
       // This function searches by phone_number custom field and fixes mismatches
@@ -2432,10 +2446,10 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       .single()
     contactRecord = lead
     contactType = 'lead'
-    if (!contactPhone) contactPhone = lead?.phone ?? null
+    if (!contactPhone && !phoneField) contactPhone = lead?.phone ?? null
     
     // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
-    if (contactPhone) {
+    if (contactPhone && shouldLinkSubscriberToCrm()) {
       const savedId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null;
       
       // This function searches by phone_number custom field and fixes mismatches
@@ -2448,6 +2462,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
 
   if (!contactPhone && data.phone != null && String(data.phone).trim()) {
     contactPhone = String(data.phone).trim()
+  }
+
+  const persistManychatSubscriberId = async (subId: string) => {
+    if (!shouldLinkSubscriberToCrm() || !contactRecord?.id || !contactType) return
+    const table = contactType === 'lead' ? 'leads' : 'clients'
+    await supabase.from(table).update({ manychat_subscriber_id: subId }).eq('id', contactRecord.id)
   }
 
   
@@ -2488,18 +2508,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         if (foundId) {
           subscriberId = foundId;
           
-          // Update the contact record with the found subscriber ID
-          if (contactType === 'lead' && contactRecord?.id) {
-            await supabase
-              .from('leads')
-              .update({ manychat_subscriber_id: subscriberId })
-              .eq('id', contactRecord.id)
-          } else if (contactType === 'client' && contactRecord?.id) {
-            await supabase
-              .from('clients')
-              .update({ manychat_subscriber_id: subscriberId })
-              .eq('id', contactRecord.id)
-          }
+          await persistManychatSubscriberId(subscriberId)
           break // Found subscriber, exit loop
         }
       } else {
@@ -2525,11 +2534,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     if (fieldId) {
       subscriberId = await findSubscriberByCustomFieldMC(apiKey, fieldId, customFieldCandidates)
       if (subscriberId) {
-        if (contactType === 'lead' && contactRecord?.id) {
-          await supabase.from('leads').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
-        } else if (contactType === 'client' && contactRecord?.id) {
-          await supabase.from('clients').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
-        }
+        await persistManychatSubscriberId(subscriberId)
       }
     } else {
     }
@@ -2572,16 +2577,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         // IMPORTANT: Save phone to custom field for future lookups
         await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone)
         
-        // Save the new subscriber ID to the lead/client
-        if (contactType === 'lead' && contactRecord?.id) {
-          await supabase.from('leads')
-            .update({ manychat_subscriber_id: subscriberId })
-            .eq('id', contactRecord.id)
-        } else if (contactType === 'client' && contactRecord?.id) {
-          await supabase.from('clients')
-            .update({ manychat_subscriber_id: subscriberId })
-            .eq('id', contactRecord.id)
-        }
+        await persistManychatSubscriberId(subscriberId)
       } else {
         // If creation failed due to existing wa_id conflict
         const errStr = JSON.stringify(createResult)
@@ -2622,16 +2618,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           }
           if (subscriberId) {
             await setPhoneCustomFieldMC(apiKey, subscriberId, whatsappPhone)
-            if (contactType === 'lead' && contactRecord?.id) {
-              await supabase.from('leads').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
-            } else if (contactType === 'client' && contactRecord?.id) {
-              await supabase.from('clients').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
-            }
-          } else if (contactType === 'lead' && contactRecord?.id) {
+            await persistManychatSubscriberId(subscriberId)
+          } else if (shouldLinkSubscriberToCrm() && contactType === 'lead' && contactRecord?.id) {
             await supabase.from('leads')
               .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
               .eq('id', contactRecord.id)
-          } else if (contactType === 'client' && contactRecord?.id) {
+          } else if (shouldLinkSubscriberToCrm() && contactType === 'client' && contactRecord?.id) {
             await supabase.from('clients')
               .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
               .eq('id', contactRecord.id)

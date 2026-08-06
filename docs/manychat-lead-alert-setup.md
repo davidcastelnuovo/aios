@@ -81,8 +81,10 @@ In the Flow Builder: change the send step action to **שלח WhatsApp (ManyChat)
 
 Make/Webhook payloads look like:
 
-- `client_phone` = who should get the alert (the client)
+- `client_phone` = who should get the alert (the client **or** a campaigner testing on their own number)
 - `phone` / `lead_phone` = the new lead
+
+`client_phone` in the webhook **always overrides** the CRM client phone when present — so campaigners can test the same client with different numbers and each number gets its own ManyChat contact + the current dynamic fields.
 
 Without `phone_field=client_phone`, ManyChat would look up the **lead** (or fail). That field is required for this automation.
 
