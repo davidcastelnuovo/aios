@@ -48,7 +48,7 @@ Edit Flow **«ליד חדש ללקוח»** (or the automation triggered by tag `
    - `lead_email` ← User Field `lead_email`
    - `client_name` ← User Field `client_name`
    - `form_qa_summary` ← User Field `form_qa_summary`
-3. **Smart Delay:** 2 seconds
+3. **Smart Delay:** 10 seconds (ManyChat minimum for Smart Delay)
 4. **Send WhatsApp template** `new_lead_alert_he` with mapping:
    - `{{1}}` → `client_name`
    - `{{2}}` → `lead_name`
