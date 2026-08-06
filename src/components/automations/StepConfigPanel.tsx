@@ -1280,6 +1280,8 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
   );
 }
 
+const LEAD_ALERT_MANYCHAT_FLOW_NS = 'content20260805211918_552368'
+
 const LEAD_ALERT_MANYCHAT_FIELDS = [
   { field_id: 14845212, field_name: "client_name", value_template: "{{client_name}}" },
   { field_id: 14845211, field_name: "lead_name", value_template: "{{lead_name}}" },
@@ -1337,8 +1339,8 @@ function ManyChatWhatsAppActionConfig({
         </p>
       </div>
       <p className="text-right text-[11px] text-muted-foreground">
-        AIOS ממלא Custom Fields ומוסיף טאג. את תבנית ה-WhatsApp שולחים ב-Flow בתוך ManyChat
-        (טריגר: Tag added). לפרטים: docs/manychat-lead-alert-setup.md
+        AIOS ממלא Custom Fields, מאמת שהם התעדכנו, ואז קורא ל־Flow ישירות (`sendFlow`).
+        טאג `aios_lead_alert` אופציונלי לניקוי אחרי שליחה.
       </p>
 
       <div className="space-y-2">
@@ -1417,6 +1419,7 @@ function ManyChatWhatsAppActionConfig({
             onClick={() => {
               onConfigChange("custom_fields", [...LEAD_ALERT_MANYCHAT_FIELDS]);
               onConfigChange("manychat_tag_id", configuration?.manychat_tag_id || "93553458");
+              onConfigChange("manychat_flow_ns", LEAD_ALERT_MANYCHAT_FLOW_NS);
               onConfigChange("phone_mode", "field");
               onConfigChange("phone_field", "client_phone");
             }}

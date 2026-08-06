@@ -22,10 +22,20 @@ Automation: **התראת ליד ללקוח מ-Make / Webhook** (`314a7c5a-d7e3-4
 | `send_whatsapp` supports `custom_fields` + `phone_field=client_phone` | AIOS code | ✅ Done |
 | Flow builder UI: tag / phone field / “מלא התראת ליד” | AIOS UI | ✅ Done |
 | removeTag before addTag (repeat alerts re-fire) | AIOS code | ✅ Done |
-| **ManyChat Flow: Tag added → WhatsApp template** | **David (UI only)** | ⏳ **Blocking** |
-| Switch Make step from Meta → `send_whatsapp` | AIOS (after Flow live) | ⏳ Waiting |
+| **ManyChat Flow: Tag added → WhatsApp template** | **David (UI only)** | ⏳ **Blocking** (Flow exists: `ליד חדש ללקוח`) |
+| Switch to `sendFlow` + field verify (no tag race) | AIOS code | ⏳ This PR |
 
-## What you still create in ManyChat (UI only)
+## Delivery path (recommended)
+
+AIOS now:
+1. Finds/creates the **client** subscriber by `client_phone`
+2. Writes all 5 custom fields (empty → `-`)
+3. **Verifies** fields on the contact (retries once)
+4. Calls **`sendFlow`** (`content20260805211918_552368` = Flow «ליד חדש ללקוח»)
+
+The tag `aios_lead_alert` is optional cleanup only — **do not rely on Tag Applied** to send (race with stale fields).
+
+## What you still need in ManyChat (UI only)
 
 ManyChat does not let the API build a WhatsApp-template Flow. One automation is enough:
 
@@ -51,6 +61,7 @@ When the Flow is live — tell AIOS/Cursor and we’ll switch the Make automatio
 
 ```json
 {
+  "manychat_flow_ns": "content20260805211918_552368",
   "manychat_tag_id": "93553458",
   "phone_mode": "field",
   "phone_field": "client_phone",
