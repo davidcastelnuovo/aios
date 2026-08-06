@@ -1339,8 +1339,8 @@ function ManyChatWhatsAppActionConfig({
         </p>
       </div>
       <p className="text-right text-[11px] text-muted-foreground">
-        AIOS ממלא Custom Fields, מאמת שהם התעדכנו, ואז קורא ל־Flow ישירות (`sendFlow`).
-        טאג `aios_lead_alert` אופציונלי לניקוי אחרי שליחה.
+        AIOS ממלא Custom Fields, מאמת, ואז מוסיף טאג `aios_lead_alert` (לא sendFlow ישיר).
+        ב-Flow של ManyChat חייבים שלבי Set Custom Field + Delay לפני התבנית — אחרת אנשי קשר קיימים מקבלים פרמטרים ישנים.
       </p>
 
       <div className="space-y-2">
