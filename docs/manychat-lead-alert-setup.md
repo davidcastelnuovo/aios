@@ -22,8 +22,10 @@ Automation: **התראת ליד ללקוח מ-Make / Webhook** (`314a7c5a-d7e3-4
 | `send_whatsapp` supports `custom_fields` + `phone_field=client_phone` | AIOS code | ✅ Done |
 | Flow builder UI: tag / phone field / “מלא התראת ליד” | AIOS UI | ✅ Done |
 | removeTag before addTag (repeat alerts re-fire) | AIOS code | ✅ Done |
-| **ManyChat Flow: Tag added → WhatsApp template** | **David (UI only)** | ⏳ **Blocking** (Flow exists: `ליד חדש ללקוח`) |
-| Switch to `sendFlow` + field verify (no tag race) | AIOS code | ⏳ This PR |
+| Switch to tag delivery + field resync | AIOS code | ✅ Done |
+| **ManyChat Flow: Set Fields + Delay + template map** | **David (UI)** | ⏳ **Blocking** |
+
+📖 **מדריך צעד-אחר-צעד:** [manychat-flow-remap-guide.md](./manychat-flow-remap-guide.md)
 
 ## Delivery path (recommended)
 
@@ -56,6 +58,8 @@ Edit Flow **«ליד חדש ללקוח»** (or the automation triggered by tag `
 5. Optional: Remove tag `aios_lead_alert` after send
 
 Without steps 2–3, existing subscribers keep showing the **previous lead's** parameters.
+
+**→ מדריך מפורט עם צעדים, טבלאות ודיאגרמה:** [manychat-flow-remap-guide.md](./manychat-flow-remap-guide.md)
 
 ## What you still need in ManyChat (UI only)
 

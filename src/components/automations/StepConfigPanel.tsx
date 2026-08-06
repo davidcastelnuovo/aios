@@ -772,6 +772,17 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
                     <summary className="cursor-pointer text-right text-xs font-medium">
                       הצג JSON לדוגמה
                     </summary>
+                    <p className="mt-2 text-right text-[11px] text-muted-foreground">
+                      תיקון Flow ב-ManyChat (שדות ישנים על איש קשר קיים):{" "}
+                      <a
+                        href="https://github.com/davidcastelnuovo/aios/blob/main/docs/manychat-flow-remap-guide.md"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        מדריך צעד-אחר-צעד
+                      </a>
+                    </p>
                     <pre dir="ltr" className="mt-2 overflow-x-auto text-left text-[10px]">
 {`{
   "external_id": "UNIQUE-LEAD-ID",
