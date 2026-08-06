@@ -31,7 +31,7 @@ flowchart TD
     C --> D[Set lead_email]
     D --> E[Set client_name]
     E --> F[Set form_qa_summary]
-    F --> G[Smart Delay 2 שניות]
+    F --> G[Smart Delay 10 שניות]
     G --> H[שליחת תבנית new_lead_alert_he]
     H --> I[אופציונלי: הסרת טאג]
 ```
@@ -94,7 +94,7 @@ flowchart TD
 
 1. אחרי 5 פעולות ה-Set Field, לחץ **+**.
 2. בחר: **Timing** → **Smart Delay** (או **Wait**).
-3. הגדר **2 שניות**.
+3. הגדר **10 שניות** — זה המינימום ש-ManyChat מאפשר (לא ניתן פחות).
 4. שמור.
 
 ---
@@ -173,7 +173,7 @@ AIOS עושה: הסרת טאג → **ממתין עד שהטאג באמת נעל�
 
 - [ ] טריגר: Tag `aios_lead_alert`
 - [ ] 5× Set Custom Field (כל שדה ← User Field באותו שם)
-- [ ] Smart Delay 2 שניות
+- [ ] Smart Delay 10 שניות (מינימום ManyChat)
 - [ ] תבנית `new_lead_alert_he` עם מיפוי `{{1}}`–`{{5}}` נכון
 - [ ] `{{2}}` = `lead_name` (לא `client_name`)
 - [ ] `{{3}}` ו-`{{4}}` מחוברים
