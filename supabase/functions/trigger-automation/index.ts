@@ -216,15 +216,18 @@ async function writeManyChatCustomFields(
           fields: batchFields,
         }),
       })
-      if (batchResponse.ok) return true
-      console.error('setCustomFields batch failed:', await batchResponse.text())
+      if (!batchResponse.ok) {
+        console.error('setCustomFields batch failed:', await batchResponse.text())
+      }
     } catch (batchErr) {
       console.error('setCustomFields batch error:', batchErr)
     }
   }
 
+  // Always follow batch with per-field writes. ManyChat can ACK batch while the
+  // Flow/template layer still serves stale values on existing subscribers.
   for (const fieldUpdate of updates) {
-    const useByName = !fieldUpdate.field_id && fieldUpdate.field_name
+    const useByName = Boolean(fieldUpdate.field_name)
     const endpoint = useByName ? 'subscriber/setCustomFieldByName' : 'subscriber/setCustomField'
     const body = useByName
       ? {
@@ -284,13 +287,36 @@ async function syncManyChatLeadAlertFields(
       .map((fieldUpdate) => [String(fieldUpdate.field_name), fieldUpdate.field_value]),
   )
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+  const fieldsMatchExpected = (fields: Record<string, string>) =>
+    !leadAlertFieldMismatches(fields, expected).length
+
+  // Clear stale values first so repeat sends to the same subscriber cannot reuse
+  // the previous lead's data inside ManyChat's Flow/template cache.
+  const clearUpdates = updates
+    .filter((fieldUpdate) => fieldUpdate.field_name)
+    .map((fieldUpdate) => ({ ...fieldUpdate, field_value: '-' }))
+  if (clearUpdates.length) {
+    await writeManyChatCustomFields(baseUrl, apiKey, subscriberId, clearUpdates)
+    await sleep(500)
+  }
+
+  for (let attempt = 0; attempt < 3; attempt++) {
     await writeManyChatCustomFields(baseUrl, apiKey, subscriberId, updates)
-    await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 500 : 800))
+    await sleep(attempt === 0 ? 800 : attempt === 1 ? 1200 : 1500)
     const fields = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberId)
     const mismatches = leadAlertFieldMismatches(fields, expected)
-    if (!mismatches.length) return { ok: true, mismatches: [], fields }
-    console.warn(`[send_whatsapp] field verify attempt ${attempt + 1} failed:`, mismatches.join('; '))
+    if (mismatches.length) {
+      console.warn(`[send_whatsapp] field verify attempt ${attempt + 1} failed:`, mismatches.join('; '))
+      continue
+    }
+    // Two stable reads — getInfo can be fresh while sendFlow still snapshots old values.
+    await sleep(1000)
+    const fieldsAgain = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberId)
+    if (fieldsMatchExpected(fieldsAgain)) {
+      return { ok: true, mismatches: [], fields: fieldsAgain }
+    }
+    console.warn('[send_whatsapp] field verify unstable between reads; retrying write')
   }
 
   const fields = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberId)
@@ -2713,8 +2739,19 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     }
   }
 
+  const resolvedFields = Object.fromEntries(
+    customFieldUpdates
+      .filter((fieldUpdate) => fieldUpdate.field_name)
+      .map((fieldUpdate) => [String(fieldUpdate.field_name), fieldUpdate.field_value]),
+  )
+
   const flowNs = typeof manychat_flow_ns === 'string' ? manychat_flow_ns.trim() : ''
   if (flowNs) {
+    // ManyChat sendFlow can snapshot stale template variables on existing subscribers
+    // even after setCustomFields + getInfo verify; pause before triggering the Flow.
+    if (customFieldUpdates.length > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
     const flowResponse = await fetch(`${baseUrl}/sending/sendFlow`, {
       method: 'POST',
       headers: {
@@ -2757,6 +2794,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       success: true,
       subscriber_id: subscriberId,
       fields_updated: customFieldUpdates.length,
+      resolved_fields: resolvedFields,
       delivery: 'sendFlow',
       flow_ns: flowNs,
       flow_result: flowResult,
