@@ -7,13 +7,19 @@ const CONTACT_FIELD_NAMES = new Set([
   "email",
   "email_address",
   "אימייל",
+  "מייל",
   "phone",
   "phone_number",
   "mobile",
   "טלפון",
+  "מספר טלפון",
+  "מספר_טלפון",
   "company",
   "company_name",
   "חברה",
+  // Make sometimes dumps the whole lead card into "questions"
+  "ליד חדש מקמפיין פייסבוק",
+  "ליד חדש מקמפיין",
 ]);
 
 /** Routing / envelope keys that must never appear under "שאלות סינון". */
@@ -61,6 +67,13 @@ export function isScreeningQuestionKey(key: string): boolean {
   if (CONTACT_FIELD_NAMES.has(normalized)) return false;
   if (ROUTING_FIELD_NAMES.has(normalized)) return false;
   if (normalized.startsWith("fb_")) return false;
+  // Catch Hebrew/English contact + campaign envelope labels Make sometimes
+  // puts inside questions_and_answers (must not appear under "שאלות סינון").
+  if (/(טלפון|אימייל|מייל|email|phone|mobile|whatsapp)/i.test(normalized)) return false;
+  if (/^(שם|name|full.?name)(\b|_)/i.test(normalized) || normalized === "שם" || normalized === "name") {
+    return false;
+  }
+  if (/ליד חדש|מקמפיין פייסבוק|facebook campaign/i.test(normalized)) return false;
   return true;
 }
 

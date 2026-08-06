@@ -2556,8 +2556,13 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     const fieldName = typeof entry.field_name === 'string' ? entry.field_name.trim() : ''
     const template = String(entry.value_template ?? entry.value ?? '')
     if (!template || (!Number.isFinite(fieldId) && !fieldName)) continue
-    const resolved = replaceTemplateVariables(template, { ...data }, undefined).trim()
-    if (!resolved) continue
+    // Always write a value — skipping empties left stale ManyChat fields (previous
+    // lead's name/phone) and unresolved {{lead_email}} literals on the contact.
+    const resolvedRaw = replaceTemplateVariables(template, { ...data }, undefined).trim()
+    const unresolved = /\{\{[^}]+\}\}/.test(resolvedRaw)
+    const resolved = !resolvedRaw || unresolved
+      ? sanitizeTemplateParameter('')
+      : sanitizeTemplateParameter(resolvedRaw)
     customFieldUpdates.push({
       ...(Number.isFinite(fieldId) ? { field_id: fieldId } : {}),
       ...(fieldName ? { field_name: fieldName } : {}),
@@ -2566,34 +2571,69 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   }
 
   if (customFieldUpdates.length > 0) {
-    for (const fieldUpdate of customFieldUpdates) {
-      const useByName = !fieldUpdate.field_id && fieldUpdate.field_name
-      const endpoint = useByName ? 'subscriber/setCustomFieldByName' : 'subscriber/setCustomField'
-      const body = useByName
-        ? {
-          subscriber_id: subscriberIdNum,
-          field_name: fieldUpdate.field_name,
-          field_value: fieldUpdate.field_value,
+    // Prefer batch write so the WhatsApp Flow never reads a half-updated contact.
+    const batchFields = customFieldUpdates
+      .filter((fieldUpdate) => Number.isFinite(fieldUpdate.field_id))
+      .map((fieldUpdate) => ({
+        field_id: fieldUpdate.field_id,
+        field_value: fieldUpdate.field_value,
+      }))
+    let batchOk = false
+    if (batchFields.length > 0) {
+      try {
+        const batchResponse = await fetch(`${baseUrl}/subscriber/setCustomFields`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            subscriber_id: subscriberIdNum,
+            fields: batchFields,
+          }),
+        })
+        batchOk = batchResponse.ok
+        if (!batchOk) {
+          console.error('setCustomFields batch failed:', await batchResponse.text())
         }
-        : {
-          subscriber_id: subscriberIdNum,
-          field_id: fieldUpdate.field_id,
-          field_value: fieldUpdate.field_value,
-        }
-      const fieldResponse = await fetch(`${baseUrl}/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-
-      if (!fieldResponse.ok) {
-        const errorText = await fieldResponse.text()
-        console.error(`Failed to set custom field ${fieldUpdate.field_id || fieldUpdate.field_name}:`, errorText)
+      } catch (batchErr) {
+        console.error('setCustomFields batch error:', batchErr)
       }
     }
+
+    if (!batchOk) {
+      for (const fieldUpdate of customFieldUpdates) {
+        const useByName = !fieldUpdate.field_id && fieldUpdate.field_name
+        const endpoint = useByName ? 'subscriber/setCustomFieldByName' : 'subscriber/setCustomField'
+        const body = useByName
+          ? {
+            subscriber_id: subscriberIdNum,
+            field_name: fieldUpdate.field_name,
+            field_value: fieldUpdate.field_value,
+          }
+          : {
+            subscriber_id: subscriberIdNum,
+            field_id: fieldUpdate.field_id,
+            field_value: fieldUpdate.field_value,
+          }
+        const fieldResponse = await fetch(`${baseUrl}/${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        })
+
+        if (!fieldResponse.ok) {
+          const errorText = await fieldResponse.text()
+          console.error(`Failed to set custom field ${fieldUpdate.field_id || fieldUpdate.field_name}:`, errorText)
+        }
+      }
+    }
+
+    // Brief settle so ManyChat's tag-triggered Flow reads the new field values.
+    await new Promise((resolve) => setTimeout(resolve, 400))
   }
   
   // Add tag to trigger ManyChat automation (instead of sending a Flow)

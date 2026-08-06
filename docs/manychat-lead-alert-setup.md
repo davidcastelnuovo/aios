@@ -34,9 +34,9 @@ ManyChat does not let the API build a WhatsApp-template Flow. One automation is 
 3. Action: **Send WhatsApp Message** → template used for lead alerts  
    Prefer the same copy as Meta: `new_lead_alert_he` / `lead_alert_compact_he`  
    (must exist & be APPROVED on the **DMM-WA / 77** WhatsApp channel in ManyChat)
-4. Map template variables:
-   - `{{1}}` → User field `client_name`
-   - `{{2}}` → User field `lead_name`
+4. Map template variables (**double-check — wrong map shows campaign name under שם**):
+   - `{{1}}` → User field `client_name` (שם קמפיין/לקוח)
+   - `{{2}}` → User field `lead_name` (שם הליד — לא client_name)
    - `{{3}}` → User field `lead_phone`
    - `{{4}}` → User field `lead_email`
    - `{{5}}` → User field `form_qa_summary`
