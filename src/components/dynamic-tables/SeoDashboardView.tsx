@@ -632,7 +632,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
                         }
                         {r.received_at && (
                           <span className="text-[10px] text-muted-foreground">
-                            (סונכרן {format(new Date(r.received_at), 'dd/MM')})
+                            (סונכרן {format(new Date(r.received_at), 'dd/MM/yy')})
                           </span>
                         )}
                         {latestReport?.id === r.id && (
