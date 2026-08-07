@@ -162,6 +162,109 @@ async function setPhoneCustomFieldMC(apiKey: string, subscriberId: string, phone
   }
 }
 
+function manyChatPhoneLast9(value: string): string {
+  return String(value ?? '').replace(/\D/g, '').slice(-9)
+}
+
+function manyChatPhoneCandidates(phone: string): string[] {
+  const cleanPhone = phone.replace(/\D/g, '')
+  const last9Digits = cleanPhone.slice(-9)
+  return [...new Set([
+    `+972${last9Digits}`,
+    `972${last9Digits}`,
+    `0${last9Digits}`,
+    cleanPhone,
+    last9Digits,
+  ])].filter(Boolean)
+}
+
+function extractManyChatWaIdFromCreateError(createResult: unknown): string | null {
+  const errStr = JSON.stringify(createResult ?? {})
+  const match = errStr.match(/WhatsApp ID already exists:\s*(\+?\d+)/i)
+  return match?.[1]?.replace(/\D/g, '') || null
+}
+
+function pickManyChatSubscriberByWhatsAppPhone(subscribers: unknown, targetLast9: string): string | null {
+  const rows = Array.isArray(subscribers) ? subscribers : subscribers ? [subscribers] : []
+  const withWA = rows.find((subscriber: any) =>
+    subscriber?.status !== 'deleted'
+    && subscriber?.whatsapp_phone
+    && manyChatPhoneLast9(String(subscriber.whatsapp_phone)) === targetLast9
+    && subscriber?.id,
+  )
+  return withWA?.id ? String(withWA.id) : null
+}
+
+async function findSubscriberByWhatsAppPhoneMC(
+  apiKey: string,
+  fieldId: number | null,
+  targetPhone: string,
+): Promise<string | null> {
+  const targetLast9 = manyChatPhoneLast9(targetPhone)
+  if (!targetLast9) return null
+  const candidates = manyChatPhoneCandidates(targetPhone)
+
+  if (fieldId) {
+    const foundByField = await findSubscriberByCustomFieldMC(apiKey, fieldId, candidates)
+    if (foundByField) return foundByField
+
+    // ManyChat WA contacts often keep phone_number as literal "{{phone}}" with no system phone.
+    for (const placeholder of ['{{phone}}', '{{client_phone}}']) {
+      try {
+        const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_id=${fieldId}&field_value=${encodeURIComponent(placeholder)}`
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        })
+        if (!res.ok) continue
+        const data = await res.json()
+        if (data?.status !== 'success' || !data?.data) continue
+        const match = pickManyChatSubscriberByWhatsAppPhone(data.data, targetLast9)
+        if (match) {
+          console.warn(`[send_whatsapp] recovered subscriber ${match} via phone_number="${placeholder}"`)
+          return match
+        }
+      } catch {
+        // try next placeholder
+      }
+    }
+  }
+
+  for (const phoneFormat of candidates) {
+    try {
+      const searchUrl = `https://api.manychat.com/fb/subscriber/findBySystemField?phone=${encodeURIComponent(phoneFormat)}`
+      const res = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      if (!res.ok) continue
+      const data = await res.json()
+      const match = pickManyChatSubscriberByWhatsAppPhone(data?.data, targetLast9)
+      if (match) return match
+    } catch {
+      // try next format
+    }
+  }
+
+  return null
+}
+
+async function ensureManyChatPhoneCustomFieldMC(
+  apiKey: string,
+  subscriberId: string,
+  targetPhone: string,
+): Promise<void> {
+  const last9 = manyChatPhoneLast9(targetPhone)
+  if (!last9) return
+  await setPhoneCustomFieldMC(apiKey, subscriberId, `+972${last9}`)
+}
+
 async function readManyChatSubscriberFields(
   baseUrl: string,
   apiKey: string,
@@ -2687,18 +2790,10 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
 
   // If still no subscriber, try Custom Field lookup (phone_number) using field_id
   if (!subscriberId && contactPhone) {
-    const cleanPhone = contactPhone.replace(/\D/g, '')
-    const last9Digits = cleanPhone.slice(-9)
-    const customFieldCandidates = [`+972${last9Digits}`, `972${last9Digits}`, `0${last9Digits}`]
-
-    // Get field_id (cached or from API)
     const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
-    if (fieldId) {
-      subscriberId = await findSubscriberByCustomFieldMC(apiKey, fieldId, customFieldCandidates)
-      if (subscriberId) {
-        await persistManychatSubscriberId(subscriberId)
-      }
-    } else {
+    subscriberId = await findSubscriberByWhatsAppPhoneMC(apiKey, fieldId, contactPhone)
+    if (subscriberId) {
+      await persistManychatSubscriberId(subscriberId)
     }
   }
   
@@ -2746,40 +2841,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         console.error('Failed to create subscriber:', createResult)
 
         if (errStr.includes('wa_id') || errStr.includes('WhatsApp ID already exists') || /already exists/i.test(errStr)) {
-          // Recover: search again by phone_number custom field AND system phone.
-          // Many WA-only contacts were created without system `phone`, so the first
-          // findBySystemField miss is expected until phone_number is populated.
           const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
-          const recoverCandidates = [
-            whatsappPhone,
-            `972${last9Digits}`,
-            `0${last9Digits}`,
-            last9Digits,
-          ]
-          if (fieldId) {
-            subscriberId = await findSubscriberByCustomFieldMC(apiKey, fieldId, recoverCandidates)
-          }
-          if (!subscriberId) {
-            for (const phoneFormat of recoverCandidates) {
-              const searchUrl = `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(phoneFormat)}`
-              const searchResponse = await fetch(searchUrl, {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Bearer ${apiKey}`,
-                  'Content-Type': 'application/json',
-                },
-              })
-              if (!searchResponse.ok) continue
-              const searchResult = await searchResponse.json()
-              const foundId = extractSubscriberId(searchResult)
-              if (foundId) {
-                subscriberId = foundId
-                break
-              }
-            }
-          }
+          const waIdDigits = extractManyChatWaIdFromCreateError(createResult)
+          const recoverPhone = waIdDigits ? `972${waIdDigits.slice(-9)}` : contactPhone
+          subscriberId = await findSubscriberByWhatsAppPhoneMC(apiKey, fieldId, recoverPhone)
           if (subscriberId) {
-            await setPhoneCustomFieldMC(apiKey, subscriberId, whatsappPhone)
+            await ensureManyChatPhoneCustomFieldMC(apiKey, subscriberId, recoverPhone)
             await persistManychatSubscriberId(subscriberId)
           } else if (shouldLinkSubscriberToCrm() && contactType === 'lead' && contactRecord?.id) {
             await supabase.from('leads')
@@ -2800,6 +2867,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   if (!subscriberId) {
     throw new Error('לא נמצא Subscriber ID של ManyChat ולא ניתן היה ליצור subscriber חדש. ודא שלליד יש מספר טלפון תקין')
   }
+
+  await ensureManyChatPhoneCustomFieldMC(apiKey, subscriberId, contactPhone ?? '')
 
   const subscriberIdNum = Number(subscriberId)
   if (!Number.isFinite(subscriberIdNum)) {
