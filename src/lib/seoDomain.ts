@@ -119,3 +119,45 @@ export function sortSeoReportsByRecency<T extends SeoReportLike>(reports: T[]): 
   };
   return [...(reports || [])].sort((a, b) => time(b) - time(a));
 }
+
+type SeoTenantScopeClient = {
+  tenant_id?: string | null;
+  agency_id?: string | null;
+};
+
+type AgencyTenantAccessRow = {
+  accessing_tenant_id?: string | null;
+  source_tenant_id?: string | null;
+};
+
+/**
+ * Tenant ids that may host ahrefs_reports for a client. fetch-ahrefs-snapshot
+ * always writes under clients.tenant_id; shared-agency SEO tables often live
+ * on a partner tenant (e.g. MarketingCaptain) while the client home tenant is
+ * DMM — CategorySyncControl must read across the same scope as SeoDashboardView.
+ */
+export function buildSeoReportTenantIds(
+  client: SeoTenantScopeClient | null | undefined,
+  agencyAccessRows: AgencyTenantAccessRow[] | null | undefined,
+  extraTenantIds: string[] = [],
+): string[] {
+  const set = new Set<string>();
+  for (const id of extraTenantIds) {
+    if (id) set.add(id);
+  }
+  if (client?.tenant_id) set.add(client.tenant_id);
+  for (const row of agencyAccessRows || []) {
+    if (row.accessing_tenant_id) set.add(row.accessing_tenant_id);
+    if (row.source_tenant_id) set.add(row.source_tenant_id);
+  }
+  return Array.from(set);
+}
+
+/** True when integration_settings.last_sync_at is missing or before this calendar month. */
+export function seoTableNeedsSyncThisMonth(lastSyncAt: string | null | undefined): boolean {
+  if (!lastSyncAt) return true;
+  const d = new Date(lastSyncAt);
+  if (Number.isNaN(d.getTime())) return true;
+  const now = new Date();
+  return d.getUTCFullYear() !== now.getUTCFullYear() || d.getUTCMonth() !== now.getUTCMonth();
+}

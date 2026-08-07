@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { isSeoReportSource } from "@/lib/seoReports";
+import { buildSeoReportTenantIds } from "@/lib/seoDomain";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface CategoryTable {
@@ -44,10 +45,43 @@ async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T
   await Promise.all(runners);
 }
 
+async function resolveReportTenantIds(clientId: string, tableTenantId?: string | null): Promise<string[]> {
+  const { data: client } = await supabase
+    .from("clients")
+    .select("tenant_id, agency_id")
+    .eq("id", clientId)
+    .maybeSingle();
+
+  let agencyRows: Array<{ accessing_tenant_id?: string | null; source_tenant_id?: string | null }> = [];
+  if (client?.agency_id) {
+    const { data } = await supabase
+      .from("agency_tenant_access")
+      .select("accessing_tenant_id, source_tenant_id")
+      .eq("agency_id", client.agency_id);
+    agencyRows = data || [];
+  }
+
+  return buildSeoReportTenantIds(client, agencyRows, tableTenantId ? [tableTenantId] : []);
+}
+
+function ahrefsReportsForClient(clientId: string, tenantIds: string[], columns = "*") {
+  let q = supabase
+    .from("ahrefs_reports" as any)
+    .select(columns)
+    .eq("client_id", clientId)
+    .order("report_date", { ascending: false });
+  if (tenantIds.length === 1) q = q.eq("tenant_id", tenantIds[0]);
+  else if (tenantIds.length > 1) q = q.in("tenant_id", tenantIds);
+  return q;
+}
+
 async function syncStoredAhrefsReportTable(t: CategoryTable) {
   const settings = t.integration_settings || {};
   const clientId = settings.clientId || settings.client_id || t.client_id;
   if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
+
+  const reportTenantIds = await resolveReportTenantIds(clientId, t.tenant_id);
+  if (reportTenantIds.length === 0) throw new Error("Missing SEO report tenant scope");
 
   const normalizeDomain = (value?: string) =>
     String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
@@ -61,13 +95,12 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   let usedMode: string | null = settings.ahrefs_mode ?? null;
   let usedProtocol: string | null = settings.ahrefs_protocol ?? null;
   if (!projectId) {
-    const { data: lastWithProject } = await supabase
-      .from("ahrefs_reports" as any)
-      .select("metadata, domain")
-      .eq("tenant_id", t.tenant_id)
-      .eq("client_id", clientId)
+    const { data: lastWithProject } = await ahrefsReportsForClient(
+      clientId,
+      reportTenantIds,
+      "metadata, domain",
+    )
       .not("metadata->ahrefs_project_id", "is", null)
-      .order("report_date", { ascending: false })
       .limit(20);
     const rows = (lastWithProject as any[]) || [];
     const match = rows.find((r: any) =>
@@ -97,12 +130,7 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
 
 
   // Step 2: Read freshly stored reports and rebuild crm_records
-  const { data: reports, error } = await supabase
-    .from("ahrefs_reports" as any)
-    .select("*")
-    .eq("tenant_id", t.tenant_id)
-    .eq("client_id", clientId)
-    .order("report_date", { ascending: false });
+  const { data: reports, error } = await ahrefsReportsForClient(clientId, reportTenantIds);
 
   if (error) throw error;
   if (!reports || reports.length === 0) throw new Error("לא נמצאו דוחות Ahrefs שמורים");
@@ -185,6 +213,8 @@ async function syncTrackedOnlyForTable(t: CategoryTable) {
   const settings = t.integration_settings || {};
   const clientId = settings.clientId || settings.client_id || t.client_id;
   if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
+  const reportTenantIds = await resolveReportTenantIds(clientId, t.tenant_id);
+  if (reportTenantIds.length === 0) throw new Error("Missing SEO report tenant scope");
   const domain = settings.targetDomain || settings.target || settings.domain;
 
   const { data, error } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
@@ -214,12 +244,7 @@ async function syncTrackedOnlyForTable(t: CategoryTable) {
   const normalizeDomain = (value?: string) =>
     String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
   const target = normalizeDomain(domain);
-  const { data: reports } = await supabase
-    .from("ahrefs_reports" as any)
-    .select("*")
-    .eq("tenant_id", t.tenant_id)
-    .eq("client_id", clientId)
-    .order("report_date", { ascending: false });
+  const { data: reports } = await ahrefsReportsForClient(clientId, reportTenantIds);
   const reportsToUse = target
     ? ((reports as any[]) || []).filter((r: any) => normalizeDomain(r.domain) === target)
     : ((reports as any[]) || []);
