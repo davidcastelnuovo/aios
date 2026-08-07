@@ -22,6 +22,66 @@ function needsSyncThisMonth(lastSyncAt: string | null | undefined): boolean {
   return d.getUTCFullYear() !== now.getUTCFullYear() || d.getUTCMonth() !== now.getUTCMonth();
 }
 
+function normalizeDomain(value?: string | null): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/.*$/, "")
+    .trim();
+}
+
+function extractDomainHint(text?: string | null): string {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const m = raw.match(
+    /(?:^|[\s\-–—])([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)/i,
+  );
+  return m ? normalizeDomain(m[1]) : "";
+}
+
+async function resolveDomainForTable(
+  supabase: ReturnType<typeof createClient>,
+  t: { name?: string | null; integration_settings?: unknown },
+  clientId: string,
+): Promise<{
+  domain: string;
+  from: string | null;
+  client: { name?: string; website?: string | null; ahrefs_domain?: string | null } | null;
+}> {
+  const settings = (t.integration_settings as Record<string, unknown>) || {};
+  const fromSettings = normalizeDomain(
+    (settings.targetDomain as string) || (settings.target as string) || (settings.domain as string),
+  );
+  if (fromSettings) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("name, website, ahrefs_domain")
+      .eq("id", clientId)
+      .maybeSingle();
+    return { domain: fromSettings, from: "integration_settings", client: client ?? null };
+  }
+
+  const { data: client } = await supabase
+    .from("clients")
+    .select("name, website, ahrefs_domain")
+    .eq("id", clientId)
+    .maybeSingle();
+
+  if (!client) {
+    const hint = extractDomainHint(t.name);
+    return { domain: hint, from: hint ? "table_name" : null, client: null };
+  }
+
+  const fromClient = normalizeDomain(client.ahrefs_domain || client.website);
+  if (fromClient) {
+    return { domain: fromClient, from: client.ahrefs_domain ? "ahrefs_domain" : "website", client };
+  }
+
+  const hint = extractDomainHint(t.name);
+  return { domain: hint, from: hint ? "table_name" : null, client };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -73,6 +133,32 @@ serve(async (req) => {
     );
 
     if (dryRun) {
+      const batchDetails = await Promise.all(
+        tables.map(async (t) => {
+          const settings = (t.integration_settings as Record<string, unknown>) || {};
+          const clientId =
+            (settings.clientId as string) || (settings.client_id as string) || t.client_id;
+          const resolved = clientId
+            ? await resolveDomainForTable(supabase, t, clientId)
+            : { domain: "", from: null, client: null };
+          return {
+            tableId: t.id,
+            name: t.name,
+            tenant_id: t.tenant_id,
+            client_id: clientId,
+            client_name: resolved.client?.name ?? null,
+            website: resolved.client?.website ?? null,
+            ahrefs_domain: resolved.client?.ahrefs_domain ?? null,
+            targetDomain: (settings.targetDomain as string) ?? null,
+            domain_hint_from_table_name: extractDomainHint(t.name) || null,
+            resolved_domain: resolved.domain || null,
+            resolved_from: resolved.from,
+            last_sync_at: (settings as any)?.last_sync_at ?? null,
+            client_missing: clientId && !resolved.client,
+          };
+        }),
+      );
+
       return new Response(
         JSON.stringify({
           startedAt,
@@ -80,13 +166,7 @@ serve(async (req) => {
           total_seo_tables: seoTables.length,
           pending_this_month: pending.length,
           batch_offset: batchOffset,
-          batch: tables.map((t) => ({
-            tableId: t.id,
-            name: t.name,
-            tenant_id: t.tenant_id,
-            client_id: t.client_id,
-            last_sync_at: (t.integration_settings as any)?.last_sync_at ?? null,
-          })),
+          batch: batchDetails,
           hasMore,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -114,23 +194,27 @@ serve(async (req) => {
         continue;
       }
 
-      let domain =
-        (settings.targetDomain as string) || (settings.target as string) || (settings.domain as string);
-      if (!domain) {
-        const { data: clientRow } = await supabase
-          .from("clients")
-          .select("website, ahrefs_domain")
-          .eq("id", clientId)
-          .maybeSingle();
-        domain = clientRow?.ahrefs_domain || clientRow?.website || "";
-      }
+      const resolved = await resolveDomainForTable(supabase, t, clientId);
+      const domain = resolved.domain;
 
       if (!domain) {
         results.push({
           tableId: t.id,
           name: t.name,
           status: "skipped",
-          reason: "no domain — set client website, ahrefs_domain, or targetDomain on the table",
+          reason: "no domain — set דומיין Ahrefs / אתר בכרטיס לקוח → חיבורים, or put domain in table title",
+          client_name: resolved.client?.name ?? null,
+        });
+        continue;
+      }
+
+      if (!resolved.client) {
+        results.push({
+          tableId: t.id,
+          name: t.name,
+          status: "skipped",
+          reason: "client not found — orphaned SEO table; re-link or delete",
+          resolved_domain: domain,
         });
         continue;
       }

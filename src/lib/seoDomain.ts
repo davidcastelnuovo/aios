@@ -161,3 +161,13 @@ export function seoTableNeedsSyncThisMonth(lastSyncAt: string | null | undefined
   const now = new Date();
   return d.getUTCFullYear() !== now.getUTCFullYear() || d.getUTCMonth() !== now.getUTCMonth();
 }
+
+/** Pull a hostname from free text (table title, client name suffix, etc.). */
+export function extractDomainHint(text?: string | null): string {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const m = raw.match(
+    /(?:^|[\s\-–—])([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)/i,
+  );
+  return m ? normalizeSeoDomain(m[1]) : "";
+}

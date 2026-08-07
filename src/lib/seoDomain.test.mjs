@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildSeoReportTenantIds,
+  extractDomainHint,
   seoTableNeedsSyncThisMonth,
 } from "./seoDomain.ts";
 
@@ -14,6 +15,11 @@ test("buildSeoReportTenantIds includes client home + agency access + table tenan
     ["table-tenant"],
   );
   assert.deepEqual(ids.sort(), ["dmm", "home", "mc", "table-tenant"].sort());
+});
+
+test("extractDomainHint finds hostnames in table titles", () => {
+  assert.equal(extractDomainHint("ג.ג - אנגלית - gg-ds.com"), "gg-ds.com");
+  assert.equal(extractDomainHint("YTS"), "");
 });
 
 test("seoTableNeedsSyncThisMonth is true when last sync is before current month", () => {

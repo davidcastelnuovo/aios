@@ -83,8 +83,8 @@ export const CLIENT_CHANNELS: ClientChannel[] = [
     label: "SEO (Ahrefs + Search Console)",
     services: ["seo"],
     fields: [
-      { key: "ahrefs_domain", label: "Ahrefs Domain", placeholder: "example.com" },
-      { key: "gsc_site_url", label: "Search Console Site", placeholder: "sc-domain:example.com" },
+      { key: "ahrefs_domain", label: "דומיין Ahrefs (SEO)", placeholder: "example.com" },
+      { key: "gsc_site_url", label: "Search Console (GSC)", placeholder: "sc-domain:example.com" },
     ],
     tables: [
       { integrationType: "ahrefs", syncFunction: "sync-ahrefs-data", requiresField: "ahrefs_domain", tableLabel: "Ahrefs SEO", settingsKey: "targetDomain" },
