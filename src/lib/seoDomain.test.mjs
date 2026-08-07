@@ -4,6 +4,7 @@ import {
   buildSeoReportTenantIds,
   extractDomainHint,
   looksLikeSeoDomain,
+  pickSeoSyncDomain,
   seoTableNeedsSyncThisMonth,
 } from "./seoDomain.ts";
 
@@ -26,6 +27,24 @@ test("extractDomainHint finds hostnames in table titles", () => {
 test("looksLikeSeoDomain rejects Hebrew client names stored as targetDomain", () => {
   assert.equal(looksLikeSeoDomain("ג.ג - אנגלית - gg-ds.com"), false);
   assert.equal(looksLikeSeoDomain("gg-ds.com"), true);
+});
+
+test("pickSeoSyncDomain prefers linkedGscSiteUrl and ahrefs_reports over empty client", () => {
+  const fromGsc = pickSeoSyncDomain({
+    settings: { linkedGscSiteUrl: "https://www.manltd.co.il/" },
+    client: { website: null, ahrefs_domain: null },
+    tableName: "מן מכונות ניקוי",
+  });
+  assert.equal(fromGsc.domain, "manltd.co.il");
+  assert.equal(fromGsc.from, "linkedGscSiteUrl");
+
+  const fromReport = pickSeoSyncDomain({
+    settings: {},
+    client: { website: null, ahrefs_domain: null },
+    latestReportDomain: "manltd.co.il",
+  });
+  assert.equal(fromReport.domain, "manltd.co.il");
+  assert.equal(fromReport.from, "ahrefs_reports");
 });
 
 test("seoTableNeedsSyncThisMonth is true when last sync is before current month", () => {

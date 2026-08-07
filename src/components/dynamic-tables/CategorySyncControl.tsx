@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { isSeoReportSource } from "@/lib/seoReports";
-import { buildSeoReportTenantIds, extractDomainHint, looksLikeSeoDomain } from "@/lib/seoDomain";
+import { buildSeoReportTenantIds, pickSeoSyncDomain } from "@/lib/seoDomain";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface CategoryTable {
@@ -83,12 +83,27 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   const reportTenantIds = await resolveReportTenantIds(clientId, t.tenant_id);
   if (reportTenantIds.length === 0) throw new Error("Missing SEO report tenant scope");
 
+  const { data: clientRow } = await supabase
+    .from("clients")
+    .select("website, ahrefs_domain")
+    .eq("id", clientId)
+    .maybeSingle();
+
+  const { data: latestReportRow } = await ahrefsReportsForClient(
+    clientId,
+    reportTenantIds,
+    "domain, received_at",
+  ).limit(1);
+
+  const { domain } = pickSeoSyncDomain({
+    settings,
+    client: clientRow,
+    tableName: t.name,
+    latestReportDomain: (latestReportRow as any)?.domain,
+  });
+
   const normalizeDomain = (value?: string) =>
     String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-  const settingsDomain = settings.targetDomain || settings.target || settings.domain;
-  const domain =
-    (looksLikeSeoDomain(settingsDomain) ? settingsDomain : null) ||
-    extractDomainHint(t.name);
   const normalizedDomain = normalizeDomain(domain);
 
   // Look up the most recent ahrefs_project_id for this client+domain so the
@@ -218,10 +233,22 @@ async function syncTrackedOnlyForTable(t: CategoryTable) {
   if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
   const reportTenantIds = await resolveReportTenantIds(clientId, t.tenant_id);
   if (reportTenantIds.length === 0) throw new Error("Missing SEO report tenant scope");
-  const settingsDomain = settings.targetDomain || settings.target || settings.domain;
-  const domain =
-    (looksLikeSeoDomain(settingsDomain) ? settingsDomain : null) ||
-    extractDomainHint(t.name);
+  const { data: clientRow } = await supabase
+    .from("clients")
+    .select("website, ahrefs_domain")
+    .eq("id", clientId)
+    .maybeSingle();
+  const { data: latestReportRow } = await ahrefsReportsForClient(
+    clientId,
+    reportTenantIds,
+    "domain",
+  ).limit(1);
+  const { domain } = pickSeoSyncDomain({
+    settings,
+    client: clientRow,
+    tableName: t.name,
+    latestReportDomain: (latestReportRow as any)?.domain,
+  });
 
   const { data, error } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
     body: {

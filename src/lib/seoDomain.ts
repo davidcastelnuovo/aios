@@ -153,13 +153,47 @@ export function buildSeoReportTenantIds(
   return Array.from(set);
 }
 
-/** True when integration_settings.last_sync_at is missing or before this calendar month. */
-export function seoTableNeedsSyncThisMonth(lastSyncAt: string | null | undefined): boolean {
-  if (!lastSyncAt) return true;
-  const d = new Date(lastSyncAt);
-  if (Number.isNaN(d.getTime())) return true;
+/** True when neither table last_sync_at nor latest ahrefs report is in the current month. */
+export function seoTableNeedsSyncThisMonth(
+  lastSyncAt: string | null | undefined,
+  latestReportReceivedAt?: string | null | undefined,
+): boolean {
   const now = new Date();
-  return d.getUTCFullYear() !== now.getUTCFullYear() || d.getUTCMonth() !== now.getUTCMonth();
+  const inCurrentMonth = (iso?: string | null): boolean => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return false;
+    return d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth();
+  };
+  if (inCurrentMonth(lastSyncAt) || inCurrentMonth(latestReportReceivedAt)) return false;
+  return true;
+}
+
+/** Same resolution order as cron-sync-ahrefs and the SEO dashboard tabs. */
+export function pickSeoSyncDomain(input: {
+  settings?: Record<string, unknown> | null;
+  client?: { website?: string | null; ahrefs_domain?: string | null } | null;
+  tableName?: string | null;
+  latestReportDomain?: string | null;
+}): { domain: string; from: string | null } {
+  const settings = input.settings || {};
+  const tryPick = (raw: unknown, from: string): { domain: string; from: string } | null => {
+    const n = normalizeSeoDomain(String(raw || ""));
+    return looksLikeSeoDomain(n) ? { domain: n, from } : null;
+  };
+  const chain: Array<{ raw: unknown; from: string }> = [
+    { raw: settings.targetDomain || settings.target || settings.domain, from: "targetDomain" },
+    { raw: settings.linkedGscSiteUrl, from: "linkedGscSiteUrl" },
+    { raw: input.client?.ahrefs_domain, from: "ahrefs_domain" },
+    { raw: input.client?.website, from: "website" },
+    { raw: input.latestReportDomain, from: "ahrefs_reports" },
+    { raw: extractDomainHint(input.tableName), from: "table_name" },
+  ];
+  for (const item of chain) {
+    const hit = tryPick(item.raw, item.from);
+    if (hit) return hit;
+  }
+  return { domain: "", from: null };
 }
 
 /** Pull a hostname from free text (table title, client name suffix, etc.). */

@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  needsSeoSyncThisMonth,
+  pickSeoSyncDomain,
+} from "../_shared/seo-sync.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,79 +18,17 @@ function isSeoReportTable(settings: Record<string, unknown> | null | undefined):
   return typeof ds === "string" && SEO_REPORT_SOURCES.has(ds);
 }
 
-function needsSyncThisMonth(lastSyncAt: string | null | undefined): boolean {
-  if (!lastSyncAt) return true;
-  const d = new Date(lastSyncAt);
-  if (Number.isNaN(d.getTime())) return true;
-  const now = new Date();
-  return d.getUTCFullYear() !== now.getUTCFullYear() || d.getUTCMonth() !== now.getUTCMonth();
-}
-
-function normalizeDomain(value?: string | null): string {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/^www\./, "")
-    .replace(/\/.*$/, "")
-    .trim();
-}
-
-function extractDomainHint(text?: string | null): string {
-  const raw = String(text || "").trim();
-  if (!raw) return "";
-  const m = raw.match(
-    /(?:^|[\s\-–—])([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)/i,
-  );
-  return m ? normalizeDomain(m[1]) : "";
-}
-
-function looksLikeDomain(value?: string | null): boolean {
-  const n = normalizeDomain(value);
-  if (!n || n.includes(" ")) return false;
-  return /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(n);
-}
-
-async function resolveDomainForTable(
-  supabase: ReturnType<typeof createClient>,
-  t: { name?: string | null; integration_settings?: unknown },
-  clientId: string,
-): Promise<{
-  domain: string;
-  from: string | null;
-  client: { name?: string; website?: string | null; ahrefs_domain?: string | null } | null;
-}> {
+function clientIdFromTable(t: {
+  client_id?: string | null;
+  integration_settings?: unknown;
+}): string | null {
   const settings = (t.integration_settings as Record<string, unknown>) || {};
-  const settingsCandidate = normalizeDomain(
-    (settings.targetDomain as string) || (settings.target as string) || (settings.domain as string),
+  return (
+    (settings.clientId as string) ||
+    (settings.client_id as string) ||
+    t.client_id ||
+    null
   );
-  const fromSettings = looksLikeDomain(settingsCandidate) ? settingsCandidate : "";
-  if (fromSettings) {
-    const { data: client } = await supabase
-      .from("clients")
-      .select("name, website, ahrefs_domain")
-      .eq("id", clientId)
-      .maybeSingle();
-    return { domain: fromSettings, from: "integration_settings", client: client ?? null };
-  }
-
-  const { data: client } = await supabase
-    .from("clients")
-    .select("name, website, ahrefs_domain")
-    .eq("id", clientId)
-    .maybeSingle();
-
-  if (!client) {
-    const hint = extractDomainHint(t.name);
-    return { domain: hint, from: hint ? "table_name" : null, client: null };
-  }
-
-  const fromClient = normalizeDomain(client.ahrefs_domain || client.website);
-  if (fromClient) {
-    return { domain: fromClient, from: client.ahrefs_domain ? "ahrefs_domain" : "website", client };
-  }
-
-  const hint = extractDomainHint(t.name);
-  return { domain: hint, from: hint ? "table_name" : null, client };
 }
 
 serve(async (req) => {
@@ -126,11 +68,46 @@ serve(async (req) => {
       isSeoReportTable((t.integration_settings as Record<string, unknown>) || {})
     );
 
+    const clientIds = Array.from(
+      new Set(seoTables.map((t) => clientIdFromTable(t)).filter(Boolean) as string[]),
+    );
+
+    const latestReportByClient = new Map<string, { domain?: string; received_at?: string }>();
+    if (clientIds.length > 0) {
+      const { data: reportRows } = await supabase
+        .from("ahrefs_reports")
+        .select("client_id, domain, received_at")
+        .in("client_id", clientIds)
+        .order("received_at", { ascending: false });
+      for (const row of reportRows || []) {
+        if (row.client_id && !latestReportByClient.has(row.client_id)) {
+          latestReportByClient.set(row.client_id, row);
+        }
+      }
+    }
+
+    const clientRows = new Map<string, { name?: string; website?: string | null; ahrefs_domain?: string | null }>();
+    if (clientIds.length > 0) {
+      const { data: clients } = await supabase
+        .from("clients")
+        .select("id, name, website, ahrefs_domain")
+        .in("id", clientIds);
+      for (const c of clients || []) {
+        if (c.id) clientRows.set(c.id, c);
+      }
+    }
+
     const pending = forceAll
       ? seoTables
-      : seoTables.filter((t) =>
-          needsSyncThisMonth((t.integration_settings as any)?.last_sync_at)
-        );
+      : seoTables.filter((t) => {
+          const settings = (t.integration_settings as Record<string, unknown>) || {};
+          const clientId = clientIdFromTable(t);
+          const latest = clientId ? latestReportByClient.get(clientId) : undefined;
+          return needsSeoSyncThisMonth(
+            settings.last_sync_at as string | undefined,
+            latest?.received_at,
+          );
+        });
 
     const tables = pending.slice(batchOffset, batchOffset + BATCH_SIZE);
     const hasMore = pending.length > batchOffset + BATCH_SIZE;
@@ -140,31 +117,35 @@ serve(async (req) => {
     );
 
     if (dryRun) {
-      const batchDetails = await Promise.all(
-        tables.map(async (t) => {
-          const settings = (t.integration_settings as Record<string, unknown>) || {};
-          const clientId =
-            (settings.clientId as string) || (settings.client_id as string) || t.client_id;
-          const resolved = clientId
-            ? await resolveDomainForTable(supabase, t, clientId)
-            : { domain: "", from: null, client: null };
-          return {
-            tableId: t.id,
-            name: t.name,
-            tenant_id: t.tenant_id,
-            client_id: clientId,
-            client_name: resolved.client?.name ?? null,
-            website: resolved.client?.website ?? null,
-            ahrefs_domain: resolved.client?.ahrefs_domain ?? null,
-            targetDomain: (settings.targetDomain as string) ?? null,
-            domain_hint_from_table_name: extractDomainHint(t.name) || null,
-            resolved_domain: resolved.domain || null,
-            resolved_from: resolved.from,
-            last_sync_at: (settings as any)?.last_sync_at ?? null,
-            client_missing: clientId && !resolved.client,
-          };
-        }),
-      );
+      const batchDetails = tables.map((t) => {
+        const settings = (t.integration_settings as Record<string, unknown>) || {};
+        const clientId = clientIdFromTable(t);
+        const client = clientId ? clientRows.get(clientId) : null;
+        const latest = clientId ? latestReportByClient.get(clientId) : undefined;
+        const resolved = pickSeoSyncDomain({
+          settings,
+          client,
+          tableName: t.name,
+          latestReportDomain: latest?.domain,
+        });
+        return {
+          tableId: t.id,
+          name: t.name,
+          tenant_id: t.tenant_id,
+          client_id: clientId,
+          client_name: client?.name ?? null,
+          website: client?.website ?? null,
+          ahrefs_domain: client?.ahrefs_domain ?? null,
+          targetDomain: settings.targetDomain ?? null,
+          linkedGscSiteUrl: settings.linkedGscSiteUrl ?? null,
+          latest_report_domain: latest?.domain ?? null,
+          latest_report_received_at: latest?.received_at ?? null,
+          table_last_sync_at: settings.last_sync_at ?? null,
+          resolved_domain: resolved.domain || null,
+          resolved_from: resolved.from,
+          client_missing: clientId && !client,
+        };
+      });
 
       return new Response(
         JSON.stringify({
@@ -175,6 +156,8 @@ serve(async (req) => {
           batch_offset: batchOffset,
           batch: batchDetails,
           hasMore,
+          note:
+            "UI 'סונכרן' = ahrefs_reports.received_at; CategorySyncControl/cron used only integration_settings.last_sync_at until aligned.",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -193,15 +176,31 @@ serve(async (req) => {
 
     for (const t of tables) {
       const settings = (t.integration_settings as Record<string, unknown>) || {};
-      const clientId =
-        (settings.clientId as string) || (settings.client_id as string) || t.client_id;
+      const clientId = clientIdFromTable(t);
 
       if (!clientId) {
         results.push({ tableId: t.id, status: "skipped", reason: "missing clientId" });
         continue;
       }
 
-      const resolved = await resolveDomainForTable(supabase, t, clientId);
+      const client = clientRows.get(clientId);
+      if (!client) {
+        results.push({
+          tableId: t.id,
+          name: t.name,
+          status: "skipped",
+          reason: "client not found — orphaned SEO table; re-link or delete",
+        });
+        continue;
+      }
+
+      const latest = latestReportByClient.get(clientId);
+      const resolved = pickSeoSyncDomain({
+        settings,
+        client,
+        tableName: t.name,
+        latestReportDomain: latest?.domain,
+      });
       const domain = resolved.domain;
 
       if (!domain) {
@@ -209,19 +208,8 @@ serve(async (req) => {
           tableId: t.id,
           name: t.name,
           status: "skipped",
-          reason: "no domain — set דומיין Ahrefs / אתר בכרטיס לקוח → חיבורים, or put domain in table title",
-          client_name: resolved.client?.name ?? null,
-        });
-        continue;
-      }
-
-      if (!resolved.client) {
-        results.push({
-          tableId: t.id,
-          name: t.name,
-          status: "skipped",
-          reason: "client not found — orphaned SEO table; re-link or delete",
-          resolved_domain: domain,
+          reason: "no domain — set דומיין Ahrefs / אתר בחיבורים, GSC link, or sync Ahrefs once",
+          client_name: client.name,
         });
         continue;
       }
@@ -252,6 +240,8 @@ serve(async (req) => {
             status: "failed",
             error: fetchJson?.error || fetchRes.statusText,
             details: fetchJson?.details ?? null,
+            resolved_domain: domain,
+            resolved_from: resolved.from,
           });
           continue;
         }
@@ -260,7 +250,7 @@ serve(async (req) => {
         await supabase
           .from("crm_tables")
           .update({
-            integration_settings: { ...settings, last_sync_at: syncedAt },
+            integration_settings: { ...settings, last_sync_at: syncedAt, targetDomain: domain },
           })
           .eq("id", t.id);
 
@@ -268,10 +258,12 @@ serve(async (req) => {
           tableId: t.id,
           name: t.name,
           status: "success",
-          domain: fetchJson?.domain ?? domain ?? null,
+          domain: fetchJson?.domain ?? domain,
+          resolved_from: resolved.from,
           keywords_count: fetchJson?.keywords_count ?? null,
           tracked_count: fetchJson?.tracked_count ?? null,
           last_sync_at: syncedAt,
+          previous_report_received_at: latest?.received_at ?? null,
         });
       } catch (e: unknown) {
         results.push({
