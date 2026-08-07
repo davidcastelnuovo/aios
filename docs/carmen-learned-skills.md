@@ -38,6 +38,12 @@ logged.
 - **How:** UI `Meta WhatsApp → חימום מספר`; edge `meta-whatsapp-warm`; tables `wa_warm_*`; webhook auto-reply via `warm_auto_reply_*` settings. Ops doc: `docs/meta-whatsapp-number-warming.md`.
 - **Origin:** Carmen → Cursor DEV TASK — warm/bleach official WA number for lead alerts after Meta 131049/billing issues.
 
+### 2026-08-07 — ManyChat lead-alert delivery failures → Carmen alerts David
+- **Skin slug:** `manychat_lead_alert_failure_notify` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When Make/Webhook lead alerts via ManyChat (`send_whatsapp`, `inbound_webhook_lead`) fail for Marketing Captain, David gets a WhatsApp alert from MC Carmen with lead name, recipient phone, and error. Throttled to once per 15 minutes; cron backup every 15m.
+- **How:** `trigger-automation` queues rows in `lead_alert_failure_notifications` → `claude_notify_david` (MC tenant). Backup: `cron-lead-alert-failure-watch`. Check Automations → היסטוריית ריצות for automation `314a7c5a-d7e3-4b24-9a18-095615906e08`.
+- **Origin:** David — Felix not receiving alerts; need proactive failure notification.
+
 ### 2026-08-05 — Meta WA lead→client alerts: diagnose 131049/131042 (not silent queue)
 - **Skin slug:** `meta_wa_lead_alert_delivery_diagnosis` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Explain when Make/Webhook lead alerts via official Meta WhatsApp fail for some clients: check automation `התראת ליד ללקוח מ-Make / Webhook` → `automation_logs`. Dominant codes: **131049** (Meta engagement/quality limit — not AIOS queue), **131042** (Meta Billing). Ops: fix WABA billing/quality; prefer GREEN number (`DMM` +972-77); don’t blind-retry 131049.
