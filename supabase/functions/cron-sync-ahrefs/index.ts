@@ -40,6 +40,12 @@ function extractDomainHint(text?: string | null): string {
   return m ? normalizeDomain(m[1]) : "";
 }
 
+function looksLikeDomain(value?: string | null): boolean {
+  const n = normalizeDomain(value);
+  if (!n || n.includes(" ")) return false;
+  return /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(n);
+}
+
 async function resolveDomainForTable(
   supabase: ReturnType<typeof createClient>,
   t: { name?: string | null; integration_settings?: unknown },
@@ -50,9 +56,10 @@ async function resolveDomainForTable(
   client: { name?: string; website?: string | null; ahrefs_domain?: string | null } | null;
 }> {
   const settings = (t.integration_settings as Record<string, unknown>) || {};
-  const fromSettings = normalizeDomain(
+  const settingsCandidate = normalizeDomain(
     (settings.targetDomain as string) || (settings.target as string) || (settings.domain as string),
   );
+  const fromSettings = looksLikeDomain(settingsCandidate) ? settingsCandidate : "";
   if (fromSettings) {
     const { data: client } = await supabase
       .from("clients")
