@@ -279,6 +279,9 @@ verify_jwt = false
 [functions.cron-sync-woocommerce]
 verify_jwt = false
 
+[functions.cron-sync-ahrefs]
+verify_jwt = false
+
 [functions.test-wordpress-connection]
 verify_jwt = true
 
