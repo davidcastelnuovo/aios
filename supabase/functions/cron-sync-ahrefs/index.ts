@@ -108,11 +108,30 @@ serve(async (req) => {
       const settings = (t.integration_settings as Record<string, unknown>) || {};
       const clientId =
         (settings.clientId as string) || (settings.client_id as string) || t.client_id;
-      const domain =
-        (settings.targetDomain as string) || (settings.target as string) || (settings.domain as string);
 
       if (!clientId) {
         results.push({ tableId: t.id, status: "skipped", reason: "missing clientId" });
+        continue;
+      }
+
+      let domain =
+        (settings.targetDomain as string) || (settings.target as string) || (settings.domain as string);
+      if (!domain) {
+        const { data: clientRow } = await supabase
+          .from("clients")
+          .select("website, ahrefs_domain")
+          .eq("id", clientId)
+          .maybeSingle();
+        domain = clientRow?.ahrefs_domain || clientRow?.website || "";
+      }
+
+      if (!domain) {
+        results.push({
+          tableId: t.id,
+          name: t.name,
+          status: "skipped",
+          reason: "no domain — set client website, ahrefs_domain, or targetDomain on the table",
+        });
         continue;
       }
 

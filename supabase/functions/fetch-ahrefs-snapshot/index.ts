@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     // Resolve domain: param > client.website
     const { data: client, error: clientError } = await supabase
       .from("clients")
-      .select("id, name, website, agency_id, tenant_id")
+      .select("id, name, website, ahrefs_domain, agency_id, tenant_id")
       .eq("id", clientId)
       .single();
 
@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
         .replace(/\/.*$/, "")
         .trim();
 
-    const domain = normalizeDomain(rawDomain || client.website);
+    const domain = normalizeDomain(rawDomain || client.ahrefs_domain || client.website);
     if (!domain) {
       return new Response(
         JSON.stringify({ error: "No domain available — set the client website or pass a domain" }),
