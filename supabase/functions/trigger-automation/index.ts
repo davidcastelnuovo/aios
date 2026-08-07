@@ -1,6 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { sendCarmenReplyViaActionStep } from '../_shared/carmen.ts'
 import { dropUnresolvedTemplateLines, sanitizeTemplateParameter } from '../_shared/meta-whatsapp.ts'
+import {
+  deliverPendingLeadAlertFailureNotifications,
+  isLeadAlertSendWhatsappFailure,
+  queueLeadAlertFailureNotification,
+} from '../_shared/lead-alert-failure-notify.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2281,6 +2286,23 @@ Deno.serve(async (req) => {
             payload: payloadData,
             response: response,
             execution_time_ms: executionTime,
+          }).select('id').single().then(async ({ data: logRow }) => {
+            if (succeeded || !logRow?.id) return
+            if (!isLeadAlertSendWhatsappFailure(null, failedSteps, payloadData)) return
+            const errorMessage = failedSteps.map((step) => step?.error || 'שלב נכשל').join(' | ')
+            await queueLeadAlertFailureNotification(supabase, {
+              automation_log_id: logRow.id,
+              tenant_id: automation.tenant_id,
+              client_phone: payloadData?.client_phone ?? null,
+              lead_name: payloadData?.lead_name ?? payloadData?.contact_name ?? null,
+              client_name: payloadData?.client_name ?? null,
+              error_message: errorMessage,
+            })
+            await deliverPendingLeadAlertFailureNotifications(supabase).catch((err) => {
+              console.error('[lead-alert-failure] immediate notify failed:', err)
+            })
+          }).catch((err) => {
+            console.error('[lead-alert-failure] log insert hook failed:', err)
           })
 
           return { success: succeeded, automation_id: automation.id, response }
