@@ -171,3 +171,10 @@ export function extractDomainHint(text?: string | null): string {
   );
   return m ? normalizeSeoDomain(m[1]) : "";
 }
+
+/** Reject client names mistakenly stored as targetDomain (must look like a host). */
+export function looksLikeSeoDomain(value?: string | null): boolean {
+  const n = normalizeSeoDomain(value);
+  if (!n || n.includes(" ")) return false;
+  return /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(n);
+}
