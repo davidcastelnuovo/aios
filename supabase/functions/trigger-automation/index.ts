@@ -6,6 +6,7 @@ import {
   isLeadAlertSendWhatsappFailure,
   queueLeadAlertFailureNotification,
 } from '../_shared/lead-alert-failure-notify.ts'
+import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2485,6 +2486,23 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
 
 // Execute send WhatsApp action via ManyChat
 async function executeSendWhatsapp(supabase: any, config: any, data: any, tenantId: string) {
+  const phoneFieldForLock = typeof config.phone_field === 'string' ? config.phone_field.trim() : ''
+  const destinationForLock = phoneFieldForLock && data?.[phoneFieldForLock] != null
+    ? String(data[phoneFieldForLock]).trim()
+    : ''
+  const useDestinationLock = Boolean(
+    destinationForLock
+    && (data?.lead_name || data?.contact_name)
+    && (phoneFieldForLock === 'client_phone' || phoneFieldForLock === 'recipient_phone'),
+  )
+  if (useDestinationLock) {
+    return withManyChatDestinationLock(supabase, destinationForLock, () =>
+      executeSendWhatsappCore(supabase, config, data, tenantId))
+  }
+  return executeSendWhatsappCore(supabase, config, data, tenantId)
+}
+
+async function executeSendWhatsappCore(supabase: any, config: any, data: any, tenantId: string) {
   
   const { manychat_tag_id, manychat_flow_ns, field_mapping } = config
   
