@@ -7,6 +7,7 @@ import {
   maybeCreateMarketingBrief,
   saveSummaryForTarget,
 } from "../_shared/meeting-summary.ts";
+import { resolveOpenAIKey } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,8 +47,9 @@ serve(async (req) => {
       throw new Error("נא להזין תמלול או הערות מהפגישה");
     }
 
-    if (!target_type || !target_id) {
-      throw new Error("נא לבחור לקוח או ליד לשיוך הסיכום");
+    const validTargetTypes = new Set(["client", "lead", "campaigner", "agency"]);
+    if (!validTargetTypes.has(target_type) || !target_id) {
+      throw new Error("נא לבחור לקוח, ליד, איש צוות או סוכנות לשיוך הסיכום");
     }
 
     // Get recording info
@@ -86,7 +88,7 @@ serve(async (req) => {
     }
 
     // Generate summary using OpenAI
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const OPENAI_API_KEY = await resolveOpenAIKey();
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
     let summary: string;
@@ -103,14 +105,42 @@ serve(async (req) => {
     }
 
     // Get target name for the filename
-    let targetName = "unknown";
+    let targetName = "";
+    let targetAgencyId: string | null = null;
     if (target_type === "client") {
       const { data } = await supabase.from("clients").select("name").eq("id", target_id).maybeSingle();
-      targetName = data?.name || "client";
-    } else {
+      targetName = data?.name || "";
+    } else if (target_type === "lead") {
       const { data } = await supabase.from("leads").select("company_name").eq("id", target_id).maybeSingle();
-      targetName = data?.company_name || "lead";
+      targetName = data?.company_name || "";
+    } else if (target_type === "campaigner") {
+      const { data } = await supabase
+        .from("campaigners")
+        .select("full_name")
+        .eq("id", target_id)
+        .eq("tenant_id", tenant_id)
+        .maybeSingle();
+      targetName = data?.full_name || "";
+      const { data: agency } = await supabase
+        .from("agencies")
+        .select("id")
+        .eq("tenant_id", tenant_id)
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      targetAgencyId = agency?.id || null;
+    } else if (target_type === "agency") {
+      const { data } = await supabase
+        .from("agencies")
+        .select("name")
+        .eq("id", target_id)
+        .eq("tenant_id", tenant_id)
+        .maybeSingle();
+      targetName = data?.name || "";
+      targetAgencyId = target_id;
     }
+    if (!targetName) throw new Error("יעד הסיכום לא נמצא או אינו נגיש");
 
     // Save to storage + attachments + summary_file_url
     const admin = createClient(
@@ -127,6 +157,41 @@ serve(async (req) => {
       recording_id: recording_id ?? null,
       created_by: user.id,
     });
+
+    if (recording_id) {
+      const association = target_type === "client"
+        ? {
+          client_id: target_id,
+          lead_id: null,
+          agency_id: null,
+          campaigner_ids: [],
+          summary_scope: "client",
+        }
+        : target_type === "lead"
+        ? {
+          client_id: null,
+          lead_id: target_id,
+          agency_id: null,
+          campaigner_ids: [],
+          summary_scope: "lead",
+        }
+        : target_type === "campaigner"
+        ? {
+          client_id: null,
+          lead_id: null,
+          agency_id: targetAgencyId,
+          campaigner_ids: [target_id],
+          summary_scope: "campaigner",
+        }
+        : {
+          client_id: null,
+          lead_id: null,
+          agency_id: target_id,
+          campaigner_ids: [],
+          summary_scope: "agency",
+        };
+      await admin.from("zoom_recordings").update(association).eq("id", recording_id);
+    }
 
     // Auto-detect marketing needs and create a brief work item
     let marketingBriefCreated = false;

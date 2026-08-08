@@ -948,7 +948,7 @@ const ALL_TOOLS = [
   // ===========================
   // MEETING BOT (Zoom / Meet / Teams)
   // ===========================
-  { name: 'join_meeting_for_client', description: 'שליחת כרמן (בוט תמלול גלוי) לפגישת Zoom, Google Meet או Microsoft Teams — גם בלי זימון ביומן, רק עם קישור. מתמללת את כל הדוברים, מקליטה, ומייצרת סיכום+בריף אם שויך לקוח. אשרו אותה בחדר ההמתנה אם נדרש.', parameters: { type: 'object', properties: { meeting_url: { type: 'string', description: 'קישור מלא לפגישה (zoom.us/j/..., meet.google.com/..., teams.microsoft.com/...)' }, client_id: { type: 'string', description: 'מזהה לקוח לשיוך הסיכום (מומלץ)' }, lead_id: { type: 'string', description: 'מזהה ליד (אופציונלי, במקום לקוח)' }, meeting_topic: { type: 'string', description: 'שם/נושא הפגישה (אופציונלי)' } }, required: ['meeting_url'] } },
+  { name: 'join_meeting_for_client', description: 'שליחת כרמן (בוט תמלול גלוי) לפגישת Zoom, Google Meet או Microsoft Teams — גם בלי זימון ביומן. מתמללת ומסכמת פגישת לקוח, פגישה פנימית שמשויכת לאיש צוות/קמפיינר, או פגישה כללית של הסוכנות. בלי יעד מפורש כרמן מזהה לקוח/צוות ואם אין התאמה שומרת סיכום סוכנות כללי.', parameters: { type: 'object', properties: { meeting_url: { type: 'string', description: 'קישור מלא לפגישה (zoom.us/j/..., meet.google.com/..., teams.microsoft.com/...)' }, client_id: { type: 'string', description: 'מזהה לקוח לשיוך הסיכום' }, lead_id: { type: 'string', description: 'מזהה ליד' }, campaigner_ids: { type: 'array', items: { type: 'string' }, description: 'מזהי אנשי צוות/קמפיינרים לפגישה פנימית' }, agency_id: { type: 'string', description: 'מזהה סוכנות לסיכום כללי או פנימי' }, summary_scope: { type: 'string', enum: ['auto', 'client', 'lead', 'campaigner', 'agency'], description: 'סוג יעד הסיכום' }, meeting_topic: { type: 'string', description: 'שם/נושא הפגישה (אופציונלי)' } }, required: ['meeting_url'] } },
   { name: 'get_meeting_bot_status', description: 'סטטוס בוט פגישה של כרמן — האם הצטרפה, מקליטה, מעבדת סיכום, או נכשלה. לפי session_id או bot_id.', parameters: { type: 'object', properties: { session_id: { type: 'string' }, bot_id: { type: 'string' } } } },
   // ===========================
   // CAMPAIGNER MESSAGING
@@ -5704,7 +5704,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
     // ============ MEETING BOT ============
     case 'join_meeting_for_client': {
-      const { meeting_url, client_id, lead_id, meeting_topic } = args
+      const { meeting_url, client_id, lead_id, campaigner_ids, agency_id, summary_scope, meeting_topic } = args
       if (!meeting_url?.trim()) return { error: 'meeting_url נדרש — קישור Zoom / Google Meet / Teams' }
 
       const res = await fetch(`${SUPABASE_URL}/functions/v1/dispatch-meeting-bot`, {
@@ -5717,6 +5717,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           meeting_url: String(meeting_url).trim(),
           client_id: client_id || null,
           lead_id: lead_id || null,
+          campaigner_ids: Array.isArray(campaigner_ids) ? campaigner_ids : [],
+          agency_id: agency_id || null,
+          summary_scope: summary_scope || 'auto',
           meeting_topic: meeting_topic || null,
           tenant_id: tenantId,
           created_by: userId,

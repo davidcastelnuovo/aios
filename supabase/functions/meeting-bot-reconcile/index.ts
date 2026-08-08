@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
   let query = admin
     .from("meeting_bot_sessions")
     .select(
-      "id, tenant_id, client_id, lead_id, platform, meeting_topic, external_bot_id, zoom_recording_id, scheduled_start, joined_at, ended_at, created_by, status",
+      "id, tenant_id, client_id, lead_id, agency_id, campaigner_ids, summary_scope, platform, meeting_topic, external_bot_id, zoom_recording_id, scheduled_start, joined_at, ended_at, created_by, status",
     )
     .not("external_bot_id", "is", null);
 
