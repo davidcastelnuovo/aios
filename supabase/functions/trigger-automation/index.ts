@@ -432,32 +432,6 @@ async function syncManyChatLeadAlertFields(
   return { ok: false, mismatches, fields }
 }
 
-async function touchManyChatSubscriberForLeadAlert(
-  baseUrl: string,
-  apiKey: string,
-  subscriberId: number,
-  leadName: string,
-  clientName: string,
-): Promise<void> {
-  const firstName = (leadName || clientName || '').trim()
-  if (!firstName) return
-  try {
-    await fetch(`${baseUrl}/subscriber/updateSubscriber`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        subscriber_id: subscriberId,
-        first_name: firstName.slice(0, 250),
-      }),
-    })
-  } catch (err) {
-    console.warn('[send_whatsapp] updateSubscriber touch failed (continuing):', err)
-  }
-}
-
 async function removeManyChatTag(
   baseUrl: string,
   apiKey: string,
@@ -2972,47 +2946,16 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       .map((fieldUpdate) => [String(fieldUpdate.field_name), fieldUpdate.field_value]),
   )
 
-  await touchManyChatSubscriberForLeadAlert(
-    baseUrl,
-    apiKey,
-    subscriberIdNum,
-    resolvedFields.lead_name ?? '',
-    resolvedFields.client_name ?? '',
-  )
-
   const flowNs = typeof manychat_flow_ns === 'string' ? manychat_flow_ns.trim() : ''
   const tagIdNum = Number.parseInt(String(manychat_tag_id ?? '').trim(), 10)
   const hasTag = Number.isFinite(tagIdNum)
-  // Tag trigger runs the ManyChat automation/Flow that should re-map user fields
-  // before the template step. sendFlow snapshots stale vars on existing subscribers.
-  const preferTagDelivery = hasTag && config.manychat_delivery !== 'sendFlow'
+  // sendFlow targets the configured Flow directly after verified field writes.
+  // Tag delivery fires a separate ManyChat Rule that often still maps system
+  // {Phone}/{Email}/{Full Name} and leaves template params empty on WA contacts.
+  const preferSendFlowDelivery = Boolean(flowNs) && config.manychat_delivery !== 'tag'
 
-  if (preferTagDelivery) {
-    const { tag_result: tagResult, tag_wait: tagWait } = await retriggerManyChatTag(
-      baseUrl,
-      apiKey,
-      subscriberIdNum,
-      tagIdNum,
-    )
-
-    return {
-      success: true,
-      subscriber_id: subscriberId,
-      fields_updated: customFieldUpdates.length,
-      resolved_fields: resolvedFields,
-      delivery: 'tag',
-      tag_id: manychat_tag_id,
-      flow_ns: flowNs || null,
-      tag_result: tagResult,
-      tag_wait: tagWait,
-      destination_phone: contactPhone,
-    }
-  }
-
-  if (flowNs) {
-    if (customFieldUpdates.length > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-    }
+  if (preferSendFlowDelivery) {
+    await new Promise((resolve) => setTimeout(resolve, 2000))
     const flowResponse = await fetch(`${baseUrl}/sending/sendFlow`, {
       method: 'POST',
       headers: {
@@ -3041,6 +2984,30 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       delivery: 'sendFlow',
       flow_ns: flowNs,
       flow_result: flowResult,
+      destination_phone: contactPhone,
+    }
+  }
+
+  const preferTagDelivery = hasTag && config.manychat_delivery !== 'sendFlow'
+
+  if (preferTagDelivery) {
+    const { tag_result: tagResult, tag_wait: tagWait } = await retriggerManyChatTag(
+      baseUrl,
+      apiKey,
+      subscriberIdNum,
+      tagIdNum,
+    )
+
+    return {
+      success: true,
+      subscriber_id: subscriberId,
+      fields_updated: customFieldUpdates.length,
+      resolved_fields: resolvedFields,
+      delivery: 'tag',
+      tag_id: manychat_tag_id,
+      flow_ns: flowNs || null,
+      tag_result: tagResult,
+      tag_wait: tagWait,
       destination_phone: contactPhone,
     }
   }
