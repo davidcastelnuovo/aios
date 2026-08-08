@@ -1,10 +1,10 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 
-const DEFAULT_LOCK_TTL_SECONDS = 90
-const DEFAULT_ACQUIRE_ATTEMPTS = 30
+const DEFAULT_LOCK_TTL_SECONDS = 120
+const DEFAULT_ACQUIRE_ATTEMPTS = 40
 const DEFAULT_ACQUIRE_INTERVAL_MS = 1500
 /** ManyChat Flow Smart Delay (10s min) + template send — hold lock so the next lead cannot overwrite fields mid-flight. */
-export const POST_SEND_FLOW_SETTLE_MS = 12_000
+export const POST_SEND_FLOW_SETTLE_MS = 22_000
 
 export function manyChatDestinationLockKey(phone: string | null | undefined): string | null {
   const last9 = String(phone ?? '').replace(/\D/g, '').slice(-9)

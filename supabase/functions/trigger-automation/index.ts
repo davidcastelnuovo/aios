@@ -2974,7 +2974,27 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
   const preferSendFlowDelivery = Boolean(flowNs) && config.manychat_delivery !== 'tag'
 
   if (preferSendFlowDelivery) {
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    if (hasTag) {
+      await removeManyChatTag(baseUrl, apiKey, subscriberIdNum, tagIdNum)
+      const tagWait = await waitForManyChatTagRemoved(baseUrl, apiKey, subscriberIdNum, tagIdNum)
+      if (!tagWait.removed) {
+        console.warn(
+          `[send_whatsapp] tag ${tagIdNum} still on subscriber ${subscriberIdNum} before sendFlow; continuing`,
+        )
+      }
+    }
+
+    if (customFieldUpdates.length > 0) {
+      const fieldsBeforeSend = await readManyChatSubscriberFields(baseUrl, apiKey, subscriberIdNum)
+      const preSendMismatches = leadAlertFieldMismatches(fieldsBeforeSend, resolvedFields)
+      if (preSendMismatches.length) {
+        throw new Error(
+          `שדות ManyChat השתנו לפני sendFlow (${preSendMismatches.slice(0, 2).join('; ')})`,
+        )
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 3000))
     const flowResponse = await fetch(`${baseUrl}/sending/sendFlow`, {
       method: 'POST',
       headers: {
