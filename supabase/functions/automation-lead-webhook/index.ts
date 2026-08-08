@@ -80,6 +80,22 @@ const digest = async (value: string) => {
   return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
+const phoneLast9 = (value: string | null | undefined): string =>
+  String(value ?? "").replace(/\D/g, "").slice(-9);
+
+const leadAlertContentKey = (parts: {
+  clientPhone: string;
+  leadName: string;
+  leadPhone: string;
+  leadEmail: string;
+}) =>
+  [
+    phoneLast9(parts.clientPhone),
+    String(parts.leadName ?? "").trim().toLowerCase(),
+    phoneLast9(parts.leadPhone),
+    String(parts.leadEmail ?? "").trim().toLowerCase(),
+  ].join("|");
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (request.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
@@ -146,14 +162,67 @@ Deno.serve(async (request) => {
       routing.client_name = firstString(payload, ["client_name", "recipient_name"]);
       routing.client_email = firstString(payload, ["client_email", "recipient_email"]);
     }
+    const normalizedLeadName = firstString(payload, ["lead_name", "contact_name", "full_name", "name"]);
+    const normalizedLeadPhone = firstString(payload, ["lead_phone", "phone", "phone_number", "mobile"]);
+    const normalizedLeadEmail = firstString(payload, ["lead_email", "email", "email_address"]);
+    const contentKey = leadAlertContentKey({
+      clientPhone: payloadClientPhone || routing.client_phone || "",
+      leadName: normalizedLeadName,
+      leadPhone: normalizedLeadPhone,
+      leadEmail: normalizedLeadEmail,
+    });
+    const contentLockKey = `leadalert:${automation.tenant_id}:${contentKey}`;
+
     const externalId = firstString(payload, ["external_id", "leadgen_id", "lead_id", "id"]);
-    if (externalId) {
+    const dedupeExternalId = externalId || `fp:${(await digest(contentKey)).slice(0, 40)}`;
+
+    const { data: contentLockAcquired, error: contentLockError } = await admin.rpc(
+      "try_acquire_manychat_destination_lock",
+      { p_destination_key: contentLockKey, p_ttl_seconds: 90 },
+    );
+    if (!contentLockError && contentLockAcquired === false) {
+      return reply({
+        success: true,
+        duplicate: true,
+        skipped: "recent_identical_lead",
+        crm_lead_created: false,
+      });
+    }
+
+    const recentCutoff = new Date(Date.now() - 90_000).toISOString();
+    const { data: recentRuns } = await admin
+      .from("automation_logs")
+      .select("payload")
+      .eq("automation_id", automation.id)
+      .eq("success", true)
+      .gte("triggered_at", recentCutoff)
+      .order("triggered_at", { ascending: false })
+      .limit(15);
+    const recentIdenticalRun = (recentRuns || []).some((row) => {
+      const p = asRecord(row.payload);
+      return leadAlertContentKey({
+        clientPhone: String(p.client_phone ?? p.recipient_phone ?? ""),
+        leadName: String(p.lead_name ?? p.contact_name ?? ""),
+        leadPhone: String(p.lead_phone ?? p.phone ?? ""),
+        leadEmail: String(p.lead_email ?? p.email ?? ""),
+      }) === contentKey;
+    });
+    if (recentIdenticalRun) {
+      return reply({
+        success: true,
+        duplicate: true,
+        skipped: "recent_identical_lead",
+        crm_lead_created: false,
+      });
+    }
+
+    {
       const { error: receiptError } = await admin
         .from("lead_notification_events")
         .insert({
           tenant_id: automation.tenant_id,
           source: "webhook",
-          external_id: externalId,
+          external_id: dedupeExternalId,
           client_id: routedClient?.client_id ?? null,
           form_id: firstString(payload, ["form_id", "facebook_form_id"]) || null,
         });
@@ -170,10 +239,13 @@ Deno.serve(async (request) => {
 
     const normalized = {
       ...payload,
-      contact_name: firstString(payload, ["lead_name", "contact_name", "full_name", "name"]),
+      contact_name: normalizedLeadName,
       company_name: firstString(payload, ["lead_company", "company_name", "company"]),
-      phone: firstString(payload, ["lead_phone", "phone", "phone_number", "mobile"]),
-      email: firstString(payload, ["lead_email", "email", "email_address"]),
+      phone: normalizedLeadPhone,
+      email: normalizedLeadEmail,
+      lead_name: normalizedLeadName,
+      lead_phone: normalizedLeadPhone,
+      lead_email: normalizedLeadEmail,
       source: firstString(payload, ["source"]) || "webhook",
       ...routing,
       raw_payload: body,
