@@ -7,6 +7,7 @@ import {
   queueLeadAlertFailureNotification,
 } from '../_shared/lead-alert-failure-notify.ts'
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
+// _shared/manychat-destination-lock bundled with this function on deploy
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
