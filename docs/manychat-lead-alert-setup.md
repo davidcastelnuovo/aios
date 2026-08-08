@@ -33,7 +33,8 @@ AIOS now:
 1. Finds/creates the **client** subscriber by `client_phone`
 2. Clears + writes all 5 custom fields (empty → `-`)
 3. **Verifies** fields on the contact (retries + stable reads)
-4. **`sendFlow`** to «ליד חדש ללקוח» (`content20260805211918_552368`) — **not tag trigger**
+4. **`sendFlow`** to «ליד חדש ללקוח» — **not tag trigger**
+5. **Per-destination lock** — back-to-back leads to the same `client_phone` wait until the previous Flow finishes (~12s) so fields are not overwritten mid-send
 
 Use **sendFlow** (default when `manychat_flow_ns` is set) so the exact Flow with Set Fields + template runs. Tag-only delivery fires a separate ManyChat Rule that often maps system `{Phone}`/`{Email}`/`{Full Name}` and shows empty phone/email on WhatsApp contacts.
 
