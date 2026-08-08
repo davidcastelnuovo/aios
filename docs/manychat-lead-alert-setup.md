@@ -36,9 +36,9 @@ AIOS now:
 4. **`sendFlow`** to «ליד חדש ללקוח» — **not tag trigger**
 5. **Per-destination lock** — back-to-back leads to the same `client_phone` wait until the previous Flow finishes (~12s) so fields are not overwritten mid-send
 
-Use **sendFlow** (default when `manychat_flow_ns` is set) so the exact Flow with Set Fields + template runs. Tag-only delivery fires a separate ManyChat Rule that often maps system `{Phone}`/`{Email}`/`{Full Name}` and shows empty phone/email on WhatsApp contacts.
+Use **tag delivery** (default) — AIOS writes fields then adds tag `aios_lead_alert`, which triggers Flow «ליד חדש ללקוח». **Do not use sendFlow by default** — ManyChat returns API success but often does not deliver WhatsApp when the Flow start is tag-triggered. Set `manychat_delivery: "sendFlow"` only after verifying delivery in UI.
 
-Optional: set `manychat_delivery: "tag"` in step config only if the tag Rule is verified to use `lead_*` user fields.
+Optional: disable any **separate Rule** on tag `aios_lead_alert` (duplicate of the Flow) — it maps system `{Phone}`/`{Email}` and shows empty fields.
 
 ## ManyChat Flow: required steps before template
 
@@ -92,6 +92,7 @@ When the Flow is live — tell AIOS/Cursor and we’ll switch the Make automatio
 {
   "manychat_flow_ns": "content20260805211918_552368",
   "manychat_tag_id": "93553458",
+  "manychat_delivery": "tag",
   "phone_mode": "field",
   "phone_field": "client_phone",
   "custom_fields": [
