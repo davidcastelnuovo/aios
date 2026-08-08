@@ -7,7 +7,7 @@ import {
   queueLeadAlertFailureNotification,
 } from '../_shared/lead-alert-failure-notify.ts'
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
-// _shared/manychat-destination-lock bundled with this function on deploy
+// default delivery: tag (sendFlow opt-in only) — 2026-08-08
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2968,10 +2968,11 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
   const flowNs = typeof manychat_flow_ns === 'string' ? manychat_flow_ns.trim() : ''
   const tagIdNum = Number.parseInt(String(manychat_tag_id ?? '').trim(), 10)
   const hasTag = Number.isFinite(tagIdNum)
-  // sendFlow targets the configured Flow directly after verified field writes.
-  // Tag delivery fires a separate ManyChat Rule that often still maps system
-  // {Phone}/{Email}/{Full Name} and leaves template params empty on WA contacts.
-  const preferSendFlowDelivery = Boolean(flowNs) && config.manychat_delivery !== 'tag'
+  // Tag delivery triggers the ManyChat Flow «ליד חדש ללקוח» (tag aios_lead_alert).
+  // sendFlow returns API success but often does not deliver when the Flow start is
+  // tag-triggered — use manychat_delivery: "sendFlow" only after verifying delivery.
+  const preferSendFlowDelivery =
+    Boolean(flowNs) && String(config.manychat_delivery ?? '').trim() === 'sendFlow'
 
   if (preferSendFlowDelivery) {
     if (hasTag) {

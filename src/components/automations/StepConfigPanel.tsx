@@ -1431,6 +1431,7 @@ function ManyChatWhatsAppActionConfig({
               onConfigChange("custom_fields", [...LEAD_ALERT_MANYCHAT_FIELDS]);
               onConfigChange("manychat_tag_id", configuration?.manychat_tag_id || "93553458");
               onConfigChange("manychat_flow_ns", LEAD_ALERT_MANYCHAT_FLOW_NS);
+              onConfigChange("manychat_delivery", "tag");
               onConfigChange("phone_mode", "field");
               onConfigChange("phone_field", "client_phone");
             }}
