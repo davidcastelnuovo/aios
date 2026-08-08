@@ -62,6 +62,10 @@ export async function withManyChatDestinationLock<T>(
     }
     return result
   } finally {
-    await supabase.rpc('release_manychat_destination_lock', { p_destination_key: key }).catch(() => {})
+    try {
+      await supabase.rpc('release_manychat_destination_lock', { p_destination_key: key })
+    } catch (releaseErr) {
+      console.warn('[send_whatsapp] destination lock release failed:', releaseErr)
+    }
   }
 }
