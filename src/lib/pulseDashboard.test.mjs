@@ -30,11 +30,11 @@ test("formats change and share URLs", () => {
   assert.equal(formatPulseChange(-3), "-3%");
   assert.equal(
     buildPulseDashboardUrl("https://aios.co.il", "marketingcaptain"),
-    "https://aios.co.il/marketingcaptain/dmm-dashboard",
+    "https://aios.co.il/t/marketingcaptain/dmm-dashboard",
   );
   assert.equal(
     buildPulseDashboardUrl("https://aios.co.il/", "marketingcaptain", "abc"),
-    "https://aios.co.il/marketingcaptain/dmm-dashboard?agency=abc",
+    "https://aios.co.il/t/marketingcaptain/dmm-dashboard?agency=abc",
   );
 });
 

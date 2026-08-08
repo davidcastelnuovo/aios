@@ -6,7 +6,13 @@
 
 export const CAMPAIGN_SERVICES = new Set(['ppc_meta', 'ppc_google'])
 export const CAMPAIGN_TABLE_TYPES = ['facebook_insights', 'facebook_ecommerce', 'google_ads'] as const
-export const STALE_SYNC_MS = 18 * 60 * 60 * 1000
+/**
+ * Sync cadence is twice-daily (05:xx / 12:xx UTC). When a noon run misses a
+ * table, the next morning gap is ~24h — and the morning pulse often races the
+ * 05:xx sync. 18h produced false "sync old" for healthy Google/Meta tables.
+ * 30h covers a full day + buffer without hiding truly abandoned syncs.
+ */
+export const STALE_SYNC_MS = 30 * 60 * 60 * 1000
 
 export type PulseStatus = 'healthy' | 'warning' | 'critical' | 'no_data'
 
@@ -40,6 +46,81 @@ export function platformLabel(integrationType: string | null | undefined): strin
   if (integrationType === 'google_ads') return 'Google'
   if (integrationType === 'facebook_insights' || integrationType === 'facebook_ecommerce') return 'Meta'
   return String(integrationType || 'unknown')
+}
+
+export function platformKey(integrationType: string | null | undefined): 'meta' | 'google' | null {
+  if (integrationType === 'google_ads') return 'google'
+  if (integrationType === 'facebook_insights' || integrationType === 'facebook_ecommerce') return 'meta'
+  return null
+}
+
+/**
+ * Per platform, keep only the freshest active table. Abandoned duplicate Meta
+ * tables (e.g. old facebook_ecommerce alongside a fresh insights/ecommerce row)
+ * must not flag a healthy connection.
+ */
+export function pickFreshestTablePerPlatform(tables: CampaignTableLike[]): CampaignTableLike[] {
+  const best = new Map<string, CampaignTableLike>()
+  for (const table of tables) {
+    if (table.campaign_active === false) continue
+    const key = platformKey(table.integration_type)
+    if (!key) continue
+    const prev = best.get(key)
+    if (!prev) {
+      best.set(key, table)
+      continue
+    }
+    const prevTs = resolveLastSyncAt(prev)
+    const nextTs = resolveLastSyncAt(table)
+    if (!prevTs && nextTs) {
+      best.set(key, table)
+      continue
+    }
+    if (prevTs && nextTs && new Date(nextTs).getTime() > new Date(prevTs).getTime()) {
+      best.set(key, table)
+    }
+  }
+  return Array.from(best.values())
+}
+
+/** Absolute tenant pulse-dashboard URL (must include `/t/` for App routing). */
+export function buildPulseDashboardAbsoluteUrl(
+  tenantSlug: string,
+  origin = 'https://aios.co.il',
+  agencyId?: string | null,
+): string {
+  const base = `${origin.replace(/\/$/, '')}/t/${tenantSlug}/dmm-dashboard`
+  if (agencyId && agencyId !== 'all') {
+    return `${base}?agency=${encodeURIComponent(agencyId)}`
+  }
+  return base
+}
+
+/**
+ * Short WhatsApp health digest: counts + dashboard link only.
+ * Never lists per-client sync/account issues on WhatsApp.
+ */
+export function buildHealthWhatsAppDigest(input: {
+  activeConnections: number
+  systemChecks: number
+  okChecks: number
+  issueCount: number
+  dashboardUrl: string
+}): string {
+  const lines = [
+    '*בדיקת תקינות מערכות וקמפיינים*',
+    `נבדקו ${input.activeConnections} חיבורי קמפיינים פעילים ו-${input.systemChecks} שירותי מערכת.`,
+  ]
+  if (input.issueCount === 0) {
+    lines.push(
+      `🟢 הכול תקין — ${input.activeConnections} חיבורי קמפיינים פעילים ו-${input.okChecks} שירותים מחוברים ללא שגיאות.`,
+    )
+  } else {
+    lines.push(`נמצאו ${input.issueCount} נקודות לטיפול — הפירוט בדשבורד בלבד.`)
+  }
+  lines.push('', 'צפה בדשבורד בדיקת דופק:', input.dashboardUrl)
+  lines.push('', 'פירוט לקוח-לקוח וטבלאות לא מחוברות — בדשבורד בלבד (לא בוואטסאפ).')
+  return lines.join('\n')
 }
 
 /** Ecommerce metrics when client flag is set OR an active facebook_ecommerce table exists. */
@@ -96,11 +177,10 @@ export function classifyCampaignPulseStatus(input: ClassifyPulseInput): {
 } {
   const flags: string[] = []
   const nowMs = input.nowMs ?? Date.now()
-  const stalePlatforms = Array.from(new Set(
-    input.activeTables
-      .filter((table) => isSyncStale(table, nowMs))
-      .map((table) => platformLabel(table.integration_type)),
-  ))
+  // Stale = freshest table per platform is stale (ignore abandoned duplicates).
+  const stalePlatforms = pickFreshestTablePerPlatform(input.activeTables)
+    .filter((table) => isSyncStale(table, nowMs))
+    .map((table) => platformLabel(table.integration_type))
 
   if (!input.hasConfiguredCampaignTable || input.activeTables.length === 0) {
     return {
