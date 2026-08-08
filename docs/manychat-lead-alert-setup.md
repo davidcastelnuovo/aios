@@ -33,9 +33,11 @@ AIOS now:
 1. Finds/creates the **client** subscriber by `client_phone`
 2. Clears + writes all 5 custom fields (empty → `-`)
 3. **Verifies** fields on the contact (retries + stable reads)
-4. **Adds tag** `aios_lead_alert` (remove first) so the ManyChat Flow runs
+4. **`sendFlow`** to «ליד חדש ללקוח» (`content20260805211918_552368`) — **not tag trigger**
 
-The Flow **must** re-map fields before sending the template (see below). Do **not** rely on `sendFlow` alone for existing contacts — ManyChat can send stale template variables.
+Use **sendFlow** (default when `manychat_flow_ns` is set) so the exact Flow with Set Fields + template runs. Tag-only delivery fires a separate ManyChat Rule that often maps system `{Phone}`/`{Email}`/`{Full Name}` and shows empty phone/email on WhatsApp contacts.
+
+Optional: set `manychat_delivery: "tag"` in step config only if the tag Rule is verified to use `lead_*` user fields.
 
 ## ManyChat Flow: required steps before template
 
