@@ -17,11 +17,14 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get all Facebook Ecommerce tables
+    // Get all Facebook Ecommerce tables. Skip explicitly paused campaigns
+    // (campaign_active = false) — those are excluded from pulse/health too, so
+    // there is no point spending Meta API calls refreshing them.
     const { data: tables, error } = await supabaseAdmin
       .from('crm_tables')
-      .select('id, name, tenant_id')
-      .eq('integration_type', 'facebook_ecommerce');
+      .select('id, name, tenant_id, campaign_active')
+      .eq('integration_type', 'facebook_ecommerce')
+      .not('campaign_active', 'is', false);
 
     if (error) throw error;
 
