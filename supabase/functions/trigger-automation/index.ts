@@ -7,7 +7,7 @@ import {
   queueLeadAlertFailureNotification,
 } from '../_shared/lead-alert-failure-notify.ts'
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
-// default delivery: tag (sendFlow opt-in only) — 2026-08-08
+// clearer error when ManyChat wa_id ghost on deleted contact — 2026-08-09
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2813,6 +2813,7 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
   }
   
   // If still no subscriber found, try to create a new one in ManyChat
+  let waIdGhostConflict = false
   if (!subscriberId && contactPhone) {
     
     const cleanPhone = contactPhone.replace(/\D/g, '')
@@ -2863,14 +2864,17 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
           if (subscriberId) {
             await ensureManyChatPhoneCustomFieldMC(apiKey, subscriberId, recoverPhone)
             await persistManychatSubscriberId(subscriberId)
-          } else if (shouldLinkSubscriberToCrm() && contactType === 'lead' && contactRecord?.id) {
-            await supabase.from('leads')
-              .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
-              .eq('id', contactRecord.id)
-          } else if (shouldLinkSubscriberToCrm() && contactType === 'client' && contactRecord?.id) {
-            await supabase.from('clients')
-              .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
-              .eq('id', contactRecord.id)
+          } else {
+            waIdGhostConflict = true
+            if (shouldLinkSubscriberToCrm() && contactType === 'lead' && contactRecord?.id) {
+              await supabase.from('leads')
+                .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
+                .eq('id', contactRecord.id)
+            } else if (shouldLinkSubscriberToCrm() && contactType === 'client' && contactRecord?.id) {
+              await supabase.from('clients')
+                .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
+                .eq('id', contactRecord.id)
+            }
           }
         }
       }
@@ -2880,6 +2884,12 @@ async function executeSendWhatsappCore(supabase: any, config: any, data: any, te
   }
   
   if (!subscriberId) {
+    if (waIdGhostConflict && contactPhone) {
+      throw new Error(
+        `איש הקשר ${contactPhone} נמחק ב-ManyChat (wa_id תפוס) — לא ניתן לשלוח. ` +
+        'שלחו הודעת WhatsApp למספר DMM 77 כדי להירשם מחדש, או מחקו לצמיתות את איש הקשר הישן ב-ManyChat Live Chat.',
+      )
+    }
     throw new Error('לא נמצא Subscriber ID של ManyChat ולא ניתן היה ליצור subscriber חדש. ודא שלליד יש מספר טלפון תקין')
   }
 
