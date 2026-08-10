@@ -12,6 +12,7 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { isSeoTaggedClient } from "@/lib/seoClients";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,10 +84,6 @@ function StatusDot({ status }: { status: OverallStatus }) {
       </Tooltip>
     </TooltipProvider>
   );
-}
-
-function isSeoTaggedClient(client: { is_seo_client?: boolean | null; services?: string[] | null }) {
-  return client.is_seo_client === true || (Array.isArray(client.services) && client.services.includes("seo"));
 }
 
 export default function DMMDashboard() {

@@ -13,6 +13,24 @@ interface CampaignerScope {
   clientIds: Set<string>;
 }
 
+async function getSeoClientIds(admin: any, userId: string): Promise<Set<string> | null> {
+  const [{ data: seoRole }, { data: isSeoStaff }] = await Promise.all([
+    admin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'seo')
+      .limit(1)
+      .maybeSingle(),
+    admin.rpc('is_seo_staff', { _user_id: userId }),
+  ]);
+
+  if (!seoRole && !isSeoStaff) return null;
+
+  const { data: clientIds } = await admin.rpc('get_user_client_ids', { _user_id: userId });
+  return new Set((clientIds || []).filter(Boolean));
+}
+
 // A campaigner's scope = the agencies they're assigned to (campaigner_agencies)
 // + the clients they're on (client_team). crm_tables has no INSERT/UPDATE RLS
 // policies for campaigners, so the service-role fallbacks below authorize
@@ -318,15 +336,23 @@ serve(async (req) => {
         }
 
         // RLS blocked the insert (crm_tables has no INSERT policy for campaigners).
-        // A campaigner may still create a table for their own clients/agencies —
-        // verify the scope explicitly and insert with the service role.
+        // A campaigner or SEO user may still create a table for clients in scope —
+        // verify explicitly and insert with the service role.
         const admin = serviceRoleClient();
         const scope = await getCampaignerScope(admin, user.id);
-        if (!scope) throw error;
+        const seoClientIds = scope ? null : await getSeoClientIds(admin, user.id);
 
-        const inScope =
-          (client_id && (await isClientInCampaignerScope(admin, client_id, scope))) ||
-          (agency_id && scope.agencyIds.has(agency_id));
+        if (!scope && !seoClientIds) throw error;
+
+        const inScope = scope
+          ? (
+            (client_id && (await isClientInCampaignerScope(admin, client_id, scope))) ||
+            (agency_id && scope.agencyIds.has(agency_id))
+          )
+          : (
+            (client_id && seoClientIds!.has(client_id)) ||
+            false
+          );
         if (!inScope) {
           return new Response(JSON.stringify({
             error: 'אין לך הרשאה ליצור טבלה שאינה משויכת ללקוח או לסוכנות שלך',
@@ -436,24 +462,28 @@ serve(async (req) => {
         }
 
         const scope = await getCampaignerScope(admin, user.id);
-        if (!scope) {
+        const seoClientIds = scope ? null : await getSeoClientIds(admin, user.id);
+        if (!scope && !seoClientIds) {
           return forbidden('אין לך הרשאה לעדכן את הטבלה הזו');
         }
 
-        // The table itself must be within the campaigner's scope:
-        // linked to one of their clients, in one of their agencies, or unassigned.
-        // (Tables may live under a shared agency's tenant, so scope is judged by the
-        // campaigner's agency/client assignments rather than by tenant equality.)
-        const canTouchTable =
-          (tableRow.client_id && scope.clientIds.has(tableRow.client_id)) ||
-          (tableRow.agency_id && scope.agencyIds.has(tableRow.agency_id)) ||
-          (!tableRow.client_id && !tableRow.agency_id);
+        const canTouchTable = scope
+          ? (
+            (tableRow.client_id && scope.clientIds.has(tableRow.client_id)) ||
+            (tableRow.agency_id && scope.agencyIds.has(tableRow.agency_id)) ||
+            (!tableRow.client_id && !tableRow.agency_id)
+          )
+          : (
+            !!tableRow.client_id && seoClientIds!.has(tableRow.client_id)
+          );
 
         // When linking, the target client must also be within their scope.
         const newClientId = client_id === undefined ? tableRow.client_id : (client_id || null);
         let canTouchTarget = true;
         if (client_id !== undefined && newClientId) {
-          canTouchTarget = await isClientInCampaignerScope(admin, newClientId, scope);
+          canTouchTarget = scope
+            ? await isClientInCampaignerScope(admin, newClientId, scope)
+            : seoClientIds!.has(newClientId);
         }
 
         if (!canTouchTable || !canTouchTarget) {

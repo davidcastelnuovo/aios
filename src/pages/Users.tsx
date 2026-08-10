@@ -955,8 +955,8 @@ export default function Users() {
                         // Team managers get more access including dynamic tables & dashboards
                         setSelectedModules(['dashboard', 'clients', 'tasks', 'campaigners', 'reports', 'client_onboarding', 'chat', 'time_tracking', 'dynamic_tables']);
                       } else if (newRole === 'seo') {
-                        // SEO gets specific modules
-                        setSelectedModules(['dashboard', 'clients', 'tasks', 'time_tracking']);
+                        // SEO gets client visibility + report management
+                        setSelectedModules(['dashboard', 'clients', 'tasks', 'time_tracking', 'dynamic_tables']);
                       } else if (newRole === 'owner') {
                         // Owners get all modules
                         setSelectedModules(getAllModules().map(m => m.id));
