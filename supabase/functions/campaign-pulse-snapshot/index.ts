@@ -2,6 +2,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import {
   CAMPAIGN_TABLE_TYPES,
+  buildPulseDashboardAbsoluteUrl,
   buildPulseWhatsAppDigest,
   classifyCampaignPulseStatus,
   clientCampaignServices as servicesFromClient,
@@ -361,7 +362,7 @@ Deno.serve(async (req) => {
     }
     const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
     const tenantSlug = tenantRow?.slug || tenantId
-    const dashboardUrl = `https://aios.co.il/${tenantSlug}/dmm-dashboard`
+    const dashboardUrl = buildPulseDashboardAbsoluteUrl(tenantSlug)
     const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl)
     let sent = false
     let deliveryClaimed = false

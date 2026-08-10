@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-06 — Health/pulse WA digest + sync false-positives + `/t/` dashboard link
+- **Skin slug:** `pulse_health_wa_digest_and_sync_truth` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Explain that (1) WhatsApp health (“בדיקת תקינות מערכות וקמפיינים”) and pulse digests are short counts + dashboard link only — never per-client issue lists; (2) false “Meta/Google sync old” for clients like 4/4 / בילבי often came from 18h threshold vs twice-daily sync, abandoned duplicate tables, or missing `facebook_ecommerce` cron; (3) the correct pulse dashboard URL is `https://aios.co.il/t/{slug}/dmm-dashboard` (without `/t/` the app redirects to home).
+- **How:** Health WA = `buildHealthWhatsAppDigest` in `carmen-health-probe`; pulse WA = `buildPulseWhatsAppDigest`; stale check uses 30h + freshest table per platform; ecommerce sync cron `cron-sync-facebook-ecommerce-daily`. Dashboard helpers: `buildPulseDashboardAbsoluteUrl` / `buildPulseDashboardUrl`.
+- **Origin:** Carmen → Cursor DEV TASK — David got full health WA list + false sync-old for 4/4/בילבי + broken dmm-dashboard link.
+
 ### 2026-08-05 — Meta WA number warming / lead opt-in (DMM +972-77)
 - **Skin slug:** `meta_wa_number_warming_optin` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Guide David through warming an official Meta WhatsApp number (prefer DMM GREEN +972-77): create APPROVED template `lead_optin_confirm_he` with quick-reply «אני מאשר/ת קבלת לידים», run a controlled warm campaign with explicit admin confirm phrase, enable inbound auto-thanks, then point Make lead alerts at that integration. Never blind-retry 131049/131042.
@@ -64,7 +70,7 @@ logged.
 
 ### 2026-08-05 — Pulse check on WhatsApp = short digest only
 - **Skin slug:** `pulse_check` (global + tenant overrides updated)
-- **What Carmen can now do:** On WhatsApp / scheduled tasks, answer “בדיקת דופק” with `whatsapp_digest` only (status counts + dashboard link). Never paste a full Markdown client table. Full detail stays on `/dmm-dashboard`.
+- **What Carmen can now do:** On WhatsApp / scheduled tasks, answer “בדיקת דופק” with `whatsapp_digest` only (status counts + dashboard link). Never paste a full Markdown client table. Full detail stays on `/t/{slug}/dmm-dashboard`.
 - **How:** `get_latest_campaign_pulse` returns `whatsapp_digest` + `dashboard_url`; on `surface=whatsapp|task` it omits `formatted_markdown`/`rows`. Shared helper: `_shared/campaign-pulse.buildPulseWhatsAppDigest`. Morning cron `campaign-pulse-snapshot` already used the same digest.
 - **Origin:** Carmen → Cursor — David: “אמרנו שכבר לא שולחים ככה” after a long WA Markdown pulse table.
 

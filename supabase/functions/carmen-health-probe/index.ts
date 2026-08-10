@@ -1,5 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { isSyncStale, resolveLastSyncAt } from '../_shared/campaign-pulse.ts';
+import {
+  buildHealthWhatsAppDigest,
+  buildPulseDashboardAbsoluteUrl,
+  isSyncStale,
+  pickFreshestTablePerPlatform,
+} from '../_shared/campaign-pulse.ts';
 
 // Periodic infrastructure health probe for the Carmen Command Center.
 // Invoked by pg_cron (see migration 20260722160000_service_health_checks.sql).
@@ -49,9 +54,10 @@ function isAccountConnected(table: any): boolean {
 }
 
 async function buildTenantHealthDigest(supabase: any, tenantId: string, checks: CheckRow[]): Promise<string> {
-  const [{ data: ownedAgencies }, { data: sharedAgencies }] = await Promise.all([
+  const [{ data: ownedAgencies }, { data: sharedAgencies }, { data: tenantRow }] = await Promise.all([
     supabase.from('agencies').select('id').eq('tenant_id', tenantId),
     supabase.from('agency_tenant_access').select('agency_id').eq('accessing_tenant_id', tenantId),
+    supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle(),
   ]);
   const agencyIds = Array.from(new Set([
     ...(ownedAgencies || []).map((agency: any) => agency.id),
@@ -71,7 +77,7 @@ async function buildTenantHealthDigest(supabase: any, tenantId: string, checks: 
         .in('integration_type', CAMPAIGN_TABLE_TYPES)
     : { data: [] };
 
-  const issues: string[] = [];
+  let issueCount = 0;
   let activeConnections = 0;
   for (const client of clients) {
     const services = campaignServices(client);
@@ -84,42 +90,34 @@ async function buildTenantHealthDigest(supabase: any, tenantId: string, checks: 
       // campaign and are excluded from both the health and performance reports.
       const active = configured.filter((table: any) => table.campaign_active !== false);
       if (configured.length > 0 && active.length === 0) continue;
-      const platformLabel = platform === 'meta' ? 'Meta' : 'Google';
       // Missing report tables are shown on the Pulse Dashboard only — never WA.
       if (active.length === 0) continue;
-      activeConnections += active.length;
-      for (const table of active) {
-        if (!isAccountConnected(table)) {
-          issues.push(`🔴 *${client.name}* — ${platformLabel}: חסר חשבון מודעות בדוח ${table.name}`);
-          continue;
-        }
-        // Prefer the freshest of column vs settings — some sync paths only
-        // patched integration_settings.last_sync_at and left the column stale.
-        const lastSync = resolveLastSyncAt(table);
-        if (isSyncStale(table)) {
-          issues.push(`🟡 *${client.name}* — ${platformLabel}: הסנכרון האחרון ישן או חסר${lastSync ? ` (עד ${lastSync})` : ''}`);
-        }
+      // One connection per platform — evaluate the freshest table only so an
+      // abandoned duplicate (old ecommerce row) cannot false-positive.
+      const [best] = pickFreshestTablePerPlatform(active);
+      if (!best) continue;
+      activeConnections += 1;
+      if (!isAccountConnected(best)) {
+        issueCount += 1;
+        continue;
+      }
+      if (isSyncStale(best)) {
+        issueCount += 1;
       }
     }
   }
 
   const relevantChecks = checks.filter((check) => check.tenant_id === null || check.tenant_id === tenantId);
-  for (const check of relevantChecks.filter((item) => item.status !== 'ok')) {
-    const icon = check.status === 'down' ? '🔴' : '🟡';
-    issues.unshift(`${icon} *${check.service}* — ${check.detail}`);
-  }
+  issueCount += relevantChecks.filter((item) => item.status !== 'ok').length;
   const okChecks = relevantChecks.filter((item) => item.status === 'ok').length;
-  const lines = [
-    '*בדיקת תקינות מערכות וקמפיינים*',
-    `נבדקו ${activeConnections} חיבורי קמפיינים פעילים ו-${relevantChecks.length} שירותי מערכת.`,
-  ];
-  if (issues.length === 0) {
-    lines.push(`🟢 הכול תקין — ${activeConnections} חיבורי קמפיינים פעילים ו-${okChecks} שירותים מחוברים ללא שגיאות.`);
-  } else {
-    lines.push(`נמצאו ${issues.length} נקודות לטיפול:`, '', ...issues);
-  }
-  lines.push('', 'לקוחות SEO בלבד וקמפיינים שסומנו כבויים אינם נכללים. טבלאות לא מחוברות — בדשבורד בדיקת דופק בלבד.');
-  return lines.join('\n');
+  const tenantSlug = tenantRow?.slug || tenantId;
+  return buildHealthWhatsAppDigest({
+    activeConnections,
+    systemChecks: relevantChecks.length,
+    okChecks,
+    issueCount,
+    dashboardUrl: buildPulseDashboardAbsoluteUrl(tenantSlug),
+  });
 }
 
 async function timedFetch(url: string, init: RequestInit = {}, timeoutMs = 8000): Promise<{ status: number | null; latency: number; error?: string }> {
