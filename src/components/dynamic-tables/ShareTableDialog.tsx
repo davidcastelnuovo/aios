@@ -80,7 +80,16 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
       queryClient.invalidateQueries({ queryKey: ["table-shares", tableId] });
       toast.success("קישור שיתוף נוצר בהצלחה");
     },
-    onError: () => toast.error("שגיאה ביצירת קישור"),
+    onError: (err: any) => {
+      const msg = err?.message || String(err);
+      if (err?.code === "23505") {
+        toast.error("הסלאג כבר תפוס — נסה שוב או ערוך הסלאג אחרי יצירה");
+      } else if (msg.includes("row-level security") || msg.includes("RLS")) {
+        toast.error("אין הרשאה ליצור קישור שיתוף לטבלה הזו");
+      } else {
+        toast.error(`שגיאה ביצירת קישור: ${msg}`);
+      }
+    },
   });
 
   const toggleActiveMutation = useMutation({
