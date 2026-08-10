@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
@@ -27,16 +27,22 @@ interface MaskyooLine {
 }
 
 interface Props {
-  tenantId: string;
   clientId: string;
+  /** Canonical tenant for seo_call_snapshots (client home tenant). */
+  storageTenantId: string;
+  /** Tenants that may host maskyoo_numbers / call_logs for this client. */
+  accessibleTenantIds: string[];
   /** Maskyoo numbers assigned to this client (split by category). */
   numbers: MaskyooLine[];
   /** Hide edit + sync controls (share view). */
   readOnly?: boolean;
+  /** Parent still resolving scope / numbers. */
+  isLoading?: boolean;
 }
 
 interface Snapshot {
   id: string;
+  tenant_id: string;
   category: "organic" | "paid";
   period_start: string;
   period_end: string;
@@ -51,12 +57,39 @@ const CATEGORIES: Array<{ key: "organic" | "paid"; label: string }> = [
   { key: "paid", label: "ממומן" },
 ];
 
-export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false }: Props) {
+function pickSnapshotsPerCategory(
+  rows: Snapshot[],
+  storageTenantId: string,
+): Record<string, Snapshot> {
+  const m: Record<string, Snapshot> = {};
+  for (const s of rows) {
+    const existing = m[s.category];
+    if (!existing) {
+      m[s.category] = s;
+      continue;
+    }
+    const sHome = s.tenant_id === storageTenantId;
+    const eHome = existing.tenant_id === storageTenantId;
+    if (sHome && !eHome) {
+      m[s.category] = s;
+    } else if (sHome === eHome && new Date(s.synced_at) > new Date(existing.synced_at)) {
+      m[s.category] = s;
+    }
+  }
+  return m;
+}
+
+export function MaskyooCallsCard({
+  clientId,
+  storageTenantId,
+  accessibleTenantIds,
+  numbers,
+  readOnly = false,
+  isLoading: parentLoading = false,
+}: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  // Date range state — default last 30 days
-  // Date range state — default: previous calendar month (1st → last day)
   const [range, setRange] = useState<DateRange>(() => {
     const prev = subMonths(new Date(), 1);
     return { from: startOfMonth(prev), to: endOfMonth(prev) };
@@ -66,29 +99,29 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
   const periodStart = range.from ? format(range.from, "yyyy-MM-dd") : "";
   const periodEnd = range.to ? format(range.to, "yyyy-MM-dd") : periodStart;
 
-  // Fetch snapshots for this client+range
-  const { data: snapshots = [], isLoading } = useQuery({
-    queryKey: ["seo-call-snapshots", tenantId, clientId, periodStart, periodEnd],
-    enabled: !!tenantId && !!clientId && !!periodStart && !!periodEnd,
+  const tenantScope = accessibleTenantIds.length > 0 ? accessibleTenantIds : [storageTenantId];
+
+  const { data: snapshots = [], isLoading: snapshotsLoading } = useQuery({
+    queryKey: ["seo-call-snapshots", clientId, periodStart, periodEnd, tenantScope],
+    enabled: !!clientId && !!storageTenantId && !!periodStart && !!periodEnd,
     staleTime: 30_000,
     queryFn: async (): Promise<Snapshot[]> => {
       const { data, error } = await supabase
         .from("seo_call_snapshots")
-        .select("id, category, period_start, period_end, incoming_count, is_manual, note, synced_at")
-        .eq("tenant_id", tenantId)
+        .select("id, tenant_id, category, period_start, period_end, incoming_count, is_manual, note, synced_at")
         .eq("client_id", clientId)
         .eq("period_start", periodStart)
-        .eq("period_end", periodEnd);
+        .eq("period_end", periodEnd)
+        .in("tenant_id", tenantScope);
       if (error) throw error;
       return (data || []) as Snapshot[];
     },
   });
 
-  const byCategory = useMemo(() => {
-    const m: Record<string, Snapshot> = {};
-    for (const s of snapshots) m[s.category] = s;
-    return m;
-  }, [snapshots]);
+  const byCategory = useMemo(
+    () => pickSnapshotsPerCategory(snapshots, storageTenantId),
+    [snapshots, storageTenantId],
+  );
 
   const numbersByCat = useMemo(() => {
     const m: Record<"organic" | "paid", string[]> = { organic: [], paid: [] };
@@ -101,7 +134,6 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
     return m;
   }, [numbers]);
 
-  // Sync mutation — pulls call_logs for the chosen window per category
   const syncMutation = useMutation({
     mutationFn: async () => {
       if (!range.from || !range.to) throw new Error("בחר טווח תאריכים");
@@ -111,7 +143,7 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
       const { data: rows, error } = await supabase
         .from("call_logs")
         .select("to_number, created_at")
-        .eq("tenant_id", tenantId)
+        .in("tenant_id", tenantScope)
         .eq("provider", "maskyoo")
         .gte("created_at", since)
         .lte("created_at", until)
@@ -127,13 +159,13 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
 
       for (const cat of ["organic", "paid"] as const) {
         const last9s = numbersByCat[cat];
-        if (last9s.length === 0) continue; // skip — preserve existing manual snapshot
+        if (last9s.length === 0) continue;
         const count = all.filter((r) => {
           const d = (r.to_number || "").replace(/\D/g, "").slice(-9);
           return last9s.includes(d);
         }).length;
         upserts.push({
-          tenant_id: tenantId,
+          tenant_id: storageTenantId,
           client_id: clientId,
           category: cat,
           period_start: periodStart,
@@ -155,7 +187,7 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
       return { skipped: false, count: upserts.length };
     },
     onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ["seo-call-snapshots", tenantId, clientId] });
+      qc.invalidateQueries({ queryKey: ["seo-call-snapshots", clientId] });
       if (res.skipped) {
         toast({ title: "אין מספרי מסקיו מחוברים", description: "ערוך ידנית כדי להזין מספרים." });
       } else {
@@ -171,6 +203,8 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
     const t = range.to ? format(range.to, "d.M.yy", { locale: he }) : f;
     return `${f} – ${t}`;
   };
+
+  const isLoading = parentLoading || snapshotsLoading;
 
   return (
     <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-blue-50/40 dark:from-emerald-950/20 dark:to-blue-950/20">
@@ -221,7 +255,7 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
           {CATEGORIES.map((cat) => (
             <Cube
               key={cat.key}
-              tenantId={tenantId}
+              storageTenantId={storageTenantId}
               clientId={clientId}
               category={cat.key}
               label={cat.label}
@@ -240,10 +274,10 @@ export function MaskyooCallsCard({ tenantId, clientId, numbers, readOnly = false
 }
 
 function Cube({
-  tenantId, clientId, category, label, periodStart, periodEnd,
+  storageTenantId, clientId, category, label, periodStart, periodEnd,
   snapshot, hasNumbers, isLoading, readOnly,
 }: {
-  tenantId: string;
+  storageTenantId: string;
   clientId: string;
   category: "organic" | "paid";
   label: string;
@@ -301,7 +335,7 @@ function Cube({
         <ManualEditDialog
           open={editOpen}
           onOpenChange={setEditOpen}
-          tenantId={tenantId}
+          storageTenantId={storageTenantId}
           clientId={clientId}
           category={category}
           label={label}
@@ -315,12 +349,12 @@ function Cube({
 }
 
 function ManualEditDialog({
-  open, onOpenChange, tenantId, clientId, category, label,
+  open, onOpenChange, storageTenantId, clientId, category, label,
   periodStart, periodEnd, current,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  tenantId: string;
+  storageTenantId: string;
   clientId: string;
   category: "organic" | "paid";
   label: string;
@@ -333,21 +367,20 @@ function ManualEditDialog({
   const [count, setCount] = useState<string>(String(current?.incoming_count ?? 0));
   const [note, setNote] = useState<string>(current?.note ?? "");
 
-  // Sync local state when dialog opens for a different snapshot
-  useMemo(() => {
+  useEffect(() => {
     if (open) {
       setCount(String(current?.incoming_count ?? 0));
       setNote(current?.note ?? "");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, current?.incoming_count, current?.note]);
 
   const save = useMutation({
     mutationFn: async () => {
       const parsed = parseInt(count, 10);
       if (!Number.isFinite(parsed) || parsed < 0) throw new Error("מספר לא תקין");
+      const saveTenantId = storageTenantId;
       const payload = {
-        tenant_id: tenantId,
+        tenant_id: saveTenantId,
         client_id: clientId,
         category,
         period_start: periodStart,
@@ -363,7 +396,7 @@ function ManualEditDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["seo-call-snapshots", tenantId, clientId] });
+      qc.invalidateQueries({ queryKey: ["seo-call-snapshots", clientId] });
       toast({ title: "נשמר" });
       onOpenChange(false);
     },

@@ -1,14 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MaskyooCallsCard } from "./MaskyooCallsCard";
-
-interface CrmTableLike {
-  id: string;
-  tenant_id: string;
-  client_id: string | null;
-  integration_type: string | null;
-  integration_settings: any;
-}
+import { useSeoScope } from "@/hooks/useSeoScope";
 
 interface MaskyooNumberRow {
   display_number: string;
@@ -21,22 +14,34 @@ interface MaskyooNumberRow {
  * Always shown when a client is linked (manual edit works even without
  * any Maskyoo number assigned).
  */
-export function MaskyooSiblingCard({ table }: { table: CrmTableLike }) {
-  const clientId =
-    (table.integration_settings?.clientId as string | undefined) ||
-    (table.integration_settings?.client_id as string | undefined) ||
-    table.client_id ||
-    null;
+export function MaskyooSiblingCard({
+  clientId,
+  fallbackTenantId,
+}: {
+  clientId: string;
+  fallbackTenantId?: string;
+}) {
+  const { data: seoScope, isLoading: scopeLoading } = useSeoScope(clientId);
 
-  const { data: rows, isLoading } = useQuery({
-    queryKey: ["maskyoo-numbers-by-client", table.tenant_id, clientId],
-    enabled: !!table.tenant_id && !!clientId,
+  const accessibleTenantIds =
+    seoScope?.accessibleTenantIds?.length
+      ? seoScope.accessibleTenantIds
+      : fallbackTenantId
+        ? [fallbackTenantId]
+        : [];
+
+  const storageTenantId =
+    seoScope?.clientTenantId || fallbackTenantId || accessibleTenantIds[0] || "";
+
+  const { data: rows, isLoading: numbersLoading } = useQuery({
+    queryKey: ["maskyoo-numbers-by-client", clientId, accessibleTenantIds],
+    enabled: !!clientId && accessibleTenantIds.length > 0,
     staleTime: 60_000,
     queryFn: async (): Promise<MaskyooNumberRow[]> => {
       const { data, error } = await supabase
         .from("maskyoo_numbers")
         .select("display_number, category, is_ignored")
-        .eq("tenant_id", table.tenant_id)
+        .in("tenant_id", accessibleTenantIds)
         .eq("client_id", clientId)
         .eq("is_ignored", false);
       if (error) throw error;
@@ -44,21 +49,21 @@ export function MaskyooSiblingCard({ table }: { table: CrmTableLike }) {
     },
   });
 
-  if (!clientId || isLoading) return null;
+  if (!clientId || !storageTenantId) return null;
 
-  // Map to organic/paid only — "general" lines fall under organic by default.
-  const numbers = (rows || [])
-    .map((r) => {
-      const cat = (r.category || "organic").toLowerCase();
-      const category: "organic" | "paid" = cat === "paid" ? "paid" : "organic";
-      return { number: r.display_number, category };
-    });
+  const numbers = (rows || []).map((r) => {
+    const cat = (r.category || "organic").toLowerCase();
+    const category: "organic" | "paid" = cat === "paid" ? "paid" : "organic";
+    return { number: r.display_number, category };
+  });
 
   return (
     <MaskyooCallsCard
-      tenantId={table.tenant_id}
       clientId={clientId}
+      storageTenantId={storageTenantId}
+      accessibleTenantIds={accessibleTenantIds}
       numbers={numbers}
+      isLoading={scopeLoading || numbersLoading}
     />
   );
 }

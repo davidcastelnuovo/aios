@@ -300,15 +300,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
         </TabsList>
 
         <TabsContent value="maskyoo">
-          <MaskyooSiblingCard
-            table={{
-              id: "",
-              tenant_id: reportTenantId,
-              client_id: clientId,
-              integration_type: "ahrefs",
-              integration_settings: {},
-            }}
-          />
+          <MaskyooSiblingCard clientId={clientId} fallbackTenantId={reportTenantId} />
         </TabsContent>
 
         <TabsContent value="monthly-work">
