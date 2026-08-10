@@ -69,6 +69,7 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useUserRole } from "@/hooks/useUserRole";
 import { resolveListCategory } from "@/lib/crmTableCategories";
+import { isSeoTaggedClient } from "@/lib/seoClients";
 
 interface CrmTable {
   id: string;
@@ -91,7 +92,9 @@ export default function DynamicTables() {
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
   const { isCampaigner, isSeo, isOwner, isTeamManager, isSuperAdmin, campaignerId } = useUserRole();
-  const isRestrictedClientViewer = (isCampaigner || isSeo) && !isOwner && !isTeamManager && !isSuperAdmin;
+  const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
+  const isRestrictedCampaignerViewer =
+    isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFacebookDialog, setShowFacebookDialog] = useState(false);
   const [showFacebookEcommerceDialog, setShowFacebookEcommerceDialog] = useState(false);
@@ -133,10 +136,10 @@ export default function DynamicTables() {
       if (error) throw error;
       return data?.map(ct => ct.client_id) || [];
     },
-    enabled: !!campaignerId && isRestrictedClientViewer,
+    enabled: !!campaignerId && isRestrictedCampaignerViewer,
   });
 
-  const canManageTables = isOwner || isTeamManager || isSuperAdmin || isCampaigner;
+  const canManageTables = isOwner || isTeamManager || isSuperAdmin || isCampaigner || isSeo;
 
   // Fetch agencies and clients for displaying names
   const { data: agencies = [] } = useQuery({
@@ -178,16 +181,16 @@ export default function DynamicTables() {
       if (!tenantId) return [];
       const agencyIds = agencies.map(a => a.id);
       if (agencyIds.length === 0) {
-        const { data, error } = await supabase
-          .from('clients')
-          .select('id, name, agency_id, website')
-          .eq('tenant_id', tenantId);
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name, agency_id, website, is_seo_client, services')
+        .eq('tenant_id', tenantId);
         if (error) throw error;
         return data || [];
       }
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name, agency_id, website')
+        .select('id, name, agency_id, website, is_seo_client, services')
         .in('agency_id', agencyIds);
       if (error) throw error;
       return data || [];
@@ -209,15 +212,25 @@ export default function DynamicTables() {
   });
   const editAdAccounts: { id: string; name: string; currency: string }[] = editAdAccountsData?.ad_accounts || [];
 
+  const scopedClientIds = useMemo(() => {
+    if (isSeoOnlyViewer) {
+      return clients.filter((client) => isSeoTaggedClient(client)).map((client) => client.id);
+    }
+    if (isRestrictedCampaignerViewer && assignedClientIds) {
+      return assignedClientIds;
+    }
+    return undefined;
+  }, [clients, isSeoOnlyViewer, isRestrictedCampaignerViewer, assignedClientIds]);
+
   // Filter clients by selected agency in edit dialog
   const editFilteredClients = useMemo(() => {
     if (!editAgencyId) return [];
     let filtered = clients.filter(c => c.agency_id === editAgencyId);
-    if (isRestrictedClientViewer && assignedClientIds) {
-      filtered = filtered.filter(c => assignedClientIds.includes(c.id));
+    if (scopedClientIds) {
+      filtered = filtered.filter(c => scopedClientIds.includes(c.id));
     }
     return filtered;
-  }, [clients, editAgencyId, isRestrictedClientViewer, assignedClientIds]);
+  }, [clients, editAgencyId, scopedClientIds]);
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables', tenantId],
@@ -255,10 +268,10 @@ export default function DynamicTables() {
     
     let result = tables;
 
-    // Campaigners can only see tables linked to their assigned clients
-    if (isRestrictedClientViewer && assignedClientIds) {
-      result = result.filter(table => 
-        table.client_id && assignedClientIds.includes(table.client_id)
+    // Campaigners see assigned clients; SEO staff see all SEO-tagged clients.
+    if (scopedClientIds) {
+      result = result.filter(table =>
+        table.client_id && scopedClientIds.includes(table.client_id)
       );
     }
     
@@ -292,7 +305,7 @@ export default function DynamicTables() {
     }
 
     return result;
-  }, [tables, selectedAgency, isRestrictedClientViewer, assignedClientIds, clientSearch, clients, reportStatusFilter]);
+  }, [tables, selectedAgency, scopedClientIds, clientSearch, clients, reportStatusFilter]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
@@ -1036,8 +1049,8 @@ export default function DynamicTables() {
                     if (!nameMatch && !clientMatch && !agencyMatch) return false;
                   }
                   // Campaigners can only see dashboards linked to their assigned clients
-                  if (isRestrictedClientViewer && assignedClientIds) {
-                    return dashboard.client_id && assignedClientIds.includes(dashboard.client_id);
+                  if (scopedClientIds) {
+                    return dashboard.client_id && scopedClientIds.includes(dashboard.client_id);
                   }
                   return true;
                 })
@@ -1147,31 +1160,31 @@ export default function DynamicTables() {
       <SimpleTableDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
 
       <FacebookTableDialog
         open={showFacebookDialog}
         onOpenChange={setShowFacebookDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
 
       <GoogleAdsTableDialog
         open={showGoogleAdsDialog}
         onOpenChange={setShowGoogleAdsDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
 
       <GoogleAnalyticsTableDialog
         open={showGADialog}
         onOpenChange={setShowGADialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
 
       <GoogleSearchConsoleTableDialog
         open={showGSCDialog}
         onOpenChange={setShowGSCDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
 
       {/* Edit Dashboard Name Dialog */}
@@ -1435,31 +1448,31 @@ export default function DynamicTables() {
       <AhrefsTableDialog 
         open={showAhrefsDialog} 
         onOpenChange={setShowAhrefsDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
 
       <FacebookEcommerceTableDialog
         open={showFacebookEcommerceDialog}
         onOpenChange={setShowFacebookEcommerceDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
 
       <CreateDashboardDialog
         open={showCreateDashboardDialog}
         onOpenChange={setShowCreateDashboardDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
 
       <SeoReportDialog
         open={showSeoReportDialog}
         onOpenChange={setShowSeoReportDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
 
       <TikTokTableDialog
         open={showTikTokDialog}
         onOpenChange={setShowTikTokDialog}
-        assignedClientIds={isRestrictedClientViewer ? assignedClientIds : undefined}
+        assignedClientIds={scopedClientIds}
       />
     </div>
   );
