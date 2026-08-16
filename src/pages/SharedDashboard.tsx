@@ -46,6 +46,7 @@ import {
 } from "recharts";
 
 import { SHARED_COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
+import { summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
 
 const DATE_FILTERS = SHARED_COMBINED_DASHBOARD_DATE_FILTERS;
 
@@ -483,7 +484,8 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     const valid = wooOrders.filter((o: any) => validStatuses.includes(o.status));
     const revenue = valid.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0);
     const orderCount = valid.length;
-    return { revenue, orderCount };
+    const googlePaid = summarizeGoogleAttributedWooOrders(valid);
+    return { revenue, orderCount, googlePaid };
   }, [wooOrders]);
 
   const hasWooData = hasWooCommerce && wooSummary.revenue > 0;
@@ -706,6 +708,12 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
         }
 
         const config = PLATFORM_CONFIG[platform] || { name: platform };
+        const isGoogleAdsEcom = platform === 'google_ads' && campaignTypeByPlatform['google_ads'] === 'ecommerce';
+        const wooGoogle = wooSummary.googlePaid;
+        const useWooGoogleOverlay = isGoogleAdsEcom && hasWooCommerce;
+        const purchases = useWooGoogleOverlay ? wooGoogle.paidOrders : metrics.purchases;
+        const revenue = useWooGoogleOverlay ? wooGoogle.paidRevenue : metrics.revenue;
+        const roas = metrics.spend > 0 ? revenue / metrics.spend : 0;
         rows.push({
           key: platform,
           platform,
@@ -717,9 +725,9 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
             clicks: metrics.clicks,
             addToCart: metrics.addToCart,
             addToCartTracked: metrics.addToCartTracked,
-            purchases: metrics.purchases,
-            revenue: metrics.revenue,
-            roas: metrics.roas,
+            purchases,
+            revenue,
+            roas,
             leads: metrics.leads,
             cpl: metrics.cpl,
             results: metrics.results,
@@ -728,7 +736,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       });
 
     return rows;
-  }, [platformFilter, summaryByPlatform, facebookMixedMode, facebookCampaignGroups]);
+  }, [platformFilter, summaryByPlatform, facebookMixedMode, facebookCampaignGroups, campaignTypeByPlatform, hasWooCommerce, wooSummary.googlePaid]);
 
   const googleAdsRecords = useMemo(
     () => records.filter((r: any) => (r._source || '') === 'google_ads'),
@@ -785,6 +793,16 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     }
     return 'leads';
   }, [tables]);
+
+  const googleWooAttribution = wooSummary.googlePaid;
+  const useGoogleWooOverlay = hasWooCommerce && googleAdsCampaignType === 'ecommerce';
+  const googleAdsStorePurchases = useGoogleWooOverlay ? googleWooAttribution.paidOrders : googleAdsTotals.conversions;
+  const googleAdsStoreRevenue = useGoogleWooOverlay ? googleWooAttribution.paidRevenue : googleAdsTotals.conversions_value;
+  const googleAdsStoreRoas = googleAdsTotals.spend > 0 ? googleAdsStoreRevenue / googleAdsTotals.spend : 0;
+  const googleAdsGaDiffersFromWoo = useGoogleWooOverlay && (
+    googleAdsStorePurchases !== googleAdsTotals.conversions
+    || Math.abs(googleAdsStoreRevenue - googleAdsTotals.conversions_value) > 1
+  );
 
   const analyticsTableIds = useMemo(
     () => (tables || []).filter((t: any) => t.integration_type === 'google_analytics').map((t: any) => t.id as string),
@@ -1272,6 +1290,15 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
           {/* Google Ads Campaign Summary */}
           {platformFilter === 'google_ads' && (
             <>
+              {useGoogleWooOverlay && googleAdsGaDiffersFromWoo && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+                  רכישות והכנסות בכרטיסים למטה מבוססים על ייחוס WooCommerce (Google ממומן).
+                  דיווח Google Ads: {formatNumber(googleAdsTotals.conversions)} המרות, {formatCurrency(googleAdsTotals.conversions_value)} ערך המרה.
+                  {googleWooAttribution.organicOrders > 0 && (
+                    <> בנוסף: {formatNumber(googleWooAttribution.organicOrders)} רכישות Google אורגני ({formatCurrency(googleWooAttribution.organicRevenue)}).</>
+                  )}
+                </div>
+              )}
               <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 auto-rows-fr">
                 <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
                   <CardContent className="p-6 text-center">
@@ -1295,22 +1322,38 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                   <>
                     <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
                       <CardContent className="p-6 text-center">
-                        <p className="text-sm text-muted-foreground">רכישות</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsTotals.conversions)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {useGoogleWooOverlay ? 'רכישות (WooCommerce)' : 'רכישות'}
+                        </p>
+                        <p className="text-3xl font-bold mt-2">{formatNumber(googleAdsStorePurchases)}</p>
+                        {useGoogleWooOverlay && googleAdsGaDiffersFromWoo && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Google Ads: {formatNumber(googleAdsTotals.conversions)}
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                       <CardContent className="p-6 text-center">
-                        <p className="text-sm text-muted-foreground">הכנסות</p>
-                        <p className="text-3xl font-bold mt-2">{formatCurrency(googleAdsTotals.conversions_value)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {useGoogleWooOverlay ? 'הכנסות (WooCommerce)' : 'הכנסות'}
+                        </p>
+                        <p className="text-3xl font-bold mt-2">{formatCurrency(googleAdsStoreRevenue)}</p>
+                        {useGoogleWooOverlay && googleAdsGaDiffersFromWoo && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Google Ads: {formatCurrency(googleAdsTotals.conversions_value)}
+                          </p>
+                        )}
                       </CardContent>
                     </Card>
                     <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950 dark:to-amber-900">
                       <CardContent className="p-6 text-center">
-                        <p className="text-sm text-muted-foreground">ROAS</p>
+                        <p className="text-sm text-muted-foreground">
+                          {useGoogleWooOverlay ? 'ROAS (WooCommerce)' : 'ROAS'}
+                        </p>
                         <p className="text-3xl font-bold mt-2">
                           {googleAdsTotals.spend > 0
-                            ? (googleAdsTotals.conversions_value / googleAdsTotals.spend).toFixed(2)
+                            ? googleAdsStoreRoas.toFixed(2)
                             : '-'}
                         </p>
                       </CardContent>
@@ -1429,10 +1472,10 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                               <TableCell>{formatCurrency(googleAdsTotals.spend)}</TableCell>
                               {googleAdsCampaignType === 'ecommerce' ? (
                                 <>
-                                  <TableCell className="text-green-600">{formatNumber(googleAdsTotals.conversions)}</TableCell>
-                                  <TableCell className="text-green-600">{formatCurrency(googleAdsTotals.conversions_value)}</TableCell>
-                                  <TableCell>{googleAdsTotals.spend > 0 ? (googleAdsTotals.conversions_value / googleAdsTotals.spend).toFixed(2) : '-'}</TableCell>
-                                  <TableCell>{googleAdsTotals.conversions > 0 ? formatCurrency(googleAdsTotals.conversions_value / googleAdsTotals.conversions) : '-'}</TableCell>
+                                  <TableCell className="text-green-600">{formatNumber(googleAdsStorePurchases)}</TableCell>
+                                  <TableCell className="text-green-600">{formatCurrency(googleAdsStoreRevenue)}</TableCell>
+                                  <TableCell>{googleAdsTotals.spend > 0 ? googleAdsStoreRoas.toFixed(2) : '-'}</TableCell>
+                                  <TableCell>{googleAdsStorePurchases > 0 ? formatCurrency(googleAdsStoreRevenue / googleAdsStorePurchases) : '-'}</TableCell>
                                 </>
                               ) : (
                                 <>
@@ -1453,6 +1496,11 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
                 <Card className="p-12 text-center">
                   <p className="text-muted-foreground">אין נתוני Google Ads בטווח התאריכים הנבחר</p>
                 </Card>
+              )}
+              {useGoogleWooOverlay && (
+                <p className="text-xs text-muted-foreground px-1">
+                  * שורת הסה"כ וכרטיסי הרכישות/הכנסות/ROAS מבוססים על ייחוס WooCommerce (Google ממומן). עמודות לפי קמפיין מציגות את דיווח Google Ads API.
+                </p>
               )}
             </>
           )}

@@ -62,6 +62,8 @@ import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableTo
 import { getLeadsFromData } from "@/lib/adsMetrics";
 import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
+import { WooAttributionSection } from "@/components/dynamic-tables/WooAttributionSection";
+import { fetchWooReportAttribution, getDynamicTableDateRangeIso } from "@/lib/wooDashboardQueries";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -245,6 +247,39 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   });
 
   const table = tables?.find((t) => t.slug === tableSlug);
+
+  const reportClientId = table?.client_id
+    || table?.integration_settings?.clientId
+    || table?.integration_settings?.client_id
+    || null;
+
+  const isGoogleAdsEcommerceReport = table?.integration_type === 'google_ads'
+    && table?.integration_settings?.campaign_type === 'ecommerce';
+
+  const wooDateRangeIso = useMemo(
+    () => getDynamicTableDateRangeIso(dateFilter, customDateRange.from, customDateRange.to),
+    [dateFilter, customDateRange.from, customDateRange.to],
+  );
+
+  const { data: wooReportAttribution } = useQuery({
+    queryKey: [
+      'woo-report-attribution',
+      reportClientId,
+      dateFilter,
+      customDateRange.from?.toISOString() ?? null,
+      customDateRange.to?.toISOString() ?? null,
+    ],
+    queryFn: () => fetchWooReportAttribution(reportClientId!, wooDateRangeIso),
+    enabled: !!reportClientId && isGoogleAdsEcommerceReport,
+  });
+
+  const useGoogleWooOverlay = isGoogleAdsEcommerceReport && !!wooReportAttribution;
+  const googleWooPaid = wooReportAttribution?.googlePaid ?? {
+    paidOrders: 0,
+    paidRevenue: 0,
+    organicOrders: 0,
+    organicRevenue: 0,
+  };
 
   // Keep currency selector aligned with the persisted table setting (after refetch / sync).
   // Skip while a settings dialog is open so an in-progress USD choice isn't reset by a refetch.
@@ -2862,6 +2897,16 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
       {/* Summary Stats for Google Ads */}
       {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && (
+        <>
+          {useGoogleWooOverlay && wooReportAttribution && (
+            <div className="mb-4">
+              <WooAttributionSection
+                orders={wooReportAttribution.orders}
+                formatCurrency={(n) => `${getCurrencySymbol(table?.integration_settings?.currency)}${Math.round(n).toLocaleString('he-IL')}`}
+                formatNumber={(n) => Math.round(n).toLocaleString('he-IL')}
+              />
+            </div>
+          )}
         <Card className="mb-4 overflow-hidden">
           {(() => {
             const isEcommerce = table?.integration_settings?.campaign_type === 'ecommerce';
@@ -2916,12 +2961,17 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
             // Detect if any record has verification data (means a WP site is connected and was checked)
             const hasVerifiedData = filteredRecords.some(r => r.data?.verified_leads !== undefined && r.data?.verified_leads !== null);
             
-            // Calculate total ROAS - always use total conversions value / total cost
-            const totalRoas = totals.cost > 0 ? totals.conversions_value / totals.cost : 0;
-            const avgValuePerConv = totals.conversions > 0 ? totals.conversions_value / totals.conversions : 0;
+            const displayConversions = useGoogleWooOverlay ? googleWooPaid.paidOrders : totals.conversions;
+            const displayRevenue = useGoogleWooOverlay ? googleWooPaid.paidRevenue : totals.conversions_value;
+            const totalRoas = totals.cost > 0 ? displayRevenue / totals.cost : 0;
+            const avgValuePerConv = displayConversions > 0 ? displayRevenue / displayConversions : 0;
+            const gaDiffersFromWoo = useGoogleWooOverlay && (
+              Math.round(displayConversions) !== Math.round(totals.conversions)
+              || Math.abs(displayRevenue - totals.conversions_value) > 1
+            );
             // Absurdly low AOV from Google Ads primary conv. value (e.g. Avieli ₪7 / 13) —
             // almost always a tracking/config issue, not a sync math bug.
-            const suspiciousLowValue = isEcommerce
+            const suspiciousLowValue = !useGoogleWooOverlay && isEcommerce
               && totals.conversions >= 3
               && totals.conversions_value > 0
               && avgValuePerConv < 20;
@@ -2931,6 +2981,22 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
             return (
               <div className="overflow-x-auto">
+                {useGoogleWooOverlay && (
+                  <div className="m-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-100">
+                    <p>
+                      שורת הסה&quot;כ מבוססת על WooCommerce (Google Ads): {Math.round(displayConversions)} רכישות, {gaCurrency}{Math.round(displayRevenue).toLocaleString('he-IL')}.
+                      {gaDiffersFromWoo && (
+                        <> דיווח Google Ads API: {Math.round(totals.conversions)} המרות, {gaCurrency}{Math.round(totals.conversions_value).toLocaleString('he-IL')}.</>
+                      )}
+                      {googleWooPaid.organicOrders > 0 && (
+                        <> בנוסף {googleWooPaid.organicOrders} רכישות Google אורגני ({gaCurrency}{Math.round(googleWooPaid.organicRevenue).toLocaleString('he-IL')}).</>
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs opacity-90">
+                      הוספה לעגלה אינה זמינה מ-WooCommerce (רק רכישות). עמודות לפי קמפיין מציגות המרות מ-Google Ads API.
+                    </p>
+                  </div>
+                )}
                 {(suspiciousLowValue || allValueHigher) && (
                   <div className="m-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
                     {suspiciousLowValue && (
@@ -2954,14 +3020,18 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       <th className="p-2 text-right font-medium">קמפיין</th>
                       <th className="p-2 text-center font-medium">חשיפות</th>
                       <th className="p-2 text-center font-medium">קליקים</th>
-                      <th className="p-2 text-center font-medium">המרות</th>
+                      <th className="p-2 text-center font-medium">
+                        {useGoogleWooOverlay ? 'המרות (GA)' : 'המרות'}
+                      </th>
                       {hasVerifiedData && (
                         <th className="p-2 text-center font-medium" title="לידים בפועל באתר (Elementor) — לפי שיוך טופס/עמוד לקמפיין">לידים באתר</th>
                       )}
                       <th className="p-2 text-center font-medium">עלות</th>
                       {isEcommerce ? (
                         <>
-                          <th className="p-2 text-center font-medium">ערך המרות</th>
+                          <th className="p-2 text-center font-medium">
+                            {useGoogleWooOverlay ? 'ערך (GA)' : 'ערך המרות'}
+                          </th>
                           <th className="p-2 text-center font-medium">ROAS</th>
                         </>
                       ) : (
@@ -3017,7 +3087,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   <tfoot className="bg-primary/10 font-bold">
                     {(() => {
                       const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
-                      const totalConvInt = Math.round(totals.conversions);
+                      const totalConvInt = Math.round(useGoogleWooOverlay ? displayConversions : totals.conversions);
                       const totalDiff = totals.verified_leads - totalConvInt;
                       const totalDiscrepancy = hasVerifiedData && Math.abs(totalDiff) >= 1;
                       return (
@@ -3034,7 +3104,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       <td className="p-2 text-center">{gaCurrency}{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
                       {isEcommerce ? (
                         <>
-                          <td className="p-2 text-center text-purple-600">{gaCurrency}{totals.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-purple-600">{gaCurrency}{Math.round(displayRevenue).toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
                         </>
                       ) : (
@@ -3049,6 +3119,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
             );
           })()}
         </Card>
+        {useGoogleWooOverlay && (
+          <p className="mb-4 text-xs text-muted-foreground px-1">
+            * טבלת &quot;רכישות לפי מקור הגעה&quot; למעלה ושורת הסה&quot;כ מבוססים על WooCommerce Order Attribution. עמודות לפי קמפיין = דיווח Google Ads.
+          </p>
+        )}
+        </>
       )}
 
       {/* Manual ROI for Google Ads (leads mode only) */}

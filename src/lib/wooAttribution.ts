@@ -94,7 +94,7 @@ export function buildWooAttributionLabel(attr: {
     entry.includes('gclid');
 
   if (looksGoogle) {
-    return med === 'paid' || med === 'cpc' || med === 'ppc' ? 'Google ממומן' : 'Google';
+    return med === 'paid' || med === 'cpc' || med === 'ppc' || med === 'paidsearch' ? 'Google Ads' : 'Google אורגני';
   }
 
   if (src === '(direct)' || attr.source_type === 'typein') {
@@ -115,7 +115,93 @@ export type WooAttributionBreakdownRow = {
   revenue: number;
 };
 
+export type WooGoogleAttributionSummary = {
+  paidOrders: number;
+  paidRevenue: number;
+  organicOrders: number;
+  organicRevenue: number;
+};
+
 const VALID_WOO_ORDER_STATUSES = ['completed', 'processing', 'on-hold'] as const;
+
+const isValidWooOrderStatus = (status?: string | null): boolean =>
+  VALID_WOO_ORDER_STATUSES.includes((status || '') as typeof VALID_WOO_ORDER_STATUSES[number]);
+
+/** True when WooCommerce attributes the order to paid Google traffic (Ads / gclid). */
+export function isGooglePaidWooAttribution(attr: WooOrderAttribution | null | undefined): boolean {
+  if (!attr) return false;
+
+  const src = (attr.utm_source || '').toLowerCase();
+  const med = (attr.utm_medium || '').toLowerCase();
+  const entry = (attr.session_entry || '').toLowerCase();
+  const ref = (attr.referrer || '').toLowerCase();
+
+  const looksGoogle =
+    src === 'google' ||
+    src === 'googleads' ||
+    src === 'adwords' ||
+    src.includes('google') ||
+    ref.includes('google') ||
+    entry.includes('gclid') ||
+    entry.includes('gad_source');
+
+  if (!looksGoogle) return false;
+
+  return (
+    med === 'paid' ||
+    med === 'cpc' ||
+    med === 'ppc' ||
+    med === 'paidsearch' ||
+    entry.includes('gclid') ||
+    attr.label === 'Google Ads' ||
+    attr.label === 'Google ממומן'
+  );
+}
+
+/** True when WooCommerce attributes the order to organic Google traffic. */
+export function isGoogleOrganicWooAttribution(attr: WooOrderAttribution | null | undefined): boolean {
+  if (!attr || isGooglePaidWooAttribution(attr)) return false;
+
+  const src = (attr.utm_source || '').toLowerCase();
+  const med = (attr.utm_medium || '').toLowerCase();
+  const entry = (attr.session_entry || '').toLowerCase();
+  const ref = (attr.referrer || '').toLowerCase();
+
+  return (
+    src === 'google' ||
+    src.includes('google') ||
+    ref.includes('google') ||
+    med === 'organic' ||
+    attr.label === 'Google אורגני' ||
+    attr.label === 'Google'
+  );
+}
+
+/** Summarize Google-attributed WooCommerce orders for Ads dashboard overlays. */
+export function summarizeGoogleAttributedWooOrders(
+  orders: Array<{ total?: number | string; status?: string; attribution?: WooOrderAttribution | null }>,
+): WooGoogleAttributionSummary {
+  const summary: WooGoogleAttributionSummary = {
+    paidOrders: 0,
+    paidRevenue: 0,
+    organicOrders: 0,
+    organicRevenue: 0,
+  };
+
+  orders.forEach((order) => {
+    if (!isValidWooOrderStatus(order.status)) return;
+    const total = Number(order.total || 0);
+    if (isGooglePaidWooAttribution(order.attribution)) {
+      summary.paidOrders += 1;
+      summary.paidRevenue += total;
+    } else if (isGoogleOrganicWooAttribution(order.attribution)) {
+      summary.organicOrders += 1;
+      summary.organicRevenue += total;
+    }
+  });
+
+  return summary;
+}
 
 /** Group valid orders by attribution label for dashboard tables. */
 export function aggregateOrdersByAttribution(
@@ -124,7 +210,7 @@ export function aggregateOrdersByAttribution(
   const map: Record<string, WooAttributionBreakdownRow> = {};
 
   orders.forEach((order) => {
-    if (!VALID_WOO_ORDER_STATUSES.includes((order.status || '') as typeof VALID_WOO_ORDER_STATUSES[number])) return;
+    if (!isValidWooOrderStatus(order.status)) return;
     const label = order.attribution?.label || buildWooAttributionLabel(order.attribution) || 'לא ידוע';
     if (!map[label]) map[label] = { label, orders: 0, revenue: 0 };
     map[label].orders += 1;
