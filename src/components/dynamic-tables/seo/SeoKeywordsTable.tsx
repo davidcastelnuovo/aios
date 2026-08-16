@@ -25,14 +25,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-
-/** GSC CTR may be stored as 0–1 (API decimal) or 0–100 (our normalized %). */
-export function formatGscCtrPercent(ctr: number | null | undefined): string | null {
-  if (ctr == null || !Number.isFinite(Number(ctr))) return null;
-  const n = Number(ctr);
-  const pct = n > 1 ? n : n * 100;
-  return `${pct.toFixed(1)}%`;
-}
+import { formatGscCtrPercent } from "@/lib/gscFormat";
 import {
   filterRelevantKeywords,
   normalizeKeywordPhrase,

@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, MousePointerClick, Eye, Target, Award, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { formatGscCtrPercent } from "@/lib/gscFormat";
 
 interface PublicGscViewProps {
   records: Array<{ id: string; data: Record<string, any> }>;
@@ -237,7 +238,7 @@ export function PublicGscView({ records }: PublicGscViewProps) {
                     </td>
                     <td className="p-3 text-center tabular-nums">{formatNumber(row.clicks)}</td>
                     <td className="p-3 text-center tabular-nums">{formatNumber(row.impressions)}</td>
-                    <td className="p-3 text-center tabular-nums">{(row.ctr * 100).toFixed(2)}%</td>
+                    <td className="p-3 text-center tabular-nums">{formatGscCtrPercent(row.ctr) ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

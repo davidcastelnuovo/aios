@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDown, Check, ArrowUpDown, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
+import { formatGscCtrPercent, gscCtrAsPercent } from "@/lib/gscFormat";
+import { formatGscCtrPercent, gscCtrAsPercent } from "@/lib/gscFormat";
 
 export type GscDateRange = '28d' | '3m' | '12m';
 
@@ -195,6 +197,7 @@ export function GscIntegration({
   const {
     data: sitesResult,
     isLoading: isLoadingSites,
+    isFetching: isFetchingSites,
     refetch: refetchSites,
   } = useQuery({
     queryKey: ["gsc-sites", gscIntegration?.id],
@@ -329,7 +332,7 @@ export function GscIntegration({
   const enableMultiPeriod = !!onMultiPeriodLoaded && hideTable;
   const enableSinglePeriod = !!gscIntegration?.id && !!effectiveSiteUrl && !enableMultiPeriod;
 
-  const { data: gscData, isLoading: isLoadingData, refetch: refetchData } = useQuery({
+  const { data: gscData, isLoading: isLoadingData, isFetching: isFetchingData, refetch: refetchData } = useQuery({
     queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl, effectiveDateRange, keywords?.join(",")],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -366,7 +369,7 @@ export function GscIntegration({
     },
     enabled: enableSinglePeriod,
   });
-  const { data: multiPeriodData, isLoading: isLoadingMulti, refetch: refetchMulti } = useQuery({
+  const { data: multiPeriodData, isLoading: isLoadingMulti, isFetching: isFetchingMulti, refetch: refetchMulti } = useQuery({
     queryKey: ["gsc-multi-period", gscIntegration?.id, effectiveSiteUrl],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -653,19 +656,35 @@ export function GscIntegration({
               variant="ghost"
               size="sm"
               className="h-7 w-7 p-0"
-              onClick={() => {
-                if (!isFallbackIntegration) refetchSites();
-                // In multi-period mode (central SEO dashboard) refresh the
-                // multi-period query, otherwise refresh the single-period one.
-                if (enableMultiPeriod) {
-                  refetchMulti();
-                } else {
-                  refetchData();
+              title="רענון נתוני Google Search Console"
+              onClick={async () => {
+                try {
+                  if (!isFallbackIntegration) await refetchSites();
+                  if (enableMultiPeriod) {
+                    await queryClient.invalidateQueries({
+                      queryKey: ["gsc-multi-period", gscIntegration?.id, effectiveSiteUrl],
+                    });
+                    const result = await refetchMulti();
+                    if (result.error) throw result.error;
+                    const count = result.data?.current?.length ?? 0;
+                    toast.success(`נתוני GSC עודכנו (${count.toLocaleString()} ביטויים)`);
+                  } else {
+                    await queryClient.invalidateQueries({
+                      queryKey: ["gsc-keyword-data", gscIntegration?.id, effectiveSiteUrl],
+                    });
+                    const result = await refetchData();
+                    if (result.error) throw result.error;
+                    const count = Array.isArray(result.data) ? result.data.length : 0;
+                    toast.success(`נתוני GSC עודכנו (${count.toLocaleString()} ביטויים)`);
+                  }
+                } catch (error) {
+                  console.error("GSC refresh failed:", error);
+                  toast.error("שגיאה ברענון נתוני Google Search Console");
                 }
               }}
-              disabled={isLoadingData || isLoadingMulti || isLoadingSites}
+              disabled={!effectiveSiteUrl || isFetchingData || isFetchingMulti || isFetchingSites}
             >
-              <RefreshCw className={`h-3 w-3 ${(isLoadingData || isLoadingMulti || isLoadingSites) ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3 w-3 ${(isFetchingData || isFetchingMulti || isFetchingSites) ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </div>
@@ -742,7 +761,13 @@ export function GscIntegration({
                 CTR ממוצע
               </div>
               <p className="text-sm font-bold">
-                {(gscData.reduce((sum: number, row: GscKeywordData) => sum + row.ctr, 0) / gscData.length).toFixed(1)}%
+                {(() => {
+                  const values = gscData
+                    .map((row: GscKeywordData) => gscCtrAsPercent(row.ctr))
+                    .filter((v): v is number => v != null);
+                  if (values.length === 0) return "—";
+                  return `${(values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)}%`;
+                })()}
               </p>
             </div>
             <div className="text-center">
@@ -958,7 +983,7 @@ function GscQueriesTable({
                 </td>
                 <td className="text-center py-1.5 px-3">{formatNumber(row.clicks)}</td>
                 <td className="text-center py-1.5 px-3">{formatNumber(row.impressions)}</td>
-                <td className="text-center py-1.5 px-3">{row.ctr.toFixed(2)}%</td>
+                <td className="text-center py-1.5 px-3">{formatGscCtrPercent(row.ctr) ?? "—"}</td>
               </tr>
             ))}
           </tbody>
