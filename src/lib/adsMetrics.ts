@@ -84,3 +84,57 @@ export const hasAddToCartMetric = (data: any) =>
 export const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
 
 export const getUsersFromData = (data: any) => Number(data?.users) || 0;
+
+export type FacebookRecordKind = 'ecommerce' | 'leads' | 'traffic';
+
+/** Mirrors DynamicTableView campaign split — per row before aggregation. */
+export function classifyFacebookRecord(data: any): FacebookRecordKind {
+  const rowType = String(data?.campaign_type || '').toLowerCase();
+  if (rowType === 'traffic') return 'traffic';
+  if (rowType === 'ecommerce') return 'ecommerce';
+
+  const purchases = Number(data?.purchases) || 0;
+  const purchaseValue = Number(data?.purchase_value) || 0;
+  const leads = getLeadsFromData(data);
+
+  const isEcommerce =
+    (purchases > 0 || purchaseValue > 0) &&
+    !(leads > 0 && purchases === 0 && purchaseValue === 0);
+
+  return isEcommerce ? 'ecommerce' : 'leads';
+}
+
+/** Classify an aggregated Facebook campaign row (same rules as DynamicTableView). */
+export function classifyFacebookCampaignTotals(totals: {
+  leads?: number;
+  purchases?: number;
+  purchase_value?: number;
+  campaign_type?: string;
+}): FacebookRecordKind {
+  const rowType = String(totals.campaign_type || '').toLowerCase();
+  if (rowType === 'traffic') return 'traffic';
+  const purchases = Number(totals.purchases) || 0;
+  const purchaseValue = Number(totals.purchase_value) || 0;
+  const leads = Number(totals.leads) || 0;
+  if (
+    (purchases > 0 || purchaseValue > 0) &&
+    !(leads > 0 && purchases === 0 && purchaseValue === 0)
+  ) {
+    return 'ecommerce';
+  }
+  return 'leads';
+}
+
+export function isFacebookLeadsOnlyTable(integrationSettings?: any): boolean {
+  const t = String(integrationSettings?.campaign_type || '').toLowerCase();
+  return t === 'leads' || t === 'lead';
+}
+
+/** facebook_insights tables without an explicit leads-only flag show both ecom + lead campaigns. */
+export function facebookTableUsesMixedRows(
+  integrationType?: string | null,
+  integrationSettings?: any,
+): boolean {
+  if (integrationType !== 'facebook_insights') return false;
+  return !isFacebookLeadsOnlyTable(integrationSettings);
+}
