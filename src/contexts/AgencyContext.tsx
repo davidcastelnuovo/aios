@@ -2,6 +2,7 @@ import { createContext, useContext, useState, ReactNode, useEffect, useRef } fro
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface AgencyContextType {
   selectedAgency: string;
@@ -12,11 +13,13 @@ interface AgencyContextType {
 
 const AgencyContext = createContext<AgencyContextType | undefined>(undefined);
 
-const STORAGE_KEY = "selectedAgencyId";
+function storageKeyForTenant(tenantId: string | null | undefined) {
+  return tenantId ? `selectedAgencyId:${tenantId}` : "selectedAgencyId";
+}
 
-function readStoredAgency(): string {
+function readStoredAgency(tenantId: string | null | undefined): string {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(storageKeyForTenant(tenantId));
     if (stored && stored.length > 0) return stored;
   } catch {
     // ignore storage failures (private mode, etc.)
@@ -25,20 +28,45 @@ function readStoredAgency(): string {
 }
 
 export function AgencyProvider({ children }: { children: ReactNode }) {
-  const [selectedAgency, setSelectedAgency] = useState<string>(readStoredAgency);
+  const { currentTenantId, isActiveTenantSynced } = useTenant();
+  const {
+    isCampaigner,
+    isSeo,
+    isTeamManager,
+    isOwner,
+    isSuperAdmin,
+  } = useUserRole();
+  const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
+  const isRestrictedCampaignerViewer =
+    isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
+
+  const [selectedAgency, setSelectedAgency] = useState<string>(() => readStoredAgency(currentTenantId));
   const didSetDefault = useRef(false);
   const queryClient = useQueryClient();
-  
-  // CRITICAL: Get tenant info including isActiveTenantSynced
-  const { currentTenantId, isActiveTenantSynced } = useTenant();
   const prevTenantIdRef = useRef<string | null>(null);
 
-  // Persist selection
+  // Reload stored agency when tenant changes (per-tenant localStorage key).
   useEffect(() => {
+    if (!currentTenantId) return;
+    setSelectedAgency(readStoredAgency(currentTenantId));
+    didSetDefault.current = false;
+  }, [currentTenantId]);
+
+  // Pure campaigners only see assigned clients — a header agency filter often
+  // hides everything (e.g. DMM-MC selected while assignments are DMM-LTD only).
+  useEffect(() => {
+    if (isRestrictedCampaignerViewer && selectedAgency !== "all") {
+      setSelectedAgency("all");
+    }
+  }, [isRestrictedCampaignerViewer, selectedAgency]);
+
+  // Persist selection per tenant
+  useEffect(() => {
+    if (!currentTenantId || isRestrictedCampaignerViewer) return;
     try {
-      localStorage.setItem(STORAGE_KEY, selectedAgency);
+      localStorage.setItem(storageKeyForTenant(currentTenantId), selectedAgency);
     } catch {}
-  }, [selectedAgency]);
+  }, [selectedAgency, currentTenantId, isRestrictedCampaignerViewer]);
 
   // Reset selection and refetch when tenant changes
   useEffect(() => {
@@ -102,8 +130,9 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   const agencies = allAgencies;
   const isLoading = isLoadingAgencies;
 
-  // Ensure a valid selection
+  // Ensure a valid selection (managers/owners only — campaigners stay on "all").
   useEffect(() => {
+    if (isRestrictedCampaignerViewer) return;
     if (!agencies || agencies.length === 0) return;
 
     // If only ONE agency exists, always select it
@@ -125,7 +154,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
       setSelectedAgency("all");
       didSetDefault.current = true;
     }
-  }, [agencies, selectedAgency, isLoadingAgencies]);
+  }, [agencies, selectedAgency, isLoadingAgencies, isRestrictedCampaignerViewer]);
 
   // Don't block the whole app on agency loading — pages handle their own
   // loading states while agencies load in the background.

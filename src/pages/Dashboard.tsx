@@ -238,7 +238,7 @@ export default function Dashboard() {
       }
 
       // עכשיו אנחנו יכולים לסנן את הקווריז בהתאם
-      if (selectedAgency !== "all") {
+      if (selectedAgency !== "all" && !isRestrictedCampaignerViewer) {
         agencyQuery = agencyQuery.eq("id", selectedAgency);
         clientQuery = clientQuery.eq("agency_id", selectedAgency);
         taskQuery = taskQuery.eq("agency_id", selectedAgency);
@@ -295,7 +295,7 @@ export default function Dashboard() {
 
       // Build finance query (uses state + clientTeamData from before step-1, not step-1 results)
       let financeQuery = supabase.from("finance").select("type, amount, client_id").eq("tenant_id", tenantId);
-      if (selectedAgency !== "all") {
+      if (selectedAgency !== "all" && !isRestrictedCampaignerViewer) {
         financeQuery = financeQuery.eq("agency_id", selectedAgency);
       }
       if (selectedClient !== "all") {
@@ -433,7 +433,7 @@ export default function Dashboard() {
       : clients;
 
   // Then filter by selected agency
-  const filteredClients = selectedAgency === "all" 
+  const filteredClients = selectedAgency === "all" || isRestrictedCampaignerViewer
     ? accessibleClients 
     : accessibleClients?.filter(c => c.agency_id === selectedAgency);
 

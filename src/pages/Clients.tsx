@@ -308,9 +308,12 @@ export default function Clients() {
         .select(selectStr)
         .order("created_at", { ascending: false });
 
-      // 🔒 Always scope to current tenant — cross-tenant only via shared agencies
-      if (selectedAgency && selectedAgency !== "all") {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
+      // 🔒 Always scope to current tenant — cross-tenant only via shared agencies.
+      // Pure campaigners only see assigned clients anyway; don't narrow the fetch
+      // by header agency (stored DMM-MC vs DMM-LTD would return zero rows).
+      const agencyScope = isRestrictedClientViewer ? "all" : selectedAgency;
+      if (agencyScope && agencyScope !== "all") {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${agencyScope}`);
       } else if (agencies && agencies.length > 0) {
         const ids = agencies.map((a: any) => a.id);
         query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${ids.join(',')})`);
@@ -506,8 +509,10 @@ export default function Clients() {
   }
   // Owner sees all clients (no filtering needed)
 
-  // Global agency filter applies to ALL roles (including campaigners and team managers)
-  if (selectedAgency && selectedAgency !== "all") {
+  // Global agency filter applies to managers/owners. Pure campaigners already see
+  // only their assigned clients — applying the header agency filter often hides
+  // everything when the stored selection is another agency (e.g. DMM-MC vs DMM-LTD).
+  if (selectedAgency && selectedAgency !== "all" && !isRestrictedClientViewer) {
     accessibleClients = accessibleClients?.filter(
       (client) => client.agency_id === selectedAgency
     );
