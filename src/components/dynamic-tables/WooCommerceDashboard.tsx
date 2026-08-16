@@ -9,6 +9,7 @@ import {
 } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { WooAttributionSection, wooAttributionLabel } from "@/components/dynamic-tables/WooAttributionSection";
 
 interface Props {
   clientId: string;
@@ -127,7 +128,7 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
       if (siteIds.length === 0) return [];
       const { data, error } = await supabase
         .from('woocommerce_orders' as any)
-        .select('id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency')
+        .select('id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution')
         .in('site_id', siteIds)
         .gte('date_created', start.toISOString())
         .lte('date_created', end.toISOString())
@@ -295,6 +296,9 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
         </Card>
       )}
 
+      {/* Revenue by traffic source */}
+      <WooAttributionSection orders={orders} formatCurrency={formatCurrency} formatNumber={formatNumber} />
+
       {/* Recent orders */}
       <Card>
         <CardHeader>
@@ -307,6 +311,7 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
                 <TableHead>הזמנה</TableHead>
                 <TableHead>תאריך</TableHead>
                 <TableHead>לקוח</TableHead>
+                <TableHead>מקור</TableHead>
                 <TableHead>סטטוס</TableHead>
                 <TableHead className="text-left">סכום</TableHead>
               </TableRow>
@@ -317,6 +322,7 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
                   <TableCell>#{o.order_number}</TableCell>
                   <TableCell>{new Date(o.date_created).toLocaleDateString('he-IL')}</TableCell>
                   <TableCell>{[o.customer_first_name, o.customer_last_name].filter(Boolean).join(' ') || o.customer_email || '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{wooAttributionLabel(o)}</TableCell>
                   <TableCell>
                     <Badge variant={['completed', 'processing'].includes(o.status) ? 'default' : 'secondary'}>
                       {o.status}
