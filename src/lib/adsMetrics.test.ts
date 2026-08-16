@@ -6,6 +6,7 @@ import {
   classifyFacebookRecord,
   facebookTableUsesMixedRows,
   groupFacebookCampaigns,
+  summarizeFacebookCampaignGroup,
   getAddToCartFromData,
   getAdsPurchasesFromData,
   getPurchasesFromData,
@@ -179,4 +180,19 @@ test('groupFacebookCampaigns splits Avieli-like mixed account like DynamicTableV
   const singleEcom = groupFacebookCampaigns(campaigns, { singleTableMode: 'ecommerce' });
   assert.equal(singleEcom.ecommerce.length, 3);
   assert.equal(singleEcom.leads.length, 0);
+});
+
+test('summarizeFacebookCampaignGroup totals match campaign rows for All-tab breakdown', () => {
+  const campaigns = [
+    { name: 'מכירות אוגוסט 2', impressions: 25100, clicks: 581, spend: 572, leads: 0, purchases: 6, purchase_value: 2903, add_to_cart: 44, campaign_type: 'ecommerce' },
+    { name: 'מכירות אוגוסט', impressions: 8800, clicks: 110, spend: 157, leads: 0, purchases: 1, purchase_value: 109, add_to_cart: 5, campaign_type: 'ecommerce' },
+  ];
+  const summary = summarizeFacebookCampaignGroup(campaigns);
+  assert.equal(summary.impressions, 33900);
+  assert.equal(summary.clicks, 691);
+  assert.equal(summary.spend, 729);
+  assert.equal(summary.purchases, 7);
+  assert.equal(summary.revenue, 3012);
+  assert.equal(summary.addToCart, 49);
+  assert.equal(summary.roas, 3012 / 729);
 });

@@ -46,6 +46,7 @@ import {
   groupFacebookCampaigns,
   facebookTableUsesMixedRows,
   isFacebookLeadsOnlyTable,
+  summarizeFacebookCampaignGroup,
 } from "@/lib/adsMetrics";
 import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
@@ -868,9 +869,10 @@ export default function DashboardView() {
   // Facebook campaign summary — split ecom / leads / traffic when table is mixed (like DynamicTableView).
   const facebookCampaignGroups = useMemo(() => {
     const empty = { ecommerce: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, leads: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, traffic: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, all: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords> };
-    if (platformFilter !== 'facebook') return empty;
+    if (platformFilter !== 'facebook' && platformFilter !== 'all') return empty;
 
-    const fbRecords = allRecords.filter((r: any) => isFacebookPlatform(r._source || ''));
+    const sourceRecords = platformFilter === 'all' ? filteredRecords : allRecords;
+    const fbRecords = sourceRecords.filter((r: any) => isFacebookPlatform(r._source || ''));
     const all = aggregateFacebookCampaignsFromRecords(fbRecords);
 
     const fbTables = tables.filter((t: any) => isFacebookPlatform(t.integration_type));
@@ -887,7 +889,108 @@ export default function DashboardView() {
 
     const grouped = groupFacebookCampaigns(all, { forceLeadsOnly });
     return { ...grouped, all };
-  }, [platformFilter, allRecords, tables, facebookMixedMode, campaignTypeByPlatform]);
+  }, [platformFilter, allRecords, filteredRecords, tables, facebookMixedMode, campaignTypeByPlatform]);
+
+  type PlatformBreakdownRowKind = 'ecommerce' | 'leads' | 'standard';
+
+  const platformBreakdownRows = useMemo(() => {
+    if (platformFilter !== 'all') return [];
+
+    const rows: Array<{
+      key: string;
+      platform: string;
+      label: string;
+      rowKind: PlatformBreakdownRowKind;
+      metrics: {
+        spend: number;
+        impressions: number;
+        clicks: number;
+        addToCart: number;
+        addToCartTracked: boolean;
+        purchases: number;
+        revenue: number;
+        roas: number;
+        leads: number;
+        cpl: number;
+        results: number;
+      };
+    }> = [];
+
+    Object.entries(summaryByPlatform)
+      .filter(([platform]) => !isAnalyticsPlatform(platform) && platform !== 'ahrefs' && platform !== 'seo')
+      .forEach(([platform, metrics]: [string, any]) => {
+        if (platform === 'facebook_insights' && facebookMixedMode) {
+          if (facebookCampaignGroups.ecommerce.length > 0) {
+            const s = summarizeFacebookCampaignGroup(facebookCampaignGroups.ecommerce);
+            rows.push({
+              key: 'facebook_ecommerce',
+              platform,
+              label: 'Facebook - קמפיינים איקומרס',
+              rowKind: 'ecommerce',
+              metrics: {
+                spend: s.spend,
+                impressions: s.impressions,
+                clicks: s.clicks,
+                addToCart: s.addToCart,
+                addToCartTracked: s.addToCart > 0,
+                purchases: s.purchases,
+                revenue: s.revenue,
+                roas: s.roas,
+                leads: s.leads,
+                cpl: s.cpl,
+                results: s.purchases,
+              },
+            });
+          }
+          if (facebookCampaignGroups.leads.length > 0) {
+            const s = summarizeFacebookCampaignGroup(facebookCampaignGroups.leads);
+            rows.push({
+              key: 'facebook_leads',
+              platform,
+              label: 'Facebook - קמפיינים לידים',
+              rowKind: 'leads',
+              metrics: {
+                spend: s.spend,
+                impressions: s.impressions,
+                clicks: s.clicks,
+                addToCart: s.addToCart,
+                addToCartTracked: s.addToCart > 0,
+                purchases: s.purchases,
+                revenue: s.revenue,
+                roas: s.roas,
+                leads: s.leads,
+                cpl: s.cpl,
+                results: s.leads,
+              },
+            });
+          }
+          return;
+        }
+
+        const config = PLATFORM_CONFIG[platform] || { name: platform };
+        rows.push({
+          key: platform,
+          platform,
+          label: config.name,
+          rowKind: 'standard',
+          metrics: {
+            spend: metrics.spend,
+            impressions: metrics.impressions,
+            clicks: metrics.clicks,
+            addToCart: metrics.addToCart,
+            addToCartTracked: metrics.addToCartTracked,
+            purchases: metrics.purchases,
+            revenue: metrics.revenue,
+            roas: metrics.roas,
+            leads: metrics.leads,
+            cpl: metrics.cpl,
+            results: metrics.results,
+          },
+        });
+      });
+
+    return rows;
+  }, [platformFilter, summaryByPlatform, facebookMixedMode, facebookCampaignGroups]);
 
   // Google Ads campaign summary - aggregate all Google Ads records by campaign name
   const googleAdsCampaignSummary = useMemo(() => {
@@ -1870,7 +1973,7 @@ export default function DashboardView() {
                 </Card>
               )}
 
-              {Object.keys(summaryByPlatform).length > 0 && platformFilter === 'all' && (
+              {platformBreakdownRows.length > 0 && platformFilter === 'all' && (
                 <Card>
                   <CardHeader><CardTitle>פירוט לפי פלטפורמה</CardTitle></CardHeader>
                   <CardContent>
@@ -1881,7 +1984,7 @@ export default function DashboardView() {
                             <TableHead className="text-right">פלטפורמה</TableHead>
                             <TableHead className="text-right">הוצאה</TableHead>
                             <TableHead className="text-right">חשיפות</TableHead>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            {facebookMixedMode || dashboardCampaignType === 'ecommerce' ? (
                               <>
                                 <TableHead className="text-right">קליקים</TableHead>
                                 <TableHead className="text-right">עלות לקליק</TableHead>
@@ -1889,6 +1992,12 @@ export default function DashboardView() {
                                 <TableHead className="text-right">רכישות</TableHead>
                                 <TableHead className="text-right">הכנסות</TableHead>
                                 <TableHead className="text-right">ROAS</TableHead>
+                                {facebookMixedMode && (
+                                  <>
+                                    <TableHead className="text-right">לידים</TableHead>
+                                    <TableHead className="text-right">עלות לליד</TableHead>
+                                  </>
+                                )}
                               </>
                             ) : (
                               <>
@@ -1901,40 +2010,52 @@ export default function DashboardView() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {Object.entries(summaryByPlatform).filter(([platform]) => !isAnalyticsPlatform(platform) && platform !== 'ahrefs' && platform !== 'seo').map(([platform, metrics]: [string, any]) => {
-                            const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-muted-foreground' };
-                            const isAnalytics = isAnalyticsPlatform(platform);
+                          {platformBreakdownRows.map((row) => {
+                            const config = PLATFORM_CONFIG[row.platform] || { name: row.platform, color: 'text-muted-foreground' };
+                            const metrics = row.metrics;
+                            const showEcomCols = facebookMixedMode
+                              ? row.rowKind !== 'leads'
+                              : dashboardCampaignType === 'ecommerce';
+                            const showLeadsCols = facebookMixedMode
+                              ? row.rowKind !== 'ecommerce'
+                              : dashboardCampaignType !== 'ecommerce';
                             return (
-                              <TableRow key={platform}>
+                              <TableRow key={row.key}>
                                 <TableCell className="font-medium">
                                   <div className="flex items-center gap-2">
-                                    {getIntegrationIcon(platform)}
-                                    <span className={config.color}>{config.name}</span>
+                                    {getIntegrationIcon(row.platform)}
+                                    <span className={config.color}>{row.label}</span>
                                   </div>
                                 </TableCell>
-                                <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
-                                <TableCell>{isAnalytics ? '-' : formatNumber(metrics.impressions)}</TableCell>
-                                {dashboardCampaignType === 'ecommerce' ? (
+                                <TableCell>{formatCurrency(metrics.spend)}</TableCell>
+                                <TableCell>{formatNumber(metrics.impressions)}</TableCell>
+                                {facebookMixedMode || dashboardCampaignType === 'ecommerce' ? (
                                   <>
-                                    <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
-                                    <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatUnitCost(metrics.spend / metrics.clicks)}</TableCell>
-                                    <TableCell>{metrics.addToCartTracked ? formatNumber(metrics.addToCart) : '-'}</TableCell>
-                                    <TableCell>{formatNumber(metrics.results)}</TableCell>
-                                    <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
+                                    <TableCell>{formatNumber(metrics.clicks)}</TableCell>
+                                    <TableCell>{metrics.clicks > 0 ? formatUnitCost(metrics.spend / metrics.clicks) : '-'}</TableCell>
+                                    <TableCell>{showEcomCols ? (metrics.addToCartTracked ? formatNumber(metrics.addToCart) : '-') : '-'}</TableCell>
+                                    <TableCell>{showEcomCols ? formatNumber(metrics.purchases) : '-'}</TableCell>
+                                    <TableCell>{showEcomCols ? formatCurrency(metrics.revenue) : '-'}</TableCell>
                                     <TableCell>
-                                      {isAnalytics ? '-' : (
+                                      {showEcomCols ? (
                                         <span className={metrics.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
                                           {metrics.roas.toFixed(2)}
                                         </span>
-                                      )}
+                                      ) : '-'}
                                     </TableCell>
+                                    {facebookMixedMode && (
+                                      <>
+                                        <TableCell>{showLeadsCols ? formatNumber(metrics.leads) : '-'}</TableCell>
+                                        <TableCell>{showLeadsCols && metrics.cpl > 0 ? formatCurrency(metrics.cpl) : '-'}</TableCell>
+                                      </>
+                                    )}
                                   </>
                                 ) : (
                                   <>
-                                    <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
-                                    <TableCell>{isAnalytics || !metrics.clicks ? '-' : formatUnitCost(metrics.spend / metrics.clicks)}</TableCell>
-                                    <TableCell>{isAnalytics ? '-' : formatNumber(metrics.results)}</TableCell>
-                                    <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.cpl)}</TableCell>
+                                    <TableCell>{formatNumber(metrics.clicks)}</TableCell>
+                                    <TableCell>{metrics.clicks > 0 ? formatUnitCost(metrics.spend / metrics.clicks) : '-'}</TableCell>
+                                    <TableCell>{formatNumber(metrics.results)}</TableCell>
+                                    <TableCell>{formatCurrency(metrics.cpl)}</TableCell>
                                   </>
                                 )}
                               </TableRow>
@@ -1951,7 +2072,7 @@ export default function DashboardView() {
                             </TableCell>
                             <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                             <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
-                            {dashboardCampaignType === 'ecommerce' ? (
+                            {facebookMixedMode || dashboardCampaignType === 'ecommerce' ? (
                               <>
                                 <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
                                 <TableCell>{totalSummary.clicks > 0 ? formatUnitCost(totalSummary.spend / totalSummary.clicks) : '-'}</TableCell>
@@ -1963,6 +2084,12 @@ export default function DashboardView() {
                                     {combinedRoas.toFixed(2)}
                                   </span>
                                 </TableCell>
+                                {facebookMixedMode && (
+                                  <>
+                                    <TableCell>{formatNumber(totalSummary.leads)}</TableCell>
+                                    <TableCell>{combinedCpl > 0 ? formatCurrency(combinedCpl) : '-'}</TableCell>
+                                  </>
+                                )}
                               </>
                             ) : (
                               <>

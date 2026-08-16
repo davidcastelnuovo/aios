@@ -238,3 +238,38 @@ export function facebookTableUsesMixedRows(
   if (integrationType !== 'facebook_insights') return false;
   return !isFacebookLeadsOnlyTable(integrationSettings);
 }
+
+export type FacebookCampaignGroupSummary = {
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  purchases: number;
+  revenue: number;
+  addToCart: number;
+  roas: number;
+  cpl: number;
+};
+
+/** Sum aggregated Facebook campaigns into one platform-breakdown row (All tab). */
+export function summarizeFacebookCampaignGroup(
+  campaigns: FacebookCampaignRow[],
+): FacebookCampaignGroupSummary {
+  const totals = campaigns.reduce(
+    (acc, c) => ({
+      spend: acc.spend + c.spend,
+      impressions: acc.impressions + c.impressions,
+      clicks: acc.clicks + c.clicks,
+      leads: acc.leads + c.leads,
+      purchases: acc.purchases + c.purchases,
+      revenue: acc.revenue + c.purchase_value,
+      addToCart: acc.addToCart + c.add_to_cart,
+    }),
+    { spend: 0, impressions: 0, clicks: 0, leads: 0, purchases: 0, revenue: 0, addToCart: 0 },
+  );
+  return {
+    ...totals,
+    roas: totals.spend > 0 ? totals.revenue / totals.spend : 0,
+    cpl: totals.leads > 0 ? totals.spend / totals.leads : 0,
+  };
+}
