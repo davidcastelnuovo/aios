@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +48,7 @@ import {
 import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
+import { invalidateWooDashboardQueries } from "@/lib/wooDashboardQueries";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -124,6 +125,7 @@ export default function DashboardView() {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const { currentTenantId } = useTenant();
+  const queryClient = useQueryClient();
   const [dateFilter, setDateFilter] = useState('last_7_days');
   const [customDateRange, setCustomDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -322,7 +324,10 @@ export default function DashboardView() {
         .eq('woocommerce_enabled', true)
         .eq('is_active', true)
         .limit(1));
-      if (error) return false;
+      if (error) {
+        console.error("[DashboardView] has-woocommerce query failed:", error);
+        return false;
+      }
       return (count || 0) > 0;
     },
     enabled: !!dashboard?.client_id,
@@ -1066,8 +1071,9 @@ export default function DashboardView() {
         }
       });
 
-      // Reload data from DB
+      // Reload data from DB + bust Woo caches (tab visibility + KPI cards)
       await refetchRecords();
+      invalidateWooDashboardQueries(queryClient, dashboard?.client_id);
 
       if (failed.length === 0) {
         toast.success(`סונכרנו ${allTasks.length} מקורות נתונים בהצלחה`, { id: syncToast });
@@ -1297,9 +1303,9 @@ export default function DashboardView() {
           )}
 
           {platformFilter === 'woocommerce' ? (
-            /* WooCommerce tab */
-            dashboard?.client_id && currentTenantId ? (
-              <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId} dateFilter={dateFilter} customFrom={customFromStr} customTo={customToStr} />
+            /* WooCommerce tab — client_id only (site may live on agency home tenant) */
+            dashboard?.client_id ? (
+              <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId || ''} dateFilter={dateFilter} customFrom={customFromStr} customTo={customToStr} />
             ) : null
           ) : platformFilter === 'seo' ? (
             /* SEO tab: render full SEO report with Ahrefs + GSC + Analytics tabs.

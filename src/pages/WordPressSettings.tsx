@@ -6,6 +6,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useNavigate } from "react-router-dom";
+import { invalidateWooDashboardQueries, shareWordpressSiteWithAgencyTenants } from "@/lib/wooDashboardQueries";
 
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -335,14 +336,20 @@ export default function WordPressSettings() {
         client_id: values.client_id || null,
         agency_id: values.agency_id || null,
       };
-      const { error } = await supabase
+      const { data: created, error } = await supabase
         .from("social_media_wordpress_sites" as any)
-        .insert(payload);
+        .insert(payload)
+        .select("id")
+        .single();
       if (error) throw error;
+      if (created?.id && values.client_id && values.agency_id) {
+        await shareWordpressSiteWithAgencyTenants(created.id, values.agency_id);
+      }
     },
-    onSuccess: () => {
+    onSuccess: (_data, values) => {
       queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
+      invalidateWooDashboardQueries(queryClient, values.client_id || null);
       toast.success("אתר וורדפרס נוסף בהצלחה");
       setAddOpen(false);
       setForm({ ...emptyForm });
@@ -375,10 +382,12 @@ export default function WordPressSettings() {
         .update(payload)
         .eq("id", id);
       if (error) throw error;
+      await shareWordpressSiteWithAgencyTenants(id, values.agency_id || null);
     },
-    onSuccess: () => {
+    onSuccess: (_data, { values }) => {
       queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
+      invalidateWooDashboardQueries(queryClient, values.client_id || null);
       toast.success("אתר עודכן בהצלחה");
       setEditSite(null);
       setForm({ ...emptyForm });
@@ -437,10 +446,12 @@ export default function WordPressSettings() {
         .update(payload)
         .eq("id", id);
       if (error) throw error;
+      await shareWordpressSiteWithAgencyTenants(id, agency_id);
     },
-    onSuccess: () => {
+    onSuccess: (_data, { client_id }) => {
       queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
+      invalidateWooDashboardQueries(queryClient, client_id);
       toast.success("השיוך עודכן בהצלחה");
       setLinkSite(null);
     },
