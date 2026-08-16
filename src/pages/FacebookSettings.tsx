@@ -357,6 +357,7 @@ export default function FacebookSettings() {
   
   const hasValidToken = isValidFacebookToken(leadAdsIntegration?.api_key);
   const hasTokenButNoApiKey = leadAdsIntegration?.is_active && !hasValidToken && !isSharedConnection;
+  const isLeadAdsConnected = leadAdsIntegration?.is_active && (hasValidToken || isSharedConnection);
 
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
@@ -449,7 +450,7 @@ export default function FacebookSettings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
-                {leadAdsIntegration?.is_active && hasValidToken ? (
+                {isLeadAdsConnected ? (
                   <Badge variant="default" className="bg-green-500 flex items-center gap-1">
                     <CheckCircle2 className="h-3 w-3" />
                     מחובר

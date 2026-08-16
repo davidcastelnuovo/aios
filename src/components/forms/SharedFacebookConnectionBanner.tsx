@@ -39,13 +39,41 @@ export function SharedFacebookConnectionBanner({ integration }: SharedFacebookCo
     enabled: !!integration?.shared_from_integration_id,
   });
 
-  if (!integration?.shared_from_integration_id || !sourceIntegration) {
+  if (!integration?.shared_from_integration_id) {
     return null;
   }
 
-  const sourceTenantName = (sourceIntegration.tenants as any)?.name || 'ארגון אחר';
+  const cachedSourceTenantName = (integration.settings as any)?.shared_from_tenant_name;
+  const cachedPageName = (integration.settings as any)?.shared_page_name;
+
+  if (!sourceIntegration) {
+    return (
+      <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800 text-right">
+        <AlertTitle className="flex items-center gap-2 flex-row-reverse justify-end text-blue-800 dark:text-blue-200">
+          <Share2 className="h-4 w-4" />
+          חיבור משותף
+          <Badge variant="secondary" className="mr-2 gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            פעיל
+          </Badge>
+        </AlertTitle>
+        <AlertDescription className="text-blue-700 dark:text-blue-300 text-right mt-2">
+          אינטגרציה זו משותפת{cachedSourceTenantName ? <> מ-<strong>{cachedSourceTenantName}</strong></> : ' מארגון אחר'}.
+          {cachedPageName && (
+            <> לידים מהעמוד "{cachedPageName}" יתקבלו אוטומטית.</>
+          )}
+          <br />
+          <span className="text-sm opacity-80">
+            ניתן להגדיר Form Mapping ייחודי לארגון זה.
+          </span>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const sourceTenantName = (sourceIntegration.tenants as any)?.name || cachedSourceTenantName || 'ארגון אחר';
   const sourceSettings = sourceIntegration.settings as any;
-  const pageName = sourceSettings?.page_name;
+  const pageName = sourceSettings?.page_name || cachedPageName;
 
   return (
     <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800 text-right">

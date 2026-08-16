@@ -113,22 +113,8 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
-  // Check Facebook integration status
-  const { data: facebookIntegration } = useQuery({
-    queryKey: ['facebook-integration', currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return null;
-      const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'facebook')
-        .eq('is_active', true)
-        .maybeSingle();
-      return data;
-    },
-    enabled: !!currentTenantId,
-  });
+  // Check Facebook Lead Ads integration status (own + tenant-shared mirror)
+  const hasFacebookLeadAds = useHasIntegrationAccess(currentTenantId, 'facebook_lead_ads');
 
   // Check ManyChat integration status
   const { data: manychatIntegration } = useQuery({
@@ -413,7 +399,7 @@ export default function Integrations() {
         "שליחת אירועי המרה ל-CAPI",
         "סנכרון טפסים אוטומטי",
       ],
-      isConnected: !!facebookIntegration,
+      isConnected: hasFacebookLeadAds,
       route: "facebook-settings",
       gradient: "bg-gradient-to-r from-blue-600 to-blue-800",
     },
