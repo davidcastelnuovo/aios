@@ -30,6 +30,12 @@ FROM (VALUES
 ) AS modules(module_name)
 ON CONFLICT DO NOTHING;
 
+UPDATE public.user_permissions
+SET can_access = true
+WHERE user_id = '360c03dd-f741-4b27-a57c-44f80e5c243e'
+  AND module IN ('dashboard', 'clients', 'tasks', 'chat', 'time_tracking', 'dynamic_tables', 'reports')
+  AND can_access = false;
+
 -- לאון: enable modules that were explicitly denied
 UPDATE public.user_permissions
 SET can_access = true
