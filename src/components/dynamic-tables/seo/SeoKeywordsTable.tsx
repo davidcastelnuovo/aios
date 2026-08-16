@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { formatGscCtrPercent } from "@/lib/gscFormat";
 import {
   filterRelevantKeywords,
   normalizeKeywordPhrase,
@@ -203,7 +204,7 @@ function KeywordRow({
             {kw.gsc_impressions != null ? Number(kw.gsc_impressions).toLocaleString() : <span className="text-muted-foreground">—</span>}
           </td>
           <td className="p-3 text-center text-xs">
-            {kw.gsc_ctr != null ? `${(Number(kw.gsc_ctr) * 100).toFixed(1)}%` : <span className="text-muted-foreground">—</span>}
+            {kw.gsc_ctr != null ? formatGscCtrPercent(kw.gsc_ctr) : <span className="text-muted-foreground">—</span>}
           </td>
         </>
       )}

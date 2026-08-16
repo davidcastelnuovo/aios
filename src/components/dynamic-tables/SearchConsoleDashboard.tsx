@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatGscCtrPercent } from "@/lib/gscFormat";
 import {
   Select,
   SelectContent,
@@ -465,7 +466,7 @@ export function SearchConsoleDashboard({
                         </div>
                         <div className="text-center min-w-[50px]">
                           <span className="text-muted-foreground text-xs">CTR</span>
-                          <p className="font-medium">{item.data.ctr.toFixed(2)}%</p>
+                          <p className="font-medium">{formatGscCtrPercent(item.data.ctr) ?? "—"}</p>
                         </div>
                         <Badge variant={item.data.position <= 10 ? "default" : item.data.position <= 20 ? "secondary" : "outline"}>
                           {item.data.position.toFixed(1)}
@@ -606,7 +607,7 @@ export function SearchConsoleDashboard({
                     </td>
                     <td className="text-center py-2 px-3">{formatNumber(query.clicks)}</td>
                     <td className="text-center py-2 px-3">{formatNumber(query.impressions)}</td>
-                    <td className="text-center py-2 px-3">{query.ctr.toFixed(2)}%</td>
+                    <td className="text-center py-2 px-3">{formatGscCtrPercent(query.ctr) ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -580,6 +580,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
             onClick={handleManualSync}
             disabled={isFetchingSnapshot}
             className="h-8 text-xs gap-1.5"
+            title="מושך מילות מפתח אורגניות ובמעקב מפרויקט Ahrefs (לא מ-Google Search Console)"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isFetchingSnapshot ? 'animate-spin' : ''}`} />
             {isFetchingSnapshot ? 'מסנכרן...' : 'סנכרון Ahrefs'}
