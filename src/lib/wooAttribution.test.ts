@@ -4,6 +4,8 @@ import {
   aggregateOrdersByAttribution,
   buildWooAttributionLabel,
   extractWooOrderAttribution,
+  isGooglePaidWooAttribution,
+  summarizeGoogleAttributedWooOrders,
 } from './wooAttribution.ts';
 
 test('extractWooOrderAttribution reads WC meta fields', () => {
@@ -40,4 +42,65 @@ test('aggregateOrdersByAttribution groups valid orders by label', () => {
   const fb = rows.find((r) => r.label === 'Facebook ממומן');
   assert.equal(fb?.orders, 2);
   assert.equal(fb?.revenue, 800);
+});
+
+test('isGooglePaidWooAttribution detects google/cpc and gclid', () => {
+  assert.equal(
+    isGooglePaidWooAttribution({
+      source_type: 'utm',
+      utm_source: 'google',
+      utm_medium: 'cpc',
+      utm_campaign: null,
+      utm_content: null,
+      utm_term: null,
+      referrer: null,
+      session_entry: null,
+      device_type: null,
+      label: 'Google ממומן',
+    }),
+    true,
+  );
+  assert.equal(
+    isGooglePaidWooAttribution({
+      source_type: 'utm',
+      utm_source: null,
+      utm_medium: null,
+      utm_campaign: null,
+      utm_content: null,
+      utm_term: null,
+      referrer: null,
+      session_entry: 'https://avieli.co.il/?gclid=abc',
+      device_type: null,
+      label: 'Google ממומן',
+    }),
+    true,
+  );
+  assert.equal(
+    isGooglePaidWooAttribution({
+      source_type: 'organic',
+      utm_source: 'google',
+      utm_medium: 'organic',
+      utm_campaign: null,
+      utm_content: null,
+      utm_term: null,
+      referrer: 'https://google.com/',
+      session_entry: null,
+      device_type: null,
+      label: 'Google',
+    }),
+    false,
+  );
+});
+
+test('summarizeGoogleAttributedWooOrders splits paid vs organic Google', () => {
+  const summary = summarizeGoogleAttributedWooOrders([
+    { status: 'processing', total: 500, attribution: { label: 'Google ממומן', utm_source: 'google', utm_medium: 'cpc' } as any },
+    { status: 'completed', total: 150, attribution: { label: 'Google', utm_source: 'google', utm_medium: 'organic' } as any },
+    { status: 'processing', total: 200, attribution: { label: 'Facebook ממומן' } as any },
+    { status: 'cancelled', total: 999, attribution: { label: 'Google ממומן' } as any },
+  ]);
+  assert.equal(summary.paidOrders, 1);
+  assert.equal(summary.paidRevenue, 500);
+  assert.equal(summary.organicOrders, 1);
+  assert.equal(summary.organicRevenue, 150);
 });
