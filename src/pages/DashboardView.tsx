@@ -41,9 +41,11 @@ import {
   getSpendFromData,
   getUsersFromData,
   hasAddToCartMetric,
-  classifyFacebookCampaignTotals,
   classifyFacebookRecord,
+  aggregateFacebookCampaignsFromRecords,
+  groupFacebookCampaigns,
   facebookTableUsesMixedRows,
+  isFacebookLeadsOnlyTable,
 } from "@/lib/adsMetrics";
 import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
@@ -863,40 +865,29 @@ export default function DashboardView() {
     return { records, fields, tableIds };
   }, [platformFilter, tables, tableFields, allRecords]);
 
-  // Facebook campaign summary — split ecom vs leads when table is mixed (like DynamicTableView).
+  // Facebook campaign summary — split ecom / leads / traffic when table is mixed (like DynamicTableView).
   const facebookCampaignGroups = useMemo(() => {
-    if (platformFilter !== 'facebook') return { ecommerce: [], leads: [], all: [] as Array<{ name: string; impressions: number; clicks: number; spend: number; addToCart: number; purchases: number; revenue: number; leads: number; campaign_type?: string }> };
-    const map: Record<string, { name: string; impressions: number; clicks: number; spend: number; addToCart: number; purchases: number; revenue: number; leads: number; campaign_type?: string }> = {};
+    const empty = { ecommerce: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, leads: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, traffic: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, all: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords> };
+    if (platformFilter !== 'facebook') return empty;
 
     const fbRecords = allRecords.filter((r: any) => isFacebookPlatform(r._source || ''));
-    fbRecords.forEach((r: any) => {
-      const d = r.data || {};
-      const name = d.campaign_name || d.campaign || 'ללא שם';
-      if (!map[name]) {
-        map[name] = { name, impressions: 0, clicks: 0, spend: 0, addToCart: 0, purchases: 0, revenue: 0, leads: 0, campaign_type: d.campaign_type };
-      }
-      map[name].impressions += Number(d.impressions) || 0;
-      map[name].clicks += Number(d.clicks) || 0;
-      map[name].spend += getSpendFromData(d);
-      map[name].addToCart += getAddToCartFromData(d);
-      map[name].purchases += getAdsPurchasesFromData(d);
-      map[name].revenue += getRevenueFromData(d);
-      map[name].leads += getLeadsFromData(d);
-      const rowType = String(d.campaign_type || '').toLowerCase();
-      if (rowType === 'ecommerce' || rowType === 'lead' || rowType === 'traffic') {
-        map[name].campaign_type = rowType;
-      }
-    });
-    const all = Object.values(map).sort((a, b) => b.spend - a.spend);
+    const all = aggregateFacebookCampaignsFromRecords(fbRecords);
+
+    const fbTables = tables.filter((t: any) => isFacebookPlatform(t.integration_type));
+    const forceLeadsOnly = fbTables.some((t: any) => isFacebookLeadsOnlyTable(t.integration_settings));
+
     if (!facebookMixedMode) {
       const isEcom = campaignTypeByPlatform['facebook_ecommerce'] === 'ecommerce'
         || campaignTypeByPlatform['facebook_insights'] === 'ecommerce';
-      return { ecommerce: isEcom ? all : [], leads: isEcom ? [] : all, all };
+      const grouped = groupFacebookCampaigns(all, {
+        singleTableMode: isEcom ? 'ecommerce' : 'leads',
+      });
+      return { ...grouped, all };
     }
-    const ecommerce = all.filter((c) => classifyFacebookCampaignTotals(c) === 'ecommerce');
-    const leads = all.filter((c) => classifyFacebookCampaignTotals(c) === 'leads');
-    return { ecommerce, leads, all };
-  }, [platformFilter, allRecords, facebookMixedMode, campaignTypeByPlatform]);
+
+    const grouped = groupFacebookCampaigns(all, { forceLeadsOnly });
+    return { ...grouped, all };
+  }, [platformFilter, allRecords, tables, facebookMixedMode, campaignTypeByPlatform]);
 
   // Google Ads campaign summary - aggregate all Google Ads records by campaign name
   const googleAdsCampaignSummary = useMemo(() => {
@@ -1511,16 +1502,16 @@ export default function DashboardView() {
                             </TableHeader>
                             <TableBody>
                               {facebookCampaignGroups.ecommerce.map((c) => {
-                                const roas = c.spend > 0 ? c.revenue / c.spend : 0;
+                                const roas = c.spend > 0 ? c.purchase_value / c.spend : 0;
                                 return (
                                   <TableRow key={`ecom-${c.name}`}>
                                     <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
                                     <TableCell>{formatNumber(c.impressions)}</TableCell>
                                     <TableCell>{formatNumber(c.clicks)}</TableCell>
                                     <TableCell>{formatCurrency(c.spend)}</TableCell>
-                                    <TableCell className={c.addToCart > 0 ? 'text-orange-600 font-medium' : ''}>{formatNumber(c.addToCart)}</TableCell>
+                                    <TableCell className={c.add_to_cart > 0 ? 'text-orange-600 font-medium' : ''}>{formatNumber(c.add_to_cart)}</TableCell>
                                     <TableCell className={c.purchases > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.purchases)}</TableCell>
-                                    <TableCell className={c.revenue > 0 ? 'text-green-600 font-medium' : ''}>{formatCurrency(c.revenue)}</TableCell>
+                                    <TableCell className={c.purchase_value > 0 ? 'text-green-600 font-medium' : ''}>{formatCurrency(c.purchase_value)}</TableCell>
                                     <TableCell>
                                       <span className={roas >= 1 ? 'text-green-600 font-semibold' : roas > 0 ? 'text-red-600' : ''}>
                                         {roas > 0 ? roas.toFixed(2) + 'x' : '0x'}
@@ -1551,8 +1542,8 @@ export default function DashboardView() {
                                 <TableHead className="text-right">קמפיין</TableHead>
                                 <TableHead className="text-right">חשיפות</TableHead>
                                 <TableHead className="text-right">קליקים</TableHead>
-                                <TableHead className="text-right">הוצאה</TableHead>
                                 <TableHead className="text-right">לידים</TableHead>
+                                <TableHead className="text-right">הוצאה</TableHead>
                                 <TableHead className="text-right">עלות לליד</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -1564,9 +1555,51 @@ export default function DashboardView() {
                                     <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
                                     <TableCell>{formatNumber(c.impressions)}</TableCell>
                                     <TableCell>{formatNumber(c.clicks)}</TableCell>
-                                    <TableCell>{formatCurrency(c.spend)}</TableCell>
                                     <TableCell className={c.leads > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.leads)}</TableCell>
+                                    <TableCell>{formatCurrency(c.spend)}</TableCell>
                                     <TableCell>{cpl > 0 ? formatCurrency(cpl) : '-'}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {facebookCampaignGroups.traffic.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Facebook className="h-5 w-5 text-blue-600" />
+                          קמפיינים טראפיק - Facebook
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-right">קמפיין</TableHead>
+                                <TableHead className="text-right">חשיפות</TableHead>
+                                <TableHead className="text-right">קליקים</TableHead>
+                                <TableHead className="text-right">הוצאה</TableHead>
+                                <TableHead className="text-right">CTR</TableHead>
+                                <TableHead className="text-right">עלות לקליק</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {facebookCampaignGroups.traffic.map((c) => {
+                                const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0;
+                                const cpc = c.clicks > 0 ? c.spend / c.clicks : 0;
+                                return (
+                                  <TableRow key={`traffic-${c.name}`}>
+                                    <TableCell className="font-medium max-w-[300px]">{c.name}</TableCell>
+                                    <TableCell>{formatNumber(c.impressions)}</TableCell>
+                                    <TableCell className={c.clicks > 0 ? 'text-green-600 font-medium' : ''}>{formatNumber(c.clicks)}</TableCell>
+                                    <TableCell>{formatCurrency(c.spend)}</TableCell>
+                                    <TableCell>{ctr > 0 ? ctr.toFixed(2) + '%' : '-'}</TableCell>
+                                    <TableCell>{cpc > 0 ? formatCurrency(cpc) : '-'}</TableCell>
                                   </TableRow>
                                 );
                               })}
