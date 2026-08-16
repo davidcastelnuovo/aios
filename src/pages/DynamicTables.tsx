@@ -275,8 +275,9 @@ export default function DynamicTables() {
       );
     }
     
-    // Filter by selected agency
-    if (selectedAgency && selectedAgency !== 'all') {
+    // Filter by selected agency (skip for pure campaigners — they are already scoped
+    // to assigned clients and the header filter can hide everything).
+    if (selectedAgency && selectedAgency !== 'all' && !isRestrictedCampaignerViewer) {
       result = result.filter(table => 
         table.agency_id === null || table.agency_id === selectedAgency
       );

@@ -506,8 +506,10 @@ export default function Clients() {
   }
   // Owner sees all clients (no filtering needed)
 
-  // Global agency filter applies to ALL roles (including campaigners and team managers)
-  if (selectedAgency && selectedAgency !== "all") {
+  // Global agency filter applies to managers/owners. Pure campaigners already see
+  // only their assigned clients — applying the header agency filter often hides
+  // everything when the stored selection is another agency (e.g. DMM-MC vs DMM-LTD).
+  if (selectedAgency && selectedAgency !== "all" && !isRestrictedClientViewer) {
     accessibleClients = accessibleClients?.filter(
       (client) => client.agency_id === selectedAgency
     );
