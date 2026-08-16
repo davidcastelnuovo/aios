@@ -125,6 +125,62 @@ function filterSeoReportsByDomain<T extends { domain?: string | null }>(
   return matching.length > 0 ? matching : (reports || []);
 }
 
+/** Mirror of resolve-seo-gsc-integration — no auth required (service-role only). */
+async function resolveGscSiteForClient(
+  supabase: ReturnType<typeof createClient>,
+  tenantIdList: string[],
+  clientId: string,
+  expectedSiteUrl?: string | null,
+): Promise<string | null> {
+  const { data: integrations } = await supabase
+    .from("tenant_integrations")
+    .select("id, settings")
+    .in("tenant_id", tenantIdList)
+    .eq("integration_type", "google_search_console")
+    .eq("is_active", true);
+
+  type Candidate = { siteUrl: string; rank: number };
+  const candidates: Candidate[] = [];
+
+  for (const i of integrations || []) {
+    const s: any = i.settings || {};
+    const clientSites = s.client_sites || {};
+    const availableSites: any[] = Array.isArray(s.available_sites) ? s.available_sites : [];
+    const mappedForClient: string | null = clientSites[clientId] || null;
+    const isMappingUsable = (siteUrl: string | null) => {
+      if (!siteUrl) return false;
+      const meta = availableSites.find((x: any) => x?.siteUrl === siteUrl);
+      return !meta || meta.permissionLevel !== "siteUnverifiedUser";
+    };
+
+    if (mappedForClient && isMappingUsable(mappedForClient)) {
+      if (!expectedSiteUrl || seoDomainsMatch(mappedForClient, expectedSiteUrl)) {
+        candidates.push({ siteUrl: mappedForClient, rank: 1 });
+        continue;
+      }
+    }
+
+    if (expectedSiteUrl) {
+      const siteMatch = availableSites.find(
+        (x: any) =>
+          x?.permissionLevel !== "siteUnverifiedUser" &&
+          seoDomainsMatch(x?.siteUrl, expectedSiteUrl),
+      );
+      if (siteMatch?.siteUrl) {
+        candidates.push({ siteUrl: siteMatch.siteUrl, rank: 2 });
+        continue;
+      }
+    }
+
+    if (mappedForClient && isMappingUsable(mappedForClient)) {
+      candidates.push({ siteUrl: mappedForClient, rank: 3 });
+    }
+  }
+
+  candidates.sort((a, b) => a.rank - b.rank);
+  return candidates[0]?.siteUrl || null;
+}
+
 type GscKeywordRow = {
   keyword: string;
   clicks: number;
@@ -513,7 +569,17 @@ Deno.serve(async (req) => {
         }
       }
 
-      const effectiveGscSiteUrl = linkedGscSiteUrl || (gscTable?.integration_settings as any)?.siteUrl || null;
+      const effectiveGscSiteUrl =
+        linkedGscSiteUrl ||
+        (gscTable?.integration_settings as any)?.siteUrl ||
+        (targetClientId
+          ? await resolveGscSiteForClient(
+            supabase,
+            tenantIdList,
+            targetClientId,
+            linkedGscSiteUrl || targetDomain || clientWebsite,
+          )
+          : null);
 
       // Prefer live GSC keyword data (mirrors internal GscIntegration) so share
       // links show positions/clicks even when crm_records were never synced.
