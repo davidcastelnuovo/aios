@@ -81,6 +81,75 @@ interface AgencyOpt {
   name: string;
   tenant_id: string;
   tenant_name?: string;
+  /** Tenants that reach this agency via agency_tenant_access (may differ from owner). */
+  shared_with_tenant_ids?: string[];
+}
+
+function mapAgencyRow(a: {
+  id: string;
+  name: string;
+  tenant_id: string;
+  tenants?: { name: string } | null;
+}): AgencyOpt {
+  return {
+    id: a.id,
+    name: a.name,
+    tenant_id: a.tenant_id,
+    tenant_name: a.tenants?.name,
+  };
+}
+
+async function withSharedTenantAccess(agencies: AgencyOpt[]): Promise<AgencyOpt[]> {
+  if (agencies.length === 0) return agencies;
+  const { data, error } = await supabase
+    .from("agency_tenant_access")
+    .select("agency_id, accessing_tenant_id")
+    .in("agency_id", agencies.map((a) => a.id));
+  if (error) throw error;
+  const sharedByAgency = new Map<string, string[]>();
+  for (const row of data || []) {
+    const list = sharedByAgency.get(row.agency_id) || [];
+    list.push(row.accessing_tenant_id);
+    sharedByAgency.set(row.agency_id, list);
+  }
+  return agencies.map((a) => ({
+    ...a,
+    shared_with_tenant_ids: sharedByAgency.get(a.id) || [],
+  }));
+}
+
+async function fetchAgenciesForTenantScope(scopeTenantId: string): Promise<AgencyOpt[]> {
+  const [ownRes, accessRes] = await Promise.all([
+    supabase
+      .from("agencies")
+      .select("id, name, tenant_id, tenants(name)")
+      .eq("tenant_id", scopeTenantId)
+      .order("name"),
+    supabase
+      .from("agency_tenant_access")
+      .select("agency_id, agencies(id, name, tenant_id, tenants(name))")
+      .eq("accessing_tenant_id", scopeTenantId),
+  ]);
+  if (ownRes.error) throw ownRes.error;
+  if (accessRes.error) throw accessRes.error;
+
+  const merged = new Map<string, AgencyOpt>();
+  (ownRes.data || []).forEach((a: any) => merged.set(a.id, mapAgencyRow(a)));
+  (accessRes.data || []).forEach((row: any) => {
+    const a = row.agencies;
+    if (a) merged.set(a.id, mapAgencyRow(a));
+  });
+  return withSharedTenantAccess(
+    Array.from(merged.values()).sort((x, y) => x.name.localeCompare(y.name))
+  );
+}
+
+function agenciesVisibleForTenant(agencies: AgencyOpt[], scopeTenantId: string): AgencyOpt[] {
+  return agencies.filter(
+    (a) =>
+      a.tenant_id === scopeTenantId ||
+      (a.shared_with_tenant_ids?.includes(scopeTenantId) ?? false)
+  );
 }
 
 const emptyForm = {
@@ -154,49 +223,21 @@ export default function WordPressSettings() {
     queryKey: ["agencies-for-wp", form.tenant_id, tenantId, isSuperAdmin],
     queryFn: async () => {
       if (isSuperAdmin) {
-        let q = supabase
+        if (form.tenant_id) {
+          return fetchAgenciesForTenantScope(form.tenant_id);
+        }
+        const { data, error } = await supabase
           .from("agencies")
           .select("id, name, tenant_id, tenants(name)")
           .order("name");
-        if (form.tenant_id) q = q.eq("tenant_id", form.tenant_id);
-        const { data, error } = await q;
         if (error) throw error;
-        return (data || []).map((a: any) => ({
-          id: a.id,
-          name: a.name,
-          tenant_id: a.tenant_id,
-          tenant_name: a.tenants?.name,
-        }));
+        return withSharedTenantAccess(
+          (data || []).map((a: any) => mapAgencyRow(a))
+        );
       }
 
       if (!tenantId) return [];
-
-      // Own tenant agencies
-      const ownPromise = supabase
-        .from("agencies")
-        .select("id, name, tenant_id, tenants(name)")
-        .eq("tenant_id", tenantId)
-        .order("name");
-
-      // Cross-tenant via agency_tenant_access
-      const accessPromise = supabase
-        .from("agency_tenant_access")
-        .select("agency_id, agencies(id, name, tenant_id, tenants(name))")
-        .eq("accessing_tenant_id", tenantId);
-
-      const [ownRes, accessRes] = await Promise.all([ownPromise, accessPromise]);
-      if (ownRes.error) throw ownRes.error;
-      if (accessRes.error) throw accessRes.error;
-
-      const merged = new Map<string, AgencyOpt>();
-      (ownRes.data || []).forEach((a: any) =>
-        merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name })
-      );
-      (accessRes.data || []).forEach((row: any) => {
-        const a = row.agencies;
-        if (a) merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name });
-      });
-      return Array.from(merged.values()).sort((x, y) => x.name.localeCompare(y.name));
+      return fetchAgenciesForTenantScope(tenantId);
     },
     enabled: !!tenantId || isSuperAdmin,
   });
@@ -418,40 +459,13 @@ export default function WordPressSettings() {
           .select("id, name, tenant_id, tenants(name)")
           .order("name");
         if (error) throw error;
-        return (data || []).map((a: any) => ({
-          id: a.id,
-          name: a.name,
-          tenant_id: a.tenant_id,
-          tenant_name: a.tenants?.name,
-        }));
+        return withSharedTenantAccess(
+          (data || []).map((a: any) => mapAgencyRow(a))
+        );
       }
 
       if (!tenantId) return [];
-
-      const ownPromise = supabase
-        .from("agencies")
-        .select("id, name, tenant_id, tenants(name)")
-        .eq("tenant_id", tenantId)
-        .order("name");
-
-      const accessPromise = supabase
-        .from("agency_tenant_access")
-        .select("agency_id, agencies(id, name, tenant_id, tenants(name))")
-        .eq("accessing_tenant_id", tenantId);
-
-      const [ownRes, accessRes] = await Promise.all([ownPromise, accessPromise]);
-      if (ownRes.error) throw ownRes.error;
-      if (accessRes.error) throw accessRes.error;
-
-      const merged = new Map<string, AgencyOpt>();
-      (ownRes.data || []).forEach((a: any) =>
-        merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name })
-      );
-      (accessRes.data || []).forEach((row: any) => {
-        const a = row.agencies;
-        if (a) merged.set(a.id, { id: a.id, name: a.name, tenant_id: a.tenant_id, tenant_name: a.tenants?.name });
-      });
-      return Array.from(merged.values()).sort((x, y) => x.name.localeCompare(y.name));
+      return fetchAgenciesForTenantScope(tenantId);
     },
     enabled: !!tenantId || isSuperAdmin,
   });
@@ -465,9 +479,9 @@ export default function WordPressSettings() {
     ).values()
   ).sort((x, y) => x.name.localeCompare(y.name));
 
-  // Filter agencies by chosen tenant in the link dialog
+  // Filter agencies by chosen tenant — include shared agencies (e.g. DMM-MC for MarketingCaptain).
   const linkFilteredAgencies = linkTenantId
-    ? linkAgencies.filter((a) => a.tenant_id === linkTenantId)
+    ? agenciesVisibleForTenant(linkAgencies, linkTenantId)
     : linkAgencies;
 
   // Clients for the quick-link dialog — scoped to the SELECTED agency's tenant
@@ -1332,7 +1346,12 @@ export default function WordPressSettings() {
                   <SelectItem value="none">ללא</SelectItem>
                   {linkFilteredAgencies.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.name}{!linkTenantId && a.tenant_name ? ` (${a.tenant_name})` : ""}
+                      {a.name}
+                      {a.tenant_name && a.tenant_id !== linkTenantId
+                        ? ` (${a.tenant_name})`
+                        : !linkTenantId && a.tenant_name
+                          ? ` (${a.tenant_name})`
+                          : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
