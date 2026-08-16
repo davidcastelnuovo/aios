@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractWooOrderAttribution } from "../_shared/wooAttribution.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,8 +9,9 @@ const corsHeaders = {
 
 const PAGE_SIZE = 100;
 const UPSERT_CHUNK = 50;
-const FUNCTION_VERSION = "1.2.0"; // 2026-08-05: UA + batch upsert + resilient sync log
+const FUNCTION_VERSION = "1.3.0"; // 2026-08-16: order attribution from WC meta_data
 const USER_AGENT = `AIOS-WooSync/${FUNCTION_VERSION}`;
+const ATTRIBUTION_BACKFILL_DAYS = 90;
 
 // ---- WooCommerce API helper ----
 async function wooFetch(
@@ -76,6 +78,46 @@ async function upsertChunks(
   }
 }
 
+function mapOrderRow(tenant_id: string, siteId: string, order: any) {
+  return {
+    tenant_id,
+    site_id: siteId,
+    woo_order_id: order.id,
+    order_number: String(order.number || order.id),
+    status: order.status,
+    currency: order.currency,
+    total: parseFloat(order.total) || 0,
+    subtotal: parseFloat(order.subtotal) || 0,
+    total_tax: parseFloat(order.total_tax) || 0,
+    shipping_total: parseFloat(order.shipping_total) || 0,
+    discount_total: parseFloat(order.discount_total) || 0,
+    customer_id: order.customer_id || null,
+    customer_email: order.billing?.email || null,
+    customer_first_name: order.billing?.first_name || null,
+    customer_last_name: order.billing?.last_name || null,
+    customer_phone: order.billing?.phone || null,
+    billing: order.billing || {},
+    shipping: order.shipping || {},
+    line_items: order.line_items || [],
+    payment_method: order.payment_method || null,
+    payment_method_title: order.payment_method_title || null,
+    date_created: order.date_created || null,
+    date_modified: order.date_modified || null,
+    date_completed: order.date_completed || null,
+    date_paid: order.date_paid || null,
+    attribution: extractWooOrderAttribution(order.meta_data),
+    synced_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/** Merge orders by woo_order_id — later rows win (backfill can refresh attribution on older orders). */
+function mergeOrdersById(orders: any[]) {
+  const map = new Map<number, any>();
+  orders.forEach((order) => map.set(order.id, order));
+  return Array.from(map.values());
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -87,7 +129,10 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { site_id, tenant_id: bodyTenantId } = body || {};
+    const { site_id, tenant_id: bodyTenantId, backfill_attribution_days } = body || {};
+    const manualSiteSync = !!site_id && !bodyTenantId;
+    const attributionBackfillDays = Number(backfill_attribution_days) ||
+      (manualSiteSync ? ATTRIBUTION_BACKFILL_DAYS : 0);
 
     // Build query — either by site_id or by tenant_id (for cron)
     let sitesQuery = supabase
@@ -166,37 +211,32 @@ serve(async (req) => {
           orderby: "modified",
           order: "asc",
         });
-        const orderRows = orders.map((order: any) => ({
-          tenant_id,
-          site_id: siteId,
-          woo_order_id: order.id,
-          order_number: String(order.number || order.id),
-          status: order.status,
-          currency: order.currency,
-          total: parseFloat(order.total) || 0,
-          subtotal: parseFloat(order.subtotal) || 0,
-          total_tax: parseFloat(order.total_tax) || 0,
-          shipping_total: parseFloat(order.shipping_total) || 0,
-          discount_total: parseFloat(order.discount_total) || 0,
-          customer_id: order.customer_id || null,
-          customer_email: order.billing?.email || null,
-          customer_first_name: order.billing?.first_name || null,
-          customer_last_name: order.billing?.last_name || null,
-          customer_phone: order.billing?.phone || null,
-          billing: order.billing || {},
-          shipping: order.shipping || {},
-          line_items: order.line_items || [],
-          payment_method: order.payment_method || null,
-          payment_method_title: order.payment_method_title || null,
-          date_created: order.date_created || null,
-          date_modified: order.date_modified || null,
-          date_completed: order.date_completed || null,
-          date_paid: order.date_paid || null,
-          // Omit full raw_data — line_items/billing already cover dashboard needs and
-          // huge payloads were a major cause of edge-function idle timeouts.
-          synced_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }));
+
+        let allOrders = [...orders];
+
+        // Manual / single-site sync: backfill attribution on recent orders even if not modified lately.
+        if (attributionBackfillDays > 0) {
+          const afterDate = new Date();
+          afterDate.setDate(afterDate.getDate() - attributionBackfillDays);
+          const backfillOrders = await fetchAllPages(
+            site_url,
+            woo_consumer_key,
+            woo_consumer_secret,
+            "orders",
+            {
+              after: afterDate.toISOString().split("T")[0],
+              orderby: "date",
+              order: "desc",
+            },
+            30,
+          );
+          allOrders = mergeOrdersById([...allOrders, ...backfillOrders]);
+          console.log(
+            `[woo-sync] attribution backfill ${attributionBackfillDays}d — ${backfillOrders.length} orders fetched, ${allOrders.length} unique`,
+          );
+        }
+
+        const orderRows = allOrders.map((order: any) => mapOrderRow(tenant_id, siteId, order));
         await upsertChunks(supabase, "woocommerce_orders", orderRows, "site_id,woo_order_id");
         ordersCount = orderRows.length;
 

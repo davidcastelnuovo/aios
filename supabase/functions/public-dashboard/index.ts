@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
       let q = supabase
         .from("woocommerce_orders")
         .select(
-          "id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency"
+          "id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution"
         )
         .in("site_id", siteIds)
         .order("date_created", { ascending: false })

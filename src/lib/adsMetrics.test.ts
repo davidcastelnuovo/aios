@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  aggregateFacebookCampaignsFromRecords,
   classifyFacebookCampaignTotals,
   classifyFacebookRecord,
   facebookTableUsesMixedRows,
+  groupFacebookCampaigns,
+  summarizeFacebookCampaignGroup,
   getAddToCartFromData,
   getAdsPurchasesFromData,
   getPurchasesFromData,
@@ -147,11 +150,49 @@ test('classifyFacebookRecord splits ecommerce vs leads rows', () => {
 
 test('classifyFacebookCampaignTotals mirrors per-row rules on aggregates', () => {
   assert.equal(
-    classifyFacebookCampaignTotals({ name: 'מכירות', purchases: 4, purchase_value: 1200, leads: 0 }),
+    classifyFacebookCampaignTotals({ name: 'מכירות', purchases: 4, purchase_value: 1200, leads: 0 } as any),
     'ecommerce',
   );
   assert.equal(
     classifyFacebookCampaignTotals({ name: 'לידים', purchases: 0, purchase_value: 0, leads: 18 }),
     'leads',
   );
+});
+
+test('groupFacebookCampaigns splits Avieli-like mixed account like DynamicTableView', () => {
+  const campaigns = [
+    { name: 'מכירות אוגוסט 2', impressions: 1000, clicks: 50, spend: 572, leads: 0, purchases: 6, purchase_value: 2903, add_to_cart: 10, campaign_type: 'ecommerce' },
+    { name: 'לידים דרושים', impressions: 2000, clicks: 80, spend: 400, leads: 36, purchases: 0, purchase_value: 0, add_to_cart: 0, campaign_type: 'lead' },
+    { name: 'תנועה אוגוסט', impressions: 5000, clicks: 250, spend: 539, leads: 0, purchases: 0, purchase_value: 0, add_to_cart: 0, campaign_type: 'traffic' },
+    { name: 'מודעות פתחנו', impressions: 800, clicks: 20, spend: 280, leads: 0, purchases: 0, purchase_value: 0, add_to_cart: 0, campaign_type: 'other' },
+  ];
+
+  const mixed = groupFacebookCampaigns(campaigns);
+  assert.equal(mixed.ecommerce.length, 1);
+  assert.equal(mixed.leads.length, 2);
+  assert.equal(mixed.traffic.length, 1);
+
+  const leadsOnly = groupFacebookCampaigns(campaigns, { forceLeadsOnly: true });
+  assert.equal(leadsOnly.ecommerce.length, 0);
+  assert.equal(leadsOnly.leads.length, 3);
+  assert.equal(leadsOnly.traffic.length, 1);
+
+  const singleEcom = groupFacebookCampaigns(campaigns, { singleTableMode: 'ecommerce' });
+  assert.equal(singleEcom.ecommerce.length, 3);
+  assert.equal(singleEcom.leads.length, 0);
+});
+
+test('summarizeFacebookCampaignGroup totals match campaign rows for All-tab breakdown', () => {
+  const campaigns = [
+    { name: 'מכירות אוגוסט 2', impressions: 25100, clicks: 581, spend: 572, leads: 0, purchases: 6, purchase_value: 2903, add_to_cart: 44, campaign_type: 'ecommerce' },
+    { name: 'מכירות אוגוסט', impressions: 8800, clicks: 110, spend: 157, leads: 0, purchases: 1, purchase_value: 109, add_to_cart: 5, campaign_type: 'ecommerce' },
+  ];
+  const summary = summarizeFacebookCampaignGroup(campaigns);
+  assert.equal(summary.impressions, 33900);
+  assert.equal(summary.clicks, 691);
+  assert.equal(summary.spend, 729);
+  assert.equal(summary.purchases, 7);
+  assert.equal(summary.revenue, 3012);
+  assert.equal(summary.addToCart, 49);
+  assert.equal(summary.roas, 3012 / 729);
 });

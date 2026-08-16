@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { WooAttributionSection, wooAttributionLabel } from "@/components/dynamic-tables/WooAttributionSection";
 
 interface PublicWooCommerceViewProps {
   sites: any[];
@@ -159,6 +160,8 @@ export function PublicWooCommerceView({ sites, orders }: PublicWooCommerceViewPr
         </Card>
       )}
 
+      <WooAttributionSection orders={orders} formatCurrency={formatCurrency} formatNumber={formatNumber} />
+
       <Card>
         <CardHeader>
           <CardTitle>הזמנות אחרונות ({summary.totalOrders})</CardTitle>
@@ -170,6 +173,7 @@ export function PublicWooCommerceView({ sites, orders }: PublicWooCommerceViewPr
                 <TableHead>הזמנה</TableHead>
                 <TableHead>תאריך</TableHead>
                 <TableHead>לקוח</TableHead>
+                <TableHead>מקור</TableHead>
                 <TableHead>סטטוס</TableHead>
                 <TableHead className="text-left">סכום</TableHead>
               </TableRow>
@@ -184,6 +188,7 @@ export function PublicWooCommerceView({ sites, orders }: PublicWooCommerceViewPr
                       o.customer_email ||
                       "—"}
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{wooAttributionLabel(o)}</TableCell>
                   <TableCell>
                     <Badge variant={["completed", "processing"].includes(o.status) ? "default" : "secondary"}>
                       {o.status}

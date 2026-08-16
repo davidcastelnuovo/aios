@@ -85,6 +85,103 @@ export const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
 
 export const getUsersFromData = (data: any) => Number(data?.users) || 0;
 
+export type FacebookCampaignRow = {
+  name: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  leads: number;
+  purchases: number;
+  purchase_value: number;
+  add_to_cart: number;
+  campaign_type?: string;
+};
+
+/** Mirrors DynamicTableView ecommerce campaign detection on aggregated rows. */
+export function isFacebookEcommerceCampaign(data: FacebookCampaignRow): boolean {
+  if (String(data.campaign_type || '').toLowerCase() === 'traffic') return false;
+  return (
+    (String(data.campaign_type || '').toLowerCase() === 'ecommerce' ||
+      data.purchases > 0 ||
+      data.purchase_value > 0) &&
+    !(data.leads > 0 && data.purchases === 0 && data.purchase_value === 0)
+  );
+}
+
+export function isFacebookTrafficCampaign(data: FacebookCampaignRow): boolean {
+  return String(data.campaign_type || '').toLowerCase() === 'traffic';
+}
+
+/**
+ * Split aggregated Facebook campaigns into ecommerce / leads / traffic tables.
+ * Matches DynamicTableView exactly so mixed accounts (e.g. אביאלי) render the same breakdown.
+ */
+export function groupFacebookCampaigns(
+  campaigns: FacebookCampaignRow[],
+  options: {
+    /** integration_settings.campaign_type = leads — hide ecommerce table */
+    forceLeadsOnly?: boolean;
+    /** Non-mixed tables: show a single campaign table (still keeps traffic separate) */
+    singleTableMode?: 'ecommerce' | 'leads';
+  } = {},
+): { ecommerce: FacebookCampaignRow[]; leads: FacebookCampaignRow[]; traffic: FacebookCampaignRow[] } {
+  const traffic = campaigns.filter(isFacebookTrafficCampaign);
+  const nonTraffic = campaigns.filter((c) => !isFacebookTrafficCampaign(c));
+
+  if (options.singleTableMode === 'ecommerce') {
+    return { ecommerce: nonTraffic, leads: [], traffic };
+  }
+  if (options.singleTableMode === 'leads') {
+    return { ecommerce: [], leads: nonTraffic, traffic };
+  }
+
+  const forceLeadsOnly = options.forceLeadsOnly ?? false;
+  const ecommerce = forceLeadsOnly ? [] : nonTraffic.filter(isFacebookEcommerceCampaign);
+  const leads = forceLeadsOnly
+    ? nonTraffic
+    : nonTraffic.filter((c) => !isFacebookEcommerceCampaign(c));
+
+  return { ecommerce, leads, traffic };
+}
+
+/** Aggregate facebook_insights / facebook_ecommerce records by campaign name. */
+export function aggregateFacebookCampaignsFromRecords(
+  records: Array<{ data?: any }>,
+): FacebookCampaignRow[] {
+  const map: Record<string, FacebookCampaignRow> = {};
+
+  records.forEach((r) => {
+    const d = r.data || {};
+    const name = d.campaign_name || d.campaign || 'ללא שם';
+    if (!map[name]) {
+      map[name] = {
+        name,
+        impressions: 0,
+        clicks: 0,
+        spend: 0,
+        leads: 0,
+        purchases: 0,
+        purchase_value: 0,
+        add_to_cart: 0,
+        campaign_type: d.campaign_type,
+      };
+    }
+    map[name].impressions += Number(d.impressions) || 0;
+    map[name].clicks += Number(d.clicks) || 0;
+    map[name].spend += getSpendFromData(d);
+    map[name].leads += getLeadsFromData(d);
+    map[name].purchases += getAdsPurchasesFromData(d);
+    map[name].purchase_value += getRevenueFromData(d);
+    map[name].add_to_cart += getAddToCartFromData(d);
+    const rowType = String(d.campaign_type || '').toLowerCase();
+    if (rowType === 'ecommerce' || rowType === 'lead' || rowType === 'traffic') {
+      map[name].campaign_type = rowType;
+    }
+  });
+
+  return Object.values(map).sort((a, b) => b.spend - a.spend);
+}
+
 export type FacebookRecordKind = 'ecommerce' | 'leads' | 'traffic';
 
 /** Mirrors DynamicTableView campaign split — per row before aggregation. */
@@ -109,20 +206,23 @@ export function classifyFacebookCampaignTotals(totals: {
   leads?: number;
   purchases?: number;
   purchase_value?: number;
+  revenue?: number;
   campaign_type?: string;
 }): FacebookRecordKind {
   const rowType = String(totals.campaign_type || '').toLowerCase();
   if (rowType === 'traffic') return 'traffic';
-  const purchases = Number(totals.purchases) || 0;
-  const purchaseValue = Number(totals.purchase_value) || 0;
-  const leads = Number(totals.leads) || 0;
-  if (
-    (purchases > 0 || purchaseValue > 0) &&
-    !(leads > 0 && purchases === 0 && purchaseValue === 0)
-  ) {
-    return 'ecommerce';
-  }
-  return 'leads';
+  const row: FacebookCampaignRow = {
+    name: '',
+    impressions: 0,
+    clicks: 0,
+    spend: 0,
+    leads: Number(totals.leads) || 0,
+    purchases: Number(totals.purchases) || 0,
+    purchase_value: Number(totals.purchase_value) || Number(totals.revenue) || 0,
+    add_to_cart: 0,
+    campaign_type: totals.campaign_type,
+  };
+  return isFacebookEcommerceCampaign(row) ? 'ecommerce' : 'leads';
 }
 
 export function isFacebookLeadsOnlyTable(integrationSettings?: any): boolean {
@@ -137,4 +237,39 @@ export function facebookTableUsesMixedRows(
 ): boolean {
   if (integrationType !== 'facebook_insights') return false;
   return !isFacebookLeadsOnlyTable(integrationSettings);
+}
+
+export type FacebookCampaignGroupSummary = {
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  purchases: number;
+  revenue: number;
+  addToCart: number;
+  roas: number;
+  cpl: number;
+};
+
+/** Sum aggregated Facebook campaigns into one platform-breakdown row (All tab). */
+export function summarizeFacebookCampaignGroup(
+  campaigns: FacebookCampaignRow[],
+): FacebookCampaignGroupSummary {
+  const totals = campaigns.reduce(
+    (acc, c) => ({
+      spend: acc.spend + c.spend,
+      impressions: acc.impressions + c.impressions,
+      clicks: acc.clicks + c.clicks,
+      leads: acc.leads + c.leads,
+      purchases: acc.purchases + c.purchases,
+      revenue: acc.revenue + c.purchase_value,
+      addToCart: acc.addToCart + c.add_to_cart,
+    }),
+    { spend: 0, impressions: 0, clicks: 0, leads: 0, purchases: 0, revenue: 0, addToCart: 0 },
+  );
+  return {
+    ...totals,
+    roas: totals.spend > 0 ? totals.revenue / totals.spend : 0,
+    cpl: totals.leads > 0 ? totals.spend / totals.leads : 0,
+  };
 }
