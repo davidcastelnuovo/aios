@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  classifyFacebookCampaignTotals,
+  classifyFacebookRecord,
+  facebookTableUsesMixedRows,
   getAddToCartFromData,
   getAdsPurchasesFromData,
   getPurchasesFromData,
@@ -119,4 +122,36 @@ test('the platform breakdown row matches the Google Ads tab totals', () => {
   assert.equal(breakdown.purchases, googleAdsTab.conversions);
   assert.equal(breakdown.revenue, googleAdsTab.conversions_value);
   assert.equal(breakdown.spend, googleAdsTab.spend);
+});
+
+test('mixed Facebook table is detected when campaign_type is unset', () => {
+  assert.equal(facebookTableUsesMixedRows('facebook_insights', {}), true);
+  assert.equal(facebookTableUsesMixedRows('facebook_insights', { campaign_type: 'leads' }), false);
+  assert.equal(facebookTableUsesMixedRows('facebook_ecommerce', {}), false);
+});
+
+test('classifyFacebookRecord splits ecommerce vs leads rows', () => {
+  assert.equal(
+    classifyFacebookRecord({ campaign_name: 'מכירות', purchases: 2, purchase_value: 500 }),
+    'ecommerce',
+  );
+  assert.equal(
+    classifyFacebookRecord({ campaign_name: 'לידים', form_leads: 12, purchases: 0, purchase_value: 0 }),
+    'leads',
+  );
+  assert.equal(
+    classifyFacebookRecord({ campaign_name: 'לידים עם רעש', form_leads: 5, add_to_cart: 3 }),
+    'leads',
+  );
+});
+
+test('classifyFacebookCampaignTotals mirrors per-row rules on aggregates', () => {
+  assert.equal(
+    classifyFacebookCampaignTotals({ name: 'מכירות', purchases: 4, purchase_value: 1200, leads: 0 }),
+    'ecommerce',
+  );
+  assert.equal(
+    classifyFacebookCampaignTotals({ name: 'לידים', purchases: 0, purchase_value: 0, leads: 18 }),
+    'leads',
+  );
 });
