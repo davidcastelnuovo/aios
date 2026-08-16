@@ -171,6 +171,7 @@ export function PublicSeoView({
 
     return {
       ...n,
+      position: n.position ?? gscRow?.position ?? null,
       position_prev_month: prevPos,
       position_3month: pos3m,
       position_yearly: posYear,
@@ -310,7 +311,7 @@ export function PublicSeoView({
         prevMonth={snapshotPrevMonth}
         campaignStart={snapshotCampaignStart}
         trackedKeywords={trackedKeywords}
-        organicKeywords={organicKeywords}
+        organicKeywords={[...organicKeywords, ...gscOnlyKeywords]}
       />
 
       <SeoKeywordsTable
