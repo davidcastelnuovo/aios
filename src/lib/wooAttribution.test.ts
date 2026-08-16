@@ -56,7 +56,7 @@ test('isGooglePaidWooAttribution detects google/cpc and gclid', () => {
       referrer: null,
       session_entry: null,
       device_type: null,
-      label: 'Google ממומן',
+      label: 'Google Ads',
     }),
     true,
   );
@@ -71,7 +71,7 @@ test('isGooglePaidWooAttribution detects google/cpc and gclid', () => {
       referrer: null,
       session_entry: 'https://avieli.co.il/?gclid=abc',
       device_type: null,
-      label: 'Google ממומן',
+      label: 'Google Ads',
     }),
     true,
   );
@@ -86,7 +86,7 @@ test('isGooglePaidWooAttribution detects google/cpc and gclid', () => {
       referrer: 'https://google.com/',
       session_entry: null,
       device_type: null,
-      label: 'Google',
+      label: 'Google אורגני',
     }),
     false,
   );
@@ -94,8 +94,8 @@ test('isGooglePaidWooAttribution detects google/cpc and gclid', () => {
 
 test('summarizeGoogleAttributedWooOrders splits paid vs organic Google', () => {
   const summary = summarizeGoogleAttributedWooOrders([
-    { status: 'processing', total: 500, attribution: { label: 'Google ממומן', utm_source: 'google', utm_medium: 'cpc' } as any },
-    { status: 'completed', total: 150, attribution: { label: 'Google', utm_source: 'google', utm_medium: 'organic' } as any },
+    { status: 'processing', total: 500, attribution: { label: 'Google Ads', utm_source: 'google', utm_medium: 'cpc' } as any },
+    { status: 'completed', total: 150, attribution: { label: 'Google אורגני', utm_source: 'google', utm_medium: 'organic' } as any },
     { status: 'processing', total: 200, attribution: { label: 'Facebook ממומן' } as any },
     { status: 'cancelled', total: 999, attribution: { label: 'Google ממומן' } as any },
   ]);

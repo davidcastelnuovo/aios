@@ -64,7 +64,7 @@ export function buildWooAttributionLabel(attr: {
     entry.includes('gclid');
 
   if (looksGoogle) {
-    return med === 'paid' || med === 'cpc' || med === 'ppc' ? 'Google ממומן' : 'Google';
+    return med === 'paid' || med === 'cpc' || med === 'ppc' || med === 'paidsearch' ? 'Google Ads' : 'Google אורגני';
   }
 
   if (src === '(direct)' || attr.source_type === 'typein') {

@@ -11,9 +11,8 @@ type Props = {
 
 export function WooAttributionSection({ orders, formatCurrency, formatNumber }: Props) {
   const bySource = useMemo(() => aggregateOrdersByAttribution(orders), [orders]);
-  const hasAttribution = bySource.some((row) => row.label !== 'לא ידוע');
 
-  if (!hasAttribution) return null;
+  if (bySource.length === 0) return null;
 
   return (
     <Card>

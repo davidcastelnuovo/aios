@@ -94,7 +94,7 @@ export function buildWooAttributionLabel(attr: {
     entry.includes('gclid');
 
   if (looksGoogle) {
-    return med === 'paid' || med === 'cpc' || med === 'ppc' ? 'Google ממומן' : 'Google';
+    return med === 'paid' || med === 'cpc' || med === 'ppc' || med === 'paidsearch' ? 'Google Ads' : 'Google אורגני';
   }
 
   if (src === '(direct)' || attr.source_type === 'typein') {
@@ -138,9 +138,12 @@ export function isGooglePaidWooAttribution(attr: WooOrderAttribution | null | un
 
   const looksGoogle =
     src === 'google' ||
+    src === 'googleads' ||
+    src === 'adwords' ||
     src.includes('google') ||
     ref.includes('google') ||
-    entry.includes('gclid');
+    entry.includes('gclid') ||
+    entry.includes('gad_source');
 
   if (!looksGoogle) return false;
 
@@ -148,7 +151,9 @@ export function isGooglePaidWooAttribution(attr: WooOrderAttribution | null | un
     med === 'paid' ||
     med === 'cpc' ||
     med === 'ppc' ||
+    med === 'paidsearch' ||
     entry.includes('gclid') ||
+    attr.label === 'Google Ads' ||
     attr.label === 'Google ממומן'
   );
 }
@@ -167,6 +172,7 @@ export function isGoogleOrganicWooAttribution(attr: WooOrderAttribution | null |
     src.includes('google') ||
     ref.includes('google') ||
     med === 'organic' ||
+    attr.label === 'Google אורגני' ||
     attr.label === 'Google'
   );
 }
