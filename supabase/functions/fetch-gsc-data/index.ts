@@ -3,6 +3,12 @@
 // shows an "edge function" error (404 on the OPTIONS preflight).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  GSC_PERIOD_DEFINITIONS,
+  fetchGscKeywordsFromApi,
+  gscPeriodBounds,
+  readGscSnapshots,
+} from "../_shared/gscKeywords.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +32,7 @@ serve(async (req) => {
   const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET') || '';
 
   try {
-    const { integrationId, siteUrl, startDate, endDate, keywords, aggregateAll } = await req.json();
+    const { integrationId, siteUrl, startDate, endDate, keywords, aggregateAll, forceLive } = await req.json();
 
     if (!integrationId || !siteUrl) {
       return new Response(
@@ -94,6 +100,39 @@ serve(async (req) => {
     // Default date range: last 28 days
     const end = endDate || new Date().toISOString().split('T')[0];
     const start = startDate || new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    // Serve from daily snapshot cache when the requested window matches a known period.
+    if (!forceLive) {
+      const matchingPeriod = GSC_PERIOD_DEFINITIONS.find((def) => {
+        const bounds = gscPeriodBounds(def);
+        return bounds.startDate === start && bounds.endDate === end;
+      });
+      if (matchingPeriod) {
+        const snapshotBundle = await readGscSnapshots(
+          supabase,
+          [integration.tenant_id],
+          siteUrl,
+        );
+        const cachedRows = snapshotBundle?.[matchingPeriod.key];
+        if (cachedRows?.length) {
+          let filteredRows = cachedRows;
+          if (keywords && Array.isArray(keywords) && keywords.length > 0) {
+            const keywordSet = new Set(keywords.map((k: string) => k.toLowerCase().trim()));
+            filteredRows = cachedRows.filter((r) => keywordSet.has(r.keyword.toLowerCase().trim()));
+          }
+          return new Response(
+            JSON.stringify({
+              rows: filteredRows,
+              totalRows: filteredRows.length,
+              dateRange: { start, end },
+              from_cache: true,
+              synced_at: snapshotBundle?.synced_at || null,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+      }
+    }
 
     // Build request body for GSC API
     const requestBody: any = {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
@@ -13,7 +13,6 @@ import { toast } from "sonner";
 import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDown, Check, ArrowUpDown, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
-import { formatGscCtrPercent, gscCtrAsPercent } from "@/lib/gscFormat";
 import { formatGscCtrPercent, gscCtrAsPercent } from "@/lib/gscFormat";
 
 export type GscDateRange = '28d' | '3m' | '12m';
@@ -124,6 +123,7 @@ export function GscIntegration({
   resolvedFallback,
 }: GscIntegrationProps) {
   const queryClient = useQueryClient();
+  const forceLiveNextRef = useRef(false);
   const [selectedSite, setSelectedSite] = useState<string>("");
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
   // Tracks personal/shared integration IDs whose OAuth token is broken
@@ -347,9 +347,11 @@ export function GscIntegration({
           keywords: keywords || [],
           startDate,
           endDate,
+          forceLive: forceLiveNextRef.current,
         },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
+      forceLiveNextRef.current = false;
 
       if (response.error) throw response.error;
       // Token revoked → mark integration as broken so the selection memo
@@ -402,11 +404,13 @@ export function GscIntegration({
               startDate: dateMinus(p.startOffset),
               endDate: dateMinus(p.endOffset),
               aggregateAll: p.aggregateAll,
+              forceLive: forceLiveNextRef.current,
             },
             headers: { Authorization: `Bearer ${session.access_token}` },
           })
         )
       );
+      forceLiveNextRef.current = false;
 
       const result: GscMultiPeriodData = {
         current: [],
@@ -659,6 +663,7 @@ export function GscIntegration({
               title="רענון נתוני Google Search Console"
               onClick={async () => {
                 try {
+                  forceLiveNextRef.current = true;
                   if (!isFallbackIntegration) await refetchSites();
                   if (enableMultiPeriod) {
                     await queryClient.invalidateQueries({
