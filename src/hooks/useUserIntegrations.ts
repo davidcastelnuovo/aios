@@ -43,7 +43,9 @@ export function useUserIntegrations(
       const TENANT_SCOPED_TYPES = new Set(['google_analytics', 'google_search_console', 'google_ads']);
       const isTenantScoped = TENANT_SCOPED_TYPES.has(integrationType);
 
-      // 1. Fetch user's own integrations (or all tenant integrations for tenant-scoped types)
+      // 1. Fetch user's own integrations (or all tenant integrations for tenant-scoped types).
+      // For user-scoped types, also include tenant-shared mirror rows (shared_from_integration_id)
+      // so members of the receiving org can see connections shared from another org.
       let ownQuery = supabase
         .from('tenant_integrations')
         .select('*')
@@ -52,7 +54,7 @@ export function useUserIntegrations(
         .eq('is_active', true);
 
       if (!isTenantScoped) {
-        ownQuery = ownQuery.eq('user_id', userId);
+        ownQuery = ownQuery.or(`user_id.eq.${userId},shared_from_integration_id.not.is.null`);
       }
 
       const { data: ownIntegrations, error: ownError } = await ownQuery;
@@ -126,8 +128,29 @@ export function useUserIntegrations(
 
       // 4. Combine and deduplicate
       const ownIds = new Set((ownIntegrations || []).map(i => i.id));
+      const ownOwnerIds = (ownIntegrations || [])
+        .map(i => i.user_id)
+        .filter((id): id is string => !!id && id !== userId);
+
+      if (ownOwnerIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', ownOwnerIds);
+        if (profiles) {
+          ownerProfiles = {
+            ...ownerProfiles,
+            ...Object.fromEntries(profiles.map(p => [p.id, p.full_name || ''])),
+          };
+        }
+      }
+
       const combined = [
-        ...(ownIntegrations || []).map(i => ({ ...i, _isOwn: true, _sharedByName: null as string | null })),
+        ...(ownIntegrations || []).map(i => ({
+          ...i,
+          _isOwn: i.user_id === userId,
+          _sharedByName: i.user_id && i.user_id !== userId ? (ownerProfiles[i.user_id] || null) : null,
+        })),
         ...sharedIntegrations
           .filter(i => !ownIds.has(i.id))
           .map(i => ({ 

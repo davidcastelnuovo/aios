@@ -84,6 +84,27 @@ export function ShareFacebookConnectionSection({
     mutationFn: async () => {
       if (!user?.id) throw new Error('User not found');
 
+      const { data: sourceIntegration, error: sourceError } = await supabase
+        .from('tenant_integrations')
+        .select(`
+          settings,
+          tenants:tenant_id (
+            name
+          )
+        `)
+        .eq('id', integrationId)
+        .maybeSingle();
+
+      if (sourceError) throw sourceError;
+
+      const sourceSettings = (sourceIntegration?.settings || {}) as Record<string, unknown>;
+      const sourceTenantName = (sourceIntegration?.tenants as { name?: string } | null)?.name || null;
+      const mirrorSettings = {
+        shared: true,
+        shared_from_tenant_name: sourceTenantName,
+        shared_page_name: (sourceSettings.page_name as string | undefined) || null,
+      };
+
       // Get current shares
       const currentShares = existingShares || [];
       
@@ -101,7 +122,7 @@ export function ShareFacebookConnectionSection({
           integration_type: 'facebook_lead_ads',
           is_active: true,
           shared_from_integration_id: integrationId,
-          settings: { shared: true },
+          settings: mirrorSettings,
         });
       }
 
