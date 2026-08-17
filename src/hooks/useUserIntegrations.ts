@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import {
+  getClientIntegrationSelect,
+  toClientIntegration,
+  type ClientIntegration,
+} from "@/lib/tenantIntegrationsClient";
 
 /**
  * Fetches integrations the current user has access to:
@@ -43,10 +48,12 @@ export function useUserIntegrations(
       const TENANT_SCOPED_TYPES = new Set(['google_analytics', 'google_search_console', 'google_ads']);
       const isTenantScoped = TENANT_SCOPED_TYPES.has(integrationType);
 
+      const selectColumns = getClientIntegrationSelect(integrationType);
+
       // 1. Fetch user's own integrations (or all tenant integrations for tenant-scoped types)
       let ownQuery = supabase
         .from('tenant_integrations')
-        .select('*')
+        .select(selectColumns)
         .in('tenant_id', tenantIds)
         .eq('integration_type', integrationType)
         .eq('is_active', true);
@@ -76,11 +83,12 @@ export function useUserIntegrations(
           }
         }
 
-        return (ownIntegrations || []).map(i => ({
-          ...i,
-          _isOwn: i.user_id === userId,
-          _sharedByName: i.user_id && i.user_id !== userId ? (ownerProfiles[i.user_id] || null) : null,
-        }));
+        return (ownIntegrations || []).map((i) =>
+          toClientIntegration(i, {
+            _isOwn: i.user_id === userId,
+            _sharedByName: i.user_id && i.user_id !== userId ? (ownerProfiles[i.user_id] || null) : null,
+          }),
+        );
       }
 
       // 2. Fetch shared integrations via permissions (for user-scoped types)
@@ -97,7 +105,7 @@ export function useUserIntegrations(
       if (sharedIntegrationIds.length > 0) {
         const { data: shared, error: sharedError } = await supabase
           .from('tenant_integrations')
-          .select('*')
+          .select(selectColumns)
           .in('tenant_id', tenantIds)
           .eq('integration_type', integrationType)
           .eq('is_active', true)
@@ -126,15 +134,18 @@ export function useUserIntegrations(
 
       // 4. Combine and deduplicate
       const ownIds = new Set((ownIntegrations || []).map(i => i.id));
-      const combined = [
-        ...(ownIntegrations || []).map(i => ({ ...i, _isOwn: true, _sharedByName: null as string | null })),
+      const combined: ClientIntegration[] = [
+        ...(ownIntegrations || []).map((i) =>
+          toClientIntegration(i, { _isOwn: true, _sharedByName: null }),
+        ),
         ...sharedIntegrations
-          .filter(i => !ownIds.has(i.id))
-          .map(i => ({ 
-            ...i, 
-            _isOwn: false, 
-            _sharedByName: i.user_id ? (ownerProfiles[i.user_id] || null) : null 
-          })),
+          .filter((i) => !ownIds.has(i.id))
+          .map((i) =>
+            toClientIntegration(i, {
+              _isOwn: false,
+              _sharedByName: i.user_id ? (ownerProfiles[i.user_id] || null) : null,
+            }),
+          ),
       ];
 
       return combined;

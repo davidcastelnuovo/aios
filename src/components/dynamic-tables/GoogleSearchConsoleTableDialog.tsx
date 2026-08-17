@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { Loader2, Search, ExternalLink } from "lucide-react";
+import { CLIENT_INTEGRATION_COLUMNS, toClientIntegration } from "@/lib/tenantIntegrationsClient";
 
 interface GoogleSearchConsoleTableDialogProps {
   open: boolean;
@@ -39,7 +40,7 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("*")
+        .select(CLIENT_INTEGRATION_COLUMNS)
         .eq("tenant_id", activeTenantId)
         .eq("integration_type", "google_search_console")
         .eq("is_active", true)
@@ -48,7 +49,7 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
         .maybeSingle();
 
       if (error) throw error;
-      return data;
+      return data ? toClientIntegration(data) : null;
     },
     enabled: open && !!activeTenantId,
   });

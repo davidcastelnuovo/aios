@@ -23,6 +23,11 @@ import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
+import {
+  CLIENT_INTEGRATION_COLUMNS,
+  isGoogleIntegrationConnected,
+  toClientIntegration,
+} from "@/lib/tenantIntegrationsClient";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-6 w-6" }: { className?: string }) => (
@@ -86,12 +91,12 @@ export default function GoogleAdsSettings() {
       if (!currentTenant?.id) return null;
       const { data, error } = await supabase
         .from('tenant_integrations')
-        .select('*')
+        .select(CLIENT_INTEGRATION_COLUMNS)
         .eq('tenant_id', currentTenant.id)
         .eq('integration_type', 'google_ads')
         .maybeSingle();
       if (error) throw error;
-      return data;
+      return data ? toClientIntegration(data) : null;
     },
     enabled: !!currentTenant?.id,
   });
@@ -421,12 +426,16 @@ export default function GoogleAdsSettings() {
     toast.success(`${label} הועתק ללוח`);
   };
 
-  const isConnected = googleAdsIntegration?.is_active && googleAdsIntegration?.api_key;
+  const isConnected = isGoogleIntegrationConnected(googleAdsIntegration);
   const isMakeConfigured = makeIntegration?.is_active;
   const isViaMakeConnected = googleAdsViaMakeIntegration?.is_active;
   const settings = googleAdsIntegration?.settings as any;
   const viaMakeSettings = googleAdsViaMakeIntegration?.settings as { connection_name?: string } | null;
-  const needsReauth = Boolean(settings?.needs_reauth) || (googleAdsIntegration && googleAdsIntegration.is_active === false && googleAdsIntegration.api_key);
+  const needsReauth = Boolean(settings?.needs_reauth) || (
+    googleAdsIntegration &&
+    googleAdsIntegration.is_active === false &&
+    googleAdsIntegration.has_credential
+  );
   const lastAuthError = settings?.last_auth_error as string | undefined;
 
   return (
