@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,15 +97,25 @@ export default function SharedTable() {
   const [customStart, setCustomStart] = useState<Date | undefined>();
   const [customEnd, setCustomEnd] = useState<Date | undefined>();
   const [isCustomOpen, setIsCustomOpen] = useState(false);
+  const [seoShareLocked, setSeoShareLocked] = useState(false);
   const queryClient = useQueryClient();
 
+  const dateQueryKey = seoShareLocked
+    ? "seo"
+    : [dateFilter, customStart?.toISOString() ?? "", customEnd?.toISOString() ?? ""].join("|");
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['shared-table', shareToken, dateFilter, customStart?.toISOString(), customEnd?.toISOString()],
+    queryKey: ['shared-table', shareToken, dateQueryKey],
     queryFn: async () => {
-      const params = new URLSearchParams({ token: shareToken!, date_filter: dateFilter });
-      if (dateFilter === 'custom' && customStart && customEnd) {
-        params.set('custom_start', format(customStart, 'yyyy-MM-dd'));
-        params.set('custom_end', format(customEnd, 'yyyy-MM-dd'));
+      const params = new URLSearchParams({ token: shareToken! });
+      // SEO share links ignore date_filter server-side — skip sending it to avoid
+      // pointless refetches when the user toggles the ads date chips.
+      if (!seoShareLocked) {
+        params.set("date_filter", dateFilter);
+        if (dateFilter === 'custom' && customStart && customEnd) {
+          params.set('custom_start', format(customStart, 'yyyy-MM-dd'));
+          params.set('custom_end', format(customEnd, 'yyyy-MM-dd'));
+        }
       }
       const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
       const res = await fetch(`${baseUrl}?${params.toString()}`, {
@@ -115,9 +125,16 @@ export default function SharedTable() {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: !!shareToken && (dateFilter !== 'custom' || (!!customStart && !!customEnd)),
+    enabled: !!shareToken && (seoShareLocked || dateFilter !== 'custom' || (!!customStart && !!customEnd)),
+    staleTime: 5 * 60 * 1000,
     retry: false,
   });
+
+  useEffect(() => {
+    if (data?.table?.integration_type === "ahrefs") {
+      setSeoShareLocked(true);
+    }
+  }, [data?.table?.integration_type]);
 
   const integrationType = data?.table?.integration_type;
   const isIntegrationTable = isAdsPlatform(integrationType || '') || isAnalyticsPlatform(integrationType || '');
