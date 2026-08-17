@@ -282,6 +282,9 @@ verify_jwt = false
 [functions.cron-sync-ahrefs]
 verify_jwt = false
 
+[functions.cron-sync-gsc-keywords]
+verify_jwt = false
+
 [functions.cron-lead-alert-failure-watch]
 verify_jwt = false
 

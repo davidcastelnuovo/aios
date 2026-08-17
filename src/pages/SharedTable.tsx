@@ -104,8 +104,8 @@ export default function SharedTable() {
     ? "seo"
     : [dateFilter, customStart?.toISOString() ?? "", customEnd?.toISOString() ?? ""].join("|");
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['shared-table', shareToken, dateQueryKey],
+  const { data: coreData, isLoading, error } = useQuery({
+    queryKey: ['shared-table', shareToken, dateQueryKey, 'core'],
     queryFn: async () => {
       const params = new URLSearchParams({ token: shareToken! });
       // SEO share links ignore date_filter server-side — skip sending it to avoid
@@ -117,6 +117,8 @@ export default function SharedTable() {
           params.set('custom_end', format(customEnd, 'yyyy-MM-dd'));
         }
       }
+      // Fast first paint for SEO shares — GSC loads in a follow-up request.
+      params.set("seo_part", "core");
       const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
       const res = await fetch(`${baseUrl}?${params.toString()}`, {
         method: 'GET',
@@ -130,11 +132,41 @@ export default function SharedTable() {
     retry: false,
   });
 
+  const isSeoShare = coreData?.table?.integration_type === "ahrefs";
+
+  const { data: gscPart, isLoading: gscLoading } = useQuery({
+    queryKey: ['shared-table', shareToken, 'gsc'],
+    queryFn: async () => {
+      const params = new URLSearchParams({ token: shareToken!, seo_part: 'gsc' });
+      const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
+      const res = await fetch(`${baseUrl}?${params.toString()}`, {
+        method: 'GET',
+        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: !!shareToken && isSeoShare,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  const data = useMemo(() => {
+    if (!coreData) return undefined;
+    if (!isSeoShare) return coreData;
+    return {
+      ...coreData,
+      gsc_records: gscPart?.gsc_records ?? coreData.gsc_records ?? [],
+      gsc_multi_period: gscPart?.gsc_multi_period ?? coreData.gsc_multi_period ?? null,
+      gsc_synced_at: gscPart?.gsc_synced_at ?? coreData.gsc_synced_at ?? null,
+    };
+  }, [coreData, gscPart, isSeoShare]);
+
   useEffect(() => {
-    if (data?.table?.integration_type === "ahrefs") {
+    if (coreData?.table?.integration_type === "ahrefs") {
       setSeoShareLocked(true);
     }
-  }, [data?.table?.integration_type]);
+  }, [coreData?.table?.integration_type]);
 
   const integrationType = data?.table?.integration_type;
   const isIntegrationTable = isAdsPlatform(integrationType || '') || isAnalyticsPlatform(integrationType || '');
@@ -306,6 +338,7 @@ export default function SharedTable() {
     const periodLabel = maskyooPeriod ? `${maskyooPeriod.start} – ${maskyooPeriod.end}` : undefined;
     const hasGa = gaRecords.length > 0;
     const hasGsc = gscRecords.length > 0;
+    const gscPending = isSeoShare && gscLoading && !hasGsc;
     const hasMaskyoo = maskyooSnapshots.length > 0;
     const seoMonthly = (data as any).seo_monthly || null;
     const hasMonthlyWork = Array.isArray(seoMonthly?.months) && seoMonthly.months.length > 0;
@@ -363,6 +396,12 @@ export default function SharedTable() {
                   Search Console
                 </TabsTrigger>
               )}
+              {gscPending && (
+                <TabsTrigger value="gsc" className="gap-1.5" disabled>
+                  <Search className="h-4 w-4 animate-pulse" />
+                  Search Console…
+                </TabsTrigger>
+              )}
               {hasGa && (
                 <TabsTrigger value="ga" className="gap-1.5">
                   <BarChart3 className="h-4 w-4" />
@@ -380,6 +419,9 @@ export default function SharedTable() {
             </TabsList>
 
             <TabsContent value="seo" className="space-y-4">
+              {gscPending && (
+                <p className="text-sm text-muted-foreground">טוען נתוני Search Console…</p>
+              )}
               <PublicSeoView
                 tableName={data.table.name}
                 reports={data.ahrefs_reports || []}

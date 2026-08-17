@@ -1,4 +1,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  type GscKeywordRow,
+  GSC_PERIOD_DEFINITIONS,
+  fetchGscKeywordsFromApi,
+  gscBundleToMultiPeriod,
+  gscDateMinus,
+  gscPeriodBounds,
+  mapGscRowsToCrmRecords,
+  readGscSnapshots,
+  readSeoShareCacheFromDb,
+  resolveGscAccessToken,
+  writeSeoShareCacheToDb,
+} from "../_shared/gscKeywords.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -181,125 +194,21 @@ async function resolveGscSiteForClient(
   return candidates[0]?.siteUrl || null;
 }
 
-type GscKeywordRow = {
-  keyword: string;
-  clicks: number;
-  impressions: number;
-  ctr: number;
-  position: number;
-};
-
-function mapGscApiRow(row: any): GscKeywordRow {
-  return {
-    keyword: row.keys?.[0] || "",
-    clicks: row.clicks || 0,
-    impressions: row.impressions || 0,
-    ctr: row.ctr ? Math.round(row.ctr * 10000) / 100 : 0,
-    position: row.position ? Math.round(row.position * 10) / 10 : 0,
-  };
-}
-
-async function resolveGscAccessToken(
-  supabase: ReturnType<typeof createClient>,
-  tenantIdList: string[],
-): Promise<string | null> {
-  const googleClientId = Deno.env.get("GOOGLE_CLIENT_ID") || "";
-  const googleClientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
-  const { data: integrations } = await supabase
-    .from("tenant_integrations")
-    .select("id, api_key, settings")
-    .eq("integration_type", "google_search_console")
-    .eq("is_active", true)
-    .in("tenant_id", tenantIdList)
-    .order("updated_at", { ascending: false })
-    .limit(5);
-
-  for (const integration of integrations || []) {
-    try {
-      let tok = integration.api_key as string;
-      const intSettings: any = integration.settings || {};
-      if (intSettings.expires_at && new Date(intSettings.expires_at) < new Date() && intSettings.refresh_token) {
-        const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            client_id: googleClientId,
-            client_secret: googleClientSecret,
-            refresh_token: intSettings.refresh_token,
-            grant_type: "refresh_token",
-          }),
-        });
-        const refreshData = await refreshResponse.json();
-        if (refreshData.access_token) {
-          tok = refreshData.access_token;
-          const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
-          await supabase
-            .from("tenant_integrations")
-            .update({ api_key: tok, settings: { ...intSettings, expires_at: newExpiresAt } })
-            .eq("id", integration.id);
-        }
-      }
-      if (tok) return tok;
-    } catch (e) {
-      console.error("Error preparing GSC token:", e);
-    }
-  }
-  return null;
-}
-
-async function fetchGscKeywordsLive(
-  accessToken: string,
-  siteUrl: string,
-  startDate: string,
-  endDate: string,
-  maxRows = 5000,
-): Promise<GscKeywordRow[]> {
-  const encodedSiteUrl = encodeURIComponent(siteUrl);
-  const gscApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodedSiteUrl}/searchAnalytics/query`;
-  const collected: GscKeywordRow[] = [];
-  const pageSize = 1000;
-  const maxPages = Math.ceil(maxRows / pageSize);
-
-  for (let page = 0; page < maxPages; page++) {
-    const resp = await fetch(gscApiUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        startDate,
-        endDate,
-        dimensions: ["query"],
-        rowLimit: pageSize,
-        startRow: page * pageSize,
-        dataState: "final",
-      }),
-    });
-    if (!resp.ok) {
-      console.error("GSC API error for site", siteUrl, resp.status, await resp.text());
-      break;
-    }
-    const json = await resp.json();
-    const pageRows = Array.isArray(json.rows) ? json.rows : [];
-    collected.push(...pageRows.map(mapGscApiRow));
-    if (pageRows.length < pageSize) break;
-  }
-  return collected;
-}
-
 const SEO_SHARE_CACHE_TTL_MS = 10 * 60 * 1000;
 const seoShareResponseCache = new Map<string, { body: string; expiresAt: number }>();
 
-function readSeoShareCache(shareToken: string): string | null {
-  const hit = seoShareResponseCache.get(shareToken);
+function readSeoShareCacheLocal(cacheKey: string): string | null {
+  const hit = seoShareResponseCache.get(cacheKey);
   if (!hit) return null;
   if (Date.now() > hit.expiresAt) {
-    seoShareResponseCache.delete(shareToken);
+    seoShareResponseCache.delete(cacheKey);
     return null;
   }
   return hit.body;
 }
 
-function writeSeoShareCache(shareToken: string, body: string) {
-  seoShareResponseCache.set(shareToken, {
+function writeSeoShareCacheLocal(cacheKey: string, body: string) {
+  seoShareResponseCache.set(cacheKey, {
     body,
     expiresAt: Date.now() + SEO_SHARE_CACHE_TTL_MS,
   });
@@ -307,6 +216,26 @@ function writeSeoShareCache(shareToken: string, body: string) {
     const oldest = seoShareResponseCache.keys().next().value;
     if (oldest) seoShareResponseCache.delete(oldest);
   }
+}
+
+async function readSeoShareCache(
+  supabase: ReturnType<typeof createClient>,
+  cacheKey: string,
+): Promise<string | null> {
+  const local = readSeoShareCacheLocal(cacheKey);
+  if (local) return local;
+  const db = await readSeoShareCacheFromDb(supabase, cacheKey);
+  if (db) writeSeoShareCacheLocal(cacheKey, db);
+  return db;
+}
+
+async function writeSeoShareCache(
+  supabase: ReturnType<typeof createClient>,
+  cacheKey: string,
+  body: string,
+) {
+  writeSeoShareCacheLocal(cacheKey, body);
+  await writeSeoShareCacheToDb(supabase, cacheKey, body, SEO_SHARE_CACHE_TTL_MS);
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -352,19 +281,6 @@ function trimAhrefsReportsForPublic(reports: any[]): any[] {
   });
 }
 
-function mapGscRowsToCrmRecords(rows: GscKeywordRow[]) {
-  return rows.map((row) => ({
-    data: {
-      query: row.keyword,
-      keyword: row.keyword,
-      clicks: row.clicks,
-      impressions: row.impressions,
-      ctr: row.ctr,
-      position: row.position,
-    },
-  }));
-}
-
 /** Only the GA row types used by computeGaOrganicByMonth — not thousands of daily rows. */
 async function fetchGaRecordsForSeoChart(
   supabase: ReturnType<typeof createClient>,
@@ -391,12 +307,6 @@ async function fetchGaRecordsForSeoChart(
     if (data?.length) out.push(...data);
   }
   return out;
-}
-
-function gscDateMinus(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().split("T")[0];
 }
 
 Deno.serve(async (req) => {
@@ -481,6 +391,8 @@ Deno.serve(async (req) => {
     const dateFilter = url.searchParams.get("date_filter") || "last_30_days";
     const customStart = url.searchParams.get("custom_start");
     const customEnd = url.searchParams.get("custom_end");
+    const seoPart = url.searchParams.get("seo_part"); // core | gsc | null (full)
+    const liveGsc = url.searchParams.get("live_gsc") === "1";
 
     if (!shareToken) {
       return new Response(JSON.stringify({ error: "Missing token" }), {
@@ -537,7 +449,12 @@ Deno.serve(async (req) => {
     // For Ahrefs/SEO tables — return the actual SEO reports payload so the
     // public viewer can render the visual SEO dashboard instead of a raw table.
     if (table.integration_type === "ahrefs") {
-      const cachedSeoBody = readSeoShareCache(shareToken);
+      const cacheKey = seoPart === "gsc"
+        ? `${shareToken}:gsc`
+        : seoPart === "core"
+        ? `${shareToken}:core`
+        : shareToken;
+      const cachedSeoBody = await readSeoShareCache(supabase, cacheKey);
       if (cachedSeoBody) {
         return new Response(cachedSeoBody, {
           headers: {
@@ -600,7 +517,9 @@ Deno.serve(async (req) => {
 
       const tenantIdList = () => Array.from(accessibleTenantIds);
 
-      const ahrefsPromise = (async () => {
+      const ahrefsPromise = seoPart === "gsc"
+        ? Promise.resolve([] as any[])
+        : (async () => {
         await clientContextPromise;
         const tenants = tenantIdList();
         let reportsQuery = supabase
@@ -668,7 +587,9 @@ Deno.serve(async (req) => {
         return { gaTable, gscTable };
       })();
 
-      const maskyooPromise = (async (): Promise<{ snapshots: any[]; period: { start: string; end: string } | null }> => {
+      const maskyooPromise = seoPart === "gsc"
+        ? Promise.resolve({ snapshots: [] as any[], period: null })
+        : (async (): Promise<{ snapshots: any[]; period: { start: string; end: string } | null }> => {
         await clientContextPromise;
         if (!targetClientId) return { snapshots: [], period: null };
         try {
@@ -691,7 +612,21 @@ Deno.serve(async (req) => {
         }
       })();
 
-      const seoMonthlyPromise = (async () => {
+      const seoMonthlyPromise = seoPart === "gsc"
+        ? Promise.resolve({
+          client_name: null,
+          domain: null,
+          share_token: null,
+          months: [] as Array<{
+            month: string;
+            status: string;
+            work: unknown;
+            notes: string | null;
+            share_token: string | null;
+            snapshot: unknown | null;
+          }>,
+        })
+        : (async () => {
         await clientContextPromise;
         const seoMonthly: {
           client_name: string | null;
@@ -779,70 +714,36 @@ Deno.serve(async (req) => {
           )
           : null);
 
-      const gaRecordsPromise = gaTable?.id
-        ? fetchGaRecordsForSeoChart(supabase, gaTable.id)
-        : Promise.resolve([] as any[]);
+      const gaRecordsPromise = seoPart === "gsc" || !gaTable?.id
+        ? Promise.resolve([] as any[])
+        : fetchGaRecordsForSeoChart(supabase, gaTable.id);
 
       const gscBundlePromise = (async () => {
+        if (seoPart === "core") {
+          return { gscRecords: [] as any[], gscMultiPeriod: null, gscSyncedAt: null };
+        }
+
         let gscRecords: any[] = [];
         let gscMultiPeriod: { prevMonth: GscKeywordRow[]; threeMonth: GscKeywordRow[]; yearly: GscKeywordRow[] } | null = null;
-        if (!effectiveGscSiteUrl) return { gscRecords, gscMultiPeriod };
+        let gscSyncedAt: string | null = null;
+        if (!effectiveGscSiteUrl) return { gscRecords, gscMultiPeriod, gscSyncedAt };
 
         try {
-          const accessToken = await resolveGscAccessToken(supabase, tenantIdList());
-          if (!accessToken) return { gscRecords, gscMultiPeriod };
-
-          const end = new Date().toISOString().split("T")[0];
-          const start90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-          const periods = {
-            prevMonth: { startOffset: 58, endOffset: 30 },
-            threeMonth: { startOffset: 118, endOffset: 90 },
-            yearly: { startOffset: 393, endOffset: 365 },
-          } as const;
-
-          const [currentRows, pm, tm, yr] = await Promise.all([
-            fetchGscKeywordsLive(accessToken, effectiveGscSiteUrl, start90, end, 5000),
-            withTimeout(
-              fetchGscKeywordsLive(
-                accessToken,
-                effectiveGscSiteUrl,
-                gscDateMinus(periods.prevMonth.startOffset),
-                gscDateMinus(periods.prevMonth.endOffset),
-                1000,
-              ),
-              4500,
-              [] as GscKeywordRow[],
-            ),
-            withTimeout(
-              fetchGscKeywordsLive(
-                accessToken,
-                effectiveGscSiteUrl,
-                gscDateMinus(periods.threeMonth.startOffset),
-                gscDateMinus(periods.threeMonth.endOffset),
-                1000,
-              ),
-              4500,
-              [] as GscKeywordRow[],
-            ),
-            withTimeout(
-              fetchGscKeywordsLive(
-                accessToken,
-                effectiveGscSiteUrl,
-                gscDateMinus(periods.yearly.startOffset),
-                gscDateMinus(periods.yearly.endOffset),
-                1000,
-              ),
-              4500,
-              [] as GscKeywordRow[],
-            ),
-          ]);
-
-          if (currentRows.length > 0) {
-            gscRecords = mapGscRowsToCrmRecords(currentRows);
+          const snapshotBundle = await readGscSnapshots(
+            supabase,
+            tenantIdList(),
+            effectiveGscSiteUrl,
+            targetClientId,
+          );
+          if (snapshotBundle) {
+            gscSyncedAt = snapshotBundle.synced_at;
+            if (snapshotBundle.current_90d.length > 0) {
+              gscRecords = mapGscRowsToCrmRecords(snapshotBundle.current_90d);
+            }
+            gscMultiPeriod = gscBundleToMultiPeriod(snapshotBundle);
           }
-          gscMultiPeriod = { prevMonth: pm, threeMonth: tm, yearly: yr };
         } catch (e) {
-          console.error("Error fetching live GSC keywords:", e);
+          console.error("Error reading GSC snapshots:", e);
         }
 
         if (gscRecords.length === 0 && gscTable?.id) {
@@ -863,13 +764,86 @@ Deno.serve(async (req) => {
           }
         }
 
-        return { gscRecords, gscMultiPeriod };
+        const needsLiveGsc = liveGsc || gscRecords.length === 0;
+        if (needsLiveGsc) {
+          try {
+            const accessToken = await resolveGscAccessToken(supabase, tenantIdList());
+            if (accessToken) {
+              const currentDef = GSC_PERIOD_DEFINITIONS.find((p) => p.key === "current_90d")!;
+              const { startDate, endDate } = gscPeriodBounds(currentDef);
+              const [currentRows, pm, tm, yr] = await Promise.all([
+                fetchGscKeywordsFromApi(accessToken, effectiveGscSiteUrl, startDate, endDate, currentDef.maxRows),
+                withTimeout(
+                  fetchGscKeywordsFromApi(
+                    accessToken,
+                    effectiveGscSiteUrl,
+                    gscDateMinus(58),
+                    gscDateMinus(30),
+                    1000,
+                  ),
+                  4500,
+                  [] as GscKeywordRow[],
+                ),
+                withTimeout(
+                  fetchGscKeywordsFromApi(
+                    accessToken,
+                    effectiveGscSiteUrl,
+                    gscDateMinus(118),
+                    gscDateMinus(90),
+                    1000,
+                  ),
+                  4500,
+                  [] as GscKeywordRow[],
+                ),
+                withTimeout(
+                  fetchGscKeywordsFromApi(
+                    accessToken,
+                    effectiveGscSiteUrl,
+                    gscDateMinus(393),
+                    gscDateMinus(365),
+                    1000,
+                  ),
+                  4500,
+                  [] as GscKeywordRow[],
+                ),
+              ]);
+
+              if (currentRows.length > 0) {
+                gscRecords = mapGscRowsToCrmRecords(currentRows);
+              }
+              gscMultiPeriod = { prevMonth: pm, threeMonth: tm, yearly: yr };
+              gscSyncedAt = new Date().toISOString();
+            }
+          } catch (e) {
+            console.error("Error fetching live GSC keywords:", e);
+          }
+        }
+
+        return { gscRecords, gscMultiPeriod, gscSyncedAt };
       })();
 
-      const [gaRecords, { gscRecords, gscMultiPeriod }] = await Promise.all([
+      const [gaRecords, { gscRecords, gscMultiPeriod, gscSyncedAt }] = await Promise.all([
         gaRecordsPromise,
         gscBundlePromise,
       ]);
+
+      if (seoPart === "gsc") {
+        const gscPayload = {
+          gsc_records: gscRecords,
+          gsc_multi_period: gscMultiPeriod,
+          gsc_synced_at: gscSyncedAt,
+        };
+        const gscBody = JSON.stringify(gscPayload);
+        await writeSeoShareCache(supabase, cacheKey, gscBody);
+        return new Response(gscBody, {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=300",
+            "X-Cache": "MISS",
+          },
+        });
+      }
 
       const seoPayload = {
         table: {
@@ -888,6 +862,7 @@ Deno.serve(async (req) => {
         gsc_table: gscTable ? { id: gscTable.id, name: gscTable.name, integration_settings: gscTable.integration_settings } : null,
         gsc_records: gscRecords,
         gsc_multi_period: gscMultiPeriod,
+        gsc_synced_at: gscSyncedAt,
         maskyoo_snapshots: maskyooResult.snapshots,
         maskyoo_period: maskyooResult.period,
         seo_monthly: seoMonthly,
@@ -899,7 +874,7 @@ Deno.serve(async (req) => {
       };
 
       const seoBody = JSON.stringify(seoPayload);
-      writeSeoShareCache(shareToken, seoBody);
+      await writeSeoShareCache(supabase, cacheKey, seoBody);
 
       return new Response(seoBody, {
         headers: {
