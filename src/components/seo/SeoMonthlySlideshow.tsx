@@ -343,8 +343,10 @@ function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const search = snapshot.search;
   const metricOf = (key: string) => snapshot.metrics.find((m) => m.key === key);
 
-  // Prefer the rich Search Console blob; if a public share only kept metric rows,
-  // rebuild the same headline cards so in-app and share stay aligned.
+  const ahrefsTop20 = metricOf("top20");
+  const ahrefsTop3 = metricOf("top3");
+
+  // GSC: clicks + impressions. Rankings: Ahrefs (matches SeoSnapshotCards / positions table).
   const headline = search
     ? [
         {
@@ -361,20 +363,24 @@ function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
           prev: search.prev?.impressions,
           base: search.base?.impressions,
         },
-        {
-          key: "top20",
-          label: "ביטויים ב-Top 20",
-          value: search.totals.top20,
-          prev: search.prev?.top20,
-          base: search.base?.top20,
-        },
-        {
-          key: "keywords",
-          label: "ביטויים עם חשיפות",
-          value: search.totals.keywords,
-          prev: search.prev?.keywords,
-          base: search.base?.keywords,
-        },
+        ...(ahrefsTop20
+          ? [{
+              key: "top20",
+              label: "ביטויים ב-Top 20",
+              value: ahrefsTop20.value,
+              prev: ahrefsTop20.prevValue,
+              base: undefined as number | undefined,
+            }]
+          : []),
+        ...(ahrefsTop3
+          ? [{
+              key: "top3",
+              label: "ביטויים ב-Top 3",
+              value: ahrefsTop3.value,
+              prev: ahrefsTop3.prevValue,
+              base: undefined as number | undefined,
+            }]
+          : []),
       ]
     : (
         [
@@ -398,9 +404,7 @@ function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
         .filter((row): row is NonNullable<typeof row> => !!row);
 
   const hasGscHeadline = headline.length > 0;
-  // Ahrefs' own traffic estimate is unreliable for small sites and reads as a
-  // contradiction next to real Search Console clicks, so hide it when we have GSC.
-  const hiddenWithSearch = ["gsc_clicks", "gsc_impressions", "top20", "keywords_total", "org_traffic"];
+  const hiddenWithSearch = ["gsc_clicks", "gsc_impressions", "top20", "top3", "org_traffic"];
   const secondary = snapshot.metrics.filter((m) =>
     hasGscHeadline ? !hiddenWithSearch.includes(m.key) : !["gsc_clicks", "gsc_impressions"].includes(m.key),
   );
@@ -484,6 +488,21 @@ function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
             );
           })}
         </div>
+      )}
+
+      {search && search.totals.keywords > 0 && (
+        <p className="text-sm text-[#F4F0E6]/55 border-t border-white/10 pt-4">
+          ביטויים עם חשיפות ב-Search Console:{" "}
+          <span className="font-semibold tabular-nums text-[#F4F0E6]">
+            {formatNum(search.totals.keywords)}
+          </span>
+          {search.prev != null && (
+            <span className="text-[#F4F0E6]/50">
+              {" "}
+              ({deltaLabel(search.totals.keywords, search.prev.keywords) ?? "ללא שינוי"})
+            </span>
+          )}
+        </p>
       )}
     </div>
   );

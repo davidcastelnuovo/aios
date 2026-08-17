@@ -352,8 +352,8 @@ export function buildSeoMonthlyShareSnapshot(opts: {
         .sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
         .slice(0, limit);
 
-  // Search Console reflects reality better than the Ahrefs snapshot, which is
-  // often stale or empty for small sites — prefer it for the headline numbers.
+  // Search Console reflects reality for clicks/impressions; Ahrefs positions stay
+  // the source of truth for Top 3 / Top 20 (GSC query positions are a different metric).
   if (search) {
     const upsert = (key: string, label: string, value: number, prevValue?: number) => {
       const idx = metrics.findIndex((m) => m.key === key);
@@ -363,9 +363,6 @@ export function buildSeoMonthlyShareSnapshot(opts: {
     };
     upsert("gsc_clicks", "קליקים מגוגל", search.totals.clicks, search.prev?.clicks);
     upsert("gsc_impressions", "חשיפות בגוגל", search.totals.impressions, search.prev?.impressions);
-    upsert("top20", "ביטויים ב-Top 20", search.totals.top20, search.prev?.top20);
-    upsert("top3", "ביטויים ב-Top 3", search.totals.top3, search.prev?.top3);
-    upsert("keywords_total", "ביטויים עם חשיפות", search.totals.keywords, search.prev?.keywords);
 
     const order = [
       "gsc_clicks",
