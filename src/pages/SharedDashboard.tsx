@@ -46,7 +46,7 @@ import {
 } from "recharts";
 
 import { SHARED_COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
-import { summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
+import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
 
 const DATE_FILTERS = SHARED_COMBINED_DASHBOARD_DATE_FILTERS;
 
@@ -708,11 +708,10 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
         }
 
         const config = PLATFORM_CONFIG[platform] || { name: platform };
-        const isGoogleAdsEcom = platform === 'google_ads' && campaignTypeByPlatform['google_ads'] === 'ecommerce';
-        const wooGoogle = wooSummary.googlePaid;
-        const useWooGoogleOverlay = isGoogleAdsEcom && hasWooCommerce;
-        const purchases = useWooGoogleOverlay ? wooGoogle.paidOrders : metrics.purchases;
-        const revenue = useWooGoogleOverlay ? wooGoogle.paidRevenue : metrics.revenue;
+        // All-tab platform rows mirror each ads platform's own reporting (like Facebook).
+        // WooCommerce attribution is reserved for the Google Ads tab KPI cards / total row.
+        const purchases = metrics.purchases;
+        const revenue = metrics.revenue;
         const roas = metrics.spend > 0 ? revenue / metrics.spend : 0;
         rows.push({
           key: platform,
@@ -736,7 +735,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
       });
 
     return rows;
-  }, [platformFilter, summaryByPlatform, facebookMixedMode, facebookCampaignGroups, campaignTypeByPlatform, hasWooCommerce, wooSummary.googlePaid]);
+  }, [platformFilter, summaryByPlatform, facebookMixedMode, facebookCampaignGroups]);
 
   const googleAdsRecords = useMemo(
     () => records.filter((r: any) => (r._source || '') === 'google_ads'),
@@ -794,8 +793,16 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     return 'leads';
   }, [tables]);
 
+  const googleAdsTableSettings = useMemo(() => {
+    const gaTables = (tables || []).filter((t: any) => t.integration_type === 'google_ads');
+    return gaTables.find((t: any) => t.integration_settings?.use_woo_google_attribution != null)?.integration_settings
+      ?? gaTables[0]?.integration_settings;
+  }, [tables]);
+
   const googleWooAttribution = wooSummary.googlePaid;
-  const useGoogleWooOverlay = hasWooCommerce && googleAdsCampaignType === 'ecommerce';
+  const useGoogleWooOverlay = hasWooCommerce
+    && googleAdsCampaignType === 'ecommerce'
+    && shouldUseGoogleWooAttributionOverlay(data?.dashboard?.client_id, googleAdsTableSettings);
   const googleAdsStorePurchases = useGoogleWooOverlay ? googleWooAttribution.paidOrders : googleAdsTotals.conversions;
   const googleAdsStoreRevenue = useGoogleWooOverlay ? googleWooAttribution.paidRevenue : googleAdsTotals.conversions_value;
   const googleAdsStoreRoas = googleAdsTotals.spend > 0 ? googleAdsStoreRevenue / googleAdsTotals.spend : 0;
