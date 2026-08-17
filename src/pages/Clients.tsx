@@ -67,22 +67,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-// Session-scoped: owners get a one-time organization-wide starting view on first
-// visit to Clients. Must NOT re-run on every remount — that was wiping the global
-// agency filter whenever anyone navigated back to this module.
-let ownerAgencyDefaultApplied = false;
-
 export default function Clients() {
-  const { selectedAgency, setSelectedAgency } = useAgency();
+  const { selectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
-  useEffect(() => {
-    if ((isOwner || isSuperAdmin) && !ownerAgencyDefaultApplied) {
-      ownerAgencyDefaultApplied = true;
-      setSelectedAgency("all");
-    }
-  }, [isOwner, isSuperAdmin, setSelectedAgency]);
   // SEO viewer takes precedence over campaigner: any user with SEO role sees all SEO-tagged clients
   // (unless they're also team_manager / owner / super_admin who already see everything)
   const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;

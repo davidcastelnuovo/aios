@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -12,53 +12,71 @@ interface AgencyContextType {
 
 const AgencyContext = createContext<AgencyContextType | undefined>(undefined);
 
-const STORAGE_KEY = "selectedAgencyId";
+const LEGACY_STORAGE_KEY = "selectedAgencyId";
 
-function readStoredAgency(): string {
+function storageKey(tenantId: string): string {
+  return `selectedAgencyId:${tenantId}`;
+}
+
+function readStoredAgency(tenantId: string | null): string {
+  if (!tenantId) return "all";
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && stored.length > 0) return stored;
+    const scoped = localStorage.getItem(storageKey(tenantId));
+    if (scoped && scoped.length > 0) return scoped;
+    // One-time migration from the old global key.
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy && legacy.length > 0) return legacy;
   } catch {
     // ignore storage failures (private mode, etc.)
   }
   return "all";
 }
 
+function writeStoredAgency(tenantId: string | null, agencyId: string) {
+  if (!tenantId) return;
+  try {
+    localStorage.setItem(storageKey(tenantId), agencyId);
+  } catch {
+    // ignore
+  }
+}
+
 export function AgencyProvider({ children }: { children: ReactNode }) {
-  const [selectedAgency, setSelectedAgency] = useState<string>(readStoredAgency);
-  const didSetDefault = useRef(false);
   const queryClient = useQueryClient();
-  
-  // CRITICAL: Get tenant info including isActiveTenantSynced
   const { currentTenantId, isActiveTenantSynced } = useTenant();
   const prevTenantIdRef = useRef<string | null>(null);
+  const hydratedTenantRef = useRef<string | null>(null);
 
-  // Persist selection
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, selectedAgency);
-    } catch {}
-  }, [selectedAgency]);
+  const [selectedAgency, setSelectedAgencyState] = useState<string>("all");
 
-  // Reset selection and refetch when tenant changes
+  const setSelectedAgency = useCallback((agencyId: string) => {
+    setSelectedAgencyState(agencyId);
+    writeStoredAgency(currentTenantId, agencyId);
+  }, [currentTenantId]);
+
+  // Hydrate per-tenant selection when the active tenant changes (not on every remount).
   useEffect(() => {
-    if (currentTenantId && prevTenantIdRef.current && currentTenantId !== prevTenantIdRef.current) {
-      setSelectedAgency("all");
-      didSetDefault.current = false;
-      // Force refetch agencies for new tenant
+    if (!currentTenantId) return;
+    if (hydratedTenantRef.current === currentTenantId) return;
+    hydratedTenantRef.current = currentTenantId;
+    setSelectedAgencyState(readStoredAgency(currentTenantId));
+    if (prevTenantIdRef.current && prevTenantIdRef.current !== currentTenantId) {
       queryClient.invalidateQueries({ queryKey: ["agencies-filter", currentTenantId] });
     }
     prevTenantIdRef.current = currentTenantId;
   }, [currentTenantId, queryClient]);
 
   // Get all agencies for the filter - ONLY when tenant is synced
-  const { data: allAgencies, isLoading: isLoadingAgencies } = useQuery({
+  const {
+    data: allAgencies,
+    isLoading: isLoadingAgencies,
+    isFetching: isFetchingAgencies,
+    isFetched: isAgenciesFetched,
+  } = useQuery({
     queryKey: ["agencies-filter", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return [] as any[];
-      
-      
-      // Fetch owned and shared agencies in parallel
+
       const [
         { data: ownedAgencies, error: ownedError },
         { data: sharedAccess, error: sharedError },
@@ -74,61 +92,44 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
       if (sharedError) {
         console.error("Error fetching shared agencies:", sharedError);
       }
-      
-      // Combine owned and shared agencies
-      const shared = sharedAccess?.map(s => s.agencies).filter(Boolean) || [];
+
+      const shared = sharedAccess?.map((s) => s.agencies).filter(Boolean) || [];
       const combined = [...(ownedAgencies || []), ...shared];
-      
-      // Remove duplicates and sort
-      const uniqueMap = new Map();
-      combined.forEach(agency => {
+
+      const uniqueMap = new Map<string, { id: string; name: string }>();
+      combined.forEach((agency) => {
         if (agency && agency.id) {
           uniqueMap.set(agency.id, agency);
         }
       });
-      
-      const result = Array.from(uniqueMap.values()).sort((a, b) => 
-        a.name.localeCompare(b.name)
-      );
-      
-      return result;
+
+      return Array.from(uniqueMap.values()).sort((a, b) => a.name.localeCompare(b.name));
     },
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
-    // CRITICAL: Only enable query when tenant is synced to DB
     enabled: !!currentTenantId && isActiveTenantSynced,
   });
 
   const agencies = allAgencies;
   const isLoading = isLoadingAgencies;
 
-  // Ensure a valid selection
+  // Ensure a valid selection once agencies are fully loaded for this tenant.
   useEffect(() => {
     if (!agencies || agencies.length === 0) return;
+    if (!isAgenciesFetched || isLoadingAgencies || isFetchingAgencies) return;
 
-    // If only ONE agency exists, always select it
     if (agencies.length === 1) {
       if (selectedAgency !== agencies[0].id) {
         setSelectedAgency(agencies[0].id);
-        didSetDefault.current = true;
       }
       return;
     }
 
-    // Multiple agencies: validate current selection. While agencies are still
-    // loading/refetching we keep the previous choice so a brief empty/partial
-    // list (e.g. shared agencies lagging) does not kick the user back to "all".
-    if (isLoadingAgencies) return;
-
     const exists = selectedAgency === "all" || agencies.some((a) => a.id === selectedAgency);
     if (!exists) {
       setSelectedAgency("all");
-      didSetDefault.current = true;
     }
-  }, [agencies, selectedAgency, isLoadingAgencies]);
-
-  // Don't block the whole app on agency loading — pages handle their own
-  // loading states while agencies load in the background.
+  }, [agencies, selectedAgency, isLoadingAgencies, isFetchingAgencies, isAgenciesFetched, setSelectedAgency]);
 
   return (
     <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, agencies, isLoading }}>
