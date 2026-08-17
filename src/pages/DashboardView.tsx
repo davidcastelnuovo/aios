@@ -982,11 +982,10 @@ export default function DashboardView() {
         }
 
         const config = PLATFORM_CONFIG[platform] || { name: platform };
-        const isGoogleAdsEcom = platform === 'google_ads' && campaignTypeByPlatform['google_ads'] === 'ecommerce';
-        const wooGoogle = wooSummary.googlePaid;
-        const useWooGoogleOverlay = isGoogleAdsEcom && hasWooCommerce;
-        const purchases = useWooGoogleOverlay ? wooGoogle.paidOrders : metrics.purchases;
-        const revenue = useWooGoogleOverlay ? wooGoogle.paidRevenue : metrics.revenue;
+        // All-tab platform rows mirror each ads platform's own reporting (like Facebook).
+        // WooCommerce attribution is reserved for the Google Ads tab KPI cards / total row.
+        const purchases = metrics.purchases;
+        const revenue = metrics.revenue;
         const roas = metrics.spend > 0 ? revenue / metrics.spend : 0;
         rows.push({
           key: platform,
@@ -1010,7 +1009,7 @@ export default function DashboardView() {
       });
 
     return rows;
-  }, [platformFilter, summaryByPlatform, facebookMixedMode, facebookCampaignGroups, campaignTypeByPlatform, hasWooCommerce, wooSummary.googlePaid]);
+  }, [platformFilter, summaryByPlatform, facebookMixedMode, facebookCampaignGroups]);
 
   // Google Ads campaign summary - aggregate all Google Ads records by campaign name
   const googleAdsCampaignSummary = useMemo(() => {
