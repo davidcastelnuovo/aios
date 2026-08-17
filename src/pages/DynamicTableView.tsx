@@ -64,6 +64,7 @@ import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { WooAttributionSection } from "@/components/dynamic-tables/WooAttributionSection";
 import { fetchWooReportAttribution, getDynamicTableDateRangeIso } from "@/lib/wooDashboardQueries";
+import { shouldUseGoogleWooAttributionOverlay } from "@/lib/wooAttribution";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -273,7 +274,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     enabled: !!reportClientId && isGoogleAdsEcommerceReport,
   });
 
-  const useGoogleWooOverlay = isGoogleAdsEcommerceReport && !!wooReportAttribution;
+  const useGoogleWooOverlay = isGoogleAdsEcommerceReport
+    && !!wooReportAttribution
+    && shouldUseGoogleWooAttributionOverlay(reportClientId, table?.integration_settings);
   const googleWooPaid = wooReportAttribution?.googlePaid ?? {
     paidOrders: 0,
     paidRevenue: 0,

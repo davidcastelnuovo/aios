@@ -4,7 +4,9 @@ import {
   aggregateOrdersByAttribution,
   buildWooAttributionLabel,
   extractWooOrderAttribution,
+  GOOGLE_WOO_ATTRIBUTION_CLIENT_IDS,
   isGooglePaidWooAttribution,
+  shouldUseGoogleWooAttributionOverlay,
   summarizeGoogleAttributedWooOrders,
 } from './wooAttribution.ts';
 
@@ -88,6 +90,25 @@ test('isGooglePaidWooAttribution detects google/cpc and gclid', () => {
       device_type: null,
       label: 'Google אורגני',
     }),
+    false,
+  );
+});
+
+test('shouldUseGoogleWooAttributionOverlay is opt-in per client (Avieli only by default)', () => {
+  const avieliId = Array.from(GOOGLE_WOO_ATTRIBUTION_CLIENT_IDS)[0];
+  assert.equal(shouldUseGoogleWooAttributionOverlay(avieliId), true);
+  assert.equal(shouldUseGoogleWooAttributionOverlay('other-client-id'), false);
+  assert.equal(shouldUseGoogleWooAttributionOverlay(null), false);
+});
+
+test('shouldUseGoogleWooAttributionOverlay respects table integration_settings override', () => {
+  assert.equal(
+    shouldUseGoogleWooAttributionOverlay('any-client', { use_woo_google_attribution: true }),
+    true,
+  );
+  const avieliId = Array.from(GOOGLE_WOO_ATTRIBUTION_CLIENT_IDS)[0];
+  assert.equal(
+    shouldUseGoogleWooAttributionOverlay(avieliId, { use_woo_google_attribution: false }),
     false,
   );
 });

@@ -52,7 +52,7 @@ import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCos
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
 import { invalidateWooDashboardQueries } from "@/lib/wooDashboardQueries";
-import { summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
+import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -1074,8 +1074,16 @@ export default function DashboardView() {
     return 'leads';
   }, [tables]);
 
+  const googleAdsTableSettings = useMemo(() => {
+    const gaTables = (tables || []).filter((t: any) => t.integration_type === 'google_ads');
+    return gaTables.find((t: any) => t.integration_settings?.use_woo_google_attribution != null)?.integration_settings
+      ?? gaTables[0]?.integration_settings;
+  }, [tables]);
+
   const googleWooAttribution = wooSummary.googlePaid;
-  const useGoogleWooOverlay = hasWooCommerce && googleAdsCampaignType === 'ecommerce';
+  const useGoogleWooOverlay = hasWooCommerce
+    && googleAdsCampaignType === 'ecommerce'
+    && shouldUseGoogleWooAttributionOverlay(dashboard?.client_id, googleAdsTableSettings);
   const googleAdsStorePurchases = useGoogleWooOverlay ? googleWooAttribution.paidOrders : googleAdsTotals.conversions;
   const googleAdsStoreRevenue = useGoogleWooOverlay ? googleWooAttribution.paidRevenue : googleAdsTotals.conversions_value;
   const googleAdsStoreRoas = googleAdsTotals.spend > 0 ? googleAdsStoreRevenue / googleAdsTotals.spend : 0;

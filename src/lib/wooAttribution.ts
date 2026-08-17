@@ -177,6 +177,25 @@ export function isGoogleOrganicWooAttribution(attr: WooOrderAttribution | null |
   );
 }
 
+/** אביאלי — Google Ads conversion value is unreliable; Woo attribution is the source of truth there. */
+export const GOOGLE_WOO_ATTRIBUTION_CLIENT_IDS = new Set([
+  '0117effa-063f-4579-989c-cdf8ec923fb9',
+]);
+
+/**
+ * Whether Google Ads ecommerce KPIs/totals should use WooCommerce order attribution
+ * instead of Google Ads API conversions. Opt-in per client (אביאלי) or via
+ * `integration_settings.use_woo_google_attribution` on the Google Ads table.
+ */
+export function shouldUseGoogleWooAttributionOverlay(
+  clientId?: string | null,
+  integrationSettings?: { use_woo_google_attribution?: boolean } | null,
+): boolean {
+  if (integrationSettings?.use_woo_google_attribution === true) return true;
+  if (integrationSettings?.use_woo_google_attribution === false) return false;
+  return !!clientId && GOOGLE_WOO_ATTRIBUTION_CLIENT_IDS.has(clientId);
+}
+
 /** Summarize Google-attributed WooCommerce orders for Ads dashboard overlays. */
 export function summarizeGoogleAttributedWooOrders(
   orders: Array<{ total?: number | string; status?: string; attribution?: WooOrderAttribution | null }>,
