@@ -545,6 +545,22 @@ def run(dry_run: bool) -> dict[str, Any]:
             },
             prefer="return=minimal",
         )
+        try:
+            db.request(
+                "POST",
+                "/rpc/claude_notify_david",
+                body={
+                    "p_message": (
+                        f"✅ ייבוא DMM מ-CSV: {len(rows)} שורות, "
+                        f"{stats.get('insert_new', 0) + stats.get('insert_new_shared_email', 0)} חדשים, "
+                        f"0 דילוגים."
+                    ),
+                    "p_tenant": DMM_TENANT_ID,
+                },
+                prefer="return=minimal",
+            )
+        except RuntimeError:
+            pass
 
     return summary
 
