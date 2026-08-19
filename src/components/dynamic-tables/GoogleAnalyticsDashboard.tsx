@@ -38,6 +38,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, isWithinInterval, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 import { resolveAnalyticsReportMode, type AnalyticsReportMode } from "@/lib/analyticsReportMode";
+import { getRevenueFromData } from "@/lib/adsMetrics";
 
 interface CrmRecord {
   id: string;
@@ -356,7 +357,7 @@ export function GoogleAnalyticsDashboard({
         existing.conversions += toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases);
         existing.addToCart += toNumber(r.data.add_to_cart ?? r.data.add_to_carts);
         existing.purchases += toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions);
-        existing.purchaseValue += toNumber(r.data.total_revenue ?? r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue);
+        existing.purchaseValue += getRevenueFromData(r.data);
         sourceMap.set(name, existing);
       }
 
@@ -460,7 +461,7 @@ export function GoogleAnalyticsDashboard({
         conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
         addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
         purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
-        purchaseValue: toNumber(r.data.total_revenue ?? r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue),
+        purchaseValue: getRevenueFromData(r.data),
       }))
       .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
@@ -472,7 +473,7 @@ export function GoogleAnalyticsDashboard({
         conversions: toNumber(r.data.conversions ?? r.data.transactions ?? r.data.purchases),
         addToCart: toNumber(r.data.add_to_cart ?? r.data.add_to_carts),
         purchases: toNumber(r.data.purchases ?? r.data.transactions ?? r.data.conversions),
-        purchaseValue: toNumber(r.data.total_revenue ?? r.data.purchase_value ?? r.data.purchase_revenue ?? r.data.revenue),
+        purchaseValue: getRevenueFromData(r.data),
       }));
 
     const topPages = records

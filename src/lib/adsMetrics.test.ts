@@ -79,6 +79,22 @@ test('Analytics purchases ignore key events reported as conversions', () => {
   assert.equal(getRevenueFromData(analyticsRow), 430.999998);
 });
 
+test('Analytics revenue prefers purchase_value over total_revenue (matches combined dashboard)', () => {
+  const row = {
+    date: '2026-08-15',
+    report_type: 'daily',
+    purchases: 5,
+    purchase_value: 9806,
+    total_revenue: 12225,
+  };
+  assert.equal(getRevenueFromData(row), 9806);
+});
+
+test('Analytics revenue falls back to total_revenue when purchase_value is missing', () => {
+  const row = { date: '2026-08-15', report_type: 'daily', total_revenue: 12225 };
+  assert.equal(getRevenueFromData(row), 12225);
+});
+
 test('add-to-cart is tracked by Facebook and Analytics but not by Google Ads', () => {
   assert.equal(hasAddToCartMetric(facebookEcommerceRow), true);
   assert.equal(getAddToCartFromData(facebookEcommerceRow), 14);
