@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle, Users, Shield, Share2 } from "lucide-react";
+import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle, Users, Shield, Share2, Copy, Link2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -618,6 +618,24 @@ export default function ChatIntegrations() {
                         <p className="text-xs text-muted-foreground truncate mt-1">
                           {group.description}
                         </p>
+                      )}
+                      {group.invite_link ? (
+                        <button
+                          type="button"
+                          className="mt-1 flex items-center gap-1 text-xs text-primary hover:underline truncate max-w-full"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(group.invite_link);
+                            toast.success("קישור הקבוצה הועתק");
+                          }}
+                        >
+                          <Link2 className="h-3 w-3 shrink-0" />
+                          <span className="truncate" dir="ltr">{group.invite_link}</span>
+                          <Copy className="h-3 w-3 shrink-0" />
+                        </button>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">אין קישור הזמנה שמור</p>
                       )}
                     </label>
                   </div>
