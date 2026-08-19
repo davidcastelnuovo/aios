@@ -57,6 +57,12 @@ test("getDashboardDateRange this_week is Sun through today", () => {
   assert.equal(range.endDate, "2026-08-05");
 });
 
+test("getDashboardDateRange last_7_days is 7 rolling days ending yesterday", () => {
+  const range = getDashboardDateRange("last_7_days", new Date(2026, 7, 19, 12, 0, 0));
+  assert.equal(range.startDate, "2026-08-12");
+  assert.equal(range.endDate, "2026-08-18");
+});
+
 test("no duplicate values in combined / shared preset lists", () => {
   for (const [name, options] of SURFACES) {
     const values = options.map((o) => o.value);
