@@ -42,9 +42,11 @@ export const getLeadsFromData = (data: any) =>
 
 export const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
 
+/** Ecommerce revenue — purchase value first (GA4 purchaseRevenue), then broader totals. */
 export const getRevenueFromData = (data: any) =>
   Number(data?.purchase_value) ||
   Number(data?.purchaseRevenue) ||
+  Number(data?.total_revenue) ||
   Number(data?.conversions_value) ||
   Number(data?.conversion_value) ||
   0;

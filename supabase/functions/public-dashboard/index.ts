@@ -43,13 +43,16 @@ function getDateRange(filter: string, integrationType?: string | null): { startD
       break;
     }
     case "last_7_days": {
-      // Ads platforms: match Facebook's "Last 7 days" — 7 full days ending yesterday.
-      if (["facebook_insights", "facebook_ecommerce", "google_ads"].includes(String(integrationType || ""))) {
+      const rollingSeven = () => {
         startDate = new Date(Date.UTC(y, m, d - 7)).toISOString().split("T")[0];
         endDate = yesterdayStr;
+      };
+      // Integration tables (ads + analytics + everything else): rolling 7 days.
+      if (integrationType != null && integrationType !== "") {
+        rollingSeven();
         break;
       }
-      // WooCommerce remains most recent COMPLETED Sunday → Saturday week (UTC).
+      // WooCommerce order range (getDateRange called without integrationType).
       const dow = yesterday.getUTCDay(); // 0=Sun .. 6=Sat
       const daysSinceSat = (dow + 1) % 7;
       const sat = new Date(Date.UTC(y, m, d - 1 - daysSinceSat));

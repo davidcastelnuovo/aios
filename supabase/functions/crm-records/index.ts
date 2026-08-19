@@ -88,18 +88,11 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string, in
       break;
     }
     case 'last_7_days': {
-      const isAds = ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(String(integrationType || ''));
-      if (isAds) {
-        // Match Facebook's "Last 7 days": 7 full days ending yesterday.
-        startDate = shiftDateString(today, -7);
-        endDate = shiftDateString(today, -1);
-      } else {
-        const yesterday = shiftDateString(today, -1);
-        const yDow = getWeekdayIndexInTimeZone(new Date(yesterday + 'T12:00:00Z'));
-        const sat = shiftDateString(yesterday, -((yDow + 1) % 7));
-        startDate = shiftDateString(sat, -6);
-        endDate = sat;
-      }
+      // Rolling 7 full days ending yesterday — matches GA4, Google Ads, Facebook,
+      // DynamicTableView, and GoogleAnalyticsDashboard. (WooCommerce uses its own
+      // Sun→Sat week in wooDashboardQueries / public-dashboard wooRange only.)
+      startDate = shiftDateString(today, -7);
+      endDate = shiftDateString(today, -1);
       break;
     }
     case 'last_14_days':
