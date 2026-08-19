@@ -101,7 +101,7 @@ export default function Recordings() {
         .from("zoom_recordings")
         // clients must be disambiguated: zoom_recordings has TWO FKs to clients
         // (client_id + suggested_client_id) and an unhinted embed 300-errors.
-        .select("*, clients!zoom_recordings_client_id_fkey(name), leads(company_name)")
+        .select("*, clients!zoom_recordings_client_id_fkey(name), leads(company_name), agencies!zoom_recordings_agency_id_fkey(name)")
         .eq("tenant_id", currentTenantId)
         .order("start_time", { ascending: false, nullsFirst: false });
       const list = data || [];
@@ -149,7 +149,25 @@ export default function Recordings() {
       const { data } = await supabase
         .from("campaigners")
         .select("id, full_name")
-        .eq("tenant_id", currentTenantId);
+        .eq("tenant_id", currentTenantId)
+        .eq("active", true)
+        .order("full_name");
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  const { data: agencies = [] } = useQuery({
+    queryKey: ["agencies-for-recordings", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data } = await supabase
+        .from("agencies")
+        .select("id, name, is_default")
+        .eq("tenant_id", currentTenantId)
+        .eq("status", "active")
+        .order("is_default", { ascending: false })
+        .order("name");
       return data || [];
     },
     enabled: !!currentTenantId,
@@ -359,6 +377,9 @@ export default function Recordings() {
         thumbnail_path: group.find((r: any) => r.thumbnail_path)?.thumbnail_path || null,
         suggested_client_id: group.find((r: any) => r.suggested_client_id)?.suggested_client_id || null,
         campaigner_ids: group.find((r: any) => r.campaigner_ids?.length)?.campaigner_ids || null,
+        agency_id: group.find((r: any) => r.agency_id)?.agency_id || null,
+        agencies: group.find((r: any) => r.agencies)?.agencies || null,
+        summary_scope: group.find((r: any) => r.summary_scope)?.summary_scope || null,
         _group: group,
       } as FeedRecording;
     });
@@ -695,6 +716,8 @@ export default function Recordings() {
         onOpenChange={setJoinBotOpen}
         tenantId={currentTenantId}
         clients={clients}
+        campaigners={campaigners}
+        agencies={agencies}
       />
 
       {/* Zoom fetch dialog */}

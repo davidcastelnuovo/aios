@@ -27,6 +27,9 @@ export interface MeetingBotSession {
   tenant_id: string;
   client_id: string | null;
   lead_id: string | null;
+  agency_id: string | null;
+  campaigner_ids: string[] | null;
+  summary_scope: "auto" | "client" | "lead" | "campaigner" | "agency";
   platform: string;
   meeting_topic: string | null;
   external_bot_id: string | null;
@@ -150,6 +153,9 @@ export async function finalizeMeetingBotSession(
     tenant_id: session.tenant_id,
     client_id: session.client_id,
     lead_id: session.lead_id,
+    agency_id: session.agency_id,
+    campaigner_ids: session.campaigner_ids,
+    summary_scope: session.summary_scope,
     meeting_id: botId,
     meeting_topic: topic,
     start_time: session.joined_at || session.scheduled_start || new Date().toISOString(),
@@ -169,7 +175,7 @@ export async function finalizeMeetingBotSession(
       .from("zoom_recordings")
       .update(row)
       .eq("id", recordingId)
-      .select("id, tenant_id, client_id, meeting_topic, start_time, duration, host_email, transcription")
+      .select("id, tenant_id, client_id, lead_id, agency_id, campaigner_ids, summary_scope, meeting_topic, start_time, duration, host_email, transcription")
       .single();
     if (error) throw new Error(`update zoom_recordings failed: ${error.message}`);
     recording = data;
@@ -178,7 +184,7 @@ export async function finalizeMeetingBotSession(
     const { data, error } = await admin
       .from("zoom_recordings")
       .insert(row)
-      .select("id, tenant_id, client_id, meeting_topic, start_time, duration, host_email, transcription")
+      .select("id, tenant_id, client_id, lead_id, agency_id, campaigner_ids, summary_scope, meeting_topic, start_time, duration, host_email, transcription")
       .single();
     if (error) throw new Error(`insert zoom_recordings failed: ${error.message}`);
     recording = data;

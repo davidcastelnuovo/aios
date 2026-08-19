@@ -57,6 +57,8 @@ export interface FeedRecording {
   folder_id: string | null;
   client_id: string | null;
   lead_id: string | null;
+  agency_id?: string | null;
+  summary_scope?: "auto" | "client" | "lead" | "campaigner" | "agency" | null;
   transcription: string | null;
   transcription_status: string | null;
   summary_md: string | null;
@@ -64,6 +66,7 @@ export interface FeedRecording {
   suggested_client_id: string | null;
   campaigner_ids: string[] | null;
   clients?: { name: string } | null;
+  agencies?: { name: string } | null;
   // deno-style loose grouping payload from the page
   _group?: FeedRecording[];
 }
@@ -95,6 +98,7 @@ const sourceLabel = (source: string | null) => {
     case "manual": return "העלאה ידנית";
     case "chrome_extension": return "הקלטת מסך";
     case "google_meet": return "Google Meet";
+    case "meeting_bot": return "כרמן";
     default: return source || "Zoom";
   }
 };
@@ -324,6 +328,10 @@ export function RecordingCard({
             ) : campaignerNames.length > 0 ? (
               <Badge variant="outline" className="text-[11px] max-w-[55%] truncate" title={campaignerNames.join(", ")}>
                 פנימי · {campaignerNames.join(", ")}
+              </Badge>
+            ) : rec.agencies?.name ? (
+              <Badge variant="outline" className="text-[11px] max-w-[55%] truncate">
+                סוכנות · {rec.agencies.name}
               </Badge>
             ) : (
               <span className="text-[11px] text-muted-foreground">ללא שיוך</span>
