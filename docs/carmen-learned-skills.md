@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-23 — Ana: bug-fix escalations to Cursor (tiered dev auth)
+- **Skin slug:** `bugfix_escalation_to_cursor` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When **Ana** (אנה, `d6cd8d62-…`, `972545612156`) reports a reproducible bug, escalate to Cursor via `mcp_Cursor__request_dev_task` only — not features, config, permissions, or DB schema changes. David keeps full tier (all coding agents). Everyone else is refused.
+- **How:** Engine tier `getDevEscalationTier`: David=`full`, Ana=`bugfix`. Tools filtered with `isDevEscalationToolAllowed`. Ana prompt requires repro steps + «Requested by Ana — BUG FIX ONLY»; PR needs David approval before merge. Shared helper: `_shared/dev-escalation-auth`.
+- **Origin:** David — allow Ana to send Carmen bug-fix requests safely without breaking prod.
+
 ### 2026-08-06 — Health/pulse WA digest + sync false-positives + `/t/` dashboard link
 - **Skin slug:** `pulse_health_wa_digest_and_sync_truth` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Explain that (1) WhatsApp health (“בדיקת תקינות מערכות וקמפיינים”) and pulse digests are short counts + dashboard link only — never per-client issue lists; (2) false “Meta/Google sync old” for clients like 4/4 / בילבי often came from 18h threshold vs twice-daily sync, abandoned duplicate tables, or missing `facebook_ecommerce` cron; (3) the correct pulse dashboard URL is `https://aios.co.il/t/{slug}/dmm-dashboard` (without `/t/` the app redirects to home).
@@ -104,11 +110,11 @@ logged.
 - **How:** Engine: phrase detector + auto-execute short confirms; smarter `execute_pending_approval` / `list_pending_approvals`; reuse existing pending duplicate instead of re-queue loops; prompt guardrails. Shared helper `_shared/wa-approval-flow`.
 - **Origin:** Carmen → Cursor FIX-ON-FAIL — after duplicate-ads approval David got stuck in "no pending / confirm again" loop ("תעשי את זה, וגם תתקני את הפלו שיהיה יותר זורם").
 
-### 2026-08-04 — Dev/system-fix escalations: David-only authorization
-- **Skin slug:** `dev_escalation_auth_only_david` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
-- **What Carmen can now do:** Enforce that only David may ask her to send system/dev/config/code/DB fixes to Cursor/Claude/Manus/GitHub agent. Non-authorized users get a polite Hebrew refusal; normal CRM tools stay under existing role permissions.
-- **How:** Engine guards in `run-ai-agent`: allowlist by campaigner_id / user_id / phone suffix; strip `mcp_Cursor__*` / `mcp_Claude__*` / `mcp_Manus__*` + `delegate_to_github_agent` from tool schema; suppress `cursor_escalation`/`claude_escalation` skins; hard-refuse at execute time; system-prompt rule for both V1/V2. Shared helper: `_shared/dev-escalation-auth`.
-- **Origin:** Carmen → Cursor DEV TASK — David: "תיקונים במערכת רק משתמשים מורשים וכרגע אני המשתמש המורשה היחידי".
+### 2026-08-04 — Dev/system-fix escalations: David full + Ana bugfix-only
+- **Skin slug:** `dev_escalation_auth_only_david` (updated) + `bugfix_escalation_to_cursor` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Enforce tiered auth for system/dev fixes: **David** = full (Cursor/Claude/Manus/GitHub); **Ana** = bugfix-only via `mcp_Cursor__request_dev_task`; others get polite Hebrew refusal. Normal CRM tools stay under existing role permissions.
+- **How:** Engine guards in `run-ai-agent`: `getDevEscalationTier` + `isDevEscalationToolAllowed`; strip unauthorized MCP tools; suppress generic escalation skins for bugfix tier; hard-refuse at execute time; system-prompt rule per tier. Shared helper: `_shared/dev-escalation-auth`.
+- **Origin:** Carmen → Cursor DEV TASK — David: "תיקונים במערכת רק משתמשים מורשים"; extended 2026-08-23 for Ana bug-fix path.
 
 ### 2026-08-04 — Expose inspect/duplicate Meta tools in Carmen runtime schema
 - **Skin slug:** `fb_duplicate_ad_variants` (triggers broadened)
