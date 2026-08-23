@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -51,8 +52,13 @@ interface CopyVersion {
   run_id: string | null;
 }
 
-const errorMessage = (error: unknown, fallback: string) =>
-  error instanceof Error ? error.message : fallback;
+interface CopyVariant {
+  label: string;
+  headline: string;
+  primary: string;
+  cta: string;
+  rationale: string;
+}
 
 interface CopyItem {
   id: string;
@@ -60,9 +66,15 @@ interface CopyItem {
   status: string;
   payload: Record<string, JsonValue> | null;
   current_stage_id: string | null;
+  target_channel: string | null;
   created_at: string;
   updated_at: string;
 }
+
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
+const asText = (value: JsonValue | undefined) => (typeof value === "string" ? value : "");
 
 const CONTENT_TYPES = [
   { value: "social_post", label: "פוסט לסושיאל" },
@@ -75,11 +87,43 @@ const CONTENT_TYPES = [
 
 const CHANNELS = ["Facebook", "Instagram", "TikTok", "LinkedIn", "Google Ads", "YouTube", "כללי"];
 
+const CHANNEL_LIMITS: Record<string, { headline: number; primary: number }> = {
+  Facebook: { headline: 40, primary: 125 },
+  Instagram: { headline: 40, primary: 125 },
+  TikTok: { headline: 90, primary: 150 },
+  LinkedIn: { headline: 70, primary: 600 },
+  "Google Ads": { headline: 30, primary: 90 },
+  YouTube: { headline: 100, primary: 5000 },
+  כללי: { headline: 60, primary: 500 },
+};
+
+const variantToMarkdown = (variant: CopyVariant) =>
+  [`## ${variant.headline}`, variant.primary, variant.cta && `**CTA:** ${variant.cta}`, variant.rationale && `_${variant.rationale}_`]
+    .filter(Boolean)
+    .join("\n\n");
+
+const readVariants = (payload: Record<string, JsonValue> | null): CopyVariant[] => {
+  const raw = payload?.copy_variants;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    return [{
+      label: asText(value.label) || "A",
+      headline: asText(value.headline),
+      primary: asText(value.primary),
+      cta: asText(value.cta),
+      rationale: asText(value.rationale),
+    }];
+  });
+};
+
 export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [generating, setGenerating] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [briefDraft, setBriefDraft] = useState("");
 
   const { data: context, isLoading: loadingContext } = useQuery({
     queryKey: ["copy-department-context", clientId, tenantId],
@@ -97,15 +141,16 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
         copyStage: stages?.find((stage) => stage.stage_type === "copy") ?? null,
         creativeStage: stages?.find((stage) => stage.stage_type === "creative") ?? null,
       };
-    }, enabled: !!clientId,
+    },
+    enabled: !!clientId,
   });
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
-    queryKey: ["copy-department-items", clientId, tenantId],
+    queryKey: ["copy-department-items", clientId, tenantId, context?.copyStage?.id, showArchived],
     queryFn: async () => {
       let query = supabase
         .from("marketing_work_items")
-        .select("id,title,status,payload,current_stage_id,created_at,updated_at")
+        .select("id,title,status,payload,current_stage_id,target_channel,created_at,updated_at")
         .eq("tenant_id", tenantId)
         .order("updated_at", { ascending: false });
       if (clientId) query = query.eq("client_id", clientId);
@@ -114,12 +159,15 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
       if (error) throw error;
       return ((data ?? []) as CopyItem[]).filter((item) => {
         const payload = item.payload ?? {};
-        return (
+        const isCopy =
           (!!context?.copyStage?.id && item.current_stage_id === context.copyStage.id) ||
           payload.department === "copy" ||
           !!payload.brief_text ||
-          !!payload.copy_text
-        );
+          !!payload.copy_text ||
+          Array.isArray(payload.copy_variants);
+        if (!isCopy) return false;
+        if (showArchived) return item.status === "archived";
+        return item.status !== "archived";
       });
     },
   });
@@ -130,6 +178,13 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
   }, [items, selectedId]);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
+  const variants = useMemo(() => readVariants(selected?.payload ?? null), [selected?.payload]);
+  const channel = asText(selected?.payload?.channel) || selected?.target_channel || "כללי";
+  const limits = CHANNEL_LIMITS[channel] ?? CHANNEL_LIMITS["כללי"];
+
+  useEffect(() => {
+    setBriefDraft(asText(selected?.payload?.brief_text));
+  }, [selected?.id, selected?.payload?.brief_text]);
 
   const { data: versions = [] } = useQuery({
     queryKey: ["copy-department-versions", selectedId, tenantId],
@@ -143,7 +198,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
         .in("type", ["copy", "brief"])
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as CopyVersion[];
     },
   });
 
@@ -154,30 +209,25 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
     ]);
   };
 
-  const generate = async () => {
-    if (!selected || !context?.copyStage) return;
-    setGenerating(true);
-    try {
-      if (selected.current_stage_id !== context.copyStage.id) {
-        const { error: moveError } = await supabase
-          .from("marketing_work_items")
-          .update({ current_stage_id: context.copyStage.id, status: "draft" })
-          .eq("id", selected.id)
-          .eq("tenant_id", tenantId);
-        if (moveError) throw moveError;
-      }
-      const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
-        body: { item_id: selected.id, stage_id: context.copyStage.id },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      toast.success("כרמן יצרה גרסת קופי חדשה");
-      await refresh();
-    } catch (error: unknown) {
-      toast.error(errorMessage(error, "יצירת הקופי נכשלה"));
-    } finally {
-      setGenerating(false);
-    }
+  const writeCopy = async (markdown: string, meta: Record<string, JsonValue>) => {
+    if (!selected) return;
+    const nextPayload = { ...(selected.payload ?? {}), copy_text: markdown, department: "copy" };
+    const { error: itemError } = await supabase
+      .from("marketing_work_items")
+      .update({ payload: nextPayload, updated_at: new Date().toISOString() })
+      .eq("id", selected.id)
+      .eq("tenant_id", tenantId);
+    if (itemError) throw itemError;
+    const { error: assetError } = await supabase.from("marketing_assets").insert({
+      tenant_id: tenantId,
+      item_id: selected.id,
+      stage_id: selected.current_stage_id,
+      type: "copy",
+      content: markdown,
+      meta,
+    });
+    if (assetError) throw assetError;
+    await refresh();
   };
 
   const handoff = useMutation({
@@ -197,110 +247,209 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
     onError: (error: unknown) => toast.error(errorMessage(error, "ההעברה נכשלה")),
   });
 
+  const archive = useMutation({
+    mutationFn: async () => {
+      if (!selected) throw new Error("לא נבחרה משימה");
+      const { error } = await supabase
+        .from("marketing_work_items")
+        .update({ status: "archived" })
+        .eq("id", selected.id)
+        .eq("tenant_id", tenantId);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("המשימה הועברה לארכיון");
+      await refresh();
+    },
+    onError: (error: unknown) => toast.error(errorMessage(error, "הארכוב נכשל")),
+  });
+
+  const saveBrief = async () => {
+    if (!selected) return;
+    const { error } = await supabase
+      .from("marketing_work_items")
+      .update({ payload: { ...(selected.payload ?? {}), brief_text: briefDraft, department: "copy" } })
+      .eq("id", selected.id)
+      .eq("tenant_id", tenantId);
+    if (error) {
+      toast.error(errorMessage(error, "שמירת הבריף נכשלה"));
+      return;
+    }
+    toast.success("הבריף עודכן");
+    await refresh();
+  };
+
   if (loadingContext) {
     return <div className="flex flex-1 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-violet-500" /></div>;
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-3 border-b bg-background px-4 py-2"><span className="text-xs font-medium text-muted-foreground">תצוגה:</span><ClientSelector tenantId={tenantId} value={clientId ?? null} onChange={onClientChange} allowGeneral generalLabel="תוכן כללי" /></div>
-    <div className="grid flex-1 min-h-0 grid-cols-[280px_minmax(0,1fr)_300px] bg-muted/10">
-      <aside className="flex min-h-0 flex-col border-l bg-card/70">
-        <div className="flex items-center justify-between border-b p-3">
-          <div>
-            <h2 className="text-sm font-bold">בריפים ומשימות</h2>
-            <p className="text-[11px] text-muted-foreground">אוטומטיים וידניים במקום אחד</p>
+      <div className="flex items-center gap-3 border-b bg-background px-4 py-2">
+        <span className="text-xs font-medium text-muted-foreground">תצוגה:</span>
+        <ClientSelector tenantId={tenantId} value={clientId ?? null} onChange={onClientChange} allowGeneral generalLabel="תוכן כללי" />
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_320px] bg-muted/10">
+        <aside className="flex min-h-0 flex-col border-l bg-card/70">
+          <div className="flex items-center justify-between border-b p-3">
+            <div>
+              <h2 className="text-sm font-bold">בריפים ומשימות</h2>
+              <p className="text-[11px] text-muted-foreground">אוטומטיים וידניים במקום אחד</p>
+            </div>
+            <Button size="icon" className="h-8 w-8" onClick={() => setCreateOpen(true)} title="בריף ידני חדש">
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
-          <Button size="icon" className="h-8 w-8" onClick={() => setCreateOpen(true)} title="בריף ידני חדש">
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="space-y-2 p-2">
-            {loadingItems ? (
-              <Loader2 className="mx-auto mt-8 h-5 w-5 animate-spin" />
-            ) : items.length === 0 ? (
-              <div className="px-4 py-10 text-center text-xs text-muted-foreground">
-                <FilePlus2 className="mx-auto mb-2 h-8 w-8 opacity-30" />
-                אין בריפים עדיין
-              </div>
-            ) : items.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setSelectedId(item.id)}
-                className={cn(
-                  "w-full rounded-xl border p-3 text-right transition-colors",
-                  selectedId === item.id ? "border-violet-400 bg-violet-50 dark:bg-violet-950/20" : "bg-background hover:bg-muted/50",
-                )}
-              >
-                <div className="flex items-start gap-2">
-                  <StatusDot status={item.status} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-semibold">{item.title || "ללא כותרת"}</div>
-                    <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-                      {item.payload?.brief_text || item.payload?.copy_text || "מחכה להנחיות"}
+          <div className="flex items-center justify-between border-b px-3 py-2 text-[11px]">
+            <button className={cn("text-muted-foreground hover:text-foreground", !showArchived && "font-semibold text-foreground")} onClick={() => setShowArchived(false)}>פעילים</button>
+            <button className={cn("text-muted-foreground hover:text-foreground", showArchived && "font-semibold text-foreground")} onClick={() => setShowArchived(true)}>ארכיון</button>
+          </div>
+          <ScrollArea className="flex-1">
+            <div className="space-y-2 p-2">
+              {loadingItems ? (
+                <Loader2 className="mx-auto mt-8 h-5 w-5 animate-spin" />
+              ) : items.length === 0 ? (
+                <div className="px-4 py-10 text-center text-xs text-muted-foreground">
+                  <FilePlus2 className="mx-auto mb-2 h-8 w-8 opacity-30" />
+                  {showArchived ? "אין משימות בארכיון" : "אין בריפים עדיין"}
+                </div>
+              ) : items.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedId(item.id)}
+                  className={cn(
+                    "w-full rounded-xl border p-3 text-right transition-colors",
+                    selectedId === item.id ? "border-violet-400 bg-violet-50 dark:bg-violet-950/20" : "bg-background hover:bg-muted/50",
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    <StatusDot status={item.status} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold">{item.title || "ללא כותרת"}</div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {asText(item.payload?.content_type) && <Badge variant="secondary" className="h-4 px-1 text-[9px]">{CONTENT_TYPES.find((type) => type.value === item.payload?.content_type)?.label ?? asText(item.payload?.content_type)}</Badge>}
+                        {(asText(item.payload?.channel) || item.target_channel) && <Badge variant="outline" className="h-4 px-1 text-[9px]">{asText(item.payload?.channel) || item.target_channel}</Badge>}
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                        {asText(item.payload?.brief_text) || asText(item.payload?.copy_text) || "מחכה להנחיות"}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </ScrollArea>
-      </aside>
-
-      <main className="flex min-h-0 min-w-0 flex-col">
-        {selected ? (
-          <>
-            <div className="flex items-center gap-3 border-b bg-card/50 px-4 py-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500 text-white"><PenLine className="h-4 w-4" /></div>
-              <div className="min-w-0 flex-1">
-                <h2 className="truncate text-sm font-bold">{selected.title}</h2>
-                <p className="text-[11px] text-muted-foreground">Skin: copywriter · שמירה עם היסטוריית גרסאות</p>
-              </div>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={generate} disabled={generating}>
-                {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
-                {selected.payload?.copy_text ? "צור גרסה נוספת" : "צור קופי"}
-              </Button>
-              <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={() => handoff.mutate()} disabled={handoff.isPending}>
-                <Send className="h-3.5 w-3.5" />אשר והעבר לקריאייטיב
-              </Button>
+                </button>
+              ))}
             </div>
-            <CopyEditor key={`${selected.id}-${selected.updated_at}`} item={selected} tenantId={tenantId} onSaved={refresh} />
-          </>
-        ) : (
-          <div className="flex flex-1 items-center justify-center text-center text-muted-foreground">
-            <div><MessageSquareText className="mx-auto mb-3 h-10 w-10 opacity-30" /><p className="text-sm">בחר בריף או צור אחד חדש</p></div>
-          </div>
-        )}
-      </main>
+          </ScrollArea>
+        </aside>
 
-      <aside className="flex min-h-0 flex-col border-r bg-card/70">
-        <div className="border-b p-3">
-          <h3 className="flex items-center gap-1.5 text-sm font-bold"><History className="h-4 w-4" />גרסאות</h3>
-          <p className="mt-1 text-[11px] text-muted-foreground">כל יצירה וכל שמירה נשמרות</p>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="space-y-3 p-3">
-            {selected?.payload?.brief_text && (
-              <Card className="p-3">
-                <Badge variant="secondary" className="mb-2">בריף מקור</Badge>
-                <p className="line-clamp-6 text-xs leading-relaxed whitespace-pre-wrap">{selected.payload.brief_text}</p>
-              </Card>
-            )}
-            {(versions as CopyVersion[]).map((version, index) => (
-              <Card key={version.id} className="p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <Badge variant="outline">גרסה {versions.length - index}</Badge>
-                  <span className="text-[10px] text-muted-foreground">{new Date(version.created_at).toLocaleString("he-IL")}</span>
+        <main className="flex min-h-0 min-w-0 flex-col">
+          {selected ? (
+            <>
+              <div className="flex items-center gap-3 border-b bg-card/50 px-4 py-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500 text-white"><PenLine className="h-4 w-4" /></div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-sm font-bold">{selected.title}</h2>
+                  <p className="text-[11px] text-muted-foreground">
+                    Skin: copywriter · {channel} · כותרת עד {limits.headline} / גוף עד {limits.primary} תווים
+                  </p>
                 </div>
-                <p className="line-clamp-5 text-xs leading-relaxed whitespace-pre-wrap">{version.content}</p>
-                {version.meta?.source === "manual_edit" && <div className="mt-2 text-[10px] text-muted-foreground">עריכה ידנית</div>}
-              </Card>
-            ))}
-            {selected && versions.length === 0 && <div className="py-8 text-center text-xs text-muted-foreground">הגרסה הראשונה תופיע כאן</div>}
-          </div>
-        </ScrollArea>
-      </aside>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => archive.mutate()} disabled={archive.isPending || selected.status === "archived"}>
+                  <Archive className="h-3.5 w-3.5" />ארכיון
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAiOpen(true)}>
+                  <WandSparkles className="h-3.5 w-3.5" />
+                  {asText(selected.payload?.copy_text) ? "כרמן תשפר / תיצור" : "כרמן תכתוב"}
+                </Button>
+                <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={() => handoff.mutate()} disabled={handoff.isPending || !context?.creativeStage} title={!context?.creativeStage ? "בחרו לקוח עם פייפליין כדי להעביר לקריאייטיב" : undefined}>
+                  <Send className="h-3.5 w-3.5" />אשר והעבר לקריאייטיב
+                </Button>
+              </div>
+              <CopyEditor key={`${selected.id}-${selected.updated_at}`} item={selected} tenantId={tenantId} limits={limits} onSaved={refresh} />
+            </>
+          ) : (
+            <div className="flex flex-1 items-center justify-center text-center text-muted-foreground">
+              <div>
+                <MessageSquareText className="mx-auto mb-3 h-10 w-10 opacity-30" />
+                <p className="text-sm">בחר בריף או צור אחד חדש</p>
+                <Button className="mt-4 gap-1.5" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />בריף חדש</Button>
+              </div>
+            </div>
+          )}
+        </main>
+
+        <aside className="flex min-h-0 flex-col border-r bg-card/70">
+          <Tabs defaultValue="brief" className="flex min-h-0 flex-1 flex-col">
+            <div className="border-b px-3 pt-2">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="brief">בריף</TabsTrigger>
+                <TabsTrigger value="variants">וריאציות</TabsTrigger>
+                <TabsTrigger value="versions">גרסאות</TabsTrigger>
+              </TabsList>
+            </div>
+            <TabsContent value="brief" className="min-h-0 flex-1 p-3">
+              {selected ? (
+                <div className="flex h-full flex-col gap-3">
+                  <p className="text-[11px] text-muted-foreground">הבריף נשמר במשימה ונכנס לכל יצירה של כרמן</p>
+                  <Textarea className="min-h-0 flex-1" value={briefDraft} onChange={(event) => setBriefDraft(event.target.value)} placeholder="מטרה, קהל, כאבים, הצעה, מסרים ומידע שאסור להמציא" />
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void saveBrief()} disabled={briefDraft === asText(selected.payload?.brief_text)}>
+                    <Save className="h-3.5 w-3.5" />שמור בריף
+                  </Button>
+                </div>
+              ) : <div className="py-8 text-center text-xs text-muted-foreground">אין משימה נבחרת</div>}
+            </TabsContent>
+            <TabsContent value="variants" className="min-h-0 flex-1">
+              <ScrollArea className="h-full">
+                <div className="space-y-3 p-3">
+                  {asText(selected?.payload?.copy_angle) && (
+                    <Card className="p-3 text-[11px] leading-relaxed text-muted-foreground">
+                      <div className="mb-1 font-semibold text-foreground">זווית: {asText(selected?.payload?.copy_angle)}</div>
+                      {asText(selected?.payload?.copy_promise)}
+                    </Card>
+                  )}
+                  {variants.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-muted-foreground">כרמן תייצר כאן 3 וריאציות לבדיקה</div>
+                  ) : variants.map((variant) => (
+                    <Card key={variant.label} className="space-y-2 p-3">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline">וריאציה {variant.label}</Badge>
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => void writeCopy(variantToMarkdown(variant), { source: "variant_select", label: variant.label }).then(() => toast.success(`וריאציה ${variant.label} נכנסה לעורך`)).catch((error: unknown) => toast.error(errorMessage(error, "ההעתקה נכשלה")))}>
+                          העתק לעורך
+                        </Button>
+                      </div>
+                      <div className="text-xs font-semibold">{variant.headline}</div>
+                      <p className="text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">{variant.primary}</p>
+                      {variant.cta && <Badge className="bg-violet-600 hover:bg-violet-600">{variant.cta}</Badge>}
+                      {variant.rationale && <p className="text-[10px] text-muted-foreground">{variant.rationale}</p>}
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+            <TabsContent value="versions" className="min-h-0 flex-1">
+              <ScrollArea className="h-full">
+                <div className="space-y-3 p-3">
+                  <p className="text-[11px] text-muted-foreground">לחיצה משחזרת גרסה לעורך כטיוטה חדשה</p>
+                  {versions.map((version, index) => (
+                    <Card key={version.id} className="p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <Badge variant="outline">גרסה {versions.length - index}</Badge>
+                        <span className="text-[10px] text-muted-foreground">{new Date(version.created_at).toLocaleString("he-IL")}</span>
+                      </div>
+                      <p className="line-clamp-5 text-xs leading-relaxed whitespace-pre-wrap">{version.content}</p>
+                      {version.meta?.source === "manual_edit" && <div className="mt-2 text-[10px] text-muted-foreground">עריכה ידנית</div>}
+                      {version.content && (
+                        <Button size="sm" variant="ghost" className="mt-2 h-7 px-2 text-[11px]" onClick={() => void writeCopy(version.content!, { source: "restore", restored_asset_id: version.id }).then(() => toast.success("הגרסה שוחזרה לעורך")).catch((error: unknown) => toast.error(errorMessage(error, "השחזור נכשל")))}>
+                          <History className="ml-1 h-3 w-3" />שחזר לעורך
+                        </Button>
+                      )}
+                    </Card>
+                  ))}
+                  {selected && versions.length === 0 && <div className="py-8 text-center text-xs text-muted-foreground">הגרסה הראשונה תופיע כאן</div>}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </aside>
+      </div>
 
       <ManualBriefDialog
         open={createOpen}
@@ -309,24 +458,54 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
         defaultClientId={clientId}
         onCreated={async (id) => { setSelectedId(id); setCreateOpen(false); await refresh(); }}
       />
-    </div>
+      {selected && (
+        <CopyAIDialog
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          item={selected}
+          copyStageId={context?.copyStage?.id ?? null}
+          tenantId={tenantId}
+          onCompleted={async () => { setAiOpen(false); await refresh(); }}
+        />
+      )}
     </div>
   );
 }
 
-function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: string; onSaved: () => Promise<void> }) {
+function CopyEditor({
+  item,
+  tenantId,
+  limits,
+  onSaved,
+}: {
+  item: CopyItem;
+  tenantId: string;
+  limits: { headline: number; primary: number };
+  onSaved: () => Promise<void>;
+}) {
   const [saving, setSaving] = useState(false);
+  const [charCount, setCharCount] = useState(0);
+  const dark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
   const initialContent = useMemo(() => {
-    const text = item.payload?.copy_text || "כאן יופיע הקופי. אפשר לכתוב ידנית או לבקש מכרמן ליצור גרסה.";
+    const text = asText(item.payload?.copy_text) || "כאן יופיע הקופי. אפשר לכתוב ידנית או לבקש מכרמן ליצור גרסה.";
     return String(text).split("\n").map((line) => ({ type: "paragraph" as const, content: line || " " }));
   }, [item.payload?.copy_text]);
   const editor = useCreateBlockNote({ initialContent });
 
+  useEffect(() => {
+    const updateCount = () => {
+      const markdown = editor.blocksToMarkdownLossy(editor.document);
+      setCharCount(markdown.replace(/\s+/g, " ").trim().length);
+    };
+    updateCount();
+    return editor.onChange(updateCount);
+  }, [editor]);
+
   const save = async () => {
     setSaving(true);
     try {
-      const markdown = await editor.blocksToMarkdownLossy(editor.document);
-      const nextPayload = { ...(item.payload ?? {}), copy_text: markdown, editor_blocks: editor.document, department: "copy" };
+      const markdown = editor.blocksToMarkdownLossy(editor.document);
+      const nextPayload = { ...(item.payload ?? {}), copy_text: markdown, editor_blocks: editor.document as unknown as JsonValue, department: "copy" };
       const { error: itemError } = await supabase
         .from("marketing_work_items")
         .update({ payload: nextPayload })
@@ -339,7 +518,7 @@ function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: str
         stage_id: item.current_stage_id,
         type: "copy",
         content: markdown,
-        meta: { source: "manual_edit", skin_slug: "copywriter", editor_blocks: editor.document },
+        meta: { source: "manual_edit", skin_slug: "copywriter", editor_blocks: editor.document as unknown as JsonValue },
       });
       if (assetError) throw assetError;
       toast.success("הגרסה נשמרה");
@@ -355,16 +534,122 @@ function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: str
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       <div className="flex items-center justify-between border-b px-4 py-2">
         <span className="text-xs text-muted-foreground">עורך בלוקים — גרור, סדר וערוך כל חלק בנפרד</span>
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={save} disabled={saving}>
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}שמור גרסה
-        </Button>
+        <div className="flex items-center gap-3">
+          <span className={cn("text-[11px]", charCount > limits.primary ? "font-semibold text-amber-600" : "text-muted-foreground")}>
+            {charCount} / {limits.primary} תווים
+          </span>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}שמור גרסה
+          </Button>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="mx-auto min-h-full max-w-3xl rounded-2xl border bg-card p-5 shadow-sm" dir="rtl">
-          <BlockNoteView editor={editor} theme="light" />
+          <BlockNoteView editor={editor} theme={dark ? "dark" : "light"} />
         </div>
       </div>
     </div>
+  );
+}
+
+function CopyAIDialog({
+  open,
+  onClose,
+  item,
+  copyStageId,
+  tenantId,
+  onCompleted,
+}: {
+  open: boolean;
+  onClose: () => void;
+  item: CopyItem;
+  copyStageId: string | null;
+  tenantId: string;
+  onCompleted: () => Promise<void>;
+}) {
+  const [mode, setMode] = useState<"autopilot" | "brief" | "improve">("autopilot");
+  const [prompt, setPrompt] = useState("");
+  const [running, setRunning] = useState(false);
+  const hasCopy = !!asText(item.payload?.copy_text);
+  const hasBrief = !!asText(item.payload?.brief_text);
+
+  const run = async () => {
+    setRunning(true);
+    try {
+      if (copyStageId && item.current_stage_id !== copyStageId) {
+        const { error: moveError } = await supabase
+          .from("marketing_work_items")
+          .update({ current_stage_id: copyStageId, status: "draft" })
+          .eq("id", item.id)
+          .eq("tenant_id", tenantId);
+        if (moveError) throw moveError;
+      }
+      const { data, error } = await supabase.functions.invoke("marketing-copy-plan", {
+        body: { item_id: item.id, prompt: prompt.trim(), mode },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`כרמן כתבה ${data?.variants?.length ?? 3} וריאציות קופי`);
+      await onCompleted();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "כרמן לא הצליחה לכתוב קופי"));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const modes = [
+    { id: "autopilot" as const, title: "כרמן עושה הכול", description: "פרומפט אחד → 3 וריאציות, כותרת, גוף ו-CTA" },
+    { id: "brief" as const, title: "מתוך הבריף", description: "רק מה שכתוב בבריף, בלי להמציא עובדות", disabled: !hasBrief },
+    { id: "improve" as const, title: "שיפור הקיים", description: "שומרת על המסר ומייצרת 3 זוויות חזקות יותר", disabled: !hasCopy },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
+      <DialogContent className="max-w-2xl" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <WandSparkles className="h-5 w-5 text-violet-500" />
+            עבודה עם כרמן — Skin קופירייטרית
+          </DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-5 py-2">
+          <div className="grid grid-cols-3 gap-2">
+            {modes.map((option) => (
+              <button
+                key={option.id}
+                disabled={option.disabled}
+                onClick={() => setMode(option.id)}
+                className={cn(
+                  "rounded-xl border p-3 text-right transition-all",
+                  mode === option.id ? "border-violet-500 bg-violet-50 ring-2 ring-violet-500/10 dark:bg-violet-950/20" : "hover:bg-muted/50",
+                  option.disabled && "cursor-not-allowed opacity-40",
+                )}
+              >
+                <div className="text-xs font-bold">{option.title}</div>
+                <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{option.description}</div>
+              </button>
+            ))}
+          </div>
+          <div>
+            <Label>{mode === "autopilot" ? "מה כרמן צריכה לכתוב?" : "הנחיות נוספות לכרמן (לא חובה)"}</Label>
+            <Textarea
+              className="mt-1 min-h-32"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder={mode === "autopilot" ? "לדוגמה: פוסט השקה לאינסטגרם שמדבר לבעלי עסקים שחוששים מפרסום ממומן. טון ישיר, בלי קלישאות של AI, CTA לשיחת ייעוץ." : "דגשים, מילים שחייבות להופיע, דברים שאסור להבטיח, אורך רצוי"}
+            />
+          </div>
+          <div className="rounded-lg bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">
+            כרמן משתמשת בבריף, בפרטי הלקוח וב־Skin <b>copywriter</b>. אחרי היצירה אפשר לבחור וריאציה, לערוך בעורך הבלוקים ולשמור גרסה.
+          </div>
+          <Button onClick={() => void run()} disabled={running || (mode === "autopilot" && !prompt.trim())} className="gap-2 bg-gradient-to-r from-violet-600 to-purple-600">
+            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+            {running ? "כרמן כותבת וריאציות..." : mode === "improve" ? "שפרי וצרי 3 וריאציות" : "כתבי קופי עם 3 וריאציות"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -378,6 +663,10 @@ function ManualBriefDialog({ open, onClose, tenantId, defaultClientId, onCreated
   const [channel, setChannel] = useState("Facebook");
   const [saving, setSaving] = useState(false);
   const [assignedClientId, setAssignedClientId] = useState<string | null>(defaultClientId ?? null);
+
+  useEffect(() => {
+    if (open) setAssignedClientId(defaultClientId ?? null);
+  }, [defaultClientId, open]);
 
   const create = async () => {
     if (!title.trim() || !brief.trim()) return;
@@ -411,7 +700,9 @@ function ManualBriefDialog({ open, onClose, tenantId, defaultClientId, onCreated
       onCreated(data.id);
     } catch (error: unknown) {
       toast.error(errorMessage(error, "יצירת הבריף נכשלה"));
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -428,7 +719,7 @@ function ManualBriefDialog({ open, onClose, tenantId, defaultClientId, onCreated
           <div><Label>בריף / חומר גלם</Label><Textarea className="mt-1 min-h-36" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, כאבים, הצעה, מסרים ומידע שאסור להמציא" /></div>
           <div><Label>הנחיות מיוחדות</Label><Textarea className="mt-1 min-h-20" value={instructions} onChange={(event) => setInstructions(event.target.value)} placeholder="טון, אורך, מבנה, השראות, דברים שחייבים או אסור לכתוב" /></div>
           <Separator />
-          <Button onClick={create} disabled={saving || !title.trim() || !brief.trim()} className="gap-1.5">
+          <Button onClick={() => void create()} disabled={saving || !title.trim() || !brief.trim()} className="gap-1.5">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}הכנס למחלקת קופי
           </Button>
         </div>
