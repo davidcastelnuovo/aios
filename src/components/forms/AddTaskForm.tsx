@@ -432,6 +432,8 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", currentTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigner-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["client-onboarding", currentTenantId] });
       toast.success(
         isViewingAs

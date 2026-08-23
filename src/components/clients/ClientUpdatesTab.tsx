@@ -215,7 +215,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
       setNewUpdate("");
       toast.success("העדכון נוסף בהצלחה");
     },
@@ -234,7 +234,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
       setEditingUpdateId(null);
       setEditingUpdateContent("");
       toast.success("העדכון נערך בהצלחה");
@@ -254,7 +254,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
       toast.success("העדכון נמחק בהצלחה");
     },
     onError: () => {
@@ -271,7 +271,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks", clientId] });
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },

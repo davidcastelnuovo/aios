@@ -21,10 +21,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarIcon, RotateCcw, X } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useTerminology } from "@/hooks/useTerminology";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
+import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 
 export interface TaskFilterState {
   campaignerId: string;
@@ -57,6 +58,7 @@ export function TaskFiltersDialog({
 }: TaskFiltersDialogProps) {
   const { tenantId } = useCurrentTenant();
   const { t } = useTerminology();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const [filters, setFilters] = useState<TaskFilterState>(currentFilters);
 
   // Sync with current filters when dialog opens
@@ -68,17 +70,8 @@ export function TaskFiltersDialog({
 
   // Fetch campaigners for the tenant
   const { data: campaigners = [] } = useQuery({
-    queryKey: ["campaigners-for-filter", tenantId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("tenant_id", tenantId)
-        .eq("active", true)
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
+    queryKey: ["campaigners-for-filter", tenantId, crossTenantAgencyIds.join(",")],
+    queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId && open,
   });
 

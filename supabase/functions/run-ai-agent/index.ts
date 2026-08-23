@@ -61,6 +61,15 @@ function scoreNameMatchSafe(fullName: string, query: string): number {
   return scoreNameMatch(fullName, query)
 }
 
+/** DB enum task_status is open|in_progress|done. Carmen tools historically used `completed`. */
+function mapHumanTaskStatus(status: string): 'open' | 'in_progress' | 'done' {
+  const value = (status || '').trim().toLowerCase()
+  if (value === 'completed' || value === 'done') return 'done'
+  if (value === 'in_progress') return 'in_progress'
+  if (value === 'open') return 'open'
+  throw new Error(`סטטוס משימה לא תקין: ${status}`)
+}
+
 /** Load campaigners / sales_people / tenant profiles as a unified staff roster. */
 async function loadStaffWhatsappRoster(
   supabase: any,
@@ -700,7 +709,7 @@ const ALL_TOOLS = [
   { name: 'record_action_episode', description: 'שמירת תוצאה של פעולה כבדה ב-long-term memory של כרמן (carmen_memory_episodes). חובה לקרוא בסיום של pulse_check / סקירת קמפיינים / סקירת לידים — כדי שבפעם הבאה recall_recent_action ימצא את התוצאה. כתוב summary תמציתי של מה שמצאת.', parameters: { type: 'object', properties: { action_type: { type: 'string', description: 'pulse_check / campaign_analysis / lead_review וכד׳' }, summary: { type: 'string', description: 'סיכום תמציתי של מה שמצאת — מספר לקוחות, דגלים, אזהרות, החלטות' }, topic_tags: { type: 'array', items: { type: 'string' }, description: 'תגיות נוספות (לקוחות מעורבים, סוכנויות וכו׳)' }, importance: { type: 'integer', description: '1-100 (ברירת מחדל 50)' } }, required: ['action_type', 'summary'] } },
   { name: 'search_tasks', description: 'חיפוש משימות לפי שם/כותרת. חשוב! השתמש בכלי הזה לפני יצירת משימה כדי לוודא שהיא לא קיימת כבר', parameters: { type: 'object', properties: { search_term: { type: 'string', description: 'מילת חיפוש בכותרת המשימה' }, status: { type: 'string' }, client_id: { type: 'string' } }, required: ['search_term'] } },
   { name: 'list_tasks', description: 'רשימת משימות', parameters: { type: 'object', properties: { status: { type: 'string' }, client_id: { type: 'string' }, limit: { type: 'integer' } } } },
-  { name: 'update_task_status', description: 'עדכון סטטוס משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'] } }, required: ['task_id', 'status'] } },
+  { name: 'update_task_status', description: 'עדכון סטטוס משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, status: { type: 'string', enum: ['open', 'in_progress', 'done', 'completed'] } }, required: ['task_id', 'status'] } },
   // CLIENTS
   { name: 'list_clients', description: 'רשימת/חיפוש לקוחות. אפשר לסנן לפי סטטוס, קמפיינר, סוכנות (agency_id/agency_name — חובה לסנן כשהמשתמש שואל על "לקוחות בסוכנות X"), או name_search. הערה: כשהקורא הוא קמפיינר (WhatsApp), ברירת המחדל היא הצגת לקוחות שמשוייכים אליו בלבד בסטטוס active/onboarding — אלא אם סופק campaigner_name/agency_name אחר במפורש. החיפוש case-insensitive. אל תאמר "לא נמצא" לפני שניסית name_search.', parameters: { type: 'object', properties: { status: { type: 'string', description: 'active / onboarding / inactive. ברירת מחדל עבור קמפיינר WhatsApp: active+onboarding בלבד.' }, limit: { type: 'integer' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הלקוח או איש הקשר (case-insensitive). נסה גם תעתיק אנגלי לעברית ולהפך.' }, campaigner_id: { type: 'string', description: 'סינון ללקוחות המשוייכים לקמפיינר זה (דרך client_team)' }, campaigner_name: { type: 'string', description: 'סינון לפי שם קמפיינר (חיפוש חופשי בשם המלא)' }, agency_id: { type: 'string', description: 'סינון ללקוחות בסוכנות זו בלבד' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי, case-insensitive). חובה להשתמש כשהמשתמש מציין סוכנות בשם.' }, all_scopes: { type: 'boolean', description: 'דרוס את הסקופ האוטומטי של הקמפיינר והחזר את כל הלקוחות בארגון (לשימוש רק אם המשתמש ביקש זאת מפורשות).' } } } },
   { name: 'get_client_info', description: 'מידע על לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' } }, required: ['client_id'] } },
@@ -753,7 +762,7 @@ const ALL_TOOLS = [
   { name: 'update_lead', description: 'עדכון פרטי ליד קיים (שם, טלפון, אימייל, מקור, הערות)', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, company_name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, source: { type: 'string' }, notes: { type: 'string' }, follow_up_date: { type: 'string', description: 'תאריך מעקב בפורמט YYYY-MM-DD' } }, required: ['lead_id'] } },
   { name: 'delete_lead', description: 'מחיקת ליד מהמערכת', parameters: { type: 'object', properties: { lead_id: { type: 'string' } }, required: ['lead_id'] } },
   // TASKS - full CRUD
-  { name: 'update_task', description: 'עדכון פרטי משימה (כותרת, תאריך, עדיפות, הערות, סטטוס, שיוך ליד/קמפיינר)', parameters: { type: 'object', properties: { task_id: { type: 'string' }, title: { type: 'string' }, due_date: { type: 'string' }, due_time: { type: 'string' }, priority: { type: 'integer', description: '1-10' }, notes: { type: 'string' }, client_id: { type: 'string' }, lead_id: { type: 'string' }, campaigner_id: { type: 'string' }, duration_minutes: { type: 'integer' }, status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'] } }, required: ['task_id'] } },
+  { name: 'update_task', description: 'עדכון פרטי משימה (כותרת, תאריך, עדיפות, הערות, סטטוס, שיוך ליד/קמפיינר)', parameters: { type: 'object', properties: { task_id: { type: 'string' }, title: { type: 'string' }, due_date: { type: 'string' }, due_time: { type: 'string' }, priority: { type: 'integer', description: '1-10' }, notes: { type: 'string' }, client_id: { type: 'string' }, lead_id: { type: 'string' }, campaigner_id: { type: 'string' }, duration_minutes: { type: 'integer' }, status: { type: 'string', enum: ['open', 'in_progress', 'done', 'completed'] } }, required: ['task_id'] } },
   { name: 'delete_task', description: 'מחיקת משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
   { name: 'add_task_update', description: 'הוספת הערה/עדכון למשימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, content: { type: 'string' } }, required: ['task_id', 'content'] } },
   { name: 'manage_task_collaborators', description: 'הוספה או הסרה של שותפים (קמפיינרים) למשימה', parameters: { type: 'object', properties: { task_id: { type: 'string' }, campaigner_id: { type: 'string' }, action: { type: 'string', enum: ['add', 'remove'] } }, required: ['task_id', 'campaigner_id', 'action'] } },
@@ -1997,7 +2006,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'update_task_status': {
       await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
-      const { data, error } = await supabase.from('tasks').update({ status: args.status }).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
+      const status = mapHumanTaskStatus(args.status)
+      const { data, error } = await supabase.from('tasks').update({ status }).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status').single()
       if (error) throw error
       return data
     }
@@ -3488,7 +3498,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.lead_id !== undefined) updates.lead_id = args.lead_id
       if (args.campaigner_id !== undefined) updates.campaigner_id = args.campaigner_id
       if (args.duration_minutes !== undefined) updates.duration_minutes = args.duration_minutes
-      if (args.status) updates.status = args.status
+      if (args.status) updates.status = mapHumanTaskStatus(args.status)
       const { data, error } = await supabase.from('tasks').update(updates).eq('id', args.task_id).in('tenant_id', accessibleTenantIds).select('id, title, status, due_date, due_time, campaigner_id, google_calendar_event_id, duration_minutes').single()
       if (error) throw error
 
@@ -4359,7 +4369,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       // Optionally mark as complete
       if (args.mark_complete) {
         await supabase.from('tasks')
-          .update({ status: 'completed', assigned_agent: null })
+          .update({ status: 'done', assigned_agent: null })
           .eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
       }
       return { success: true, task_id: args.task_id, completed: !!args.mark_complete }

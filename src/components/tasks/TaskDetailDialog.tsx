@@ -31,6 +31,8 @@ import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
+import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
+import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 
 interface Task {
   id: string;
@@ -46,6 +48,8 @@ interface Task {
   campaigner_id: string | null;
   tenant_id: string | null;
   self_reminder_at?: string | null;
+  google_calendar_event_id?: string | null;
+  duration_minutes?: number | null;
 }
 
 interface TaskDetailDialogProps {
@@ -92,6 +96,7 @@ export function TaskDetailDialog({
   const [selfReminderEnabled, setSelfReminderEnabled] = useState(false);
   const [selfReminderAt, setSelfReminderAt] = useState("");
   const [viewLeadOpen, setViewLeadOpen] = useState(false);
+  const [googleCalendarEventId, setGoogleCalendarEventId] = useState<string | null>(null);
 
   // Fetch full lead data for viewing
   const { data: fullLeadData } = useQuery({
@@ -136,6 +141,7 @@ export function TaskDetailDialog({
             : ""
         );
         setAttachments(Array.isArray((t as any).attachments) ? (t as any).attachments : []);
+        setGoogleCalendarEventId((t as any).google_calendar_event_id || null);
         setClientSearch("");
         setCampaignerSearch("");
         setLeadSearch("");
@@ -178,16 +184,8 @@ export function TaskDetailDialog({
 
   // Fetch campaigners for collaboration
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners-for-tasks", tenantId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("tenant_id", tenantId)
-        .eq("active", true)
-        .order("full_name");
-      return data || [];
-    },
+    queryKey: ["campaigners-for-tasks", tenantId, crossTenantAgencyIds.join(",")],
+    queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId && open,
   });
 
@@ -269,6 +267,8 @@ export function TaskDetailDialog({
       if (selfReminderEnabled && assignedCampaignerId === userCampaignerId && !selfReminderAt) {
         throw new Error("יש לבחור תאריך ושעה לתזכורת");
       }
+      const nextDueDate = dueDate?.toISOString().split("T")[0] || null;
+      const nextDueTime = dueTime ? dueTime + ":00" : null;
       const { error } = await supabase
         .from("tasks")
         .update({
@@ -276,8 +276,8 @@ export function TaskDetailDialog({
           notes,
           priority,
           status,
-          due_date: dueDate?.toISOString().split("T")[0] || null,
-          due_time: dueTime ? dueTime + ":00" : null,
+          due_date: nextDueDate,
+          due_time: nextDueTime,
           duration_minutes: durationMinutes,
           client_id: clientId || null,
           lead_id: leadId || null,
@@ -290,6 +290,27 @@ export function TaskDetailDialog({
         })
         .eq("id", task!.id);
       if (error) throw error;
+
+      if (tenantId) {
+        try {
+          const eventId = await syncTaskCalendarEvent({
+            tenantId,
+            title,
+            dueDate: nextDueDate,
+            dueTime: nextDueTime,
+            durationMinutes,
+            existingEventId: googleCalendarEventId,
+          });
+          if ((eventId ?? null) !== (googleCalendarEventId ?? null)) {
+            await supabase
+              .from("tasks")
+              .update({ google_calendar_event_id: eventId })
+              .eq("id", task!.id);
+          }
+        } catch (calendarError) {
+          console.warn("לא הצלחנו לעדכן ביומן גוגל:", calendarError);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });

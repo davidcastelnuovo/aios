@@ -42,6 +42,8 @@ import { useTerminology } from "@/hooks/useTerminology";
 import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
+import { resolveBoardTaskAgency } from "@/lib/taskBoardAgency";
+import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 
 interface Task {
   id: string;
@@ -90,32 +92,7 @@ export function WeeklyTaskBoard() {
   // Fetch campaigners for quick filter (include cross-tenant via shared agencies)
   const { data: campaignersList = [] } = useQuery({
     queryKey: ["campaigners-for-task-filter", tenantId, crossTenantAgencyIds.join(",")],
-    queryFn: async () => {
-      let crossTenantCampaignerIds: string[] = [];
-      if (crossTenantAgencyIds.length > 0) {
-        const { data: caRows } = await supabase
-          .from("campaigner_agencies")
-          .select("campaigner_id")
-          .in("agency_id", crossTenantAgencyIds);
-        crossTenantCampaignerIds = Array.from(new Set((caRows || []).map((r: any) => r.campaigner_id)));
-      }
-
-      let query = supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("active", true)
-        .order("full_name");
-
-      if (crossTenantCampaignerIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantCampaignerIds.join(",")})`);
-      } else {
-        query = query.eq("tenant_id", tenantId!);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId,
   });
   const { selectedAgency } = useAgency();
@@ -448,7 +425,8 @@ export function WeeklyTaskBoard() {
     enabled: !!tenantId,
   });
 
-  const canQuickAddTask = !!tenantId && !!firstAgency?.id;
+  const boardAgencyId = resolveBoardTaskAgency(selectedAgency, firstAgency?.id);
+  const canQuickAddTask = !!tenantId && !!boardAgencyId;
 
   // Add task mutation
   const addTask = useMutation({
@@ -468,7 +446,8 @@ export function WeeklyTaskBoard() {
       selfReminderAt?: string | null;
     }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
-      if (!firstAgency?.id) throw new Error("NO_AGENCY");
+      const agencyId = resolveBoardTaskAgency(selectedAgency, firstAgency?.id);
+      if (!agencyId) throw new Error("NO_AGENCY");
 
       const myCampaignerId = userProfile?.campaigner_id || null;
       const mySalesPersonId = userProfile?.sales_person_id || null;
@@ -482,7 +461,7 @@ export function WeeklyTaskBoard() {
         status: "open",
         priority: 5,
         tenant_id: tenantId,
-        agency_id: firstAgency.id,
+        agency_id: agencyId,
         campaigner_id: assignedCampaignerId,
         sales_person_id: assignedCampaignerId ? null : mySalesPersonId,
         client_id: clientId ?? null,
@@ -566,6 +545,10 @@ export function WeeklyTaskBoard() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
+      if (data.synced === 0) {
+        toast.info(data.message || "סנכרון משימות אינו נתמך כרגע.");
+        return;
+      }
       toast.success(`סונכרנו ${data.synced} משימות ליומן גוגל`);
       if (data.failed > 0) {
         toast.warning(`${data.failed} משימות נכשלו בסנכרון`);
@@ -644,13 +627,17 @@ export function WeeklyTaskBoard() {
       durationMinutes,
     }: {
       taskId: string;
-      newDate: string;
+      newDate: string | null;
       newTime?: string | null;
       title?: string;
       googleCalendarEventId?: string | null;
       durationMinutes?: number;
     }) => {
-      const updateData: { due_date: string; due_time?: string | null } = { due_date: newDate };
+      const updateData: {
+        due_date: string | null;
+        due_time?: string | null;
+        google_calendar_event_id?: string | null;
+      } = { due_date: newDate };
       if (newTime !== undefined) {
         updateData.due_time = newTime;
       }
@@ -660,37 +647,25 @@ export function WeeklyTaskBoard() {
         .eq("id", taskId);
       if (error) throw error;
 
-      // אם יש תאריך ושעה - עדכן או צור אירוע ביומן גוגל
-      if (newDate && newTime && title) {
-        try {
-          const startDateTime = new Date(`${newDate}T${newTime}`);
-          const duration = durationMinutes || 30;
-          const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
-          
-          if (googleCalendarEventId) {
-            // עדכון אירוע קיים דרך Unified
-            const { updateCalendarEvent: updateCalEvent } = await import("@/lib/calendarApi");
-            await updateCalEvent(
-              { eventId: googleCalendarEventId, summary: title, start: startDateTime.toISOString(), end: endDateTime.toISOString() },
-              { tenantId: tenantId! }
-            );
-          } else {
-            // יצירת אירוע חדש דרך Unified
-            const { addCalendarEvent: addCalEvent } = await import("@/lib/calendarApi");
-            const calendarResult = await addCalEvent(
-              { summary: title, description: `משימה ממערכת Marketing Captain`, start: startDateTime.toISOString(), end: endDateTime.toISOString() },
-              { tenantId: tenantId! }
-            );
-            
-            if (calendarResult?.eventId) {
-              await supabase.from("tasks")
-                .update({ google_calendar_event_id: calendarResult.eventId })
-                .eq("id", taskId);
-            }
-          }
-        } catch (calendarError) {
-          console.warn("לא הצלחנו לעדכן ביומן גוגל:", calendarError);
+      try {
+        const { syncTaskCalendarEvent } = await import("@/lib/calendarApi");
+        const eventId = await syncTaskCalendarEvent({
+          tenantId: tenantId!,
+          title: title || "משימה",
+          dueDate: newDate,
+          dueTime: newTime ?? null,
+          durationMinutes: durationMinutes || 30,
+          existingEventId: googleCalendarEventId,
+        });
+        const calendarChanged =
+          (eventId ?? null) !== (googleCalendarEventId ?? null);
+        if (calendarChanged) {
+          await supabase.from("tasks")
+            .update({ google_calendar_event_id: eventId })
+            .eq("id", taskId);
         }
+      } catch (calendarError) {
+        console.warn("לא הצלחנו לעדכן ביומן גוגל:", calendarError);
       }
     },
     onSuccess: () => {
@@ -913,6 +888,8 @@ export function WeeklyTaskBoard() {
         taskId,
         newDate: null,
         newTime: null,
+        title: draggedTask.title,
+        googleCalendarEventId: draggedTask.google_calendar_event_id,
       });
       toast.success("המשימה הועברה לרשימת המשימות");
       return;
@@ -1570,6 +1547,8 @@ export function WeeklyTaskBoard() {
             taskId,
             newDate: null,
             newTime: null,
+            title: selectedTask?.title,
+            googleCalendarEventId: selectedTask?.google_calendar_event_id,
           });
           toast.success("המשימה הועברה לרשימת המשימות");
         }}
@@ -1592,7 +1571,8 @@ export function WeeklyTaskBoard() {
         onDelete={(eventId) => deleteCalendarEvent.mutate(eventId)}
         onCreateTask={(data) => {
           // Create a new task from calendar event
-          if (!tenantId || !firstAgency?.id) {
+          const agencyId = resolveBoardTaskAgency(selectedAgency, firstAgency?.id);
+          if (!tenantId || !agencyId) {
             toast.error("לא ניתן ליצור משימה כרגע");
             return;
           }
@@ -1606,7 +1586,7 @@ export function WeeklyTaskBoard() {
             status: "open",
             priority: 5,
             tenant_id: tenantId,
-            agency_id: firstAgency.id,
+            agency_id: agencyId,
             campaigner_id: myCampaignerId,
             sales_person_id: myCampaignerId ? null : mySalesPersonId,
             due_date: data.dueDate,
