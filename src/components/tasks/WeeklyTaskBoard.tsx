@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -39,7 +39,6 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
-import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import { resolveBoardTaskAgency } from "@/lib/taskBoardAgency";
@@ -119,22 +118,10 @@ export function WeeklyTaskBoard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const { isTeamManager, isOwner, isSuperAdmin } = useUserRole();
-  const seesTeamTasksByDefault = isTeamManager || isOwner || isSuperAdmin;
+  // Everyone — including owners and team managers — lands on their own queue.
+  // The campaigner filter switches to the full team board on demand.
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
-  // Team managers / owners land on the agency's full board, not "mine" only —
-  // otherwise filtering the header to DMM/Promo looks empty when their personal
-  // queue happens to have no open tasks in that agency.
-  const didApplyRoleDefault = useRef(false);
-  useEffect(() => {
-    if (didApplyRoleDefault.current) return;
-    if (!seesTeamTasksByDefault) return;
-    didApplyRoleDefault.current = true;
-    setFilters((prev) =>
-      prev.campaignerId === "mine" ? { ...prev, campaignerId: "all" } : prev
-    );
-  }, [seesTeamTasksByDefault]);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
   const [quickAddSlot, setQuickAddSlot] = useState<{ date: Date; time: string } | null>(null);

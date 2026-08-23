@@ -26,22 +26,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
+import { defaultTaskFilters, type TaskFilterState } from "@/lib/taskFilters";
 
-export interface TaskFilterState {
-  campaignerId: string;
-  taskType: string;
-  association: string;
-  startDate: Date | undefined;
-  endDate: Date | undefined;
-}
-
-export const defaultTaskFilters: TaskFilterState = {
-  campaignerId: "mine",
-  taskType: "all",
-  association: "all",
-  startDate: undefined,
-  endDate: undefined,
-};
+export { defaultTaskFilters, type TaskFilterState };
 
 interface TaskFiltersDialogProps {
   open: boolean;
