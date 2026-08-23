@@ -127,7 +127,7 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
         client_id: recording.client_id,
         update_type: "meeting_summary",
         content: `סיכום הפגישה "${meetingName}"${meetingDate ? ` (${meetingDate})` : ""} נשלח ללקוח`,
-        created_by: user?.id ?? null,
+        user_id: user?.id ?? null,
       } as never);
     } catch (err) {
       console.error("client_updates log failed:", err);
