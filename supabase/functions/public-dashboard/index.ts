@@ -72,11 +72,33 @@ function getDateRange(filter: string, integrationType?: string | null): { startD
       endDate = endOfLastMonth.toISOString().split("T")[0];
       break;
     }
+    case "last_14_days":
+      startDate = new Date(Date.UTC(y, m, d - 14)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
+      break;
+    case "last_30_days":
+      startDate = new Date(Date.UTC(y, m, d - 30)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
+      break;
     case 'last_70_days':
       startDate = new Date(Date.UTC(y, m, d - 70)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
-    default: // last_30_days — 30 full days ending yesterday
+    case "last_90_days":
+      startDate = new Date(Date.UTC(y, m, d - 90)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
+      break;
+    case "last_180_days":
+      startDate = new Date(Date.UTC(y, m, d - 180)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
+      break;
+    case "last_365_days":
+      startDate = new Date(Date.UTC(y, m, d - 365)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
+      break;
+    case "all":
+      return { startDate: null, endDate: null };
+    default: // unknown preset — 30 full days ending yesterday
       startDate = new Date(Date.UTC(y, m, d - 30)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
@@ -266,18 +288,34 @@ Deno.serve(async (req) => {
       wooSites = sites || [];
       const siteIds = wooSites.map((s: any) => s.id);
       if (siteIds.length === 0) return;
-      let q = supabase
-        .from("woocommerce_orders")
-        .select(
-          "id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution"
-        )
-        .in("site_id", siteIds)
-        .order("date_created", { ascending: false })
-        .limit(2000);
-      if (wooRange.startDate) q = q.gte("date_created", wooRange.startDate + "T00:00:00.000Z");
-      if (wooRange.endDate) q = q.lte("date_created", wooRange.endDate + "T23:59:59.999Z");
-      const { data: orders } = await q;
-      wooOrders = orders || [];
+
+      const selectCols =
+        "id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution";
+      const pageSize = 1000;
+      const maxPages = 50;
+      const collected: any[] = [];
+
+      for (let page = 0; page < maxPages; page++) {
+        const from = page * pageSize;
+        let q = supabase
+          .from("woocommerce_orders")
+          .select(selectCols)
+          .in("site_id", siteIds)
+          .order("date_created", { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (wooRange.startDate) q = q.gte("date_created", wooRange.startDate + "T00:00:00.000Z");
+        if (wooRange.endDate) q = q.lte("date_created", wooRange.endDate + "T23:59:59.999Z");
+        const { data: batch, error } = await q;
+        if (error) {
+          console.error("Error fetching woocommerce orders:", error);
+          break;
+        }
+        if (!batch || batch.length === 0) break;
+        collected.push(...batch);
+        if (batch.length < pageSize) break;
+      }
+
+      wooOrders = collected;
     };
 
     const loadMaskyoo = async () => {

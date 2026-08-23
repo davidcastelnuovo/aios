@@ -108,6 +108,53 @@ export type WooReportAttributionData = {
   bySource: ReturnType<typeof aggregateOrdersByAttribution>;
 };
 
+const WOO_VALID_STATUSES = ['completed', 'processing', 'on-hold'] as const;
+const WOO_PAGE_SIZE = 1000;
+const WOO_MAX_PAGES = 50; // safety cap — 50k orders per range
+
+/** Paginated fetch — PostgREST caps responses at 1000 rows per request. */
+export async function fetchWooOrdersInRange(
+  siteIds: string[],
+  range: { start: string; end: string } | null,
+  select = 'total, status, date_created, attribution',
+): Promise<any[]> {
+  if (siteIds.length === 0) return [];
+
+  const all: any[] = [];
+  for (let page = 0; page < WOO_MAX_PAGES; page++) {
+    const from = page * WOO_PAGE_SIZE;
+    let query = supabase
+      .from('woocommerce_orders' as any)
+      .select(select)
+      .in('site_id', siteIds)
+      .order('date_created', { ascending: false })
+      .range(from, from + WOO_PAGE_SIZE - 1);
+
+    if (range) {
+      query = query.gte('date_created', range.start).lte('date_created', range.end);
+    }
+
+    const { data: orders, error } = await query;
+    if (error) throw error;
+    const batch = (orders as any[]) || [];
+    if (batch.length === 0) break;
+    all.push(...batch);
+    if (batch.length < WOO_PAGE_SIZE) break;
+  }
+
+  return all;
+}
+
+export async function fetchWooSiteIdsForClient(clientId: string): Promise<string[]> {
+  const { data: sites } = await supabase
+    .from('social_media_wordpress_sites' as any)
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('woocommerce_enabled', true)
+    .eq('is_active', true);
+  return ((sites as any[]) || []).map((s: any) => s.id);
+}
+
 /** Fetch WooCommerce orders + attribution summary for a linked client report. */
 export async function fetchWooReportAttribution(
   clientId: string,
@@ -120,35 +167,45 @@ export async function fetchWooReportAttribution(
   };
   if (!clientId) return empty;
 
-  const { data: sites } = await supabase
-    .from('social_media_wordpress_sites' as any)
-    .select('id')
-    .eq('client_id', clientId)
-    .eq('woocommerce_enabled', true)
-    .eq('is_active', true);
-  const siteIds = (sites as any[] || []).map((s: any) => s.id);
+  const siteIds = await fetchWooSiteIdsForClient(clientId);
   if (siteIds.length === 0) return empty;
 
-  let query = supabase
-    .from('woocommerce_orders' as any)
-    .select('total, status, date_created, attribution')
-    .in('site_id', siteIds)
-    .order('date_created', { ascending: false })
-    .limit(5000);
-
-  if (range) {
-    query = query.gte('date_created', range.start).lte('date_created', range.end);
-  }
-
-  const { data: orders } = await query;
-  const list = (orders as any[]) || [];
-  const validStatuses = ['completed', 'processing', 'on-hold'];
-  const valid = list.filter((o) => validStatuses.includes(o.status));
+  const list = await fetchWooOrdersInRange(siteIds, range);
+  const valid = list.filter((o) => WOO_VALID_STATUSES.includes(o.status));
 
   return {
     orders: valid,
     googlePaid: summarizeGoogleAttributedWooOrders(valid),
     bySource: aggregateOrdersByAttribution(valid),
+  };
+}
+
+/** KPI summary for combined dashboard cards — paginates past the 1k PostgREST cap. */
+export async function fetchWooDashboardSummary(
+  clientId: string,
+  range: { start: string; end: string },
+): Promise<{
+  revenue: number;
+  orders: number;
+  googlePaid: ReturnType<typeof summarizeGoogleAttributedWooOrders>;
+}> {
+  const empty = {
+    revenue: 0,
+    orders: 0,
+    googlePaid: { paidOrders: 0, paidRevenue: 0, organicOrders: 0, organicRevenue: 0 },
+  };
+  if (!clientId) return empty;
+
+  const siteIds = await fetchWooSiteIdsForClient(clientId);
+  if (siteIds.length === 0) return empty;
+
+  const list = await fetchWooOrdersInRange(siteIds, range, 'total, status, attribution');
+  const valid = list.filter((o) => WOO_VALID_STATUSES.includes(o.status));
+  const revenue = valid.reduce((s: number, o: any) => s + Number(o.total || 0), 0);
+  return {
+    revenue,
+    orders: valid.length,
+    googlePaid: summarizeGoogleAttributedWooOrders(valid),
   };
 }
 

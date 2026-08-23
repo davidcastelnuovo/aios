@@ -57,6 +57,16 @@ test("getDashboardDateRange this_week is Sun through today", () => {
   assert.equal(range.endDate, "2026-08-05");
 });
 
+test("getDashboardDateRange last_14_days is 14 rolling days ending yesterday", () => {
+  const range = getDashboardDateRange("last_14_days", new Date(2026, 7, 19, 12, 0, 0));
+  assert.equal(range.startDate, "2026-08-05");
+  assert.equal(range.endDate, "2026-08-18");
+});
+
+test("SHARED_COMBINED_DASHBOARD_DATE_FILTERS includes 14-day preset", () => {
+  assert.equal(dateFilterHasOption(SHARED_COMBINED_DASHBOARD_DATE_FILTERS, "last_14_days", "14 יום אחרונים"), true);
+});
+
 test("getDashboardDateRange last_7_days is 7 rolling days ending yesterday", () => {
   const range = getDashboardDateRange("last_7_days", new Date(2026, 7, 19, 12, 0, 0));
   assert.equal(range.startDate, "2026-08-12");

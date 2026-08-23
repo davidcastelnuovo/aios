@@ -51,7 +51,7 @@ import {
 import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
-import { invalidateWooDashboardQueries } from "@/lib/wooDashboardQueries";
+import { fetchWooDashboardSummary, invalidateWooDashboardQueries } from "@/lib/wooDashboardQueries";
 import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -406,7 +406,7 @@ export default function DashboardView() {
   }, [dateFilter, customDateRange.from, customDateRange.to]);
 
   const { data: wooSummary = { revenue: 0, orders: 0, googlePaid: { paidOrders: 0, paidRevenue: 0, organicOrders: 0, organicRevenue: 0 } } } = useQuery({
-    queryKey: ['woo-summary-for-totals', dashboard?.client_id, dateFilter, customFromStr, customToStr],
+    queryKey: ['woo-summary-for-totals', dashboard?.client_id, dateFilter, customFromStr, customToStr, wooDateRange.start, wooDateRange.end],
     queryFn: async () => {
       if (!dashboard?.client_id) {
         return {
@@ -415,33 +415,10 @@ export default function DashboardView() {
           googlePaid: { paidOrders: 0, paidRevenue: 0, organicOrders: 0, organicRevenue: 0 },
         };
       }
-      // No UI-tenant filter — shared-agency WP sites live on the home tenant.
-      const { data: sites } = await (supabase
-        .from('social_media_wordpress_sites' as any)
-        .select('id')
-        .eq('client_id', dashboard.client_id)
-        .eq('woocommerce_enabled', true)
-        .eq('is_active', true));
-      const siteIds = (sites as any[] || []).map((s: any) => s.id);
-      if (siteIds.length === 0) {
-        return {
-          revenue: 0,
-          orders: 0,
-          googlePaid: { paidOrders: 0, paidRevenue: 0, organicOrders: 0, organicRevenue: 0 },
-        };
-      }
-      const { data: orders } = await (supabase
-        .from('woocommerce_orders' as any)
-        .select('total, status, attribution')
-        .in('site_id', siteIds)
-        .gte('date_created', wooDateRange.start)
-        .lte('date_created', wooDateRange.end)
-        .limit(5000));
-      const validStatuses = ['completed', 'processing', 'on-hold'];
-      const valid = ((orders as any[]) || []).filter((o: any) => validStatuses.includes(o.status));
-      const revenue = valid.reduce((s: number, o: any) => s + Number(o.total || 0), 0);
-      const googlePaid = summarizeGoogleAttributedWooOrders(valid);
-      return { revenue, orders: valid.length, googlePaid };
+      return fetchWooDashboardSummary(dashboard.client_id, {
+        start: wooDateRange.start,
+        end: wooDateRange.end,
+      });
     },
     enabled: !!dashboard?.client_id && hasWooCommerce,
   });
