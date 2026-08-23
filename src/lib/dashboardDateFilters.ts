@@ -41,6 +41,7 @@ export const SHARED_COMBINED_DASHBOARD_DATE_FILTERS: DateFilterOption[] = [
   { value: "this_week", label: "השבוע" },
   { value: "last_week", label: "שבוע שעבר" },
   { value: "last_7_days", label: "7 ימים אחרונים" },
+  { value: "last_14_days", label: "14 יום אחרונים" },
   { value: "last_30_days", label: "30 יום אחרונים" },
   { value: "last_70_days", label: "70 יום אחרונים" },
   { value: "this_month", label: "החודש הנוכחי" },
