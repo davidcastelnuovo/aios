@@ -21,7 +21,6 @@ import {
   DEV_ESCALATION_REFUSAL_HE,
   DEV_ESCALATION_BUGFIX_ONLY_REFUSAL_HE,
   getDevEscalationTier,
-  isAuthorizedDevRequester,
   isDevEscalationSkill,
   isDevEscalationTool,
   isDevEscalationToolAllowed,
