@@ -10,6 +10,33 @@ COMMENT ON COLUMN public.campaign_pulse_snapshots.last_client_call_at IS
 COMMENT ON COLUMN public.campaign_pulse_snapshots.last_client_call_by IS
   'Display name or email of the user who recorded the latest client call update.';
 
+CREATE OR REPLACE FUNCTION public.get_latest_client_call_updates(p_client_ids uuid[])
+RETURNS TABLE (
+  client_id uuid,
+  last_client_call_at timestamptz,
+  last_client_call_by text
+)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  SELECT DISTINCT ON (updates.client_id)
+    updates.client_id,
+    updates.created_at AS last_client_call_at,
+    COALESCE(NULLIF(profiles.full_name, ''), profiles.email) AS last_client_call_by
+  FROM public.client_updates AS updates
+  LEFT JOIN public.profiles AS profiles ON profiles.id = updates.user_id
+  WHERE updates.client_id = ANY (p_client_ids)
+    AND updates.update_type = 'call'
+  ORDER BY updates.client_id, updates.created_at DESC;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_latest_client_call_updates(uuid[])
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_latest_client_call_updates(uuid[])
+  TO service_role;
+
 UPDATE public.ai_skills
 SET
   system_prompt = $$הציגי רק את בדיקת הדופק האחרונה שכבר חושבה ונשמרה. חובה לקרוא ל-get_latest_campaign_pulse.

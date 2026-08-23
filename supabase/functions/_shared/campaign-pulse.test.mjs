@@ -319,6 +319,29 @@ test("client call within 14 days keeps healthy campaign healthy", () => {
   assert.deepEqual(result.flags, []);
 });
 
+test("client with no documented call is flagged", () => {
+  const result = classifyCampaignPulseStatus({
+    activeTables: [{
+      integration_type: "google_ads",
+      campaign_active: true,
+      last_sync_at: FRESH,
+      integration_settings: {},
+    }],
+    hasConfiguredCampaignTable: true,
+    recentRecordCount: 20,
+    isEcommerce: false,
+    spend7: 900,
+    leads7: 10,
+    purchases7: 0,
+    roas: null,
+    cplChangePct: 5,
+    lastClientCallAt: null,
+    nowMs: NOW,
+  });
+  assert.equal(result.status, "warning");
+  assert.deepEqual(result.flags, ["לא תועדה שיחה טלפונית עם הלקוח"]);
+});
+
 test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)", () => {
   const digest = buildPulseWhatsAppDigest(
     [
