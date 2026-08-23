@@ -49,6 +49,7 @@ import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { Check, ChevronsUpDown, Send, FileText, MessageSquare, Settings, Pencil, Trash2, Upload, X, File, Image as ImageIcon, Calendar as CalendarIcon, Clock, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { UPDATE_AUTHOR_SELECT, resolveUpdateAuthorName } from "@/lib/updateAuthor";
 import {
   Command,
   CommandEmpty,
@@ -207,7 +208,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         .from("task_updates")
         .select(`
           *,
-          profiles:user_id (full_name, email)
+          ${UPDATE_AUTHOR_SELECT}
         `)
         .eq("task_id", task.id)
         .order("created_at", { ascending: true });
@@ -267,7 +268,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", ctTenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-tasks", ctTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events", ctTenantId] });
       toast.success("המשימה עודכנה בהצלחה");
       onOpenChange(false);
@@ -288,7 +289,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", ctTenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-tasks", ctTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events", ctTenantId] });
       toast.success("המשימה נמחקה בהצלחה");
       onOpenChange(false);
@@ -1096,7 +1097,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                             <div className="flex-1 space-y-2">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-medium text-muted-foreground">
-                                  {update.profiles?.full_name || update.profiles?.email || "משתמש"}
+                                  {resolveUpdateAuthorName(update.profiles)}
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">
                                   {format(new Date(update.created_at), "d בMMMM, HH:mm", { locale: he })}

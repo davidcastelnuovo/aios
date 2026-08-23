@@ -36,6 +36,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { UPDATE_AUTHOR_SELECT, resolveUpdateAuthorName } from "@/lib/updateAuthor";
 
 interface ClientUpdatesTabProps {
   clientId: string;
@@ -174,7 +175,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
         .from("client_updates")
         .select(`
           *,
-          profiles:user_id (full_name, email)
+          ${UPDATE_AUTHOR_SELECT}
         `)
         .eq("client_id", clientId)
         .order("created_at", { ascending: false });
@@ -215,7 +216,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates"] });
       setNewUpdate("");
       toast.success("העדכון נוסף בהצלחה");
     },
@@ -234,7 +235,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates"] });
       setEditingUpdateId(null);
       setEditingUpdateContent("");
       toast.success("העדכון נערך בהצלחה");
@@ -254,7 +255,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates"] });
       toast.success("העדכון נמחק בהצלחה");
     },
     onError: () => {
@@ -271,7 +272,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },
@@ -558,7 +559,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                             <User className="h-3 w-3 shrink-0" />
-                            <span>{update.profiles?.full_name || update.profiles?.email || "משתמש"}</span>
+                            <span>{resolveUpdateAuthorName(update.profiles)}</span>
                             <span>•</span>
                             <Calendar className="h-3 w-3 shrink-0" />
                             <span>{format(new Date(update.created_at), "d/M/yy HH:mm", { locale: he })}</span>
