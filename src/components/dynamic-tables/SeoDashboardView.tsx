@@ -64,7 +64,15 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success('הדוח נטען בהצלחה מ-Ahrefs');
+      const tracked = (data as any)?.tracked_count ?? 0;
+      const organic = (data as any)?.keywords_count ?? 0;
+      toast.success(
+        tracked > 0
+          ? `הדוח נטען מ-Ahrefs (${organic} אורגניות, ${tracked} במעקב)`
+          : organic > 0
+            ? `הדוח נטען מ-Ahrefs (${organic} אורגניות). לא נמצאו ביטויים במעקב — בדוק שיש פרויקט Rank Tracker ב-Ahrefs לדומיין.`
+            : 'הדוח נטען בהצלחה מ-Ahrefs',
+      );
       await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] });
     } catch (err: any) {
       console.error('fetch-ahrefs-snapshot failed:', err);
