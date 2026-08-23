@@ -454,7 +454,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               content: messageText.trim(),
               update_type: "weekly_update",
             } as any);
-            queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+            queryClient.invalidateQueries({ queryKey: ["client-updates"] });
           } catch (e) {
             console.warn("Failed to auto-save weekly update:", e);
           }
@@ -547,7 +547,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               content: messageText.trim(),
               update_type: "monthly_seo",
             } as any);
-            queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+            queryClient.invalidateQueries({ queryKey: ["client-updates"] });
           } catch (e) {
             console.warn("Failed to auto-save monthly SEO update:", e);
           }
