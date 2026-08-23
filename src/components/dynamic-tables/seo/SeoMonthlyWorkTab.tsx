@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
-import { FileText, Link2, Loader2, Plus, Save, Trash2, Wrench } from "lucide-react";
+import { ExternalLink, FileText, Link2, Loader2, Plus, Save, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -444,54 +444,81 @@ function LinksSection({
         {items.length === 0 ? (
           <EmptyHint text="עדיין אין קישורים לחודש הזה" />
         ) : (
-          items.map((item, idx) => (
-            <div key={item.id} className="grid gap-2 rounded-md border p-2 md:grid-cols-[1.4fr_1fr_1fr_auto]">
-              <Input
-                className="h-8 text-sm"
-                dir="ltr"
-                placeholder="https://..."
-                value={item.url}
-                onChange={(e) => {
-                  const next = [...items];
-                  next[idx] = { ...item, url: e.target.value };
-                  onChange(next);
-                }}
-              />
-              <Input
-                className="h-8 text-sm"
-                placeholder="טקסט עוגן"
-                value={item.anchor || ""}
-                onChange={(e) => {
-                  const next = [...items];
-                  next[idx] = { ...item, anchor: e.target.value };
-                  onChange(next);
-                }}
-              />
-              <Input
-                className="h-8 text-sm"
-                placeholder="הערה (אופציונלי)"
-                value={item.notes || ""}
-                onChange={(e) => {
-                  const next = [...items];
-                  next[idx] = { ...item, notes: e.target.value };
-                  onChange(next);
-                }}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground"
-                onClick={() => onChange(items.filter((x) => x.id !== item.id))}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))
+          items.map((item, idx) => {
+            const externalUrl = toExternalUrl(item.url);
+            return (
+              <div key={item.id} className="grid gap-2 rounded-md border p-2 md:grid-cols-[1.4fr_1fr_1fr_auto]">
+                <div className="flex gap-2">
+                  <Input
+                    className="h-8 min-w-0 text-sm"
+                    dir="ltr"
+                    placeholder="https://..."
+                    value={item.url}
+                    onChange={(e) => {
+                      const next = [...items];
+                      next[idx] = { ...item, url: e.target.value };
+                      onChange(next);
+                    }}
+                  />
+                  {externalUrl ? (
+                    <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-1 px-2" asChild>
+                      <a href={externalUrl} target="_blank" rel="noopener noreferrer" aria-label="פתח קישור לבדיקה">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        פתח
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button type="button" variant="outline" size="sm" className="h-8 shrink-0 gap-1 px-2" disabled>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      פתח
+                    </Button>
+                  )}
+                </div>
+                <Input
+                  className="h-8 text-sm"
+                  placeholder="טקסט עוגן"
+                  value={item.anchor || ""}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[idx] = { ...item, anchor: e.target.value };
+                    onChange(next);
+                  }}
+                />
+                <Input
+                  className="h-8 text-sm"
+                  placeholder="הערה (אופציונלי)"
+                  value={item.notes || ""}
+                  onChange={(e) => {
+                    const next = [...items];
+                    next[idx] = { ...item, notes: e.target.value };
+                    onChange(next);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground"
+                  onClick={() => onChange(items.filter((x) => x.id !== item.id))}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            );
+          })
         )}
       </CardContent>
     </Card>
   );
+}
+
+function toExternalUrl(value: string): string | null {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function EmptyHint({ text }: { text: string }) {
