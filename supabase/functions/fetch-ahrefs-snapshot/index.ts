@@ -160,6 +160,35 @@ Deno.serve(async (req) => {
       }
     };
 
+    // Helper: resolve Rank Tracker project — explicit body > last saved report > Ahrefs projects list.
+    const resolveAhrefsProjectId = async (
+      current: string | number | undefined,
+    ): Promise<{ projectId: string | number; mode?: string; protocol?: string } | null> => {
+      if (current) return { projectId: current };
+
+      const { data: lastWithProject } = await supabase
+        .from("ahrefs_reports")
+        .select("metadata, domain")
+        .eq("tenant_id", client.tenant_id)
+        .eq("client_id", client.id)
+        .not("metadata->ahrefs_project_id", "is", null)
+        .order("report_date", { ascending: false })
+        .limit(20);
+      const rows = (lastWithProject as any[]) || [];
+      const match = rows.find((r: any) => normalizeDomain(r.domain) === domain) || rows[0];
+      const meta = match?.metadata as any;
+      const savedPid = meta?.ahrefs_project_id;
+      if (savedPid) {
+        return {
+          projectId: savedPid,
+          mode: meta?.used_mode,
+          protocol: meta?.used_protocol,
+        };
+      }
+
+      return await resolveProjectIdByDomain(domain);
+    };
+
     // Helper: pull tracked keywords from Rank Tracker (FREE endpoints).
     const fetchTrackedKeywords = async (pid: string | number): Promise<{ tracked: any[]; source: string | null }> => {
       const trackedByKey = new Map<string, any>();
@@ -241,32 +270,10 @@ Deno.serve(async (req) => {
     // Merges into the latest existing ahrefs_report for client+domain (does not
     // overwrite organic_keywords / snapshot / comparisons).
     if (trackedOnlyFlag) {
-      // Resolve project: explicit > last saved metadata > auto-discover by domain
-      if (!projectId) {
-        const { data: lastWithProject } = await supabase
-          .from("ahrefs_reports")
-          .select("metadata, domain")
-          .eq("tenant_id", client.tenant_id)
-          .eq("client_id", client.id)
-          .not("metadata->ahrefs_project_id", "is", null)
-          .order("report_date", { ascending: false })
-          .limit(20);
-        const rows = (lastWithProject as any[]) || [];
-        const match = rows.find((r: any) => normalizeDomain(r.domain) === domain) || rows[0];
-        const pid = (match?.metadata as any)?.ahrefs_project_id;
-        if (pid) projectId = pid;
-      }
       let resolvedMode: string | undefined;
       let resolvedProtocol: string | undefined;
-      if (!projectId) {
-        const auto = await resolveProjectIdByDomain(domain);
-        if (auto) {
-          projectId = auto.projectId;
-          resolvedMode = auto.mode;
-          resolvedProtocol = auto.protocol;
-        }
-      }
-      if (!projectId) {
+      const resolved = await resolveAhrefsProjectId(projectId);
+      if (!resolved) {
         return new Response(
           JSON.stringify({
             error: "לא נמצא פרויקט Ahrefs Rank Tracker מתאים לדומיין",
@@ -275,6 +282,9 @@ Deno.serve(async (req) => {
           { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      projectId = resolved.projectId;
+      resolvedMode = resolved.mode;
+      resolvedProtocol = resolved.protocol;
 
       const { tracked, source } = await fetchTrackedKeywords(projectId);
 
@@ -359,6 +369,16 @@ Deno.serve(async (req) => {
       tryDates.push(d.toISOString().split("T")[0]);
     }
 
+    // Resolve Rank Tracker project for "ביטויים במעקב" (FREE — no Site Explorer credits).
+    let effectiveHintMode = hintMode;
+    let effectiveHintProtocol = hintProtocol;
+    const resolvedProject = await resolveAhrefsProjectId(projectId);
+    if (resolvedProject) {
+      projectId = resolvedProject.projectId;
+      effectiveHintMode = effectiveHintMode ?? resolvedProject.mode;
+      effectiveHintProtocol = effectiveHintProtocol ?? resolvedProject.protocol;
+    }
+
     // If the project picker passed mode/protocol from Ahrefs, try them first.
     const baseModes: Array<{ mode: string; protocol: string }> = [
       { mode: "subdomains", protocol: "both" },
@@ -369,11 +389,11 @@ Deno.serve(async (req) => {
       { mode: "domain", protocol: "https" },
     ];
     const tryModes: Array<{ mode: string; protocol: string }> =
-      hintMode || hintProtocol
+      effectiveHintMode || effectiveHintProtocol
         ? [
-            { mode: hintMode || "subdomains", protocol: hintProtocol || "both" },
+            { mode: effectiveHintMode || "subdomains", protocol: effectiveHintProtocol || "both" },
             ...baseModes.filter(
-              (m) => !(m.mode === (hintMode || "subdomains") && m.protocol === (hintProtocol || "both"))
+              (m) => !(m.mode === (effectiveHintMode || "subdomains") && m.protocol === (effectiveHintProtocol || "both"))
             ),
           ]
         : baseModes;
@@ -510,121 +530,36 @@ Deno.serve(async (req) => {
       "12_months": snap12m,
     };
 
-    // 4) Tracked (Rank Tracker) keywords — only if a project_id was passed from the picker.
-    // These endpoints are FREE and do not consume API units.
+    // 4) Tracked (Rank Tracker) keywords — auto-resolved project above when possible.
     let tracked_keywords: any[] = [];
     let trackedSource: string | null = null;
     if (projectId) {
       try {
-        const trackedByKey = new Map<string, any>();
-        const normalizeTracked = (k: any, source: string, device?: string) => ({
-          keyword: String(k.keyword || "").trim(),
-          position: k.position ?? null,
-          position_prev_month: k.position_prev ?? null,
-          traffic: k.traffic ?? 0,
-          traffic_prev_month: k.traffic_prev ?? 0,
-          volume: k.volume ?? 0,
-          kd: k.keyword_difficulty ?? null,
-          cpc: k.cost_per_click ?? null,
-          url: k.url ?? "",
-          country: k.country ?? null,
-          location: k.location ?? null,
-          language: k.language ?? k.language_code ?? null,
-          tags: Array.isArray(k.tags) ? k.tags : [],
-          _source: source,
-          _device: device ?? null,
-        });
-
-        const addTrackedRows = (rows: any[], source: string, device?: string) => {
-          for (const row of rows) {
-            if (!row || typeof row.keyword !== "string" || !row.keyword.trim()) continue;
-            const normalized = normalizeTracked(row, source, device);
-            const key = [normalized.keyword.toLowerCase(), normalized.country, normalized.location, normalized.language].join("|");
-            if (!trackedByKey.has(key)) trackedByKey.set(key, normalized);
-          }
-        };
-
-        const selectFields = [
-          "keyword",
-          "position",
-          "position_prev",
-          "volume",
-          "keyword_difficulty",
-          "cost_per_click",
-          "traffic",
-          "traffic_prev",
-          "url",
-          "country",
-          "location",
-          "language",
-          "tags",
-        ].join(",");
-
-        const trackerDates: string[] = [];
-        const reportDateObj = new Date(`${reportDate}T00:00:00Z`);
-        for (let i = 0; i <= 14; i++) {
-          const d = new Date(reportDateObj);
-          d.setUTCDate(d.getUTCDate() - i);
-          trackerDates.push(d.toISOString().split("T")[0]);
-        }
-
-        for (const trackerDate of trackerDates) {
-          const compared = new Date(`${trackerDate}T00:00:00Z`);
-          compared.setUTCDate(compared.getUTCDate() - 30);
-          const comparedDate = compared.toISOString().split("T")[0];
-
-          for (const device of ["desktop", "mobile"]) {
-            const trackerUrl =
-              `https://api.ahrefs.com/v3/rank-tracker/overview` +
-              `?project_id=${encodeURIComponent(String(projectId))}` +
-              `&device=${device}` +
-              `&date=${trackerDate}` +
-              `&date_compared=${comparedDate}` +
-              `&select=${encodeURIComponent(selectFields)}` +
-              `&limit=1000` +
-              `&volume_mode=monthly` +
-              `&output=json`;
-            const trackerRes = await fetch(trackerUrl, {
-              headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
-            });
-            if (trackerRes.ok) {
-              const trackerJson = await trackerRes.json();
-              const overviews = Array.isArray(trackerJson?.overviews) ? trackerJson.overviews : [];
-              addTrackedRows(overviews, "rank-tracker-overview", device);
-              console.log(`Ahrefs Rank Tracker overview: project=${projectId} date=${trackerDate} device=${device} rows=${overviews.length}`);
-            } else {
-              const errTxt = await trackerRes.text();
-              console.warn(`Ahrefs Rank Tracker overview failed: project=${projectId} date=${trackerDate} device=${device} status=${trackerRes.status} body=${errTxt.slice(0, 200)}`);
-            }
-          }
-
-          if (trackedByKey.size > 0) break;
-        }
-
-        if (trackedByKey.size === 0) {
-          const projectKeywordsUrl =
-            `https://api.ahrefs.com/v3/management/project-keywords` +
-            `?project_id=${encodeURIComponent(String(projectId))}` +
-            `&output=json`;
-          const projectKeywordsRes = await fetch(projectKeywordsUrl, {
-            headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
-          });
-          if (projectKeywordsRes.ok) {
-            const projectKeywordsJson = await projectKeywordsRes.json();
-            const projectKeywords = Array.isArray(projectKeywordsJson?.keywords) ? projectKeywordsJson.keywords : [];
-            addTrackedRows(projectKeywords, "management-project-keywords");
-            console.log(`Ahrefs Project Keywords fallback: project=${projectId} rows=${projectKeywords.length}`);
-          } else {
-            const errTxt = await projectKeywordsRes.text();
-            console.warn(`Ahrefs Project Keywords fallback failed: project=${projectId} status=${projectKeywordsRes.status} body=${errTxt.slice(0, 200)}`);
-          }
-        }
-
-        tracked_keywords = Array.from(trackedByKey.values());
-        trackedSource = tracked_keywords[0]?._source ?? null;
+        const { tracked, source } = await fetchTrackedKeywords(projectId);
+        tracked_keywords = tracked;
+        trackedSource = source;
         console.log(`Ahrefs tracked keywords resolved: project=${projectId} tracked_count=${tracked_keywords.length} source=${trackedSource ?? "none"}`);
       } catch (e) {
         console.warn("Rank Tracker fetch threw:", e instanceof Error ? e.message : String(e));
+      }
+    }
+
+    // Never wipe previously-synced tracked keywords when Rank Tracker returns empty.
+    if (tracked_keywords.length === 0) {
+      const { data: prevReports } = await supabase
+        .from("ahrefs_reports")
+        .select("report_data, domain")
+        .eq("tenant_id", client.tenant_id)
+        .eq("client_id", client.id)
+        .order("report_date", { ascending: false })
+        .limit(20);
+      const prev = ((prevReports as any[]) || []).find((r: any) => normalizeDomain(r.domain) === domain)
+        || ((prevReports as any[]) || [])[0];
+      const prevTracked = prev?.report_data?.tracked_keywords;
+      if (Array.isArray(prevTracked) && prevTracked.length > 0) {
+        tracked_keywords = prevTracked;
+        trackedSource = "preserved-previous";
+        console.log(`Preserved ${tracked_keywords.length} tracked_keywords from previous report`);
       }
     }
 
