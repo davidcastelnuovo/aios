@@ -1080,14 +1080,18 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
         // Step 1: pull a fresh snapshot from Ahrefs (persists into ahrefs_reports via webhook)
         const targetDomainForFetch = settings.targetDomain || settings.target || settings.domain;
-        const { error: fetchError } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
+        const { data: fetchData, error: fetchError } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
           body: {
             clientId,
             domain: targetDomainForFetch,
             country: settings.country || 'il',
+            ...(settings.ahrefs_project_id ? { projectId: settings.ahrefs_project_id } : {}),
+            ...(settings.ahrefs_mode ? { mode: settings.ahrefs_mode } : {}),
+            ...(settings.ahrefs_protocol ? { protocol: settings.ahrefs_protocol } : {}),
           },
         });
         if (fetchError) throw fetchError;
+        if ((fetchData as any)?.error) throw new Error((fetchData as any).error);
 
         // Step 2: pull ALL reports for this client (all months) and rebuild
         const { data: reports, error } = await supabase
@@ -1219,7 +1223,11 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           },
         });
 
-        return { recordsCount: recordsToInsert.length };
+        return {
+          recordsCount: recordsToInsert.length,
+          trackedCount: (fetchData as any)?.tracked_count ?? null,
+          organicCount: (fetchData as any)?.keywords_count ?? null,
+        };
       }
 
       // Regular Ahrefs API sync
@@ -1265,7 +1273,17 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', tenantId] });
-      toast.success(`נתוני SEO סונכרנו בהצלחה (${data?.recordsCount || 0} שורות)`);
+      const tracked = data?.trackedCount;
+      const organic = data?.organicCount;
+      const detail =
+        typeof tracked === 'number' && typeof organic === 'number'
+          ? `${organic} אורגניות, ${tracked} במעקב (${data?.recordsCount || 0} שורות)`
+          : `${data?.recordsCount || 0} שורות`;
+      toast.success(
+        typeof tracked === 'number' && tracked === 0 && typeof organic === 'number' && organic > 0
+          ? `נתוני SEO סונכרנו (${detail}). לא נמצאו ביטויים במעקב — בדוק פרויקט Rank Tracker ב-Ahrefs.`
+          : `נתוני SEO סונכרנו בהצלחה (${detail})`,
+      );
     },
     onError: (error: any) => {
       toast.error('שגיאה בסנכרון: ' + (error?.message || 'Unknown error'));

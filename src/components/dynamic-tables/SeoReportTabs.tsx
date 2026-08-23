@@ -45,6 +45,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   // table from scope; if none, derive a stable tenant_id for the report from
   // either the table's tenant_id, the client's home tenant, or the prop.
   const seoTable = scope?.seoTable || null;
+  const seoSettings = (seoTable?.integration_settings || {}) as Record<string, unknown>;
+  const ahrefsProjectId = (seoSettings.ahrefs_project_id as string | number | undefined) ?? null;
+  const ahrefsMode = (seoSettings.ahrefs_mode as string | undefined) ?? null;
+  const ahrefsProtocol = (seoSettings.ahrefs_protocol as string | undefined) ?? null;
   const reportTenantId =
     seoTable?.tenant_id ||
     scope?.clientTenantId ||
@@ -314,6 +318,9 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
             accessibleTenantIds={accessibleTenantIds}
             gaRecords={gaRecords || []}
             expectedDomain={expectedDomain}
+            ahrefsProjectId={ahrefsProjectId}
+            ahrefsMode={ahrefsMode}
+            ahrefsProtocol={ahrefsProtocol}
             initialGscSiteUrl={savedGscSiteUrl}
             onGscSiteSelected={(siteUrl) => {
               if (siteUrl && siteUrl !== savedGscSiteUrl) {

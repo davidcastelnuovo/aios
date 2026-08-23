@@ -48,9 +48,13 @@ interface SeoDashboardViewProps {
    * stray report synced under this client can't show another client's data.
    */
   expectedDomain?: string;
+  /** Saved Ahrefs Rank Tracker project from the SEO crm_table settings. */
+  ahrefsProjectId?: string | number | null;
+  ahrefsMode?: string | null;
+  ahrefsProtocol?: string | null;
 }
 
-export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain }: SeoDashboardViewProps) {
+export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol }: SeoDashboardViewProps) {
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -60,7 +64,13 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     setIsFetchingSnapshot(true);
     try {
       const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
-        body: { clientId },
+        body: {
+          clientId,
+          ...(expectedDomain ? { domain: expectedDomain } : {}),
+          ...(ahrefsProjectId ? { projectId: ahrefsProjectId } : {}),
+          ...(ahrefsMode ? { mode: ahrefsMode } : {}),
+          ...(ahrefsProtocol ? { protocol: ahrefsProtocol } : {}),
+        },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -80,7 +90,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     } finally {
       setIsFetchingSnapshot(false);
     }
-  }, [clientId, tenantId, queryClient]);
+  }, [clientId, tenantId, queryClient, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol]);
   const [gscData, setGscData] = useState<GscKeywordData[]>([]);
   const [gscMultiPeriod, setGscMultiPeriod] = useState<GscMultiPeriodData | null>(null);
   const { comparisonData, resetComparisonData } = useAhrefsEnrichment();
@@ -489,7 +499,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
 
 
   const handleManualSync = useCallback(async () => {
-    const projectId = (selectedReport as any)?.metadata?.ahrefs_project_id;
+    const projectId = (selectedReport as any)?.metadata?.ahrefs_project_id || ahrefsProjectId;
     if (!projectId) {
       toast.info('כדי למשוך ביטויים במעקב צריך לבחור פרויקט מ-Ahrefs');
       setPickerOpen(true);
@@ -501,7 +511,14 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         gscData.map(g => (g.keyword || '').toLowerCase().trim()).filter(k => k.length > 0)
       ));
       const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
-        body: { clientId, domain, projectId, gsc_keywords: gscKws },
+        body: {
+          clientId,
+          domain,
+          projectId,
+          ...(ahrefsMode ? { mode: ahrefsMode } : {}),
+          ...(ahrefsProtocol ? { protocol: ahrefsProtocol } : {}),
+          gsc_keywords: gscKws,
+        },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -513,7 +530,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     } finally {
       setIsFetchingSnapshot(false);
     }
-  }, [clientId, domain, selectedReport, queryClient, gscData]);
+  }, [clientId, domain, selectedReport, queryClient, gscData, ahrefsProjectId, ahrefsMode, ahrefsProtocol]);
 
   // First load only — background ahrefs_reports refetches must not unmount the
   // whole SEO dashboard (that made client SEO views look empty after #328).
