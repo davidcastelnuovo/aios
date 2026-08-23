@@ -41,6 +41,7 @@ import {
   applyPeriodMetricsToSnapshot,
   buildPulseDashboardUrl,
   clientHasCampaignService,
+  formatLastClientCall,
   formatMetaChange,
   formatPulseChange,
   formatPulseEfficiency,
@@ -226,7 +227,7 @@ export default function DMMDashboard() {
       const { data, error } = await (supabase as any)
         .from("campaign_pulse_snapshots")
         .select(
-          "client_id, agency_id, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability",
+          "client_id, agency_id, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, last_client_call_at, last_client_call_by",
         )
         .in("client_id", clientIds);
       if (error) throw error;
@@ -555,6 +556,7 @@ export default function DMMDashboard() {
                 <TableHead className="text-right">CPL/ROAS</TableHead>
                 <TableHead className="text-right">שינוי</TableHead>
                 <TableHead className="text-right">נתונים עד</TableHead>
+                <TableHead className="text-right">שיחת לקוח אחרונה</TableHead>
                 <TableHead className="text-right">שינוי במטה</TableHead>
                 <TableHead className="text-right">הערה</TableHead>
                 <TableHead className="text-right">פעולות</TableHead>
@@ -563,7 +565,7 @@ export default function DMMDashboard() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={14} className="text-center text-muted-foreground py-10">
                     אין לקוחות להצגה
                   </TableCell>
                 </TableRow>
@@ -619,6 +621,12 @@ export default function DMMDashboard() {
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
                         {pulse?.data_fresh_through || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {pulse ? formatLastClientCall(pulse) : "—"}
+                        {pulse?.last_client_call_by ? (
+                          <div className="text-muted-foreground">תיעד/ה: {pulse.last_client_call_by}</div>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-xs max-w-[180px]">
                         {pulse ? formatMetaChange(pulse) : "—"}

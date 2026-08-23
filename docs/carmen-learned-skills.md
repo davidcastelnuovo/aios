@@ -1,3 +1,9 @@
+### 2026-08-23 — Pulse alerts on stale client phone contact
+- **Skin slug:** `pulse_check` (global + tenant overrides updated)
+- **What Carmen can now do:** Include the latest client-card update explicitly marked `call`, show when and by whom it was recorded, and flag campaign clients with no documented phone call in the last 14 days. A missing/stale call turns an otherwise healthy pulse yellow; existing critical/no-data states remain unchanged.
+- **How:** `campaign-pulse-snapshot` reads `client_updates.update_type='call'`, stores `last_client_call_at` / `last_client_call_by` on `campaign_pulse_snapshots`, and `_shared/campaign-pulse.classifyCampaignPulseStatus` applies the 14-day rule. Free-text updates are never inferred to be calls.
+- **Origin:** David — add client-contact freshness from client-card updates to Carmen's campaign pulse.
+
 # Carmen — Learned Skills Log (Claude's memory)
 
 This file is **Claude's own long-term memory** of capabilities it has taught

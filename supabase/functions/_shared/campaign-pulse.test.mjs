@@ -273,6 +273,52 @@ test("stale platform on otherwise healthy client becomes warning", () => {
   assert.ok(result.flags.some((flag) => flag.includes("Meta")));
 });
 
+test("client without a documented call in 14 days becomes warning", () => {
+  const result = classifyCampaignPulseStatus({
+    activeTables: [{
+      integration_type: "facebook_insights",
+      campaign_active: true,
+      last_sync_at: FRESH,
+      integration_settings: {},
+    }],
+    hasConfiguredCampaignTable: true,
+    recentRecordCount: 20,
+    isEcommerce: false,
+    spend7: 900,
+    leads7: 10,
+    purchases7: 0,
+    roas: null,
+    cplChangePct: 5,
+    lastClientCallAt: "2026-07-15T12:00:00.000Z",
+    nowMs: NOW,
+  });
+  assert.equal(result.status, "warning");
+  assert.ok(result.flags.some((flag) => flag.includes("14 הימים")));
+});
+
+test("client call within 14 days keeps healthy campaign healthy", () => {
+  const result = classifyCampaignPulseStatus({
+    activeTables: [{
+      integration_type: "facebook_insights",
+      campaign_active: true,
+      last_sync_at: FRESH,
+      integration_settings: {},
+    }],
+    hasConfiguredCampaignTable: true,
+    recentRecordCount: 20,
+    isEcommerce: false,
+    spend7: 900,
+    leads7: 10,
+    purchases7: 0,
+    roas: null,
+    cplChangePct: 5,
+    lastClientCallAt: "2026-07-25T12:00:00.000Z",
+    nowMs: NOW,
+  });
+  assert.equal(result.status, "healthy");
+  assert.deepEqual(result.flags, []);
+});
+
 test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)", () => {
   const digest = buildPulseWhatsAppDigest(
     [

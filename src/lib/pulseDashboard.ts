@@ -34,6 +34,8 @@ export type PulseSnapshotRow = {
   last_meta_change_actor: string | null;
   last_meta_change_object: string | null;
   meta_change_availability: string | null;
+  last_client_call_at: string | null;
+  last_client_call_by: string | null;
 };
 
 /** Period metrics reshaped to the same fields the snapshot table uses. */
@@ -115,6 +117,15 @@ export function formatMetaChange(row: PulseSnapshotRow): string {
   if (row.meta_change_availability === "no_campaign_change_in_30d") return "לא נמצא ב-30 יום";
   if (row.meta_change_availability === "not_applicable") return "—";
   return "לא זמין";
+}
+
+export function formatLastClientCall(row: PulseSnapshotRow): string {
+  if (!row.last_client_call_at) return "לא תועדה שיחה";
+  return new Date(row.last_client_call_at).toLocaleString("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    dateStyle: "short",
+    timeStyle: "short",
+  });
 }
 
 /** Build shareable authenticated pulse dashboard URL for a tenant + optional agency. */

@@ -6,6 +6,7 @@
 
 export const CAMPAIGN_SERVICES = new Set(['ppc_meta', 'ppc_google'])
 export const CAMPAIGN_TABLE_TYPES = ['facebook_insights', 'facebook_ecommerce', 'google_ads'] as const
+export const CLIENT_CALL_STALE_MS = 14 * 24 * 60 * 60 * 1000
 /**
  * Sync cadence is twice-daily (05:xx / 12:xx UTC). When a noon run misses a
  * table, the next morning gap is ~24h — and the morning pulse often races the
@@ -160,7 +161,28 @@ export type ClassifyPulseInput = {
   purchases7: number
   roas: number | null
   cplChangePct: number | null
+  /** Latest client-card update with update_type='call'. Undefined skips this rule. */
+  lastClientCallAt?: string | null
   nowMs?: number
+}
+
+function applyClientCallFreshness(
+  status: PulseStatus,
+  flags: string[],
+  lastClientCallAt: string | null | undefined,
+  nowMs: number,
+): { status: PulseStatus; flags: string[] } {
+  if (lastClientCallAt === undefined) return { status, flags }
+
+  const timestamp = lastClientCallAt ? new Date(lastClientCallAt).getTime() : Number.NaN
+  const missing = Number.isNaN(timestamp)
+  const stale = !missing && nowMs - timestamp > CLIENT_CALL_STALE_MS
+  if (!missing && !stale) return { status, flags }
+
+  flags.push(missing
+    ? 'לא תועדה שיחה טלפונית עם הלקוח'
+    : 'לא תועדה שיחה טלפונית עם הלקוח ב-14 הימים האחרונים')
+  return { status: status === 'healthy' ? 'warning' : status, flags }
 }
 
 /**
@@ -183,9 +205,14 @@ export function classifyCampaignPulseStatus(input: ClassifyPulseInput): {
     .map((table) => platformLabel(table.integration_type))
 
   if (!input.hasConfiguredCampaignTable || input.activeTables.length === 0) {
+    const result = applyClientCallFreshness(
+      'no_data',
+      ['אין טבלת קמפיין מחוברת'],
+      input.lastClientCallAt,
+      nowMs,
+    )
     return {
-      status: 'no_data',
-      flags: ['אין טבלת קמפיין מחוברת'],
+      ...result,
       stalePlatforms,
     }
   }
@@ -194,11 +221,13 @@ export function classifyCampaignPulseStatus(input: ClassifyPulseInput): {
     const staleNote = stalePlatforms.length
       ? ` (${stalePlatforms.join(', ')})`
       : ''
-    return {
-      status: 'warning',
-      flags: [`סנכרון ישן או חסר — אין נתונים ב-30 הימים האחרונים${staleNote}`],
-      stalePlatforms,
-    }
+    const result = applyClientCallFreshness(
+      'warning',
+      [`סנכרון ישן או חסר — אין נתונים ב-30 הימים האחרונים${staleNote}`],
+      input.lastClientCallAt,
+      nowMs,
+    )
+    return { ...result, stalePlatforms }
   }
 
   let status: PulseStatus = 'healthy'
@@ -226,7 +255,8 @@ export function classifyCampaignPulseStatus(input: ClassifyPulseInput): {
     if (status === 'healthy') status = 'warning'
   }
 
-  return { status, flags, stalePlatforms }
+  const result = applyClientCallFreshness(status, flags, input.lastClientCallAt, nowMs)
+  return { ...result, stalePlatforms }
 }
 
 export type PulseStatusCounts = {

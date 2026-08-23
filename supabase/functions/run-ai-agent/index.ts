@@ -2718,7 +2718,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const loadPulse = async () => {
         let query = supabase
           .from('campaign_pulse_snapshots')
-          .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)')
+          .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, last_client_call_at, last_client_call_by, client_id, agency_id, clients(name), agencies(name)')
           .eq('tenant_id', tenantId)
           .order('calculated_at', { ascending: false })
         if (args.client_id) query = query.eq('client_id', args.client_id)
@@ -2760,8 +2760,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         : '—'
       const escapeCell = (value: any) => String(value ?? '—').replace(/\|/g, '\\|').replace(/\n/g, ' ')
       const tableLines = [
-        '| סוכנות | לקוח | סטטוס | הוצאה 7 ימים | לידים/רכישות | CPL/ROAS | שינוי | נתונים עד | שינוי אחרון במטה | מי שינה | הערה |',
-        '|---|---|---|---:|---:|---:|---:|---|---|---|---|',
+        '| סוכנות | לקוח | סטטוס | הוצאה 7 ימים | לידים/רכישות | CPL/ROAS | שינוי | נתונים עד | שיחת לקוח אחרונה | תועדה ע"י | שינוי אחרון במטה | מי שינה | הערה |',
+        '|---|---|---|---:|---:|---:|---:|---|---|---|---|---|---|',
         ...normalizedRows.map((row: any) => {
           const outcomes = row.is_ecommerce ? fmtNumber(row.purchases_7d) : fmtNumber(row.leads_7d)
           const efficiency = row.is_ecommerce ? fmtNumber(row.roas_7d) : fmtNumber(row.cpl_7d)
@@ -2770,7 +2770,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           const metaChange = row.last_meta_change_at
             ? `${fmtDate(row.last_meta_change_at)} — ${row.last_meta_change_type || 'שינוי'}${row.last_meta_change_object ? ` (${row.last_meta_change_object})` : ''}`
             : row.meta_change_availability === 'no_campaign_change_in_30d' ? 'לא נמצא ב-30 יום' : 'לא זמין'
-          return `| ${escapeCell(row.agency_name)} | ${escapeCell(row.client_name)} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(row.data_fresh_through)} | ${escapeCell(metaChange)} | ${escapeCell(row.last_meta_change_actor)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
+          return `| ${escapeCell(row.agency_name)} | ${escapeCell(row.client_name)} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(row.data_fresh_through)} | ${escapeCell(fmtDate(row.last_client_call_at))} | ${escapeCell(row.last_client_call_by)} | ${escapeCell(metaChange)} | ${escapeCell(row.last_meta_change_actor)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
         }),
       ]
       const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()

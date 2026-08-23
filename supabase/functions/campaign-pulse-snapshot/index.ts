@@ -198,6 +198,22 @@ Deno.serve(async (req) => {
           .in('integration_type', [...CAMPAIGN_TABLE_TYPES])
       : { data: [], error: null }
     if (tableResult.error) { results.push({ tenant_id: tenantId, error: tableResult.error.message }); continue }
+    const callUpdateResult = clientIds.length
+      ? await supabase.from('client_updates')
+          .select('client_id, created_at, profiles:user_id(full_name, email)')
+          .in('client_id', clientIds)
+          .eq('update_type', 'call')
+          .order('created_at', { ascending: false })
+          .limit(5000)
+      : { data: [], error: null }
+    if (callUpdateResult.error) {
+      results.push({ tenant_id: tenantId, error: callUpdateResult.error.message })
+      continue
+    }
+    const latestCallByClient = new Map<string, any>()
+    for (const update of callUpdateResult.data || []) {
+      if (!latestCallByClient.has(update.client_id)) latestCallByClient.set(update.client_id, update)
+    }
     const activeTablesByClient = new Map<string, any[]>()
     for (const table of tableResult.data || []) {
       const client = campaignClients.find((item: any) => item.id === table.client_id)
@@ -285,6 +301,9 @@ Deno.serve(async (req) => {
         const configuredForClient = (tableResult.data || []).filter((table: any) =>
           table.client_id === client.id && tableMatchesServices(table, clientCampaignServices(client))
         )
+        const latestCall = latestCallByClient.get(client.id) || null
+        const latestCallProfile = latestCall?.profiles as any
+        const latestCallBy = latestCallProfile?.full_name || latestCallProfile?.email || null
         const isEcommerce = effectiveIsEcommerce(client.is_ecommerce, activeTables)
         const { status, flags, stalePlatforms } = classifyCampaignPulseStatus({
           activeTables,
@@ -296,6 +315,7 @@ Deno.serve(async (req) => {
           purchases7: purchases,
           roas,
           cplChangePct: cplChange,
+          lastClientCallAt: latestCall?.created_at || null,
           nowMs: now.getTime(),
         })
         console.log('[campaign-pulse] client classified', {
@@ -323,6 +343,8 @@ Deno.serve(async (req) => {
           last_meta_change_actor: lastMetaChange.actor,
           last_meta_change_object: lastMetaChange.object,
           meta_change_availability: lastMetaChange.availability,
+          last_client_call_at: latestCall?.created_at || null,
+          last_client_call_by: latestCallBy,
           client_name: client.name, agency_name: (client.agencies as any)?.name || null,
         })
       } catch (clientError) {
@@ -338,6 +360,7 @@ Deno.serve(async (req) => {
           last_meta_change_at: null, last_meta_change_type: null,
           last_meta_change_actor: null, last_meta_change_object: null,
           meta_change_availability: 'meta_api_unavailable',
+          last_client_call_at: null, last_client_call_by: null,
           client_name: client.name, agency_name: (client.agencies as any)?.name || null,
         })
       }
