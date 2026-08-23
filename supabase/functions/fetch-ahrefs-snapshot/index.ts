@@ -160,11 +160,35 @@ Deno.serve(async (req) => {
       }
     };
 
-    // Helper: resolve Rank Tracker project — explicit body > last saved report > Ahrefs projects list.
+    // Helper: resolve Rank Tracker project — explicit body > SEO table settings >
+    // last saved report > Ahrefs projects list.
     const resolveAhrefsProjectId = async (
       current: string | number | undefined,
     ): Promise<{ projectId: string | number; mode?: string; protocol?: string } | null> => {
       if (current) return { projectId: current };
+
+      const { data: seoTables } = await supabase
+        .from("crm_tables")
+        .select("integration_settings, updated_at")
+        .eq("integration_type", "ahrefs")
+        .or(`client_id.eq.${client.id},integration_settings->>clientId.eq.${client.id}`)
+        .order("updated_at", { ascending: false })
+        .limit(20);
+      for (const table of (seoTables as any[]) || []) {
+        const settings = (table?.integration_settings || {}) as Record<string, unknown>;
+        const pid = settings.ahrefs_project_id;
+        if (!pid) continue;
+        const tableDomain = normalizeDomain(
+          String(settings.targetDomain || settings.domain || settings.target || ""),
+        );
+        if (!tableDomain || tableDomain === domain) {
+          return {
+            projectId: pid as string | number,
+            mode: settings.ahrefs_mode as string | undefined,
+            protocol: settings.ahrefs_protocol as string | undefined,
+          };
+        }
+      }
 
       const { data: lastWithProject } = await supabase
         .from("ahrefs_reports")
