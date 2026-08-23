@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-23 — Client card sync from assigned report tables
+- **Skin slug:** `client_report_table_sync` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Recognize Google/Meta (and other channel) connections from assigned `crm_tables` even when `clients.google_ads_account_id` / `meta_ads_account_id` are empty; explain that tables are source of truth; use `list_google_campaigns` with `client_id` without false "not connected".
+- **How:** DB trigger `crm_tables_sync_client_card` + `_shared/client-report-sync` helper. On create/assign of report tables, client card fields auto-update. `googleResolveClientCustomerId` resolves from assigned `google_ads` table first. Missing account IDs on assigned tables are logged.
+- **Origin:** Carmen → Cursor DEV — Aviali had assigned Google Ads + Facebook tables but empty client card fields; campaign tools falsely reported not connected.
+
 ### 2026-08-23 — Ana: bug-fix escalations to Cursor (tiered dev auth)
 - **Skin slug:** `bugfix_escalation_to_cursor` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When **Ana** (אנה, `d6cd8d62-…`, `972545612156`) reports a reproducible bug, escalate to Cursor via `mcp_Cursor__request_dev_task` only — not features, config, permissions, or DB schema changes. David keeps full tier (all coding agents). Everyone else is refused.
