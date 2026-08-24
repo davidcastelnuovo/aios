@@ -175,10 +175,20 @@ export function CreativeStoryboardEditor({ frames, onChange, onSave, onGenerateF
                 <div><Label>קריינות / דיאלוג</Label><Textarea className="mt-1 min-h-20" value={frameDraft.voiceover} onChange={(event) => setFrameDraft({ ...frameDraft, voiceover: event.target.value })} /></div>
                 <div><Label>משך בשניות</Label><Input className="mt-1" type="number" min={1} max={30} value={frameDraft.duration} onChange={(event) => setFrameDraft({ ...frameDraft, duration: Number(event.target.value) || 1 })} /></div>
                 <Button variant="outline" className="w-full gap-2" onClick={saveFrameDraft}><Save className="h-4 w-4" />עדכן סצנה</Button>
-                <Button className="w-full gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={() => void onGenerateFrame(frameDraft)} disabled={generating}>
+                <Button
+                  className="w-full gap-2 bg-gradient-to-r from-pink-600 to-violet-600"
+                  onClick={() => {
+                    saveFrameDraft();
+                    void onGenerateFrame(frameDraft);
+                  }}
+                  disabled={generating || (!frameDraft.visualPrompt?.trim() && !frameDraft.voiceover?.trim())}
+                >
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
                   {frameDraft.imageUrl ? "צור וריאציה" : "צור פריים"}
                 </Button>
+                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                  יצירת פריים דורשת תיאור ויזואלי או קריינות. התמונה נוצרת ב-DALL-E 3 (1024×1024) דרך Skin social_media.
+                </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" size="sm" className="gap-1" onClick={duplicateFrame}><Copy className="h-3.5 w-3.5" />שכפל</Button>
                   <Button variant="outline" size="sm" className="gap-1 text-destructive" onClick={removeFrame}><Trash2 className="h-3.5 w-3.5" />מחק</Button>

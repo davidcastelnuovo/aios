@@ -187,6 +187,17 @@ serve(async (req) => {
       item.payload?.brief_text ?? item.payload?.brief ?? item.payload?.source_summary ?? "";
     if (sourceBrief) userParts.push(`בריף מקור / סיכום פגישה:\n${sourceBrief}`);
     if (item.payload?.notes) userParts.push(`הערות: ${item.payload.notes}`);
+    const storyboardFrame = item.payload?.storyboard_frame as Record<string, unknown> | undefined;
+    if (stageType === "creative" && storyboardFrame && typeof storyboardFrame === "object") {
+      userParts.push(
+        `\nStoryboard frame #${storyboardFrame.order ?? "?"}\n` +
+        `Title: ${storyboardFrame.title ?? ""}\n` +
+        `Shot type: ${storyboardFrame.shot ?? ""}\n` +
+        `Visual description: ${storyboardFrame.visualPrompt ?? ""}\n` +
+        `On-screen text: ${storyboardFrame.overlayText ?? ""}\n` +
+        `Voiceover: ${storyboardFrame.voiceover ?? ""}`,
+      );
+    }
     if ((prevAssets ?? []).length > 0) {
       userParts.push("\nתוצרים מהשלבים הקודמים:");
       for (const a of prevAssets ?? []) {

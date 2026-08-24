@@ -23,6 +23,7 @@ import { isCreativeDepartmentItem, isLinkableCopyItem } from "@/components/marke
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +37,7 @@ import { toast } from "sonner";
 import {
   Archive,
   Check,
+  ChevronDown,
   Clock3,
   Clapperboard,
   FilePlus2,
@@ -232,13 +234,18 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     await refresh();
   };
 
-  const generateStoryboardFrame = async (frame: StoryboardFrame) => {
+  const generateStoryboardFrame = async (frame: StoryboardFrame, framesOverride?: StoryboardFrame[]) => {
     if (!selected || !context?.creativeStage) {
       toast.error("יש לשייך לקוח לפרויקט לפני יצירת פריימים");
       return;
     }
+    if (!frame.visualPrompt?.trim() && !frame.voiceover?.trim()) {
+      toast.error("מלא/י 'מה רואים בפריים' או קריינות לפני יצירת הפריים");
+      return;
+    }
     setGenerating(true);
     try {
+      const activeFrames = framesOverride ?? storyboardDraft;
       const generationNotes = [
         selected.payload?.notes,
         `בקשת פריים ${frame.order}: ${frame.visualPrompt || frame.voiceover || frame.title}`,
@@ -248,7 +255,21 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       await supabase.from("marketing_work_items").update({
         current_stage_id: context.creativeStage.id,
         status: "draft",
-        payload: { ...(selected.payload ?? {}), notes: generationNotes, department: "creative", project_type: "video" },
+        payload: {
+          ...(selected.payload ?? {}),
+          notes: generationNotes,
+          storyboard_frame: {
+            id: frame.id,
+            order: frame.order,
+            title: frame.title,
+            shot: frame.shot,
+            visualPrompt: frame.visualPrompt,
+            overlayText: frame.overlayText,
+            voiceover: frame.voiceover,
+          },
+          department: "creative",
+          project_type: "video",
+        },
       }).eq("id", selected.id).eq("tenant_id", tenantId);
       const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
         body: { item_id: selected.id, stage_id: context.creativeStage.id },
@@ -257,7 +278,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       if (data?.error) throw new Error(data.error);
       const imageUrl = data.url ?? data.image_url;
       if (!imageUrl || typeof imageUrl !== "string") throw new Error("לא התקבלה תמונה מהיצירה");
-      const next = storyboardDraft.map((value) => value.id === frame.id ? { ...frame, imageUrl } : value);
+      const next = activeFrames.map((value) => value.id === frame.id ? { ...frame, imageUrl } : value);
       setStoryboardDraft(next);
       await persistStoryboard(next, "הפריים נוצר ונשמר");
     } catch (error: unknown) {
@@ -521,7 +542,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 </div>
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-sm font-bold">{selected.title}</h2>
-                  <p className="text-[11px] text-muted-foreground">{projectTypeLabel(projectType)} · Skin: social_media</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {projectTypeLabel(projectType)} · Skin: social_media · תמונות: DALL-E 3
+                  </p>
                 </div>
                 <Tabs value={workspaceTab} onValueChange={(value) => setWorkspaceTab(value as "project" | "creative")}>
                   <TabsList>
@@ -555,7 +578,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                   frames={storyboardDraft}
                   onChange={setStoryboardDraft}
                   onSave={() => persistStoryboard(storyboardDraft)}
-                  onGenerateFrame={generateStoryboardFrame}
+                  onGenerateFrame={async (frame) => {
+                    const merged = storyboardDraft.map((value) => value.id === frame.id ? frame : value);
+                    setStoryboardDraft(merged);
+                    await generateStoryboardFrame(frame, merged);
+                  }}
                   generating={generating}
                   saving={saving}
                 />
@@ -598,46 +625,48 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           </div>
           <ScrollArea className="flex-1">
             <div className="space-y-3 p-3">
-              {getBriefText(selected) && (
-                <Card className="p-3">
-                  <Badge variant="secondary" className="mb-2">בריף מקור</Badge>
-                  <p className="line-clamp-6 text-xs leading-relaxed whitespace-pre-wrap">{getBriefText(selected)}</p>
-                </Card>
+              {(getBriefText(selected) || getLinkedCopyText(selected)) && (
+                <Collapsible defaultOpen={false}>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs font-semibold hover:bg-muted/50">
+                    <span>בריף וקופי משויך</span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-60 transition-transform [[data-state=open]_&]:rotate-180" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 space-y-2">
+                    {getBriefText(selected) && (
+                      <Card className="p-3">
+                        <Badge variant="secondary" className="mb-2">בריף מקור</Badge>
+                        <p className="text-xs leading-relaxed whitespace-pre-wrap">{getBriefText(selected)}</p>
+                      </Card>
+                    )}
+                    {getLinkedCopyText(selected) && (
+                      <Card className="p-3">
+                        <Badge variant="outline" className="mb-2 gap-1"><PenLine className="h-3 w-3" />קופי משויך</Badge>
+                        <p className="text-xs leading-relaxed whitespace-pre-wrap">{getLinkedCopyText(selected)}</p>
+                        {selected?.payload?.linked_copy_title && (
+                          <p className="mt-2 text-[10px] text-muted-foreground">מקור: {String(selected.payload.linked_copy_title)}</p>
+                        )}
+                      </Card>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
               )}
 
-              {getLinkedCopyText(selected) && (
-                <Card className="p-3">
-                  <Badge variant="outline" className="mb-2 gap-1"><PenLine className="h-3 w-3" />קופי משויך</Badge>
-                  <p className="line-clamp-8 text-xs leading-relaxed whitespace-pre-wrap">{getLinkedCopyText(selected)}</p>
-                  {selected?.payload?.linked_copy_title && (
-                    <p className="mt-2 text-[10px] text-muted-foreground">מקור: {String(selected.payload.linked_copy_title)}</p>
-                  )}
-                </Card>
-              )}
-
-              {variations.map((variation, index) => (
-                <Card
-                  key={variation.id}
-                  className={cn(
-                    "cursor-pointer overflow-hidden p-0",
-                    selectedVariationId === variation.id && "ring-2 ring-pink-400",
-                  )}
-                  onClick={() => setSelectedVariationId(variation.id)}
-                >
-                  {variation.imageUrl && (
-                    <img src={variation.imageUrl} alt={variation.name} className="aspect-video w-full object-cover" />
+              {selectedVariation && (
+                <Card className="overflow-hidden p-0 ring-2 ring-pink-400">
+                  {selectedVariation.imageUrl && (
+                    <img src={selectedVariation.imageUrl} alt={selectedVariation.name} className="aspect-video w-full object-cover" />
                   )}
                   <div className="p-3">
                     <div className="mb-2 flex items-center justify-between">
-                      <Badge variant="outline">גרסה {index + 1}</Badge>
+                      <Badge>גרסה נוכחית</Badge>
                       <span className="text-[10px] text-muted-foreground">
-                        {new Date(variation.createdAt).toLocaleString("he-IL")}
+                        {new Date(selectedVariation.createdAt).toLocaleString("he-IL")}
                       </span>
                     </div>
-                    <div className="text-xs font-semibold">{variation.name}</div>
-                    {variation.comments.length > 0 && (
+                    <div className="text-xs font-semibold">{selectedVariation.name}</div>
+                    {selectedVariation.comments.length > 0 && (
                       <div className="mt-2 space-y-1">
-                        {variation.comments.slice(-2).map((comment) => (
+                        {selectedVariation.comments.slice(-3).map((comment) => (
                           <div key={comment.id} className="rounded-md bg-muted/60 px-2 py-1 text-[10px] leading-relaxed">
                             {comment.text}
                           </div>
@@ -646,19 +675,52 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                     )}
                   </div>
                 </Card>
-              ))}
+              )}
 
-              {(assetVersions as CreativeAssetRow[]).map((asset, index) => (
-                <Card key={asset.id} className="p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <Badge variant="outline">שמירה {assetVersions.length - index}</Badge>
-                    <span className="text-[10px] text-muted-foreground">{new Date(asset.created_at).toLocaleString("he-IL")}</span>
-                  </div>
-                  {asset.meta?.source === "manual_edit" && <div className="text-[10px] text-muted-foreground">עריכה ידנית</div>}
-                </Card>
-              ))}
+              {(variations.filter((v) => v.id !== selectedVariationId).length > 0 || (assetVersions as CreativeAssetRow[]).length > 0) && (
+                <Collapsible defaultOpen={false}>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs font-semibold hover:bg-muted/50">
+                    <span>
+                      גרסאות ישנות
+                      ({variations.filter((v) => v.id !== selectedVariationId).length + (assetVersions as CreativeAssetRow[]).length})
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-60 transition-transform [[data-state=open]_&]:rotate-180" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 space-y-2">
+                    {variations.filter((variation) => variation.id !== selectedVariationId).map((variation, index) => (
+                      <Card
+                        key={variation.id}
+                        className="cursor-pointer overflow-hidden p-0 hover:bg-muted/20"
+                        onClick={() => setSelectedVariationId(variation.id)}
+                      >
+                        {variation.imageUrl && (
+                          <img src={variation.imageUrl} alt={variation.name} className="aspect-video w-full object-cover" />
+                        )}
+                        <div className="p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <Badge variant="outline">גרסה {index + 1}</Badge>
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(variation.createdAt).toLocaleString("he-IL")}
+                            </span>
+                          </div>
+                          <div className="text-xs font-semibold">{variation.name}</div>
+                        </div>
+                      </Card>
+                    ))}
+                    {(assetVersions as CreativeAssetRow[]).map((asset, index) => (
+                      <Card key={asset.id} className="p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <Badge variant="outline">שמירה {(assetVersions as CreativeAssetRow[]).length - index}</Badge>
+                          <span className="text-[10px] text-muted-foreground">{new Date(asset.created_at).toLocaleString("he-IL")}</span>
+                        </div>
+                        {asset.meta?.source === "manual_edit" && <div className="text-[10px] text-muted-foreground">עריכה ידנית</div>}
+                      </Card>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
 
-              {selected && variations.length === 0 && (
+              {selected && variations.length === 0 && projectType === "static" && (
                 <div className="py-8 text-center text-xs text-muted-foreground">הגרסה הראשונה תופיע כאן</div>
               )}
             </div>
