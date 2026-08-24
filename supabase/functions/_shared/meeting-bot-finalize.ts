@@ -169,7 +169,7 @@ export async function finalizeMeetingBotSession(
       .from("zoom_recordings")
       .update(row)
       .eq("id", recordingId)
-      .select("id, tenant_id, client_id, meeting_topic, start_time, duration, host_email, transcription")
+      .select("id, tenant_id, meeting_id, source, client_id, meeting_topic, start_time, duration, host_email, transcription, calendar_event_id")
       .single();
     if (error) throw new Error(`update zoom_recordings failed: ${error.message}`);
     recording = data;
@@ -178,7 +178,7 @@ export async function finalizeMeetingBotSession(
     const { data, error } = await admin
       .from("zoom_recordings")
       .insert(row)
-      .select("id, tenant_id, client_id, meeting_topic, start_time, duration, host_email, transcription")
+      .select("id, tenant_id, meeting_id, source, client_id, meeting_topic, start_time, duration, host_email, transcription, calendar_event_id")
       .single();
     if (error) throw new Error(`insert zoom_recordings failed: ${error.message}`);
     recording = data;

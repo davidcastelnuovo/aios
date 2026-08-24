@@ -10290,6 +10290,8 @@ export type Database = {
       }
       zoom_recordings: {
         Row: {
+          calendar_event_id: string | null
+          calendar_matched_at: string | null
           client_id: string | null
           created_at: string
           duration: number | null
@@ -10307,6 +10309,7 @@ export type Database = {
           source: string
           start_time: string | null
           summary_file_url: string | null
+          summary_md: string | null
           tenant_id: string
           transcription: string | null
           transcription_error: string | null
@@ -10314,6 +10317,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          calendar_event_id?: string | null
+          calendar_matched_at?: string | null
           client_id?: string | null
           created_at?: string
           duration?: number | null
@@ -10331,6 +10336,7 @@ export type Database = {
           source?: string
           start_time?: string | null
           summary_file_url?: string | null
+          summary_md?: string | null
           tenant_id: string
           transcription?: string | null
           transcription_error?: string | null
@@ -10338,6 +10344,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          calendar_event_id?: string | null
+          calendar_matched_at?: string | null
           client_id?: string | null
           created_at?: string
           duration?: number | null
@@ -10355,6 +10363,7 @@ export type Database = {
           source?: string
           start_time?: string | null
           summary_file_url?: string | null
+          summary_md?: string | null
           tenant_id?: string
           transcription?: string | null
           transcription_error?: string | null

@@ -5,16 +5,20 @@ import {
   saveSummaryForTarget,
 } from "./meeting-summary.ts";
 import { matchRecordingToClient } from "./recording-match.ts";
+import { enrichRecordingFromCalendar } from "./calendar-recording-match.ts";
 
 export interface RecordingRow {
   id: string;
   tenant_id: string;
+  meeting_id?: string | null;
+  source?: string | null;
   client_id: string | null;
   meeting_topic: string | null;
   start_time: string | null;
   duration: number | null;
   host_email: string | null;
   transcription: string | null;
+  calendar_event_id?: string | null;
 }
 
 export interface RunRecordingPipelineOpts {
@@ -30,6 +34,12 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
   const recording_id = recording.id;
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  const calendarMatch = await enrichRecordingFromCalendar(admin, recording, {
+    preferredUserId: createdByUserId,
+  });
+  const meetingTopic = calendarMatch?.eventTitle || recording.meeting_topic;
+  let clientId = recording.client_id || calendarMatch?.clientId || null;
 
   let transcription: string | null = recording.transcription;
   if (!transcription && !skipTranscribe) {
@@ -60,11 +70,10 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
     return;
   }
 
-  let clientId = recording.client_id;
   if (!clientId) {
     const match = await matchRecordingToClient(admin, OPENAI_API_KEY, {
       tenant_id: recording.tenant_id,
-      meeting_topic: recording.meeting_topic,
+      meeting_topic: meetingTopic,
       transcription,
       host_email: recording.host_email,
     });
@@ -101,7 +110,7 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
     return;
   }
 
-  const recordingInfo = `נושא הפגישה: ${recording.meeting_topic || "לא צוין"}
+  const recordingInfo = `נושא הפגישה: ${meetingTopic || "לא צוין"}
 תאריך: ${recording.start_time ? new Date(recording.start_time).toLocaleDateString("he-IL") : "לא צוין"}
 משך: ${recording.duration ? recording.duration + " דקות" : "לא צוין"}
 מארח: ${recording.host_email || "לא צוין"}`;

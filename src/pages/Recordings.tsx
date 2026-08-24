@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 import { SummaryViewerDialog } from "@/components/recordings/SummaryViewerDialog";
+import { TranscriptViewerDialog } from "@/components/recordings/TranscriptViewerDialog";
 import { ShareSummaryDialog } from "@/components/recordings/ShareSummaryDialog";
 import { RecordingCard, type FeedRecording, type FolderOption } from "@/components/recordings/RecordingCard";
 import { JoinMeetingBotDialog } from "@/components/recordings/JoinMeetingBotDialog";
@@ -73,6 +74,7 @@ export default function Recordings() {
   const [joinBotOpen, setJoinBotOpen] = useState(false);
 
   const [summarizeRec, setSummarizeRec] = useState<FeedRecording | null>(null);
+  const [transcriptViewRec, setTranscriptViewRec] = useState<FeedRecording | null>(null);
   const [summaryViewRec, setSummaryViewRec] = useState<FeedRecording | null>(null);
   const [shareRec, setShareRec] = useState<FeedRecording | null>(null);
 
@@ -158,7 +160,10 @@ export default function Recordings() {
 
   // ── Mutations ─────────────────────────────────────────────────
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["recordings", currentTenantId] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["recordings", currentTenantId] });
+    queryClient.invalidateQueries({ queryKey: ["client-recordings"] });
+  };
 
   const assignMutation = useMutation({
     mutationFn: async ({
@@ -213,6 +218,23 @@ export default function Recordings() {
       toast({ title: "ההקלטה הועברה" });
     },
     onError: (err: any) => toast({ title: "שגיאה בהעברה", description: err.message, variant: "destructive" }),
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: async ({ recordingIds, name }: { recordingIds: string[]; name: string }) => {
+      const { error } = await supabase
+        .from("zoom_recordings")
+        .update({ meeting_topic: name.trim() })
+        .in("id", recordingIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "שם ההקלטה עודכן" });
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה בשינוי השם", description: err.message, variant: "destructive" });
+    },
   });
 
   const deleteMutation = useMutation({
@@ -663,6 +685,7 @@ export default function Recordings() {
                   campaignerNames={campaignerNamesFor(rec)}
                   onAcceptSuggestion={acceptSuggestion}
                   onRejectSuggestion={rejectSuggestion}
+                  onOpenTranscript={setTranscriptViewRec}
                   onOpenSummary={setSummaryViewRec}
                   onCreateSummary={(r) => {
                     const audioRec = r._group?.find((g: any) => g.recording_type === "audio_only") || r;
@@ -673,6 +696,7 @@ export default function Recordings() {
                     assignMutation.mutateAsync({ recordingIds: groupIds(r), selection: assignment })
                   }
                   onMoveToFolder={(r, folderId) => moveFolderMutation.mutate({ recordingIds: groupIds(r), folderId })}
+                  onRename={(r, name) => renameMutation.mutateAsync({ recordingIds: groupIds(r), name })}
                   onDelete={handleDelete}
                 />
               ))}
@@ -757,12 +781,22 @@ export default function Recordings() {
         />
       )}
 
+      {transcriptViewRec && (
+        <TranscriptViewerDialog
+          open={!!transcriptViewRec}
+          onOpenChange={(open) => !open && setTranscriptViewRec(null)}
+          recording={transcriptViewRec}
+        />
+      )}
+
       {summaryViewRec && currentTenantId && (
         <SummaryViewerDialog
           open={!!summaryViewRec}
           onOpenChange={(open) => !open && setSummaryViewRec(null)}
           recording={summaryViewRec as any}
           tenantId={currentTenantId}
+          recordingIds={groupIds(summaryViewRec)}
+          onSaved={(summaryMd) => setSummaryViewRec((prev) => prev ? { ...prev, summary_md: summaryMd } : prev)}
         />
       )}
 
