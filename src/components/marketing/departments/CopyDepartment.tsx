@@ -37,7 +37,6 @@ import {
   Paperclip,
   Pencil,
   PenLine,
-  PanelRight,
   Plus,
   Save,
   Send,
@@ -191,7 +190,6 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<CopyItem | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [projectsOpen, setProjectsOpen] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const { data: items = [], isLoading } = useQuery({
@@ -448,24 +446,24 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
   };
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/20" dir="rtl">
-      <aside className={cn(
-        "flex w-[280px] min-w-0 flex-col overflow-hidden border-e bg-background",
-        selected
-          ? cn("absolute inset-y-0 start-0 z-20 shadow-xl", !projectsOpen && "hidden")
-          : "shrink-0",
-      )}>
-        <div className="flex items-center gap-2 px-3 py-3">
-          <Button className="h-9 w-full min-w-0 justify-start gap-2 rounded-lg bg-foreground text-background hover:bg-foreground/90" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 shrink-0" />פרויקט חדש
+    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/20" dir="rtl">
+      <aside className="group/sidebar flex w-14 shrink-0 flex-col overflow-hidden border-e bg-background transition-[width] duration-200 ease-out hover:w-[280px] focus-within:w-[280px]">
+        <div className="flex items-center gap-2 px-2 py-3 group-hover/sidebar:px-3 group-focus-within/sidebar:px-3">
+          <Button
+            className="h-9 w-full min-w-0 justify-center gap-2 rounded-lg bg-foreground text-background hover:bg-foreground/90 group-hover/sidebar:justify-start group-focus-within/sidebar:justify-start"
+            onClick={() => setCreateOpen(true)}
+            title="פרויקט חדש"
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className="hidden truncate group-hover/sidebar:inline group-focus-within/sidebar:inline">פרויקט חדש</span>
           </Button>
         </div>
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3">
-          <div className="px-2 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">פרויקטים</div>
+          <div className="hidden px-2 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground group-hover/sidebar:block group-focus-within/sidebar:block">פרויקטים</div>
           {isLoading ? (
             <Loader2 className="mx-auto my-8 h-5 w-5 animate-spin text-muted-foreground" />
           ) : items.length === 0 ? (
-            <p className="px-3 py-8 text-center text-xs text-muted-foreground">אין פרויקטים עדיין. צרו אחד כמו אייג׳נט חדש.</p>
+            <p className="hidden px-3 py-8 text-center text-xs text-muted-foreground group-hover/sidebar:block group-focus-within/sidebar:block">אין פרויקטים עדיין. צרו אחד כמו אייג׳נט חדש.</p>
           ) : items.map((item) => {
             const owner = clients.find((client) => client.id === item.client_id);
             const title = item.title || "בלי שם";
@@ -474,7 +472,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
               <div
                 key={item.id}
                 className={cn(
-                  "group mb-0.5 flex w-full min-w-0 items-start gap-1 rounded-lg px-2 py-2 transition-colors",
+                  "group mb-0.5 flex w-full min-w-0 items-start gap-1 rounded-lg px-1 py-2 transition-colors group-hover/sidebar:px-2 group-focus-within/sidebar:px-2",
                   selectedId === item.id ? "bg-muted" : "hover:bg-muted/60",
                 )}
               >
@@ -499,16 +497,21 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                       className="h-7 px-2 text-[13px]"
                     />
                   ) : (
-                    <button type="button" onClick={() => { setSelectedId(item.id); setProjectsOpen(false); }} className="block w-full min-w-0 overflow-hidden text-right">
-                      <div className="block w-full truncate text-[13px] font-medium [unicode-bidi:plaintext]" dir="auto" title={title}>{title}</div>
-                      <div className="mt-0.5 block w-full truncate text-[11px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">
-                        {owner?.name || "ללא לקוח"} · {typeLabel(asText(item.payload?.content_type) || "posts")} · {timeAgo(item.updated_at)}
+                    <button type="button" onClick={() => setSelectedId(item.id)} className="block w-full min-w-0 overflow-hidden text-right" title={title}>
+                      <div className="flex h-5 items-center justify-center group-hover/sidebar:hidden group-focus-within/sidebar:hidden">
+                        <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="hidden min-w-0 group-hover/sidebar:block group-focus-within/sidebar:block">
+                        <div className="block w-full truncate text-[13px] font-medium [unicode-bidi:plaintext]" dir="auto">{title}</div>
+                        <div className="mt-0.5 block w-full truncate text-[11px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">
+                          {owner?.name || "ללא לקוח"} · {typeLabel(asText(item.payload?.content_type) || "posts")} · {timeAgo(item.updated_at)}
+                        </div>
                       </div>
                     </button>
                   )}
                 </div>
                 <div className={cn(
-                  "flex shrink-0 items-center gap-0.5 transition-opacity",
+                  "hidden shrink-0 items-center gap-0.5 transition-opacity group-hover/sidebar:flex group-focus-within/sidebar:flex",
                   selectedId === item.id ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
                 )}>
                   <Button
@@ -543,14 +546,6 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
           })}
         </div>
       </aside>
-      {selected && projectsOpen && (
-        <button
-          type="button"
-          className="absolute inset-0 z-10 bg-foreground/20"
-          aria-label="סגור רשימת פרויקטים"
-          onClick={() => setProjectsOpen(false)}
-        />
-      )}
 
       <section className="flex min-w-0 flex-1 flex-col">
         {selected ? (
@@ -565,9 +560,6 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                   {agencyName ? `${agencyName} · ` : ""}{clientName || "לא משויך ללקוח"} · {typeLabel(asText(selected.payload?.content_type) || "posts")} · כרמן · קופירייטר
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => setProjectsOpen(true)}>
-                <PanelRight className="h-4 w-4" />פרויקטים
-              </Button>
               <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => setSettingsOpen(true)}>
                 <Settings2 className="h-4 w-4" />הגדרות
               </Button>
@@ -577,7 +569,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-              <div className="mx-auto flex w-[95vw] max-w-[95vw] flex-col gap-4 py-6" dir="rtl">
+              <div className="mx-auto flex w-[95%] flex-col gap-4 py-6" dir="rtl">
                 {chat.filter((turn) => turn.role === "user").map((turn, index) => (
                   <div key={`${turn.at}-${index}`} className="flex justify-start">
                     <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-right text-sm leading-relaxed [unicode-bidi:plaintext]" dir="auto">{turn.content}</div>
@@ -619,9 +611,9 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
               </div>
             </div>
 
-            <div className="border-t bg-background py-3">
+            <div className="border-t bg-background px-5 py-3">
               <form
-                className="mx-auto flex w-[95vw] max-w-[95vw] items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm"
+                className="mx-auto flex w-[95%] items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void sendPrompt();
@@ -647,7 +639,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
               </form>
-              <p className="mx-auto mt-1.5 w-[95vw] max-w-[95vw] px-1 text-right text-[10px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">כרמן · סקין קופירייטר · שיחה נפרדת מהצ׳ט הראשי וממשימות הרקע</p>
+              <p className="mx-auto mt-1.5 w-[95%] px-1 text-right text-[10px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">כרמן · סקין קופירייטר · שיחה נפרדת מהצ׳ט הראשי וממשימות הרקע</p>
             </div>
           </>
         ) : (
