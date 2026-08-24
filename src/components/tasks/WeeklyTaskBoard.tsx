@@ -286,35 +286,6 @@ export function WeeklyTaskBoard() {
         selectedAgency,
         crossTenantAgencyIds,
       });
-      // #region agent log
-      {
-        const payload = {
-          location: "WeeklyTaskBoard.tsx:queryFn-scope",
-          message: "tasks board scope resolved",
-          data: { boardScope, selectedAgency, crossTenantCount: crossTenantAgencyIds.length },
-          timestamp: Date.now(),
-          hypothesisId: "A",
-        };
-        // Browser-safe: beacon for session debugging; never blocks the query.
-        try {
-          if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-            navigator.sendBeacon(
-              "/__debug_agent_log",
-              new Blob([JSON.stringify(payload)], { type: "application/json" }),
-            );
-          }
-        } catch {
-          /* ignore */
-        }
-        if (typeof window !== "undefined") {
-          (window as unknown as { __TASK_BOARD_DEBUG__?: unknown[] }).__TASK_BOARD_DEBUG__ =
-            [
-              ...(((window as unknown as { __TASK_BOARD_DEBUG__?: unknown[] }).__TASK_BOARD_DEBUG__) || []),
-              payload,
-            ].slice(-20);
-        }
-      }
-      // #endregion
       if (boardScope.type === "agency") {
         query = query.eq("agency_id", boardScope.agencyId);
       } else if (boardScope.type === "tenant_or_shared") {
@@ -424,48 +395,13 @@ export function WeeklyTaskBoard() {
   useEffect(() => {
     // Sync with server results (including empty). While a refetch is in flight we keep
     // previous rows to avoid an empty flash — but ALWAYS narrow by selectedAgency so the
-    // header agency filter cannot leave other agencies' tasks on the board (hypothesis B).
+    // header agency filter cannot leave other agencies' tasks on the board.
     const next = syncLocalTasksForAgencyFilter({
       isFetching,
       fetchedTasks,
       previousLocal: localTasks,
       selectedAgency,
     });
-    // #region agent log
-    {
-      const agencyIds = Array.from(new Set(next.map((t) => t.agency_id || "null")));
-      const payload = {
-        location: "WeeklyTaskBoard.tsx:localTasks-sync",
-        message: "localTasks synced for agency filter",
-        data: {
-          isFetching,
-          selectedAgency,
-          fetchedCount: fetchedTasks?.length ?? 0,
-          nextCount: next.length,
-          agencyIds,
-        },
-        timestamp: Date.now(),
-        hypothesisId: "B",
-      };
-      try {
-        if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-          navigator.sendBeacon(
-            "/__debug_agent_log",
-            new Blob([JSON.stringify(payload)], { type: "application/json" }),
-          );
-        }
-      } catch {
-        /* ignore */
-      }
-      if (typeof window !== "undefined") {
-        (window as unknown as { __TASK_BOARD_DEBUG__?: unknown[] }).__TASK_BOARD_DEBUG__ =
-          [
-            ...(((window as unknown as { __TASK_BOARD_DEBUG__?: unknown[] }).__TASK_BOARD_DEBUG__) || []),
-            payload,
-          ].slice(-20);
-      }
-    }
-    // #endregion
     setLocalTasks(next);
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
     // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
