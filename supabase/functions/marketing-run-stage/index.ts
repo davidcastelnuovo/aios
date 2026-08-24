@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuth } from "../_shared/security.ts";
+import { resolveOpenAIKey } from "../_shared/ai.ts";
 import { buildSkillsBlockBySlug } from "../_shared/skills/registry.ts";
 
 const corsHeaders = {
@@ -11,13 +12,26 @@ const corsHeaders = {
 };
 
 const TEXT_MODEL = 'gpt-4o-mini';
-const IMAGE_MODEL = 'dall-e-3';
+const IMAGE_MODEL = 'gpt-image-1';
 
 // GPT-4o-mini pricing (USD per 1M tokens)
 const COST_IN_PER_M = 0.15;
 const COST_OUT_PER_M = 0.60;
-// DALL-E 3: $0.040 per image (1024x1024 standard)
-const DALLE3_COST_PER_IMAGE = 0.040;
+// gpt-image-1 medium ~1024px (approximate blended cost for marketing creatives)
+const GPT_IMAGE1_COST_PER_IMAGE = 0.042;
+
+const imageSizeForFormat = (format: unknown): string => {
+  switch (format) {
+    case "9:16":
+    case "4:5":
+      return "1024x1536";
+    case "16:9":
+      return "1536x1024";
+    case "1:1":
+    default:
+      return "1024x1024";
+  }
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -58,8 +72,10 @@ serve(async (req) => {
         if (src?.settings) settings = src.settings as Record<string, string>;
       }
       const key = settings.openai_api_key;
-      if (!key) throw new Error('OpenAI API key חסר — הגדר אותו בהגדרות האינטגרציות');
-      return key;
+      if (key) return key;
+      const fallback = await resolveOpenAIKey();
+      if (fallback) return fallback;
+      throw new Error('OpenAI API key חסר — הגדר אותו בהגדרות האינטגרציות או כ־OPENAI_API_KEY');
     };
 
     const { item_id, stage_id } = await req.json();
@@ -86,8 +102,15 @@ serve(async (req) => {
       .eq("id", stage_id)
       .single();
     if (stageErr || !stage) throw new Error("Stage not found");
+    if (!item.pipeline_id && stage.pipeline_id) {
+      await admin
+        .from("marketing_work_items")
+        .update({ pipeline_id: stage.pipeline_id })
+        .eq("id", item_id);
+      item.pipeline_id = stage.pipeline_id;
+    }
     if (stage.pipeline_id !== item.pipeline_id) {
-      throw new Error("Stage does not belong to the work item pipeline");
+      throw new Error("השלב לא שייך לפייפליין של הפריט — נסה/י לשמור את הפרויקט מחדש או לשייך לקוח");
     }
     if (stage.tenant_id && stage.tenant_id !== item.tenant_id) {
       throw new Error("Stage and work item tenant mismatch");
@@ -229,7 +252,7 @@ serve(async (req) => {
     let outputJson: any = {};
 
     if (stageType === "creative") {
-      // Image generation via DALL-E 3
+      const imageSize = imageSizeForFormat(item.payload?.format);
       // First, generate a detailed image prompt using text model
       const promptRes = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -240,8 +263,8 @@ serve(async (req) => {
         body: JSON.stringify({
           model: TEXT_MODEL,
           messages: [
-            { role: "system", content: systemPrompt || "You are a creative director. Generate concise DALL-E image prompts in English." },
-            { role: "user", content: userPrompt + "\n\nGenerate a concise DALL-E 3 image prompt (max 200 words) in English for this marketing creative. Focus on visual elements, style, and composition." },
+            { role: "system", content: systemPrompt || "You are a creative director. Generate concise photorealistic image prompts in English." },
+            { role: "user", content: userPrompt + "\n\nGenerate a concise gpt-image-1 prompt (max 200 words) in English for this marketing creative. Focus on visual elements, style, composition, and lighting. Do not include on-image text unless explicitly requested in the brief." },
           ],
           max_tokens: 300,
         }),
@@ -254,7 +277,6 @@ serve(async (req) => {
         tokensOut += promptData.usage?.completion_tokens ?? 0;
       }
 
-      // Generate image with DALL-E 3
       const aiRes = await fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
         headers: {
@@ -263,10 +285,11 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: IMAGE_MODEL,
-          prompt: imagePrompt,
+          prompt: `${imagePrompt}. Professional marketing creative, high quality, polished composition.`,
           n: 1,
-          size: "1024x1024",
-          response_format: "b64_json",
+          size: imageSize,
+          quality: "medium",
+          output_format: "png",
         }),
       });
       if (!aiRes.ok) {
@@ -275,7 +298,7 @@ serve(async (req) => {
       }
       const data = await aiRes.json();
       const b64Data = data.data?.[0]?.b64_json;
-      if (!b64Data) throw new Error("No image returned from DALL-E");
+      if (!b64Data) throw new Error("No image returned from gpt-image-1");
       const bytes = Uint8Array.from(atob(b64Data), (c) => c.charCodeAt(0));
       const fileName = `${Date.now()}-${runRow.id}.png`;
       const filePath = `${item.tenant_id}/marketing/${item_id}/${fileName}`;
@@ -286,8 +309,7 @@ serve(async (req) => {
       const { data: pub } = admin.storage.from("entity-attachments").getPublicUrl(filePath);
       assetUrl = pub.publicUrl;
       assetType = "image";
-      outputJson = { image_url: assetUrl };
-      // DALL-E 3 is billed per image, not per token — add fixed cost here
+      outputJson = { image_url: assetUrl, image_model: IMAGE_MODEL, image_size: imageSize };
       tokensIn = 0;
       tokensOut = 0;
     } else {
@@ -347,7 +369,7 @@ serve(async (req) => {
     await admin.from("marketing_work_items").update({ payload: newPayload }).eq("id", item_id);
 
     const cost = stageType === "creative"
-      ? DALLE3_COST_PER_IMAGE
+      ? GPT_IMAGE1_COST_PER_IMAGE
       : (tokensIn * COST_IN_PER_M + tokensOut * COST_OUT_PER_M) / 1_000_000;
 
     // Decide: auto-advance or wait for approval

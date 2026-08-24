@@ -1,6 +1,11 @@
-import type { CreativeFormat, CreativeItem } from "./types";
+export type CreativeFormat = "9:16" | "1:1" | "4:5" | "16:9";
 
 export type CreativeProjectType = "static" | "video";
+
+export interface StoryboardStyleLock {
+  lock: string;
+  referenceImageUrl?: string;
+}
 
 export interface StoryboardFrame {
   id: string;
