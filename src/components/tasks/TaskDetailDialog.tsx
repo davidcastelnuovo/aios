@@ -42,6 +42,7 @@ interface Task {
   priority: number;
   due_date: string | null;
   due_time: string | null;
+  target_date?: string | null;
   client_id: string | null;
   lead_id: string | null;
   agency_id: string | null;
@@ -80,6 +81,7 @@ export function TaskDetailDialog({
   const [priority, setPriority] = useState(5);
   const [status, setStatus] = useState<"open" | "in_progress" | "done">("open");
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
+  const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
   const [clientId, setClientId] = useState("");
   const [leadId, setLeadId] = useState("");
   const [dueTime, setDueTime] = useState<string | null>(null);
@@ -133,6 +135,7 @@ export function TaskDetailDialog({
         setPriority(t.priority);
         setStatus((t.status as "open" | "in_progress" | "done") || "open");
         setDueDate(t.due_date ? new Date(t.due_date) : undefined);
+        setTargetDate(t.target_date ? new Date(t.target_date) : undefined);
         setClientId(t.client_id || "");
         setLeadId(t.lead_id || "");
         setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
@@ -284,7 +287,8 @@ export function TaskDetailDialog({
       if (selfReminderEnabled && assignedCampaignerId === userCampaignerId && !selfReminderAt) {
         throw new Error("יש לבחור תאריך ושעה לתזכורת");
       }
-      const nextDueDate = dueDate?.toISOString().split("T")[0] || null;
+      const nextDueDate = dueDate ? format(dueDate, "yyyy-MM-dd") : null;
+      const nextTargetDate = targetDate ? format(targetDate, "yyyy-MM-dd") : null;
       const nextDueTime = dueTime ? dueTime + ":00" : null;
       const { error } = await supabase
         .from("tasks")
@@ -295,6 +299,7 @@ export function TaskDetailDialog({
           status,
           due_date: nextDueDate,
           due_time: nextDueTime,
+          target_date: nextTargetDate,
           duration_minutes: durationMinutes,
           client_id: clientId || null,
           lead_id: leadId || null,
@@ -330,7 +335,8 @@ export function TaskDetailDialog({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
       toast.success("המשימה עודכנה");
       onOpenChange(false);
     },
@@ -660,7 +666,8 @@ export function TaskDetailDialog({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>תאריך יעד</Label>
+                  <Label>תאריך ביצוע</Label>
+                  <p className="text-xs text-muted-foreground">מתי לבצע / להציג ביומן</p>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
@@ -689,12 +696,42 @@ export function TaskDetailDialog({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>שעת יעד</Label>
+                  <Label>שעת ביצוע</Label>
                   <TimeSlotPicker
                     value={dueTime}
                     onChange={setDueTime}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>תאריך יעד</Label>
+                <p className="text-xs text-muted-foreground">עד מתי להשלים (דדליין)</p>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-right",
+                        !targetDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="ml-2 h-4 w-4" />
+                      {targetDate
+                        ? format(targetDate, "dd/MM/yyyy", { locale: he })
+                        : "בחר תאריך יעד"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={targetDate}
+                      onSelect={setTargetDate}
+                      initialFocus
+                      className="p-3 pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div className="space-y-2">
