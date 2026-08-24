@@ -42,25 +42,144 @@ const toMarkdown = (variant: { headline?: string; primary?: string; cta?: string
     .filter(Boolean)
     .join("\n\n");
 
+function parseIPv4(host: string): number | null {
+  const parts = host.split(".");
+  if (parts.length !== 4) return null;
+  const nums = parts.map((part) => (/^\d{1,3}$/.test(part) ? Number(part) : NaN));
+  if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+  return ((nums[0] << 24) | (nums[1] << 16) | (nums[2] << 8) | nums[3]) >>> 0;
+}
+
+function ipv4InCidr(ip: number, network: number, bits: number): boolean {
+  return (ip >>> (32 - bits)) === (network >>> (32 - bits));
+}
+
+function isPrivateIPv4(ip: number): boolean {
+  return (
+    ipv4InCidr(ip, 0x00000000, 8) ||
+    ipv4InCidr(ip, 0x0a000000, 8) ||
+    ipv4InCidr(ip, 0x7f000000, 8) ||
+    ipv4InCidr(ip, 0xa9fe0000, 16) ||
+    ipv4InCidr(ip, 0xac100000, 12) ||
+    ipv4InCidr(ip, 0xc0a80000, 16) ||
+    ipv4InCidr(ip, 0x64400000, 10) ||
+    ipv4InCidr(ip, 0xc0000000, 24) ||
+    ipv4InCidr(ip, 0xe0000000, 4) ||
+    ipv4InCidr(ip, 0xf0000000, 4)
+  );
+}
+
+function ipv4FromMappedIPv6(host: string): number | null {
+  const dotted = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (dotted) return parseIPv4(dotted[1]);
+  const hex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (!hex) return null;
+  const hi = Number.parseInt(hex[1], 16);
+  const lo = Number.parseInt(hex[2], 16);
+  if (!Number.isInteger(hi) || !Number.isInteger(lo)) return null;
+  return ((hi << 16) | lo) >>> 0;
+}
+
+function isPrivateIPv6(host: string): boolean {
+  const ip = host.toLowerCase();
+  if (ip === "::" || ip === "::1" || ip === "0:0:0:0:0:0:0:1") return true;
+  if (ip.startsWith("fe80:") || ip.startsWith("fc") || ip.startsWith("fd")) return true;
+  const mappedIp = ipv4FromMappedIPv6(ip);
+  return mappedIp !== null && isPrivateIPv4(mappedIp);
+}
+
+async function isBlockedHost(hostname: string): Promise<boolean> {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
+  if (!host) return true;
+  if (
+    host === "localhost" ||
+    host === "metadata" ||
+    host === "metadata.google.internal" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".lan")
+  ) {
+    return true;
+  }
+  const ipv4 = parseIPv4(host);
+  if (ipv4 !== null) return isPrivateIPv4(ipv4);
+  const mappedIp = ipv4FromMappedIPv6(host);
+  if (mappedIp !== null) return isPrivateIPv4(mappedIp);
+  if (host.includes(":")) return isPrivateIPv6(host);
+  try {
+    const resolveDns = (Deno as { resolveDns?: (q: string, t: string) => Promise<string[]> }).resolveDns;
+    if (typeof resolveDns !== "function") return false;
+    const [aRecords, aaaaRecords] = await Promise.all([
+      resolveDns(host, "A").catch(() => [] as string[]),
+      resolveDns(host, "AAAA").catch(() => [] as string[]),
+    ]);
+    const ips = [...aRecords, ...aaaaRecords];
+    if (ips.length === 0) return true;
+    for (const ip of ips) {
+      const v4 = parseIPv4(ip);
+      if (v4 !== null) {
+        if (isPrivateIPv4(v4)) return true;
+        continue;
+      }
+      if (isPrivateIPv6(ip)) return true;
+      const mappedFromDns = ipv4FromMappedIPv6(ip.toLowerCase());
+      if (mappedFromDns !== null && isPrivateIPv4(mappedFromDns)) return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+async function publicHttpUrl(raw: string): Promise<URL | null> {
+  const trimmed = raw.trim();
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^https?:/i.test(trimmed)) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  if (parsed.username || parsed.password) return null;
+  if (parsed.port && parsed.port !== "80" && parsed.port !== "443") return null;
+  if (await isBlockedHost(parsed.hostname)) return null;
+  return parsed;
+}
+
 async function fetchWebsiteText(url: string): Promise<string | null> {
   try {
-    const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    const response = await fetch(href, {
-      signal: controller.signal,
-      headers: { "User-Agent": "AIOS-CopyDepartment/1.0" },
-    });
-    clearTimeout(timer);
-    if (!response.ok) return null;
-    const html = await response.text();
-    const text = html
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    return text.slice(0, 4000) || null;
+    let href = await publicHttpUrl(url);
+    if (!href) return null;
+    for (let hop = 0; hop < 3; hop++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const response = await fetch(href, {
+        signal: controller.signal,
+        redirect: "manual",
+        headers: { "User-Agent": "AIOS-CopyDepartment/1.0" },
+      });
+      clearTimeout(timer);
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("Location");
+        if (!location) return null;
+        const nextRaw = new URL(location, href).toString();
+        href = await publicHttpUrl(nextRaw);
+        if (!href) return null;
+        continue;
+      }
+      if (!response.ok) return null;
+      const html = await response.text();
+      const text = html
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return text.slice(0, 4000) || null;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -129,6 +248,7 @@ serve(async (req) => {
             .from("clients")
             .select("name,website,industry,notes,attachments")
             .eq("id", item.client_id)
+            .eq("tenant_id", item.tenant_id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
       admin
@@ -146,6 +266,7 @@ serve(async (req) => {
             .from("zoom_recordings")
             .select("id,meeting_topic,transcription,notes")
             .eq("id", recordingId)
+            .eq("tenant_id", item.tenant_id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
