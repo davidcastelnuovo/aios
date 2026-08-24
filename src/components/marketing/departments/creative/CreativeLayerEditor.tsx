@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
-import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
+import type { CreativeFormat, CreativeLayer, CreativeVariation, LayerShadowStyle } from "./types";
+import { inferLayerShadow, withLayerShadow } from "./layerShadow";
 import { aspectRatioClass } from "./utils";
 
 interface Props {
@@ -54,10 +55,20 @@ export function CreativeLayerEditor({
   const setEditing = onEditingChange ?? setInternalEditing;
 
   useEffect(() => {
-    if (!isEditing) setSelectedLayerId(null);
-  }, [isEditing]);
+    if (!isEditing) {
+      setSelectedLayerId(null);
+      return;
+    }
+    setSelectedLayerId((current) => {
+      if (current && variation.layers.some((layer) => layer.id === current)) return current;
+      return variation.layers.find((layer) => layer.type === "text")?.id
+        ?? variation.layers.find((layer) => layer.type !== "background")?.id
+        ?? null;
+    });
+  }, [isEditing, variation.id]);
 
   const selectedLayer = variation.layers.find((layer) => layer.id === selectedLayerId) ?? null;
+  const selectedShadow = selectedLayer?.type === "text" ? inferLayerShadow(selectedLayer) : null;
   const overlayLayers = variation.layers.filter((layer) => layer.type !== "background");
 
   const updateLayer = useCallback((layerId: string, patch: Partial<CreativeLayer>) => {
@@ -97,6 +108,12 @@ export function CreativeLayerEditor({
 
   const removeSelectedLayer = () => {
     if (selectedLayerId) removeLayer(selectedLayerId);
+  };
+
+  const applyShadow = (layerId: string, patch: Partial<ReturnType<typeof inferLayerShadow>>) => {
+    const layer = variation.layers.find((item) => item.id === layerId);
+    if (!layer) return;
+    updateLayer(layerId, withLayerShadow({ ...inferLayerShadow(layer), ...patch }));
   };
 
   const removeAllTextLayers = () => {
@@ -183,7 +200,7 @@ export function CreativeLayerEditor({
             </Button>
           )}
           <span className="text-xs text-muted-foreground">
-            {isEditing ? "מצב עריכה — גרור שכבות, שנה טקסט ופונטים" : "לחץ פעמיים על הקריאייטיב או על עריכה כדי לערוך שכבות"}
+            {isEditing ? "מצב עריכה — הקלד על השכבה, גרור, ושלוט בהצללה" : "לחץ פעמיים על הקריאייטיב או על עריכה כדי לערוך שכבות"}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -278,9 +295,28 @@ export function CreativeLayerEditor({
                     <Trash2 className="h-3 w-3" />
                   </button>
                 )}
-                {layer.type === "text" && (
+                {layer.type === "text" && isEditing && selectedLayerId === layer.id ? (
+                  <textarea
+                    className="h-full w-full resize-none bg-transparent px-1 outline-none"
+                    dir="auto"
+                    value={layer.text ?? ""}
+                    onChange={(event) => updateLayer(layer.id, { text: event.target.value })}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    style={{
+                      color: "inherit",
+                      fontFamily: "inherit",
+                      fontSize: "inherit",
+                      fontWeight: "inherit",
+                      textAlign: "inherit",
+                      letterSpacing: "inherit",
+                      lineHeight: "inherit",
+                      textShadow: "inherit",
+                    }}
+                  />
+                ) : layer.type === "text" ? (
                   <span className="block w-full overflow-hidden whitespace-pre-wrap break-words px-1">{layer.text}</span>
-                )}
+                ) : null}
                 {isEditing && selectedLayerId === layer.id && (
                   <span
                     className="absolute -bottom-1 -left-1 h-3 w-3 cursor-se-resize rounded-full border border-white bg-pink-500"
@@ -354,12 +390,15 @@ export function CreativeLayerEditor({
               {selectedLayer?.type === "text" && (
                 <div className="space-y-3 border-t pt-4">
                   <div>
-                    <Label>תוכן</Label>
+                    <Label>הטקסט עצמו</Label>
                     <Textarea
-                      className="mt-1 min-h-20 text-sm"
+                      className="mt-1 min-h-24 text-sm"
+                      dir="auto"
                       value={selectedLayer.text ?? ""}
                       onChange={(event) => updateLayer(selectedLayer.id, { text: event.target.value })}
+                      placeholder="כתוב כאן את הכותרת, ההצעה או ה-CTA"
                     />
+                    <p className="mt-1 text-[11px] text-muted-foreground">אפשר גם להקליד ישירות על השכבה בקנבס.</p>
                   </div>
                   <div>
                     <Label>פונט</Label>
@@ -420,6 +459,57 @@ export function CreativeLayerEditor({
                       </SelectContent>
                     </Select>
                   </div>
+                  {selectedShadow && (
+                    <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                      <Label>הצללה</Label>
+                      <Select
+                        value={selectedShadow.shadowStyle}
+                        onValueChange={(value: LayerShadowStyle) => applyShadow(selectedLayer.id, { shadowStyle: value, shadowDepth: value === "none" ? 0 : Math.max(selectedShadow.shadowDepth, 4) })}
+                      >
+                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">בלי הצללה</SelectItem>
+                          <SelectItem value="soft">רכה</SelectItem>
+                          <SelectItem value="extrude">תלת־ממד / עומק</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {selectedShadow.shadowStyle !== "none" && (
+                        <>
+                          <div>
+                            <Label>עומק ({selectedShadow.shadowDepth})</Label>
+                            <Slider
+                              className="mt-3"
+                              min={1}
+                              max={24}
+                              step={1}
+                              value={[selectedShadow.shadowDepth]}
+                              onValueChange={([value]) => applyShadow(selectedLayer.id, { shadowDepth: value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>טשטוש ({selectedShadow.shadowBlur}px)</Label>
+                            <Slider
+                              className="mt-3"
+                              min={0}
+                              max={40}
+                              step={1}
+                              value={[selectedShadow.shadowBlur]}
+                              onValueChange={([value]) => applyShadow(selectedLayer.id, { shadowBlur: value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>צבע הצללה</Label>
+                            <Input
+                              className="mt-1 h-9"
+                              type="color"
+                              value={selectedShadow.shadowColor}
+                              onChange={(event) => applyShadow(selectedLayer.id, { shadowColor: event.target.value })}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <Button variant="outline" size="sm" className="w-full text-destructive" onClick={removeSelectedLayer}>
                     מחק שכבת טקסט
                   </Button>

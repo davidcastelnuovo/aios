@@ -31,6 +31,8 @@ export interface CreativeComment {
   createdAt: string;
 }
 
+export type LayerShadowStyle = "none" | "soft" | "extrude";
+
 export interface CreativeLayer {
   id: string;
   type: "background" | "text" | "shape";
@@ -51,6 +53,10 @@ export interface CreativeLayer {
   textShadow?: string;
   boxShadow?: string;
   letterSpacing?: string;
+  shadowStyle?: LayerShadowStyle;
+  shadowDepth?: number;
+  shadowColor?: string;
+  shadowBlur?: number;
   locked?: boolean;
 }
 

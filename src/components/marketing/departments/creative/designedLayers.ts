@@ -1,4 +1,5 @@
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
+import { withLayerShadow } from "./layerShadow";
 import {
   CREATIVE_VISUAL_STYLES,
   stylesInGroup,
@@ -227,16 +228,6 @@ const layer = (partial: Omit<CreativeLayer, "id">): CreativeLayer => ({
   ...partial,
 });
 
-const extrudeShadow = (color: string, depth = 12) => {
-  const steps = Array.from({ length: depth }, (_, index) => {
-    const offset = index + 1;
-    return `${offset}px ${offset}px 0 ${color}`;
-  });
-  steps.unshift("0 1px 0 rgba(255,255,255,0.35)");
-  steps.push(`${depth + 4}px ${depth + 14}px 30px rgba(15,23,42,0.38)`);
-  return steps.join(", ");
-};
-
 export const buildDesignedCopyLayers = ({
   copyText,
   format,
@@ -272,7 +263,9 @@ export const buildDesignedCopyLayers = ({
       color: palette.headline,
       textAlign: "right",
       letterSpacing: "-0.03em",
-      textShadow: punchy ? extrudeShadow(palette.extrude, 8) : "0 3px 14px rgba(0,0,0,0.55)",
+      ...withLayerShadow(punchy
+        ? { shadowStyle: "extrude", shadowDepth: 8, shadowColor: palette.extrude, shadowBlur: 16 }
+        : { shadowStyle: "soft", shadowDepth: 6, shadowColor: "#000000", shadowBlur: 14 }),
     }));
   }
 
@@ -317,7 +310,7 @@ export const buildDesignedCopyLayers = ({
       fontWeight: "600",
       color: palette.body,
       textAlign: "right",
-      textShadow: "0 2px 16px rgba(0,0,0,0.55)",
+      ...withLayerShadow({ shadowStyle: "soft", shadowDepth: 4, shadowColor: "#000000", shadowBlur: 16 }),
     }));
   }
 
