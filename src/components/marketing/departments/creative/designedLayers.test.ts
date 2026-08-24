@@ -7,7 +7,10 @@ import {
   heroWord,
   isInternalCopyLine,
   parseCreativeCopy,
+  punchScore,
   shouldRebuildDesignedLayers,
+  strongestLine,
+  wrapPosterLine,
 } from "./designedLayers.ts";
 
 const AIDA_DOC = `
@@ -65,15 +68,34 @@ test("visual brief uses real offer copy, never the AIDA header", () => {
   assert.doesNotMatch(brief, /פומו תחרותי/);
 });
 
-test("headline sits in the top band, not over the face", () => {
+test("strongestLine prefers a punchy sentence over a weak one-word headline", () => {
+  assert.equal(strongestLine(AIDA_DOC), "רק 99 ש״ח ללילה, כולל טיסה");
+  assert.equal(
+    strongestLine("כותרת:\nהמתחרים\nגוף:\nלקוחות כבר לא מחפשים רק בגוגל\nCTA:\nהשאירו פרטים"),
+    "לקוחות כבר לא מחפשים רק בגוגל",
+  );
+  assert.ok(punchScore("רק 99 ש״ח ללילה") > punchScore("המתחרים"));
+});
+
+test("wrapPosterLine splits a long lockup into two poster lines", () => {
+  assert.equal(wrapPosterLine("רודוס", 14), "רודוס");
+  const wrapped = wrapPosterLine("לקוחות כבר לא מחפשים רק בגוגל", 13);
+  assert.match(wrapped, /\n/);
+  assert.equal(wrapped.split("\n").length, 2);
+});
+
+test("headline sits in the top band as a fat lockup, not a weak fragment", () => {
   const layers = buildDesignedCopyLayers({
     copyText: "כותרת:\nהמתחרים\nגוף:\nלקוחות כבר לא מחפשים רק בגוגל\nCTA:\nהשאירו פרטים",
     format: "1:1",
-    styleId: "swiss",
+    styleId: "cinematic",
   });
-  const headline = layers.find((layer) => layer.text === "המתחרים");
-  assert.ok(headline);
-  assert.ok((headline?.y ?? 99) <= 8);
+  const poster = layers.find((layer) => layer.type === "text" && (layer.text ?? "").includes("לקוחות"));
+  assert.ok(poster);
+  assert.equal(poster?.fontFamily, "Suez One");
+  assert.ok((poster?.fontSize ?? 0) >= 32);
+  assert.ok((poster?.y ?? 99) <= 8);
+  assert.ok(!layers.some((layer) => layer.text === "המתחרים"));
   const cta = layers.find((layer) => layer.text === "השאירו פרטים");
   assert.ok((cta?.y ?? 0) >= 80);
 });
@@ -86,7 +108,8 @@ test("designed layers never paint AIDA labels or a bottom caption plate", () => 
     title: "וריאציה 1 — AIDA — פומו תחרותי",
   });
   const texts = layers.map((layer) => layer.text).filter(Boolean);
-  assert.ok(texts.includes("טסים לרודוס") || texts.includes("טסים"));
+  assert.ok(texts.some((text) => (text ?? "").includes("99")));
+  assert.ok(!texts.includes("טסים"));
   assert.ok(texts.includes("להזמנה"));
   assert.ok(!texts.some((text) => /AIDA|וריאציה|כותרת:/.test(text ?? "")));
   assert.ok(!layers.some((layer) => layer.type === "shape" && layer.y >= 52 && layer.height >= 18 && layer.width >= 70));
@@ -118,7 +141,7 @@ test("ensureLogoLayer updates or removes the logo without touching copy", () => 
   assert.equal(ensureLogoLayer(updated).some((layer) => layer.type === "image"), false);
 });
 
-test("shouldRebuildDesignedLayers catches leftover AIDA overlays", () => {
+test("shouldRebuildDesignedLayers catches leftover AIDA overlays and weak auto type", () => {
   assert.equal(shouldRebuildDesignedLayers([
     { id: "1", type: "text", x: 8, y: 60, width: 84, height: 16, text: "וריאציה 1 — AIDA — פומו תחרותי" },
   ]), true);
@@ -128,4 +151,10 @@ test("shouldRebuildDesignedLayers catches leftover AIDA overlays", () => {
   assert.equal(shouldRebuildDesignedLayers([
     { id: "1", type: "text", x: 8, y: 30, width: 80, height: 14, text: "רודוס" },
   ]), false);
+  assert.equal(shouldRebuildDesignedLayers([
+    { id: "1", type: "text", x: 6, y: 5, width: 80, height: 10, text: "טסים", fontFamily: "Rubik", fontSize: 28 },
+  ], AIDA_DOC), true);
+  assert.equal(shouldRebuildDesignedLayers([
+    { id: "1", type: "text", x: 4, y: 4, width: 90, height: 16, text: "טסים לרודוס", fontFamily: "Suez One", fontSize: 52 },
+  ], AIDA_DOC), false);
 });

@@ -25,7 +25,7 @@ interface Props {
   onBack?: () => void;
 }
 
-const FONT_OPTIONS = ["Rubik", "Assistant", "Heebo", "Arial", "Georgia"];
+const FONT_OPTIONS = ["Suez One", "Heebo", "Rubik", "Assistant", "Arial", "Georgia"];
 
 type DragMode = "move" | "resize-se";
 
@@ -268,7 +268,7 @@ export function CreativeLayerEditor({
                   fontWeight: layer.fontWeight ?? "600",
                   textAlign: layer.textAlign ?? "right",
                   letterSpacing: layer.letterSpacing,
-                  lineHeight: 1.05,
+                  lineHeight: layer.lineHeight ?? 1.05,
                   textShadow: layer.type === "text" ? layer.textShadow ?? "0 2px 14px rgba(0,0,0,0.35)" : undefined,
                 }}
                 onMouseDown={(event) => {

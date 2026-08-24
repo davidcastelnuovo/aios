@@ -56,6 +56,7 @@ export interface CreativeLayer {
   textShadow?: string;
   boxShadow?: string;
   letterSpacing?: string;
+  lineHeight?: number;
   shadowStyle?: LayerShadowStyle;
   shadowDepth?: number;
   shadowColor?: string;
