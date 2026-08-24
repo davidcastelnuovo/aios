@@ -25,9 +25,9 @@ export const CREATIVE_VISUAL_STYLES: CreativeVisualStyle[] = [
     label: "ראליסטי",
     hint: "צילום אמיתי, תאורה טבעית",
     lock: [
-      "ART DIRECTION: photoreal photography only.",
-      "35mm look, shallow depth of field, motivated natural light, real skin and materials.",
-      "Forbidden: illustration, 3D render, cartoon, collage, split-screen, stock montage.",
+      "ART DIRECTION: photoreal photography only — a commercial environment, not a studio portrait.",
+      "35mm look, shallow depth of field, motivated natural light, real materials and atmosphere.",
+      "Forbidden: illustration, 3D render, cartoon, collage, split-screen, stock montage, grey-studio headshot.",
       "Palette: warm neutrals (cream, walnut, charcoal) plus one muted teal accent.",
     ].join(" "),
   },
@@ -160,11 +160,12 @@ const STORYBOARD_CONTINUITY = [
 
 const STATIC_QUALITY = [
   "MILLION-DOLLAR commercial still — luxury travel / premium brand ad, not a stock photo and not a flat Canva template.",
-  "Vertical hierarchy: hero object in the top third, open center sky for a floating 3D title, clean bottom for a CTA.",
-  "One hero product/vehicle/place, photoreal, 8K, cinematic depth of field, consistent light from upper-right, soft lens flare.",
-  "Cohesive 3-color world. Supporting props sit IN the environment (on clouds, water, ground) with matching shadows.",
+  "The picture is a cinematic ENVIRONMENT that illustrates the offer: destination, product-in-world, vehicle, or flagship moment.",
+  "Vertical hierarchy: hero subject in the top half, open center sky for a floating 3D title, clean bottom for a CTA.",
+  "Photoreal or style-locked, 8K, cinematic depth of field, motivated light from upper-right, atmosphere and color grade.",
+  "Cohesive 3-color world. Supporting props sit IN the environment with matching shadows — never pasted on a blank backdrop.",
   "Leave the center and lower third visually open — no letters, numbers, logos, buttons, or fake UI. Typesetting is added later.",
-  "Forbidden: clutter, collage, split-screen, generic lifestyle, muddy dark plates covering the scene, cheap clipart.",
+  "Forbidden: grey/white seamless studio, cyclorama, cutout headshot, thinking-hand pose, passport portrait, caption box, collage, split-screen, generic lifestyle, Canva chrome.",
 ].join(" ");
 
 export const buildVisualStyleLock = (

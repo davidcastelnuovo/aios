@@ -175,7 +175,7 @@ export function CreativeLayerEditor({
     <div className="relative flex min-h-0 flex-1 flex-col bg-muted/10">
       <div className="flex items-center justify-between border-b px-4 py-2">
         <span className="text-xs text-muted-foreground">
-          {isEditing ? "מצב עריכה — גרור שכבות, שנה טקסט ופונטים" : "לחץ על הקריאייטיב כדי לערוך"}
+          {isEditing ? "מצב עריכה — גרור שכבות, שנה טקסט ופונטים" : "לחץ פעמיים על הקריאייטיב או על עריכה כדי לערוך שכבות"}
         </span>
         <div className="flex items-center gap-2">
           {onRegenerate && (
@@ -203,12 +203,14 @@ export function CreativeLayerEditor({
         <div
           className={cn(
             "relative w-full max-w-3xl overflow-hidden rounded-2xl border bg-muted shadow-xl",
-            !isEditing && "cursor-zoom-in ring-offset-background hover:ring-2 hover:ring-pink-400/40",
+            !isEditing && "cursor-default",
             canvasClass,
           )}
           onClick={() => {
+            if (isEditing) setSelectedLayerId(null);
+          }}
+          onDoubleClick={() => {
             if (!isEditing) setEditing(true);
-            else setSelectedLayerId(null);
           }}
         >
           <div ref={canvasRef} className="absolute inset-0">
@@ -253,7 +255,7 @@ export function CreativeLayerEditor({
                   setSelectedLayerId(layer.id);
                 }}
               >
-                {isEditing && (
+                {isEditing && selectedLayerId === layer.id && (
                   <button
                     type="button"
                     className="absolute -top-2 -left-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-white bg-destructive text-white shadow"

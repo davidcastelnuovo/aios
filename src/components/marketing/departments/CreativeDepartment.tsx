@@ -24,7 +24,7 @@ import {
   pickStoryboardReferences,
 } from "@/components/marketing/departments/creative/utils";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
-import { buildDesignedCopyLayers, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
+import { buildCampaignVisualBrief, buildDesignedCopyLayers, hydrateVariationLayers, isInternalCopyLine, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
 import {
   buildVisualStyleLock,
   getVisualStyle,
@@ -208,8 +208,17 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   }, [variations, selectedVariationId]);
 
   useEffect(() => {
-    setVariationDraft(selectedVariation ? { ...selectedVariation } : null);
-  }, [selectedVariation]);
+    if (!selectedVariation) {
+      setVariationDraft(null);
+      return;
+    }
+    setVariationDraft(hydrateVariationLayers(
+      selectedVariation,
+      getLinkedCopyText(selected),
+      selected?.title ?? undefined,
+      getVisualStyleId(selected?.payload),
+    ));
+  }, [selectedVariation, selected]);
 
   const { data: assetVersions = [] } = useQuery({
     queryKey: ["creative-department-assets", selectedId, tenantId],
@@ -350,7 +359,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       const framePrompt = [
         `Next shot in ONE continuous ${visual.label} commercial. Keep the same world, people, wardrobe, lighting and grade.`,
         style.lock,
-        selected.title && `Campaign: ${selected.title}`,
+        selected.title && !isInternalCopyLine(selected.title) && `Campaign: ${selected.title}`,
         `Frame ${frame.order}: ${frame.title}`,
         frame.shot && `Shot type: ${frame.shot}`,
         frame.visualPrompt && `Action/setting change only: ${frame.visualPrompt}`,
@@ -515,14 +524,19 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         : visualStyleById(replaceTarget?.visualStyle ?? projectStyle);
       const format = defaultFormat(selected.payload);
       const copyText = getLinkedCopyText(selected);
+      const visualBrief = buildCampaignVisualBrief({
+        copyText,
+        title: selected.title ?? undefined,
+        brief: getBriefText(selected),
+        instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
+      });
       const creativePrompt = [
         `Create a million-dollar ${format} commercial key visual in a ${style.label} style.`,
-        "Art-direct like a luxury OTA / flagship brand ad: one hero, cinematic light, depth, clean sky.",
+        "Art-direct like a Super Bowl / luxury travel flagship ad: a SCENE in a real world, not a stock headshot.",
         buildVisualStyleLock(selected.payload, { styleId: style.id }),
-        selected.title && `Campaign idea (do not paint the words): ${selected.title}`,
-        getBriefText(selected) && `Visual brief (mood, destination, offer — no lettering): ${getBriefText(selected)}`,
-        selected.payload?.instructions && `Director notes: ${String(selected.payload.instructions)}`,
-        `Format ${format}. Hero top, empty center for a floating 3D title, open bottom for a button.`,
+        `Subject to illustrate (do not paint any letters): ${visualBrief}`,
+        `Format ${format}. Hero subject in the upper half, open sky/center for a floating 3D title, clean lower third for a CTA.`,
+        "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, Canva templates, UI chrome.",
       ].filter(Boolean).join("\n");
 
       const { imageUrl } = await generateCreativeImage({
