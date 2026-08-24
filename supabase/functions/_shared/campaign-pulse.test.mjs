@@ -8,6 +8,7 @@ import {
   classifyCampaignPulseStatus,
   countPulseStatuses,
   effectiveIsEcommerce,
+  filterPulseRowsByClientIds,
   pickFreshestTablePerPlatform,
   resolveLastSyncAt,
   isSyncStale,
@@ -288,9 +289,9 @@ test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)
   assert.match(digest, /🟡 2 לתשומת לב/);
   assert.match(digest, /🔴 1 קריטיים/);
   assert.match(digest, /https:\/\/aios\.co\.il\/t\/marketingcaptain\/dmm-dashboard/);
-  assert.match(digest, /לא בוואטסאפ/);
   assert.equal(digest.includes("| סוכנות |"), false);
   assert.equal(digest.includes("חושבה ב־"), false);
+  assert.equal(digest.includes("לא בוואטסאפ"), false);
   const counts = countPulseStatuses([
     { status: "healthy" },
     { status: "warning" },
@@ -301,4 +302,23 @@ test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)
   assert.equal(pulseSurfacePrefersWhatsAppDigest("whatsapp"), true);
   assert.equal(pulseSurfacePrefersWhatsAppDigest("task"), true);
   assert.equal(pulseSurfacePrefersWhatsAppDigest("internal_chat"), false);
+});
+
+test("filterPulseRowsByClientIds keeps only assigned clients", () => {
+  const rows = [
+    { client_id: "a", status: "healthy", client_name: "Alpha" },
+    { client_id: "b", status: "warning", client_name: "Beta" },
+    { client_id: "c", status: "critical", client_name: "Gamma" },
+  ];
+  const filtered = filterPulseRowsByClientIds(rows, ["a", "c"]);
+  assert.equal(filtered.length, 2);
+  assert.deepEqual(filtered.map((row) => row.client_id), ["a", "c"]);
+
+  const digest = buildPulseWhatsAppDigest(
+    filtered,
+    "https://aios.co.il/t/dmm/dmm-dashboard",
+  );
+  assert.match(digest, /נבדקו 2 לקוחות/);
+  assert.match(digest, /https:\/\/aios\.co\.il\/t\/dmm\/dmm-dashboard/);
+  assert.equal(filterPulseRowsByClientIds(rows, []).length, 0);
 });

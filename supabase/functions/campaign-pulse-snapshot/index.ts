@@ -114,10 +114,10 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
   let body: any = {}
   try { body = await req.json() } catch { /* empty cron body */ }
-  const deliveryRequested = body.deliver !== false
-  const forceDelivery = body.force_delivery === true && (
-    body.source === 'approved_manual_trigger' || body.source === 'morning_cron'
-  )
+  // Only explicit deliver:true may send WhatsApp — sync crons refresh snapshots only.
+  const deliveryRequested = body.deliver === true
+  const manualDeliveryBypass =
+    body.force_delivery === true && body.source === 'approved_manual_trigger'
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
     .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
@@ -366,12 +366,14 @@ Deno.serve(async (req) => {
     const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl)
     let sent = false
     let deliveryClaimed = false
-    if (deliveryRequested && setting.campaign_pulse_enabled && forceDelivery) {
-      deliveryClaimed = true
-    } else if (deliveryRequested && setting.campaign_pulse_enabled) {
-      const claim = await supabase.rpc('claim_campaign_pulse_delivery', { p_tenant_id: tenantId })
-      deliveryClaimed = claim.data === true && !claim.error
-      if (claim.error) console.error('Failed to claim campaign pulse delivery:', claim.error.message)
+    if (deliveryRequested && setting.campaign_pulse_enabled) {
+      if (manualDeliveryBypass) {
+        deliveryClaimed = true
+      } else {
+        const claim = await supabase.rpc('claim_campaign_pulse_delivery', { p_tenant_id: tenantId })
+        deliveryClaimed = claim.data === true && !claim.error
+        if (claim.error) console.error('Failed to claim campaign pulse delivery:', claim.error.message)
+      }
     }
     if (deliveryClaimed) {
       // Deliver via Carmen Direct, but pin the recipient when
@@ -409,7 +411,7 @@ Deno.serve(async (req) => {
       sent,
       delivery_channel: 'carmen_direct',
       delivery_requested: deliveryRequested,
-      skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !forceDelivery && !deliveryClaimed,
+      skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !manualDeliveryBypass && !deliveryClaimed,
       ai_used: false,
       external_api_calls: metaActivityCalls,
     })
