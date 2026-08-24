@@ -58,6 +58,8 @@ interface Task {
   campaigner_id: string | null;
   sales_person_id?: string | null;
   tenant_id: string | null;
+  created_by?: string | null;
+  creator_name?: string | null;
   sort_order?: number;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
@@ -360,7 +362,21 @@ export function WeeklyTaskBoard() {
         .order("sort_order", { ascending: true });
 
       if (error) throw error;
-      return data as FullTask[];
+      const taskRows = (data || []) as FullTask[];
+      const creatorIds = Array.from(new Set(
+        taskRows.map((task) => task.created_by).filter((id): id is string => Boolean(id))
+      ));
+      if (creatorIds.length === 0) return taskRows;
+
+      const { data: creators } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", creatorIds);
+      const creatorNames = new Map((creators || []).map((creator) => [creator.id, creator.full_name]));
+      return taskRows.map((task) => ({
+        ...task,
+        creator_name: task.created_by ? creatorNames.get(task.created_by) || null : null,
+      }));
     },
     staleTime: 1000 * 60,
   });
@@ -449,6 +465,7 @@ export function WeeklyTaskBoard() {
         priority: 5,
         tenant_id: tenantId,
         agency_id: agencyId,
+        created_by: user?.id || null,
         campaigner_id: assignedCampaignerId,
         sales_person_id: assignedCampaignerId ? null : mySalesPersonId,
         client_id: clientId ?? null,
@@ -1574,6 +1591,7 @@ export function WeeklyTaskBoard() {
             priority: 5,
             tenant_id: tenantId,
             agency_id: agencyId,
+            created_by: user?.id || null,
             campaigner_id: myCampaignerId,
             sales_person_id: myCampaignerId ? null : mySalesPersonId,
             due_date: data.dueDate,

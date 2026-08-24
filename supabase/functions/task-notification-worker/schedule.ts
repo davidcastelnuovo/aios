@@ -109,7 +109,9 @@ export function taskNotificationScope(input: {
   creatorCampaignerId: string | null
   creatorSalesPersonId: string | null
   creatorRoles: string[]
+  hasCreator: boolean
 }) {
+  const hasAssignee = Boolean(input.taskCampaignerId || input.taskSalesPersonId)
   const isSelfAssigned = Boolean(
     (input.taskCampaignerId && input.creatorCampaignerId === input.taskCampaignerId)
     || (input.taskSalesPersonId && input.creatorSalesPersonId === input.taskSalesPersonId)
@@ -119,6 +121,9 @@ export function taskNotificationScope(input: {
 
   return {
     isSelfAssigned,
+    // Every cross-user assignment gets an immediate notification. Management
+    // roles still control the later reminder/receipt workflow below.
+    shouldNotifyAssignee: input.hasCreator && hasAssignee && !isSelfAssigned,
     isManagedAssignment: creatorCanManage && !isSelfAssigned,
   }
 }

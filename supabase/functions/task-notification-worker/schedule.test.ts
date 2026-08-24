@@ -56,8 +56,10 @@ test('manager assignment to another campaigner enables managed notifications', (
     creatorCampaignerId: 'manager-a',
     creatorSalesPersonId: null,
     creatorRoles: ['team_manager'],
+    hasCreator: true,
   }), {
     isSelfAssigned: false,
+    shouldNotifyAssignee: true,
     isManagedAssignment: true,
   })
 })
@@ -69,21 +71,55 @@ test('campaigner self-assignment is silent unless a self reminder is requested',
     creatorCampaignerId: 'campaigner-a',
     creatorSalesPersonId: null,
     creatorRoles: ['campaigner'],
+    hasCreator: true,
   }), {
     isSelfAssigned: true,
+    shouldNotifyAssignee: false,
     isManagedAssignment: false,
   })
 })
 
-test('campaigner assignment to a colleague does not enable managerial notifications', () => {
+test('campaigner assignment to a colleague notifies the assignee without managerial follow-ups', () => {
   assert.deepEqual(taskNotificationScope({
     taskCampaignerId: 'campaigner-b',
     taskSalesPersonId: null,
     creatorCampaignerId: 'campaigner-a',
     creatorSalesPersonId: null,
     creatorRoles: ['campaigner'],
+    hasCreator: true,
   }), {
     isSelfAssigned: false,
+    shouldNotifyAssignee: true,
+    isManagedAssignment: false,
+  })
+})
+
+test('service-created task without a known giver is silent', () => {
+  assert.deepEqual(taskNotificationScope({
+    taskCampaignerId: 'campaigner-b',
+    taskSalesPersonId: null,
+    creatorCampaignerId: null,
+    creatorSalesPersonId: null,
+    creatorRoles: [],
+    hasCreator: false,
+  }), {
+    isSelfAssigned: false,
+    shouldNotifyAssignee: false,
+    isManagedAssignment: false,
+  })
+})
+
+test('sales person receives a peer-assignment notification', () => {
+  assert.deepEqual(taskNotificationScope({
+    taskCampaignerId: null,
+    taskSalesPersonId: 'sales-b',
+    creatorCampaignerId: 'campaigner-a',
+    creatorSalesPersonId: null,
+    creatorRoles: ['campaigner'],
+    hasCreator: true,
+  }), {
+    isSelfAssigned: false,
+    shouldNotifyAssignee: true,
     isManagedAssignment: false,
   })
 })

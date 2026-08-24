@@ -22,7 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -47,6 +47,9 @@ interface Task {
   agency_id: string | null;
   campaigner_id: string | null;
   tenant_id: string | null;
+  created_by?: string | null;
+  created_at?: string;
+  creator_name?: string | null;
   self_reminder_at?: string | null;
   google_calendar_event_id?: string | null;
   duration_minutes?: number | null;
@@ -97,6 +100,7 @@ export function TaskDetailDialog({
   const [selfReminderAt, setSelfReminderAt] = useState("");
   const [viewLeadOpen, setViewLeadOpen] = useState(false);
   const [googleCalendarEventId, setGoogleCalendarEventId] = useState<string | null>(null);
+  const [creatorName, setCreatorName] = useState("");
 
   // Fetch full lead data for viewing
   const { data: fullLeadData } = useQuery({
@@ -142,6 +146,19 @@ export function TaskDetailDialog({
         );
         setAttachments(Array.isArray((t as any).attachments) ? (t as any).attachments : []);
         setGoogleCalendarEventId((t as any).google_calendar_event_id || null);
+        const knownCreatorName = (t as any).creator_name || "";
+        if (knownCreatorName) {
+          setCreatorName(knownCreatorName);
+        } else if ((t as any).created_by) {
+          const { data: creator } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", (t as any).created_by)
+            .maybeSingle();
+          setCreatorName(creator?.full_name || "");
+        } else {
+          setCreatorName("");
+        }
         setClientSearch("");
         setCampaignerSearch("");
         setLeadSearch("");
@@ -422,6 +439,14 @@ export function TaskDetailDialog({
                   placeholder="כותרת המשימה"
                 />
               </div>
+
+              {creatorName && (
+                <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                  <UserRound className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">המשימה ניתנה על ידי</span>
+                  <span className="font-medium">{creatorName}</span>
+                </div>
+              )}
 
               {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
                 <div className="space-y-3 rounded-md border p-3">

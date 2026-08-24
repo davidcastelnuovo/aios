@@ -3,7 +3,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Users, GripVertical, GripHorizontal } from "lucide-react";
+import { MessageSquare, Users, GripVertical, GripHorizontal, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ResizableTaskItemProps {
@@ -13,6 +13,7 @@ interface ResizableTaskItemProps {
     status: string;
     client_id: string | null;
     duration_minutes?: number;
+    creator_name?: string | null;
     clients?: { name: string } | null;
     task_updates?: { id: string }[];
     task_collaborators?: { id: string }[];
@@ -175,6 +176,9 @@ export function ResizableTaskItem({
             {task.clients?.name && (
               <span className="text-muted-foreground">{task.clients.name}</span>
             )}
+            {task.creator_name && (
+              <span className="text-muted-foreground"> • מאת {task.creator_name}</span>
+            )}
           </div>
 
           {(updatesCount > 0 || collaboratorsCount > 0) && (
@@ -251,6 +255,12 @@ export function ResizableTaskItem({
           {task.clients?.name && (
             <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5">
               {task.clients.name}
+            </Badge>
+          )}
+          {task.creator_name && (
+            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+              <UserRound className="h-3 w-3" />
+              מאת {task.creator_name}
             </Badge>
           )}
           

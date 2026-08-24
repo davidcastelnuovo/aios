@@ -426,7 +426,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       const { error } = await supabase.from("tasks").insert([taskPayload]);
       if (error) throw error;
 
-      // Note: task_assigned automation is fired by DB trigger trg_notify_task_assigned
+      // task_assigned is fired by trg_notify_task_notification_worker.
       // (AFTER INSERT OR UPDATE OF campaigner_id ON public.tasks). Do not invoke it
       // from the client to avoid duplicate notifications.
     },

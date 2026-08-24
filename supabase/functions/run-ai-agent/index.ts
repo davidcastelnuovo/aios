@@ -1827,12 +1827,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           agencyId = fallbackAgency?.id
         }
       }
+      // The authenticated/WhatsApp caller is the person who gave the task.
+      // Service-role inserts do not receive the tasks.created_by auth.uid()
+      // default, so persist it explicitly for attribution and notifications.
+      const taskCreatorId = userId && userId !== 'system' ? userId : null
       const { data, error } = await supabase.from('tasks').insert({
         title: args.title, agency_id: agencyId, campaigner_id: campaignerId,
         tenant_id: tenantId, priority: args.priority || 5, status: 'open', task_type: 'other',
         client_id: args.client_id || null, lead_id: args.lead_id || null,
         due_date: args.due_date, due_time: args.due_time, notes: args.notes,
-        duration_minutes: args.duration_minutes || null,
+        duration_minutes: args.duration_minutes || null, created_by: taskCreatorId,
       }).select('id, title, status').single()
       if (error) throw error
       // Auto-sync to Google Calendar — fire-and-forget; never fails the create_task call
