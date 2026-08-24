@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronsUpDown, ChevronLeft, Search, Building2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ALL_CLIENTS_FILTER } from "@/components/marketing/clientFilter";
 
 interface Props {
   tenantId: string | undefined;
   value: string | null;
   onChange: (id: string | null) => void;
   allowGeneral?: boolean;
+  allowAllClients?: boolean;
   generalLabel?: string;
+  allClientsLabel?: string;
 }
 
 interface Client {
@@ -28,7 +31,15 @@ interface Agency {
 const ALL_AGENCY = "__all__";
 const NO_AGENCY = "__none__";
 
-export function ClientSelector({ tenantId, value, onChange, allowGeneral = false, generalLabel = "תוכן כללי" }: Props) {
+export function ClientSelector({
+  tenantId,
+  value,
+  onChange,
+  allowGeneral = false,
+  allowAllClients = false,
+  generalLabel = "תוכן כללי",
+  allClientsLabel = "כל הלקוחות",
+}: Props) {
   const [open, setOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
@@ -57,6 +68,9 @@ export function ClientSelector({ tenantId, value, onChange, allowGeneral = false
   }, [tenantId]);
 
   const current = clients.find((c) => c.id === value);
+  const displayLabel = value === ALL_CLIENTS_FILTER
+    ? allClientsLabel
+    : current?.name ?? (allowGeneral ? generalLabel : "בחר לקוח");
 
   const clientCountByAgency = useMemo(() => {
     const m = new Map<string, number>();
@@ -94,7 +108,7 @@ export function ClientSelector({ tenantId, value, onChange, allowGeneral = false
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="min-w-[220px] justify-between" dir="rtl">
-          <span className="truncate">{current?.name ?? (allowGeneral ? generalLabel : "בחר לקוח")}</span>
+          <span className="truncate">{displayLabel}</span>
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -111,12 +125,26 @@ export function ClientSelector({ tenantId, value, onChange, allowGeneral = false
                   <User className="h-4 w-4 text-muted-foreground" /> {generalLabel}
                 </button>
               )}
+              {allowAllClients && (
+                <button
+                  className={cn(
+                    "flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-muted/60",
+                    value === ALL_CLIENTS_FILTER && "bg-muted",
+                  )}
+                  onClick={() => { onChange(ALL_CLIENTS_FILTER); setOpen(false); }}
+                >
+                  <span className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4" /> {allClientsLabel}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{clients.length}</span>
+                </button>
+              )}
               <button
                 className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-muted/60"
                 onClick={() => setSelectedAgency(ALL_AGENCY)}
               >
                 <span className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" /> כל הלקוחות
+                  <Building2 className="h-4 w-4 text-muted-foreground" /> לפי סוכנות
                 </span>
                 <span className="text-xs text-muted-foreground">{clients.length}</span>
               </button>
