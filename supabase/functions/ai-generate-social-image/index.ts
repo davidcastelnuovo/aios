@@ -64,7 +64,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls, size: requestedSize, quality: requestedQuality } = await req.json();
+    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls, reference_role: requestedRole, size: requestedSize, quality: requestedQuality } = await req.json();
 
     if (!prompt || !tenant_id) {
       return new Response(
@@ -132,9 +132,13 @@ serve(async (req) => {
     if (files.length > 0) {
       const form = new FormData();
       form.append("model", "gpt-image-1");
+      const referenceRole = requestedRole === "technique" ? "technique" : "continuity";
+      const referencePrefix = referenceRole === "technique"
+        ? "Use attached image(s) as TECHNIQUE only (material, paper, ink, light, color family). Do not copy faces, pose, crop, lettering, logos, or layout. Output must contain zero letters, digits, or logos. "
+        : "Continue this exact visual world. Match faces, wardrobe, lighting, lens and color grade from the reference. Do not copy or invent lettering or logos. ";
       form.append(
         "prompt",
-        `Continue this exact visual world. Match faces, wardrobe, lighting, lens and color grade from the reference. ${prompt}`,
+        `${referencePrefix}${prompt}`,
       );
       form.append("n", "1");
       form.append("size", size);

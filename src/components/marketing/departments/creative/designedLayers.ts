@@ -364,13 +364,14 @@ export const buildCopySceneBrief = ({
   const idea = strong || parts.headline || parts.body;
   const lines = [
     "IRON RULE — SUBJECT FIRST. Style may change light, material and crop. It may NOT change what the ad is about.",
-    idea && `STAGE THIS IDEA as a literal situation (do not paint any letters): "${idea}"`,
-    angle && `This variation's angle: ${angle}. A stranger must see this specific idea — not a prettier default from the style board.`,
-    parts.headline && parts.headline !== idea && `Headline beat: ${parts.headline}`,
-    parts.offer && parts.offer !== idea && `Offer that must be visible in the scene: ${parts.offer}`,
-    parts.body && parts.body !== idea && `Story beat: ${parts.body}`,
+    idea && `STAGE THIS IDEA as a silent picture (people, objects, light — no letters). COPY CONTEXT — meaning only, NEVER draw these characters: «${idea}»`,
+    angle && `This variation's angle (meaning only, do not paint it): ${angle}. A stranger must see this specific idea — not a prettier default from the style board.`,
+    parts.headline && parts.headline !== idea && `Headline beat (do not paint): ${parts.headline}`,
+    parts.offer && parts.offer !== idea && `Offer that must be visible as a situation, not as written type: ${parts.offer}`,
+    parts.body && parts.body !== idea && `Story beat (do not paint): ${parts.body}`,
     brief?.trim() && `Campaign brief (supporting only — do not replace the variation idea): ${brief.trim().slice(0, 280)}`,
     instructions?.trim() && `Constraints: ${instructions.trim().slice(0, 180)}`,
+    "Any Hebrew or English in this brief is context for the scene. Drawing it — or a gibberish stand-in — is a fail.",
     "The still fails if it is a pretty style-board that could belong to any other variation.",
     "Forbidden substitutions: Santorini, generic sea arch, airplane wing, suitcase, jet engine, random phone light-trails — unless the copy is actually about those things.",
   ].filter(Boolean);

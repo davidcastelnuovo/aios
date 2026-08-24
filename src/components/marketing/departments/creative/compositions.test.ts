@@ -27,7 +27,7 @@ test("pickCompositionId prefers an unused structure", () => {
 });
 
 test("image generation lock no longer reserves the old caption template", () => {
-  const source = readFileSync(new URL("../../lib/generateCreativeImage.ts", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../../lib/creativeImagePrompt.ts", import.meta.url), "utf8");
   assert.match(source, /Do NOT reserve a top headline strip/);
   assert.match(source, /garbles Hebrew/);
   assert.doesNotMatch(source, /reserved top-right pad/);

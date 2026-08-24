@@ -95,6 +95,7 @@ test("copy scene brief stages chat-scroll copy, not a style postcard", () => {
 הנעה לפעולה: כתבו "רודוס" בוואטסאפ`,
   });
   assert.match(scene, /STAGE THIS IDEA/);
+  assert.match(scene, /NEVER draw these characters/);
   assert.match(scene, /מגולל לצ'אט/);
   assert.match(scene, /צ'אט/);
   assert.match(scene, /FORBIDDEN SUBSTITUTION/i);

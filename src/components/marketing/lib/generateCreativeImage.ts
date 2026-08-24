@@ -8,6 +8,10 @@ import {
   type ImageQuality,
   type ImageSize,
 } from "@/components/marketing/departments/creative/imageCost";
+import { wrapCreativeImagePrompt, type CreativeReferenceRole } from "@/components/marketing/lib/creativeImagePrompt";
+
+export type { CreativeReferenceRole } from "@/components/marketing/lib/creativeImagePrompt";
+export { NO_TEXT_ON_IMAGE, buildNoGlyphLock, wrapCreativeImagePrompt } from "@/components/marketing/lib/creativeImagePrompt";
 
 interface GenerateCreativeImageArgs {
   supabase: SupabaseClient;
@@ -16,12 +20,11 @@ interface GenerateCreativeImageArgs {
   stageId: string;
   prompt: string;
   referenceImageUrls?: string[];
+  referenceRole?: CreativeReferenceRole;
   size?: ImageSize;
   quality?: ImageQuality;
+  regenerate?: boolean;
 }
-
-export const NO_TEXT_ON_IMAGE =
-  "No letters, numbers, captions, logos, watermarks, buttons, or typography anywhere — the image API still garbles Hebrew glyphs, so exact type and the real logo are composited later. Do not invent or redraw a logo. Do NOT reserve a top headline strip, a bottom CTA pill, or a top-right logo pad (that is the old caption template). Build a finished multi-element graphic poster: several designed pieces already in the still (rail, slash, badge, split field, shadow pocket, object, light) so type can sit inside the art. No Hebrew and no English words.";
 
 async function invokeSocialImage(
   supabase: SupabaseClient,
@@ -31,14 +34,17 @@ async function invokeSocialImage(
   referenceImageUrls?: string[],
   size?: GenerateCreativeImageArgs["size"],
   quality?: GenerateCreativeImageArgs["quality"],
+  referenceRole?: CreativeReferenceRole,
+  regenerate?: boolean,
 ) {
   return supabase.functions.invoke("ai-generate-social-image", {
     body: {
-      prompt: `${prompt}\n\n${NO_TEXT_ON_IMAGE}`,
+      prompt: wrapCreativeImagePrompt(prompt, { regenerate }),
       tenant_id: tenantId,
       post_id: itemId,
       reference_image_url: referenceImageUrls?.[0],
       reference_image_urls: referenceImageUrls,
+      reference_role: referenceRole,
       size,
       quality,
     },
@@ -92,7 +98,7 @@ export const estimateCreativeImageCall = ({
   referenceCount?: number;
 }): ImageGenerationCost =>
   estimateGptImage1({
-    prompt: `${prompt}\n\n${NO_TEXT_ON_IMAGE}`,
+    prompt: wrapCreativeImagePrompt(prompt),
     quality,
     size,
     referenceCount,
@@ -106,8 +112,10 @@ export async function generateCreativeImage({
   stageId,
   prompt,
   referenceImageUrls,
+  referenceRole,
   size = "1024x1024",
   quality = "high",
+  regenerate,
 }: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean; cost: ImageGenerationCost }> {
   const estimate = estimateCreativeImageCall({
     prompt,
@@ -115,7 +123,17 @@ export async function generateCreativeImage({
     size,
     referenceCount: referenceImageUrls?.length ?? 0,
   });
-  const socialResult = await invokeSocialImage(supabase, tenantId, itemId, prompt, referenceImageUrls, size, quality);
+  const socialResult = await invokeSocialImage(
+    supabase,
+    tenantId,
+    itemId,
+    prompt,
+    referenceImageUrls,
+    size,
+    quality,
+    referenceRole,
+    regenerate,
+  );
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;
     if (imageUrl && typeof imageUrl === "string") {

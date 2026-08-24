@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
+import { buildNoGlyphLock } from "@/components/marketing/lib/creativeImagePrompt";
 import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
 import {
   brandKitPrompt,
@@ -588,6 +589,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         stageId: readyContext.creativeStage.id,
         prompt: framePrompt,
         referenceImageUrls,
+        referenceRole: referenceImageUrls.length ? "continuity" : undefined,
         size: imageSizeForFormat(defaultFormat(selected.payload)),
         quality: "medium",
       });
@@ -748,6 +750,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     name,
     styleSource,
     existing,
+    regenerate,
   }: {
     copyText: string;
     copyKey?: string;
@@ -759,6 +762,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     name?: string;
     styleSource?: CreativeVariation;
     existing?: CreativeVariation[];
+    regenerate?: boolean;
   }): Promise<CreativeVariation> => {
     if (!selected) throw new Error("לא נבחר פרויקט");
     throwIfGenerationAborted(generateAbortRef.current);
@@ -795,6 +799,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       .slice(-4);
     const creativePrompt = [
       `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
+      buildNoGlyphLock({ regenerate }),
       sceneBrief,
       styleSource
         ? buildStyleContinuityLock({
@@ -822,12 +827,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         }),
       buildStaticQualityLock({ selectedStyle: !!costume }),
       brandKitPrompt(kit),
-      directorNote && `Art director REJECT — do not repeat these mistakes: ${directorNote}`,
+      directorNote && `Art director REJECT (visual mistakes only — if they mention type/text, the fix is a letter-empty PNG, never new painted words): ${directorNote}`,
       styleSource
         ? `Format ${format}. Same TECHNIQUE family (paper, ink, light, color). Completely different picture, people, and props for this copy.`
         : `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
       kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
-      "RTL/production: Hebrew is composited as layers after generation — the image API still garbles Hebrew (reversed letters, missing glyphs). Do not paint letters.",
+      "RTL/production: Hebrew is composited as layers after generation — the image API still garbles Hebrew (reversed letters, missing glyphs, gibberish). Do not paint letters.",
       "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes, reprinting a previous collage.",
     ].filter(Boolean).join("\n");
     throwIfGenerationAborted(generateAbortRef.current);
@@ -838,8 +843,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       stageId: readyContext.creativeStage.id,
       prompt: creativePrompt || selected.title || "Marketing creative",
       referenceImageUrls: styleRefUrl ? [styleRefUrl] : undefined,
+      referenceRole: styleRefUrl ? "technique" : undefined,
       size: imageSizeForFormat(format),
       quality: "high",
+      regenerate,
     });
     const created = makeVariation({
       imageUrl,
@@ -887,6 +894,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         name: replaceTarget
           ? (replaceTarget.name.includes("·") ? replaceTarget.name : `${replaceTarget.name} · ${style.label}`)
           : undefined,
+        regenerate: !!replaceTarget,
       });
       const nextVariations = replaceTarget
         ? variations.map((variation) => variation.id === replaceTarget.id ? { ...replaceTarget, ...nextVariation, rejected: false } : variation)
@@ -1011,6 +1019,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         rejectNote: rejectNote.trim(),
         parentId: rejectTarget.id,
         name: `${rejectTarget.copyLabel || rejectTarget.name} · תיקון`,
+        regenerate: true,
       });
       const nextVariations = [
         ...variations.map((variation) => variation.id === rejectTarget.id ? { ...variation, rejected: true, rejectNote: rejectNote.trim() } : variation),

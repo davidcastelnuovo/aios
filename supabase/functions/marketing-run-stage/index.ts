@@ -264,7 +264,7 @@ serve(async (req) => {
           model: TEXT_MODEL,
           messages: [
             { role: "system", content: systemPrompt || "You are a creative director. Generate concise photorealistic image prompts in English." },
-            { role: "user", content: userPrompt + "\n\nGenerate a concise gpt-image-1 prompt (max 200 words) in English for this marketing creative. Focus on visual elements, style, composition, and lighting. Do not include on-image text unless explicitly requested in the brief." },
+            { role: "user", content: userPrompt + "\n\nGenerate a concise gpt-image-1 prompt (max 200 words) in English for this marketing creative. Focus on visual elements, style, composition, and lighting. NEVER request on-image text, letters, digits, captions, or logos — Hebrew type is composited later and the image API garbles it." },
           ],
           max_tokens: 300,
         }),
@@ -285,7 +285,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: IMAGE_MODEL,
-          prompt: `${imagePrompt}. Professional marketing creative, high quality, polished composition.`,
+          prompt: `${imagePrompt}. Professional marketing creative, high quality, polished composition. ZERO letters, digits, captions, logos, or watermarks on the image — Hebrew type is composited later.`,
           n: 1,
           size: imageSize,
           quality: "medium",
