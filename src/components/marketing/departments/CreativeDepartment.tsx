@@ -55,12 +55,13 @@ import {
 interface Props {
   clientFilter: MarketingClientFilter;
   tenantId: string;
+  onClientChange?: (id: string | null) => void;
 }
 
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
-export function CreativeDepartment({ clientFilter, tenantId }: Props) {
+export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedVariationId, setSelectedVariationId] = useState<string | null>(null);
@@ -684,8 +685,14 @@ export function CreativeDepartment({ clientFilter, tenantId }: Props) {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         tenantId={tenantId}
+        clientFilter={clientFilter}
         defaultClientId={clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null}
-        onCreated={async (id) => {
+        onClientChange={onClientChange}
+        onCreated={async (id, createdClientId) => {
+          if (onClientChange && createdClientId !== undefined) {
+            const filterClient = clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null;
+            if (createdClientId !== filterClient) onClientChange(createdClientId);
+          }
           setSelectedId(id);
           setWorkspaceTab("project");
           setCreateOpen(false);
@@ -721,12 +728,14 @@ export function CreativeDepartment({ clientFilter, tenantId }: Props) {
   );
 }
 
-function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCreated }: {
+function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultClientId, onClientChange, onCreated }: {
   open: boolean;
   onClose: () => void;
   tenantId: string;
+  clientFilter: MarketingClientFilter;
   defaultClientId?: string | null;
-  onCreated: (id: string) => void;
+  onClientChange?: (id: string | null) => void;
+  onCreated: (id: string, createdClientId: string | null) => void;
 }) {
   const [mode, setMode] = useState<"manual" | "from_copy">("manual");
   const [title, setTitle] = useState("");
@@ -737,6 +746,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCrea
   const [selectedCopyId, setSelectedCopyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [assignedClientId, setAssignedClientId] = useState<string | null>(defaultClientId ?? null);
+  const clientLocked = !!clientFilter && clientFilter !== ALL_CLIENTS_FILTER;
 
   const { data: copyItems = [] } = useQuery({
     queryKey: ["creative-create-copy-items", assignedClientId, tenantId],
@@ -781,8 +791,18 @@ function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCrea
   }, [projectType, format]);
 
   const canCreate = mode === "manual"
-    ? title.trim() && brief.trim()
-    : !!assignedClientId && !!selectedCopyId && title.trim();
+    ? !!title.trim()
+    : !!assignedClientId && !!selectedCopyId && !!title.trim();
+
+  const createHint = !canCreate && !saving
+    ? mode === "from_copy" && !assignedClientId
+      ? "בחר לקוח (לא תוכן כללי) כדי לשייך פרויקט קופי"
+      : mode === "from_copy" && !selectedCopyId
+        ? "בחר פרויקט קופי מהרשימה"
+        : !title.trim()
+          ? "הזן שם לפרויקט"
+          : null
+    : null;
 
   const create = async () => {
     if (!canCreate) return;
@@ -801,8 +821,23 @@ function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCrea
         stageId = stages?.find((stage) => stage.stage_type === "creative")?.id ?? null;
         if (!stageId) throw new Error("שלב הקריאייטיב לא נמצא");
       }
-      const initialStoryboard = projectType === "video" ? [makeStoryboardFrame(1)] : undefined;
       const linkedCopy = mode === "from_copy" ? selectedCopyItem : null;
+      const payload: Record<string, unknown> = {
+        brief_text: brief.trim() || String(linkedCopy?.payload?.brief_text ?? "") || undefined,
+        copy_text: copyText.trim() || undefined,
+        format,
+        project_type: projectType,
+        department: "creative",
+        intake_source: mode === "from_copy" ? "copy_link" : "manual",
+        handoff_from: mode === "from_copy" ? "copy" : undefined,
+        linked_copy_item_id: linkedCopy?.id,
+        linked_copy_title: linkedCopy?.title,
+        content_type: linkedCopy?.payload?.content_type,
+        channel: linkedCopy?.payload?.channel,
+        instructions: linkedCopy?.payload?.instructions,
+      };
+      if (projectType === "video") payload.storyboard = [makeStoryboardFrame(1)];
+
       const { data, error } = await supabase.from("marketing_work_items").insert({
         tenant_id: tenantId,
         client_id: assignedClientId,
@@ -811,25 +846,11 @@ function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCrea
         title: title.trim(),
         status: "draft",
         target_channel: projectType === "video" ? "video" : "creative",
-        payload: {
-          brief_text: brief.trim() || String(linkedCopy?.payload?.brief_text ?? ""),
-          copy_text: copyText.trim() || undefined,
-          format,
-          project_type: projectType,
-          storyboard: initialStoryboard,
-          department: "creative",
-          intake_source: mode === "from_copy" ? "copy_link" : "manual",
-          handoff_from: mode === "from_copy" ? "copy" : undefined,
-          linked_copy_item_id: linkedCopy?.id,
-          linked_copy_title: linkedCopy?.title,
-          content_type: linkedCopy?.payload?.content_type,
-          channel: linkedCopy?.payload?.channel,
-          instructions: linkedCopy?.payload?.instructions,
-        },
+        payload,
       }).select("id").single();
       if (error) throw error;
       toast.success(mode === "from_copy" ? "פרויקט קריאייטיב נוצר ושויך לקופי הקיים" : "הפרויקט נכנס למחלקת הקריאייטיב");
-      onCreated(data.id);
+      onCreated(data.id, assignedClientId);
     } catch (error: unknown) {
       toast.error(errorMessage(error, "יצירת הפרויקט נכשלה"));
     } finally {
@@ -839,9 +860,12 @@ function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCrea
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
-      <DialogContent className="max-w-2xl" dir="rtl">
-        <DialogHeader><DialogTitle>פרויקט קריאייטיב חדש</DialogTitle></DialogHeader>
-        <div className="grid gap-4 py-2">
+      <DialogContent className="flex max-h-[min(90vh,760px)] max-w-2xl flex-col gap-0 overflow-hidden p-0" dir="rtl">
+        <DialogHeader className="shrink-0 border-b px-6 py-4">
+          <DialogTitle>פרויקט קריאייטיב חדש</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="grid gap-4 px-6 py-4">
           <Tabs value={mode} onValueChange={(value) => setMode(value as "manual" | "from_copy")}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="manual">בריף ידני</TabsTrigger>
@@ -851,16 +875,29 @@ function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCrea
           <div>
             <Label>שיוך לקוח</Label>
             <div className="mt-1">
-              <ClientSelector tenantId={tenantId} value={assignedClientId} onChange={(id) => { setAssignedClientId(id); setSelectedCopyId(null); }} allowGeneral generalLabel="תוכן כללי — ללא לקוח" />
+              {clientLocked ? (
+                <ClientSelector tenantId={tenantId} value={assignedClientId} onChange={() => undefined} disabled />
+              ) : (
+                <ClientSelector
+                  tenantId={tenantId}
+                  value={assignedClientId}
+                  onChange={(id) => { setAssignedClientId(id); setSelectedCopyId(null); }}
+                  allowGeneral={mode === "manual"}
+                  generalLabel="תוכן כללי — ללא לקוח"
+                />
+              )}
             </div>
+            {clientLocked && (
+              <p className="mt-2 text-xs text-muted-foreground">הפרויקט ייווצר עבור הלקוח שנבחר במסנן ההדר</p>
+            )}
             {mode === "from_copy" && !assignedClientId && (
-              <p className="mt-2 text-xs text-amber-600">בחר לקוח כדי לראות פרויקטי קופי זמינים לשיוך</p>
+              <p className="mt-2 text-xs text-amber-600">מצב שיוך לקופי דורש בחירת לקוח ספציפי</p>
             )}
           </div>
           {mode === "from_copy" ? (
             <div>
               <Label>פרויקט קופי לשיוך</Label>
-              <ScrollArea className="mt-2 max-h-48 rounded-xl border">
+              <ScrollArea className="mt-2 max-h-40 rounded-xl border">
                 <div className="space-y-2 p-2">
                   {!assignedClientId ? (
                     <p className="py-6 text-center text-sm text-muted-foreground">בחר לקוח קודם</p>
@@ -888,9 +925,9 @@ function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCrea
           <div>
             <Label>סוג פרויקט</Label>
             <Select value={projectType} onValueChange={(value: CreativeProjectType) => setProjectType(value)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="בחר סוג פרויקט" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="static">מודעה / גрафיקה סטטית</SelectItem>
+                <SelectItem value="static">מודעה / גרפיקה סטטית</SelectItem>
                 <SelectItem value="video">וידאו / storyboard</SelectItem>
               </SelectContent>
             </Select>
@@ -909,18 +946,21 @@ function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCrea
           </div>
           {mode === "manual" ? (
             <>
-              <div><Label>בריף / חומר גלם</Label><Textarea className="mt-1 min-h-32" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, סגנון, רפרנסים, מגבלות" /></div>
+              <div><Label>בריף / חומר גלם (אופציונלי)</Label><Textarea className="mt-1 min-h-24" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, סגנון, רפרנסים, מגבלות" /></div>
               <div><Label>קופי משויך (אופציונלי)</Label><Textarea className="mt-1 min-h-20" value={copyText} onChange={(event) => setCopyText(event.target.value)} placeholder="אפשר להדביק קופi ידנית או לשייך אחר כך ממחלקת הקופi" /></div>
             </>
           ) : selectedCopyItem ? (
-            <div className="rounded-xl border bg-muted/20 p-3 text-sm">
+            <div className="max-h-32 overflow-y-auto rounded-xl border bg-muted/20 p-3 text-sm">
               <div className="font-semibold">קופi שיושב לפרויקט</div>
               <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{copyText || "אין טקסט קופi"}</p>
               {brief ? <p className="mt-3 whitespace-pre-wrap text-xs text-muted-foreground">{brief}</p> : null}
             </div>
           ) : null}
-          <Separator />
-          <Button onClick={create} disabled={saving || !canCreate} className="gap-1.5 bg-pink-600 hover:bg-pink-700">
+          </div>
+        </ScrollArea>
+        <div className="shrink-0 border-t bg-background px-6 py-4">
+          {createHint ? <p className="mb-2 text-xs text-amber-600">{createHint}</p> : null}
+          <Button onClick={create} disabled={saving || !canCreate} className="w-full gap-1.5 bg-pink-600 hover:bg-pink-700">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {mode === "from_copy" ? "צור קריאייטיב מקופi קיים" : "הכנס למחלקת קריאייטיב"}
           </Button>

@@ -190,7 +190,7 @@ export default function MarketingDepartment() {
         </Suspense>
       ) : department === "creative" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-pink-500" /></div>}>
-          <CreativeDepartment clientFilter={clientFilter} tenantId={tenantId} />
+          <CreativeDepartment clientFilter={clientFilter} tenantId={tenantId} onClientChange={selectClient} />
         </Suspense>
       ) : department === "seo" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-emerald-500" /></div>}>
