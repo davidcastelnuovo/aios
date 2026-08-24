@@ -18,6 +18,23 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+// Supabase projects that migrated to sb_secret keys may expose a different
+// SUPABASE_SERVICE_ROLE_KEY to functions than the still-valid legacy
+// service_role JWT. The gateway verifies this JWT before invocation
+// (verify_jwt=true in config.toml), so its signed role claim is authoritative.
+function isServiceRoleJwt(token: string): boolean {
+  try {
+    const payloadPart = token.split(".")[1];
+    if (!payloadPart) return false;
+    const base64 = payloadPart.replace(/-/g, "+").replace(/_/g, "/")
+      .padEnd(Math.ceil(payloadPart.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(base64));
+    return payload?.role === "service_role";
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -29,12 +46,13 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const token = authHeader.replace(/^Bearer\s+/i, "");
+    const isServiceCall = token === SERVICE_ROLE_KEY || isServiceRoleJwt(token);
     const body = await req.json().catch(() => ({}));
     const tenantId = typeof body.tenant_id === "string" ? body.tenant_id : null;
     if (!tenantId) return json({ error: "tenant_id is required" }, 400);
 
     let preferredUserId: string | null = null;
-    if (token !== SERVICE_ROLE_KEY) {
+    if (!isServiceCall) {
       const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
         global: { headers: { Authorization: authHeader } },
       });
