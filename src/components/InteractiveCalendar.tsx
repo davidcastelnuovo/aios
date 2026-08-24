@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { getCalendarEvents, updateCalendarEvent, deleteCalendarEvent, CalendarProvider } from "@/lib/calendarApi";
+import { markLinkedTaskDoneForCalendarEvent } from "@/lib/taskCalendarSync";
 
 function getStoredProvider(): CalendarProvider {
   return (localStorage.getItem("calendar_provider_mode") as CalendarProvider) || "direct";
@@ -119,11 +120,13 @@ export function InteractiveCalendar() {
   // Delete event mutation
   const deleteMutation = useMutation({
     mutationFn: async (eventId: string) => {
+      await markLinkedTaskDoneForCalendarEvent(eventId);
       return await deleteCalendarEvent(eventId, { tenantId: tenantId!, provider: getStoredProvider() });
     },
     onSuccess: () => {
       toast.success('האירוע נמחק בהצלחה');
       queryClient.invalidateQueries({ queryKey: ['calendar-events', userId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', tenantId] });
       setSelectedEvent(null);
     },
     onError: (error: Error) => {

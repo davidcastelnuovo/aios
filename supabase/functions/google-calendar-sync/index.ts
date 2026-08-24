@@ -12,6 +12,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { calendarEventCancelledTaskUpdates } from "../_shared/calendar-task-sync.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -157,7 +158,7 @@ async function performSync(serviceClient: any, userId: string) {
 
   // Apply changes to local tasks
   let updated = 0;
-  let cleared = 0;
+  let completed = 0;
   for (const ev of allEvents) {
     if (!ev.id) continue;
     const { data: task } = await serviceClient
@@ -168,12 +169,12 @@ async function performSync(serviceClient: any, userId: string) {
     if (!task) continue;
 
     if (ev.status === 'cancelled') {
-      // Event was deleted in Google -> unschedule the task (don't delete).
+      // Event was deleted in Google -> mark the linked AIOS task done.
       await serviceClient
         .from('tasks')
-        .update({ due_date: null, due_time: null, google_calendar_event_id: null })
+        .update(calendarEventCancelledTaskUpdates())
         .eq('id', task.id);
-      cleared++;
+      completed++;
       continue;
     }
 
@@ -209,7 +210,7 @@ async function performSync(serviceClient: any, userId: string) {
     })
     .eq('user_id', userId);
 
-  return { ok: true, updated, cleared, events: allEvents.length };
+  return { ok: true, updated, completed, events: allEvents.length };
 }
 
 serve(async (req) => {

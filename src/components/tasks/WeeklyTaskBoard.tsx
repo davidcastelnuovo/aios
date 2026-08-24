@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { markLinkedTaskDoneForCalendarEvent } from "@/lib/taskCalendarSync";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -819,7 +820,9 @@ export function WeeklyTaskBoard() {
   // Delete task mutation - עם מחיקה מגוגל קלנדר
   const deleteTask = useMutation({
     mutationFn: async ({ taskId, googleCalendarEventId }: { taskId: string; googleCalendarEventId?: string | null }) => {
-      // אם יש eventId - מחק גם מגוגל קלנדר
+      const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+      if (error) throw error;
+
       if (googleCalendarEventId) {
         try {
           const { deleteCalendarEvent: delCalEvent } = await import("@/lib/calendarApi");
@@ -828,9 +831,6 @@ export function WeeklyTaskBoard() {
           console.warn("לא הצלחנו למחוק מיומן גוגל:", calendarError);
         }
       }
-      
-      const { error } = await supabase.from("tasks").delete().eq("id", taskId);
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
@@ -897,10 +897,12 @@ export function WeeklyTaskBoard() {
   // Delete calendar event mutation
   const deleteCalendarEvent = useMutation({
     mutationFn: async (eventId: string) => {
+      await markLinkedTaskDoneForCalendarEvent(eventId);
       const { deleteCalendarEvent: delCalEvent } = await import("@/lib/calendarApi");
       return await delCalEvent(eventId, { tenantId: tenantId! });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
       toast.success("האירוע נמחק בהצלחה");
       setCalendarEventDialogOpen(false);
