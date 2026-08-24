@@ -6,8 +6,12 @@ import { generateCreativeImage } from "@/components/marketing/lib/generateCreati
 import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
 import {
   brandKitPrompt,
+  deriveBrandBook,
+  filesFromAttachments,
   getBrandKit,
   isGenerationAborted,
+  mergeStyleReferences,
+  styleRefsFromClientFiles,
   throwIfGenerationAborted,
 } from "@/components/marketing/departments/creative/brandKit";
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
@@ -208,12 +212,19 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("id,name,website,industry,notes")
+        .select("id,name,website,industry,notes,attachments")
         .eq("id", selected!.client_id!)
         .eq("tenant_id", tenantId)
         .maybeSingle();
       if (error) throw error;
-      return data as { id: string; name: string; website: string | null; industry: string | null; notes: string | null } | null;
+      return data as {
+        id: string;
+        name: string;
+        website: string | null;
+        industry: string | null;
+        notes: string | null;
+        attachments: unknown;
+      } | null;
     },
   });
 
@@ -305,6 +316,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         logo_url: draft.logoUrl || null,
         brand_book: draft.brandBook || null,
         style_references: draft.styleReferences,
+        client_website: draft.clientWebsite || null,
         department: "creative",
       };
       const { error } = await supabase
@@ -320,6 +332,86 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     } finally {
       setSaving(false);
     }
+  };
+
+  const assignCreativeClient = async (nextClientId: string | null, draft: CreativeProjectDraft) => {
+    if (!selected) return;
+    let pipelineId: string | null = null;
+    let stageId: string | null = null;
+    let website: string | null = null;
+    let attachments: unknown = [];
+    let clientName: string | undefined;
+    let industry: string | undefined;
+    let notes: string | undefined;
+    if (nextClientId) {
+      const pipeline = await ensurePipelineForClient({ clientId: nextClientId, tenantId, track: "campaigns" });
+      if (pipeline) {
+        const { data: stages, error } = await supabase
+          .from("marketing_pipeline_stages")
+          .select("id,stage_type")
+          .eq("pipeline_id", pipeline.id);
+        if (error) throw error;
+        pipelineId = pipeline.id;
+        stageId = stages?.find((stage) => stage.stage_type === "creative")?.id ?? null;
+      }
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .select("id,name,website,industry,notes,attachments")
+        .eq("id", nextClientId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (clientError) throw clientError;
+      website = client?.website ?? null;
+      attachments = client?.attachments ?? [];
+      clientName = client?.name ?? undefined;
+      industry = client?.industry ?? undefined;
+      notes = client?.notes ?? undefined;
+      onClientChange?.(nextClientId);
+    }
+    const clientFiles = filesFromAttachments(attachments);
+    const pulledRefs = styleRefsFromClientFiles(supabase, attachments);
+    const styleReferences = mergeStyleReferences(draft.styleReferences, pulledRefs);
+    const brandBook = draft.brandBook?.source === "manual" && draft.brandBook.notes
+      ? draft.brandBook
+      : deriveBrandBook({
+        clientName,
+        website: website ?? undefined,
+        industry,
+        brief: [draft.briefText, notes].filter(Boolean).join("\n"),
+        copy: draft.copyText,
+        colors: draft.brandBook?.colors,
+        existing: draft.brandBook,
+      });
+    const nextPayload = {
+      ...(selected.payload ?? {}),
+      brief_text: draft.briefText.trim(),
+      copy_text: draft.copyText.trim() || undefined,
+      instructions: draft.instructions.trim() || undefined,
+      format: draft.format,
+      project_type: draft.projectType,
+      visual_style: draft.visualStyle,
+      logo_url: draft.logoUrl || null,
+      brand_book: brandBook,
+      style_references: styleReferences,
+      client_website: website,
+      client_files: clientFiles.map((file) => ({ name: file.name, path: file.path ?? null })),
+      department: "creative",
+    };
+    const keepStage = !!nextClientId && nextClientId === selected.client_id && !!selected.current_stage_id;
+    const { error } = await supabase.from("marketing_work_items").update({
+      title: draft.title.trim() || selected.title,
+      client_id: nextClientId,
+      pipeline_id: pipelineId,
+      current_stage_id: nextClientId ? (keepStage ? selected.current_stage_id : stageId) : null,
+      payload: nextPayload,
+    }).eq("id", selected.id).eq("tenant_id", tenantId);
+    if (error) throw error;
+    await Promise.all([
+      refresh(),
+      queryClient.invalidateQueries({ queryKey: ["creative-client", nextClientId, tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ["creative-department-context", nextClientId, tenantId] }),
+    ]);
+    toast.success(nextClientId ? "נמשך האתר, הקבצים והסגנון של הלקוח" : "השיוך הוסר");
   };
 
   const persistStoryboard = async (nextFrames: StoryboardFrame[], message = "ה-storyboard נשמר") => {
@@ -1258,7 +1350,14 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             <SheetTitle>עריכת פרויקט</SheetTitle>
           </SheetHeader>
           {selected ? (
-            <CreativeBriefEditor item={selected} tenantId={tenantId} client={selectedClient} onSave={saveProject} saving={saving} />
+            <CreativeBriefEditor
+              item={selected}
+              tenantId={tenantId}
+              client={selectedClient}
+              onSave={saveProject}
+              onAssignClient={assignCreativeClient}
+              saving={saving}
+            />
           ) : null}
         </SheetContent>
       </Sheet>

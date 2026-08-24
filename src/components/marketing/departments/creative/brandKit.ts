@@ -18,8 +18,16 @@ export interface StyleReference {
 
 export interface CreativeBrandKit {
   logoUrl?: string;
+  website?: string;
   brandBook?: BrandBook;
   styleReferences: StyleReference[];
+}
+
+export interface ClientAttachment {
+  name: string;
+  path?: string;
+  size?: number;
+  type?: string;
 }
 
 const asString = (value: unknown) => typeof value === "string" ? value : undefined;
@@ -34,6 +42,7 @@ export const getBrandKit = (payload: Record<string, unknown> | null | undefined)
   const refs = payload?.style_references;
   return {
     logoUrl: asString(payload?.logo_url),
+    website: asString(payload?.client_website),
     brandBook: book ? {
       name: asString(book.name),
       colors: asColors(book.colors),
@@ -55,6 +64,7 @@ export const brandKitPrompt = (kit: CreativeBrandKit) => {
     kit.brandBook?.name && `Brand: ${kit.brandBook.name}`,
     kit.brandBook?.colors.length ? `Brand colors (use these, plus one controlled accent): ${kit.brandBook.colors.join(", ")}` : undefined,
     kit.brandBook?.voice && `Brand voice: ${kit.brandBook.voice}`,
+    kit.website && `Brand website: ${kit.website}. Match that commercial world (color temperature, materials, locations) without copying UI chrome or inventing a logo.`,
     kit.logoUrl && "A logo asset exists and will be composited later — reserve a clean top-right pad (~18% width) with no face or clutter. Do not redraw or invent a logo.",
     kit.styleReferences.length > 0 && `${kit.styleReferences.length} style-reference image(s) attached: match their art-direction level (light, material, grade) without copying layout, lettering, or logo.`,
   ].filter(Boolean);
@@ -163,6 +173,43 @@ export const sampleColorsFromFile = async (file: File): Promise<string[]> => {
   bitmap.close();
   return sampleColorsFromImageData(data);
 };
+
+export const filesFromAttachments = (attachments: unknown): ClientAttachment[] => {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.flatMap((file) => {
+    if (!file || typeof file !== "object") return [];
+    const rec = file as Record<string, unknown>;
+    const name = typeof rec.name === "string" ? rec.name : "";
+    if (!name) return [];
+    return [{
+      name,
+      path: typeof rec.path === "string" ? rec.path : undefined,
+      size: typeof rec.size === "number" ? rec.size : undefined,
+      type: typeof rec.type === "string" ? rec.type : undefined,
+    }];
+  });
+};
+
+export const isImageAttachment = (file: ClientAttachment) =>
+  (file.type?.startsWith("image/") ?? false) || /\.(png|jpe?g|webp|gif|svg)$/i.test(file.name);
+
+export const websiteHref = (website?: string | null) => {
+  if (!website) return undefined;
+  return /^https?:\/\//i.test(website) ? website : `https://${website}`;
+};
+
+export const mergeStyleReferences = (current: StyleReference[], incoming: StyleReference[]) => {
+  const seen = new Set(current.map((item) => item.url));
+  return [...current, ...incoming.filter((item) => item.url && !seen.has(item.url))];
+};
+
+export const styleRefsFromClientFiles = (supabase: SupabaseClient, attachments: unknown): StyleReference[] =>
+  filesFromAttachments(attachments)
+    .filter((file) => !!file.path && isImageAttachment(file))
+    .map((file) => ({
+      url: supabase.storage.from("entity-attachments").getPublicUrl(file.path!).data.publicUrl,
+      name: file.name,
+    }));
 
 export const GENERATION_ABORTED = "ABORTED";
 

@@ -101,6 +101,8 @@ export const itemToProjectDraft = (item: CreativeItem | null): CreativeProjectDr
     format: defaultFormat(item?.payload),
     projectType: getProjectType(item?.payload),
     visualStyle: getVisualStyleId(item?.payload),
+    clientId: item?.client_id ?? null,
+    clientWebsite: kit.website,
     logoUrl: kit.logoUrl,
     brandBook: kit.brandBook,
     styleReferences: kit.styleReferences,

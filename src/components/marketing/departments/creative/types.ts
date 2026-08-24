@@ -119,6 +119,8 @@ export interface CreativeProjectDraft {
   format: CreativeFormat;
   projectType: CreativeProjectType;
   visualStyle: CreativeVisualStyleId;
+  clientId?: string | null;
+  clientWebsite?: string;
   logoUrl?: string;
   brandBook?: BrandBook;
   styleReferences: StyleReference[];

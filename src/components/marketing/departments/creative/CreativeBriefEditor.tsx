@@ -13,17 +13,24 @@ import {
   uploadCreativeAsset,
   type BrandBook,
 } from "./brandKit";
-import { Loader2, Save, Sparkles, Trash2, Upload } from "lucide-react";
+import { ClientSelector } from "@/components/marketing/ClientSelector";
+import {
+  filesFromAttachments,
+  websiteHref,
+} from "./brandKit";
+import { Globe, Loader2, Paperclip, Save, Sparkles, Trash2, Upload } from "lucide-react";
 import type { CreativeItem, CreativeProjectDraft } from "./types";
 import { itemToProjectDraft, projectTypeLabel } from "./utils";
 import { VisualStyleSelect } from "./VisualStyleSelect";
 import { toast } from "sonner";
 
 export interface CreativeClientHint {
+  id?: string;
   name?: string | null;
   website?: string | null;
   industry?: string | null;
   notes?: string | null;
+  attachments?: unknown;
 }
 
 interface Props {
@@ -31,11 +38,13 @@ interface Props {
   tenantId: string;
   client?: CreativeClientHint | null;
   onSave: (draft: CreativeProjectDraft) => Promise<void>;
+  onAssignClient?: (clientId: string | null, draft: CreativeProjectDraft) => Promise<void>;
   saving?: boolean;
 }
 
-export function CreativeBriefEditor({ item, tenantId, client, onSave, saving }: Props) {
+export function CreativeBriefEditor({ item, tenantId, client, onSave, onAssignClient, saving }: Props) {
   const [draft, setDraft] = useState<CreativeProjectDraft>(() => itemToProjectDraft(item));
+  const [assigning, setAssigning] = useState(false);
   const [uploading, setUploading] = useState<"logo" | "reference" | "brandbook" | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const refsInputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +52,7 @@ export function CreativeBriefEditor({ item, tenantId, client, onSave, saving }: 
 
   useEffect(() => {
     setDraft(itemToProjectDraft(item));
-  }, [item.id, item.updated_at]);
+  }, [item.id, item.updated_at, item.client_id]);
 
   const patchBook = (patch: Partial<BrandBook>) => {
     const current = draft.brandBook ?? { colors: [], notes: "", source: "manual" as const };
@@ -113,10 +122,24 @@ export function CreativeBriefEditor({ item, tenantId, client, onSave, saving }: 
     }
   };
 
+  const assignClient = async (clientId: string | null) => {
+    const next = { ...draft, clientId };
+    setDraft(next);
+    if (!onAssignClient) return;
+    setAssigning(true);
+    try {
+      await onAssignClient(clientId, next);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "השיוך נכשל");
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   const autoBrandBook = () => {
     const book = deriveBrandBook({
       clientName: client?.name ?? undefined,
-      website: client?.website ?? undefined,
+      website: client?.website ?? draft.clientWebsite,
       industry: client?.industry ?? undefined,
       brief: [draft.briefText, client?.notes].filter(Boolean).join("\n"),
       copy: draft.copyText,
@@ -161,6 +184,47 @@ export function CreativeBriefEditor({ item, tenantId, client, onSave, saving }: 
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label>שיוך ללקוח / סוכנות</Label>
+            <div className="mt-1">
+              <ClientSelector
+                tenantId={tenantId}
+                value={draft.clientId ?? null}
+                onChange={(id) => void assignClient(id)}
+                allowGeneral
+                generalLabel="ללא לקוח"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              כמו בקופי — נמשך האתר, הקבצים והסגנון של הלקוח לברנדבוק ולרפרנסים.
+            </p>
+          </div>
+
+          {(client || draft.clientWebsite || assigning) && (
+            <div className="rounded-xl border bg-muted/40 p-3 text-xs leading-relaxed">
+              <div className="mb-2 font-medium">{assigning ? "מושך מהלקוח..." : "נמשך אוטומטית מהלקוח"}</div>
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {draft.clientWebsite || client?.website ? (
+                  <a
+                    className="underline-offset-2 hover:underline"
+                    href={websiteHref(draft.clientWebsite || client?.website)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {draft.clientWebsite || client?.website}
+                  </a>
+                ) : "אין אתר משויך ללקוח"}
+              </div>
+              <div className="mt-2 flex items-start gap-2 text-muted-foreground">
+                <Paperclip className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {filesFromAttachments(client?.attachments).length > 0
+                  ? filesFromAttachments(client?.attachments).map((file) => file.name).join(" · ")
+                  : "אין קבצים בתיק הלקוח"}
+              </div>
+            </div>
+          )}
+
           <VisualStyleSelect
             value={draft.visualStyle}
             onChange={(visualStyle) => setDraft({ ...draft, visualStyle })}

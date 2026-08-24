@@ -3,10 +3,14 @@ import test from "node:test";
 import {
   brandKitPrompt,
   deriveBrandBook,
+  filesFromAttachments,
   getBrandKit,
   isGenerationAborted,
+  isImageAttachment,
+  mergeStyleReferences,
   sampleColorsFromImageData,
   throwIfGenerationAborted,
+  websiteHref,
 } from "./brandKit.ts";
 
 test("getBrandKit reads logo, book, and style references from payload", () => {
@@ -36,12 +40,30 @@ test("deriveBrandBook uses client + brief and never invents a logo rule-break", 
 test("brandKitPrompt reserves a logo pad and labels style refs", () => {
   const prompt = brandKitPrompt({
     logoUrl: "https://example.com/logo.png",
+    website: "https://smartair.co.il",
     brandBook: { colors: ["#111"], notes: "", source: "auto" },
     styleReferences: [{ url: "https://example.com/a.jpg" }],
   });
   assert.match(prompt, /top-right pad/i);
   assert.match(prompt, /style-reference/i);
   assert.match(prompt, /#111/);
+  assert.match(prompt, /smartair\.co\.il/);
+});
+
+test("client attachments become image style refs and ignore non-images", () => {
+  const files = filesFromAttachments([
+    { name: "look.jpg", path: "tenant/a.jpg", type: "image/jpeg" },
+    { name: "brief.pdf", path: "tenant/b.pdf", type: "application/pdf" },
+  ]);
+  assert.equal(files.length, 2);
+  assert.equal(isImageAttachment(files[0]), true);
+  assert.equal(isImageAttachment(files[1]), false);
+  assert.equal(websiteHref("smartair.co.il"), "https://smartair.co.il");
+  const merged = mergeStyleReferences(
+    [{ url: "https://example.com/a.jpg" }],
+    [{ url: "https://example.com/a.jpg" }, { url: "https://example.com/b.jpg" }],
+  );
+  assert.equal(merged.length, 2);
 });
 
 test("getBrandKit keeps an uploaded brand-book file", () => {
