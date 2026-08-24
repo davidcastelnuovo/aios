@@ -41,7 +41,12 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
-import { resolveBoardTaskAgency } from "@/lib/taskBoardAgency";
+import {
+  resolveBoardTaskAgency,
+  resolveTasksBoardScope,
+  filterTasksBySelectedAgency,
+  syncLocalTasksForAgencyFilter,
+} from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 
 interface Task {
@@ -273,11 +278,51 @@ export function WeeklyTaskBoard() {
           task_collaborators (id)
         `);
 
-      // Cross-tenant: include tasks from shared agencies
-      if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      // Tenant / agency scope. When the header picks a specific agency, filter
+      // ONLY by agency_id — do not stack the broad cross-tenant `.or()` first
+      // (that left localTasks showing mixed agencies while the narrow fetch ran).
+      const boardScope = resolveTasksBoardScope({
+        tenantId: tenantId!,
+        selectedAgency,
+        crossTenantAgencyIds,
+      });
+      // #region agent log
+      {
+        const payload = {
+          location: "WeeklyTaskBoard.tsx:queryFn-scope",
+          message: "tasks board scope resolved",
+          data: { boardScope, selectedAgency, crossTenantCount: crossTenantAgencyIds.length },
+          timestamp: Date.now(),
+          hypothesisId: "A",
+        };
+        // Browser-safe: beacon for session debugging; never blocks the query.
+        try {
+          if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+            navigator.sendBeacon(
+              "/__debug_agent_log",
+              new Blob([JSON.stringify(payload)], { type: "application/json" }),
+            );
+          }
+        } catch {
+          /* ignore */
+        }
+        if (typeof window !== "undefined") {
+          (window as unknown as { __TASK_BOARD_DEBUG__?: unknown[] }).__TASK_BOARD_DEBUG__ =
+            [
+              ...(((window as unknown as { __TASK_BOARD_DEBUG__?: unknown[] }).__TASK_BOARD_DEBUG__) || []),
+              payload,
+            ].slice(-20);
+        }
+      }
+      // #endregion
+      if (boardScope.type === "agency") {
+        query = query.eq("agency_id", boardScope.agencyId);
+      } else if (boardScope.type === "tenant_or_shared") {
+        query = query.or(
+          `tenant_id.eq.${boardScope.tenantId},agency_id.in.(${boardScope.crossTenantAgencyIds.join(",")})`,
+        );
       } else {
-        query = query.eq("tenant_id", tenantId);
+        query = query.eq("tenant_id", boardScope.tenantId);
       }
 
       // Include: current range OR overdue (past due_date with status != done) OR null due_date
@@ -347,14 +392,6 @@ export function WeeklyTaskBoard() {
         query = query.is("client_id", null);
       }
 
-      // Apply agency filter from header. Filter on tasks.agency_id directly —
-      // the previous client_id IN (...) subquery added a fourth PostgREST `.or()`
-      // (on top of tenant / date / mine) that could empty the board for shared
-      // agencies, and hid tasks whose client row the user could not SELECT.
-      if (selectedAgency && selectedAgency !== "all") {
-        query = query.eq("agency_id", selectedAgency);
-      }
-
 
       const { data, error } = await query
         .order("due_date", { ascending: true })
@@ -385,17 +422,61 @@ export function WeeklyTaskBoard() {
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
   
   useEffect(() => {
-    // Don't clobber the current list while a refetch is in flight (avoids an empty flash).
-    if (isFetching) return;
-    // Sync with the settled server result, INCLUDING an empty list. This is critical:
-    // when a filter (campaigner / agency / type / association / date) matches no tasks,
-    // we must clear the board. The old `length > 0` guard kept the previous (broader) set,
-    // which made filters look like they were ignored and showed all tasks.
-    setLocalTasks(fetchedTasks ?? []);
-  }, [isFetching, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+    // Sync with server results (including empty). While a refetch is in flight we keep
+    // previous rows to avoid an empty flash — but ALWAYS narrow by selectedAgency so the
+    // header agency filter cannot leave other agencies' tasks on the board (hypothesis B).
+    const next = syncLocalTasksForAgencyFilter({
+      isFetching,
+      fetchedTasks,
+      previousLocal: localTasks,
+      selectedAgency,
+    });
+    // #region agent log
+    {
+      const agencyIds = Array.from(new Set(next.map((t) => t.agency_id || "null")));
+      const payload = {
+        location: "WeeklyTaskBoard.tsx:localTasks-sync",
+        message: "localTasks synced for agency filter",
+        data: {
+          isFetching,
+          selectedAgency,
+          fetchedCount: fetchedTasks?.length ?? 0,
+          nextCount: next.length,
+          agencyIds,
+        },
+        timestamp: Date.now(),
+        hypothesisId: "B",
+      };
+      try {
+        if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+          navigator.sendBeacon(
+            "/__debug_agent_log",
+            new Blob([JSON.stringify(payload)], { type: "application/json" }),
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+      if (typeof window !== "undefined") {
+        (window as unknown as { __TASK_BOARD_DEBUG__?: unknown[] }).__TASK_BOARD_DEBUG__ =
+          [
+            ...(((window as unknown as { __TASK_BOARD_DEBUG__?: unknown[] }).__TASK_BOARD_DEBUG__) || []),
+            payload,
+          ].slice(-20);
+      }
+    }
+    // #endregion
+    setLocalTasks(next);
+    // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
+    // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFetching, selectedAgency, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
 
-  // localTasks is the source of truth for rendering (kept in sync with the filtered query above).
-  const tasks = localTasks;
+  // Defense in depth (Clients.tsx pattern): never render tasks outside the header agency.
+  const tasks = useMemo(
+    () => filterTasksBySelectedAgency(localTasks, selectedAgency),
+    [localTasks, selectedAgency],
+  );
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates)
   // Also hide calendar events when filtering by a specific campaigner (not "mine" or "all")
