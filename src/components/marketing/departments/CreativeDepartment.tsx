@@ -37,7 +37,7 @@ import {
   pickStoryboardReferences,
 } from "@/components/marketing/departments/creative/utils";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
-import { buildCampaignVisualBrief, hydrateVariationLayers, isInternalCopyLine, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
+import { buildCopySceneBrief, hydrateVariationLayers, isInternalCopyLine, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
 import {
   buildVisualStyleLock,
   getVisualStyle,
@@ -696,26 +696,25 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const style = visualStyleById(styleId);
     const format = defaultFormat(selected.payload);
     const kit = getBrandKit(selected.payload);
-    const visualBrief = buildCampaignVisualBrief({
+    const sceneBrief = buildCopySceneBrief({
       copyText,
       title: selected.title ?? undefined,
       brief: getBriefText(selected),
       instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
+      copyLabel,
     });
     const referenceImageUrls = (
       await Promise.all(kit.styleReferences.map((reference) => resolveCreativeImageUrl(reference.url)))
     ).filter((url): url is string => !!url);
     const creativePrompt = [
       `Use case: ads-marketing. Asset type: standalone ${format} commercial key visual.`,
+      sceneBrief,
+      `TREATMENT ONLY: dress that same situation in a ${style.label} art system. Do not swap the subject to match the style's cliché.`,
+      buildVisualStyleLock(selected.payload, { styleId: style.id }),
       referenceImageUrls.length
-        ? "Input-image roles: attached stills are STYLE REFERENCES only — match light, material and grade. Do not copy layout, lettering, faces, or logo."
+        ? "Input-image roles: attached stills are STYLE REFERENCES only — match light, material and grade. Do not copy layout, lettering, faces, or logo, and do not let them override the copy subject."
         : undefined,
       brandKitPrompt(kit),
-      `Create a million-dollar ${format} commercial key visual in a ${style.label} style.`,
-      "Art-direct a finished ad that illustrates THIS copy angle and the project brief — a scene, not a stock headshot.",
-      buildVisualStyleLock(selected.payload, { styleId: style.id }),
-      `Project brief: ${getBriefText(selected) || "not provided"}`,
-      `This variation's copy to illustrate (do not paint any letters): ${visualBrief}`,
       directorNote && `Art director REJECT — do not repeat these mistakes: ${directorNote}`,
       `Format ${format}. Poster composition: keep the TOP 20% and BOTTOM 28% quiet for type. Subject lives in the middle band. No face in the top fifth.`,
       kit.logoUrl && "Reserve a clean top-right pad (~18% width) for the real logo composite. Do not invent or redraw a logo.",

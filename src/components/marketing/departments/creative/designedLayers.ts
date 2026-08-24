@@ -278,9 +278,69 @@ export const buildCampaignVisualBrief = ({
 
   const unique = [...new Set(bits.map((bit) => bit.trim()).filter(Boolean))];
   if (unique.length === 0) {
-    return "a premium cinematic commercial world — destination, product, or flagship brand moment in a real environment";
+    return "the specific situation described in this variation's copy — not a generic destination or product catalog";
   }
   return unique.join(". ");
+};
+
+const ANGLE_LINE = /^(?:וריאציה|variation)\s*\d+\s*[—–\-|:•·]\s*(.+)$/i;
+
+const sanitizeCopyAngle = (raw?: string): string | undefined => {
+  if (!raw) return undefined;
+  const angle = raw
+    .replace(/\b(AIDA|PAS|BAB|4Ps|4PS|framework)\b/gi, "")
+    .replace(/[—–\-•·]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return angle && !isInternalCopyLine(angle) ? angle : undefined;
+};
+
+export const extractCopyAngle = (copyText?: string, copyLabel?: string): string | undefined => {
+  const firstCopyLine = copyText?.split("\n").map((line) => cleanLine(line)).find(Boolean);
+  for (const source of [firstCopyLine, copyLabel]) {
+    if (!source) continue;
+    const match = cleanLine(source).match(ANGLE_LINE);
+    const angle = sanitizeCopyAngle(match?.[1] ?? (copyLabel && source === copyLabel ? source : undefined));
+    if (angle) return angle;
+  }
+  return sanitizeCopyAngle(copyLabel);
+};
+
+export const buildCopySceneBrief = ({
+  copyText,
+  title,
+  brief,
+  instructions,
+  copyLabel,
+  angle: explicitAngle,
+}: {
+  copyText?: string;
+  title?: string;
+  brief?: string;
+  instructions?: string;
+  copyLabel?: string;
+  angle?: string;
+}): string => {
+  const parts = parseCreativeCopy(copyText ?? "", title);
+  const strong = strongestLine(copyText ?? "", title);
+  const angle = sanitizeCopyAngle(explicitAngle) || extractCopyAngle(copyText, copyLabel);
+  const idea = strong || parts.headline || parts.body;
+  const lines = [
+    "IRON RULE — SUBJECT FIRST. Style may change light, material and crop. It may NOT change what the ad is about.",
+    idea && `STAGE THIS IDEA as a literal situation (do not paint any letters): "${idea}"`,
+    angle && `This variation's angle: ${angle}. A stranger must see this specific idea — not a prettier default from the style board.`,
+    parts.headline && parts.headline !== idea && `Headline beat: ${parts.headline}`,
+    parts.offer && parts.offer !== idea && `Offer that must be visible in the scene: ${parts.offer}`,
+    parts.body && parts.body !== idea && `Story beat: ${parts.body}`,
+    brief?.trim() && `Campaign brief (supporting only — do not replace the variation idea): ${brief.trim().slice(0, 280)}`,
+    instructions?.trim() && `Constraints: ${instructions.trim().slice(0, 180)}`,
+    "The still fails if it is a pretty style-board that could belong to any other variation.",
+    "Forbidden substitutions: Santorini, generic sea arch, airplane wing, suitcase, jet engine, random phone light-trails — unless the copy is actually about those things.",
+  ].filter(Boolean);
+  if (!idea) {
+    lines.push("If copy is thin, invent a situation from the brief — never a default travel postcard.");
+  }
+  return lines.join("\n");
 };
 
 export const isLegacyCaptionPlate = (layer: CreativeLayer): boolean =>

@@ -46,6 +46,7 @@ test("brandKitPrompt reserves a logo pad and labels style refs", () => {
   });
   assert.match(prompt, /top-right pad/i);
   assert.match(prompt, /style-reference/i);
+  assert.match(prompt, /Do not copy their subject/i);
   assert.match(prompt, /#111/);
   assert.match(prompt, /smartair\.co\.il/);
 });

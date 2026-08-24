@@ -39,8 +39,8 @@ Secondary: "[SECONDARY]"
 Support: "[SUPPORT]"
 CTA: "[CTA]"
 Composition: [HERO, TYPE SCALE, CTA LOCATION, SAFE MARGINS].
-Style: [PALETTE, MATERIAL, IMAGE TREATMENT, LIGHTING].
-Constraints: preserve the supplied logo; no grid numbering; no mockup frame; no extra copy; exact Hebrew; strong mobile legibility; do not place text or logo within the outer 6% safe margin; no watermark.
+Style: [PALETTE, MATERIAL, IMAGE TREATMENT, LIGHTING] applied to THIS copy's subject — treatment only, never a style-board cliché.
+Constraints: preserve the supplied logo; no grid numbering; no mockup frame; no extra copy; exact Hebrew; strong mobile legibility; do not place text or logo within the outer 6% safe margin; no watermark; do not swap the subject to match the style.
 ```
 
 ## Targeted correction

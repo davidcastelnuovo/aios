@@ -27,6 +27,8 @@ Extract and keep these fields before generating:
 
 Treat the user-selected edit target as exact. Never silently substitute another image from the conversation. Inspect all input images before generation. Ask one concise question only when a missing offer, exact copy, or required format would materially change the result; otherwise make a tasteful assumption and proceed.
 
+**Iron rule — subject first:** Style is costume, light, material, and crop only. The picture must depict this variation's copy idea as a concrete situation. A stranger should recognize which variation it is without reading type. Do not replace the copy with a prettier style-board default (vacation village, airplane wing, suitcase, jet engine, generic landscape, abstract glass toy) unless the copy is actually about that.
+
 ## Design concept grids
 
 Read [references/style-catalog.md](references/style-catalog.md) when creating a multi-direction board.

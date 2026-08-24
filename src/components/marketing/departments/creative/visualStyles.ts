@@ -40,73 +40,73 @@ const style = (
 ): CreativeVisualStyle => ({ id, label, hint, group, lock: lock.join(" ") });
 
 export const CREATIVE_VISUAL_STYLES: CreativeVisualStyle[] = [
-  style("swiss", "מסחרי נקי", "שוויצרי, מטוס ומוצר על רקע בהיר", "reference", [
-    "ART DIRECTION: clean Swiss / international commercial still.",
-    "Light grey-to-white gradient, generous negative space, one hero vehicle or product sitting in real space with a soft contact shadow.",
-    "Catalog-precise, 35mm, high-key daylight, no grit. Think flagship travel OTA key visual.",
+  style("swiss", "מסחרי נקי", "שוויצרי, אוויר, צל רך, גריד נקי", "reference", [
+    "ART DIRECTION only: clean Swiss / international commercial still applied to THIS copy's subject.",
+    "Light grey-to-white field, generous negative space, catalog-precise 35mm, high-key daylight, one soft contact shadow.",
+    "The hero object is whatever the copy is about — not a default airplane or travel catalog.",
     "Forbidden: dark cyber, collage, neon, studio headshot, busy texture, caption plates.",
     "Palette: cool grey, white, navy, one primary blue accent.",
   ]),
-  style("industrial", "תעשייתי", "בלופרינט, מנוע, צהוב על שחור", "reference", [
-    "ART DIRECTION: industrial tech / blueprint still.",
-    "Dark textured black metal, yellow construction marks, plus signs, faint coordinate ticks, close-up of machinery or a jet engine.",
-    "Gritty, high-contrast, travel-hacker energy. Weathered yellow frame language without any letters.",
+  style("industrial", "תעשייתי", "בלופרינט, מתכת, צהוב על שחור", "reference", [
+    "ART DIRECTION only: industrial tech / blueprint treatment of THIS copy's subject.",
+    "Dark textured black metal, yellow construction marks, plus signs, faint coordinate ticks.",
+    "Gritty high-contrast close-up of the idea in the copy — machinery only if the copy is about machines.",
     "Forbidden: pastel lifestyle, watercolor, cute illustration, grey-studio portrait, glassmorphism.",
     "Palette: black, industrial yellow, electric blue, steel.",
   ]),
-  style("mediterranean", "ים־תיכוני", "קשת, מזוודה, כפר לבן וים", "reference", [
-    "ART DIRECTION: Mediterranean lifestyle editorial.",
-    "Arched window or terrace looking onto whitewashed village, blue domes, sea; a suitcase in the foreground; olive branch accents.",
-    "Warm sand and cream architecture, golden-hour sun, romantic vacation still.",
+  style("mediterranean", "ים־תיכוני", "אור זהב, חול, חום רך", "reference", [
+    "ART DIRECTION only: warm Mediterranean light and materials on THIS copy's subject.",
+    "Sand, cream, arched daylight, golden-hour sun. Use a village or sea ONLY if the copy is about a destination.",
+    "Otherwise keep the warmth and stone/linen textures on the actual situation in the copy.",
     "Forbidden: neon, cyber, collage scraps, grey studio, comic ink.",
     "Palette: sand, cream, Aegean blue, olive, soft gold.",
   ]),
   style("kinetic", "קינטי", "מוישן בלר, כתום על סגול", "reference", [
-    "ART DIRECTION: kinetic motion-design still.",
-    "A vehicle or hero object streaking through frame with heavy motion blur and speed smear, frozen mid-move.",
+    "ART DIRECTION only: kinetic motion-design still of THIS copy's action.",
+    "Heavy motion blur and speed smear on the real action (a thumb scrolling, a person turning away, a choice being made) — not a random streaking car.",
     "Deep royal purple to hot orange/red energy. Thin white tick marks allowed, no words.",
     "Forbidden: static catalog pose, watercolor, scrapbook, quiet beige luxury.",
     "Palette: royal purple, orange, red, white ticks.",
   ]),
   style("glass", "זכוכית", "צורות זכוכית אירידסנטיות בחושך", "reference", [
-    "ART DIRECTION: iridescent glass / 3D still life.",
-    "Octane-quality translucent glass cube, sphere, splash; rainbow caustics on near-black.",
-    "Premium abstract product world. Glossy, refractive, no UI text.",
+    "ART DIRECTION only: iridescent glass / 3D still life of THIS copy's subject.",
+    "Octane-quality translucent glass, splash, rainbow caustics on near-black — the object inside the glass is the copy's idea, not a random cube.",
+    "Premium refractive world. No UI text.",
     "Forbidden: paper collage, live-action street photo, bauhaus primaries, studio headshot.",
     "Palette: black, iridescent cyan/magenta/gold highlights.",
   ]),
-  style("collage", "קולאז'", "נייר קרוע, מפה, חותמת מסע", "reference", [
-    "ART DIRECTION: analog mixed-media collage.",
-    "Torn paper edges, vintage map fragment, cut-out vehicle or portrait piece, ink splatters, charcoal scribbles.",
-    "Handmade scrapbook / explorer board. Physical paper texture only — one coherent collage, not a digital mashup of styles.",
+  style("collage", "קולאז'", "נייר קרוע, דיו, טקסטורה", "reference", [
+    "ART DIRECTION only: analog mixed-media collage of THIS copy's story.",
+    "Torn paper, ink splatters, charcoal, physical paper texture. Cut-outs must depict the copy idea, not a generic explorer map or random vehicle.",
+    "One coherent handmade board, not a digital mashup of styles.",
     "Forbidden: photoreal studio, neon glass, clean Swiss grid, 3D render.",
     "Palette: beige paper, grey newsprint, black ink, one red accent.",
   ]),
-  style("bauhaus", "באוהאוס", "גריד, עיגול אדום, צורות ראשוניות", "reference", [
-    "ART DIRECTION: Bauhaus geometric poster.",
-    "Cream field, strict grid, primary circle/square/rectangle; a circular window may reveal a fragment of the offer (wing, cloud, destination).",
+  style("bauhaus", "באוהאוס", "גריד, עיגול, צורות ראשוניות", "reference", [
+    "ART DIRECTION only: Bauhaus geometric poster of THIS copy's idea.",
+    "Cream field, strict grid, primary circle/square/rectangle. A circular window may reveal a fragment of the copy's actual subject — never a default airplane wing.",
     "Asymmetric balance, thick black bars, no decoration beyond geometry.",
     "Forbidden: photoreal full-bleed photo, neon, collage torn paper, cinematic grade.",
     "Palette: cream, black, primary red, blue, yellow.",
   ]),
-  style("cinematic", "קולנועי", "שעת זהב, קו חוף, צללית מטוס", "reference", [
-    "ART DIRECTION: cinematic golden-hour film still.",
-    "Wide dramatic photograph of the destination at sunset — coastline, water, ancient stone — a vehicle silhouette may cross the sky.",
-    "Anamorphic feel, rich contrast, film grain, movie-grade amber light.",
+  style("cinematic", "קולנועי", "שעת זהב, פילם, דרמה", "reference", [
+    "ART DIRECTION only: cinematic golden-hour film still of THIS copy's moment.",
+    "Anamorphic feel, rich contrast, film grain, movie-grade amber light on the real situation in the copy.",
+    "Do not default to a coastline or airplane silhouette unless the copy is about travel.",
     "Forbidden: flat graphic design, clipart, collage, UI chrome, grey-studio portrait.",
     "Palette: deep brown, black, warm gold, cool shadow.",
   ]),
-  style("holographic", "הולוגרפי", "פאנלי זכוכית, ורוד־ציאן, UI רך", "reference", [
-    "ART DIRECTION: soft-futuristic holographic UI world — without any readable text or icons that look like letters.",
-    "Pink-purple-cyan gradient, frosted glass panels, glossy 3D product (suitcase/vehicle) floating, thin wireframe ornaments.",
-    "Web3 / app-key-visual energy. Empty cards only — no words, numbers, logos, or fake buttons.",
+  style("holographic", "הולוגרפי", "פאנלי זכוכית, ורוד־ציאן", "reference", [
+    "ART DIRECTION only: soft-futuristic holographic world around THIS copy's subject.",
+    "Pink-purple-cyan gradient, frosted glass panels, thin wireframe ornaments. The floating object is the copy's idea, not a default suitcase.",
+    "Empty cards only — no words, numbers, logos, or fake buttons.",
     "Forbidden: dirty analog collage, bauhaus primaries, documentary photo, grey studio.",
     "Palette: pink, purple, cyan, frosted white, gloss blue.",
   ]),
-  style("organic", "אורגני", "אבן, עלה, חלון לים", "reference", [
-    "ART DIRECTION: organic earthy still.",
-    "Textured stone or sand wall, a real leaf or olive branch, a window cut-out onto the destination coast, clay pot in the foreground.",
-    "Tactile, sustainable, carved-from-the-land. Soft natural daylight.",
+  style("organic", "אורגני", "אבן, עלה, אור טבעי", "reference", [
+    "ART DIRECTION only: organic earthy materials around THIS copy's subject.",
+    "Stone, sand, leaf, clay, soft natural daylight. A window to the sea ONLY if the copy is about a place.",
+    "Tactile and carved-from-the-land — the person or object in frame must act out the copy.",
     "Forbidden: neon, cyber, chrome UI, comic ink, grey cyclorama portrait.",
     "Palette: stone grey, moss green, sand, deep leaf, warm beige.",
   ]),
@@ -196,11 +196,12 @@ const STORYBOARD_CONTINUITY = [
 ].join(" ");
 
 const STATIC_QUALITY = [
-  "Finished commercial key visual in THIS style only — same campaign idea, this exact art system.",
-  "Illustrate the offer (destination, product, vehicle, or place) inside this style's world.",
+  "IRON RULE: style is costume and lighting only. The picture MUST depict THIS variation's copy idea as a concrete situation.",
+  "A stranger should recognize which variation this is without reading type. If the still could be reused for a different angle, it failed.",
+  "Do not replace the copy with a prettier default (vacation village, airplane, suitcase, jet engine, generic landscape, abstract glass toy) unless the copy is about that.",
   "Leave an open center, lower third, and a clean top-right pad (~18% width) so a title, CTA, and brand logo can be composited later.",
   "No letters, numbers, logos, watermarks, buttons, or fake UI with words — Hebrew and the real logo are added as layers. Never invent or redraw a logo.",
-  "Forbidden: grey/white seamless studio headshot, thinking-hand pose, caption plate, random portrait unrelated to the offer.",
+  "Forbidden: grey/white seamless studio headshot, thinking-hand pose, caption plate, random portrait unrelated to the copy.",
 ].join(" ");
 
 export const buildVisualStyleLock = (

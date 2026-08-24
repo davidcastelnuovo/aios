@@ -32,6 +32,12 @@ test("splits a Copy-department document into one block per וריאציה", () =
   assert.match(copyBlockLabel(blocks[0]), /פומו תחרותי/);
 });
 
+test("bullet variation headers keep the copy angle", () => {
+  const [block] = splitCopyVariations("וריאציה 3 • מגולל לצ'אט\nכותרת: תפתח צ'אט");
+  assert.equal(block?.angle, "מגולל לצ'אט");
+  assert.match(copyBlockLabel(block!), /מגולל לצ'אט/);
+});
+
 test("a document without headers is a single copy block", () => {
   const blocks = splitCopyVariations("כותרת: רודוס\nCTA: הזמינו");
   assert.equal(blocks.length, 1);

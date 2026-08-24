@@ -15,7 +15,7 @@ const SPLIT_HEADLINE = /(?:^|\n)(?=כותרת\s*:)/;
 
 const parseHeader = (chunk: string) => {
   const line = chunk.split("\n")[0]?.trim() ?? "";
-  const match = line.match(/^(?:וריאציה|variation)\s*(\d+)\s*(?:[—–\-|:]\s*(.*))?/i);
+  const match = line.match(/^(?:וריאציה|variation)\s*(\d+)\s*(?:[—–\-|:•·]\s*(.*))?/i);
   if (!match) return {};
   const angle = (match[2] ?? "")
     .replace(/\b(AIDA|PAS|BAB|4Ps|4PS|framework)\b/gi, "")

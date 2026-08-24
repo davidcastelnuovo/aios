@@ -66,7 +66,7 @@ export const brandKitPrompt = (kit: CreativeBrandKit) => {
     kit.brandBook?.voice && `Brand voice: ${kit.brandBook.voice}`,
     kit.website && `Brand website: ${kit.website}. Match that commercial world (color temperature, materials, locations) without copying UI chrome or inventing a logo.`,
     kit.logoUrl && "A logo asset exists and will be composited later — reserve a clean top-right pad (~18% width) with no face or clutter. Do not redraw or invent a logo.",
-    kit.styleReferences.length > 0 && `${kit.styleReferences.length} style-reference image(s) attached: match their art-direction level (light, material, grade) without copying layout, lettering, or logo.`,
+    kit.styleReferences.length > 0 && `${kit.styleReferences.length} style-reference image(s) attached: match light, material, and grade ONLY. Do not copy their subject (no airplane, village, suitcase, or abstract object from the board). The scene is this variation's copy.`,
   ].filter(Boolean);
   return lines.join("\n");
 };

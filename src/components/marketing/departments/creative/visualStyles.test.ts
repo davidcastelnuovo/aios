@@ -38,6 +38,19 @@ test("collage lock is not overridden by a global anti-collage rule", () => {
   assert.doesNotMatch(lock, /Forbidden:.*collage/i);
 });
 
+test("style locks are treatment only and never require a travel cliché", () => {
+  for (const styleId of ["swiss", "kinetic", "organic", "bauhaus", "cinematic", "holographic"] as const) {
+    const lock = buildVisualStyleLock({}, { styleId });
+    assert.match(lock, /THIS copy/i);
+    assert.match(lock, /IRON RULE/i);
+    assert.match(lock, /style is costume and lighting only/i);
+    assert.doesNotMatch(lock, /destination coast/i);
+  }
+  assert.match(buildVisualStyleLock({}, { styleId: "organic" }), /ONLY if the copy is about a place/i);
+  assert.match(buildVisualStyleLock({}, { styleId: "bauhaus" }), /never a default airplane wing/i);
+  assert.match(buildVisualStyleLock({}, { styleId: "kinetic" }), /not a random streaking car/i);
+});
+
 test("new variations prefer an unused reference style", () => {
   const next = pickNextVariationStyle(["swiss", "industrial"]);
   assert.equal(next.group, "reference");

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCampaignVisualBrief,
+  buildCopySceneBrief,
   buildDesignedCopyLayers,
   ensureLogoLayer,
+  extractCopyAngle,
   heroWord,
   isInternalCopyLine,
   parseCreativeCopy,
@@ -66,6 +68,62 @@ test("visual brief uses real offer copy, never the AIDA header", () => {
   assert.doesNotMatch(brief, /AIDA/);
   assert.doesNotMatch(brief, /וריאציה 1/);
   assert.doesNotMatch(brief, /פומו תחרותי/);
+});
+
+test("extractCopyAngle reads the variation idea from em-dash or bullet labels", () => {
+  assert.equal(extractCopyAngle(AIDA_DOC), "פומו תחרותי");
+  assert.equal(extractCopyAngle(undefined, "וריאציה 3 • מגולל לצ'אט"), "מגולל לצ'אט");
+  assert.equal(extractCopyAngle("כותרת: רודוס", "פומו תחרותי"), "פומו תחרותי");
+});
+
+test("copy scene brief stages chat-scroll copy, not a style postcard", () => {
+  const scene = buildCopySceneBrief({
+    title: "Smartair",
+    brief: "טיסה ישירה לרודוס",
+    copyLabel: "וריאציה 3 • מגולל לצ'אט",
+    copyText: `וריאציה 3 — מגולל לצ'אט
+
+כותרת: עדיין מגלגל בטיקטוק?
+
+גוף: תפתח צ'אט. נסגור לך טיסה בלי עוד שעה של סרטונים.
+
+הנעה לפעולה: כתבו "רודוס" בוואטסאפ`,
+  });
+  assert.match(scene, /STAGE THIS IDEA/);
+  assert.match(scene, /מגולל לצ'אט/);
+  assert.match(scene, /צ'אט/);
+  assert.match(scene, /FORBIDDEN SUBSTITUTION/i);
+  assert.match(scene, /vacation postcard|Santorini|airplane wing/i);
+});
+
+test("copy scene brief stages the doubt problem, not a sea arch", () => {
+  const scene = buildCopySceneBrief({
+    title: "Smartair",
+    brief: "טיסה ישירה לרודוס",
+    copyText: `וריאציה 2 — בעיית "אני לא יודע אם אני שם"
+
+כותרת: אתה עדיין לא יודע אם אתה שם?
+
+גוף: בזמן שאתה מתלבט, הטיסות נסגרות.
+
+הנעה לפעולה: בדוק זמינות`,
+  });
+  assert.match(scene, /אני לא יודע אם אני שם/);
+  assert.match(scene, /מתלבט/);
+  assert.match(scene, /Santorini|sea arch/i);
+});
+
+test("copy scene brief stages competitive FOMO, not an airplane wing", () => {
+  const scene = buildCopySceneBrief({
+    title: "Smartair Rhodes",
+    brief: "טיסה לרודוס במחיר מבצע",
+    copyLabel: "וריאציה 1 • פומו תחרותי",
+    copyText: AIDA_DOC,
+  });
+  assert.match(scene, /פומו תחרותי/);
+  assert.match(scene, /רודוס|99/);
+  assert.match(scene, /THIS variation/i);
+  assert.doesNotMatch(scene, /\bAIDA\b/);
 });
 
 test("strongestLine prefers a punchy sentence over a weak one-word headline", () => {
