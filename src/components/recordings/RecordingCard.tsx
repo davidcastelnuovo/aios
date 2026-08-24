@@ -44,7 +44,9 @@ import {
   Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useTenantPath } from "@/hooks/useTenantPath";
 
 export interface FeedRecording {
   id: string;
@@ -81,6 +83,7 @@ interface RecordingCardProps {
   clients: { id: string; name: string }[];
   folders: FolderOption[];
   campaignerNames?: string[];
+  onOpenTranscript: (rec: FeedRecording) => void;
   onOpenSummary: (rec: FeedRecording) => void;
   onCreateSummary: (rec: FeedRecording) => void;
   onShare: (rec: FeedRecording) => void;
@@ -98,6 +101,9 @@ const sourceLabel = (source: string | null) => {
     case "manual": return "העלאה ידנית";
     case "chrome_extension": return "הקלטת מסך";
     case "google_meet": return "Google Meet";
+    case "meeting_bot": return "כרמן";
+    case "microsoft_teams":
+    case "teams": return "Teams";
     default: return source || "Zoom";
   }
 };
@@ -114,6 +120,7 @@ export function RecordingCard({
   clients,
   folders,
   campaignerNames = [],
+  onOpenTranscript,
   onOpenSummary,
   onCreateSummary,
   onShare,
@@ -124,6 +131,7 @@ export function RecordingCard({
   onAcceptSuggestion,
   onRejectSuggestion,
 }: RecordingCardProps) {
+  const { buildPath } = useTenantPath();
   const suggestedClientName = rec.suggested_client_id && !rec.client_id
     ? clients.find((c) => c.id === rec.suggested_client_id)?.name ?? null
     : null;
@@ -273,6 +281,12 @@ export function RecordingCard({
                   <Pencil className="h-4 w-4 ml-2" />
                   שנה שם
                 </DropdownMenuItem>
+                {rec.transcription && (
+                  <DropdownMenuItem onClick={() => onCreateSummary(rec)}>
+                    <Sparkles className="h-4 w-4 ml-2" />
+                    {hasSummary ? "צור סיכום מפורט מחדש" : "צור סיכום מפורט"}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
 
                 <DropdownMenuSub>
@@ -349,7 +363,17 @@ export function RecordingCard({
 
           {/* Client chip + actions */}
           <div className="flex items-center justify-between gap-2">
-            {rec.clients?.name ? (
+            {rec.clients?.name && rec.client_id ? (
+              <Badge variant="secondary" className="text-[11px] max-w-[45%] truncate p-0">
+                <Link
+                  to={buildPath(`/clients?clientId=${rec.client_id}&tab=recordings`)}
+                  className="block truncate px-2.5 py-0.5"
+                  title="פתח בכרטיס הלקוח"
+                >
+                  {rec.clients.name}
+                </Link>
+              </Badge>
+            ) : rec.clients?.name ? (
               <Badge variant="secondary" className="text-[11px] max-w-[45%] truncate">
                 {rec.clients.name}
               </Badge>
@@ -361,6 +385,12 @@ export function RecordingCard({
               <span className="text-[11px] text-muted-foreground">ללא שיוך</span>
             )}
             <div className="flex gap-1">
+              {rec.transcription && (
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onOpenTranscript(rec)}>
+                  <Mic className="h-3.5 w-3.5 ml-1" />
+                  תמלול
+                </Button>
+              )}
               {hasSummary ? (
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-green-600" onClick={() => onOpenSummary(rec)}>
                   <FileText className="h-3.5 w-3.5 ml-1" />

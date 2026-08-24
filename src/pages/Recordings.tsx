@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 import { SummaryViewerDialog } from "@/components/recordings/SummaryViewerDialog";
+import { TranscriptViewerDialog } from "@/components/recordings/TranscriptViewerDialog";
 import { ShareSummaryDialog } from "@/components/recordings/ShareSummaryDialog";
 import { RecordingCard, type FeedRecording, type FolderOption } from "@/components/recordings/RecordingCard";
 import { JoinMeetingBotDialog } from "@/components/recordings/JoinMeetingBotDialog";
@@ -68,6 +69,7 @@ export default function Recordings() {
   const [joinBotOpen, setJoinBotOpen] = useState(false);
 
   const [summarizeRec, setSummarizeRec] = useState<FeedRecording | null>(null);
+  const [transcriptViewRec, setTranscriptViewRec] = useState<FeedRecording | null>(null);
   const [summaryViewRec, setSummaryViewRec] = useState<FeedRecording | null>(null);
   const [shareRec, setShareRec] = useState<FeedRecording | null>(null);
 
@@ -172,7 +174,10 @@ export default function Recordings() {
 
   // ── Mutations ─────────────────────────────────────────────────
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["recordings", currentTenantId] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["recordings", currentTenantId] });
+    queryClient.invalidateQueries({ queryKey: ["client-recordings"] });
+  };
 
   const assignMutation = useMutation({
     mutationFn: async ({ recordingIds, clientId }: { recordingIds: string[]; clientId: string | null }) => {
@@ -653,6 +658,7 @@ export default function Recordings() {
                   campaignerNames={campaignerNamesFor(rec)}
                   onAcceptSuggestion={acceptSuggestion}
                   onRejectSuggestion={rejectSuggestion}
+                  onOpenTranscript={setTranscriptViewRec}
                   onOpenSummary={setSummaryViewRec}
                   onCreateSummary={(r) => {
                     const audioRec = r._group?.find((g: any) => g.recording_type === "audio_only") || r;
@@ -746,12 +752,22 @@ export default function Recordings() {
         />
       )}
 
+      {transcriptViewRec && (
+        <TranscriptViewerDialog
+          open={!!transcriptViewRec}
+          onOpenChange={(open) => !open && setTranscriptViewRec(null)}
+          recording={transcriptViewRec}
+        />
+      )}
+
       {summaryViewRec && currentTenantId && (
         <SummaryViewerDialog
           open={!!summaryViewRec}
           onOpenChange={(open) => !open && setSummaryViewRec(null)}
           recording={summaryViewRec as any}
           tenantId={currentTenantId}
+          recordingIds={groupIds(summaryViewRec)}
+          onSaved={(summaryMd) => setSummaryViewRec((prev) => prev ? { ...prev, summary_md: summaryMd } : prev)}
         />
       )}
 

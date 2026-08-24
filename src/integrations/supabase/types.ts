@@ -10309,6 +10309,7 @@ export type Database = {
           source: string
           start_time: string | null
           summary_file_url: string | null
+          summary_md: string | null
           tenant_id: string
           transcription: string | null
           transcription_error: string | null
@@ -10335,6 +10336,7 @@ export type Database = {
           source?: string
           start_time?: string | null
           summary_file_url?: string | null
+          summary_md?: string | null
           tenant_id: string
           transcription?: string | null
           transcription_error?: string | null
@@ -10361,6 +10363,7 @@ export type Database = {
           source?: string
           start_time?: string | null
           summary_file_url?: string | null
+          summary_md?: string | null
           tenant_id?: string
           transcription?: string | null
           transcription_error?: string | null

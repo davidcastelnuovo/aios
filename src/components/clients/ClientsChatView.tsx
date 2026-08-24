@@ -50,7 +50,7 @@ interface ClientsChatViewProps {
   canViewFinance?: boolean;
   getClientFinancialData?: (clientId: string) => any;
   initialClientId?: string;  // deep-link: open this client on mount
-  initialTab?: "updates" | "details"; // deep-link: open this tab on mount
+  initialTab?: string; // deep-link: open this tab on mount (?tab=recordings)
   onSelectedClientChange?: (clientId: string | null) => void;
 }
 
