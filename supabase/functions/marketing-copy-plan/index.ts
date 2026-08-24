@@ -24,20 +24,73 @@ const CHANNEL_LIMITS: Record<string, { headline: number; primary: number }> = {
   YouTube: { headline: 100, primary: 5000 },
 };
 
-const toMarkdown = (variant: {
-  headline?: string;
-  primary?: string;
-  cta?: string;
-  rationale?: string;
-}) =>
-  [
-    variant.headline && `## ${variant.headline}`,
-    variant.primary,
-    variant.cta && `**CTA:** ${variant.cta}`,
-    variant.rationale && `_${variant.rationale}_`,
-  ]
+const TYPE_LABELS: Record<string, string> = {
+  posts: "פוסטים לרשתות",
+  ads: "קופי למודעות",
+  script: "תסריט",
+  book: "ספר / לונג-פורם",
+  social_post: "פוסטים לרשתות",
+  ad_copy: "קופי למודעות",
+  ad_script: "תסריט למודעה",
+  video_script: "תסריט",
+  email: "דיוור",
+  landing_page: "דף נחיתה",
+};
+
+const toMarkdown = (variant: { headline?: string; primary?: string; cta?: string; rationale?: string }) =>
+  [variant.headline && `## ${variant.headline}`, variant.primary, variant.cta && `**CTA:** ${variant.cta}`]
     .filter(Boolean)
     .join("\n\n");
+
+async function fetchWebsiteText(url: string): Promise<string | null> {
+  try {
+    const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(href, {
+      signal: controller.signal,
+      headers: { "User-Agent": "AIOS-CopyDepartment/1.0" },
+    });
+    clearTimeout(timer);
+    if (!response.ok) return null;
+    const html = await response.text();
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return text.slice(0, 4000) || null;
+  } catch {
+    return null;
+  }
+}
+
+type AttachmentRef = { name?: string; path?: string };
+
+const asAttachments = (value: unknown): AttachmentRef[] =>
+  Array.isArray(value) ? value.filter((file): file is AttachmentRef => !!file && typeof file === "object") : [];
+
+async function readTextAttachments(
+  admin: ReturnType<typeof createClient>,
+  files: AttachmentRef[],
+): Promise<string> {
+  const chunks: string[] = [];
+  for (const file of files.slice(0, 6)) {
+    const name = String(file.name ?? "");
+    const path = String(file.path ?? "");
+    if (!path || !/\.(txt|md|markdown|csv|json|html)$/i.test(name)) continue;
+    try {
+      const { data } = await admin.storage.from("entity-attachments").download(path);
+      if (!data) continue;
+      const text = (await data.text()).replace(/\s+/g, " ").trim().slice(0, 4000);
+      if (text) chunks.push(`--- ${name} ---\n${text}`);
+    } catch {
+      // best-effort: names still go into the prompt
+    }
+  }
+  return chunks.join("\n\n");
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -67,12 +120,17 @@ serve(async (req) => {
       if (!membership) return jsonResponse({ error: "Forbidden" }, 403);
     }
 
-    const [{ data: client }, { data: integration }, skinBlock] = await Promise.all([
-      admin
-        .from("clients")
-        .select("name,website,business_description,industry")
-        .eq("id", item.client_id)
-        .maybeSingle(),
+    const payload = (item.payload ?? {}) as Record<string, unknown>;
+    const recordingId = typeof payload.recording_id === "string" ? payload.recording_id : null;
+
+    const [{ data: client }, { data: integration }, skinBlock, { data: recording }] = await Promise.all([
+      item.client_id
+        ? admin
+            .from("clients")
+            .select("name,website,industry,notes,attachments")
+            .eq("id", item.client_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
       admin
         .from("tenant_integrations")
         .select("settings,shared_from_integration_id")
@@ -83,6 +141,13 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle(),
       buildSkillsBlockBySlug(["copywriter"], item.tenant_id),
+      recordingId
+        ? admin
+            .from("zoom_recordings")
+            .select("id,meeting_topic,transcription,notes")
+            .eq("id", recordingId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
 
     let settings = (integration?.settings ?? {}) as Record<string, string>;
@@ -96,42 +161,55 @@ serve(async (req) => {
     }
     if (!settings.openai_api_key) throw new Error("OpenAI API key חסר בהגדרות האינטגרציות");
 
-    const payload = (item.payload ?? {}) as Record<string, unknown>;
+    const website = String(client?.website ?? payload.client_website ?? "");
+    const websiteText = website ? await fetchWebsiteText(website) : null;
+    const clientAttachments = asAttachments(client?.attachments);
+    const briefAttachments = asAttachments(payload.brief_files);
+    const clientFiles = clientAttachments.map((file) => file.name).filter(Boolean) as string[];
+    const briefFiles = briefAttachments.map((file) => file.name).filter(Boolean) as string[];
+    const recordingRecord = recording as { notes?: string | null; transcription?: string | null; meeting_topic?: string | null } | null;
+    const recordingText = String(
+      payload.recording_excerpt || recordingRecord?.notes || recordingRecord?.transcription || "",
+    ).slice(0, 6000);
+    const briefFileBodies = await readTextAttachments(admin, [...briefAttachments, ...clientAttachments]);
+
     const channel = String(payload.channel ?? item.target_channel ?? "כללי");
-    const limits = CHANNEL_LIMITS[channel] ?? { headline: 60, primary: 500 };
-    const contentType = String(payload.content_type ?? "social_post");
+    const contentType = String(payload.content_type ?? "posts");
+    const longForm = contentType === "book" || contentType === "script" || contentType === "video_script";
+    const limits = longForm ? { headline: 120, primary: 12000 } : (CHANNEL_LIMITS[channel] ?? { headline: 60, primary: 800 });
     const existingCopy = String(payload.copy_text ?? "");
+    const typeLabel = TYPE_LABELS[contentType] ?? contentType;
 
     const sourceContext = [
-      `לקוח: ${client?.name ?? "—"}`,
+      `לקוח: ${client?.name ?? "לא משויך"}`,
       `תחום: ${client?.industry ?? "—"}`,
-      `תיאור העסק: ${client?.business_description ?? "—"}`,
-      `אתר: ${client?.website ?? "—"}`,
-      `כותרת המשימה: ${item.title ?? "—"}`,
-      `סוג תוצר: ${contentType}`,
+      client?.notes && `הערות לקוח: ${client.notes}`,
+      website && `אתר הלקוח: ${website}`,
+      websiteText && `תוכן שנמשך מהאתר (לא להמציא מעבר לזה):\n${websiteText}`,
+      clientFiles.length > 0 && `קבצים בתיק הלקוח: ${clientFiles.join(", ")}`,
+      `כותרת הפרויקט: ${item.title ?? "—"}`,
+      `סוג תוצר: ${typeLabel}`,
       `ערוץ: ${channel}`,
-      `מגבלות תווים: כותרת עד ${limits.headline}, גוף עד ${limits.primary}`,
+      !longForm && `מגבלות תווים: כותרת עד ${limits.headline}, גוף עד ${limits.primary}`,
       payload.brief_text && `בריף: ${payload.brief_text}`,
-      payload.instructions && `הנחיות מיוחדות: ${payload.instructions}`,
-      payload.notes && `הערות: ${payload.notes}`,
-      prompt && `הנחיית המשתמש: ${prompt}`,
-      mode === "improve" && existingCopy && `קופי קיים לשיפור:\n${existingCopy}`,
+      briefFiles.length > 0 && `קבצים שצורפו לבריף: ${briefFiles.join(", ")}`,
+      briefFileBodies && `תוכן קבצי בריף/לקוח שנקראו:\n${briefFileBodies}`,
+      recordingText && `סיכום/תמלול פגישה (${recordingRecord?.meeting_topic ?? "הקלטה"}):\n${recordingText}`,
+      prompt && `הודעת המשתמש בצ'אט: ${prompt}`,
+      existingCopy && `קופי נוכחי בעורך:\n${existingCopy}`,
     ]
       .filter(Boolean)
       .join("\n\n");
 
     const taskByMode: Record<string, string> = {
-      autopilot:
-        "כתוב מאפס 3 וריאציות קופי מוכנות לפרסום. קבל החלטות מקצועיות בעצמך, אל תמציא עובדות עסקיות, ושמור על מגבלות הערוץ.",
-      brief:
-        "הפוך את הבריף וההנחיות ל-3 וריאציות קופי מדויקות. אל תוסיף הבטחות או נתונים שלא הופיעו בבריף.",
-      improve:
-        "שפר את הקופי הקיים: שמור על המסר המרכזי, חדד hook/CTA, וצור 3 וריאציות חזקות יותר במגבלות הערוץ.",
+      autopilot: `כתוב את ה${typeLabel} במלואו, מוכן לעריכה. קבל החלטות מקצועיות, אל תמציא עובדות עסקיות.`,
+      brief: `הפוך את הבריף, האתר, הקבצים וההקלטה ל${typeLabel} מדויק. אל תוסיף הבטחות או נתונים שלא הופיעו במקורות.`,
+      improve: `שפר את הקופי הקיים לפי הודעת המשתמש. שמור על המסר, חדד, והחזר מסמך מלא מוכן לעריכה.`,
     };
 
     const systemPrompt = `${skinBlock}
 
-את כרמן בתפקיד קופירייטרית המרה. את כותבת בעברית טבעית, ספציפית וממוקדת פעולה אחת. כל וריאציה היא היפותזה שונה (זווית/טון/הוכחה), לא אותו טקסט בניסוח מחדש. אל תמציאי מחירים, תוצאות או פיצ'רים. החזירי JSON תקין בלבד.`;
+את כרמן בתפקיד קופירייטרית המרה במחלקת הקופי. את כותבת בעברית טבעית ומחזירה JSON בלבד. אל תמציאי מחירים, תוצאות או פיצ'רים. אם חסר מידע — כתבי בלי להשלים עובדות. full_copy הוא המסמך שנכנס לעורך.`;
 
     const userPrompt = `${taskByMode[mode] ?? taskByMode.autopilot}
 
@@ -139,20 +217,13 @@ ${sourceContext}
 
 החזירי אובייקט במבנה הבא בדיוק:
 {
-  "angle": "הזווית האסטרטגית בקצרה",
-  "audience": "למי זה מדובר",
-  "promise": "ההבטחה המרכזית",
+  "full_copy": "המסמך המלא בעברית, מארקדאון, מוכן לעריכה",
+  "angle": "הזווית בקצרה",
   "variants": [
-    {
-      "label": "A",
-      "headline": "כותרת במגבלת התווים",
-      "primary": "גוף הקופי",
-      "cta": "קריאה לפעולה קצרה",
-      "rationale": "למה הווריאציה הזו עובדת"
-    }
+    { "label": "A", "headline": "", "primary": "", "cta": "", "rationale": "" }
   ]
 }
-חובה להחזיר בדיוק 3 וריאציות עם תוויות A, B, C.`;
+הוסיפי 3 וריאציות קצרות בנוסף למסמך המלא.`;
 
     const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -174,29 +245,34 @@ ${sourceContext}
       .slice(0, 3)
       .map((variant: Record<string, unknown>, index: number) => ({
         label: String(variant.label || ["A", "B", "C"][index] || index + 1),
-        headline: String(variant.headline || "").slice(0, limits.headline),
-        primary: String(variant.primary || "").slice(0, Math.max(limits.primary, 8000)),
+        headline: String(variant.headline || ""),
+        primary: String(variant.primary || ""),
         cta: String(variant.cta || ""),
         rationale: String(variant.rationale || ""),
       }));
-    if (variants.length === 0) throw new Error("כרמן לא החזירה וריאציות קופי תקינות");
+    const fullCopy = String(plan.full_copy || "").trim() || (variants[0] ? toMarkdown(variants[0]) : "");
+    if (!fullCopy) throw new Error("כרמן לא החזירה קופי תקין");
 
-    const fullCopy = toMarkdown(variants[0]);
+    const now = new Date().toISOString();
+    const chat = Array.isArray(payload.copy_chat) ? [...(payload.copy_chat as unknown[])] : [];
+    if (prompt) chat.push({ role: "user", content: prompt, at: now });
+    chat.push({ role: "assistant", content: fullCopy, at: now });
+
     const nextPayload = {
       ...payload,
       copy_text: fullCopy,
       copy_variants: variants,
       copy_angle: plan.angle ?? "",
-      copy_audience: plan.audience ?? "",
-      copy_promise: plan.promise ?? "",
       copy_prompt: prompt,
+      copy_chat: chat.slice(-40),
       department: "copy",
       last_skin_slug: "copywriter",
+      client_website: website || payload.client_website || null,
     };
 
     const { error: updateError } = await admin
       .from("marketing_work_items")
-      .update({ payload: nextPayload, status: "draft", updated_at: new Date().toISOString() })
+      .update({ payload: nextPayload, status: "draft", updated_at: now })
       .eq("id", item.id);
     if (updateError) throw updateError;
 
@@ -206,22 +282,19 @@ ${sourceContext}
       stage_id: item.current_stage_id,
       type: "copy",
       content: fullCopy,
-      meta: {
-        source: `carmen_${mode}`,
-        skin_slug: "copywriter",
-        variants,
-        angle: plan.angle ?? "",
-        prompt,
-      },
+      meta: { source: `carmen_${mode}`, skin_slug: "copywriter", variants, prompt },
     });
 
     return jsonResponse({
-      variants,
       copy_text: fullCopy,
+      variants,
       angle: plan.angle ?? "",
-      audience: plan.audience ?? "",
-      promise: plan.promise ?? "",
       skin_slug: "copywriter",
+      sources: {
+        website: Boolean(websiteText),
+        client_files: clientFiles.length,
+        recording: Boolean(recordingText),
+      },
     });
   } catch (error) {
     console.error("marketing-copy-plan error", error);

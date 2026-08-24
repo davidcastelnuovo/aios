@@ -38,7 +38,7 @@ const DEPARTMENTS: Array<{
   {
     id: "copy",
     label: "מחלקת קופי",
-    description: "בריף נכנס, פוסטים, תסריטי מודעות, גרסאות ואישור",
+    description: "פרויקטי קופי, צ'אט עם כרמן ועורך חי",
     icon: PenLine,
     gradient: "from-violet-500 to-purple-700",
     status: "active",
@@ -129,7 +129,9 @@ export default function MarketingDepartment() {
         <DepartmentLanding onSelect={selectDepartment} />
       ) : department === "copy" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-violet-500" /></div>}>
-          <CopyDepartment clientId={selectedClientId ?? undefined} tenantId={tenantId} onClientChange={selectClient} />
+          <div className="flex min-h-0 flex-1">
+            <CopyDepartment clientId={selectedClientId ?? undefined} tenantId={tenantId} onClientChange={selectClient} />
+          </div>
         </Suspense>
       ) : department === "creative" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-pink-500" /></div>}>
