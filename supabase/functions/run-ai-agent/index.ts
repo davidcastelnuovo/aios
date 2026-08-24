@@ -12,7 +12,7 @@ import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, 
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
-import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
+import { resolveActiveSkills, buildSkillsBlockBySlug, resolveSkillsBySlug } from '../_shared/skills/registry.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 import { asUuidOrNull } from '../_shared/uuid.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
@@ -5989,7 +5989,8 @@ type Emit = ((obj: any) => void) | undefined
 async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Promise<Response> {
   try {
     const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history, conversation_id, wa_notify } = bodyJson
-    console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
+    const pinSkillsOnly = bodyJson.pin_skills_only === true && Array.isArray(task_skills) && task_skills.length > 0
+    console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}, pin_skills_only=${pinSkillsOnly}`)
 
     if (!command_text) throw new Error('Missing command_text')
 
@@ -6467,23 +6468,6 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       if (taskSkillPrompts.length > 0) {
         systemPrompt += `\n\n=== סקילז למשימה זו ===\n${taskSkillPrompts.join('\n')}`
       }
-      // Additive (Strangler): any task_skills entry that matches a DB skin slug
-      // (the global skin catalog in ai_skills, e.g. "campaigner"/"seo"/"legal")
-      // is injected explicitly here, independent of trigger-phrase matching.
-      // Legacy hardcoded keys above are ignored by resolveSkillsBySlug, so this
-      // does not change existing behavior — it only adds DB-pinned skins.
-      try {
-        const pinnedTenantId = (agent as any)?.tenant_id || tenant_id || null
-        const disabledForPin = ((agent as any)?.disabled_skins || []) as string[]
-        const pinnableSlugs = (task_skills as string[]).filter((s) => !disabledForPin.includes(s))
-        const pinnedBlock = await buildSkillsBlockBySlug(pinnableSlugs, pinnedTenantId)
-        if (pinnedBlock) {
-          systemPrompt += pinnedBlock
-          console.log(`[AGENT] Pinned skins by slug: ${(task_skills as string[]).join(', ')}`)
-        }
-      } catch (e) {
-        console.error('[AGENT] pinned-skin resolution failed (non-fatal):', e)
-      }
     }
     // Inject active modes
     const activeModes: string[] = (agent as any).active_modes || []
@@ -6720,6 +6704,30 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     }
     } // ─── end V1 PROMPT BUILDING (else branch of shouldUseV2Prompt) ───
 
+    // Pin DB skins from task_skills for BOTH prompt versions. V2 previously only
+    // looked up a hardcoded map (no "copywriter"), so marketing studio chats
+    // never actually loaded the copywriter skin. When pin_skills_only is set the
+    // same slugs are also resolved later as the exclusive matched-skill set
+    // (prompts + tools); this early block still covers the default path.
+    if (task_skills && Array.isArray(task_skills) && task_skills.length > 0 && !pinSkillsOnly) {
+      try {
+        const pinnedTenantId = (agent as any)?.tenant_id || tenant_id || null
+        const disabledForPin = ((agent as any)?.disabled_skins || []) as string[]
+        const pinnableSlugs = (task_skills as string[]).filter((s) => !disabledForPin.includes(s))
+        const pinnedBlock = await buildSkillsBlockBySlug(pinnableSlugs, pinnedTenantId)
+        if (pinnedBlock) {
+          systemPrompt += pinnedBlock
+          console.log(`[AGENT] Pinned skins by slug: ${(task_skills as string[]).join(', ')}`)
+        }
+      } catch (e) {
+        console.error('[AGENT] pinned-skin resolution failed (non-fatal):', e)
+      }
+    }
+    const promptAddon = typeof bodyJson.system_prompt_addon === 'string' ? bodyJson.system_prompt_addon.trim() : ''
+    if (promptAddon) {
+      systemPrompt += `\n\n=== הקשר סטודיו (משימה מבודדת) ===\n${promptAddon}`
+    }
+
     // Hard rule for both V1 and V2: only allowlisted requesters may escalate
     // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
     systemPrompt += buildDevEscalationPromptRule(devEscalationTier)
@@ -6810,7 +6818,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // "דופק" is intentionally sufficient: speech transcription frequently
     // mangles the word before it ("ביגת דופק", "מדיקת דופק"). A pulse request
     // must never depend on the model deciding whether to call the data tool.
-    const isStoredPulseRequest = /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
+    const isStoredPulseRequest = !pinSkillsOnly
+      && /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
       && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
@@ -6908,7 +6917,10 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // Access control: skins turned OFF in settings are excluded even if their
     // trigger matches. Default (empty) = no change.
     const disabledSkins = ((agent as any).disabled_skins || []) as string[]
-    const _matchedSkills = (await resolveActiveSkills(String(command_text || ''), skillTenantId))
+    const _matchedSkills = pinSkillsOnly
+      ? (await resolveSkillsBySlug(task_skills as string[], skillTenantId))
+        .filter(s => !disabledSkins.includes(s.id))
+      : (await resolveActiveSkills(String(command_text || ''), skillTenantId))
       .filter(s => !disabledSkins.includes(s.id))
       // Unauthorized callers must not get generic cursor/claude escalation skins.
       // Bugfix tier may still load the dedicated bugfix escalation skin.
@@ -7362,6 +7374,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       execution_time_ms: executionTime,
       tools_used: toolLog.map(t => t.tool),
       tool_log: toolLog,
+      conversation_id: serverConversationId,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (error: any) {

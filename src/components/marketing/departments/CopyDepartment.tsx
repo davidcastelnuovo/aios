@@ -160,6 +160,24 @@ const filesFromAttachments = (attachments: unknown): BriefFile[] => {
 const recordingHasText = (recording: RecordingRow) =>
   Boolean(recording.summary_md || recording.transcription || recording.notes);
 
+const invokeErrorMessage = async (error: unknown, data: { error?: string } | null, fallback: string) => {
+  if (data?.error) return data.error;
+  const context = error && typeof error === "object" ? (error as { context?: Response }).context : undefined;
+  if (context && typeof context.json === "function") {
+    try {
+      const body = await context.json() as { error?: string };
+      if (body?.error) return body.error;
+    } catch { /* ignore */ }
+  }
+  return error instanceof Error ? error.message : fallback;
+};
+
+const extractCopyDocument = (output: string) => {
+  const marker = output.split(/---COPY---/i);
+  const body = (marker.length > 1 ? marker.slice(1).join("---COPY---") : output).trim();
+  return body.replace(/^```(?:markdown|md)?\s*/i, "").replace(/\s*```$/, "").trim();
+};
+
 export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -242,14 +260,88 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
     setPendingPrompt(prompt);
     setSending(true);
     try {
-      const hasCopy = !!asText(selected.payload?.copy_text);
-      const hasBrief = !!asText(selected.payload?.brief_text) || !!asText(selected.payload?.recording_excerpt);
-      const mode = hasCopy ? "improve" : hasBrief ? "brief" : "autopilot";
-      const { data, error } = await supabase.functions.invoke("marketing-copy-plan", {
-        body: { item_id: selected.id, prompt, mode },
+      const conversationId = asText(selected.payload?.copy_conversation_id);
+      const type = typeLabel(asText(selected.payload?.content_type) || "posts");
+      const brief = asText(selected.payload?.brief_text);
+      const existing = asText(selected.payload?.copy_text);
+      const website = asText(selected.payload?.client_website);
+      const recordingTitle = asText(selected.payload?.recording_title);
+      // Isolation lives in the system addon — never put pulse/health trigger
+      // phrases in command_text or resolveActiveSkills will load those skins.
+      const studioAddon = [
+        "זה שרשור סטודיו קופי נפרד מהצ׳ט הראשי של כרמן.",
+        "עבדי רק כקופירייטרית (סקין copywriter) על הפרויקט הזה. כתבי בעברית טבעית. אל תמציאי מחירים, תוצאות או פיצ'רים.",
+        "משימות רקע אחרות של כרמן רצות במקביל בשיחות ובקרונים נפרדים — אל תערבבי אותן לכאן ואל תריצי אותן בשרשור הזה.",
+        `פרויקט: ${selected.title || "בלי שם"}`,
+        `סוג תוצר: ${type}`,
+        clientName && `לקוח: ${clientName}`,
+        agencyName && `סוכנות: ${agencyName}`,
+        website && `אתר הלקוח: ${website}`,
+        brief && `בריף:\n${brief}`,
+        recordingTitle && `הקלטה משויכת: ${recordingTitle}`,
+        "החזירי קודם שורת ---COPY--- ואחריה את המסמך המלא במרקדאון, בלי הקדמות.",
+      ].filter(Boolean).join("\n");
+      const commandText = [
+        `כתבי קופי לפרויקט "${selected.title || "בלי שם"}" (${type}).`,
+        clientName && `לקוח: ${clientName}.`,
+        website && `אתר: ${website}.`,
+        brief && `בריף:\n${brief}`,
+        existing && `קופי נוכחי בעורך — שפרי לפי הבקשה והחזירי מסמך מלא:\n${existing}`,
+        `בקשת המשתמש:\n${prompt}`,
+      ].filter(Boolean).join("\n\n");
+
+      const { data, error } = await supabase.functions.invoke("run-ai-agent", {
+        body: {
+          command_text: commandText,
+          tenant_id: tenantId,
+          client_id: selected.client_id,
+          surface: "internal_chat",
+          task_mode: "copywriting",
+          task_skills: ["copywriter"],
+          pin_skills_only: true,
+          system_prompt_addon: studioAddon,
+          conversation_id: conversationId || undefined,
+          conversation_history: readChat(selected.payload).map((turn) => ({
+            role: turn.role,
+            content: turn.content,
+          })),
+          user_name: "מחלקת קופי",
+        },
       });
-      if (error) throw error;
+      if (error) throw new Error(await invokeErrorMessage(error, data, "כרמן לא הצליחה לכתוב"));
       if (data?.error) throw new Error(data.error);
+      const output = String(data?.output ?? data?.reply ?? data?.message ?? "").trim();
+      if (!output) throw new Error("כרמן החזירה תשובה ריקה");
+      const copyDocument = extractCopyDocument(output);
+      const now = new Date().toISOString();
+      const nextChat = [
+        ...readChat(selected.payload),
+        { role: "user" as const, content: prompt, at: now },
+        { role: "assistant" as const, content: copyDocument, at: now },
+      ].slice(-40);
+      const nextPayload = {
+        ...(selected.payload ?? {}),
+        department: "copy",
+        copy_text: copyDocument,
+        copy_chat: nextChat,
+        copy_prompt: prompt,
+        last_skin_slug: "copywriter",
+        copy_conversation_id: data?.conversation_id || conversationId || null,
+      };
+      const { error: saveError } = await supabase
+        .from("marketing_work_items")
+        .update({ payload: nextPayload, status: "draft" })
+        .eq("id", selected.id)
+        .eq("tenant_id", tenantId);
+      if (saveError) throw saveError;
+      await supabase.from("marketing_assets").insert({
+        tenant_id: tenantId,
+        item_id: selected.id,
+        stage_id: selected.current_stage_id,
+        type: "copy",
+        content: copyDocument,
+        meta: { source: "carmen_chat", skin_slug: "copywriter", prompt },
+      });
       toast.success("הקופי עודכן בעורך");
       await refresh();
     } catch (error: unknown) {
@@ -433,7 +525,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
               <div className="min-w-0 flex-1 overflow-hidden">
                 <div className="truncate text-sm font-semibold" dir="rtl" title={selected.title ?? ""}>{selected.title}</div>
                 <div className="truncate text-[11px] text-muted-foreground" dir="rtl">
-                  {agencyName ? `${agencyName} · ` : ""}{clientName || "לא משויך ללקוח"} · {typeLabel(asText(selected.payload?.content_type) || "posts")}
+                  {agencyName ? `${agencyName} · ` : ""}{clientName || "לא משויך ללקוח"} · {typeLabel(asText(selected.payload?.content_type) || "posts")} · כרמן · קופירייטר
                 </div>
               </div>
               <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => setSettingsOpen(true)}>
@@ -467,7 +559,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                   <div className="overflow-hidden rounded-2xl border bg-background shadow-sm">
                     <div className="flex items-center justify-between border-b px-4 py-2 text-[11px] text-muted-foreground">
                       <span>הקופי — ניתן לערוך ישירות</span>
-                      <Badge variant="outline" className="font-normal">כרמן</Badge>
+                      <Badge variant="outline" className="font-normal">כרמן · קופירייטר</Badge>
                     </div>
                     <CopyEditor key={`${selected.id}-${selected.updated_at}`} item={selected} tenantId={tenantId} onSaved={refresh} />
                   </div>
@@ -476,7 +568,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                     <PenLine className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
                     <h2 className="text-lg font-semibold">פרויקט מוכן לכתיבה</h2>
                     <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                      פתחו הגדרות לבריף, סוג תוצר ושיוך ללקוח — או כתבו למטה מה כרמן צריכה ליצור.
+                      הצ׳ט מחובר לכרמן עם סקין הקופירייטר בשיחה מבודדת. פתחו הגדרות לבריף ושיוך, או כתבו למטה מה לכתוב.
                     </p>
                   </div>
                 )}
@@ -512,6 +604,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
               </form>
+              <p className="mx-auto mt-1.5 max-w-3xl px-1 text-[10px] text-muted-foreground">כרמן · סקין קופירייטר · שיחה נפרדת מהצ׳ט הראשי וממשימות הרקע</p>
             </div>
           </>
         ) : (
