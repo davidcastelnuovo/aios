@@ -15,6 +15,7 @@ interface Props {
   allowAllClients?: boolean;
   generalLabel?: string;
   allClientsLabel?: string;
+  disabled?: boolean;
 }
 
 interface Client {
@@ -39,6 +40,7 @@ export function ClientSelector({
   allowAllClients = false,
   generalLabel = "תוכן כללי",
   allClientsLabel = "כל הלקוחות",
+  disabled = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
@@ -94,6 +96,7 @@ export function ClientSelector({
   }, [clients, selectedAgency, search]);
 
   const handleOpenChange = (o: boolean) => {
+    if (disabled) return;
     setOpen(o);
     if (o) {
       setSearch("");
@@ -107,7 +110,7 @@ export function ClientSelector({
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="min-w-[220px] justify-between" dir="rtl">
+        <Button variant="outline" size="sm" className="min-w-[220px] justify-between" dir="rtl" disabled={disabled}>
           <span className="truncate">{displayLabel}</span>
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
