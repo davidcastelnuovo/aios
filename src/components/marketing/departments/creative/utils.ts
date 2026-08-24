@@ -231,6 +231,7 @@ export const makeVariation = ({
   generationCost,
   compositionId,
   brandColors,
+  styleSourceId,
 }: {
   imageUrl: string;
   format: CreativeFormat;
@@ -248,6 +249,7 @@ export const makeVariation = ({
   generationCost?: CreativeVariation["generationCost"];
   compositionId?: CreativeVariation["compositionId"];
   brandColors?: string[];
+  styleSourceId?: string;
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
   name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
@@ -268,6 +270,7 @@ export const makeVariation = ({
   parentId,
   generationCost,
   compositionId,
+  styleSourceId,
 });
 
 export const getLinkedCopyText = (item: CreativeItem | null) => {

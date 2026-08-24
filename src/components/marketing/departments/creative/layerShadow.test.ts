@@ -18,6 +18,13 @@ test("soft shadow keeps a single blur drop", () => {
   assert.equal(css, "0 4px 18px #000000");
 });
 
+test("halo is an outline glow, not a caption plate", () => {
+  const css = buildLayerTextShadow({ shadowStyle: "halo", shadowDepth: 4, shadowColor: "#fde7ee", shadowBlur: 18 });
+  assert.ok(css);
+  assert.match(css ?? "", /0 0 18px #fde7ee/);
+  assert.match(css ?? "", /-1px 0 0 #fde7ee/);
+});
+
 test("infer restores extrude depth from existing designed layers", () => {
   const layer = { id: "1", type: "text" as const, x: 0, y: 0, width: 10, height: 10, ...withLayerShadow({ shadowStyle: "extrude", shadowDepth: 8, shadowColor: "#1e3a8a", shadowBlur: 16 }) };
   const inferred = inferLayerShadow(layer);

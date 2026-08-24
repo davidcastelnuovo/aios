@@ -22,6 +22,17 @@ export const buildLayerTextShadow = ({
   if (shadowStyle === "soft") {
     return `0 ${Math.max(1, Math.round(depth / 2))}px ${blur}px ${color}`;
   }
+  if (shadowStyle === "halo") {
+    const ring = Math.max(1, Math.round(depth / 4));
+    return [
+      `${-ring}px 0 0 ${color}`,
+      `${ring}px 0 0 ${color}`,
+      `0 ${-ring}px 0 ${color}`,
+      `0 ${ring}px 0 ${color}`,
+      `0 0 ${blur}px ${color}`,
+      `0 0 ${Math.round(blur * 1.6)}px ${color}99`,
+    ].join(", ");
+  }
   const steps = Array.from({ length: Math.max(1, depth) }, (_, index) => {
     const offset = index + 1;
     return `${offset}px ${offset}px 0 ${color}`;
@@ -61,6 +72,14 @@ export const inferLayerShadow = (layer: CreativeLayer): LayerShadow => {
   }
   const css = layer.textShadow ?? "";
   if (!css) return { shadowStyle: "none", shadowDepth: 0, shadowColor: DEFAULT_COLOR, shadowBlur: 8 };
+  if (/-1px 0 0|-?\d+px 0 0/.test(css) && /0 0 \d+px/.test(css) && (css.match(/0 0 \d+px/g)?.length ?? 0) >= 1 && css.includes("-")) {
+    return {
+      shadowStyle: "halo",
+      shadowDepth: layer.shadowDepth ?? 4,
+      shadowColor: hexFromCssColor(css),
+      shadowBlur: layer.shadowBlur ?? 16,
+    };
+  }
   const extrudeHits = css.match(/\d+px\s+\d+px\s+0\s+/g);
   if (extrudeHits && extrudeHits.length >= 3) {
     return {

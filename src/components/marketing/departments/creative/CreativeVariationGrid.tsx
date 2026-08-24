@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { cn } from "@/lib/utils";
-import { Loader2, PenLine, RotateCcw, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
+import { Layers2, Loader2, PenLine, RotateCcw, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
 import type { CreativeVariation } from "./types";
 import { aspectRatioClass } from "./utils";
 import { styleLabelForId } from "./designedLayers";
@@ -16,6 +16,8 @@ interface Props {
   onDelete: (variation: CreativeVariation) => void;
   onRegenerate: (variation: CreativeVariation) => void;
   onReject: (variation: CreativeVariation) => void;
+  onExpandStyle?: (variation: CreativeVariation) => void;
+  remainingCopyCount?: (variation: CreativeVariation) => number;
 }
 
 export function CreativeVariationGrid({
@@ -27,6 +29,8 @@ export function CreativeVariationGrid({
   onDelete,
   onRegenerate,
   onReject,
+  onExpandStyle,
+  remainingCopyCount,
 }: Props) {
   return (
     <div className="min-h-0 flex-1 overflow-auto p-4" dir="rtl">
@@ -108,6 +112,22 @@ export function CreativeVariationGrid({
                     {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                     ג׳נרט
                   </Button>
+                  {onExpandStyle && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1"
+                      onClick={() => onExpandStyle(variation)}
+                      disabled={disabled || (remainingCopyCount?.(variation) ?? 0) === 0}
+                      title={(remainingCopyCount?.(variation) ?? 0) === 0 ? "כל וריאציות הקופי כבר בגריד" : "צור את שאר הקופי באותו סגנון"}
+                    >
+                      <Layers2 className="h-3.5 w-3.5" />
+                      עוד בסגנון הזה
+                      {(remainingCopyCount?.(variation) ?? 0) > 0 && (
+                        <span className="text-[10px] text-muted-foreground">{remainingCopyCount?.(variation)}</span>
+                      )}
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onReject(variation)} disabled={disabled}>
                     <ThumbsDown className="h-3.5 w-3.5" />רג׳קט
                   </Button>

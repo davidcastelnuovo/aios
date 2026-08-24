@@ -160,6 +160,7 @@ test("flush lockup is fat type without a full-width headline rectangle", () => {
   assert.ok((poster?.fontSize ?? 0) >= 32);
   assert.ok(!layers.some((layer) => layer.text === "המתחרים"));
   assert.ok(!layers.some((layer) => isLegacyHeadlineBand(layer)));
+  assert.equal(poster?.shadowStyle, "halo");
   const cta = layers.find((layer) => layer.text === "השאירו פרטים");
   assert.ok(cta);
   assert.equal(layers.some((layer) => layer.type === "shape" && (layer.y ?? 0) >= 80 && (layer.width ?? 0) >= 50), false);

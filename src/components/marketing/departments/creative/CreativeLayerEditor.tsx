@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
+import { ArrowRight, Layers2, Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
 import type { CreativeFormat, CreativeLayer, CreativeVariation, LayerShadowStyle } from "./types";
 import { inferLayerShadow, withLayerShadow } from "./layerShadow";
 import { aspectRatioClass } from "./utils";
@@ -22,6 +22,8 @@ interface Props {
   onEditingChange?: (editing: boolean) => void;
   onRegenerate?: () => void;
   regenerating?: boolean;
+  onExpandStyle?: () => void;
+  expandStyleCount?: number;
   onBack?: () => void;
 }
 
@@ -38,6 +40,8 @@ export function CreativeLayerEditor({
   onEditingChange,
   onRegenerate,
   regenerating,
+  onExpandStyle,
+  expandStyleCount,
   onBack,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -208,6 +212,13 @@ export function CreativeLayerEditor({
             <Button size="sm" variant="outline" className="gap-1.5" onClick={onRegenerate} disabled={regenerating}>
               {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
               ג׳נרט מחדש
+            </Button>
+          )}
+          {onExpandStyle && (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={onExpandStyle} disabled={regenerating || !expandStyleCount}>
+              <Layers2 className="h-3.5 w-3.5" />
+              עוד בסגנון הזה
+              {!!expandStyleCount && <span className="text-[10px] text-muted-foreground">{expandStyleCount}</span>}
             </Button>
           )}
           {isEditing && (
@@ -490,6 +501,7 @@ export function CreativeLayerEditor({
                           <SelectItem value="none">בלי הצללה</SelectItem>
                           <SelectItem value="soft">רכה</SelectItem>
                           <SelectItem value="extrude">תלת־ממד / עומק</SelectItem>
+                          <SelectItem value="halo">הילה / קו מתאר</SelectItem>
                         </SelectContent>
                       </Select>
                       {selectedShadow.shadowStyle !== "none" && (

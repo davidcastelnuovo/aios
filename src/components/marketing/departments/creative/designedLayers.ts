@@ -515,14 +515,23 @@ export const buildDesignedCopyLayers = ({
       textAlign: composition.type.align,
       letterSpacing: "-0.045em",
       lineHeight: 0.86,
-      ...withLayerShadow({
-        shadowStyle: "extrude",
-        shadowDepth: lines >= 2 ? 6 : 9,
-        shadowColor: palette.extrude,
-        shadowBlur: 18,
-      }),
+      ...withLayerShadow(
+        composition.id === "flush" || !composition.field
+          ? {
+            shadowStyle: "halo",
+            shadowDepth: 4,
+            shadowColor: hexLuma(palette.headline) < 0.5 ? "#fde7ee" : palette.extrude,
+            shadowBlur: 18,
+          }
+          : {
+            shadowStyle: "extrude",
+            shadowDepth: lines >= 2 ? 6 : 9,
+            shadowColor: palette.extrude,
+            shadowBlur: 18,
+          },
+      ),
     }));
-    if (composition.bar) {
+    if (composition.bar && composition.id !== "flush") {
       layers.push(layer({
         type: "shape",
         ...composition.bar,

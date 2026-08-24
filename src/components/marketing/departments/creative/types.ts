@@ -35,7 +35,7 @@ export interface CreativeComment {
   createdAt: string;
 }
 
-export type LayerShadowStyle = "none" | "soft" | "extrude";
+export type LayerShadowStyle = "none" | "soft" | "extrude" | "halo";
 
 export interface CreativeLayer {
   id: string;
@@ -85,6 +85,7 @@ export interface CreativeVariation {
   parentId?: string;
   generationCost?: ImageGenerationCost;
   compositionId?: CompositionId;
+  styleSourceId?: string;
 }
 
 export interface CreativeItem {
