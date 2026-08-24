@@ -21,13 +21,26 @@ export const getProjectType = (payload: Record<string, unknown> | null | undefin
 export const projectTypeLabel = (type: CreativeProjectType) =>
   type === "video" ? "וידאו / storyboard" : "מודעה סטטית";
 
+export const STORYBOARD_FRAME_GAP = 300;
+
+export const storyboardFrameX = (order: number) => -(order - 1) * STORYBOARD_FRAME_GAP;
+
+export const layoutStoryboardRtl = (frames: StoryboardFrame[]): StoryboardFrame[] => {
+  if (frames.length <= 1) return frames;
+  const ordered = [...frames].sort((a, b) => a.order - b.order);
+  const alreadyRtl = ordered.every((frame, index) => index === 0 || frame.x < ordered[index - 1].x);
+  if (alreadyRtl) return frames;
+  return frames.map((frame) => ({ ...frame, x: storyboardFrameX(frame.order) }));
+};
+
 export const getStoryboard = (payload: Record<string, unknown> | null | undefined): StoryboardFrame[] => {
   const value = payload?.storyboard;
   if (!Array.isArray(value)) return [];
-  return value.filter((frame): frame is StoryboardFrame => {
+  const frames = value.filter((frame): frame is StoryboardFrame => {
     if (!frame || typeof frame !== "object") return false;
     return typeof (frame as StoryboardFrame).id === "string";
-  });
+  }).sort((a, b) => a.order - b.order);
+  return layoutStoryboardRtl(frames);
 };
 
 export const DEFAULT_STORYBOARD_STYLE_LOCK = [
@@ -73,7 +86,7 @@ export const pickStoryboardReferences = (
   return [bible, immediate].filter((url, index, list): url is string => !!url && list.indexOf(url) === index);
 };
 
-export const makeStoryboardFrame = (order: number, x = (order - 1) * 300, y = 100): StoryboardFrame => ({
+export const makeStoryboardFrame = (order: number, x = storyboardFrameX(order), y = 100): StoryboardFrame => ({
   id: crypto.randomUUID(),
   order,
   title: `סצנה ${order}`,

@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { Copy, Image as ImageIcon, Loader2, Plus, Save, Trash2, WandSparkles } from "lucide-react";
 import type { StoryboardFrame } from "./types";
-import { makeStoryboardFrame } from "./utils";
+import { STORYBOARD_FRAME_GAP, makeStoryboardFrame, storyboardFrameX } from "./utils";
 
 interface Props {
   frames: StoryboardFrame[];
@@ -105,13 +105,16 @@ export function CreativeStoryboardEditor({
     data: frame,
   })), [frames]);
 
-  const edges: Edge[] = useMemo(() => frames.slice(0, -1).map((frame, index) => ({
-    id: `${frame.id}-${frames[index + 1].id}`,
-    source: frame.id,
-    target: frames[index + 1].id,
-    animated: true,
-    style: { stroke: "#ec4899", strokeWidth: 2 },
-  })), [frames]);
+  const edges: Edge[] = useMemo(() => {
+    const ordered = [...frames].sort((a, b) => a.order - b.order);
+    return ordered.slice(0, -1).map((frame, index) => ({
+      id: `${frame.id}-${ordered[index + 1].id}`,
+      source: frame.id,
+      target: ordered[index + 1].id,
+      animated: true,
+      style: { stroke: "#ec4899", strokeWidth: 2 },
+    }));
+  }, [frames]);
 
   const updateFrames = (next: StoryboardFrame[]) => onChange(next);
 
@@ -130,14 +133,16 @@ export function CreativeStoryboardEditor({
 
   const duplicateFrame = () => {
     if (!frameDraft) return;
-    const copy = { ...frameDraft, id: crypto.randomUUID(), order: frames.length + 1, x: frameDraft.x + 300 };
+    const copy = { ...frameDraft, id: crypto.randomUUID(), order: frames.length + 1, x: frameDraft.x - STORYBOARD_FRAME_GAP };
     updateFrames([...frames, copy]);
     setSelectedFrameId(copy.id);
   };
 
   const removeFrame = () => {
     if (!frameDraft) return;
-    const next = frames.filter((frame) => frame.id !== frameDraft.id).map((frame, index) => ({ ...frame, order: index + 1 }));
+    const next = frames
+      .filter((frame) => frame.id !== frameDraft.id)
+      .map((frame, index) => ({ ...frame, order: index + 1, x: storyboardFrameX(index + 1), y: frame.y }));
     updateFrames(next);
     if (next.length === 0) setSceneOpen(false);
   };
