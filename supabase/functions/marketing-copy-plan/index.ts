@@ -69,29 +69,57 @@ function isPrivateIPv4(ip: number): boolean {
   );
 }
 
-function ipv4FromMappedIPv6(host: string): number | null {
-  const dotted = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-  if (dotted) return parseIPv4(dotted[1]);
-  const hex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
-  if (!hex) return null;
-  const hi = Number.parseInt(hex[1], 16);
-  const lo = Number.parseInt(hex[2], 16);
-  if (!Number.isInteger(hi) || !Number.isInteger(lo)) return null;
-  return ((hi << 16) | lo) >>> 0;
+function expandIPv6(host: string): number[] | null {
+  let ip = host.toLowerCase().replace(/^\[|\]$/g, "");
+  const v4tail = ip.match(/:(\d+\.\d+\.\d+\.\d+)$/);
+  if (v4tail) {
+    const n = parseIPv4(v4tail[1]);
+    if (n === null) return null;
+    ip = `${ip.slice(0, -v4tail[1].length)}${(n >>> 16).toString(16)}:${(n & 0xffff).toString(16)}`;
+  }
+  if (ip.includes(".")) return null;
+  const sides = ip.split("::");
+  if (sides.length > 2) return null;
+  const parseSide = (side: string) => (side === "" ? [] : side.split(":"));
+  const left = parseSide(sides[0]).map((part) => (/^[0-9a-f]{1,4}$/.test(part) ? Number.parseInt(part, 16) : NaN));
+  const right = (sides.length === 2 ? parseSide(sides[1]) : []).map((part) =>
+    (/^[0-9a-f]{1,4}$/.test(part) ? Number.parseInt(part, 16) : NaN));
+  if (left.some(Number.isNaN) || right.some(Number.isNaN)) return null;
+  if (sides.length === 2) {
+    const fill = 8 - left.length - right.length;
+    if (fill < 0) return null;
+    return [...left, ...Array(fill).fill(0), ...right];
+  }
+  return left.length === 8 ? left : null;
 }
 
 function isPrivateIPv6(host: string): boolean {
-  const ip = host.toLowerCase();
-  if (ip === "::" || ip === "::1" || ip === "0:0:0:0:0:0:0:1") return true;
-  if (ip.startsWith("fe80:") || ip.startsWith("fc") || ip.startsWith("fd")) return true;
-  const mappedIp = ipv4FromMappedIPv6(ip);
-  return mappedIp !== null && isPrivateIPv4(mappedIp);
+  const groups = expandIPv6(host);
+  if (!groups) return true;
+  if (groups.every((group) => group === 0)) return true;
+  if (groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1) return true;
+  if ((groups[0] & 0xffc0) === 0xfe80) return true;
+  if ((groups[0] & 0xfe00) === 0xfc00) return true;
+  if ((groups[0] & 0xff00) === 0xff00) return true;
+  const ipv4Mapped = groups[0] === 0 && groups[1] === 0 && groups[2] === 0 && groups[3] === 0 && groups[4] === 0 && groups[5] === 0xffff;
+  if (ipv4Mapped) return isPrivateIPv4(((groups[6] << 16) | groups[7]) >>> 0);
+  const ipv4Compatible = groups.slice(0, 6).every((group) => group === 0) && groups[6] !== 0 && groups[7] !== 1;
+  if (ipv4Compatible) return isPrivateIPv4(((groups[6] << 16) | groups[7]) >>> 0);
+  return false;
 }
 
-async function isBlockedHost(hostname: string): Promise<boolean> {
+function isBlockedAddress(address: string): boolean {
+  const host = address.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
+  const ipv4 = parseIPv4(host);
+  if (ipv4 !== null) return isPrivateIPv4(ipv4);
+  if (host.includes(":")) return isPrivateIPv6(host);
+  return true;
+}
+
+function isBlockedHostname(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
   if (!host) return true;
-  if (
+  return (
     host === "localhost" ||
     host === "metadata" ||
     host === "metadata.google.internal" ||
@@ -99,40 +127,10 @@ async function isBlockedHost(hostname: string): Promise<boolean> {
     host.endsWith(".local") ||
     host.endsWith(".internal") ||
     host.endsWith(".lan")
-  ) {
-    return true;
-  }
-  const ipv4 = parseIPv4(host);
-  if (ipv4 !== null) return isPrivateIPv4(ipv4);
-  const mappedIp = ipv4FromMappedIPv6(host);
-  if (mappedIp !== null) return isPrivateIPv4(mappedIp);
-  if (host.includes(":")) return isPrivateIPv6(host);
-  try {
-    const resolveDns = (Deno as { resolveDns?: (q: string, t: string) => Promise<string[]> }).resolveDns;
-    if (typeof resolveDns !== "function") return false;
-    const [aRecords, aaaaRecords] = await Promise.all([
-      resolveDns(host, "A").catch(() => [] as string[]),
-      resolveDns(host, "AAAA").catch(() => [] as string[]),
-    ]);
-    const ips = [...aRecords, ...aaaaRecords];
-    if (ips.length === 0) return true;
-    for (const ip of ips) {
-      const v4 = parseIPv4(ip);
-      if (v4 !== null) {
-        if (isPrivateIPv4(v4)) return true;
-        continue;
-      }
-      if (isPrivateIPv6(ip)) return true;
-      const mappedFromDns = ipv4FromMappedIPv6(ip.toLowerCase());
-      if (mappedFromDns !== null && isPrivateIPv4(mappedFromDns)) return true;
-    }
-    return false;
-  } catch {
-    return true;
-  }
+  );
 }
 
-async function publicHttpUrl(raw: string): Promise<URL | null> {
+function parsePublicHttpUrl(raw: string): URL | null {
   const trimmed = raw.trim();
   if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^https?:/i.test(trimmed)) return null;
   let parsed: URL;
@@ -144,34 +142,110 @@ async function publicHttpUrl(raw: string): Promise<URL | null> {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
   if (parsed.username || parsed.password) return null;
   if (parsed.port && parsed.port !== "80" && parsed.port !== "443") return null;
-  if (await isBlockedHost(parsed.hostname)) return null;
+  if (isBlockedHostname(parsed.hostname)) return null;
   return parsed;
+}
+
+async function lookupIps(hostname: string): Promise<string[]> {
+  const host = hostname.replace(/^\[|\]$/g, "");
+  if (parseIPv4(host) !== null || host.includes(":")) return [host];
+  const resolveDns = (Deno as { resolveDns?: (q: string, t: string) => Promise<string[]> }).resolveDns;
+  if (typeof resolveDns !== "function") return [];
+  const [aRecords, aaaaRecords] = await Promise.all([
+    resolveDns(host, "A").catch(() => [] as string[]),
+    resolveDns(host, "AAAA").catch(() => [] as string[]),
+  ]);
+  return [...aRecords, ...aaaaRecords];
+}
+
+type PublicTarget = { url: URL; ip: string };
+
+async function resolvePublicTarget(raw: string): Promise<PublicTarget | null> {
+  const url = parsePublicHttpUrl(raw);
+  if (!url) return null;
+  const ips = await lookupIps(url.hostname);
+  if (ips.length === 0) return null;
+  if (ips.some((ip) => isBlockedAddress(ip))) return null;
+  return { url, ip: ips[0] };
+}
+
+async function readPinnedHttp(conn: Deno.Conn, limit = 512_000): Promise<{ status: number; headers: Headers; body: string }> {
+  const decoder = new TextDecoder();
+  let buf = new Uint8Array(0);
+  const readMore = async () => {
+    const chunk = new Uint8Array(8192);
+    const n = await conn.read(chunk);
+    if (n === null) return false;
+    const next = new Uint8Array(buf.length + n);
+    next.set(buf);
+    next.set(chunk.subarray(0, n), buf.length);
+    buf = next;
+    return true;
+  };
+  while (buf.length < 65_536) {
+    if (decoder.decode(buf).includes("\r\n\r\n")) break;
+    if (!(await readMore())) break;
+  }
+  const decoded = decoder.decode(buf);
+  const headerEnd = decoded.indexOf("\r\n\r\n");
+  if (headerEnd < 0) throw new Error("no http headers");
+  const headerBlock = decoded.slice(0, headerEnd);
+  const [statusLine, ...headerLines] = headerBlock.split("\r\n");
+  const status = Number(statusLine.split(" ")[1]);
+  const headers = new Headers();
+  for (const line of headerLines) {
+    const idx = line.indexOf(":");
+    if (idx > 0) headers.append(line.slice(0, idx).trim(), line.slice(idx + 1).trim());
+  }
+  while (buf.length < limit) {
+    if (!(await readMore())) break;
+  }
+  const body = decoder.decode(buf).slice(headerEnd + 4).slice(0, limit);
+  try {
+    conn.close();
+  } catch { /* already closed */ }
+  if (!Number.isInteger(status)) throw new Error("bad http status");
+  return { status, headers, body };
+}
+
+async function pinnedGet(target: PublicTarget, timeoutMs: number): Promise<{ status: number; headers: Headers; body: string }> {
+  const connect = Deno.connect;
+  const startTls = Deno.startTls;
+  if (typeof connect !== "function" || typeof startTls !== "function") {
+    throw new Error("pinned connect unavailable");
+  }
+  const port = target.url.port ? Number(target.url.port) : (target.url.protocol === "https:" ? 443 : 80);
+  const tcp = await Promise.race([
+    connect({ hostname: target.ip, port }),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect timeout")), timeoutMs)),
+  ]);
+  const conn = target.url.protocol === "https:"
+    ? await startTls(tcp, { hostname: target.url.hostname, alpnProtocols: ["http/1.1"] })
+    : tcp;
+  const path = `${target.url.pathname || "/"}${target.url.search}`;
+  const request = `GET ${path} HTTP/1.1\r\nHost: ${target.url.host}\r\nUser-Agent: AIOS-CopyDepartment/1.0\r\nAccept: text/html,text/plain,*/*\r\nConnection: close\r\n\r\n`;
+  await conn.write(new TextEncoder().encode(request));
+  return await Promise.race([
+    readPinnedHttp(conn),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("read timeout")), timeoutMs)),
+  ]);
 }
 
 async function fetchWebsiteText(url: string): Promise<string | null> {
   try {
-    let href = await publicHttpUrl(url);
-    if (!href) return null;
+    let target = await resolvePublicTarget(url);
+    if (!target) return null;
     for (let hop = 0; hop < 3; hop++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      const response = await fetch(href, {
-        signal: controller.signal,
-        redirect: "manual",
-        headers: { "User-Agent": "AIOS-CopyDepartment/1.0" },
-      });
-      clearTimeout(timer);
+      const response = await pinnedGet(target, 8000);
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("Location");
         if (!location) return null;
-        const nextRaw = new URL(location, href).toString();
-        href = await publicHttpUrl(nextRaw);
-        if (!href) return null;
+        target = await resolvePublicTarget(new URL(location, target.url).toString());
+        if (!target) return null;
         continue;
       }
-      if (!response.ok) return null;
-      const html = await response.text();
-      const text = html
+      if (response.status < 200 || response.status >= 300) return null;
+      const text = response.body
         .replace(/<script[\s\S]*?<\/script>/gi, " ")
         .replace(/<style[\s\S]*?<\/style>/gi, " ")
         .replace(/<[^>]+>/g, " ")
