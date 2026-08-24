@@ -9,6 +9,15 @@ import {
   effectiveIsEcommerce,
   tableMatchesServices,
 } from '../_shared/campaign-pulse.ts'
+import { normalizeNotifyPhone } from '../_shared/carmen-notify-target.ts'
+import {
+  buildPulsePreviewMessage,
+  mergePulseDeliveryPlans,
+  planCampaignerPulseDeliveries,
+  planTeamManagerPulseDeliveries,
+  scopeSnapshotsForPlan,
+  type PulseDeliveryPlan,
+} from '../_shared/pulse-delivery.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -106,6 +115,108 @@ function bearerAuthorized(authHeader: string | null): boolean {
   }
 }
 
+async function queuePulseWhatsApp(
+  supabase: any,
+  tenantId: string,
+  message: string,
+  chatId: string | null,
+): Promise<boolean> {
+  const delivery = await supabase.rpc('claude_notify_david', {
+    p_message: message,
+    p_tenant: tenantId,
+    p_chat_id: chatId,
+  })
+  return !delivery.error && delivery.data?.queued === true
+}
+
+async function loadTeamManagerDeliveryPlans(
+  supabase: any,
+  tenantId: string,
+  snapshots: Array<{ client_id: string; agency_id?: string | null }>,
+): Promise<PulseDeliveryPlan[]> {
+  const { data: roles } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('tenant_id', tenantId)
+    .eq('role', 'team_manager')
+  const userIds = Array.from(new Set((roles || []).map((row: any) => row.user_id).filter(Boolean)))
+  if (!userIds.length) return []
+
+  const [{ data: profiles }, { data: managed }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, full_name, campaigner_id, campaigners ( phone )')
+      .in('id', userIds),
+    supabase
+      .from('user_managed_agencies')
+      .select('user_id, agency_id')
+      .in('user_id', userIds),
+  ])
+
+  const agenciesByUser = new Map<string, string[]>()
+  for (const row of managed || []) {
+    if (!row.user_id || !row.agency_id) continue
+    agenciesByUser.set(row.user_id, [...(agenciesByUser.get(row.user_id) || []), row.agency_id])
+  }
+
+  return planTeamManagerPulseDeliveries(
+    snapshots,
+    (profiles || []).map((profile: any) => ({
+      user_id: profile.id,
+      full_name: profile.full_name,
+      phone: profile.campaigners?.phone || null,
+      agency_ids: agenciesByUser.get(profile.id) || [],
+    })),
+  )
+}
+
+async function deliverScopedPulseRecipients(
+  supabase: any,
+  tenantId: string,
+  snapshots: any[],
+  dashboardUrl: string,
+  plans: PulseDeliveryPlan[],
+  previewPhone: string | null,
+  skipPhones: Set<string>,
+): Promise<any[]> {
+  const deliveries: any[] = []
+  for (const plan of plans) {
+    const recipientPhone = normalizeNotifyPhone(plan.phone)
+    if (!recipientPhone || skipPhones.has(recipientPhone)) continue
+
+    const scoped = scopeSnapshotsForPlan(snapshots, plan)
+    if (!scoped.length) continue
+
+    const scopedDigest = buildPulseWhatsAppDigest(scoped, dashboardUrl)
+    if (previewPhone) {
+      const previewQueued = await queuePulseWhatsApp(
+        supabase,
+        tenantId,
+        buildPulsePreviewMessage(plan.name, scopedDigest),
+        previewPhone,
+      )
+      deliveries.push({
+        type: 'preview',
+        recipient: plan.name,
+        role: plan.role,
+        preview_phone: previewPhone,
+        clients: scoped.length,
+        queued: previewQueued,
+      })
+    }
+
+    const queued = await queuePulseWhatsApp(supabase, tenantId, scopedDigest, recipientPhone)
+    deliveries.push({
+      type: plan.role,
+      recipient: plan.name,
+      phone: recipientPhone,
+      clients: scoped.length,
+      queued,
+    })
+  }
+  return deliveries
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok')
   if (!bearerAuthorized(req.headers.get('authorization'))) {
@@ -119,7 +230,7 @@ Deno.serve(async (req) => {
   const manualDeliveryBypass =
     body.force_delivery === true && body.source === 'approved_manual_trigger'
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
-    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone')
+    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
   const { data: settings, error: settingsError } = await settingsQuery
   if (settingsError) return json({ error: settingsError.message }, 500)
@@ -366,6 +477,7 @@ Deno.serve(async (req) => {
     const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl)
     let sent = false
     let deliveryClaimed = false
+    const scopedDeliveries: any[] = []
     if (deliveryRequested && setting.campaign_pulse_enabled) {
       if (manualDeliveryBypass) {
         deliveryClaimed = true
@@ -376,17 +488,53 @@ Deno.serve(async (req) => {
       }
     }
     if (deliveryClaimed) {
-      // Deliver via Carmen Direct, but pin the recipient when
-      // campaign_pulse_phone is set (e.g. Felix on DMM). claude-notify also
-      // refuses cross-tenant owner fallback (David's newest session on DMM).
-      const delivery = await supabase.rpc('claude_notify_david', {
-        p_message: digest,
-        p_tenant: tenantId,
-        p_chat_id: setting.campaign_pulse_phone || null,
-      })
-      sent = !delivery.error && delivery.data?.queued === true
+      const skipPhones = new Set(
+        [normalizeNotifyPhone(setting.campaign_pulse_phone)].filter((phone): phone is string => !!phone),
+      )
+
+      // Full-tenant digest to the configured management phone (e.g. Felix on DMM).
+      if (setting.campaign_pulse_phone) {
+        sent = await queuePulseWhatsApp(supabase, tenantId, digest, setting.campaign_pulse_phone)
+        if (!sent) {
+          console.error('Failed to queue full campaign pulse via Carmen Direct')
+        }
+      }
+
+      const deliverToCampaigners = setting.campaign_pulse_deliver_to_campaigners === true
+      const deliverToManagers = setting.campaign_pulse_deliver_to_team_managers === true
+      if (deliverToCampaigners || deliverToManagers) {
+        const snapshotClientIds = snapshots.map((snapshot) => snapshot.client_id)
+        const plans: PulseDeliveryPlan[] = []
+
+        if (deliverToCampaigners && snapshotClientIds.length) {
+          const [{ data: links }, { data: campaigners }] = await Promise.all([
+            supabase.from('client_team').select('campaigner_id, client_id').in('client_id', snapshotClientIds),
+            supabase.from('campaigners').select('id, full_name, phone').eq('tenant_id', tenantId).eq('active', true),
+          ])
+          plans.push(...planCampaignerPulseDeliveries(snapshots, links || [], campaigners || []))
+        }
+
+        if (deliverToManagers) {
+          plans.push(...await loadTeamManagerDeliveryPlans(supabase, tenantId, snapshots))
+        }
+
+        const mergedPlans = mergePulseDeliveryPlans(plans)
+        const recipientDeliveries = await deliverScopedPulseRecipients(
+          supabase,
+          tenantId,
+          snapshots,
+          dashboardUrl,
+          mergedPlans,
+          setting.campaign_pulse_preview_phone || null,
+          skipPhones,
+        )
+        scopedDeliveries.push(...recipientDeliveries)
+        if (!sent) {
+          sent = recipientDeliveries.some((row) => row.type !== 'preview' && row.queued === true)
+        }
+      }
+
       if (!sent) {
-        console.error('Failed to queue deterministic campaign pulse via Carmen Direct:', delivery.error?.message)
         await supabase.from('tenant_heartbeat_settings')
           .update({ campaign_pulse_last_sent_at: null }).eq('tenant_id', tenantId)
       }
@@ -400,6 +548,7 @@ Deno.serve(async (req) => {
         external_api_calls: metaActivityCalls,
         dashboard_url: dashboardUrl,
         clients_checked: snapshots.length,
+        scoped_deliveries: scopedDeliveries,
       }],
       summary: digest, duration_ms: Date.now() - started,
     })
@@ -409,6 +558,7 @@ Deno.serve(async (req) => {
       onboarding_clients: onboardingClients.length,
       onboarding_open_tasks: onboardingClients.reduce((total: number, client: any) => total + client.open_tasks.length, 0),
       sent,
+      scoped_deliveries: scopedDeliveries,
       delivery_channel: 'carmen_direct',
       delivery_requested: deliveryRequested,
       skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !manualDeliveryBypass && !deliveryClaimed,
