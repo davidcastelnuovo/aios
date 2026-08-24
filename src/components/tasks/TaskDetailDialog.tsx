@@ -22,6 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
+import { formatTaskDate, parseTaskDate } from "@/lib/taskDate";
 import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -61,6 +62,13 @@ interface TaskDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   onDelete?: (taskId: string) => void;
   onMoveToBacklog?: (taskId: string) => void;
+  onUpdated?: (patch: {
+    id: string;
+    due_date: string | null;
+    due_time: string | null;
+    title: string;
+    google_calendar_event_id?: string | null;
+  }) => void;
 }
 
 export function TaskDetailDialog({
@@ -69,6 +77,7 @@ export function TaskDetailDialog({
   onOpenChange,
   onDelete,
   onMoveToBacklog,
+  onUpdated,
 }: TaskDetailDialogProps) {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
@@ -132,7 +141,7 @@ export function TaskDetailDialog({
         setNotes(t.notes || "");
         setPriority(t.priority);
         setStatus((t.status as "open" | "in_progress" | "done") || "open");
-        setDueDate(t.due_date ? new Date(t.due_date) : undefined);
+        setDueDate(parseTaskDate(t.due_date) ?? undefined);
         setClientId(t.client_id || "");
         setLeadId(t.lead_id || "");
         setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
@@ -284,7 +293,7 @@ export function TaskDetailDialog({
       if (selfReminderEnabled && assignedCampaignerId === userCampaignerId && !selfReminderAt) {
         throw new Error("יש לבחור תאריך ושעה לתזכורת");
       }
-      const nextDueDate = dueDate?.toISOString().split("T")[0] || null;
+      const nextDueDate = dueDate ? formatTaskDate(dueDate) : null;
       const nextDueTime = dueTime ? dueTime + ":00" : null;
       const { error } = await supabase
         .from("tasks")
@@ -308,6 +317,7 @@ export function TaskDetailDialog({
         .eq("id", task!.id);
       if (error) throw error;
 
+      let nextEventId = googleCalendarEventId ?? null;
       if (tenantId) {
         try {
           const eventId = await syncTaskCalendarEvent({
@@ -318,19 +328,31 @@ export function TaskDetailDialog({
             durationMinutes,
             existingEventId: googleCalendarEventId,
           });
-          if ((eventId ?? null) !== (googleCalendarEventId ?? null)) {
+          nextEventId = eventId ?? null;
+          if (nextEventId !== (googleCalendarEventId ?? null)) {
             await supabase
               .from("tasks")
-              .update({ google_calendar_event_id: eventId })
+              .update({ google_calendar_event_id: nextEventId })
               .eq("id", task!.id);
+            setGoogleCalendarEventId(nextEventId);
           }
         } catch (calendarError) {
           console.warn("לא הצלחנו לעדכן ביומן גוגל:", calendarError);
         }
       }
+      return {
+        id: task!.id,
+        due_date: nextDueDate,
+        due_time: nextDueTime,
+        title,
+        google_calendar_event_id: nextEventId,
+      };
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
+      onUpdated?.(updated);
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
       toast.success("המשימה עודכנה");
       onOpenChange(false);
     },

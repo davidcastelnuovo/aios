@@ -49,6 +49,13 @@ import {
   syncLocalTasksForAgencyFilter,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
+import { formatTaskDate, parseTaskDate } from "@/lib/taskDate";
+import {
+  buildTasksBoardDateFilter,
+  shouldJumpBoardToDueDate,
+  splitBoardTasks,
+  taskBoardRowFingerprint,
+} from "@/lib/taskBoardVisibility";
 
 interface Task {
   id: string;
@@ -295,24 +302,20 @@ export function WeeklyTaskBoard() {
         query = query.eq("tenant_id", boardScope.tenantId);
       }
 
-      // Include: current range OR overdue (past due_date with status != done) OR null due_date
-      // Overdue = due_date < today AND status != 'done'
+      // Current range, overdue, unscheduled, OR any open date-only task.
+      // Date-only tasks used to vanish when their day sat outside this week.
       if (filters.startDate && filters.endDate) {
-        // Custom date range
-        const customStart = format(filters.startDate, "yyyy-MM-dd");
-        const customEnd = format(filters.endDate, "yyyy-MM-dd");
-        query = query.or(
-          `and(due_date.gte.${customStart},due_date.lte.${customEnd}),` +
-          `and(due_date.lt.${today},status.neq.done),` +
-          `due_date.is.null`
-        );
+        query = query.or(buildTasksBoardDateFilter({
+          rangeStart: format(filters.startDate, "yyyy-MM-dd"),
+          rangeEnd: format(filters.endDate, "yyyy-MM-dd"),
+          today,
+        }));
       } else {
-        // View range + overdue + unscheduled
-        query = query.or(
-          `and(due_date.gte.${rangeStartStr},due_date.lte.${rangeEndStr}),` +
-          `and(due_date.lt.${today},status.neq.done),` +
-          `due_date.is.null`
-        );
+        query = query.or(buildTasksBoardDateFilter({
+          rangeStart: rangeStartStr,
+          rangeEnd: rangeEndStr,
+          today,
+        }));
       }
 
       // Apply "mine" filter - tasks ASSIGNED to me (campaigner or sales person).
@@ -405,7 +408,7 @@ export function WeeklyTaskBoard() {
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
     // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFetching, selectedAgency, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+  }, [isFetching, selectedAgency, JSON.stringify(fetchedTasks?.map(taskBoardRowFingerprint))]);
 
   // Defense in depth (Clients.tsx pattern): never render tasks outside the header agency.
   const tasks = useMemo(
@@ -1076,36 +1079,18 @@ export function WeeklyTaskBoard() {
     ? tasks.find((t) => t.id === activeTaskId)
     : null;
 
-  // Split tasks: backlog (overdue + unscheduled + untimed) vs scheduled in range
   const today = startOfDay(new Date());
-  
-  // Backlog includes: overdue, no due_date, or has due_date but no due_time
-  const backlogTasks = tasks.filter((t) => {
-    if (t.status === "done") return false;
-    if (t.due_date === null) return true; // Unscheduled
-    const dueDate = new Date(t.due_date);
-    if (dueDate < today) return true; // Overdue
-    if (!t.due_time) return true; // Has date but no time - goes to backlog
-    return false;
-  });
+  const { backlog: backlogTasks, calendar: currentRangeTasks } = splitBoardTasks(
+    tasks,
+    dateRange,
+    today,
+  );
 
-  // Current range tasks: only those with both due_date AND due_time in range
-  const currentRangeTasks = tasks.filter((t) => {
-    if (t.due_date === null) return false;
-    if (!t.due_time) return false; // No time = goes to backlog
-    const dueDate = new Date(t.due_date);
-    if (dueDate < today && t.status !== "done") return false; // Overdue, show in backlog
-    return dueDate >= dateRange.start && dueDate <= dateRange.end;
-  });
-
-  // For daily view - filter tasks for the specific day (include tasks with OR without time)
+  // Daily view: every incomplete task on that local day, with or without a time
   const dailyTasks = tasks.filter((t) => {
-    if (!t.due_date) return false;
     if (t.status === "done") return false;
-    const dueDate = new Date(t.due_date);
-    const isToday = format(dueDate, "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
-    // For daily view, include all tasks for that day regardless of time
-    return isToday;
+    const due = parseTaskDate(t.due_date);
+    return due ? formatTaskDate(due) === formatTaskDate(currentDate) : false;
   });
 
   // Count active filters (exclude campaigner since it has its own selector in toolbar)
@@ -1567,6 +1552,16 @@ export function WeeklyTaskBoard() {
       <TaskDetailDialog
         task={selectedTask}
         open={dialogOpen}
+        onUpdated={(patch) => {
+          setLocalTasks((prev) =>
+            prev.some((t) => t.id === patch.id)
+              ? prev.map((t) => (t.id === patch.id ? { ...t, ...patch } : t))
+              : [{ ...patch } as FullTask, ...prev],
+          );
+          setSelectedTask((prev) => (prev && prev.id === patch.id ? { ...prev, ...patch } : prev));
+          const jumpTo = shouldJumpBoardToDueDate(patch.due_date, dateRange);
+          if (jumpTo) setCurrentDate(jumpTo);
+        }}
         onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open && linkedTaskId) {

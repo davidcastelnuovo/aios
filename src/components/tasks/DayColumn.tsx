@@ -3,11 +3,12 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { format, isToday, isSameDay, parseISO } from "date-fns";
+import { format, isToday, isSameDay } from "date-fns";
 import { he } from "date-fns/locale";
 import { ResizableTaskItem } from "./ResizableTaskItem";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
+import { isTaskOnDay } from "@/lib/taskDate";
 
 interface Task {
   id: string;
@@ -233,9 +234,11 @@ export function DayColumn({
   });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Only show tasks with time
-  const dayTasks = tasks.filter(
-    (task) => task.due_date && task.due_time && isSameDay(new Date(task.due_date), date)
+  const timedDayTasks = tasks.filter(
+    (task) => task.due_date && task.due_time && isTaskOnDay(task.due_date, date)
+  );
+  const allDayTasks = tasks.filter(
+    (task) => task.due_date && !task.due_time && isTaskOnDay(task.due_date, date)
   );
 
   // Filter calendar events for this day
@@ -287,6 +290,23 @@ export function DayColumn({
         </p>
       </div>
 
+      {allDayTasks.length > 0 && (
+        <div className="border-b bg-background/80 px-1 py-1 space-y-1">
+          <p className="px-2 text-[10px] text-muted-foreground">כל היום</p>
+          <SortableContext items={allDayTasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+            {allDayTasks.map((task) => (
+              <ResizableTaskItem
+                key={task.id}
+                task={task}
+                onToggleComplete={onToggleComplete}
+                onClick={() => onTaskClick(task)}
+                onDurationChange={onDurationChange}
+              />
+            ))}
+          </SortableContext>
+        </div>
+      )}
+
       {/* Time Slots */}
       <div
         ref={scrollContainerRef}
@@ -312,7 +332,7 @@ export function DayColumn({
             key={time}
             date={date}
             time={time}
-            tasks={dayTasks}
+            tasks={timedDayTasks}
             onToggleComplete={onToggleComplete}
             onTaskClick={onTaskClick}
             onDurationChange={onDurationChange}

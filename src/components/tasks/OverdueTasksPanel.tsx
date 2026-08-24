@@ -8,6 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { startOfDay } from "date-fns";
+import { isTaskDateBefore, parseTaskDate } from "@/lib/taskDate";
 import { QuickTaskInput, QuickTaskPayload } from "./QuickTaskInput";
 
 interface Task {
@@ -266,8 +268,7 @@ export function TaskBacklogPanel({
   // 1. Overdue = has due_date in the past
   // 2. Untimed = has due_date but no due_time (for today or future)
   // 3. Unscheduled = no due_date at all
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = startOfDay(new Date());
 
   const sortNewestFirst = (a: Task, b: Task) => {
     const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -278,14 +279,13 @@ export function TaskBacklogPanel({
   
   const overdueTasks = tasks.filter(t => {
     if (!t.due_date) return false;
-    const dueDate = new Date(t.due_date);
-    return dueDate < today;
+    return isTaskDateBefore(t.due_date, today);
   }).sort(sortNewestFirst);
   
   const untimedTasks = tasks.filter(t => {
-    if (!t.due_date) return false;
-    const dueDate = new Date(t.due_date);
-    return dueDate >= today && !t.due_time;
+    if (!t.due_date || t.due_time) return false;
+    const dueDate = parseTaskDate(t.due_date);
+    return dueDate ? dueDate >= today : false;
   }).sort(sortNewestFirst);
   
   const unscheduledTasks = tasks.filter(t => !t.due_date).sort(sortNewestFirst);

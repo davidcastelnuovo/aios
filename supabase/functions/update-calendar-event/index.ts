@@ -6,6 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function addCalendarDate(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const next = new Date(year, month - 1, day + days);
+  const yyyy = next.getFullYear();
+  const mm = String(next.getMonth() + 1).padStart(2, "0");
+  const dd = String(next.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -23,7 +32,7 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { eventId, summary, description, start, end } = await req.json();
+    const { eventId, summary, description, start, end, allDay } = await req.json();
 
     if (!eventId || !start) {
       throw new Error('Missing required fields: eventId and start are required');
@@ -102,19 +111,29 @@ serve(async (req) => {
       throw new Error(existingEvent.error?.message || 'Failed to get existing event');
     }
 
-    // Update event in Google Calendar - merge with existing data
-    const event = {
-      summary: summary ?? existingEvent.summary,
-      description: description ?? existingEvent.description ?? '',
-      start: {
-        dateTime: start,
-        timeZone: 'Asia/Jerusalem',
-      },
-      end: {
-        dateTime: end || new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString(),
-        timeZone: 'Asia/Jerusalem',
-      },
-    };
+    const isAllDay = Boolean(allDay) || /^\d{4}-\d{2}-\d{2}$/.test(String(start || ""));
+    const allDayStart = String(start).slice(0, 10);
+    const allDayEndRaw = String(end || start).slice(0, 10);
+    const allDayEnd = allDayEndRaw <= allDayStart ? addCalendarDate(allDayStart, 1) : allDayEndRaw;
+    const event = isAllDay
+      ? {
+          summary: summary ?? existingEvent.summary,
+          description: description ?? existingEvent.description ?? '',
+          start: { date: allDayStart },
+          end: { date: allDayEnd },
+        }
+      : {
+          summary: summary ?? existingEvent.summary,
+          description: description ?? existingEvent.description ?? '',
+          start: {
+            dateTime: start,
+            timeZone: 'Asia/Jerusalem',
+          },
+          end: {
+            dateTime: end || new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString(),
+            timeZone: 'Asia/Jerusalem',
+          },
+        };
 
 
     const calendarResponse = await fetch(

@@ -62,7 +62,7 @@ export async function getCalendarEvents(
 }
 
 export async function addCalendarEvent(
-  eventData: { summary: string; description?: string; start: string; end?: string; attendees?: string[] },
+  eventData: { summary: string; description?: string; start: string; end?: string; attendees?: string[]; allDay?: boolean },
   options: CalendarProxyOptions,
   legacyOptions?: { target_user_id?: string }
 ) {
@@ -76,7 +76,7 @@ export async function addCalendarEvent(
 }
 
 export async function updateCalendarEvent(
-  eventData: { eventId: string; summary?: string; description?: string; start?: string; end?: string },
+  eventData: { eventId: string; summary?: string; description?: string; start?: string; end?: string; allDay?: boolean },
   options: CalendarProxyOptions
 ) {
   if (options.provider === 'unified') {
@@ -137,10 +137,19 @@ export async function syncTasksToCalendar(_options: CalendarProxyOptions) {
   return { synced: 0, failed: 0, message: 'סנכרון משימות אינו נתמך כרגע.' };
 }
 
+function nextCalendarDate(dueDate: string): string {
+  const [year, month, day] = dueDate.split("-").map(Number);
+  const next = new Date(year, month - 1, day + 1);
+  const yyyy = next.getFullYear();
+  const mm = String(next.getMonth() + 1).padStart(2, "0");
+  const dd = String(next.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 /**
- * Create / update / delete the Google Calendar event that mirrors a task's
- * scheduled date+time. Returns the event id to persist, or null when unscheduled.
- * Calendar failures are non-fatal — callers should catch.
+ * Create / update / delete the Google Calendar event that mirrors a task.
+ * Date+time → timed event. Date only → all-day event (so it still shows on
+ * a synced Google Calendar). No date → delete the previous event.
  */
 export async function syncTaskCalendarEvent(opts: {
   tenantId: string;
@@ -151,24 +160,38 @@ export async function syncTaskCalendarEvent(opts: {
   existingEventId?: string | null;
 }): Promise<string | null> {
   const { tenantId, title, dueDate, dueTime, durationMinutes = 30, existingEventId } = opts;
-  if (!dueDate || !dueTime) {
+  if (!dueDate) {
     if (existingEventId) {
       await deleteCalendarEvent(existingEventId, { tenantId });
     }
     return null;
   }
 
-  const time = dueTime.length === 5 ? `${dueTime}:00` : dueTime;
-  const startDateTime = new Date(`${dueDate}T${time}`);
-  const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60000);
+  const payload = dueTime
+    ? (() => {
+        const time = dueTime.length === 5 ? `${dueTime}:00` : dueTime;
+        const startDateTime = new Date(`${dueDate}T${time}`);
+        const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60000);
+        return {
+          start: startDateTime.toISOString(),
+          end: endDateTime.toISOString(),
+          allDay: false,
+        };
+      })()
+    : {
+        start: dueDate,
+        end: nextCalendarDate(dueDate),
+        allDay: true,
+      };
 
   if (existingEventId) {
     await updateCalendarEvent(
       {
         eventId: existingEventId,
         summary: title,
-        start: startDateTime.toISOString(),
-        end: endDateTime.toISOString(),
+        start: payload.start,
+        end: payload.end,
+        allDay: payload.allDay,
       },
       { tenantId },
     );
@@ -179,8 +202,9 @@ export async function syncTaskCalendarEvent(opts: {
     {
       summary: title,
       description: "משימה ממערכת Marketing Captain",
-      start: startDateTime.toISOString(),
-      end: endDateTime.toISOString(),
+      start: payload.start,
+      end: payload.end,
+      allDay: payload.allDay,
     },
     { tenantId },
   );

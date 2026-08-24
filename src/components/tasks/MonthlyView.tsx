@@ -1,4 +1,5 @@
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isSameMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMonth } from "date-fns";
+import { isTaskOnDay } from "@/lib/taskDate";
 import { he } from "date-fns/locale";
 import { useDroppable } from "@dnd-kit/core";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +51,7 @@ function DayCell({
   });
 
   const dayTasks = tasks.filter(
-    (task) => task.due_date && isSameDay(new Date(task.due_date), date)
+    (task) => task.due_date && isTaskOnDay(task.due_date, date)
   );
 
   const isCurrentMonth = isSameMonth(date, currentMonth);
