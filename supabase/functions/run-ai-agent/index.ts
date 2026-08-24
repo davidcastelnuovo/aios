@@ -7361,7 +7361,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // Route to the org's own LLM provider(s) using the keys stored in the "llm"
     // integration. Build a fallback chain so Carmen automatically continues on the
     // next funded provider if the primary runs out of quota/credit mid-request.
-    const llmChain = await buildLLMChain(supabase, agent.tenant_id, model)
+    const isolatedChatModel = pinSkillsOnly && (model === 'manus/manus-1' || model === 'manus-1')
+      ? 'google/gemini-3-flash-preview'
+      : model
+    if (isolatedChatModel !== model) {
+      console.log(`[AGENT] pin_skills_only: remapping ${model} → ${isolatedChatModel} for isolated chat`)
+    }
+    const llmChain = await buildLLMChain(supabase, agent.tenant_id, isolatedChatModel)
     if (llmChain.length === 0) throw new Error('לא מוגדר אף מפתח מודל AI פעיל באינטגרציית מודלי AI')
     let activeIdx = 0
     let llm = llmChain[activeIdx]
