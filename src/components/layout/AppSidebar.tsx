@@ -21,8 +21,6 @@ import {
   Settings,
   Building,
   Zap,
-  PanelRightClose,
-  PanelRightOpen,
   Package,
   Palette,
   Bot,
@@ -114,7 +112,7 @@ import { computeSidebarOverlay } from "@/visual-workspace/hooks/useSitemap";
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function AppSidebar() {
-  const { state, setOpenMobile, isMobile, toggleSidebar } = useSidebar();
+  const { state, setOpenMobile, isMobile } = useSidebar();
   const { hasPermission, isLoading } = useUserPermissions();
   const { logoUrl } = useTheme();
   const { buildPath } = useTenantPath();
@@ -288,7 +286,7 @@ export function AppSidebar() {
                 <Tooltip key={tab.id}>
                   <TooltipTrigger asChild>
                     <button
-                      onClick={() => { setActiveTab(tab.id); if (isCollapsed) toggleSidebar(); }}
+                      onClick={() => setActiveTab(tab.id)}
                       className={`p-2 rounded-md transition-colors ${
                         activeTab === tab.id
                           ? "bg-primary text-primary-foreground"
@@ -302,23 +300,11 @@ export function AppSidebar() {
                 </Tooltip>
               );
             })}
-            <button
-              onClick={toggleSidebar}
-              className="p-2 hover:bg-sidebar-accent rounded-md transition-colors"
-            >
-              <PanelRightOpen className="h-4 w-4" />
-            </button>
           </div>
         ) : (
           <div className="flex flex-col gap-2 px-2 py-2" dir="rtl">
-            {/* Top row: logo + tenant + collapse */}
-            <div className="flex items-center justify-between">
-              <button
-                onClick={toggleSidebar}
-                className="flex-shrink-0 p-1.5 hover:bg-sidebar-accent rounded-md transition-colors"
-              >
-                <PanelRightClose className="h-4 w-4" />
-              </button>
+            {/* Top row: logo + tenant */}
+            <div className="flex items-center justify-end">
               <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
                 {userTenants && userTenants.length > 1 && (
                   <Select value={currentTenantId || undefined} onValueChange={handleTenantChange}>
