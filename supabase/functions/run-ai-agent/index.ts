@@ -6989,12 +6989,15 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // 4a-router. For Carmen's large toolset, keep only the tools relevant to this
     // message (+ the always-on core). Best-effort — falls back to the full set;
     // capToolsForTarget remains the final backstop for OpenAI's 128-tool limit.
-    if (isCarmen) {
-      filteredTools = await selectRelevantTools(supabase, String(command_text || ''), filteredTools)
-    }
+    // Isolated studio (copy thread): text in / copy out. Do not route native
+    // tools, and do not fall back to Carmen's full CRM set. The pinned
+    // copywriter skin still lists operational tools (gmail_send, Meta reads);
+    // those must not be injected later either.
     if (pinSkillsOnly) {
-      const isolatedBlock = new Set(['get_latest_campaign_pulse', 'check_ad_accounts_health'])
-      filteredTools = filteredTools.filter((t) => !isolatedBlock.has(t.name))
+      filteredTools = []
+      console.log('[AGENT] pin_skills_only: exposing no tools (isolated copy session)')
+    } else if (isCarmen) {
+      filteredTools = await selectRelevantTools(supabase, String(command_text || ''), filteredTools)
     }
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
@@ -7021,6 +7024,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // 4b. Load MCP tools for this tenant + agent (Phase 3)
     let mcpExecutors = new Map<string, (args: any) => Promise<any>>()
     try {
+      if (!pinSkillsOnly) {
       const disabledIntegrations = ((agent as any).disabled_integrations || []) as string[]
       const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id, disabledIntegrations)
       if (mcp.toolDefs.length > 0) {
@@ -7047,6 +7051,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           if (exec) mcpExecutors.set(t.name, exec)
         }
         console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent}, dev_tier=${devEscalationTier ?? 'none'}, exposed=${[...mcpExecutors.keys()].length})`)
+      }
       }
     } catch (e: any) {
       console.error('[AGENT] MCP load failed:', e?.message)
@@ -7081,7 +7086,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       // guaranteed to be available, even when agent.allowed_tools narrows the
       // set. Explicitly disabled tools stay disabled (denylist wins).
       const skillToolNames = new Set(_matchedSkills.flatMap(s => s.tools || []))
-      if (skillToolNames.size > 0) {
+      if (skillToolNames.size > 0 && !pinSkillsOnly) {
         const present = new Set(filteredTools.map(t => t.name))
         const missing = ALL_TOOLS.filter(t =>
           skillToolNames.has(t.name) && !present.has(t.name) && !disabledTools.includes(t.name) &&
@@ -7110,7 +7115,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     const userSaidApprove = isExplicitApprovalPhrase(String(command_text || ''))
     const userSaidReject = isExplicitRejectionPhrase(String(command_text || ''))
     let pendingForConfirm: any = null
-    if (isCarmen && (userSaidApprove || userSaidReject)) {
+    if (isCarmen && !pinSkillsOnly && (userSaidApprove || userSaidReject)) {
       const { data: pendingRows } = await supabase.from('agent_approval_queue')
         .select('id, action_type, title, description, tool_name, tool_input, context, created_at, status')
         .eq('tenant_id', resolvedTenantId)
@@ -7140,6 +7145,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // Deterministic path: short WhatsApp confirm + open pending → execute now (no LLM loop).
     if (
       isCarmen &&
+      !pinSkillsOnly &&
       userSaidApprove &&
       pendingForConfirm &&
       String(command_text || '').trim().length <= 40
@@ -7212,7 +7218,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
     // Deterministic path: meeting join URL in message → dispatch Recall bot immediately.
     const meetingUrl = extractMeetingUrl(String(command_text || ''))
-    if (isCarmen && meetingUrl) {
+    if (isCarmen && !pinSkillsOnly && meetingUrl) {
       console.log(`[AGENT] Auto-dispatching meeting bot for URL: ${meetingUrl.slice(0, 80)}`)
       const autoStart = Date.now()
       const execResult = await executeTool(
@@ -7326,7 +7332,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
     // If the agent's engine is Manus — delegate the entire conversation to Manus AI
     // and return the result directly (no tool loop needed here).
-    if (model === 'manus/manus-1' || model === 'manus-1') {
+    if (!pinSkillsOnly && (model === 'manus/manus-1' || model === 'manus-1')) {
       const manusBody: any = {
         action: 'create_task',
         tenantId: agent.tenant_id,
@@ -7355,7 +7361,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // Route to the org's own LLM provider(s) using the keys stored in the "llm"
     // integration. Build a fallback chain so Carmen automatically continues on the
     // next funded provider if the primary runs out of quota/credit mid-request.
-    const llmChain = await buildLLMChain(supabase, agent.tenant_id, model)
+    const isolatedChatModel = pinSkillsOnly && (model === 'manus/manus-1' || model === 'manus-1')
+      ? 'google/gemini-3-flash-preview'
+      : model
+    if (isolatedChatModel !== model) {
+      console.log(`[AGENT] pin_skills_only: remapping ${model} → ${isolatedChatModel} for isolated chat`)
+    }
+    const llmChain = await buildLLMChain(supabase, agent.tenant_id, isolatedChatModel)
     if (llmChain.length === 0) throw new Error('לא מוגדר אף מפתח מודל AI פעיל באינטגרציית מודלי AI')
     let activeIdx = 0
     let llm = llmChain[activeIdx]
@@ -7447,7 +7459,9 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         try {
           // Defense in depth: even if a tool slipped into the schema, refuse
           // coding-agent escalations outside the caller's tier (full vs bugfix).
-          if (isDevEscalationTool(toolName) && !isDevEscalationToolAllowed(toolName, devEscalationTier)) {
+          if (pinSkillsOnly) {
+            result = { error: 'isolated_session', message: 'סשן מבודד — כלים כבויים.' }
+          } else if (isDevEscalationTool(toolName) && !isDevEscalationToolAllowed(toolName, devEscalationTier)) {
             result = {
               error: 'dev_escalation_forbidden',
               message: devEscalationTier === 'bugfix' ? DEV_ESCALATION_BUGFIX_ONLY_REFUSAL_HE : DEV_ESCALATION_REFUSAL_HE,

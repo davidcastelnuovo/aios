@@ -14,7 +14,7 @@ export function isCopyDepartmentItem(item: WorkItemLike, copyStageId?: string | 
   if (payload.project_type === "static" || payload.project_type === "video") return false;
   if (department === "copy") return true;
   if (copyStageId && item.current_stage_id === copyStageId) return true;
-  if (!department && (payload.brief_text || payload.copy_text)) return true;
+  if (!department && (payload.brief_text || payload.copy_text || payload.copy_chat)) return true;
   return false;
 }
 
