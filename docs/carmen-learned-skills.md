@@ -1,9 +1,3 @@
-### 2026-08-23 — Pulse alerts on stale client phone contact
-- **Skin slug:** `pulse_check` (global + tenant overrides updated)
-- **What Carmen can now do:** Include the latest client-card update explicitly marked `call`, show when and by whom it was recorded, and flag campaign clients with no documented phone call in the last 14 days. A missing/stale call turns an otherwise healthy pulse yellow; existing critical/no-data states remain unchanged.
-- **How:** `campaign-pulse-snapshot` reads `client_updates.update_type='call'`, stores `last_client_call_at` / `last_client_call_by` on `campaign_pulse_snapshots`, and `_shared/campaign-pulse.classifyCampaignPulseStatus` applies the 14-day rule. Free-text updates are never inferred to be calls.
-- **Origin:** David — add client-contact freshness from client-card updates to Carmen's campaign pulse.
-
 # Carmen — Learned Skills Log (Claude's memory)
 
 This file is **Claude's own long-term memory** of capabilities it has taught
@@ -38,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-24 — Pulse: client-call freshness + critical campaign alerts
+- **Skin slug:** `pulse_check` (global + tenant overrides updated)
+- **What Carmen can now do:** (1) Report the latest client-card update explicitly marked `call` — when it happened and who logged it — and flag campaign clients with no documented phone call in the last 14 days. (2) Report open critical alerts (stopped campaign, disapproved ad) in a `🔴 דורש טיפול` block, but only for clients whose campaign table is still active. (3) Stop appending the redundant "details are dashboard-only" sign-off to WhatsApp digests. (4) Show the same pulse across tenants that share an agency, instead of "no pulse available" on one side.
+- **How:** `campaign-pulse-snapshot` reads `client_updates.update_type='call'` via `get_latest_client_call_updates` and open `campaign_alerts`, matching alerts to clients by `ad_account_id` (Meta records no `client_id`). `_shared/campaign-pulse` owns the rules: `classifyCampaignPulseStatus` (14-day call rule, stopped campaign ⇒ critical), `selectPulseCriticalAlerts`, `buildPulseWhatsAppDigest`. `get_latest_campaign_pulse` reads snapshots across `accessibleTenantIds`, keeping the freshest row per client. Free-text updates are never inferred to be calls.
+- **Origin:** David — add client-contact freshness, report stopped campaigns, drop the redundant sentence, and close the DMM vs Marketing Captain display gap.
+
 ### 2026-08-23 — Ana: bug-fix escalations to Cursor (tiered dev auth)
 - **Skin slug:** `bugfix_escalation_to_cursor` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When **Ana** (אנה, `d6cd8d62-…`, `972545612156`) reports a reproducible bug, escalate to Cursor via `mcp_Cursor__request_dev_task` only — not features, config, permissions, or DB schema changes. David keeps full tier (all coding agents). Everyone else is refused.

@@ -5,8 +5,11 @@ import {
   buildPulseDashboardAbsoluteUrl,
   buildPulseWhatsAppDigest,
   classifyCampaignPulseStatus,
+  clientAdAccountIds,
   clientCampaignServices as servicesFromClient,
+  countStoppedCampaignsByClient,
   effectiveIsEcommerce,
+  selectPulseCriticalAlerts,
   tableMatchesServices,
 } from '../_shared/campaign-pulse.ts'
 
@@ -131,7 +134,7 @@ Deno.serve(async (req) => {
     const [{ data: ownedAgencies, error: ownedAgenciesError }, { data: sharedAgencies, error: sharedAgenciesError }] =
       await Promise.all([
         supabase.from('agencies').select('id').eq('tenant_id', tenantId),
-        supabase.from('agency_tenant_access').select('agency_id').eq('accessing_tenant_id', tenantId),
+        supabase.from('agency_tenant_access').select('agency_id, source_tenant_id').eq('accessing_tenant_id', tenantId),
       ])
     if (ownedAgenciesError || sharedAgenciesError) {
       results.push({ tenant_id: tenantId, error: ownedAgenciesError?.message || sharedAgenciesError?.message })
@@ -140,6 +143,11 @@ Deno.serve(async (req) => {
     const agencyIds = Array.from(new Set([
       ...(ownedAgencies || []).map((agency: any) => agency.id),
       ...(sharedAgencies || []).map((agency: any) => agency.agency_id),
+    ]))
+    // Alerts for a shared agency are recorded under the agency's source tenant.
+    const alertTenantIds = Array.from(new Set([
+      tenantId,
+      ...(sharedAgencies || []).map((agency: any) => agency.source_tenant_id).filter(Boolean),
     ]))
     const { data: clients, error: clientsError } = await supabase.from('clients')
       .select('id, name, tenant_id, agency_id, is_ecommerce, services, agencies(name)')
@@ -198,13 +206,15 @@ Deno.serve(async (req) => {
           .in('integration_type', [...CAMPAIGN_TABLE_TYPES])
       : { data: [], error: null }
     if (tableResult.error) { results.push({ tenant_id: tenantId, error: tableResult.error.message }); continue }
+    // Client-call freshness and alerts are additive signals: when their schema is
+    // not deployed yet the pulse must still be computed and delivered.
     const callUpdateResult = clientIds.length
       ? await supabase.rpc('get_latest_client_call_updates', { p_client_ids: clientIds })
       : { data: [], error: null }
     if (callUpdateResult.error) {
-      results.push({ tenant_id: tenantId, error: callUpdateResult.error.message })
-      continue
+      console.warn('[campaign-pulse] client call lookup unavailable', callUpdateResult.error.message)
     }
+    const clientCallDataAvailable = !callUpdateResult.error
     const latestCallByClient = new Map<string, any>()
     for (const update of callUpdateResult.data || []) {
       latestCallByClient.set(update.client_id, update)
@@ -218,6 +228,28 @@ Deno.serve(async (req) => {
       tables.push(table)
       activeTablesByClient.set(table.client_id, tables)
     }
+    // Critical alerts (stopped campaigns, disapproved ads) are only reported for
+    // clients that still have an active campaign table.
+    const alertResult = await supabase.from('campaign_alerts')
+      .select('client_id, ad_account_id, campaign_id, campaign_name, alert_type, severity')
+      .in('tenant_id', alertTenantIds)
+      .is('resolved_at', null)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (alertResult.error) {
+      console.warn('[campaign-pulse] campaign alerts unavailable', alertResult.error.message)
+    }
+    const criticalIssues = selectPulseCriticalAlerts(alertResult.data || [], campaignClients.map((client: any) => {
+      const activeTables = activeTablesByClient.get(client.id) || []
+      return {
+        clientId: client.id,
+        clientName: client.name,
+        adAccountIds: clientAdAccountIds(activeTables),
+        hasActiveCampaignTable: activeTables.length > 0,
+      }
+    }))
+    const stoppedByClient = countStoppedCampaignsByClient(criticalIssues)
+
     // Include EVERY active client with ppc_meta/ppc_google — never drop clients
     // because Meta activity timed out or all tables were paused.
     const reportableClients = campaignClients
@@ -308,7 +340,8 @@ Deno.serve(async (req) => {
           purchases7: purchases,
           roas,
           cplChangePct: cplChange,
-          lastClientCallAt: latestCall?.last_client_call_at || null,
+          lastClientCallAt: clientCallDataAvailable ? (latestCall?.last_client_call_at || null) : undefined,
+          stoppedCampaignCount: stoppedByClient.get(client.id) || 0,
           nowMs: now.getTime(),
         })
         console.log('[campaign-pulse] client classified', {
@@ -372,14 +405,22 @@ Deno.serve(async (req) => {
     }
     if (snapshots.length) {
       const rows = snapshots.map(({ client_name: _c, agency_name: _a, ...row }) => row)
-      const { error } = await supabase.from('campaign_pulse_snapshots')
+      let { error } = await supabase.from('campaign_pulse_snapshots')
         .upsert(rows, { onConflict: 'tenant_id,client_id' })
+      if (error && /last_client_call/.test(error.message)) {
+        // Columns not deployed yet — persist the pulse without the call fields.
+        console.warn('[campaign-pulse] client call columns missing, writing without them')
+        const legacyRows = rows.map(({ last_client_call_at: _at, last_client_call_by: _by, ...row }) => row)
+        const retry = await supabase.from('campaign_pulse_snapshots')
+          .upsert(legacyRows, { onConflict: 'tenant_id,client_id' })
+        error = retry.error
+      }
       if (error) { results.push({ tenant_id: tenantId, error: error.message }); continue }
     }
     const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
     const tenantSlug = tenantRow?.slug || tenantId
     const dashboardUrl = buildPulseDashboardAbsoluteUrl(tenantSlug)
-    const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl)
+    const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl, criticalIssues)
     let sent = false
     let deliveryClaimed = false
     if (deliveryRequested && setting.campaign_pulse_enabled && forceDelivery) {

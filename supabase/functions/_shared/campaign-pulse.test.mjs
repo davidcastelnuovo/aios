@@ -6,12 +6,16 @@ import {
   buildPulseDashboardAbsoluteUrl,
   buildPulseWhatsAppDigest,
   classifyCampaignPulseStatus,
+  clientAdAccountIds,
   countPulseStatuses,
+  countStoppedCampaignsByClient,
   effectiveIsEcommerce,
+  normalizeAdAccountId,
   pickFreshestTablePerPlatform,
   resolveLastSyncAt,
   isSyncStale,
   pulseSurfacePrefersWhatsAppDigest,
+  selectPulseCriticalAlerts,
 } from "./campaign-pulse.ts";
 
 const NOW = Date.parse("2026-08-03T12:00:00.000Z");
@@ -144,6 +148,7 @@ test("health WhatsApp digest is short counts + dashboard link (no per-client lis
   assert.equal(digest.includes("ארבע על ארבע"), false);
   assert.equal(digest.includes("בילבי"), false);
   assert.equal(digest.includes("Meta:"), false);
+  assert.equal(digest.includes("לא בוואטסאפ"), false);
 });
 
 test("effectiveIsEcommerce follows facebook_ecommerce tables", () => {
@@ -342,6 +347,88 @@ test("client with no documented call is flagged", () => {
   assert.deepEqual(result.flags, ["לא תועדה שיחה טלפונית עם הלקוח"]);
 });
 
+test("stopped campaign makes the client critical", () => {
+  const result = classifyCampaignPulseStatus({
+    activeTables: [{
+      integration_type: "facebook_insights",
+      campaign_active: true,
+      last_sync_at: FRESH,
+      integration_settings: {},
+    }],
+    hasConfiguredCampaignTable: true,
+    recentRecordCount: 20,
+    isEcommerce: false,
+    spend7: 900,
+    leads7: 10,
+    purchases7: 0,
+    roas: null,
+    cplChangePct: 5,
+    stoppedCampaignCount: 2,
+    nowMs: NOW,
+  });
+  assert.equal(result.status, "critical");
+  assert.ok(result.flags.includes("2 קמפיינים נעצרו"));
+});
+
+test("critical alerts attach only to clients with an active campaign table", () => {
+  const clients = [
+    {
+      clientId: "client-active",
+      clientName: "בילבי",
+      adAccountIds: ["111"],
+      hasActiveCampaignTable: true,
+    },
+    {
+      clientId: "client-paused",
+      clientName: "ארבע על ארבע",
+      adAccountIds: ["222"],
+      hasActiveCampaignTable: false,
+    },
+  ];
+  const issues = selectPulseCriticalAlerts([
+    // Meta's monitor records the ad account but no client_id.
+    { alert_type: "campaign_stopped", severity: "critical", ad_account_id: "act_111", campaign_name: "לידים אוגוסט" },
+    { alert_type: "campaign_stopped", severity: "critical", ad_account_id: "act_222", campaign_name: "קמפיין מושהה" },
+    { alert_type: "frequency_high", severity: "info", ad_account_id: "act_111", campaign_name: "תדירות" },
+    { alert_type: "campaign_stopped", severity: "critical", ad_account_id: "act_999", campaign_name: "לקוח לא ידוע" },
+  ], clients);
+
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].clientName, "בילבי");
+  assert.equal(issues[0].label, "קמפיין נעצר");
+  assert.equal(issues[0].campaignName, "לידים אוגוסט");
+  assert.equal(countStoppedCampaignsByClient(issues).get("client-active"), 1);
+});
+
+test("critical alerts appear in the WhatsApp digest", () => {
+  const digest = buildPulseWhatsAppDigest(
+    [{ status: "critical" }, { status: "healthy" }],
+    "https://aios.co.il/t/dmm/dmm-dashboard",
+    [
+      { clientId: "a", clientName: "בילבי", alertType: "campaign_stopped", label: "קמפיין נעצר", campaignName: "לידים אוגוסט" },
+      { clientId: "b", clientName: "ארבע על ארבע", alertType: "ad_disapproved", label: "מודעה נדחתה", campaignName: null },
+    ],
+  );
+  assert.match(digest, /🔴 דורש טיפול:/);
+  assert.match(digest, /• בילבי: קמפיין נעצר — לידים אוגוסט/);
+  assert.match(digest, /• ארבע על ארבע: מודעה נדחתה/);
+  assert.equal(digest.includes("| סוכנות |"), false);
+});
+
+test("ad account ids are read from table settings and normalized", () => {
+  assert.equal(normalizeAdAccountId("act_123"), "123");
+  assert.equal(normalizeAdAccountId(" 456 "), "456");
+  assert.equal(normalizeAdAccountId(null), null);
+  assert.deepEqual(
+    clientAdAccountIds([
+      { integration_type: "facebook_insights", integration_settings: { ad_account_id: "act_111" } },
+      { integration_type: "google_ads", integration_settings: { customer_id: "222" } },
+      { integration_type: "facebook_ecommerce", integration_settings: {} },
+    ]),
+    ["111", "222"],
+  );
+});
+
 test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)", () => {
   const digest = buildPulseWhatsAppDigest(
     [
@@ -357,9 +444,18 @@ test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)
   assert.match(digest, /🟡 2 לתשומת לב/);
   assert.match(digest, /🔴 1 קריטיים/);
   assert.match(digest, /https:\/\/aios\.co\.il\/t\/marketingcaptain\/dmm-dashboard/);
-  assert.match(digest, /לא בוואטסאפ/);
   assert.equal(digest.includes("| סוכנות |"), false);
   assert.equal(digest.includes("חושבה ב־"), false);
+  // The redundant "details are dashboard-only" sign-off is gone from both shapes.
+  assert.equal(digest.includes("בדשבורד בלבד"), false);
+  assert.equal(digest.includes("לא בוואטסאפ"), false);
+  assert.equal(
+    buildPulseWhatsAppDigest(
+      [{ status: "healthy", client_name: "בילבי" }],
+      "https://aios.co.il/t/marketingcaptain/dmm-dashboard",
+    ).includes("בדשבורד בלבד"),
+    false,
+  );
   const counts = countPulseStatuses([
     { status: "healthy" },
     { status: "warning" },

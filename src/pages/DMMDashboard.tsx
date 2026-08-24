@@ -223,13 +223,19 @@ export default function DMMDashboard() {
     queryKey: ["pulse-dash-snapshots", tenantId, clientIds.join(","), selectedAgency],
     queryFn: async () => {
       if (!tenantId || !clientIds.length) return [] as PulseSnapshotRow[];
+      const baseColumns =
+        "client_id, agency_id, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability";
       // Snapshots may live on this tenant or a partner tenant for shared agencies.
-      const { data, error } = await (supabase as any)
-        .from("campaign_pulse_snapshots")
-        .select(
-          "client_id, agency_id, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, last_client_call_at, last_client_call_by",
-        )
-        .in("client_id", clientIds);
+      const load = (columns: string) =>
+        (supabase as any)
+          .from("campaign_pulse_snapshots")
+          .select(columns)
+          .in("client_id", clientIds);
+      let { data, error } = await load(`${baseColumns}, last_client_call_at, last_client_call_by`);
+      if (error && /last_client_call/.test(error.message ?? "")) {
+        // Call-freshness columns not deployed yet — render the rest of the pulse.
+        ({ data, error } = await load(baseColumns));
+      }
       if (error) throw error;
       return (data ?? []) as PulseSnapshotRow[];
     },
