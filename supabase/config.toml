@@ -307,6 +307,9 @@ verify_jwt = true
 [functions.task-notification-worker]
 verify_jwt = true
 
+[functions.client-follow-up-worker]
+verify_jwt = true
+
 [functions.run-ai-agent-v2]
 verify_jwt = true
 
@@ -335,6 +338,10 @@ verify_jwt = false
 # Cron-driven retry for bot sessions the webhook could not finish.
 [functions.meeting-bot-reconcile]
 verify_jwt = false
+
+# Authenticated dry-run/apply endpoint for existing recording calendar matches.
+[functions.match-recordings-calendar]
+verify_jwt = true
 
 [functions.publishing-feed]
 verify_jwt = false

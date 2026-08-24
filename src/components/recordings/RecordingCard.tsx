@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,11 +39,21 @@ import {
   Video,
   Folder,
   UserRound,
+  Users,
+  Building2,
+  Link2,
   Sparkles,
   Mic,
+  Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import {
+  EntityAssignmentDialog,
+  type EntityAssignmentSelection,
+} from "@/components/shared/EntityAssignmentDialog";
+import { useTenantPath } from "@/hooks/useTenantPath";
 
 export interface FeedRecording {
   id: string;
@@ -56,7 +67,9 @@ export interface FeedRecording {
   thumbnail_path: string | null;
   folder_id: string | null;
   client_id: string | null;
+  agency_id?: string | null;
   lead_id: string | null;
+  summary_scope?: "auto" | "client" | "lead" | "campaigner" | "agency" | null;
   transcription: string | null;
   transcription_status: string | null;
   summary_md: string | null;
@@ -64,6 +77,7 @@ export interface FeedRecording {
   suggested_client_id: string | null;
   campaigner_ids: string[] | null;
   clients?: { name: string } | null;
+  agencies?: { name: string } | null;
   // deno-style loose grouping payload from the page
   _group?: FeedRecording[];
 }
@@ -76,14 +90,18 @@ export interface FolderOption {
 
 interface RecordingCardProps {
   rec: FeedRecording;
-  clients: { id: string; name: string }[];
+  clients: { id: string; name: string; agency_id?: string | null }[];
+  campaigners: { id: string; full_name: string; email?: string | null }[];
+  agencies: { id: string; name: string }[];
   folders: FolderOption[];
   campaignerNames?: string[];
+  onOpenTranscript: (rec: FeedRecording) => void;
   onOpenSummary: (rec: FeedRecording) => void;
   onCreateSummary: (rec: FeedRecording) => void;
   onShare: (rec: FeedRecording) => void;
-  onAssignClient: (rec: FeedRecording, clientId: string | null) => void;
+  onAssignTarget: (rec: FeedRecording, selection: EntityAssignmentSelection) => void | Promise<void>;
   onMoveToFolder: (rec: FeedRecording, folderId: string | null) => void;
+  onRename: (rec: FeedRecording, name: string) => Promise<void>;
   onDelete: (rec: FeedRecording) => void;
   onAcceptSuggestion?: (rec: FeedRecording) => void;
   onRejectSuggestion?: (rec: FeedRecording) => void;
@@ -95,6 +113,9 @@ const sourceLabel = (source: string | null) => {
     case "manual": return "העלאה ידנית";
     case "chrome_extension": return "הקלטת מסך";
     case "google_meet": return "Google Meet";
+    case "meeting_bot": return "כרמן";
+    case "microsoft_teams":
+    case "teams": return "Teams";
     default: return source || "Zoom";
   }
 };
@@ -109,22 +130,41 @@ function formatDuration(minutes: number | null): string | null {
 export function RecordingCard({
   rec,
   clients,
+  campaigners,
+  agencies,
   folders,
   campaignerNames = [],
+  onOpenTranscript,
   onOpenSummary,
   onCreateSummary,
   onShare,
-  onAssignClient,
+  onAssignTarget,
   onMoveToFolder,
+  onRename,
   onDelete,
   onAcceptSuggestion,
   onRejectSuggestion,
 }: RecordingCardProps) {
+  const { buildPath } = useTenantPath();
   const suggestedClientName = rec.suggested_client_id && !rec.client_id
     ? clients.find((c) => c.id === rec.suggested_client_id)?.name ?? null
     : null;
   const [playOpen, setPlayOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const assignedAgencyName = rec.agency_id
+    ? agencies.find((agency) => agency.id === rec.agency_id)?.name
+    : null;
+  const currentAssignment: EntityAssignmentSelection = rec.client_id
+    ? { type: "client", ids: [rec.client_id] }
+    : (rec.campaigner_ids || []).length > 0
+    ? { type: "team", ids: rec.campaigner_ids || [] }
+    : rec.agency_id
+    ? { type: "agency", ids: [rec.agency_id] }
+    : null;
 
   const { data: thumbnailUrl } = useQuery({
     queryKey: ["recording-thumb", rec.thumbnail_path],
@@ -188,6 +228,20 @@ export function RecordingCard({
     }
   };
 
+  const handleRename = async () => {
+    const nextName = renameValue.trim();
+    if (!nextName || nextName === (rec.meeting_topic || "").trim()) return;
+    setIsRenaming(true);
+    try {
+      await onRename(rec, nextName);
+      setRenameOpen(false);
+    } catch {
+      // The parent mutation shows the error toast; keep the dialog open.
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
   return (
     <>
       <Card className="overflow-hidden group hover:shadow-lg transition-all">
@@ -243,27 +297,26 @@ export function RecordingCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <UserRound className="h-4 w-4 ml-2" />
-                    שייך ללקוח
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
-                    <DropdownMenuItem onClick={() => onAssignClient(rec, null)}>
-                      — ללא שיוך —
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {clients.map((c) => (
-                      <DropdownMenuItem
-                        key={c.id}
-                        onClick={() => onAssignClient(rec, c.id)}
-                        className={cn(rec.client_id === c.id && "font-semibold text-primary")}
-                      >
-                        {c.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setRenameValue(rec.meeting_topic || "");
+                    setRenameOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 ml-2" />
+                  שנה שם
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAssignmentOpen(true)}>
+                  <Link2 className="h-4 w-4 ml-2" />
+                  ניהול שיוך
+                </DropdownMenuItem>
+                {rec.transcription && (
+                  <DropdownMenuItem onClick={() => onCreateSummary(rec)}>
+                    <Sparkles className="h-4 w-4 ml-2" />
+                    {hasSummary ? "צור סיכום מפורט מחדש" : "צור סיכום מפורט"}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
 
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
@@ -317,7 +370,17 @@ export function RecordingCard({
 
           {/* Client chip + actions */}
           <div className="flex items-center justify-between gap-2">
-            {rec.clients?.name ? (
+            {rec.clients?.name && rec.client_id ? (
+              <Badge variant="secondary" className="text-[11px] max-w-[45%] truncate p-0">
+                <Link
+                  to={buildPath(`/clients?clientId=${rec.client_id}&tab=recordings`)}
+                  className="block truncate px-2.5 py-0.5"
+                  title="פתח בכרטיס הלקוח"
+                >
+                  {rec.clients.name}
+                </Link>
+              </Badge>
+            ) : rec.clients?.name ? (
               <Badge variant="secondary" className="text-[11px] max-w-[45%] truncate">
                 {rec.clients.name}
               </Badge>
@@ -325,10 +388,20 @@ export function RecordingCard({
               <Badge variant="outline" className="text-[11px] max-w-[55%] truncate" title={campaignerNames.join(", ")}>
                 פנימי · {campaignerNames.join(", ")}
               </Badge>
+            ) : assignedAgencyName || rec.agencies?.name ? (
+              <Badge variant="outline" className="text-[11px] max-w-[55%] truncate">
+                סוכנות · {assignedAgencyName || rec.agencies?.name}
+              </Badge>
             ) : (
               <span className="text-[11px] text-muted-foreground">ללא שיוך</span>
             )}
             <div className="flex gap-1">
+              {rec.transcription && (
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onOpenTranscript(rec)}>
+                  <Mic className="h-3.5 w-3.5 ml-1" />
+                  תמלול
+                </Button>
+              )}
               {hasSummary ? (
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-green-600" onClick={() => onOpenSummary(rec)}>
                   <FileText className="h-3.5 w-3.5 ml-1" />
@@ -349,6 +422,88 @@ export function RecordingCard({
           </div>
         </div>
       </Card>
+
+      <EntityAssignmentDialog
+        open={assignmentOpen}
+        onOpenChange={setAssignmentOpen}
+        title={`שיוך הקלטה — ${rec.meeting_topic || "ללא נושא"}`}
+        currentSelection={currentAssignment}
+        groups={[
+          {
+            type: "client",
+            label: "לקוחות",
+            icon: UserRound,
+            options: clients.map((client) => ({
+              id: client.id,
+              label: client.name,
+              description: agencies.find((agency) => agency.id === client.agency_id)?.name,
+            })),
+            emptyLabel: "לא נמצאו לקוחות",
+          },
+          {
+            type: "team",
+            label: "אנשי צוות",
+            icon: Users,
+            multiple: true,
+            options: campaigners.map((campaigner) => ({
+              id: campaigner.id,
+              label: campaigner.full_name,
+              description: campaigner.email,
+            })),
+            emptyLabel: "לא נמצאו אנשי צוות",
+          },
+          {
+            type: "agency",
+            label: "סוכנויות",
+            icon: Building2,
+            options: agencies.map((agency) => ({
+              id: agency.id,
+              label: agency.name,
+            })),
+            emptyLabel: "לא נמצאו סוכנויות",
+          },
+        ]}
+        onSave={(selection) => onAssignTarget(rec, selection)}
+      />
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>שינוי שם ההקלטה</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleRename();
+            }}
+          >
+            <Input
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              placeholder="שם ההקלטה"
+              autoFocus
+              maxLength={200}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>
+                ביטול
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  isRenaming ||
+                  !renameValue.trim() ||
+                  renameValue.trim() === (rec.meeting_topic || "").trim()
+                }
+              >
+                {isRenaming && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
+                שמור
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Player */}
       <Dialog open={playOpen} onOpenChange={setPlayOpen}>

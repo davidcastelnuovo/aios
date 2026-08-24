@@ -3157,6 +3157,9 @@ export type Database = {
           notes: string | null
           overall_status: string | null
           phone: string | null
+          follow_up_date: string | null
+          follow_up_campaigner_notified_at: string | null
+          follow_up_manager_notified_at: string | null
           retainer: number | null
           services: string[] | null
           start_date: string | null
@@ -3199,6 +3202,9 @@ export type Database = {
           notes?: string | null
           overall_status?: string | null
           phone?: string | null
+          follow_up_date?: string | null
+          follow_up_campaigner_notified_at?: string | null
+          follow_up_manager_notified_at?: string | null
           retainer?: number | null
           services?: string[] | null
           start_date?: string | null
@@ -3241,6 +3247,9 @@ export type Database = {
           notes?: string | null
           overall_status?: string | null
           phone?: string | null
+          follow_up_date?: string | null
+          follow_up_campaigner_notified_at?: string | null
+          follow_up_manager_notified_at?: string | null
           retainer?: number | null
           services?: string[] | null
           start_date?: string | null
@@ -8351,6 +8360,7 @@ export type Database = {
           sort_order: number | null
           status: Database["public"]["Enums"]["task_status"]
           task_type: Database["public"]["Enums"]["task_type"] | null
+          target_date: string | null
           tenant_id: string
           title: string
           updated_at: string
@@ -8380,6 +8390,7 @@ export type Database = {
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
+          target_date?: string | null
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id: string
           title: string
@@ -8410,6 +8421,7 @@ export type Database = {
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
+          target_date?: string | null
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id?: string
           title?: string
@@ -10290,6 +10302,10 @@ export type Database = {
       }
       zoom_recordings: {
         Row: {
+          agency_id: string | null
+          calendar_event_id: string | null
+          calendar_matched_at: string | null
+          campaigner_ids: string[] | null
           client_id: string | null
           created_at: string
           duration: number | null
@@ -10306,7 +10322,9 @@ export type Database = {
           recording_url: string | null
           source: string
           start_time: string | null
+          summary_scope: string | null
           summary_file_url: string | null
+          summary_md: string | null
           tenant_id: string
           transcription: string | null
           transcription_error: string | null
@@ -10314,6 +10332,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agency_id?: string | null
+          calendar_event_id?: string | null
+          calendar_matched_at?: string | null
+          campaigner_ids?: string[] | null
           client_id?: string | null
           created_at?: string
           duration?: number | null
@@ -10330,7 +10352,9 @@ export type Database = {
           recording_url?: string | null
           source?: string
           start_time?: string | null
+          summary_scope?: string | null
           summary_file_url?: string | null
+          summary_md?: string | null
           tenant_id: string
           transcription?: string | null
           transcription_error?: string | null
@@ -10338,6 +10362,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agency_id?: string | null
+          calendar_event_id?: string | null
+          calendar_matched_at?: string | null
+          campaigner_ids?: string[] | null
           client_id?: string | null
           created_at?: string
           duration?: number | null
@@ -10354,7 +10382,9 @@ export type Database = {
           recording_url?: string | null
           source?: string
           start_time?: string | null
+          summary_scope?: string | null
           summary_file_url?: string | null
+          summary_md?: string | null
           tenant_id?: string
           transcription?: string | null
           transcription_error?: string | null
@@ -10362,6 +10392,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "zoom_recordings_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "zoom_recordings_client_id_fkey"
             columns: ["client_id"]

@@ -15,6 +15,7 @@ import { CampaignerAssignmentPicker } from "@/components/clients/CampaignerAssig
 import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
 import { ClientsChatView } from "@/components/clients/ClientsChatView";
 import { ClientsMultiSelectToolbar } from "@/components/clients/ClientsMultiSelectToolbar";
+import { ClientFollowUpDatePicker } from "@/components/clients/ClientFollowUpDatePicker";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -77,10 +78,27 @@ export default function Clients() {
   const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
   // Restricted viewer: pure campaigner (no SEO / team_manager / owner / super_admin)
   const isRestrictedClientViewer = isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
-  // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
+  // Deep-link support: ?clientId=xxx&tab=updates|recordings (from DMM / recordings)
+  const CLIENT_DEEP_LINK_TABS = new Set([
+    "details",
+    "connections",
+    "business",
+    "docs",
+    "credentials",
+    "meeting",
+    "recordings",
+    "report",
+    "updates",
+    "calls",
+    "wordpress",
+    "whatsapp",
+  ]);
   const [searchParams] = useSearchParams();
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
-  const deepLinkTab = (searchParams.get("tab") as "updates" | "details" | undefined) ?? undefined;
+  const rawDeepLinkTab = searchParams.get("tab");
+  const deepLinkTab = rawDeepLinkTab && CLIENT_DEEP_LINK_TABS.has(rawDeepLinkTab)
+    ? rawDeepLinkTab
+    : undefined;
   const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("chat");
   const [pendingChatClientId, setPendingChatClientId] = useState<string | null>(null);
 
@@ -1075,6 +1093,10 @@ export default function Clients() {
                   <Badge variant="outline" className={getMoodStatusDisplay(client.mood_status).color}>
                     {getMoodStatusDisplay(client.mood_status).emoji} {getMoodStatusDisplay(client.mood_status).text}
                   </Badge>
+                  <ClientFollowUpDatePicker
+                    clientId={client.id}
+                    currentDate={client.follow_up_date ?? null}
+                  />
                 </div>
               </div>
             </CardHeader>

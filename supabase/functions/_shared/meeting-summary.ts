@@ -94,7 +94,7 @@ ${transcript}${focusPrompt}
 
 export interface SaveSummaryOptions {
   tenant_id: string;
-  target_type: "client" | "lead";
+  target_type: "client" | "lead" | "campaigner" | "agency";
   target_id: string;
   target_name: string;
   summary: string;
@@ -131,16 +131,6 @@ export async function saveSummaryForTarget(
   if (urlError || !urlData) throw new Error("Failed to sign recording URL: " + (urlError?.message ?? ""));
   const fileUrl = urlData.signedUrl;
 
-  // Add to client/lead attachments
-  const table = target_type === "client" ? "clients" : "leads";
-  const { data: targetData } = await admin
-    .from(table)
-    .select("attachments")
-    .eq("id", target_id)
-    .maybeSingle();
-
-  // deno-lint-ignore no-explicit-any
-  const currentAttachments = (targetData?.attachments as any[]) || [];
   const newAttachment = {
     name: `סיכום פגישה - ${dateStr}.docx`,
     url: fileUrl,
@@ -149,13 +139,27 @@ export async function saveSummaryForTarget(
     created_by: created_by ?? null,
   };
 
-  const { error: updateError } = await admin
-    .from(table)
-    .update({ attachments: [...currentAttachments, newAttachment] })
-    .eq("id", target_id);
+  // Clients and leads have an attachments collection. Campaigners/agencies do
+  // not; their association lives on zoom_recordings and the DOCX remains in
+  // the tenant-scoped summaries folder.
+  if (target_type === "client" || target_type === "lead") {
+    const table = target_type === "client" ? "clients" : "leads";
+    const { data: targetData } = await admin
+      .from(table)
+      .select("attachments")
+      .eq("id", target_id)
+      .maybeSingle();
 
-  if (updateError) {
-    console.error("Update attachments error:", updateError);
+    // deno-lint-ignore no-explicit-any
+    const currentAttachments = (targetData?.attachments as any[]) || [];
+    const { error: updateError } = await admin
+      .from(table)
+      .update({ attachments: [...currentAttachments, newAttachment] })
+      .eq("id", target_id);
+
+    if (updateError) {
+      console.error("Update attachments error:", updateError);
+    }
   }
 
   // Also persist the summary on the recording itself — the raw Markdown is

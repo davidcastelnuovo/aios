@@ -1,4 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  chooseCalendarRecordingMatch,
+  loadCalendarMatchContext,
+} from "../_shared/calendar-recording-match.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -106,19 +110,35 @@ Deno.serve(async (req) => {
       nextPageToken = data.next_page_token || '';
     } while (nextPageToken);
 
+    const calendarContext = await loadCalendarMatchContext(supabase, {
+      tenantId: tenant_id,
+      // Expand by one day on both sides so local-midnight events in Israel are
+      // not lost at the UTC date boundary. The matcher still enforces ±30 min.
+      timeMin: new Date(new Date(`${fromDate}T00:00:00.000Z`).getTime() - 24 * 60 * 60 * 1000).toISOString(),
+      timeMax: new Date(new Date(`${toDate}T00:00:00.000Z`).getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+      preferredUserId: typeof claimsData.claims.sub === "string" ? claimsData.claims.sub : null,
+    });
+
     // Process and upsert recordings
     let savedCount = 0;
     for (const meeting of allMeetings) {
       const recordingFiles = meeting.recording_files || [];
+      const meetingId = String(meeting.id || meeting.uuid || '');
+      const calendarMatch = chooseCalendarRecordingMatch({
+        start_time: meeting.start_time || null,
+        duration: meeting.duration || null,
+        meeting_topic: meeting.topic || null,
+        source: "zoom",
+      }, calendarContext.events, calendarContext.clients);
+
       for (const file of recordingFiles) {
-        const meetingId = String(meeting.id || meeting.uuid || '');
         const recordingType = file.recording_type || null;
 
         // Upsert by meeting_id + recording_type to avoid duplicates
-      const recordingData = {
+        const recordingData = {
             tenant_id,
             meeting_id: meetingId,
-            meeting_topic: meeting.topic || null,
+            meeting_topic: calendarMatch?.eventTitle || meeting.topic || null,
             host_email: meeting.host_email || null,
             start_time: meeting.start_time || null,
             duration: meeting.duration || null,
@@ -126,6 +146,9 @@ Deno.serve(async (req) => {
             recording_password: meeting.password || null,
             recording_type: recordingType,
             file_size: file.file_size || null,
+            calendar_event_id: calendarMatch?.eventId || null,
+            calendar_matched_at: calendarMatch ? new Date().toISOString() : null,
+            client_id: calendarMatch?.clientId || null,
           };
 
         const { error } = await supabase
@@ -143,6 +166,27 @@ Deno.serve(async (req) => {
           }
         }
         savedCount++;
+      }
+
+      // Existing rows are intentionally ignored by the upsert. Enrich only
+      // rows that have never been calendar-matched, and never replace an
+      // explicit client assignment.
+      if (calendarMatch) {
+        await supabase.from('zoom_recordings').update({
+          meeting_topic: calendarMatch.eventTitle,
+          calendar_event_id: calendarMatch.eventId,
+          calendar_matched_at: new Date().toISOString(),
+        }).eq('tenant_id', tenant_id)
+          .eq('meeting_id', meetingId)
+          .is('calendar_event_id', null);
+
+        if (calendarMatch.clientId) {
+          await supabase.from('zoom_recordings')
+            .update({ client_id: calendarMatch.clientId, suggested_client_id: null })
+            .eq('tenant_id', tenant_id)
+            .eq('meeting_id', meetingId)
+            .is('client_id', null);
+        }
       }
     }
 

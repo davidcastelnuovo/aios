@@ -24,7 +24,6 @@ type DateFilter = "week" | "month" | "all";
 export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [editingTask, setEditingTask] = useState<any>(null);
-  const [showAddTask, setShowAddTask] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
@@ -68,7 +67,7 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks", clientId] });
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },
@@ -171,10 +170,15 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
     <div className="space-y-4">
       {/* Header with Add Task button and Date Filter */}
       <div className="flex items-center justify-between gap-4">
-        <Button onClick={() => setShowAddTask(true)} size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          הוסף משימה
-        </Button>
+        <AddTaskForm
+          clientId={clientId}
+          triggerButton={
+            <Button size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              הוסף משימה
+            </Button>
+          }
+        />
 
         <RadioGroup value={dateFilter} onValueChange={(value) => setDateFilter(value as DateFilter)} className="flex gap-4">
           <div className="flex items-center space-x-2 space-x-reverse">
@@ -193,7 +197,7 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
       </div>
 
       {/* Two Columns Layout */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* In Progress Column */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -250,14 +254,6 @@ export function ClientTasksTab({ clientId, clientName }: ClientTasksTabProps) {
           </div>
         </div>
       </div>
-
-      {/* Dialogs */}
-      {showAddTask && (
-        <AddTaskForm
-          clientId={clientId}
-          triggerButton={<div />}
-        />
-      )}
 
       {editingTask && (
         <EditTaskDialog

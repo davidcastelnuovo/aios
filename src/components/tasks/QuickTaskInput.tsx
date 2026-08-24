@@ -1,16 +1,25 @@
 import { useMemo, useState } from "react";
+import { format } from "date-fns";
+import { he } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Plus, Users, Megaphone, Check, Bell } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Plus, Users, Megaphone, Check, Bell, CalendarDays, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TimeSlotPicker } from "./TimeSlotPicker";
 
 export interface QuickTaskPayload {
   title: string;
   clientId?: string | null;
   campaignerId?: string | null;
   selfReminderAt?: string | null;
+  /** When to perform / show on calendar (תאריך ביצוע) */
+  executionDate?: string | null;
+  executionTime?: string | null;
+  /** Deadline to complete by (תאריך יעד) */
+  targetDate?: string | null;
 }
 
 interface QuickTaskInputProps {
@@ -37,6 +46,11 @@ export function QuickTaskInput({
   const [campaignerSearch, setCampaignerSearch] = useState("");
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderAt, setReminderAt] = useState("");
+  const [executionDate, setExecutionDate] = useState<Date | undefined>(undefined);
+  const [executionTime, setExecutionTime] = useState<string | null>(null);
+  const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
+  const [executionOpen, setExecutionOpen] = useState(false);
+  const [targetOpen, setTargetOpen] = useState(false);
 
   const isTyping = title.trim().length > 0;
   const effectiveCampaignerId = campaignerId ?? defaultCampaignerId ?? null;
@@ -61,6 +75,15 @@ export function QuickTaskInput({
   const selectedClientName = clientsList?.find((c) => c.id === clientId)?.name;
   const selectedCampaignerName = campaignersList?.find((c) => c.id === effectiveCampaignerId)?.full_name;
 
+  const executionLabel = executionDate
+    ? format(executionDate, "dd/MM", { locale: he }) +
+      (executionTime ? ` ${executionTime}` : "")
+    : "תאריך ביצוע";
+
+  const targetLabel = targetDate
+    ? format(targetDate, "dd/MM", { locale: he })
+    : "תאריך יעד";
+
   const resetForm = () => {
     setTitle("");
     setClientId(null);
@@ -69,6 +92,9 @@ export function QuickTaskInput({
     setReminderAt("");
     setClientSearch("");
     setCampaignerSearch("");
+    setExecutionDate(undefined);
+    setExecutionTime(null);
+    setTargetDate(undefined);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -86,6 +112,9 @@ export function QuickTaskInput({
         canSetReminder && reminderEnabled && reminderAt
           ? new Date(reminderAt).toISOString()
           : null,
+      executionDate: executionDate ? format(executionDate, "yyyy-MM-dd") : null,
+      executionTime: executionTime ?? null,
+      targetDate: targetDate ? format(targetDate, "yyyy-MM-dd") : null,
     });
     resetForm();
   };
@@ -115,6 +144,90 @@ export function QuickTaskInput({
       {isTyping && (clientsList || campaignersList || canSetReminder) && (
         <div className="space-y-2 rounded-md border border-dashed border-border/70 bg-muted/20 p-2">
           <div className="flex flex-wrap items-center gap-2">
+            <Popover open={executionOpen} onOpenChange={setExecutionOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-8 gap-1 text-xs max-w-[150px]",
+                    executionDate && "border-primary/40 bg-primary/5",
+                  )}
+                >
+                  <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{executionLabel}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-3 z-50 space-y-3" align="start">
+                <p className="text-xs font-medium text-muted-foreground">
+                  מתי לבצע / להציג ביומן
+                </p>
+                <Calendar
+                  mode="single"
+                  selected={executionDate}
+                  onSelect={setExecutionDate}
+                  initialFocus
+                  className="p-0 pointer-events-auto"
+                />
+                <TimeSlotPicker
+                  value={executionTime}
+                  onChange={setExecutionTime}
+                  disabled={disabled}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-7 text-xs"
+                  onClick={() => {
+                    setExecutionDate(undefined);
+                    setExecutionTime(null);
+                  }}
+                >
+                  נקה תאריך ביצוע
+                </Button>
+              </PopoverContent>
+            </Popover>
+
+            <Popover open={targetOpen} onOpenChange={setTargetOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-8 gap-1 text-xs max-w-[130px]",
+                    targetDate && "border-amber-500/40 bg-amber-500/5",
+                  )}
+                >
+                  <Flag className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{targetLabel}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-3 z-50 space-y-2" align="start">
+                <p className="text-xs font-medium text-muted-foreground">
+                  עד מתי להשלים (דדליין)
+                </p>
+                <Calendar
+                  mode="single"
+                  selected={targetDate}
+                  onSelect={setTargetDate}
+                  initialFocus
+                  className="p-0 pointer-events-auto"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-7 text-xs"
+                  onClick={() => setTargetDate(undefined)}
+                >
+                  נקה תאריך יעד
+                </Button>
+              </PopoverContent>
+            </Popover>
+
             {clientsList && (
               <Popover open={clientOpen} onOpenChange={setClientOpen}>
                 <PopoverTrigger asChild>

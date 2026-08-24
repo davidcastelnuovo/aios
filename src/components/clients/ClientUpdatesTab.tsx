@@ -36,6 +36,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { resolveClientUpdateType } from "@/lib/clientUpdateType";
 
 interface ClientUpdatesTabProps {
   clientId: string;
@@ -203,6 +204,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   const addUpdateMutation = useMutation({
     mutationFn: async ({ content, updateType }: { content: string; updateType: string }) => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
+      const resolvedUpdateType = resolveClientUpdateType(updateType, content);
       const { error } = await supabase
         .from("client_updates")
         .insert({
@@ -210,12 +212,12 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
           tenant_id: tenantId,
           user_id: user.id,
           content,
-          update_type: updateType,
+          update_type: resolvedUpdateType,
         } as any);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
       setNewUpdate("");
       toast.success("העדכון נוסף בהצלחה");
     },
@@ -234,7 +236,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
       setEditingUpdateId(null);
       setEditingUpdateContent("");
       toast.success("העדכון נערך בהצלחה");
@@ -254,7 +256,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
       toast.success("העדכון נמחק בהצלחה");
     },
     onError: () => {
@@ -271,7 +273,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["client-tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks", clientId] });
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },
