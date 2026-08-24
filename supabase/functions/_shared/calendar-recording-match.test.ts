@@ -50,6 +50,10 @@ test("matches an explicit client name in the calendar title", () => {
 test("does not match partial words or ambiguous equal-length names", () => {
   assert.equal(matchClientFromCalendarTitle("Acmeology kickoff", clients), null);
   assert.equal(matchClientFromCalendarTitle("פגישה כללית", clients), null);
+  assert.equal(matchClientFromCalendarTitle("Alpha + Bravo", [
+    { id: "alpha", name: "Alpha" },
+    { id: "bravo", name: "Bravo" },
+  ]), null);
 });
 
 test("chooses the closest timed Zoom event and assigns its client", () => {
