@@ -202,6 +202,8 @@ export function RecordingCard({
     try {
       await onRename(rec, nextName);
       setRenameOpen(false);
+    } catch {
+      // The parent mutation shows the error toast; keep the dialog open.
     } finally {
       setIsRenaming(false);
     }
