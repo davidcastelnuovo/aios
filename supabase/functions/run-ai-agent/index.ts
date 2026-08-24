@@ -6851,6 +6851,10 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     if (isCarmen) {
       filteredTools = await selectRelevantTools(supabase, String(command_text || ''), filteredTools)
     }
+    if (pinSkillsOnly) {
+      const isolatedBlock = new Set(['get_latest_campaign_pulse', 'check_ad_accounts_health'])
+      filteredTools = filteredTools.filter((t) => !isolatedBlock.has(t.name))
+    }
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
 
