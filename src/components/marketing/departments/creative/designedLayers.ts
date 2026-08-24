@@ -296,10 +296,11 @@ const sanitizeCopyAngle = (raw?: string): string | undefined => {
 };
 
 export const extractCopyAngle = (copyText?: string, copyLabel?: string): string | undefined => {
-  const firstCopyLine = copyText?.split("\n").map((line) => cleanLine(line)).find(Boolean);
+  const firstCopyLine = copyText?.split("\n").map((line) => line.trim()).find(Boolean);
   for (const source of [firstCopyLine, copyLabel]) {
     if (!source) continue;
-    const match = cleanLine(source).match(ANGLE_LINE);
+    const header = source.replace(/^#+\s*/, "").replace(/\*\*/g, "").replace(/^[-*]\s*/, "").trim();
+    const match = header.match(ANGLE_LINE);
     const angle = sanitizeCopyAngle(match?.[1] ?? (copyLabel && source === copyLabel ? source : undefined));
     if (angle) return angle;
   }

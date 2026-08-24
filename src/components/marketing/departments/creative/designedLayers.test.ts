@@ -74,6 +74,10 @@ test("extractCopyAngle reads the variation idea from em-dash or bullet labels", 
   assert.equal(extractCopyAngle(AIDA_DOC), "פומו תחרותי");
   assert.equal(extractCopyAngle(undefined, "וריאציה 3 • מגולל לצ'אט"), "מגולל לצ'אט");
   assert.equal(extractCopyAngle("כותרת: רודוס", "פומו תחרותי"), "פומו תחרותי");
+  assert.equal(
+    extractCopyAngle(`וריאציה 2 — בעיית "אני לא יודע אם אני שם"`),
+    `בעיית "אני לא יודע אם אני שם"`,
+  );
 });
 
 test("copy scene brief stages chat-scroll copy, not a style postcard", () => {
