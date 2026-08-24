@@ -1,6 +1,10 @@
 export type CreativeFormat = "9:16" | "1:1" | "4:5" | "16:9";
 
+import type { CreativeVisualStyleId } from "./visualStyles";
+
 export type CreativeProjectType = "static" | "video";
+
+export type { CreativeVisualStyleId };
 
 export interface StoryboardStyleLock {
   lock: string;
@@ -91,4 +95,5 @@ export interface CreativeProjectDraft {
   instructions: string;
   format: CreativeFormat;
   projectType: CreativeProjectType;
+  visualStyle: CreativeVisualStyleId;
 }

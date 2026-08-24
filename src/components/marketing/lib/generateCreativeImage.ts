@@ -9,6 +9,7 @@ interface GenerateCreativeImageArgs {
   stageId: string;
   prompt: string;
   referenceImageUrls?: string[];
+  size?: "1024x1024" | "1024x1536" | "1536x1024";
 }
 
 const NO_TEXT_ON_IMAGE =
@@ -20,6 +21,7 @@ async function invokeSocialImage(
   itemId: string,
   prompt: string,
   referenceImageUrls?: string[],
+  size?: GenerateCreativeImageArgs["size"],
 ) {
   return supabase.functions.invoke("ai-generate-social-image", {
     body: {
@@ -28,6 +30,7 @@ async function invokeSocialImage(
       post_id: itemId,
       reference_image_url: referenceImageUrls?.[0],
       reference_image_urls: referenceImageUrls,
+      size,
     },
   });
 }
@@ -50,8 +53,9 @@ export async function generateCreativeImage({
   stageId,
   prompt,
   referenceImageUrls,
+  size,
 }: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean }> {
-  const socialResult = await invokeSocialImage(supabase, tenantId, itemId, prompt, referenceImageUrls);
+  const socialResult = await invokeSocialImage(supabase, tenantId, itemId, prompt, referenceImageUrls, size);
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;
     if (imageUrl && typeof imageUrl === "string") {

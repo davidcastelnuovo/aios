@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { cn } from "@/lib/utils";
-import { Loader2, Move, Save, Trash2, Type } from "lucide-react";
+import { Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
 import { aspectRatioClass } from "./utils";
 
@@ -19,6 +19,8 @@ interface Props {
   saving?: boolean;
   editing?: boolean;
   onEditingChange?: (editing: boolean) => void;
+  onRegenerate?: () => void;
+  regenerating?: boolean;
 }
 
 const FONT_OPTIONS = ["Rubik", "Assistant", "Heebo", "Arial", "Georgia"];
@@ -32,6 +34,8 @@ export function CreativeLayerEditor({
   saving,
   editing,
   onEditingChange,
+  onRegenerate,
+  regenerating,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -174,6 +178,12 @@ export function CreativeLayerEditor({
           {isEditing ? "מצב עריכה — גרור שכבות, שנה טקסט ופונטים" : "לחץ על הקריאייטיב כדי לערוך"}
         </span>
         <div className="flex items-center gap-2">
+          {onRegenerate && (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={onRegenerate} disabled={regenerating}>
+              {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+              ג׳נרט מחדש
+            </Button>
+          )}
           {isEditing && (
             <>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={addTextLayer}>

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Save } from "lucide-react";
 import type { CreativeItem, CreativeProjectDraft } from "./types";
 import { itemToProjectDraft, projectTypeLabel } from "./utils";
+import { VisualStyleSelect } from "./VisualStyleSelect";
 
 interface Props {
   item: CreativeItem;
@@ -56,6 +57,10 @@ export function CreativeBriefEditor({ item, onSave, saving }: Props) {
               </SelectContent>
             </Select>
           </div>
+          <VisualStyleSelect
+            value={draft.visualStyle}
+            onChange={(visualStyle) => setDraft({ ...draft, visualStyle })}
+          />
           <div>
             <Label>בריף / חומר גלם</Label>
             <Textarea

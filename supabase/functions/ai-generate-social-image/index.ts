@@ -38,7 +38,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls } = await req.json();
+    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls, size: requestedSize } = await req.json();
 
     if (!prompt || !tenant_id) {
       return new Response(
@@ -72,6 +72,9 @@ serve(async (req) => {
       return new Uint8Array(await res.arrayBuffer());
     };
 
+    const allowedSizes = new Set(["1024x1024", "1024x1536", "1536x1024"]);
+    const size = allowedSizes.has(requestedSize) ? requestedSize : "1024x1024";
+
     const generateFromPrompt = () =>
       fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
@@ -81,9 +84,9 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: "gpt-image-1",
-          prompt: `Professional social media post image: ${prompt}. Visually appealing, modern, suitable for social media marketing.`,
+          prompt,
           n: 1,
-          size: "1024x1024",
+          size,
           quality: "medium",
           output_format: "png",
         }),
@@ -107,7 +110,7 @@ serve(async (req) => {
         `Continue this exact visual world. Match faces, wardrobe, lighting, lens and color grade from the reference. ${prompt}`,
       );
       form.append("n", "1");
-      form.append("size", "1024x1024");
+      form.append("size", size);
       form.append("quality", "medium");
       form.append("output_format", "png");
       form.append("input_fidelity", "high");
