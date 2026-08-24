@@ -542,6 +542,7 @@ const CORE_TOOLS = new Set([
   'list_facebook_ads', 'analyze_facebook_campaign',
   'execute_pending_approval', 'reject_pending_approval', 'list_pending_approvals',
   'join_meeting_for_client', 'get_meeting_bot_status',
+  'get_latest_campaign_pulse',
 ])
 
 // Cheap, stable signature of a tool description so embeddings refresh when the
@@ -617,7 +618,10 @@ async function selectRelevantTools(supabase: any, userText: string, toolDefs: an
       picked.add('list_sales_people')
       picked.add('search_entities')
     }
-    // OpenAI billing / credit / usage (super_admin tool — still must be in schema when asked).
+    // Pulse check — must always reach the cached snapshot tool on WhatsApp.
+    if (/\bדופק\b|\bpulse\s*check\b|בדיקת\s*דוח|מצב\s*קמפיינים|סיכום\s*קמפיינים/i.test(userText)) {
+      picked.add('get_latest_campaign_pulse')
+    }
     if (/(openai|open ai|קרדיט|יתרת|billing|usage|חיוב|כמה.*(נשאר|עולה|הוצא)|api.*(cost|credit|balance))/i.test(userText)) {
       picked.add('get_openai_billing_status')
     }
@@ -6851,7 +6855,9 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // WhatsApp / scheduled tasks: pulse must stay short (counts + dashboard link).
     if (isCarmen && (surface === 'whatsapp' || surface === 'task')) {
       systemPrompt += `\n\n📱 === בדיקת דופק בוואטסאפ (חובה) ===
-• אחרי get_latest_campaign_pulse — החזירי את whatsapp_digest כלשונו, כולל שורת הקישור לדשבורד.
+• בקשה ל"בדיקת דופק" / "דופק" / "מצב קמפיינים" — חובה get_latest_campaign_pulse בלבד.
+• אחרי הכלי — החזירי את whatsapp_digest כלשונו, כולל שורת הקישור לדשבורד. בלי הקדמה, בלי סיכום נוסף.
+• "בדיקת תקינות מערכות וקמפיינים" זה דוח אחר (health probe) — לא בדיקת דופק. אל תערבבי ביניהם.
 • אסור טבלת Markdown, אסור "בדיקת דופק אחרונה — חושבה ב־…" + פירוט לקוחות, אסור להמציא שורות מה-rows.`
     }
 
@@ -6883,8 +6889,12 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // "דופק" is intentionally sufficient: speech transcription frequently
     // mangles the word before it ("ביגת דופק", "מדיקת דופק"). A pulse request
     // must never depend on the model deciding whether to call the data tool.
-    const isStoredPulseRequest = /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
-      && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
+    const isStoredPulseRequest = (
+      /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
+      || /בדיקת\s*(דוח|דופק)/i.test(cmd)
+      || /מצב\s*קמפיינים|סיכום\s*קמפיינים/i.test(cmd)
+    ) && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
+      && !/תקינות\s*מערכות/i.test(cmd)
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
@@ -7171,6 +7181,52 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         tools_used: ['join_meeting_for_client'],
         tool_log: [{ tool: 'join_meeting_for_client', args: { meeting_url: meetingUrl }, result: execResult }],
         auto_meeting_join: true,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Deterministic path: WhatsApp pulse request → return colorful cached digest verbatim.
+    if (isCarmen && isStoredPulseRequest && pulseSurfacePrefersWhatsAppDigest(surface)) {
+      console.log('[AGENT] Auto-returning cached campaign pulse digest for WhatsApp')
+      const autoStart = Date.now()
+      const pulseResult = await executeTool(
+        'get_latest_campaign_pulse',
+        {},
+        supabase,
+        resolvedTenantId,
+        callerUserId || asUuidOrNull(resolvedUserId),
+        callerCampaignerId,
+        agent_id,
+        callerRole,
+        callerManagedAgencyIds,
+        callerPhone,
+        wa_notify,
+        surface,
+      )
+      const digest = typeof pulseResult?.whatsapp_digest === 'string' ? pulseResult.whatsapp_digest.trim() : ''
+      const finalOutput = digest || 'אין בדיקת דופק זמינה כרגע — נסה שוב אחרי הסנכרון הבא.'
+      const executionTime = Date.now() - autoStart
+      if (serverConversationId && callerUserId) {
+        const persistedMessages = [
+          ...serverConversationHistory,
+          { role: 'user', content: String(command_text) },
+          { role: 'assistant', content: finalOutput },
+        ].slice(-60)
+        await supabase.from('ai_conversations')
+          .update({ messages: persistedMessages, updated_at: new Date().toISOString() })
+          .eq('id', serverConversationId)
+          .eq('user_id', callerUserId)
+          .eq('tenant_id', resolvedTenantId)
+      }
+      if (emit && finalOutput) emit({ type: 'token', content: finalOutput })
+      return new Response(JSON.stringify({
+        success: !!digest,
+        output: finalOutput,
+        agent_name: agent.name,
+        model: resolveModel(agent.engine || 'gemini-3-flash'),
+        execution_time_ms: executionTime,
+        tools_used: ['get_latest_campaign_pulse'],
+        tool_log: [{ tool: 'get_latest_campaign_pulse', args: {}, result: pulseResult }],
+        auto_pulse_digest: true,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
