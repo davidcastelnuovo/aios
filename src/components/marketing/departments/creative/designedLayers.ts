@@ -228,20 +228,43 @@ const layer = (partial: Omit<CreativeLayer, "id">): CreativeLayer => ({
   ...partial,
 });
 
+export const isLogoLayer = (layer: CreativeLayer) =>
+  layer.type === "image" && (layer.role === "logo" || !layer.role);
+
+export const makeLogoLayer = (logoUrl: string): CreativeLayer => layer({
+  type: "image",
+  role: "logo",
+  src: logoUrl,
+  x: 74,
+  y: 3.5,
+  width: 22,
+  height: 10,
+});
+
+export const ensureLogoLayer = (layers: CreativeLayer[], logoUrl?: string): CreativeLayer[] => {
+  const withoutLogo = layers.filter((item) => !isLogoLayer(item));
+  if (!logoUrl) return withoutLogo;
+  const existing = layers.find(isLogoLayer);
+  if (existing) return [...withoutLogo, { ...existing, src: logoUrl, role: "logo", type: "image" }];
+  return [...withoutLogo, makeLogoLayer(logoUrl)];
+};
+
 export const buildDesignedCopyLayers = ({
   copyText,
   format,
   styleId,
   title,
+  logoUrl,
 }: {
   copyText?: string;
   format: CreativeFormat;
   styleId: CreativeVisualStyleId;
   title?: string;
+  logoUrl?: string;
 }): CreativeLayer[] => {
   const parts = parseCreativeCopy(copyText ?? "", title);
   const hero = heroWord(parts.headline);
-  if (!hero && !parts.offer && !parts.body && !parts.cta) return [];
+  if (!hero && !parts.offer && !parts.body && !parts.cta && !logoUrl) return [];
 
   const palette = PALETTES[styleId] ?? PALETTES.swiss;
   const wide = format === "16:9";
@@ -254,7 +277,7 @@ export const buildDesignedCopyLayers = ({
       type: "text",
       x: wide ? 6 : 6,
       y: 5,
-      width: wide ? 50 : 88,
+      width: wide ? (logoUrl ? 48 : 50) : (logoUrl ? 68 : 88),
       height: punchy ? 12 : 10,
       text: hero,
       fontFamily: "Rubik",
@@ -341,7 +364,7 @@ export const buildDesignedCopyLayers = ({
     }));
   }
 
-  return layers;
+  return ensureLogoLayer(layers, logoUrl);
 };
 
 export const hydrateVariationLayers = (
@@ -349,16 +372,20 @@ export const hydrateVariationLayers = (
   copyText: string,
   title?: string,
   styleId?: CreativeVisualStyleId,
+  logoUrl?: string,
 ): CreativeVariation => {
-  if (!shouldRebuildDesignedLayers(variation.layers)) return { ...variation };
-  return {
-    ...variation,
-    layers: buildDesignedCopyLayers({
+  const layers = shouldRebuildDesignedLayers(variation.layers)
+    ? buildDesignedCopyLayers({
       copyText: variation.copyText || copyText,
       format: variation.format,
       styleId: variation.visualStyle ?? styleId ?? "swiss",
       title,
-    }),
+      logoUrl,
+    })
+    : variation.layers;
+  return {
+    ...variation,
+    layers: ensureLogoLayer(layers, logoUrl),
   };
 };
 

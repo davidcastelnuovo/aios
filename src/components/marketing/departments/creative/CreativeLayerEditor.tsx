@@ -119,7 +119,7 @@ export function CreativeLayerEditor({
   const removeAllTextLayers = () => {
     onChange({
       ...variation,
-      layers: variation.layers.filter((layer) => layer.type === "background"),
+      layers: variation.layers.filter((layer) => layer.type === "background" || layer.type === "image"),
     });
     setSelectedLayerId(null);
   };
@@ -295,7 +295,9 @@ export function CreativeLayerEditor({
                     <Trash2 className="h-3 w-3" />
                   </button>
                 )}
-                {layer.type === "text" && isEditing && selectedLayerId === layer.id ? (
+                {layer.type === "image" && layer.src ? (
+                  <CreativeImage src={layer.src} alt={layer.role === "logo" ? "לוגו" : "שכבת תמונה"} className="h-full w-full object-contain" />
+                ) : layer.type === "text" && isEditing && selectedLayerId === layer.id ? (
                   <textarea
                     className="h-full w-full resize-none bg-transparent px-1 outline-none"
                     dir="auto"
@@ -360,8 +362,12 @@ export function CreativeLayerEditor({
                       selectedLayerId === layer.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "hover:bg-muted/50",
                     )}
                   >
-                    <div className="font-semibold">{layer.type === "shape" ? `פלטה ${index + 1}` : `טקסט ${index + 1}`}</div>
-                    <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">{layer.text || (layer.type === "shape" ? "רקע לקופי" : "ריק")}</div>
+                    <div className="font-semibold">
+                      {layer.type === "image" ? "לוגו" : layer.type === "shape" ? `פלטה ${index + 1}` : `טקסט ${index + 1}`}
+                    </div>
+                    <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">
+                      {layer.type === "image" ? "מורכב מהקובץ שהועלה" : layer.text || (layer.type === "shape" ? "רקע לקופי" : "ריק")}
+                    </div>
                   </button>
                   <Button
                     type="button"
@@ -386,6 +392,17 @@ export function CreativeLayerEditor({
               <p className="text-[11px] leading-relaxed text-muted-foreground">
                 השכבות הן העיצוב — פלטה + כותרת + CTA כמו בפוטושופ. טקסט משובש בתוך התמונה עצמה דורש ג׳נרט מחדש.
               </p>
+
+              {selectedLayer?.type === "image" && (
+                <div className="space-y-3 border-t pt-4">
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    שכבת לוגו — מורכבת מהקובץ המקורי. אפשר לגרור ולשנות גודל, בלי לצייר מחדש.
+                  </p>
+                  <Button variant="outline" size="sm" className="w-full text-destructive" onClick={removeSelectedLayer}>
+                    מחק שכבת לוגו
+                  </Button>
+                </div>
+              )}
 
               {selectedLayer?.type === "text" && (
                 <div className="space-y-3 border-t pt-4">

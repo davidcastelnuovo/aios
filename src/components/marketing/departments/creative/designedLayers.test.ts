@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildCampaignVisualBrief,
   buildDesignedCopyLayers,
+  ensureLogoLayer,
   heroWord,
   isInternalCopyLine,
   parseCreativeCopy,
@@ -89,6 +90,32 @@ test("designed layers never paint AIDA labels or a bottom caption plate", () => 
   assert.ok(texts.includes("להזמנה"));
   assert.ok(!texts.some((text) => /AIDA|וריאציה|כותרת:/.test(text ?? "")));
   assert.ok(!layers.some((layer) => layer.type === "shape" && layer.y >= 52 && layer.height >= 18 && layer.width >= 70));
+});
+
+test("logo is composited as an image layer and shrinks the headline band", () => {
+  const layers = buildDesignedCopyLayers({
+    copyText: "כותרת:\nרודוס\nCTA:\nלהזמנה",
+    format: "1:1",
+    styleId: "swiss",
+    logoUrl: "https://example.com/logo.png",
+  });
+  const logo = layers.find((layer) => layer.type === "image");
+  const headline = layers.find((layer) => layer.text === "רודוס");
+  assert.ok(logo);
+  assert.equal(logo?.src, "https://example.com/logo.png");
+  assert.ok((logo?.x ?? 0) >= 70);
+  assert.ok((headline?.width ?? 99) <= 70);
+});
+
+test("ensureLogoLayer updates or removes the logo without touching copy", () => {
+  const withLogo = ensureLogoLayer([
+    { id: "1", type: "text", x: 8, y: 8, width: 60, height: 10, text: "רודוס" },
+  ], "https://example.com/a.png");
+  assert.equal(withLogo.filter((layer) => layer.type === "image").length, 1);
+  const updated = ensureLogoLayer(withLogo, "https://example.com/b.png");
+  assert.equal(updated.find((layer) => layer.type === "image")?.src, "https://example.com/b.png");
+  assert.equal(updated.find((layer) => layer.text === "רודוס")?.text, "רודוס");
+  assert.equal(ensureLogoLayer(updated).some((layer) => layer.type === "image"), false);
 });
 
 test("shouldRebuildDesignedLayers catches leftover AIDA overlays", () => {

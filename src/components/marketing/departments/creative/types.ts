@@ -1,5 +1,6 @@
 export type CreativeFormat = "9:16" | "1:1" | "4:5" | "16:9";
 
+import type { BrandBook, StyleReference } from "./brandKit";
 import type { CreativeVisualStyleId } from "./visualStyles";
 
 export type CreativeProjectType = "static" | "video";
@@ -35,12 +36,14 @@ export type LayerShadowStyle = "none" | "soft" | "extrude";
 
 export interface CreativeLayer {
   id: string;
-  type: "background" | "text" | "shape";
+  type: "background" | "text" | "shape" | "image";
   x: number;
   y: number;
   width: number;
   height: number;
   rotation?: number;
+  src?: string;
+  role?: "logo";
   text?: string;
   fontFamily?: string;
   fontSize?: number;
@@ -115,4 +118,7 @@ export interface CreativeProjectDraft {
   format: CreativeFormat;
   projectType: CreativeProjectType;
   visualStyle: CreativeVisualStyleId;
+  logoUrl?: string;
+  brandBook?: BrandBook;
+  styleReferences: StyleReference[];
 }

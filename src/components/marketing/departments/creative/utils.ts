@@ -1,3 +1,4 @@
+import { getBrandKit } from "./brandKit";
 import type { CreativeFormat, CreativeItem, CreativeLayer, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "./types";
 import { buildDesignedCopyLayers } from "./designedLayers";
 import { buildVisualStyleLock, getVisualStyleId, type CreativeVisualStyleId } from "./visualStyles";
@@ -90,15 +91,21 @@ export const makeStoryboardFrame = (order: number, x = storyboardFrameX(order), 
   y,
 });
 
-export const itemToProjectDraft = (item: CreativeItem | null): CreativeProjectDraft => ({
-  title: item?.title ?? "",
-  briefText: getBriefText(item),
-  copyText: getLinkedCopyText(item),
-  instructions: String(item?.payload?.instructions ?? ""),
-  format: defaultFormat(item?.payload),
-  projectType: getProjectType(item?.payload),
-  visualStyle: getVisualStyleId(item?.payload),
-});
+export const itemToProjectDraft = (item: CreativeItem | null): CreativeProjectDraft => {
+  const kit = getBrandKit(item?.payload);
+  return {
+    title: item?.title ?? "",
+    briefText: getBriefText(item),
+    copyText: getLinkedCopyText(item),
+    instructions: String(item?.payload?.instructions ?? ""),
+    format: defaultFormat(item?.payload),
+    projectType: getProjectType(item?.payload),
+    visualStyle: getVisualStyleId(item?.payload),
+    logoUrl: kit.logoUrl,
+    brandBook: kit.brandBook,
+    styleReferences: kit.styleReferences,
+  };
+};
 
 export const defaultFormat = (payload: Record<string, unknown> | null | undefined): CreativeFormat => {
   const value = payload?.format;
@@ -218,6 +225,7 @@ export const makeVariation = ({
   rejected,
   rejectNote,
   parentId,
+  logoUrl,
 }: {
   imageUrl: string;
   format: CreativeFormat;
@@ -231,13 +239,14 @@ export const makeVariation = ({
   rejected?: boolean;
   rejectNote?: string;
   parentId?: string;
+  logoUrl?: string;
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
   name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
   imageUrl,
   format,
   layers: visualStyle
-    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title })
+    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, logoUrl })
     : [],
   comments: [],
   createdAt: new Date().toISOString(),

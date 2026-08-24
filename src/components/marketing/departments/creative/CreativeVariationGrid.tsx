@@ -50,6 +50,37 @@ export function CreativeVariationGrid({
                 onClick={() => onEdit(variation)}
               >
                 <CreativeImage src={variation.imageUrl} alt={variation.name} className="absolute inset-0 h-full w-full object-cover" />
+                {variation.layers.filter((layer) => layer.type !== "background").map((layer) => (
+                  <div
+                    key={layer.id}
+                    className="pointer-events-none absolute"
+                    style={{
+                      left: `${layer.x}%`,
+                      top: `${layer.y}%`,
+                      width: `${layer.width}%`,
+                      height: `${layer.height}%`,
+                      display: layer.type === "text" ? "flex" : undefined,
+                      alignItems: layer.type === "text" ? "center" : undefined,
+                      justifyContent: layer.textAlign === "center" ? "center" : layer.textAlign === "left" ? "flex-start" : "flex-end",
+                      background: layer.type === "shape" ? layer.fill : undefined,
+                      borderRadius: layer.borderRadius,
+                      color: layer.color,
+                      fontFamily: layer.fontFamily,
+                      fontSize: `${Math.max(10, (layer.fontSize ?? 18) * 0.45)}px`,
+                      fontWeight: layer.fontWeight,
+                      textAlign: layer.textAlign,
+                      textShadow: layer.textShadow,
+                      boxShadow: layer.boxShadow,
+                      opacity: layer.opacity,
+                    }}
+                  >
+                    {layer.type === "image" && layer.src ? (
+                      <CreativeImage src={layer.src} alt="לוגו" className="h-full w-full object-contain" />
+                    ) : layer.type === "text" ? (
+                      <span className="block w-full overflow-hidden whitespace-pre-wrap break-words px-0.5">{layer.text}</span>
+                    ) : null}
+                  </div>
+                ))}
                 {variation.rejected && (
                   <span className="absolute inset-x-3 top-3 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white">נדחה</span>
                 )}

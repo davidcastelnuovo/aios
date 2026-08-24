@@ -14,7 +14,7 @@ interface GenerateCreativeImageArgs {
 }
 
 const NO_TEXT_ON_IMAGE =
-  "No letters, numbers, captions, logos, watermarks, buttons, or typography anywhere. Keep a clean open center and lower third so a 3D title and CTA can be typeset later. Supporting objects may sit in the scene. No Hebrew and no English words.";
+  "No letters, numbers, captions, logos, watermarks, buttons, or typography anywhere. Keep a clean open center, lower third, and a reserved top-right pad (~18% width) so a title, CTA, and brand logo can be composited later. Do not invent or redraw a logo. Supporting objects may sit in the scene. No Hebrew and no English words.";
 
 async function invokeSocialImage(
   supabase: SupabaseClient,

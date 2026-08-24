@@ -1,8 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
+import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
+import {
+  brandKitPrompt,
+  getBrandKit,
+  isGenerationAborted,
+  throwIfGenerationAborted,
+} from "@/components/marketing/departments/creative/brandKit";
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { CreativeBriefEditor } from "@/components/marketing/departments/creative/CreativeBriefEditor";
@@ -26,7 +33,7 @@ import {
   pickStoryboardReferences,
 } from "@/components/marketing/departments/creative/utils";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
-import { buildCampaignVisualBrief, buildDesignedCopyLayers, hydrateVariationLayers, isInternalCopyLine, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
+import { buildCampaignVisualBrief, hydrateVariationLayers, isInternalCopyLine, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
 import {
   buildVisualStyleLock,
   getVisualStyle,
@@ -68,6 +75,7 @@ import {
   Plus,
   Send,
   Sparkles,
+  Square,
   ThumbsDown,
   WandSparkles,
 } from "lucide-react";
@@ -130,6 +138,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<CreativeVariation | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const generateAbortRef = useRef(false);
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
     queryKey: ["creative-department-items", clientFilter, tenantId],
@@ -150,7 +159,19 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const projectType = getProjectType(selected?.payload ?? null);
-  const variations = useMemo(() => getVariations(selected?.payload ?? null), [selected?.payload]);
+  const variations = useMemo(() => {
+    const raw = getVariations(selected?.payload ?? null);
+    const logoUrl = getBrandKit(selected?.payload).logoUrl;
+    const copyText = getLinkedCopyText(selected);
+    const styleId = getVisualStyleId(selected?.payload);
+    return raw.map((variation) => hydrateVariationLayers(
+      variation,
+      variation.copyText || copyText,
+      selected?.title ?? undefined,
+      variation.visualStyle ?? styleId,
+      logoUrl,
+    ));
+  }, [selected]);
   const copyBlocks = useMemo(() => splitCopyVariations(getLinkedCopyText(selected)), [selected]);
   const storyboard = useMemo(() => getStoryboard(selected?.payload ?? null), [selected?.payload]);
   const selectedVariation = variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1] ?? null;
@@ -180,6 +201,21 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   });
 
   const linkCopyClientFilter = selected?.client_id ?? (clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null);
+
+  const { data: selectedClient } = useQuery({
+    queryKey: ["creative-client", selected?.client_id, tenantId],
+    enabled: !!selected?.client_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id,name,website,industry,notes")
+        .eq("id", selected!.client_id!)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { id: string; name: string; website: string | null; industry: string | null; notes: string | null } | null;
+    },
+  });
 
   const { data: copyItems = [] } = useQuery({
     queryKey: ["creative-linkable-copy", linkCopyClientFilter, tenantId],
@@ -227,6 +263,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       getLinkedCopyText(selected),
       selected?.title ?? undefined,
       getVisualStyleId(selected?.payload),
+      getBrandKit(selected?.payload).logoUrl,
     ));
   }, [selectedVariation, selected]);
 
@@ -265,6 +302,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         format: draft.format,
         project_type: draft.projectType,
         visual_style: draft.visualStyle,
+        logo_url: draft.logoUrl || null,
+        brand_book: draft.brandBook || null,
+        style_references: draft.styleReferences,
         department: "creative",
       };
       const { error } = await supabase
@@ -332,7 +372,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       return fallback;
     }
     const shouldLock = options?.lock !== false;
-    if (shouldLock) setGenerating(true);
+    if (shouldLock) {
+      generateAbortRef.current = false;
+      setGenerating(true);
+    }
     try {
       const activeFrames = framesOverride ?? storyboardDraft;
       const generationNotes = [
@@ -365,8 +408,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       }).eq("id", selected.id).eq("tenant_id", tenantId);
       const style = getStoryboardStyle(selected.payload);
       const visual = getVisualStyle(selected.payload);
-      const referenceImageUrls = pickStoryboardReferences(activeFrames, frame.id, style.referenceImageUrl);
+      const kit = getBrandKit(selected.payload);
+      const storyboardRefs = pickStoryboardReferences(activeFrames, frame.id, style.referenceImageUrl);
+      const styleRefs = (
+        await Promise.all(kit.styleReferences.map((reference) => resolveCreativeImageUrl(reference.url)))
+      ).filter((url): url is string => !!url);
+      const referenceImageUrls = [...storyboardRefs, ...styleRefs].filter((url, index, list) => list.indexOf(url) === index);
       const framePrompt = [
+        `Use case: ads-marketing. Asset type: storyboard still, ${defaultFormat(selected.payload)}.`,
+        referenceImageUrls.length && "Input-image roles: earlier frames = continuity (faces/wardrobe/world). Extra stills = style reference only — match grade/material, do not copy lettering or logo.",
+        brandKitPrompt(kit),
         `Next shot in ONE continuous ${visual.label} commercial. Keep the same world, people, wardrobe, lighting and grade.`,
         style.lock,
         selected.title && !isInternalCopyLine(selected.title) && `Campaign: ${selected.title}`,
@@ -377,6 +428,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           ? "A reference still from this same storyboard is attached — match faces, wardrobe, location family and color language. Do not invent a new art style."
           : `This is the first frame. Establish a single ${visual.label} look that later frames must copy exactly.`,
       ].filter(Boolean).join("\n");
+      throwIfGenerationAborted(generateAbortRef.current);
       const { imageUrl } = await generateCreativeImage({
         supabase,
         tenantId,
@@ -394,6 +446,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       await persistStoryboard(next, shouldLock ? "הפריים נוצר ונשמר" : "");
       return next;
     } catch (error: unknown) {
+      if (isGenerationAborted(error)) {
+        if (!shouldLock) throw error;
+        toast.message("היצירה נעצרה");
+        return fallback;
+      }
       toast.error(errorMessage(error, "יצירת הפריים נכשלה"));
       if (!shouldLock) throw error;
       return fallback;
@@ -414,18 +471,24 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       toast.error("מלא/י הנחיות לפריימים לפני יצירה לפי סדר");
       return;
     }
+    generateAbortRef.current = false;
     setGenerating(true);
     try {
       let current = [...storyboardDraft].sort((a, b) => a.order - b.order);
       for (const frame of queued) {
+        throwIfGenerationAborted(generateAbortRef.current);
         const latest = current.find((value) => value.id === frame.id) ?? frame;
         current = await generateStoryboardFrame(latest, current, { lock: false });
       }
       toast.success("הפריימים נוצרו לפי סדר, עם אותו סגנון");
-    } catch {
+    } catch (error: unknown) {
+      if (isGenerationAborted(error)) {
+        toast.message("היצירה נעצרה — הפריימים שכבר נוצרו נשמרו");
+      }
       // Per-frame toast already shown; stop the sequence so later frames do not drift.
     } finally {
       setGenerating(false);
+      setGenerateProgress(null);
     }
   };
 
@@ -536,16 +599,26 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     name?: string;
   }): Promise<CreativeVariation> => {
     if (!selected) throw new Error("לא נבחר פרויקט");
+    throwIfGenerationAborted(generateAbortRef.current);
     const readyContext = ensureCreativeStageReady(context);
     const style = visualStyleById(styleId);
     const format = defaultFormat(selected.payload);
+    const kit = getBrandKit(selected.payload);
     const visualBrief = buildCampaignVisualBrief({
       copyText,
       title: selected.title ?? undefined,
       brief: getBriefText(selected),
       instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
     });
+    const referenceImageUrls = (
+      await Promise.all(kit.styleReferences.map((reference) => resolveCreativeImageUrl(reference.url)))
+    ).filter((url): url is string => !!url);
     const creativePrompt = [
+      `Use case: ads-marketing. Asset type: standalone ${format} commercial key visual.`,
+      referenceImageUrls.length
+        ? "Input-image roles: attached stills are STYLE REFERENCES only — match light, material and grade. Do not copy layout, lettering, faces, or logo."
+        : undefined,
+      brandKitPrompt(kit),
       `Create a million-dollar ${format} commercial key visual in a ${style.label} style.`,
       "Art-direct a finished ad that illustrates THIS copy angle and the project brief — a scene, not a stock headshot.",
       buildVisualStyleLock(selected.payload, { styleId: style.id }),
@@ -553,14 +626,18 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       `This variation's copy to illustrate (do not paint any letters): ${visualBrief}`,
       directorNote && `Art director REJECT — do not repeat these mistakes: ${directorNote}`,
       `Format ${format}. Poster composition: keep the TOP 20% and BOTTOM 28% quiet for type. Subject lives in the middle band. No face in the top fifth.`,
-      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, Canva templates, UI chrome.",
+      kit.logoUrl && "Reserve a clean top-right pad (~18% width) for the real logo composite. Do not invent or redraw a logo.",
+      "RTL/production: Hebrew and the brand logo are composited as layers after generation.",
+      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, Canva templates, UI chrome, invented logos, baked lettering.",
     ].filter(Boolean).join("\n");
+    throwIfGenerationAborted(generateAbortRef.current);
     const { imageUrl } = await generateCreativeImage({
       supabase,
       tenantId,
       itemId: selected.id,
       stageId: readyContext.creativeStage.id,
       prompt: creativePrompt || selected.title || "Marketing creative",
+      referenceImageUrls,
       size: imageSizeForFormat(format),
       quality: "high",
     });
@@ -576,12 +653,14 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       copyLabel,
       rejectNote: directorNote,
       parentId,
+      logoUrl: kit.logoUrl,
     });
     return replaceId ? { ...created, id: replaceId } : created;
   };
 
   const generate = async (mode: "new" | "replace" = "new", target?: CreativeVariation) => {
     if (!selected) return;
+    generateAbortRef.current = false;
     setGenerating(true);
     try {
       await prepareCreativeStage();
@@ -621,10 +700,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       setSelectedVariationId(nextVariation.id);
       if (mode !== "replace") setWorkspacePanel(null);
     } catch (error: unknown) {
-      toast.error(errorMessage(error, "יצירת הקריאייטיב נכשלה"));
+      if (isGenerationAborted(error)) toast.message("היצירה נעצרה");
+      else toast.error(errorMessage(error, "יצירת הקריאייטיב נכשלה"));
     } finally {
       setGenerating(false);
       setGeneratingId(null);
+      setGenerateProgress(null);
     }
   };
 
@@ -635,6 +716,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       toast.error("שייך קופי או מלא בריף לפני יצירה לכל הווריאציות");
       return;
     }
+    generateAbortRef.current = false;
     setGenerating(true);
     try {
       await prepareCreativeStage();
@@ -644,6 +726,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         .filter((value): value is CreativeVisualStyleId => !!value);
       let current = [...variations];
       for (const [index, block] of blocks.entries()) {
+        throwIfGenerationAborted(generateAbortRef.current);
         setGenerateProgress(`יוצר ${index + 1}/${blocks.length} · ${copyBlockLabel(block)}`);
         const style = styleMode === "same"
           ? visualStyleById(projectStyle)
@@ -662,15 +745,23 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       setWorkspacePanel(null);
       toast.success(styleMode === "same" ? "נוצר קריאייטיב לכל וריאציית קופי בסגנון הנבחר" : "נוצר קריאייטיב לכל וריאציית קופי בסגנון אחר");
     } catch (error: unknown) {
-      toast.error(errorMessage(error, "יצירת הגריד נכשלה"));
+      if (isGenerationAborted(error)) toast.message("היצירה נעצרה — מה שכבר נוצר נשמר");
+      else toast.error(errorMessage(error, "יצירת הגריד נכשלה"));
     } finally {
       setGenerating(false);
       setGenerateProgress(null);
     }
   };
 
+  const stopGeneration = () => {
+    if (!generating) return;
+    generateAbortRef.current = true;
+    setGenerateProgress("עוצר אחרי הווריאציה הנוכחית...");
+  };
+
   const rejectVariation = async () => {
     if (!selected || !rejectTarget || !rejectNote.trim()) return;
+    generateAbortRef.current = false;
     setGenerating(true);
     setGeneratingId(rejectTarget.id);
     try {
@@ -700,7 +791,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       setRejectNote("");
       setWorkspacePanel(null);
     } catch (error: unknown) {
-      toast.error(errorMessage(error, "יצירת וריאציית הרג׳קט נכשלה"));
+      if (isGenerationAborted(error)) toast.message("היצירה נעצרה");
+      else toast.error(errorMessage(error, "יצירת וריאציית הרג׳קט נכשלה"));
     } finally {
       setGenerating(false);
       setGeneratingId(null);
@@ -1034,6 +1126,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           </Button>
         </>
       )}
+      {generating && (
+        <Button variant="destructive" size="sm" className="gap-1.5" onClick={stopGeneration}>
+          <Square className="h-3.5 w-3.5 fill-current" />עצור
+        </Button>
+      )}
       <Button
         size="sm"
         className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
@@ -1061,6 +1158,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 await generateStoryboardFrame(frame, merged);
               }}
               onGenerateAll={generateAllStoryboardFrames}
+              onStop={stopGeneration}
               generating={generating}
               saving={saving}
               scenePanelOpen={workspacePanel === "scene"}
@@ -1119,6 +1217,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 <Button variant="outline" className="gap-2" onClick={() => void generateAllFromCopy("mixed")} disabled={generating || loadingContext || !selected.client_id}>
                   סגנון שונה לכל קופי
                 </Button>
+                {generating && (
+                  <Button variant="destructive" className="gap-2" onClick={stopGeneration}>
+                    <Square className="h-4 w-4 fill-current" />עצור
+                  </Button>
+                )}
               </div>
             </div>
           )
@@ -1155,7 +1258,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             <SheetTitle>עריכת פרויקט</SheetTitle>
           </SheetHeader>
           {selected ? (
-            <CreativeBriefEditor item={selected} onSave={saveProject} saving={saving} />
+            <CreativeBriefEditor item={selected} tenantId={tenantId} client={selectedClient} onSave={saveProject} saving={saving} />
           ) : null}
         </SheetContent>
       </Sheet>

@@ -198,8 +198,8 @@ const STORYBOARD_CONTINUITY = [
 const STATIC_QUALITY = [
   "Finished commercial key visual in THIS style only — same campaign idea, this exact art system.",
   "Illustrate the offer (destination, product, vehicle, or place) inside this style's world.",
-  "Leave an open center and lower third so a title and CTA can be typeset later.",
-  "No letters, numbers, logos, watermarks, buttons, or fake UI with words — Hebrew and English are added as layers.",
+  "Leave an open center, lower third, and a clean top-right pad (~18% width) so a title, CTA, and brand logo can be composited later.",
+  "No letters, numbers, logos, watermarks, buttons, or fake UI with words — Hebrew and the real logo are added as layers. Never invent or redraw a logo.",
   "Forbidden: grey/white seamless studio headshot, thinking-hand pose, caption plate, random portrait unrelated to the offer.",
 ].join(" ");
 
