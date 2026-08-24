@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { enrichRecordingFromCalendar } from "../_shared/calendar-recording-match.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,8 +14,6 @@ Deno.serve(async (req) => {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-  const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID');
-  const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET');
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -76,88 +75,13 @@ Deno.serve(async (req) => {
 
     console.log(`User resolved: ${userId}, phone: ${userPhone}`);
 
-    // 3. Calendar matching - find matching event by start_time
-    let calendarEventName: string | null = null;
-
-    if (userId && recording.start_time && GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-      try {
-        const { data: tokenData } = await supabase
-          .from('calendar_tokens')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (tokenData) {
-          let accessToken = tokenData.access_token;
-          const expiresAt = new Date(tokenData.expires_at);
-
-          // Refresh token if expired
-          if (expiresAt <= new Date()) {
-            const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({
-                client_id: GOOGLE_CLIENT_ID,
-                client_secret: GOOGLE_CLIENT_SECRET,
-                refresh_token: tokenData.refresh_token,
-                grant_type: 'refresh_token',
-              }),
-            });
-            const refreshData = await refreshResponse.json();
-            if (refreshData.access_token) {
-              accessToken = refreshData.access_token;
-              await supabase
-                .from('calendar_tokens')
-                .update({
-                  access_token: accessToken,
-                  expires_at: new Date(Date.now() + refreshData.expires_in * 1000).toISOString(),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('user_id', userId);
-            }
-          }
-
-          // Search for events around the recording start time (+-30 min)
-          const startTime = new Date(recording.start_time);
-          const timeMin = new Date(startTime.getTime() - 30 * 60 * 1000).toISOString();
-          const timeMax = new Date(startTime.getTime() + 30 * 60 * 1000).toISOString();
-
-          const calUrl = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
-          calUrl.searchParams.set('timeMin', timeMin);
-          calUrl.searchParams.set('timeMax', timeMax);
-          calUrl.searchParams.set('singleEvents', 'true');
-          calUrl.searchParams.set('orderBy', 'startTime');
-
-          const calResponse = await fetch(calUrl.toString(), {
-            headers: { 'Authorization': `Bearer ${accessToken}` },
-          });
-
-          if (calResponse.ok) {
-            const calData = await calResponse.json();
-            const events = calData.items || [];
-
-            // Find closest event by time overlap
-            if (events.length > 0) {
-              calendarEventName = events[0].summary || null;
-              console.log(`Calendar match found: "${calendarEventName}"`);
-            }
-          } else {
-            console.warn('Calendar API failed:', await calResponse.text());
-          }
-        }
-      } catch (calErr) {
-        console.warn('Calendar matching failed (continuing):', calErr);
-      }
-    }
-
-    // 4. Update meeting_topic if calendar event found
-    if (calendarEventName) {
-      await supabase
-        .from('zoom_recordings')
-        .update({ meeting_topic: calendarEventName })
-        .eq('id', recording_id);
-      console.log(`Updated meeting_topic to: "${calendarEventName}"`);
-    }
+    // 3. Deterministic Calendar match: closest Zoom event by time. The shared
+    // matcher renames every recording variant and assigns a client only when its
+    // name appears unambiguously in the event title.
+    const calendarMatch = await enrichRecordingFromCalendar(supabase, recording, {
+      preferredUserId: userId,
+    });
+    const calendarEventName = calendarMatch?.eventTitle || null;
 
     // 5. Transcribe the recording (only audio types)
     let transcription: string | null = recording.transcription;
