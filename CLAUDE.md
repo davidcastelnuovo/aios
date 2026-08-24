@@ -7,8 +7,10 @@
 - Never commit Graphify output, `graph.json`, generated reports, summaries, reflections, or work-memory files. Keep changes to Carmen and other critical monolithic functions small and additive.
 
 ## Working mode / autonomy (David's standing preference)
-- **Default to action — do not ask for confirmation on obvious, low-risk fixes or clearly-requested work.** Implement → commit → open PR → merge to `main` → verify the deploy, end-to-end, without pausing to ask at each step.
-- After merging an edge-function change, confirm the `deploy-edge-function.yml` run went green.
+- **Default to action — do not ask for confirmation on obvious, low-risk fixes or clearly-requested work.** Implement → commit → open PR → send David the Vercel preview URL → wait for an explicit merge ask.
+- **Never merge to `main` until David has the preview link and explicitly asks to merge.** This applies to every Cloud Agent / coding session (copy, creative, and anything else).
+- At the end of every completed change that has a frontend preview, include the Vercel preview URL in the reply (and the in-app path when known). Send it again whenever you finish a follow-up that pushed to the PR.
+- After merging an edge-function change (only when David asked to merge), confirm the `deploy-edge-function.yml` run went green.
 - **Only pause and ask** when the change is genuinely ambiguous (several valid interpretations), architecturally significant or irreversible, destructive (possible data loss), or external-facing in a way David wouldn't expect.
 - Report what was done concisely afterward; don't narrate every intermediate step.
 

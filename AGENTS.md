@@ -30,3 +30,7 @@ Verification / token budget:
 - Small UI changes: verify with `pnpm build` (and a focused lint of changed files if useful). Do **not** run browser sessions, click-throughs, or screenshots/recordings unless the user explicitly asked for a visual check.
 - Data / production changes: verify with SQL against the hosted project. That is the source of truth; do not add a UI walkthrough on top.
 - Skip extra “manual testing” loops by default. If a check is not needed to prove the change, do not run it.
+
+Preview / merge (standing rule for every Cloud Agent):
+- **Always send David the Vercel preview URL** when you finish work on a branch, and again after every follow-up that pushes new commits. Include the in-app path when known (e.g. `/t/<tenant>/marketing/department/copy`).
+- **Do not merge to `main` until he has that preview link and explicitly asks to merge.** Coordinate with other open agents the same way — each agent sends its own branch preview; nobody merges on another agent's behalf.
