@@ -56,6 +56,42 @@ export function pulseStatusToOverall(status: PulseStatus | null | undefined): "g
   return "yellow";
 }
 
+export function overallStatusLabel(status: "green" | "yellow" | "red"): string {
+  if (status === "green") return "🟢 תקין";
+  if (status === "red") return "🔴 דורש טיפול";
+  return "🟡 לתשומת לב";
+}
+
+export type PulseOverrideRow = {
+  id: string;
+  client_id: string;
+  tenant_id: string;
+  algorithm_status: string;
+  override_status: "green" | "yellow" | "red";
+  reason: string;
+  algorithm_flags: string[] | null;
+  algorithm_metrics: Record<string, unknown> | null;
+  snapshot_calculated_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  cleared_at: string | null;
+};
+
+export function buildPulseAlgorithmMetrics(pulse: PulseSnapshotRow | null): Record<string, unknown> {
+  if (!pulse) return {};
+  return {
+    status: pulse.status,
+    spend_7d: pulse.spend_7d,
+    leads_7d: pulse.leads_7d,
+    purchases_7d: pulse.purchases_7d,
+    cpl_7d: pulse.cpl_7d,
+    cpl_change_pct: pulse.cpl_change_pct,
+    roas_7d: pulse.roas_7d,
+    data_fresh_through: pulse.data_fresh_through,
+    calculated_at: pulse.calculated_at,
+  };
+}
+
 export function pulseStatusLabel(status: PulseStatus | null | undefined): string {
   switch (status) {
     case "healthy":
