@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
+import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
 import { invokeErrorMessage } from "@/components/marketing/lib/invokeErrorMessage";
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
@@ -317,13 +318,23 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           project_type: "video",
         },
       }).eq("id", selected.id).eq("tenant_id", tenantId);
-      const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
-        body: { item_id: selected.id, stage_id: readyContext.creativeStage.id },
+      const framePrompt = [
+        selected.title,
+        frame.title,
+        frame.shot && `Shot: ${frame.shot}`,
+        frame.visualPrompt,
+        frame.voiceover && `Voiceover: ${frame.voiceover}`,
+        frame.overlayText && `On-screen text: ${frame.overlayText}`,
+        getBriefText(selected),
+      ].filter(Boolean).join("\n");
+      const { imageUrl, usedFallback } = await generateCreativeImage({
+        supabase,
+        tenantId,
+        itemId: selected.id,
+        stageId: readyContext.creativeStage.id,
+        prompt: framePrompt,
       });
-      if (error) throw new Error(await invokeErrorMessage(error, data, "יצירת הפריים נכשלה"));
-      if (data?.error) throw new Error(data.error);
-      const imageUrl = data.url ?? data.image_url;
-      if (!imageUrl || typeof imageUrl !== "string") throw new Error("לא התקבלה תמונה מהיצירה");
+      if (usedFallback) toast.message("הפריים נוצר דרך מנוע גיבוי (gpt-image-1)");
       const next = activeFrames.map((value) => value.id === frame.id ? { ...frame, imageUrl } : value);
       setStoryboardDraft(next);
       await persistStoryboard(next, "הפריים נוצר ונשמר");
@@ -411,14 +422,23 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         .eq("id", selected.id)
         .eq("tenant_id", tenantId);
 
-      const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
-        body: { item_id: selected.id, stage_id: readyContext.creativeStage.id },
-      });
-      if (error) throw new Error(await invokeErrorMessage(error, data, "יצירת הקריאייטיב נכשלה"));
-      if (data?.error) throw new Error(data.error);
+      const creativePrompt = [
+        selected.title,
+        getBriefText(selected) && `Brief: ${getBriefText(selected)}`,
+        getLinkedCopyText(selected) && `Copy: ${getLinkedCopyText(selected)}`,
+        variationDraft?.layers?.length
+          ? `Text layers: ${variationDraft.layers.map((layer) => layer.text).filter(Boolean).join(" | ")}`
+          : null,
+      ].filter(Boolean).join("\n");
 
-      const imageUrl = data.url ?? data.image_url ?? selected.payload?.image_url;
-      if (!imageUrl || typeof imageUrl !== "string") throw new Error("לא התקבלה תמונה מהיצירה");
+      const { imageUrl, usedFallback } = await generateCreativeImage({
+        supabase,
+        tenantId,
+        itemId: selected.id,
+        stageId: readyContext.creativeStage.id,
+        prompt: creativePrompt || selected.title || "Marketing creative",
+      });
+      if (usedFallback) toast.message("הקריאייטיב נוצר דרך מנוע גיבוי (gpt-image-1)");
 
       const nextVariation = makeVariation({
         imageUrl,
