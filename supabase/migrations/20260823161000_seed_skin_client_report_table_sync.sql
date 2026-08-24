@@ -1,8 +1,7 @@
 -- Tenant skin: Carmen understands report-table ↔ client-card sync.
 INSERT INTO public.ai_skills
   (slug, scope, tenant_id, name, description, goal, constraints, system_prompt, output_template, allowed_tools, triggers, is_active, steps, created_by_agent)
-VALUES
-(
+SELECT
   'client_report_table_sync',
   'tenant',
   '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019'::uuid,
@@ -25,7 +24,6 @@ VALUES
 3. אם יש google_ads — קראי list_google_campaigns(client_id=...) (לא דורש connect_google_ads_account).
 4. אם אין טבלה — אז באמת לא מחובר; הציעי create_*_report_table או connect_*.$$,
   true
-)
 WHERE NOT EXISTS (
   SELECT 1 FROM public.ai_skills s
   WHERE s.slug = 'client_report_table_sync'

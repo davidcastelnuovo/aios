@@ -7,8 +7,11 @@ RETURNS text
 LANGUAGE sql
 IMMUTABLE
 AS $$
-  SELECT NULLIF(regexp_replace(trim(COALESCE(raw, '')), '-', '', 'g'), '')
-         FILTER (WHERE regexp_replace(trim(COALESCE(raw, '')), '-', '', 'g') ~ '^\d+$');
+  SELECT CASE
+    WHEN regexp_replace(trim(COALESCE(raw, '')), '-', '', 'g') ~ '^\d+$'
+      THEN NULLIF(regexp_replace(trim(COALESCE(raw, '')), '-', '', 'g'), '')
+    ELSE NULL
+  END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.normalize_meta_ad_account_id(raw text)
