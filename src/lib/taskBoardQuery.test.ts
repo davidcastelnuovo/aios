@@ -6,12 +6,13 @@ import {
   taskAppearsOnTimeGrid,
 } from "./taskBoardQuery.ts";
 
-test("buildTaskDueDateOrFilter includes dated untimed tasks outside the view range", () => {
+test("buildTaskDueDateOrFilter includes target_date overdue and dated untimed branches", () => {
   const filter = buildTaskDueDateOrFilter({
     rangeStart: "2026-08-24",
     rangeEnd: "2026-08-30",
     today: "2026-08-24",
   });
+  assert.match(filter, /target_date\.lt/);
   assert.match(filter, /due_time\.is\.null/);
   assert.match(filter, /due_date\.not\.is\.null/);
 });

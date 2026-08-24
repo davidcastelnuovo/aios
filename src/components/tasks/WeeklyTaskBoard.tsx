@@ -50,6 +50,7 @@ import {
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
+import { isTaskOverdue } from "@/lib/taskDeadline";
 
 interface Task {
   id: string;
@@ -68,6 +69,7 @@ interface Task {
   created_by?: string | null;
   creator_name?: string | null;
   sort_order?: number;
+  target_date?: string | null;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
   clients?: { name: string; agency_id?: string | null } | null;
@@ -456,6 +458,7 @@ export function WeeklyTaskBoard() {
       clientId,
       campaignerId,
       selfReminderAt,
+      targetDate,
     }: {
       title: string;
       date: Date | null;
@@ -463,6 +466,7 @@ export function WeeklyTaskBoard() {
       clientId?: string | null;
       campaignerId?: string | null;
       selfReminderAt?: string | null;
+      targetDate?: string | null;
     }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
       // A task attached to a client must carry that client's agency, otherwise
@@ -496,6 +500,9 @@ export function WeeklyTaskBoard() {
       };
       if (selfReminderAt) {
         insertData.self_reminder_at = selfReminderAt;
+      }
+      if (targetDate) {
+        insertData.target_date = targetDate;
       }
       if (validDate) {
         insertData.due_date = format(validDate, "yyyy-MM-dd");
@@ -593,12 +600,17 @@ export function WeeklyTaskBoard() {
       toast.error("המערכת עדיין נטענת, נסי שוב בעוד רגע");
       return;
     }
+    const executionDate = payload.executionDate
+      ? new Date(`${payload.executionDate}T12:00:00`)
+      : null;
     addTask.mutate({
       title: payload.title,
-      date: null,
+      date: executionDate,
+      time: payload.executionTime?.substring(0, 5),
       clientId: payload.clientId,
       campaignerId: payload.campaignerId,
       selfReminderAt: payload.selfReminderAt,
+      targetDate: payload.targetDate,
     });
   };
 
@@ -1082,10 +1094,9 @@ export function WeeklyTaskBoard() {
   // Backlog includes: overdue, no due_date, or has due_date but no due_time
   const backlogTasks = tasks.filter((t) => {
     if (t.status === "done") return false;
-    if (t.due_date === null) return true; // Unscheduled
-    const dueDate = new Date(t.due_date);
-    if (dueDate < today) return true; // Overdue
-    if (!t.due_time) return true; // Has date but no time - goes to backlog
+    if (isTaskOverdue(t, today)) return true;
+    if (t.due_date === null) return true;
+    if (!t.due_time) return true;
     return false;
   });
 

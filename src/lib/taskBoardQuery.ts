@@ -15,11 +15,14 @@ export function buildTaskDueDateOrFilter(input: {
 }): string {
   const { rangeStart, rangeEnd, today, customStart, customEnd } = input;
   const datedUntimed = "and(due_time.is.null,due_date.not.is.null)";
+  const overdueByTarget = `and(target_date.lt.${today},status.neq.done)`;
+  const overdueByDue = `and(due_date.lt.${today},status.neq.done,target_date.is.null)`;
 
   if (customStart && customEnd) {
     return (
       `and(due_date.gte.${customStart},due_date.lte.${customEnd}),` +
-      `and(due_date.lt.${today},status.neq.done),` +
+      overdueByTarget + "," +
+      overdueByDue + "," +
       "due_date.is.null," +
       datedUntimed
     );
@@ -27,7 +30,8 @@ export function buildTaskDueDateOrFilter(input: {
 
   return (
     `and(due_date.gte.${rangeStart},due_date.lte.${rangeEnd}),` +
-    `and(due_date.lt.${today},status.neq.done),` +
+    overdueByTarget + "," +
+    overdueByDue + "," +
     "due_date.is.null," +
     datedUntimed
   );

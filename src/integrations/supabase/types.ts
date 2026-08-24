@@ -8351,6 +8351,7 @@ export type Database = {
           sort_order: number | null
           status: Database["public"]["Enums"]["task_status"]
           task_type: Database["public"]["Enums"]["task_type"] | null
+          target_date: string | null
           tenant_id: string
           title: string
           updated_at: string
@@ -8380,6 +8381,7 @@ export type Database = {
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
+          target_date?: string | null
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id: string
           title: string
@@ -8410,6 +8412,7 @@ export type Database = {
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
+          target_date?: string | null
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id?: string
           title?: string
