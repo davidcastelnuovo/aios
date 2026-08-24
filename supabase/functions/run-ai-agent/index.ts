@@ -1814,7 +1814,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           campaignerId = ownerProfile?.campaigner_id
         }
       }
-      if (campaignerId) {
+      // A task for a client belongs to that client's agency — the campaigner's
+      // own agency would file it under the wrong one on the tasks board.
+      if (args.client_id) {
+        const { data: taskClient } = await supabase.from('clients').select('agency_id').eq('id', args.client_id).maybeSingle()
+        agencyId = taskClient?.agency_id || null
+      }
+      if (!agencyId && campaignerId) {
         const { data: campAgency } = await supabase.from('campaigner_agencies').select('agency_id').eq('campaigner_id', campaignerId).limit(1).single()
         agencyId = campAgency?.agency_id
       }
@@ -3498,7 +3504,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.due_time !== undefined) updates.due_time = args.due_time
       if (args.priority !== undefined) updates.priority = args.priority
       if (args.notes !== undefined) updates.notes = args.notes
-      if (args.client_id !== undefined) updates.client_id = args.client_id
+      if (args.client_id !== undefined) {
+        updates.client_id = args.client_id
+        // Keep the agency stamp on the client the task now belongs to.
+        if (args.client_id) {
+          const { data: movedClient } = await supabase.from('clients').select('agency_id').eq('id', args.client_id).maybeSingle()
+          if (movedClient?.agency_id) updates.agency_id = movedClient.agency_id
+        }
+      }
       if (args.lead_id !== undefined) updates.lead_id = args.lead_id
       if (args.campaigner_id !== undefined) updates.campaigner_id = args.campaigner_id
       if (args.duration_minutes !== undefined) updates.duration_minutes = args.duration_minutes

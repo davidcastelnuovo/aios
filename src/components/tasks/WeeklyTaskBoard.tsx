@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import {
   resolveBoardTaskAgency,
+  resolveNewTaskAgency,
   resolveTasksBoardScope,
   filterTasksBySelectedAgency,
   syncLocalTasksForAgencyFilter,
@@ -68,7 +69,7 @@ interface Task {
   sort_order?: number;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
-  clients?: { name: string } | null;
+  clients?: { name: string; agency_id?: string | null } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
 }
@@ -106,7 +107,7 @@ export function WeeklyTaskBoard() {
   const { data: clientsList = [] } = useQuery({
     queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
-      let query = supabase.from("clients").select("id, name");
+      let query = supabase.from("clients").select("id, name, agency_id");
       if (crossTenantAgencyIds.length > 0) {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
       } else {
@@ -138,7 +139,7 @@ export function WeeklyTaskBoard() {
 
   // Full task type from DB
   type FullTask = Task & {
-    clients?: { name: string } | null;
+    clients?: { name: string; agency_id?: string | null } | null;
     campaigners?: { full_name: string } | null;
     task_updates?: { id: string }[];
     task_collaborators?: { id: string }[];
@@ -154,7 +155,7 @@ export function WeeklyTaskBoard() {
         .from("tasks")
         .select(`
           *,
-          clients (name),
+          clients (name, agency_id),
           campaigners (full_name),
           task_updates (id),
           task_collaborators (id)
@@ -272,23 +273,21 @@ export function WeeklyTaskBoard() {
         .from("tasks")
         .select(`
           *,
-          clients (name),
+          clients (name, agency_id),
           campaigners (full_name),
           task_updates (id),
           task_collaborators (id)
         `);
 
-      // Tenant / agency scope. When the header picks a specific agency, filter
-      // ONLY by agency_id — do not stack the broad cross-tenant `.or()` first
-      // (that left localTasks showing mixed agencies while the narrow fetch ran).
+      // Tenant scope only. The header agency is applied after the fetch, on the
+      // task's effective agency (its client's agency when it has one), because
+      // `tasks.agency_id` alone both leaks foreign clients and hides tasks that
+      // do belong to the selected agency.
       const boardScope = resolveTasksBoardScope({
         tenantId: tenantId!,
-        selectedAgency,
         crossTenantAgencyIds,
       });
-      if (boardScope.type === "agency") {
-        query = query.eq("agency_id", boardScope.agencyId);
-      } else if (boardScope.type === "tenant_or_shared") {
+      if (boardScope.type === "tenant_or_shared") {
         query = query.or(
           `tenant_id.eq.${boardScope.tenantId},agency_id.in.(${boardScope.crossTenantAgencyIds.join(",")})`,
         );
@@ -466,7 +465,15 @@ export function WeeklyTaskBoard() {
       selfReminderAt?: string | null;
     }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
-      const agencyId = resolveBoardTaskAgency(selectedAgency, firstAgency?.id);
+      // A task attached to a client must carry that client's agency, otherwise
+      // it shows up under whichever agency the header happened to be on.
+      const agencyId = resolveNewTaskAgency({
+        clientAgencyId: clientId
+          ? clientsList?.find((client) => client.id === clientId)?.agency_id
+          : null,
+        selectedAgency,
+        fallbackAgencyId: firstAgency?.id,
+      });
       if (!agencyId) throw new Error("NO_AGENCY");
 
       const myCampaignerId = userProfile?.campaigner_id || null;
@@ -703,18 +710,31 @@ export function WeeklyTaskBoard() {
   // Update client assignment
   const updateTaskClient = useMutation({
     mutationFn: async ({ taskId, clientId }: { taskId: string; clientId: string | null }) => {
+      // Re-stamp the agency with the new client's, so the task follows its
+      // client instead of staying under the agency it was created in.
+      const clientAgencyId = clientId
+        ? clientsList?.find((client) => client.id === clientId)?.agency_id ?? null
+        : null;
+      const update: { client_id: string | null; agency_id?: string } = { client_id: clientId };
+      if (clientAgencyId) update.agency_id = clientAgencyId;
+
       const { error } = await supabase
         .from("tasks")
-        .update({ client_id: clientId })
+        .update(update)
         .eq("id", taskId);
       if (error) throw error;
     },
     onMutate: async ({ taskId, clientId }) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
-      const clientName = clientsList?.find((c) => c.id === clientId)?.name ?? null;
+      const client = clientsList?.find((c) => c.id === clientId) ?? null;
       const patch = (t: any) =>
         t?.id === taskId
-          ? { ...t, client_id: clientId, clients: clientName ? { name: clientName } : null }
+          ? {
+              ...t,
+              client_id: clientId,
+              agency_id: client?.agency_id ?? t.agency_id,
+              clients: client ? { name: client.name, agency_id: client.agency_id } : null,
+            }
           : t;
       queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
         if (!Array.isArray(old)) return old;

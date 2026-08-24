@@ -2,20 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   resolveBoardTaskAgency,
+  resolveNewTaskAgency,
+  resolveTaskEffectiveAgency,
   filterTasksBySelectedAgency,
   resolveTasksBoardScope,
   syncLocalTasksForAgencyFilter,
 } from "./taskBoardAgency.ts";
 
+const PROMO = "agency-promo";
+const DMM = "agency-dmm";
+
 test("header agency wins over the first-agency fallback", () => {
-  assert.equal(resolveBoardTaskAgency("agency-dmm", "agency-first"), "agency-dmm");
+  assert.equal(resolveBoardTaskAgency(PROMO, "agency-first"), PROMO);
 });
 
 test("all agencies falls back to the first loaded agency", () => {
   assert.equal(resolveBoardTaskAgency("all", "agency-first"), "agency-first");
-});
-
-test("empty / unset header also uses the fallback", () => {
   assert.equal(resolveBoardTaskAgency(null, "agency-first"), "agency-first");
   assert.equal(resolveBoardTaskAgency(undefined, "agency-first"), "agency-first");
 });
@@ -25,99 +27,100 @@ test("returns null when neither source has an agency", () => {
   assert.equal(resolveBoardTaskAgency(undefined, undefined), null);
 });
 
-const taskA = { id: "1", agency_id: "agency-A" };
-const taskB = { id: "2", agency_id: "agency-B" };
-const taskNull = { id: "3", agency_id: null };
+test("a task for a client belongs to that client's agency", () => {
+  assert.equal(
+    resolveNewTaskAgency({ clientAgencyId: DMM, selectedAgency: PROMO, fallbackAgencyId: PROMO }),
+    DMM,
+  );
+});
 
-test("filterTasksBySelectedAgency keeps only the header agency", () => {
-  const filtered = filterTasksBySelectedAgency([taskA, taskB, taskNull], "agency-A");
-  assert.deepEqual(filtered.map((t) => t.id), ["1"]);
+test("a task without a client uses the header agency, then the fallback", () => {
+  assert.equal(resolveNewTaskAgency({ selectedAgency: PROMO, fallbackAgencyId: "first" }), PROMO);
+  assert.equal(resolveNewTaskAgency({ selectedAgency: "all", fallbackAgencyId: "first" }), "first");
+});
+
+// The production leak: tasks stamped with the creator's agency while the client
+// they belong to sits in another agency.
+const misstampedDmmTask = {
+  id: "1",
+  agency_id: PROMO,
+  client_id: "client-dmm",
+  clients: { agency_id: DMM },
+};
+const promoClientTaskStampedDmm = {
+  id: "2",
+  agency_id: DMM,
+  client_id: "client-promo",
+  clients: { agency_id: PROMO },
+};
+const promoTaskNoClient = { id: "3", agency_id: PROMO, client_id: null, clients: null };
+
+test("the client's agency decides where a task belongs", () => {
+  assert.equal(resolveTaskEffectiveAgency(misstampedDmmTask), DMM);
+  assert.equal(resolveTaskEffectiveAgency(promoClientTaskStampedDmm), PROMO);
+});
+
+test("a task without a client keeps its own stamp", () => {
+  assert.equal(resolveTaskEffectiveAgency(promoTaskNoClient), PROMO);
+  assert.equal(resolveTaskEffectiveAgency({ agency_id: null, client_id: null }), null);
+});
+
+test("filtering to promo hides another agency's client and keeps its own", () => {
+  const filtered = filterTasksBySelectedAgency(
+    [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient],
+    PROMO,
+  );
+  assert.deepEqual(filtered.map((task) => task.id), ["2", "3"]);
 });
 
 test("filterTasksBySelectedAgency leaves the list alone for all", () => {
-  const all = [taskA, taskB, taskNull];
+  const all = [misstampedDmmTask, promoClientTaskStampedDmm];
   assert.equal(filterTasksBySelectedAgency(all, "all"), all);
   assert.equal(filterTasksBySelectedAgency(all, null), all);
 });
 
-test("resolveTasksBoardScope uses agency-only when header is set", () => {
+test("the board query stays tenant-scoped so client-owned tasks are not dropped", () => {
   assert.deepEqual(
-    resolveTasksBoardScope({
-      tenantId: "t1",
-      selectedAgency: "agency-A",
-      crossTenantAgencyIds: ["shared-1"],
-    }),
-    { type: "agency", agencyId: "agency-A" },
+    resolveTasksBoardScope({ tenantId: "t1", crossTenantAgencyIds: ["shared-1"] }),
+    { type: "tenant_or_shared", tenantId: "t1", crossTenantAgencyIds: ["shared-1"] },
   );
-});
-
-test("resolveTasksBoardScope uses tenant_or_shared when header is all", () => {
   assert.deepEqual(
-    resolveTasksBoardScope({
-      tenantId: "t1",
-      selectedAgency: "all",
-      crossTenantAgencyIds: ["shared-1"],
-    }),
-    {
-      type: "tenant_or_shared",
-      tenantId: "t1",
-      crossTenantAgencyIds: ["shared-1"],
-    },
-  );
-});
-
-test("resolveTasksBoardScope uses tenant when no shared agencies", () => {
-  assert.deepEqual(
-    resolveTasksBoardScope({
-      tenantId: "t1",
-      selectedAgency: "all",
-      crossTenantAgencyIds: [],
-    }),
+    resolveTasksBoardScope({ tenantId: "t1", crossTenantAgencyIds: [] }),
     { type: "tenant", tenantId: "t1" },
   );
 });
 
-/**
- * Reproduction of the WeeklyTaskBoard bug: localTasks kept the previous
- * (all-agencies) list while isFetching=true after the header agency changed,
- * so the backlog still showed other agencies' tasks.
- */
-test("syncLocalTasksForAgencyFilter narrows during in-flight agency switch", () => {
-  const previousLocal = [taskA, taskB];
+test("syncLocalTasksForAgencyFilter narrows during an in-flight agency switch", () => {
   const duringFetch = syncLocalTasksForAgencyFilter({
     isFetching: true,
     fetchedTasks: [],
-    previousLocal,
-    selectedAgency: "agency-A",
+    previousLocal: [misstampedDmmTask, promoTaskNoClient],
+    selectedAgency: PROMO,
   });
   assert.deepEqual(
-    duringFetch.map((t) => t.agency_id),
-    ["agency-A"],
-    "must not keep agency-B tasks on screen while the filtered query loads",
+    duringFetch.map((task) => task.id),
+    ["3"],
+    "must not keep another agency's tasks on screen while the filtered query loads",
   );
 });
 
 test("syncLocalTasksForAgencyFilter applies settled server rows for the agency", () => {
   const settled = syncLocalTasksForAgencyFilter({
     isFetching: false,
-    fetchedTasks: [taskA, taskB], // defensive: even if server leaked, client filters
-    previousLocal: [taskA, taskB],
-    selectedAgency: "agency-A",
+    fetchedTasks: [misstampedDmmTask, promoClientTaskStampedDmm],
+    previousLocal: [],
+    selectedAgency: PROMO,
   });
-  assert.deepEqual(settled.map((t) => t.id), ["1"]);
+  assert.deepEqual(settled.map((task) => task.id), ["2"]);
 });
 
-test("legacy isFetching early-return without agency narrow leaks other agencies", () => {
-  // Documents the pre-fix behavior for regression clarity.
-  const previousLocal = [taskA, taskB];
-  const legacySync = (isFetching: boolean, fetchedTasks: typeof previousLocal) => {
-    if (isFetching) return previousLocal; // ← old WeeklyTaskBoard effect
-    return fetchedTasks ?? [];
-  };
-  const leaked = legacySync(true, []);
+test("legacy stamp-only filtering reproduces the reported leak", () => {
+  const legacyFilter = (tasks: typeof misstampedDmmTask[], agency: string) =>
+    tasks.filter((task) => task.agency_id === agency);
+  const leaked = legacyFilter([misstampedDmmTask, promoClientTaskStampedDmm], PROMO);
   assert.deepEqual(
-    leaked.map((t) => t.agency_id),
-    ["agency-A", "agency-B"],
-    "legacy path reproduces the bug",
+    leaked.map((task) => task.id),
+    ["1"],
+    "stamp-only filtering shows a DMM client under promo and hides a promo client",
   );
 });
