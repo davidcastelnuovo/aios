@@ -284,7 +284,7 @@ export function TaskDetailDialog({
       if (selfReminderEnabled && assignedCampaignerId === userCampaignerId && !selfReminderAt) {
         throw new Error("יש לבחור תאריך ושעה לתזכורת");
       }
-      const nextDueDate = dueDate?.toISOString().split("T")[0] || null;
+      const nextDueDate = dueDate ? format(dueDate, "yyyy-MM-dd") : null;
       const nextDueTime = dueTime ? dueTime + ":00" : null;
       const { error } = await supabase
         .from("tasks")
@@ -330,7 +330,8 @@ export function TaskDetailDialog({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
       toast.success("המשימה עודכנה");
       onOpenChange(false);
     },

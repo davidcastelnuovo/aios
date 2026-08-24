@@ -667,39 +667,62 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       if (!calendarData) {
         toast.error("שגיאה ביצירת הפגישה ביומן");
       } else {
-        const successMessage = attendeeEmail 
-          ? "המשימה נוספה ליומן ונשלח זימון לקמפיינר!" 
-          : "המשימה נוספה ליומן!";
-        toast.success(successMessage);
-        
-        // Trigger automation for task_calendar_created
-        try {
-          const { data: taskData } = await supabase
-            .from('tasks')
-            .select('tenant_id')
-            .eq('id', task.id)
-            .single();
-          
-          if (taskData?.tenant_id) {
-            await supabase.functions.invoke('trigger-automation', {
-              body: {
-                trigger_type: 'task_calendar_created',
-                data: {
-                  id: task.id,
-                  title: task.title,
-                  client_id: task.client_id,
-                  client_name: clientName,
-                  meeting_date: format(meetingDate, 'yyyy-MM-dd'),
-                  meeting_time: meetingTime,
-                  meeting_subject: subject,
-                  meeting_location: meetingLocation,
-                },
-                tenant_id: taskData.tenant_id
-              }
-            });
+        const dueDateStr = format(meetingDate, "yyyy-MM-dd");
+        const dueTimeStr = meetingTime.includes(":") && meetingTime.length === 5
+          ? `${meetingTime}:00`
+          : meetingTime;
+
+        const { error: taskScheduleError } = await supabase
+          .from("tasks")
+          .update({
+            due_date: dueDateStr,
+            due_time: dueTimeStr,
+            google_calendar_event_id: calendarData.eventId ?? null,
+          })
+          .eq("id", task.id);
+
+        if (taskScheduleError) {
+          console.error("Failed to link task to calendar event:", taskScheduleError);
+          toast.error("האירוע נוצר ביומן אך לא עודכן במשימה — נסה שוב");
+        } else {
+          queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+          queryClient.invalidateQueries({ queryKey: ["calendar-events", ctTenantId] });
+
+          const successMessage = attendeeEmail
+            ? "המשימה נוספה ליומן ונשלח זימון לקמפיינר!"
+            : "המשימה נוספה ליומן!";
+          toast.success(successMessage);
+
+          // Trigger automation for task_calendar_created
+          try {
+            const { data: taskData } = await supabase
+              .from('tasks')
+              .select('tenant_id')
+              .eq('id', task.id)
+              .single();
+
+            if (taskData?.tenant_id) {
+              await supabase.functions.invoke('trigger-automation', {
+                body: {
+                  trigger_type: 'task_calendar_created',
+                  data: {
+                    id: task.id,
+                    title: task.title,
+                    client_id: task.client_id,
+                    client_name: clientName,
+                    meeting_date: format(meetingDate, 'yyyy-MM-dd'),
+                    meeting_time: meetingTime,
+                    meeting_subject: subject,
+                    meeting_location: meetingLocation,
+                  },
+                  tenant_id: taskData.tenant_id
+                }
+              });
+            }
+          } catch (automationError) {
+            console.error('Automation trigger error:', automationError);
           }
-        } catch (automationError) {
-          console.error('Automation trigger error:', automationError);
         }
       }
 

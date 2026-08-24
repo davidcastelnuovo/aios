@@ -49,6 +49,7 @@ import {
   syncLocalTasksForAgencyFilter,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
+import { buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
 
 interface Task {
   id: string;
@@ -297,23 +298,15 @@ export function WeeklyTaskBoard() {
 
       // Include: current range OR overdue (past due_date with status != done) OR null due_date
       // Overdue = due_date < today AND status != 'done'
-      if (filters.startDate && filters.endDate) {
-        // Custom date range
-        const customStart = format(filters.startDate, "yyyy-MM-dd");
-        const customEnd = format(filters.endDate, "yyyy-MM-dd");
-        query = query.or(
-          `and(due_date.gte.${customStart},due_date.lte.${customEnd}),` +
-          `and(due_date.lt.${today},status.neq.done),` +
-          `due_date.is.null`
-        );
-      } else {
-        // View range + overdue + unscheduled
-        query = query.or(
-          `and(due_date.gte.${rangeStartStr},due_date.lte.${rangeEndStr}),` +
-          `and(due_date.lt.${today},status.neq.done),` +
-          `due_date.is.null`
-        );
-      }
+      query = query.or(
+        buildTaskDueDateOrFilter({
+          rangeStart: rangeStartStr,
+          rangeEnd: rangeEndStr,
+          today,
+          customStart: filters.startDate ? format(filters.startDate, "yyyy-MM-dd") : undefined,
+          customEnd: filters.endDate ? format(filters.endDate, "yyyy-MM-dd") : undefined,
+        }),
+      );
 
       // Apply "mine" filter - tasks ASSIGNED to me (campaigner or sales person).
       // We intentionally do NOT include `created_by` here: an admin/owner creates
@@ -421,14 +414,21 @@ export function WeeklyTaskBoard() {
     if (filters.campaignerId && filters.campaignerId !== "mine" && filters.campaignerId !== "all") {
       return [];
     }
-    
+
+    const gridToday = startOfDay(new Date());
+    // Hide a Google event only when the linked task is actually on the timed grid.
+    // Otherwise the event vanishes while the task sits in backlog / off-screen.
     const syncedEventIds = new Set(
       tasks
-        .filter(t => t.google_calendar_event_id)
-        .map(t => t.google_calendar_event_id)
+        .filter(
+          (t) =>
+            t.google_calendar_event_id &&
+            taskAppearsOnTimeGrid(t, dateRange, gridToday),
+        )
+        .map((t) => t.google_calendar_event_id as string),
     );
-    return calendarEvents.filter(event => !syncedEventIds.has(event.id));
-  }, [calendarEvents, tasks, filters.campaignerId]);
+    return calendarEvents.filter((event) => !syncedEventIds.has(event.id));
+  }, [calendarEvents, tasks, filters.campaignerId, dateRange]);
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
