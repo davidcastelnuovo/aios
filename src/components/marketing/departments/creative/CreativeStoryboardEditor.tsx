@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { Copy, Image as ImageIcon, Loader2, Plus, Save, Trash2, WandSparkles } from "lucide-react";
@@ -30,6 +31,8 @@ interface Props {
   onGenerateFrame: (frame: StoryboardFrame) => Promise<void>;
   generating?: boolean;
   saving?: boolean;
+  scenePanelOpen?: boolean;
+  onScenePanelOpenChange?: (open: boolean) => void;
 }
 
 type StoryboardNode = Node<StoryboardFrame, "storyboard">;
@@ -63,9 +66,22 @@ function StoryboardCard({ data, selected }: NodeProps<StoryboardNode>) {
 
 const nodeTypes = { storyboard: StoryboardCard };
 
-export function CreativeStoryboardEditor({ frames, onChange, onSave, onGenerateFrame, generating, saving }: Props) {
+export function CreativeStoryboardEditor({
+  frames,
+  onChange,
+  onSave,
+  onGenerateFrame,
+  generating,
+  saving,
+  scenePanelOpen,
+  onScenePanelOpenChange,
+}: Props) {
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(frames[0]?.id ?? null);
   const [frameDraft, setFrameDraft] = useState<StoryboardFrame | null>(frames[0] ?? null);
+  const [internalSceneOpen, setInternalSceneOpen] = useState(false);
+
+  const sceneOpen = scenePanelOpen ?? internalSceneOpen;
+  const setSceneOpen = onScenePanelOpenChange ?? setInternalSceneOpen;
 
   useEffect(() => {
     if (!selectedFrameId && frames[0]?.id) setSelectedFrameId(frames[0].id);
@@ -104,7 +120,9 @@ export function CreativeStoryboardEditor({ frames, onChange, onSave, onGenerateF
   const addFrame = () => {
     const next = [...frames, makeStoryboardFrame(frames.length + 1)];
     updateFrames(next);
-    setSelectedFrameId(next[next.length - 1].id);
+    const newId = next[next.length - 1].id;
+    setSelectedFrameId(newId);
+    setSceneOpen(true);
   };
 
   const duplicateFrame = () => {
@@ -118,54 +136,59 @@ export function CreativeStoryboardEditor({ frames, onChange, onSave, onGenerateF
     if (!frameDraft) return;
     const next = frames.filter((frame) => frame.id !== frameDraft.id).map((frame, index) => ({ ...frame, order: index + 1 }));
     updateFrames(next);
+    if (next.length === 0) setSceneOpen(false);
+  };
+
+  const selectFrame = (frameId: string) => {
+    setSelectedFrameId(frameId);
+    setSceneOpen(true);
   };
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px]">
-      <div className="flex min-h-0 flex-col">
-        <div className="flex items-center justify-between border-b px-4 py-2">
-          <span className="text-xs text-muted-foreground">Storyboard וידאו — סצנות, פריימים וקריינות</span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={addFrame}><Plus className="h-3.5 w-3.5" />סצנה</Button>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void onSave()} disabled={saving}>
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}שמור
-            </Button>
-          </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-between border-b px-4 py-2">
+        <span className="text-xs text-muted-foreground">Storyboard — לחץ על סצנה לעריכה</span>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={addFrame}><Plus className="h-3.5 w-3.5" />סצנה</Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void onSave()} disabled={saving}>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}שמור
+          </Button>
         </div>
-        {frames.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center p-8 text-center text-muted-foreground">
-            <div>
-              <p className="text-sm">אין סצנות עדיין</p>
-              <Button className="mt-4 gap-2" onClick={addFrame}><Plus className="h-4 w-4" />הוסף סצנה ראשונה</Button>
-            </div>
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1" dir="ltr">
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              fitView
-              fitViewOptions={{ padding: 0.2 }}
-              onNodeClick={(_, node) => setSelectedFrameId(node.id)}
-              onNodeDragStop={(_, node) => {
-                updateFrames(frames.map((frame) => frame.id === node.id ? { ...frame, x: node.position.x, y: node.position.y } : frame));
-              }}
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background gap={24} size={1} />
-              <Controls position="bottom-left" />
-            </ReactFlow>
-          </div>
-        )}
       </div>
 
-      <aside className="flex min-h-0 flex-col border-r bg-card/80">
-        {frameDraft ? (
-          <>
-            <div className="border-b p-4">
-              <h3 className="text-sm font-bold">עריכת סצנה {frameDraft.order}</h3>
-            </div>
+      {frames.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center p-8 text-center text-muted-foreground">
+          <div>
+            <p className="text-sm">אין סצנות עדיין</p>
+            <Button className="mt-4 gap-2" onClick={addFrame}><Plus className="h-4 w-4" />הוסף סצנה ראשונה</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1" dir="ltr">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            onNodeClick={(_, node) => selectFrame(node.id)}
+            onNodeDragStop={(_, node) => {
+              updateFrames(frames.map((frame) => frame.id === node.id ? { ...frame, x: node.position.x, y: node.position.y } : frame));
+            }}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background gap={24} size={1} />
+            <Controls position="bottom-left" />
+          </ReactFlow>
+        </div>
+      )}
+
+      <Sheet open={sceneOpen} onOpenChange={setSceneOpen}>
+        <SheetContent side="left" className="flex w-[360px] max-w-[90vw] flex-col gap-0 p-0 sm:max-w-[360px]" dir="rtl">
+          <SheetHeader className="border-b px-6 py-4 text-right">
+            <SheetTitle>{frameDraft ? `עריכת סצנה ${frameDraft.order}` : "עריכת סצנה"}</SheetTitle>
+          </SheetHeader>
+          {frameDraft ? (
             <ScrollArea className="flex-1">
               <div className="space-y-4 p-4">
                 <div><Label>שם הסצנה</Label><Input className="mt-1" value={frameDraft.title} onChange={(event) => setFrameDraft({ ...frameDraft, title: event.target.value })} /></div>
@@ -195,11 +218,11 @@ export function CreativeStoryboardEditor({ frames, onChange, onSave, onGenerateF
                 </div>
               </div>
             </ScrollArea>
-          </>
-        ) : (
-          <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-muted-foreground">בחר סצנה לעריכה</div>
-        )}
-      </aside>
+          ) : (
+            <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-muted-foreground">בחר סצנה לעריכה</div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

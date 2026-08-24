@@ -31,6 +31,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -74,6 +75,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [saving, setSaving] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
   const [workspaceTab, setWorkspaceTab] = useState<"project" | "creative">("project");
+  const [videoPanel, setVideoPanel] = useState<"projects" | "project" | "scene" | "versions" | null>(null);
   const [storyboardDraft, setStoryboardDraft] = useState<StoryboardFrame[]>([]);
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
@@ -145,6 +147,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   useEffect(() => {
     setWorkspaceTab("project");
+    setVideoPanel(null);
   }, [selectedId]);
 
   useEffect(() => {
@@ -481,56 +484,296 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   });
 
   const canHandoff = projectType === "video" ? storyboardDraft.length > 0 : variations.length > 0;
+  const isVideoWorkspace = projectType === "video";
+
+  const toggleVideoPanel = (panel: "projects" | "project" | "scene" | "versions") => {
+    setVideoPanel((current) => (current === panel ? null : panel));
+  };
+
+  const projectsList = (
+    <ScrollArea className="flex-1">
+      <div className="space-y-2 p-2">
+        {loadingItems ? (
+          <Loader2 className="mx-auto mt-8 h-5 w-5 animate-spin" />
+        ) : items.length === 0 ? (
+          <div className="px-4 py-10 text-center text-xs text-muted-foreground">
+            <Palette className="mx-auto mb-2 h-8 w-8 opacity-30" />
+            אין פרויקטים עדיין
+          </div>
+        ) : items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => { setSelectedId(item.id); setSelectedVariationId(null); setVideoPanel(null); }}
+            className={cn(
+              "w-full rounded-xl border p-3 text-right transition-colors",
+              selectedId === item.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "bg-background hover:bg-muted/50",
+            )}
+          >
+            <div className="flex items-start gap-2">
+              <StatusDot status={item.status} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-semibold">{item.title || "ללא כותרת"}</div>
+                <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                  {getBriefText(item) || getLinkedCopyText(item) || "מחכה לבריף או לקופi"}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                  <Badge variant="outline" className="h-4 px-1 text-[9px]">{projectTypeLabel(getProjectType(item.payload))}</Badge>
+                  <span>{getProjectType(item.payload) === "video" ? `${getStoryboard(item.payload).length} סצנות` : `${getVariations(item.payload).length} וריאציות`}</span>
+                  {item.payload?.handoff_from === "copy" && <Badge variant="secondary" className="h-4 px-1 text-[9px]">מהקופi</Badge>}
+                </div>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </ScrollArea>
+  );
+
+  const versionsPanel = (
+    <>
+      <ScrollArea className="flex-1">
+        <div className="space-y-3 p-3">
+          {(getBriefText(selected) || getLinkedCopyText(selected)) && (
+            <Collapsible defaultOpen={false}>
+              <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs font-semibold hover:bg-muted/50">
+                <span>בריף וקופi משויך</span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-60 transition-transform [[data-state=open]_&]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2 space-y-2">
+                {getBriefText(selected) && (
+                  <Card className="p-3">
+                    <Badge variant="secondary" className="mb-2">בריף מקור</Badge>
+                    <p className="text-xs leading-relaxed whitespace-pre-wrap">{getBriefText(selected)}</p>
+                  </Card>
+                )}
+                {getLinkedCopyText(selected) && (
+                  <Card className="p-3">
+                    <Badge variant="outline" className="mb-2 gap-1"><PenLine className="h-3 w-3" />קופi משויך</Badge>
+                    <p className="text-xs leading-relaxed whitespace-pre-wrap">{getLinkedCopyText(selected)}</p>
+                    {selected?.payload?.linked_copy_title && (
+                      <p className="mt-2 text-[10px] text-muted-foreground">מקור: {String(selected.payload.linked_copy_title)}</p>
+                    )}
+                  </Card>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {selectedVariation && (
+            <Card className="overflow-hidden p-0 ring-2 ring-pink-400">
+              {selectedVariation.imageUrl && (
+                <img src={selectedVariation.imageUrl} alt={selectedVariation.name} className="aspect-video w-full object-cover" />
+              )}
+              <div className="p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <Badge>גרסה נוכחית</Badge>
+                  <span className="text-[10px] text-muted-foreground">
+                    {new Date(selectedVariation.createdAt).toLocaleString("he-IL")}
+                  </span>
+                </div>
+                <div className="text-xs font-semibold">{selectedVariation.name}</div>
+                {selectedVariation.comments.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {selectedVariation.comments.slice(-3).map((comment) => (
+                      <div key={comment.id} className="rounded-md bg-muted/60 px-2 py-1 text-[10px] leading-relaxed">
+                        {comment.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {(variations.filter((v) => v.id !== selectedVariationId).length > 0 || (assetVersions as CreativeAssetRow[]).length > 0) && (
+            <Collapsible defaultOpen={false}>
+              <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs font-semibold hover:bg-muted/50">
+                <span>
+                  גרסאות ישנות
+                  ({variations.filter((v) => v.id !== selectedVariationId).length + (assetVersions as CreativeAssetRow[]).length})
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-60 transition-transform [[data-state=open]_&]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2 space-y-2">
+                {variations.filter((variation) => variation.id !== selectedVariationId).map((variation, index) => (
+                  <Card
+                    key={variation.id}
+                    className="cursor-pointer overflow-hidden p-0 hover:bg-muted/20"
+                    onClick={() => setSelectedVariationId(variation.id)}
+                  >
+                    {variation.imageUrl && (
+                      <img src={variation.imageUrl} alt={variation.name} className="aspect-video w-full object-cover" />
+                    )}
+                    <div className="p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <Badge variant="outline">גרסה {index + 1}</Badge>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(variation.createdAt).toLocaleString("he-IL")}
+                        </span>
+                      </div>
+                      <div className="text-xs font-semibold">{variation.name}</div>
+                    </div>
+                  </Card>
+                ))}
+                {(assetVersions as CreativeAssetRow[]).map((asset, index) => (
+                  <Card key={asset.id} className="p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <Badge variant="outline">שמירה {(assetVersions as CreativeAssetRow[]).length - index}</Badge>
+                      <span className="text-[10px] text-muted-foreground">{new Date(asset.created_at).toLocaleString("he-IL")}</span>
+                    </div>
+                    {asset.meta?.source === "manual_edit" && <div className="text-[10px] text-muted-foreground">עריכה ידנית</div>}
+                  </Card>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {selected && variations.length === 0 && projectType === "static" && (
+            <div className="py-8 text-center text-xs text-muted-foreground">הגרסה הראשונה תופיע כאן</div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {variationDraft && (
+        <div className="border-t p-3">
+          <Label className="flex items-center gap-1 text-xs"><MessageSquare className="h-3.5 w-3.5" />הערה לגרסה הנוכחית</Label>
+          <Textarea
+            className="mt-2 min-h-16 text-xs"
+            value={commentDraft}
+            onChange={(event) => setCommentDraft(event.target.value)}
+            placeholder="פידבק ללקוח, לצוות או לכרמן..."
+          />
+          <Button size="sm" variant="outline" className="mt-2 w-full" onClick={addComment} disabled={!commentDraft.trim()}>
+            שמור הערה
+          </Button>
+        </div>
+      )}
+    </>
+  );
+
+  const videoHeader = selected ? (
+    <div className="flex flex-wrap items-center gap-2 border-b bg-card/50 px-4 py-2">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-700 text-white">
+        <Clapperboard className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate text-sm font-bold">{selected.title}</h2>
+        <p className="text-[11px] text-muted-foreground">
+          {projectTypeLabel(projectType)} · Skin: social_media · תמונות: DALL-E 3
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
+        <Button size="sm" variant={videoPanel === "projects" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleVideoPanel("projects")}>
+          פרויקטים
+        </Button>
+        <Button size="sm" variant={videoPanel === "project" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleVideoPanel("project")}>
+          עריכת פרויקט
+        </Button>
+        <Button size="sm" variant={videoPanel === "scene" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleVideoPanel("scene")} disabled={storyboardDraft.length === 0}>
+          סצנה
+        </Button>
+        <Button size="sm" variant={videoPanel === "versions" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleVideoPanel("versions")}>
+          גרסאות
+        </Button>
+      </div>
+      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkCopyOpen(true)}>
+        <Link2 className="h-3.5 w-3.5" />שייך קופi
+      </Button>
+      <Button
+        size="sm"
+        className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+        onClick={() => handoff.mutate()}
+        disabled={handoff.isPending || !canHandoff}
+      >
+        <Send className="h-3.5 w-3.5" />אשר לקמפיינים
+      </Button>
+    </div>
+  ) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {isVideoWorkspace ? (
+        <>
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/10">
+            {videoHeader}
+            {selected ? (
+              <CreativeStoryboardEditor
+                frames={storyboardDraft}
+                onChange={setStoryboardDraft}
+                onSave={() => persistStoryboard(storyboardDraft)}
+                onGenerateFrame={async (frame) => {
+                  const merged = storyboardDraft.map((value) => value.id === frame.id ? frame : value);
+                  setStoryboardDraft(merged);
+                  await generateStoryboardFrame(frame, merged);
+                }}
+                generating={generating}
+                saving={saving}
+                scenePanelOpen={videoPanel === "scene"}
+                onScenePanelOpenChange={(open) => setVideoPanel(open ? "scene" : null)}
+              />
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center text-muted-foreground">
+                <Clapperboard className="h-12 w-12 opacity-30" />
+                <p className="text-sm">בחר פרויקט storyboard או צור חדש</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setVideoPanel("projects")}>פתח פרויקטים</Button>
+                  <Button className="bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>פרויקט חדש</Button>
+                </div>
+              </div>
+            )}
+          </main>
+
+          <Sheet open={videoPanel === "projects"} onOpenChange={(open) => setVideoPanel(open ? "projects" : null)}>
+            <SheetContent side="right" className="flex w-[320px] max-w-[90vw] flex-col gap-0 p-0 sm:max-w-[320px]" dir="rtl">
+              <SheetHeader className="flex-row items-center justify-between border-b px-6 py-4 text-right">
+                <div>
+                  <SheetTitle className="text-sm">פרויקטים לקריאייטיב</SheetTitle>
+                  <p className="text-[11px] text-muted-foreground">מהקופi, מבריף ידני או AI</p>
+                </div>
+                <Button size="icon" className="h-8 w-8 shrink-0 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </SheetHeader>
+              {projectsList}
+            </SheetContent>
+          </Sheet>
+
+          <Sheet open={videoPanel === "project"} onOpenChange={(open) => setVideoPanel(open ? "project" : null)}>
+            <SheetContent side="right" className="flex w-[min(560px,92vw)] max-w-none flex-col gap-0 p-0 sm:max-w-[560px]" dir="rtl">
+              <SheetHeader className="border-b px-6 py-4 text-right">
+                <SheetTitle>עריכת פרויקט</SheetTitle>
+              </SheetHeader>
+              {selected ? (
+                <CreativeBriefEditor item={selected} onSave={saveProject} saving={saving} />
+              ) : null}
+            </SheetContent>
+          </Sheet>
+
+          <Sheet open={videoPanel === "versions"} onOpenChange={(open) => setVideoPanel(open ? "versions" : null)}>
+            <SheetContent side="left" className="flex w-[320px] max-w-[90vw] flex-col gap-0 p-0 sm:max-w-[320px]" dir="rtl">
+              <SheetHeader className="border-b px-6 py-4 text-right">
+                <SheetTitle className="flex items-center gap-1.5 text-sm">
+                  <History className="h-4 w-4" />גרסאות והערות
+                </SheetTitle>
+                <p className="text-[11px] text-muted-foreground">כל יצירה, שמירה והערה נשמרות</p>
+              </SheetHeader>
+              {versionsPanel}
+            </SheetContent>
+          </Sheet>
+        </>
+      ) : (
       <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_300px] bg-muted/10">
         <aside className="flex min-h-0 flex-col border-l bg-card/70">
           <div className="flex items-center justify-between border-b p-3">
             <div>
               <h2 className="text-sm font-bold">פרויקטים לקריאייטיב</h2>
-              <p className="text-[11px] text-muted-foreground">מהקופי, מבריף ידני או AI</p>
+              <p className="text-[11px] text-muted-foreground">מהקופi, מבריף ידני או AI</p>
             </div>
             <Button size="icon" className="h-8 w-8 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          <ScrollArea className="flex-1">
-            <div className="space-y-2 p-2">
-              {loadingItems ? (
-                <Loader2 className="mx-auto mt-8 h-5 w-5 animate-spin" />
-              ) : items.length === 0 ? (
-                <div className="px-4 py-10 text-center text-xs text-muted-foreground">
-                  <Palette className="mx-auto mb-2 h-8 w-8 opacity-30" />
-                  אין פרויקטים עדיין
-                </div>
-              ) : items.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => { setSelectedId(item.id); setSelectedVariationId(null); }}
-                  className={cn(
-                    "w-full rounded-xl border p-3 text-right transition-colors",
-                    selectedId === item.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "bg-background hover:bg-muted/50",
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    <StatusDot status={item.status} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-semibold">{item.title || "ללא כותרת"}</div>
-                      <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-                        {getBriefText(item) || getLinkedCopyText(item) || "מחכה לבריף או לקופי"}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                        <Badge variant="outline" className="h-4 px-1 text-[9px]">{projectTypeLabel(getProjectType(item.payload))}</Badge>
-                        <span>{getProjectType(item.payload) === "video" ? `${getStoryboard(item.payload).length} סצנות` : `${getVariations(item.payload).length} וריאציות`}</span>
-                        {item.payload?.handoff_from === "copy" && <Badge variant="secondary" className="h-4 px-1 text-[9px]">מהקופי</Badge>}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </ScrollArea>
+          {projectsList}
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-col">
@@ -538,7 +781,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             <>
               <div className="flex flex-wrap items-center gap-3 border-b bg-card/50 px-4 py-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-700 text-white">
-                  {projectType === "video" ? <Clapperboard className="h-4 w-4" /> : <Palette className="h-4 w-4" />}
+                  <Palette className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-sm font-bold">{selected.title}</h2>
@@ -549,18 +792,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 <Tabs value={workspaceTab} onValueChange={(value) => setWorkspaceTab(value as "project" | "creative")}>
                   <TabsList>
                     <TabsTrigger value="project">עריכת פרויקט</TabsTrigger>
-                    <TabsTrigger value="creative">{projectType === "video" ? "Storyboard" : "קריאייטיב"}</TabsTrigger>
+                    <TabsTrigger value="creative">קריאייטיב</TabsTrigger>
                   </TabsList>
                 </Tabs>
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkCopyOpen(true)}>
-                  <Link2 className="h-3.5 w-3.5" />שייך קופי
+                  <Link2 className="h-3.5 w-3.5" />שייך קופi
                 </Button>
-                {projectType === "static" && (
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={generate} disabled={generating || !selected.client_id}>
-                    {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
-                    {variations.length ? "צור וריאציה" : "צור קריאייטיב"}
-                  </Button>
-                )}
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={generate} disabled={generating || !selected.client_id}>
+                  {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+                  {variations.length ? "צור וריאציה" : "צור קריאייטיב"}
+                </Button>
                 <Button
                   size="sm"
                   className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
@@ -573,19 +814,6 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
               {workspaceTab === "project" ? (
                 <CreativeBriefEditor item={selected} onSave={saveProject} saving={saving} />
-              ) : projectType === "video" ? (
-                <CreativeStoryboardEditor
-                  frames={storyboardDraft}
-                  onChange={setStoryboardDraft}
-                  onSave={() => persistStoryboard(storyboardDraft)}
-                  onGenerateFrame={async (frame) => {
-                    const merged = storyboardDraft.map((value) => value.id === frame.id ? frame : value);
-                    setStoryboardDraft(merged);
-                    await generateStoryboardFrame(frame, merged);
-                  }}
-                  generating={generating}
-                  saving={saving}
-                />
               ) : variationDraft ? (
                 <CreativeLayerEditor
                   key={variationDraft.id}
@@ -623,125 +851,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             </h3>
             <p className="mt-1 text-[11px] text-muted-foreground">כל יצירה, שמירה והערה נשמרות</p>
           </div>
-          <ScrollArea className="flex-1">
-            <div className="space-y-3 p-3">
-              {(getBriefText(selected) || getLinkedCopyText(selected)) && (
-                <Collapsible defaultOpen={false}>
-                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs font-semibold hover:bg-muted/50">
-                    <span>בריף וקופי משויך</span>
-                    <ChevronDown className="h-4 w-4 shrink-0 opacity-60 transition-transform [[data-state=open]_&]:rotate-180" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2 space-y-2">
-                    {getBriefText(selected) && (
-                      <Card className="p-3">
-                        <Badge variant="secondary" className="mb-2">בריף מקור</Badge>
-                        <p className="text-xs leading-relaxed whitespace-pre-wrap">{getBriefText(selected)}</p>
-                      </Card>
-                    )}
-                    {getLinkedCopyText(selected) && (
-                      <Card className="p-3">
-                        <Badge variant="outline" className="mb-2 gap-1"><PenLine className="h-3 w-3" />קופי משויך</Badge>
-                        <p className="text-xs leading-relaxed whitespace-pre-wrap">{getLinkedCopyText(selected)}</p>
-                        {selected?.payload?.linked_copy_title && (
-                          <p className="mt-2 text-[10px] text-muted-foreground">מקור: {String(selected.payload.linked_copy_title)}</p>
-                        )}
-                      </Card>
-                    )}
-                  </CollapsibleContent>
-                </Collapsible>
-              )}
-
-              {selectedVariation && (
-                <Card className="overflow-hidden p-0 ring-2 ring-pink-400">
-                  {selectedVariation.imageUrl && (
-                    <img src={selectedVariation.imageUrl} alt={selectedVariation.name} className="aspect-video w-full object-cover" />
-                  )}
-                  <div className="p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <Badge>גרסה נוכחית</Badge>
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date(selectedVariation.createdAt).toLocaleString("he-IL")}
-                      </span>
-                    </div>
-                    <div className="text-xs font-semibold">{selectedVariation.name}</div>
-                    {selectedVariation.comments.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {selectedVariation.comments.slice(-3).map((comment) => (
-                          <div key={comment.id} className="rounded-md bg-muted/60 px-2 py-1 text-[10px] leading-relaxed">
-                            {comment.text}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              )}
-
-              {(variations.filter((v) => v.id !== selectedVariationId).length > 0 || (assetVersions as CreativeAssetRow[]).length > 0) && (
-                <Collapsible defaultOpen={false}>
-                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs font-semibold hover:bg-muted/50">
-                    <span>
-                      גרסאות ישנות
-                      ({variations.filter((v) => v.id !== selectedVariationId).length + (assetVersions as CreativeAssetRow[]).length})
-                    </span>
-                    <ChevronDown className="h-4 w-4 shrink-0 opacity-60 transition-transform [[data-state=open]_&]:rotate-180" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2 space-y-2">
-                    {variations.filter((variation) => variation.id !== selectedVariationId).map((variation, index) => (
-                      <Card
-                        key={variation.id}
-                        className="cursor-pointer overflow-hidden p-0 hover:bg-muted/20"
-                        onClick={() => setSelectedVariationId(variation.id)}
-                      >
-                        {variation.imageUrl && (
-                          <img src={variation.imageUrl} alt={variation.name} className="aspect-video w-full object-cover" />
-                        )}
-                        <div className="p-3">
-                          <div className="mb-2 flex items-center justify-between">
-                            <Badge variant="outline">גרסה {index + 1}</Badge>
-                            <span className="text-[10px] text-muted-foreground">
-                              {new Date(variation.createdAt).toLocaleString("he-IL")}
-                            </span>
-                          </div>
-                          <div className="text-xs font-semibold">{variation.name}</div>
-                        </div>
-                      </Card>
-                    ))}
-                    {(assetVersions as CreativeAssetRow[]).map((asset, index) => (
-                      <Card key={asset.id} className="p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <Badge variant="outline">שמירה {(assetVersions as CreativeAssetRow[]).length - index}</Badge>
-                          <span className="text-[10px] text-muted-foreground">{new Date(asset.created_at).toLocaleString("he-IL")}</span>
-                        </div>
-                        {asset.meta?.source === "manual_edit" && <div className="text-[10px] text-muted-foreground">עריכה ידנית</div>}
-                      </Card>
-                    ))}
-                  </CollapsibleContent>
-                </Collapsible>
-              )}
-
-              {selected && variations.length === 0 && projectType === "static" && (
-                <div className="py-8 text-center text-xs text-muted-foreground">הגרסה הראשונה תופיע כאן</div>
-              )}
-            </div>
-          </ScrollArea>
-
-          {variationDraft && (
-            <div className="border-t p-3">
-              <Label className="flex items-center gap-1 text-xs"><MessageSquare className="h-3.5 w-3.5" />הערה לגרסה הנוכחית</Label>
-              <Textarea
-                className="mt-2 min-h-16 text-xs"
-                value={commentDraft}
-                onChange={(event) => setCommentDraft(event.target.value)}
-                placeholder="פידבק ללקוח, לצוות או לכרמן..."
-              />
-              <Button size="sm" variant="outline" className="mt-2 w-full" onClick={addComment} disabled={!commentDraft.trim()}>
-                שמור הערה
-              </Button>
-            </div>
-          )}
+          {versionsPanel}
         </aside>
       </div>
+      )}
 
       <ManualCreativeDialog
         open={createOpen}
