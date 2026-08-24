@@ -78,6 +78,25 @@ test("mergePulseDeliveryPlans unions client ids for same phone", () => {
   assert.deepEqual(merged[0].clientIds.sort(), ["c1", "c2"]);
 });
 
+test("planTeamManagerPulseDeliveries skips excluded recipients", () => {
+  const plans = planTeamManagerPulseDeliveries(SNAPSHOTS, [
+    {
+      user_id: "u1",
+      full_name: "אילנית",
+      phone: "972500000001",
+      agency_ids: ["a1"],
+    },
+    {
+      user_id: "u2",
+      full_name: "פליקס",
+      phone: "972558833168",
+      agency_ids: ["a1"],
+    },
+  ]);
+  assert.equal(plans.length, 1);
+  assert.equal(plans[0].name, "פליקס");
+});
+
 test("preview message wraps scoped digest for David", () => {
   const scoped = scopeSnapshotsForPlan(SNAPSHOTS, {
     key: "campaigner:cam1",
@@ -89,6 +108,6 @@ test("preview message wraps scoped digest for David", () => {
   const digest = buildPulseWhatsAppDigest(scoped, "https://aios.co.il/t/dmm/dmm-dashboard");
   const preview = buildPulsePreviewMessage("אביעד", digest);
   assert.match(preview, /תצוגה מקדימה — בדיקת דופק לאביעד/);
-  assert.match(preview, /נבדקו 2 לקוחות/);
+  assert.match(preview, /נבדקו 2 יעדי קמפיין/);
   assert.match(preview, /https:\/\/aios\.co\.il\/t\/dmm\/dmm-dashboard/);
 });

@@ -6,8 +6,11 @@ import {
   buildPulseWhatsAppDigest,
   classifyCampaignPulseStatus,
   clientCampaignServices as servicesFromClient,
-  effectiveIsEcommerce,
+  computeGoalMetricsFromRecords,
+  detectCampaignGoalMode,
+  integrationTypeToGoal,
   tableMatchesServices,
+  worstPulseStatus,
 } from '../_shared/campaign-pulse.ts'
 import { normalizeNotifyPhone } from '../_shared/carmen-notify-target.ts'
 import {
@@ -360,7 +363,7 @@ Deno.serve(async (req) => {
         }
         let records: any[] = []
         if (tableIds.length) {
-          const filtered = await supabase.from('crm_records').select('data')
+          const filtered = await supabase.from('crm_records').select('table_id, data')
             .in('table_id', tableIds)
             .filter('data->>date', 'gte', d30Str)
             .limit(5000)
@@ -370,7 +373,7 @@ Deno.serve(async (req) => {
             if (filtered.error) {
               console.warn('[campaign-pulse] crm_records date filter failed', client.id, filtered.error.message)
             }
-            const fallback = await supabase.from('crm_records').select('data')
+            const fallback = await supabase.from('crm_records').select('table_id, data')
               .in('table_id', tableIds)
               .limit(5000)
             records = fallback.data || []
@@ -379,41 +382,69 @@ Deno.serve(async (req) => {
             }
           }
         }
+        const tableTypeById = new Map(activeTables.map((table: any) => [table.id, table.integration_type]))
+        const recordsForGoal = (goal: 'leads' | 'ecommerce') =>
+          records.filter((row: any) => integrationTypeToGoal(tableTypeById.get(row.table_id)) === goal)
+        const leadRecords = recordsForGoal('leads')
+        const ecommerceRecords = recordsForGoal('ecommerce')
         const recent = records.filter((row: any) => row.data?.date && row.data.date >= d30Str)
-        const current = recent.filter((row: any) => row.data.date >= d7Str)
-        const previous = recent.filter((row: any) => row.data.date >= d14Str && row.data.date < d7Str)
-        const sum = (rows: any[], fields: string[]) =>
-          rows.reduce((total, row) => {
-            const field = fields.find((candidate) => row.data?.[candidate] !== undefined && row.data?.[candidate] !== null)
-            return total + (field ? Number(row.data[field]) || 0 : 0)
-          }, 0)
-        const spend7 = sum(current, ['spend', 'cost'])
-        const leads7 = sum(current, ['leads', 'conversions', 'all_conversions'])
-        const previousSpend = sum(previous, ['spend', 'cost'])
-        const previousLeads = sum(previous, ['leads', 'conversions', 'all_conversions'])
-        const cpl7 = leads7 > 0 ? spend7 / leads7 : null
-        const previousCpl = previousLeads > 0 ? previousSpend / previousLeads : null
-        const cplChange = cpl7 !== null && previousCpl ? ((cpl7 - previousCpl) / previousCpl) * 100 : null
-        const purchases = sum(current, ['purchases'])
-        const revenue = sum(current, ['purchase_value', 'conversions_value', 'revenue'])
-        const roas = spend7 > 0 ? revenue / spend7 : null
+        const goalMode = detectCampaignGoalMode(activeTables)
+        const leadMetrics = computeGoalMetricsFromRecords(leadRecords, 'leads', d7Str, d14Str)
+        const ecommerceMetrics = computeGoalMetricsFromRecords(ecommerceRecords, 'ecommerce', d7Str, d14Str)
+        const spend7 = leadMetrics.spend + ecommerceMetrics.spend
+        const leads7 = leadMetrics.outcomes
+        const purchases = ecommerceMetrics.outcomes
+        const revenue = ecommerceMetrics.revenue
+        const cpl7 = leadMetrics.efficiency
+        const cplChange = leadMetrics.changePct
+        const roas = ecommerceMetrics.efficiency
+        const roasChange = ecommerceMetrics.changePct
         const freshest = recent.map((row: any) => row.data?.date).filter(Boolean).sort().reverse()[0] || null
         const configuredForClient = (tableResult.data || []).filter((table: any) =>
           table.client_id === client.id && tableMatchesServices(table, clientCampaignServices(client))
         )
-        const isEcommerce = effectiveIsEcommerce(client.is_ecommerce, activeTables)
-        const { status, flags, stalePlatforms } = classifyCampaignPulseStatus({
-          activeTables,
-          hasConfiguredCampaignTable: configuredForClient.length > 0,
-          recentRecordCount: recent.length,
-          isEcommerce,
-          spend7,
-          leads7,
-          purchases7: purchases,
-          roas,
-          cplChangePct: cplChange,
+        const leadTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type) === 'leads')
+        const ecommerceTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type) === 'ecommerce')
+        const leadClassification = classifyCampaignPulseStatus({
+          activeTables: leadTables,
+          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type) === 'leads'),
+          recentRecordCount: leadRecords.filter((row: any) => row.data?.date && row.data.date >= d30Str).length,
+          isEcommerce: false,
+          spend7: leadMetrics.spend,
+          leads7: leadMetrics.outcomes,
+          purchases7: 0,
+          roas: null,
+          cplChangePct: leadMetrics.changePct,
           nowMs: now.getTime(),
         })
+        const ecommerceClassification = classifyCampaignPulseStatus({
+          activeTables: ecommerceTables,
+          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type) === 'ecommerce'),
+          recentRecordCount: ecommerceRecords.filter((row: any) => row.data?.date && row.data.date >= d30Str).length,
+          isEcommerce: true,
+          spend7: ecommerceMetrics.spend,
+          leads7: 0,
+          purchases7: ecommerceMetrics.outcomes,
+          roas: ecommerceMetrics.efficiency,
+          cplChangePct: null,
+          nowMs: now.getTime(),
+        })
+        const leadStatus = goalMode === 'ecommerce' ? null : leadClassification.status
+        const ecommerceStatus = goalMode === 'leads' ? null : ecommerceClassification.status
+        const status = goalMode === 'hybrid'
+          ? worstPulseStatus(leadClassification.status, ecommerceClassification.status)
+          : goalMode === 'ecommerce'
+            ? ecommerceClassification.status
+            : leadClassification.status
+        const flags = Array.from(new Set([
+          ...(goalMode !== 'ecommerce' ? leadClassification.flags : []),
+          ...(goalMode !== 'leads' ? ecommerceClassification.flags : []),
+        ]))
+        const stalePlatforms = Array.from(new Set([
+          ...leadClassification.stalePlatforms,
+          ...ecommerceClassification.stalePlatforms,
+        ]))
+        const isEcommerce = goalMode === 'ecommerce' || goalMode === 'hybrid'
         console.log('[campaign-pulse] client classified', {
           client_id: client.id,
           client_name: client.name,
@@ -431,9 +462,21 @@ Deno.serve(async (req) => {
         snapshots.push({
           tenant_id: tenantId, agency_id: client.agency_id, client_id: client.id,
           calculated_at: now.toISOString(), data_fresh_through: freshest, status,
-          is_ecommerce: isEcommerce, spend_7d: round(spend7), leads_7d: round(leads7),
-          cpl_7d: round(cpl7), cpl_change_pct: round(cplChange, 1), purchases_7d: round(purchases),
-          revenue_7d: round(revenue), roas_7d: round(roas), flags, source: 'synced_crm',
+          campaign_goal_mode: goalMode,
+          is_ecommerce: isEcommerce,
+          lead_spend_7d: round(leadMetrics.spend),
+          ecommerce_spend_7d: round(ecommerceMetrics.spend),
+          spend_7d: round(spend7),
+          leads_7d: round(leads7),
+          cpl_7d: round(cpl7),
+          cpl_change_pct: round(cplChange, 1),
+          purchases_7d: round(purchases),
+          revenue_7d: round(revenue),
+          roas_7d: round(roas),
+          roas_change_pct: round(roasChange, 1),
+          lead_goal_status: leadStatus,
+          ecommerce_goal_status: ecommerceStatus,
+          flags, source: 'synced_crm',
           last_meta_change_at: lastMetaChange.at,
           last_meta_change_type: lastMetaChange.type,
           last_meta_change_actor: lastMetaChange.actor,
@@ -446,9 +489,12 @@ Deno.serve(async (req) => {
         snapshots.push({
           tenant_id: tenantId, agency_id: client.agency_id, client_id: client.id,
           calculated_at: now.toISOString(), data_fresh_through: null, status: 'no_data',
+          campaign_goal_mode: detectCampaignGoalMode(activeTablesByClient.get(client.id) || []),
           is_ecommerce: !!client.is_ecommerce, spend_7d: 0, leads_7d: 0,
+          lead_spend_7d: 0, ecommerce_spend_7d: 0,
           cpl_7d: null, cpl_change_pct: null, purchases_7d: 0,
-          revenue_7d: 0, roas_7d: null,
+          revenue_7d: 0, roas_7d: null, roas_change_pct: null,
+          lead_goal_status: 'no_data', ecommerce_goal_status: null,
           flags: ['שגיאה בחישוב דופק — נסה שוב'],
           source: 'synced_crm',
           last_meta_change_at: null, last_meta_change_type: null,
