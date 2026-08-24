@@ -22,6 +22,7 @@ import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { ClientConnectionsTab } from "@/components/clients/ClientConnectionsTab";
 import { useProvisionClientChannels } from "@/components/clients/useProvisionClientChannels";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
+import { ClientFollowUpDatePicker } from "@/components/clients/ClientFollowUpDatePicker";
 import { ClientTablesTab } from "@/components/clients/ClientTablesTab";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { ClientCredentialsTab } from "@/components/clients/ClientCredentialsTab";
@@ -1093,6 +1094,14 @@ export function ClientsChatView({
                             {getMoodInfo(selectedClient.mood_status).emoji} {getMoodInfo(selectedClient.mood_status).text}
                           </span>
                           <span className="text-muted-foreground">:מצב רוח</span>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <ClientFollowUpDatePicker
+                            clientId={selectedClient.id}
+                            currentDate={(selectedClient as any).follow_up_date ?? null}
+                            variant="full"
+                          />
+                          <span className="text-muted-foreground">:תאריך לשיחה</span>
                         </div>
                       </div>
                     </div>
