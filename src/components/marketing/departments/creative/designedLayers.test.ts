@@ -8,6 +8,7 @@ import {
   extractCopyAngle,
   heroWord,
   isInternalCopyLine,
+  isLegacyHeadlineBand,
   parseCreativeCopy,
   punchScore,
   shouldRebuildDesignedLayers,
@@ -146,20 +147,22 @@ test("wrapPosterLine splits a long lockup into two poster lines", () => {
   assert.equal(wrapped.split("\n").length, 2);
 });
 
-test("headline sits in the top band as a fat lockup, not a weak fragment", () => {
+test("flush lockup is fat type without a full-width headline rectangle", () => {
   const layers = buildDesignedCopyLayers({
     copyText: "כותרת:\nהמתחרים\nגוף:\nלקוחות כבר לא מחפשים רק בגוגל\nCTA:\nהשאירו פרטים",
     format: "1:1",
     styleId: "cinematic",
+    compositionId: "flush",
   });
   const poster = layers.find((layer) => layer.type === "text" && (layer.text ?? "").includes("לקוחות"));
   assert.ok(poster);
   assert.equal(poster?.fontFamily, "Suez One");
   assert.ok((poster?.fontSize ?? 0) >= 32);
-  assert.ok((poster?.y ?? 99) <= 8);
   assert.ok(!layers.some((layer) => layer.text === "המתחרים"));
+  assert.ok(!layers.some((layer) => isLegacyHeadlineBand(layer)));
   const cta = layers.find((layer) => layer.text === "השאירו פרטים");
-  assert.ok((cta?.y ?? 0) >= 80);
+  assert.ok(cta);
+  assert.equal(layers.some((layer) => layer.type === "shape" && (layer.y ?? 0) >= 80 && (layer.width ?? 0) >= 50), false);
 });
 
 test("designed layers never paint AIDA labels or a bottom caption plate", () => {
@@ -168,13 +171,14 @@ test("designed layers never paint AIDA labels or a bottom caption plate", () => 
     format: "1:1",
     styleId: "photoreal",
     title: "וריאציה 1 — AIDA — פומו תחרותי",
+    compositionId: "flush",
   });
   const texts = layers.map((layer) => layer.text).filter(Boolean);
   assert.ok(texts.some((text) => (text ?? "").includes("99")));
   assert.ok(!texts.includes("טסים"));
   assert.ok(texts.includes("להזמנה"));
   assert.ok(!texts.some((text) => /AIDA|וריאציה|כותרת:/.test(text ?? "")));
-  assert.ok(!layers.some((layer) => layer.type === "shape" && layer.y >= 52 && layer.height >= 18 && layer.width >= 70));
+  assert.ok(!layers.some((layer) => layer.type === "shape" && layer.y >= 58 && layer.height >= 18 && layer.height <= 36 && layer.width >= 70));
 });
 
 test("logo is composited as an image layer and shrinks the headline band", () => {
@@ -183,13 +187,14 @@ test("logo is composited as an image layer and shrinks the headline band", () =>
     format: "1:1",
     styleId: "swiss",
     logoUrl: "https://example.com/logo.png",
+    compositionId: "flag",
   });
   const logo = layers.find((layer) => layer.type === "image");
   const headline = layers.find((layer) => layer.text === "רודוס");
   assert.ok(logo);
   assert.equal(logo?.src, "https://example.com/logo.png");
-  assert.ok((logo?.x ?? 0) >= 70);
-  assert.ok((headline?.width ?? 99) <= 70);
+  assert.ok((logo?.x ?? 99) <= 20);
+  assert.ok(headline);
 });
 
 test("ensureLogoLayer updates or removes the logo without touching copy", () => {
@@ -219,4 +224,59 @@ test("shouldRebuildDesignedLayers catches leftover AIDA overlays and weak auto t
   assert.equal(shouldRebuildDesignedLayers([
     { id: "1", type: "text", x: 4, y: 4, width: 90, height: 16, text: "טסים לרודוס", fontFamily: "Suez One", fontSize: 52 },
   ], AIDA_DOC), false);
+  assert.equal(shouldRebuildDesignedLayers([
+    { id: "1", type: "shape", x: 0, y: 0, width: 100, height: 22, fill: "#f8fafccc" },
+    { id: "2", type: "text", x: 4, y: 4, width: 90, height: 16, text: "רק 99 ש״ח ללילה, כולל טיסה", fontFamily: "Suez One", fontSize: 52 },
+  ], AIDA_DOC), true);
+});
+
+test("brand colors from the logo override the style palette", () => {
+  const layers = buildDesignedCopyLayers({
+    copyText: "כותרת:\nרודוס\nCTA:\nלהזמנה",
+    format: "1:1",
+    styleId: "swiss",
+    compositionId: "flush",
+    brandColors: ["#111111", "#e11d48"],
+  });
+  const poster = layers.find((layer) => layer.text === "רודוס");
+  assert.ok(poster?.color === "#111111" || poster?.color === "#e11d48");
+});
+
+test("rail composition is a vertical field, not a top strip", () => {
+  const layers = buildDesignedCopyLayers({
+    copyText: "כותרת:\nרודוס\nCTA:\nלהזמנה",
+    format: "1:1",
+    styleId: "bauhaus",
+    compositionId: "rail",
+  });
+  const field = layers.find((layer) => layer.type === "shape" && (layer.height ?? 0) >= 80);
+  assert.ok(field);
+  assert.ok((field?.x ?? 0) >= 60);
+  assert.ok(!layers.some((layer) => isLegacyHeadlineBand(layer)));
+  assert.equal(shouldRebuildDesignedLayers(layers, "כותרת:\nרודוס\nCTA:\nלהזמנה"), false);
+});
+
+test("split field is architecture, not a leftover caption plate", () => {
+  const layers = buildDesignedCopyLayers({
+    copyText: "כותרת:\nרודוס\nCTA:\nלהזמנה",
+    format: "1:1",
+    styleId: "industrial",
+    compositionId: "split",
+  });
+  const field = layers.find((layer) => layer.type === "shape" && (layer.height ?? 0) >= 40);
+  assert.ok(field);
+  assert.ok((field?.y ?? 0) >= 50);
+  assert.equal(shouldRebuildDesignedLayers(layers, "כותרת:\nרודוס\nCTA:\nלהזמנה"), false);
+});
+
+test("slash field is rotated instead of a horizontal caption bar", () => {
+  const layers = buildDesignedCopyLayers({
+    copyText: "כותרת:\nרודוס\nCTA:\nלהזמנה",
+    format: "1:1",
+    styleId: "kinetic",
+    compositionId: "slash",
+  });
+  const slash = layers.find((layer) => typeof layer.rotation === "number" && layer.rotation < 0);
+  assert.ok(slash);
+  assert.ok(!layers.some((layer) => isLegacyHeadlineBand(layer)));
 });

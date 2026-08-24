@@ -229,6 +229,8 @@ export const makeVariation = ({
   parentId,
   logoUrl,
   generationCost,
+  compositionId,
+  brandColors,
 }: {
   imageUrl: string;
   format: CreativeFormat;
@@ -244,13 +246,15 @@ export const makeVariation = ({
   parentId?: string;
   logoUrl?: string;
   generationCost?: CreativeVariation["generationCost"];
+  compositionId?: CreativeVariation["compositionId"];
+  brandColors?: string[];
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
   name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
   imageUrl,
   format,
   layers: visualStyle
-    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, logoUrl })
+    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, logoUrl, compositionId, brandColors })
     : [],
   comments: [],
   createdAt: new Date().toISOString(),
@@ -263,6 +267,7 @@ export const makeVariation = ({
   rejectNote,
   parentId,
   generationCost,
+  compositionId,
 });
 
 export const getLinkedCopyText = (item: CreativeItem | null) => {

@@ -199,9 +199,12 @@ const STATIC_QUALITY = [
   "IRON RULE: style is costume and lighting only. The picture MUST depict THIS variation's copy idea as a concrete situation.",
   "A stranger should recognize which variation this is without reading type. If the still could be reused for a different angle, it failed.",
   "Do not replace the copy with a prettier default (vacation village, airplane, suitcase, jet engine, generic landscape, abstract glass toy) unless the copy is about that.",
-  "Leave an open center, lower third, and a clean top-right pad (~18% width) so a title, CTA, and brand logo can be composited later.",
-  "No letters, numbers, logos, watermarks, buttons, or fake UI with words — Hebrew and the real logo are added as layers. Never invent or redraw a logo.",
-  "Forbidden: grey/white seamless studio headshot, thinking-hand pose, caption plate, random portrait unrelated to the copy.",
+  "MILLION-DOLLAR GRAPHIC DESIGN — not a stock photo with a caption. Build the still from several designed pieces (hero acting the copy + 2-4 graphic objects: geometric field, torn paper, 3D object, light, architectural frame, printed texture).",
+  "The ten style boards were examples of RANGE, not layouts to copy. Do not recall those boards. Invent a new graphic structure. Forbidden template: logo top-right + top headline strip + bottom CTA pill.",
+  "Type will be composited into a designed zone that is already part of the art (slash, rail, badge, split field, shadow pocket). Do not leave a white/cream rectangle or caption plate.",
+  "If BRAND COLOR LOCK is present, it OVERRIDES any palette listed in this style. Use only those logo/brand colors plus black, white, or paper.",
+  "No letters, numbers, logos, watermarks, buttons, or fake UI with words — Hebrew is composited later because the image API still garbles Hebrew glyphs. Never invent or redraw a logo.",
+  "Forbidden: grey/white seamless studio headshot, thinking-hand pose, caption plate, Canva template, random portrait unrelated to the copy.",
 ].join(" ");
 
 export const buildVisualStyleLock = (

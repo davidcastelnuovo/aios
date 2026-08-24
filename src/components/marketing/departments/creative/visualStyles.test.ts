@@ -44,6 +44,8 @@ test("style locks are treatment only and never require a travel cliché", () => 
     assert.match(lock, /THIS copy/i);
     assert.match(lock, /IRON RULE/i);
     assert.match(lock, /style is costume and lighting only/i);
+    assert.match(lock, /RANGE, not layouts/i);
+    assert.match(lock, /BRAND COLOR LOCK/i);
     assert.doesNotMatch(lock, /destination coast/i);
   }
   assert.match(buildVisualStyleLock({}, { styleId: "organic" }), /ONLY if the copy is about a place/i);

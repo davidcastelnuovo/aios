@@ -21,7 +21,7 @@ interface GenerateCreativeImageArgs {
 }
 
 export const NO_TEXT_ON_IMAGE =
-  "No letters, numbers, captions, logos, watermarks, buttons, or typography anywhere. Keep a clean open center, lower third, and a reserved top-right pad (~18% width) so a title, CTA, and brand logo can be composited later. Do not invent or redraw a logo. Supporting objects may sit in the scene. No Hebrew and no English words.";
+  "No letters, numbers, captions, logos, watermarks, buttons, or typography anywhere — the image API still garbles Hebrew glyphs, so exact type and the real logo are composited later. Do not invent or redraw a logo. Do NOT reserve a top headline strip, a bottom CTA pill, or a top-right logo pad (that is the old caption template). Build a finished multi-element graphic poster: several designed pieces already in the still (rail, slash, badge, split field, shadow pocket, object, light) so type can sit inside the art. No Hebrew and no English words.";
 
 async function invokeSocialImage(
   supabase: SupabaseClient,

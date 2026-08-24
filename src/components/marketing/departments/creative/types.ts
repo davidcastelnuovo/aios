@@ -1,6 +1,7 @@
 export type CreativeFormat = "9:16" | "1:1" | "4:5" | "16:9";
 
 import type { BrandBook, StyleReference } from "./brandKit";
+import type { CompositionId } from "./compositions";
 import type { ImageGenerationCost } from "./imageCost";
 import type { CreativeVisualStyleId } from "./visualStyles";
 
@@ -83,6 +84,7 @@ export interface CreativeVariation {
   rejectNote?: string;
   parentId?: string;
   generationCost?: ImageGenerationCost;
+  compositionId?: CompositionId;
 }
 
 export interface CreativeItem {

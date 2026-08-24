@@ -62,11 +62,13 @@ export const getBrandKit = (payload: Record<string, unknown> | null | undefined)
 export const brandKitPrompt = (kit: CreativeBrandKit) => {
   const lines = [
     kit.brandBook?.name && `Brand: ${kit.brandBook.name}`,
-    kit.brandBook?.colors.length ? `Brand colors (use these, plus one controlled accent): ${kit.brandBook.colors.join(", ")}` : undefined,
+    kit.brandBook?.colors.length
+      ? `BRAND COLOR LOCK: use ONLY these logo/brand colors (plus black, white, or paper): ${kit.brandBook.colors.join(", ")}. No extra neon, no random primaries that fight the logo.`
+      : undefined,
     kit.brandBook?.voice && `Brand voice: ${kit.brandBook.voice}`,
     kit.website && `Brand website: ${kit.website}. Match that commercial world (color temperature, materials, locations) without copying UI chrome or inventing a logo.`,
-    kit.logoUrl && "A logo asset exists and will be composited later — reserve a clean top-right pad (~18% width) with no face or clutter. Do not redraw or invent a logo.",
-    kit.styleReferences.length > 0 && `${kit.styleReferences.length} style-reference image(s) attached: match light, material, and grade ONLY. Do not copy their subject (no airplane, village, suitcase, or abstract object from the board). The scene is this variation's copy.`,
+    kit.logoUrl && "A logo asset exists and will be composited later as a layer. Leave a quiet designed pocket for it wherever THIS composition asks — not always top-right. Do not redraw or invent a logo.",
+    kit.styleReferences.length > 0 && `${kit.styleReferences.length} style-range board(s) live on the project as examples of RANGE only. Do not attach, recall, or copy their layout, lettering, faces, logo, or composition. Invent a new graphic structure. The scene is this variation's copy.`,
   ].filter(Boolean);
   return lines.join("\n");
 };

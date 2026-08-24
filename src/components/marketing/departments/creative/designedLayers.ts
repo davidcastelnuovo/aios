@@ -1,4 +1,5 @@
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
+import { compositionById, pickCompositionId, type CompositionId } from "./compositions";
 import { withLayerShadow } from "./layerShadow";
 import {
   CREATIVE_VISUAL_STYLES,
@@ -27,7 +28,7 @@ interface Palette {
 }
 
 const PALETTES: Record<CreativeVisualStyleId, Palette> = {
-  swiss: { headline: "#1e3a8a", extrude: "#93c5fd", body: "#1e3a8a", pill: "#1d4ed8", pillText: "#ffffff", cta: "#1d4ed8", ctaText: "#ffffff", band: "#f8fafccc" },
+  swiss: { headline: "#1e3a8a", extrude: "#93c5fd", body: "#1e3a8a", pill: "#1d4ed8", pillText: "#ffffff", cta: "#1d4ed8", ctaText: "#ffffff", band: "#1e3a8af0" },
   industrial: { headline: "#facc15", extrude: "#1a1a1a", body: "#fde68a", pill: "#eab308", pillText: "#111827", cta: "#eab308", ctaText: "#111827", band: "#111111e6" },
   mediterranean: { headline: "#fffbeb", extrude: "#1e3a5f", body: "#fffbeb", pill: "#c4a574", pillText: "#1c1917", cta: "#1e3a5f", ctaText: "#fffbeb", band: "#1e3a5fe6" },
   kinetic: { headline: "#fb923c", extrude: "#4c1d95", body: "#fed7aa", pill: "#f97316", pillText: "#ffffff", cta: "#f97316", ctaText: "#ffffff", band: "#2e1065e6" },
@@ -46,6 +47,42 @@ const PALETTES: Record<CreativeVisualStyleId, Palette> = {
   ugc: { headline: "#ffffff", extrude: "#334155", body: "#ffffff", pill: "#ffffff", pillText: "#111827", cta: "#ffffff", ctaText: "#111827", band: "#111827cc" },
   watercolor: { headline: "#fff7ed", extrude: "#7c2d12", body: "#fff7ed", pill: "#9a3412", pillText: "#fff7ed", cta: "#7c2d12", ctaText: "#fff7ed", band: "#7c2d12e6" },
   comic: { headline: "#fef08a", extrude: "#111827", body: "#111827", pill: "#111827", pillText: "#fef08a", cta: "#111827", ctaText: "#fef08a", band: "#111827e6" },
+};
+
+const hexLuma = (hex: string) => {
+  const value = hex.replace("#", "");
+  if (value.length < 6) return 0.5;
+  const r = Number.parseInt(value.slice(0, 2), 16) / 255;
+  const g = Number.parseInt(value.slice(2, 4), 16) / 255;
+  const b = Number.parseInt(value.slice(4, 6), 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+const inkOn = (hex: string) => (hexLuma(hex) > 0.55 ? "#111111" : "#ffffff");
+
+const normalizeHex = (value: string) => {
+  const hex = value.trim();
+  const raw = hex.startsWith("#") ? hex : `#${hex}`;
+  return /^#[0-9a-f]{6}$/i.test(raw) ? raw : undefined;
+};
+
+export const applyBrandPalette = (base: Palette, colors?: string[]): Palette => {
+  const cleaned = (colors ?? []).map(normalizeHex).filter((item): item is string => !!item);
+  if (cleaned.length === 0) return base;
+  const sorted = [...cleaned].sort((left, right) => hexLuma(left) - hexLuma(right));
+  const dark = sorted[0];
+  const light = sorted[sorted.length - 1];
+  const accent = cleaned.find((item) => item !== dark && item !== light) ?? cleaned[1] ?? cleaned[0];
+  return {
+    headline: hexLuma(dark) < 0.35 ? light : dark,
+    extrude: dark,
+    body: hexLuma(dark) < 0.35 ? light : dark,
+    pill: accent,
+    pillText: inkOn(accent),
+    cta: accent,
+    ctaText: inkOn(accent),
+    band: `${dark}e6`,
+  };
 };
 
 const FAT_DISPLAY_STYLES = new Set<CreativeVisualStyleId>([
@@ -345,18 +382,29 @@ export const buildCopySceneBrief = ({
 };
 
 export const isLegacyCaptionPlate = (layer: CreativeLayer): boolean =>
-  layer.type === "shape" && layer.y >= 52 && layer.height >= 18 && layer.width >= 70;
+  layer.type === "shape" && layer.y >= 58 && layer.height >= 18 && layer.height <= 36 && layer.width >= 70;
+
+export const isLegacyHeadlineBand = (layer: CreativeLayer): boolean =>
+  layer.type === "shape" && layer.y <= 1 && layer.x <= 1 && layer.width >= 90 && layer.height >= 12 && layer.height <= 36;
 
 export const shouldRebuildDesignedLayers = (layers: CreativeLayer[], copyText?: string): boolean => {
-  if (layers.some((layer) => (typeof layer.text === "string" && isInternalCopyLine(layer.text)) || isLegacyCaptionPlate(layer))) {
+  if (layers.some((layer) =>
+    (typeof layer.text === "string" && isInternalCopyLine(layer.text))
+    || isLegacyCaptionPlate(layer)
+    || isLegacyHeadlineBand(layer)
+  )) {
     return true;
   }
   if (!copyText) return false;
   const strong = strongestLine(copyText);
   if (!strong) return false;
-  const poster = layers.find((layer) => layer.type === "text" && layer.y <= 14);
-  const posterText = flattenLayerText(poster?.text);
   const strongText = flattenLayerText(strong);
+  const poster = layers.find((layer) => {
+    if (layer.type !== "text") return false;
+    const text = flattenLayerText(layer.text);
+    return !!text && (text === strongText || strongText.includes(text) || text.includes(strongText.slice(0, 12)));
+  }) ?? layers.find((layer) => layer.type === "text" && layer.y <= 14);
+  const posterText = flattenLayerText(poster?.text);
   if (!posterText) return true;
   if (strongText.includes(posterText) && posterText.length < strongText.length && posterText.length <= 14) return true;
   if ((poster?.fontSize ?? 0) < 34) return true;
@@ -385,22 +433,28 @@ const layer = (partial: Omit<CreativeLayer, "id">): CreativeLayer => ({
 export const isLogoLayer = (layer: CreativeLayer) =>
   layer.type === "image" && (layer.role === "logo" || !layer.role);
 
-export const makeLogoLayer = (logoUrl: string): CreativeLayer => layer({
+export const makeLogoLayer = (
+  logoUrl: string,
+  slot: { x: number; y: number; width: number; height: number } = { x: 6, y: 86, width: 20, height: 9 },
+): CreativeLayer => layer({
   type: "image",
   role: "logo",
   src: logoUrl,
-  x: 74,
-  y: 3.5,
-  width: 22,
-  height: 10,
+  ...slot,
 });
 
-export const ensureLogoLayer = (layers: CreativeLayer[], logoUrl?: string): CreativeLayer[] => {
+export const ensureLogoLayer = (
+  layers: CreativeLayer[],
+  logoUrl?: string,
+  slot?: { x: number; y: number; width: number; height: number },
+): CreativeLayer[] => {
   const withoutLogo = layers.filter((item) => !isLogoLayer(item));
   if (!logoUrl) return withoutLogo;
   const existing = layers.find(isLogoLayer);
-  if (existing) return [...withoutLogo, { ...existing, src: logoUrl, role: "logo", type: "image" }];
-  return [...withoutLogo, makeLogoLayer(logoUrl)];
+  if (existing) {
+    return [...withoutLogo, { ...existing, src: logoUrl, role: "logo", type: "image", ...(slot ?? {}) }];
+  }
+  return [...withoutLogo, makeLogoLayer(logoUrl, slot)];
 };
 
 export const buildDesignedCopyLayers = ({
@@ -409,50 +463,67 @@ export const buildDesignedCopyLayers = ({
   styleId,
   title,
   logoUrl,
+  compositionId,
+  brandColors,
 }: {
   copyText?: string;
   format: CreativeFormat;
   styleId: CreativeVisualStyleId;
   title?: string;
   logoUrl?: string;
+  compositionId?: CompositionId;
+  brandColors?: string[];
 }): CreativeLayer[] => {
   const parts = parseCreativeCopy(copyText ?? "", title);
   const poster = strongestLine(copyText ?? "", title);
   if (!poster && !parts.cta && !logoUrl) return [];
 
-  const palette = PALETTES[styleId] ?? PALETTES.swiss;
+  const composition = compositionById(compositionId);
+  const palette = applyBrandPalette(PALETTES[styleId] ?? PALETTES.swiss, brandColors);
   const typeface = displayType(styleId);
-  const wide = format === "16:9";
   const story = format === "9:16" || format === "4:5";
   const layers: CreativeLayer[] = [];
 
-  if (poster) {
-    const lockup = wrapPosterLine(poster, wide ? 18 : 13);
-    const lines = lockup.split("\n").length;
-    const fontSize = posterFontSize(lockup, story);
-    const typeHeight = lines >= 2 ? (story ? 24 : 22) : story ? 16 : 15;
-    const bandHeight = typeHeight + 8;
-
+  if (poster && composition.field) {
     layers.push(layer({
       type: "shape",
-      x: 0,
-      y: 0,
-      width: 100,
-      height: bandHeight,
+      x: composition.field.x,
+      y: composition.field.y,
+      width: composition.field.width,
+      height: composition.field.height,
       fill: palette.band,
+      borderRadius: composition.field.radius,
+      rotation: composition.field.rotation,
+      boxShadow: composition.field.shadow ? "0 22px 48px rgba(15,23,42,0.28)" : undefined,
     }));
+  }
+
+  if (poster && composition.accent) {
+    layers.push(layer({
+      type: "shape",
+      ...composition.accent,
+      fill: palette.pill,
+      borderRadius: composition.accent.radius,
+      rotation: composition.accent.rotation,
+    }));
+  }
+
+  if (poster) {
+    const lockup = wrapPosterLine(poster, composition.type.width < 40 ? 10 : 14);
+    const lines = lockup.split("\n").length;
+    const fontSize = posterFontSize(lockup, story);
     layers.push(layer({
       type: "text",
-      x: wide ? 4 : 4,
-      y: 3.5,
-      width: wide ? (logoUrl ? 54 : 72) : (logoUrl ? 70 : 92),
-      height: typeHeight,
+      x: composition.type.x,
+      y: composition.type.y,
+      width: composition.type.width,
+      height: composition.type.height,
       text: lockup,
       fontFamily: typeface.fontFamily,
       fontSize,
       fontWeight: typeface.fontWeight,
       color: palette.headline,
-      textAlign: "right",
+      textAlign: composition.type.align,
       letterSpacing: "-0.045em",
       lineHeight: 0.86,
       ...withLayerShadow({
@@ -462,46 +533,53 @@ export const buildDesignedCopyLayers = ({
         shadowBlur: 18,
       }),
     }));
-    layers.push(layer({
-      type: "shape",
-      x: wide ? 4 : 6,
-      y: 3.5 + typeHeight + 0.4,
-      width: wide ? 18 : 22,
-      height: 1.3,
-      fill: palette.pill,
-      borderRadius: 999,
-    }));
+    if (composition.bar) {
+      layers.push(layer({
+        type: "shape",
+        ...composition.bar,
+        fill: palette.pill,
+        borderRadius: 999,
+      }));
+    }
   }
 
   if (parts.cta && flattenLayerText(parts.cta) !== flattenLayerText(poster)) {
     const longCta = parts.cta.length > 22;
-    const cta = wide
-      ? { x: 6, y: 84, width: longCta ? 48 : 36, height: longCta ? 10 : 8 }
-      : { x: 8, y: 85, width: longCta ? 72 : 58, height: longCta ? 10 : 8 };
-    layers.push(layer({
-      type: "shape",
-      ...cta,
-      fill: palette.cta,
-      borderRadius: 999,
-      boxShadow: "0 14px 30px rgba(15,23,42,0.28)",
-    }));
+    if (composition.cta.pill) {
+      layers.push(layer({
+        type: "shape",
+        x: composition.cta.x,
+        y: composition.cta.y,
+        width: composition.cta.width,
+        height: composition.cta.height,
+        fill: palette.cta,
+        borderRadius: 999,
+        boxShadow: "0 14px 30px rgba(15,23,42,0.28)",
+      }));
+    }
     layers.push(layer({
       type: "text",
-      x: cta.x + 1,
-      y: cta.y + 1.2,
-      width: cta.width - 2,
+      x: composition.cta.x,
+      y: composition.cta.y + (composition.cta.pill ? 1.2 : 0),
+      width: composition.cta.width,
       height: longCta ? 7 : 5.6,
       text: parts.cta,
       fontFamily: "Heebo",
-      fontSize: longCta ? 15 : 17,
+      fontSize: longCta ? 14 : 16,
       fontWeight: "800",
-      color: palette.ctaText,
-      textAlign: "center",
+      color: composition.cta.pill ? palette.ctaText : palette.headline,
+      textAlign: composition.type.align === "center" ? "center" : "right",
       letterSpacing: "-0.02em",
+      ...withLayerShadow({
+        shadowStyle: composition.cta.pill ? "none" : "soft",
+        shadowDepth: 4,
+        shadowColor: palette.extrude,
+        shadowBlur: 10,
+      }),
     }));
   }
 
-  return ensureLogoLayer(layers, logoUrl);
+  return ensureLogoLayer(layers, logoUrl, composition.logo);
 };
 
 export const hydrateVariationLayers = (
@@ -510,7 +588,9 @@ export const hydrateVariationLayers = (
   title?: string,
   styleId?: CreativeVisualStyleId,
   logoUrl?: string,
+  brandColors?: string[],
 ): CreativeVariation => {
+  const compositionId = variation.compositionId ?? pickCompositionId(variation.id);
   const layers = shouldRebuildDesignedLayers(variation.layers, variation.copyText || copyText)
     ? buildDesignedCopyLayers({
       copyText: variation.copyText || copyText,
@@ -518,10 +598,13 @@ export const hydrateVariationLayers = (
       styleId: variation.visualStyle ?? styleId ?? "swiss",
       title,
       logoUrl,
+      compositionId,
+      brandColors,
     })
     : variation.layers;
   return {
     ...variation,
+    compositionId,
     layers: ensureLogoLayer(layers, logoUrl),
   };
 };

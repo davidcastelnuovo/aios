@@ -64,6 +64,8 @@ export function CreativeVariationGrid({
                       justifyContent: layer.textAlign === "center" ? "center" : layer.textAlign === "left" ? "flex-start" : "flex-end",
                       background: layer.type === "shape" ? layer.fill : undefined,
                       borderRadius: layer.borderRadius,
+                      transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
+                      transformOrigin: "center center",
                       color: layer.color,
                       fontFamily: layer.fontFamily,
                       fontSize: `${Math.max(11, (layer.fontSize ?? 18) * 0.52)}px`,

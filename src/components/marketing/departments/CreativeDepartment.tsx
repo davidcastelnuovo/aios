@@ -39,6 +39,7 @@ import {
 } from "@/components/marketing/departments/creative/utils";
 import { formatUsd, summarizeStoredImageCosts } from "@/components/marketing/departments/creative/imageCost";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
+import { buildCompositionLock, pickCompositionId, type CompositionId } from "@/components/marketing/departments/creative/compositions";
 import { buildCopySceneBrief, hydrateVariationLayers, isInternalCopyLine, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
 import {
   buildVisualStyleLock,
@@ -169,7 +170,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const projectType = getProjectType(selected?.payload ?? null);
   const variations = useMemo(() => {
     const raw = getVariations(selected?.payload ?? null);
-    const logoUrl = getBrandKit(selected?.payload).logoUrl;
+    const kit = getBrandKit(selected?.payload);
     const copyText = getLinkedCopyText(selected);
     const styleId = getVisualStyleId(selected?.payload);
     return raw.map((variation) => hydrateVariationLayers(
@@ -177,7 +178,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       variation.copyText || copyText,
       selected?.title ?? undefined,
       variation.visualStyle ?? styleId,
-      logoUrl,
+      kit.logoUrl,
+      kit.brandBook?.colors,
     ));
   }, [selected]);
   const copyBlocks = useMemo(() => splitCopyVariations(getLinkedCopyText(selected)), [selected]);
@@ -326,6 +328,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       selected?.title ?? undefined,
       getVisualStyleId(selected?.payload),
       getBrandKit(selected?.payload).logoUrl,
+      getBrandKit(selected?.payload).brandBook?.colors,
     ));
   }, [selectedVariation, selected]);
 
@@ -756,23 +759,22 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
       copyLabel,
     });
-    const referenceImageUrls = (
-      await Promise.all(kit.styleReferences.map((reference) => resolveCreativeImageUrl(reference.url)))
-    ).filter((url): url is string => !!url);
+    const usedCompositions = variations
+      .map((variation) => variation.compositionId)
+      .filter((value): value is CompositionId => !!value);
+    const compositionId = pickCompositionId(`${copyKey || copyLabel || style.id}-${Date.now()}`, usedCompositions);
     const creativePrompt = [
-      `Use case: ads-marketing. Asset type: standalone ${format} commercial key visual.`,
+      `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
       sceneBrief,
-      `TREATMENT ONLY: dress that same situation in a ${style.label} art system. Do not swap the subject to match the style's cliché.`,
+      buildCompositionLock(compositionId),
+      `TREATMENT ONLY: dress that same situation in a ${style.label} material/light system. Invent the structure. Do not recall or copy any style-board layout or cliché subject.`,
       buildVisualStyleLock(selected.payload, { styleId: style.id }),
-      referenceImageUrls.length
-        ? "Input-image roles: attached stills are STYLE REFERENCES only — match light, material and grade. Do not copy layout, lettering, faces, or logo, and do not let them override the copy subject."
-        : undefined,
       brandKitPrompt(kit),
       directorNote && `Art director REJECT — do not repeat these mistakes: ${directorNote}`,
-      `Format ${format}. Poster composition: keep the TOP 20% and BOTTOM 28% quiet for type. Subject lives in the middle band. No face in the top fifth.`,
-      kit.logoUrl && "Reserve a clean top-right pad (~18% width) for the real logo composite. Do not invent or redraw a logo.",
-      "RTL/production: Hebrew and the brand logo are composited as layers after generation.",
-      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, Canva templates, UI chrome, invented logos, baked lettering.",
+      `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
+      kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
+      "RTL/production: Hebrew is composited as layers after generation — the image API still garbles Hebrew (reversed letters, missing glyphs). Do not paint letters.",
+      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, attached style-board layouts.",
     ].filter(Boolean).join("\n");
     throwIfGenerationAborted(generateAbortRef.current);
     const { imageUrl, cost } = await generateCreativeImage({
@@ -781,7 +783,6 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       itemId: selected.id,
       stageId: readyContext.creativeStage.id,
       prompt: creativePrompt || selected.title || "Marketing creative",
-      referenceImageUrls,
       size: imageSizeForFormat(format),
       quality: "high",
     });
@@ -799,6 +800,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       parentId,
       logoUrl: kit.logoUrl,
       generationCost: cost,
+      compositionId,
+      brandColors: kit.brandBook?.colors,
     });
     return replaceId ? { ...created, id: replaceId } : created;
   };
