@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -13,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAgency } from "@/contexts/AgencyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -36,6 +36,10 @@ import { SummaryViewerDialog } from "@/components/recordings/SummaryViewerDialog
 import { ShareSummaryDialog } from "@/components/recordings/ShareSummaryDialog";
 import { RecordingCard, type FeedRecording, type FolderOption } from "@/components/recordings/RecordingCard";
 import { JoinMeetingBotDialog } from "@/components/recordings/JoinMeetingBotDialog";
+import { ClientSelector } from "@/components/marketing/ClientSelector";
+import { useAssignableClients } from "@/hooks/useAssignableClients";
+import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
+import type { EntityAssignmentSelection } from "@/components/shared/EntityAssignmentDialog";
 import { cn } from "@/lib/utils";
 
 type SidebarSelection =
@@ -46,6 +50,7 @@ type SidebarSelection =
 
 export default function Recordings() {
   const { currentTenantId } = useTenant();
+  const { agencies: accessibleAgencies } = useAgency();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -132,28 +137,9 @@ export default function Recordings() {
       ((query.state.data as any[]) ?? []).some((r) => r.transcription_status === "processing") ? 8000 : false,
   });
 
-  const { data: clients = [] } = useQuery({
-    queryKey: ["clients-for-recordings", currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data } = await supabase.from("clients").select("id, name").eq("tenant_id", currentTenantId).order("name");
-      return data || [];
-    },
-    enabled: !!currentTenantId,
-  });
-
-  const { data: campaigners = [] } = useQuery({
-    queryKey: ["campaigners-for-recordings", currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data } = await supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("tenant_id", currentTenantId);
-      return data || [];
-    },
-    enabled: !!currentTenantId,
-  });
+  const { data: clients = [] } = useAssignableClients();
+  const { data: campaigners = [] } = useAssignableCampaigners({ activeOnly: true });
+  const agencies = accessibleAgencies || [];
 
   const { data: folders = [] } = useQuery({
     queryKey: ["recording-folders", currentTenantId],
@@ -175,10 +161,35 @@ export default function Recordings() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["recordings", currentTenantId] });
 
   const assignMutation = useMutation({
-    mutationFn: async ({ recordingIds, clientId }: { recordingIds: string[]; clientId: string | null }) => {
-      const { error } = await supabase
+    mutationFn: async ({
+      recordingIds,
+      selection,
+    }: {
+      recordingIds: string[];
+      selection: EntityAssignmentSelection;
+    }) => {
+      const update: Record<string, unknown> = {
+        client_id: null,
+        lead_id: null,
+        suggested_client_id: null,
+        campaigner_ids: [],
+        agency_id: null,
+      };
+
+      if (selection?.type === "client") {
+        const clientId = selection.ids[0];
+        const client = clients.find((candidate) => candidate.id === clientId);
+        update.client_id = clientId;
+        update.agency_id = client?.agency_id || null;
+      } else if (selection?.type === "team") {
+        update.campaigner_ids = selection.ids;
+      } else if (selection?.type === "agency") {
+        update.agency_id = selection.ids[0];
+      }
+
+      const { error } = await (supabase as any)
         .from("zoom_recordings")
-        .update({ client_id: clientId, lead_id: null })
+        .update(update)
         .in("id", recordingIds);
       if (error) throw error;
     },
@@ -272,6 +283,9 @@ export default function Recordings() {
           source: "manual",
           file_path: filePath,
           client_id: uploadClientId || null,
+          agency_id: uploadClientId
+            ? clients.find((client) => client.id === uploadClientId)?.agency_id || null
+            : null,
           folder_id: selection.kind === "folder" ? selection.folderId : null,
           meeting_id: `manual_${Date.now()}`,
           recording_type: "manual",
@@ -388,7 +402,10 @@ export default function Recordings() {
   }, [groupedRecordings]);
 
   const filtered = groupedRecordings.filter((rec) => {
-    if (selection.kind === "unassigned" && (rec.client_id || rec.folder_id)) return false;
+    if (
+      selection.kind === "unassigned"
+      && (rec.client_id || rec.agency_id || (rec.campaigner_ids || []).length > 0 || rec.folder_id)
+    ) return false;
     if (selection.kind === "client" && rec.client_id !== selection.clientId) return false;
     if (selection.kind === "folder" && rec.folder_id !== selection.folderId) return false;
 
@@ -414,9 +431,15 @@ export default function Recordings() {
   // transcription already exists, so it continues straight to summary + brief.
   const acceptSuggestion = async (rec: FeedRecording) => {
     if (!rec.suggested_client_id) return;
-    const { error } = await supabase
+    const suggestedClient = clients.find((client) => client.id === rec.suggested_client_id);
+    const { error } = await (supabase as any)
       .from("zoom_recordings")
-      .update({ client_id: rec.suggested_client_id, suggested_client_id: null } as any)
+      .update({
+        client_id: rec.suggested_client_id,
+        agency_id: suggestedClient?.agency_id || null,
+        suggested_client_id: null,
+        campaigner_ids: [],
+      })
       .in("id", groupIds(rec));
     if (error) {
       toast({ title: "שגיאה באישור השיוך", description: error.message, variant: "destructive" });
@@ -508,7 +531,9 @@ export default function Recordings() {
               () => setSelection({ kind: "unassigned" }),
               <Video className="h-4 w-4" />,
               "ללא שיוך",
-              groupedRecordings.filter((r) => !r.client_id && !r.folder_id).length,
+              groupedRecordings.filter(
+                (r) => !r.client_id && !r.agency_id && (r.campaigner_ids || []).length === 0 && !r.folder_id,
+              ).length,
             )}
           </div>
 
@@ -632,6 +657,8 @@ export default function Recordings() {
                   key={rec.id}
                   rec={rec}
                   clients={clients}
+                  campaigners={campaigners}
+                  agencies={agencies}
                   folders={folders}
                   campaignerNames={campaignerNamesFor(rec)}
                   onAcceptSuggestion={acceptSuggestion}
@@ -642,7 +669,9 @@ export default function Recordings() {
                     setSummarizeRec({ ...audioRec, _group: r._group });
                   }}
                   onShare={setShareRec}
-                  onAssignClient={(r, clientId) => assignMutation.mutate({ recordingIds: groupIds(r), clientId })}
+                  onAssignTarget={(r, assignment) =>
+                    assignMutation.mutateAsync({ recordingIds: groupIds(r), selection: assignment })
+                  }
                   onMoveToFolder={(r, folderId) => moveFolderMutation.mutate({ recordingIds: groupIds(r), folderId })}
                   onDelete={handleDelete}
                 />
@@ -669,13 +698,13 @@ export default function Recordings() {
             </div>
             <div>
               <Label>שיוך ללקוח (אופציונלי)</Label>
-              <Select value={uploadClientId || "none"} onValueChange={(v) => setUploadClientId(v === "none" ? "" : v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— ללא —</SelectItem>
-                  {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <ClientSelector
+                tenantId={currentTenantId || undefined}
+                value={uploadClientId || null}
+                onChange={(id) => setUploadClientId(id || "")}
+                allowGeneral
+                generalLabel="ללא שיוך"
+              />
             </div>
             <div>
               <Label>קובץ הקלטה</Label>

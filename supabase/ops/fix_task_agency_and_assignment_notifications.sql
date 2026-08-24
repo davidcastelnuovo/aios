@@ -106,3 +106,22 @@ FROM public.clients AS c
 WHERE t.client_id = c.id
   AND c.agency_id IS NOT NULL
   AND t.agency_id IS DISTINCT FROM c.agency_id;
+
+-- Recordings already support client and internal-team assignment. Add an
+-- explicit agency target for recordings that belong to an agency but not to a
+-- specific client. Keeping this in the same ops file guarantees it is applied
+-- in the same merge as the task fixes (the ops workflow applies one file).
+ALTER TABLE public.zoom_recordings
+  ADD COLUMN IF NOT EXISTS agency_id uuid
+  REFERENCES public.agencies(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_zoom_recordings_agency_id
+  ON public.zoom_recordings(agency_id)
+  WHERE agency_id IS NOT NULL;
+
+UPDATE public.zoom_recordings AS r
+SET agency_id = c.agency_id
+FROM public.clients AS c
+WHERE r.client_id = c.id
+  AND c.agency_id IS NOT NULL
+  AND r.agency_id IS DISTINCT FROM c.agency_id;

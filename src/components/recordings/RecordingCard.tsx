@@ -38,11 +38,18 @@ import {
   Video,
   Folder,
   UserRound,
+  Users,
+  Building2,
+  Link2,
   Sparkles,
   Mic,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  EntityAssignmentDialog,
+  type EntityAssignmentSelection,
+} from "@/components/shared/EntityAssignmentDialog";
 
 export interface FeedRecording {
   id: string;
@@ -56,6 +63,7 @@ export interface FeedRecording {
   thumbnail_path: string | null;
   folder_id: string | null;
   client_id: string | null;
+  agency_id?: string | null;
   lead_id: string | null;
   transcription: string | null;
   transcription_status: string | null;
@@ -76,13 +84,15 @@ export interface FolderOption {
 
 interface RecordingCardProps {
   rec: FeedRecording;
-  clients: { id: string; name: string }[];
+  clients: { id: string; name: string; agency_id?: string | null }[];
+  campaigners: { id: string; full_name: string; email?: string | null }[];
+  agencies: { id: string; name: string }[];
   folders: FolderOption[];
   campaignerNames?: string[];
   onOpenSummary: (rec: FeedRecording) => void;
   onCreateSummary: (rec: FeedRecording) => void;
   onShare: (rec: FeedRecording) => void;
-  onAssignClient: (rec: FeedRecording, clientId: string | null) => void;
+  onAssignTarget: (rec: FeedRecording, selection: EntityAssignmentSelection) => void | Promise<void>;
   onMoveToFolder: (rec: FeedRecording, folderId: string | null) => void;
   onDelete: (rec: FeedRecording) => void;
   onAcceptSuggestion?: (rec: FeedRecording) => void;
@@ -109,12 +119,14 @@ function formatDuration(minutes: number | null): string | null {
 export function RecordingCard({
   rec,
   clients,
+  campaigners,
+  agencies,
   folders,
   campaignerNames = [],
   onOpenSummary,
   onCreateSummary,
   onShare,
-  onAssignClient,
+  onAssignTarget,
   onMoveToFolder,
   onDelete,
   onAcceptSuggestion,
@@ -125,6 +137,17 @@ export function RecordingCard({
     : null;
   const [playOpen, setPlayOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const assignedAgencyName = rec.agency_id
+    ? agencies.find((agency) => agency.id === rec.agency_id)?.name
+    : null;
+  const currentAssignment: EntityAssignmentSelection = rec.client_id
+    ? { type: "client", ids: [rec.client_id] }
+    : (rec.campaigner_ids || []).length > 0
+    ? { type: "team", ids: rec.campaigner_ids || [] }
+    : rec.agency_id
+    ? { type: "agency", ids: [rec.agency_id] }
+    : null;
 
   const { data: thumbnailUrl } = useQuery({
     queryKey: ["recording-thumb", rec.thumbnail_path],
@@ -243,27 +266,10 @@ export function RecordingCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <UserRound className="h-4 w-4 ml-2" />
-                    שייך ללקוח
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
-                    <DropdownMenuItem onClick={() => onAssignClient(rec, null)}>
-                      — ללא שיוך —
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {clients.map((c) => (
-                      <DropdownMenuItem
-                        key={c.id}
-                        onClick={() => onAssignClient(rec, c.id)}
-                        className={cn(rec.client_id === c.id && "font-semibold text-primary")}
-                      >
-                        {c.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
+                <DropdownMenuItem onClick={() => setAssignmentOpen(true)}>
+                  <Link2 className="h-4 w-4 ml-2" />
+                  ניהול שיוך
+                </DropdownMenuItem>
 
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
@@ -325,6 +331,10 @@ export function RecordingCard({
               <Badge variant="outline" className="text-[11px] max-w-[55%] truncate" title={campaignerNames.join(", ")}>
                 פנימי · {campaignerNames.join(", ")}
               </Badge>
+            ) : assignedAgencyName ? (
+              <Badge variant="outline" className="text-[11px] max-w-[55%] truncate">
+                סוכנות · {assignedAgencyName}
+              </Badge>
             ) : (
               <span className="text-[11px] text-muted-foreground">ללא שיוך</span>
             )}
@@ -349,6 +359,49 @@ export function RecordingCard({
           </div>
         </div>
       </Card>
+
+      <EntityAssignmentDialog
+        open={assignmentOpen}
+        onOpenChange={setAssignmentOpen}
+        title={`שיוך הקלטה — ${rec.meeting_topic || "ללא נושא"}`}
+        currentSelection={currentAssignment}
+        groups={[
+          {
+            type: "client",
+            label: "לקוחות",
+            icon: UserRound,
+            options: clients.map((client) => ({
+              id: client.id,
+              label: client.name,
+              description: agencies.find((agency) => agency.id === client.agency_id)?.name,
+            })),
+            emptyLabel: "לא נמצאו לקוחות",
+          },
+          {
+            type: "team",
+            label: "אנשי צוות",
+            icon: Users,
+            multiple: true,
+            options: campaigners.map((campaigner) => ({
+              id: campaigner.id,
+              label: campaigner.full_name,
+              description: campaigner.email,
+            })),
+            emptyLabel: "לא נמצאו אנשי צוות",
+          },
+          {
+            type: "agency",
+            label: "סוכנויות",
+            icon: Building2,
+            options: agencies.map((agency) => ({
+              id: agency.id,
+              label: agency.name,
+            })),
+            emptyLabel: "לא נמצאו סוכנויות",
+          },
+        ]}
+        onSave={(selection) => onAssignTarget(rec, selection)}
+      />
 
       {/* Player */}
       <Dialog open={playOpen} onOpenChange={setPlayOpen}>

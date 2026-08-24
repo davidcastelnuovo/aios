@@ -71,8 +71,18 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
     if (match.matchType === "client" && match.clientId) {
       if (match.autoAssign) {
         clientId = match.clientId;
+        const { data: matchedClient } = await admin
+          .from("clients")
+          .select("agency_id")
+          .eq("id", clientId)
+          .maybeSingle();
         await admin.from("zoom_recordings")
-          .update({ client_id: clientId, suggested_client_id: null })
+          .update({
+            client_id: clientId,
+            agency_id: matchedClient?.agency_id || null,
+            suggested_client_id: null,
+            campaigner_ids: [],
+          })
           .eq("id", recording_id);
       } else {
         await admin.from("zoom_recordings")
@@ -81,7 +91,7 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
       }
     } else if (match.matchType === "internal" && match.campaignerIds.length > 0) {
       await admin.from("zoom_recordings")
-        .update({ campaigner_ids: match.campaignerIds })
+        .update({ client_id: null, agency_id: null, campaigner_ids: match.campaignerIds })
         .eq("id", recording_id);
     }
   }
