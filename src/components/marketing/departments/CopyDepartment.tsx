@@ -559,7 +559,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-              <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-5 py-6" dir="rtl">
+              <div className="mx-auto flex w-[95%] flex-col gap-4 py-6" dir="rtl">
                 {chat.filter((turn) => turn.role === "user").map((turn, index) => (
                   <div key={`${turn.at}-${index}`} className="flex justify-start">
                     <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-right text-sm leading-relaxed [unicode-bidi:plaintext]" dir="auto">{turn.content}</div>
@@ -603,7 +603,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
 
             <div className="border-t bg-background px-5 py-3">
               <form
-                className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm"
+                className="mx-auto flex w-[95%] items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void sendPrompt();
@@ -629,7 +629,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
               </form>
-              <p className="mx-auto mt-1.5 max-w-3xl px-1 text-right text-[10px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">כרמן · סקין קופירייטר · שיחה נפרדת מהצ׳ט הראשי וממשימות הרקע</p>
+              <p className="mx-auto mt-1.5 w-[95%] px-1 text-right text-[10px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">כרמן · סקין קופירייטר · שיחה נפרדת מהצ׳ט הראשי וממשימות הרקע</p>
             </div>
           </>
         ) : (
