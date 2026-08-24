@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuth } from "../_shared/security.ts";
+import { resolveOpenAIKey } from "../_shared/ai.ts";
 import { buildSkillsBlockBySlug } from "../_shared/skills/registry.ts";
 
 const corsHeaders = {
@@ -71,8 +72,10 @@ serve(async (req) => {
         if (src?.settings) settings = src.settings as Record<string, string>;
       }
       const key = settings.openai_api_key;
-      if (!key) throw new Error('OpenAI API key חסר — הגדר אותו בהגדרות האינטגרציות');
-      return key;
+      if (key) return key;
+      const fallback = await resolveOpenAIKey();
+      if (fallback) return fallback;
+      throw new Error('OpenAI API key חסר — הגדר אותו בהגדרות האינטגרציות או כ־OPENAI_API_KEY');
     };
 
     const { item_id, stage_id } = await req.json();
@@ -99,8 +102,15 @@ serve(async (req) => {
       .eq("id", stage_id)
       .single();
     if (stageErr || !stage) throw new Error("Stage not found");
+    if (!item.pipeline_id && stage.pipeline_id) {
+      await admin
+        .from("marketing_work_items")
+        .update({ pipeline_id: stage.pipeline_id })
+        .eq("id", item_id);
+      item.pipeline_id = stage.pipeline_id;
+    }
     if (stage.pipeline_id !== item.pipeline_id) {
-      throw new Error("Stage does not belong to the work item pipeline");
+      throw new Error("השלב לא שייך לפייפליין של הפריט — נסה/י לשמור את הפרויקט מחדש או לשייך לקוח");
     }
     if (stage.tenant_id && stage.tenant_id !== item.tenant_id) {
       throw new Error("Stage and work item tenant mismatch");

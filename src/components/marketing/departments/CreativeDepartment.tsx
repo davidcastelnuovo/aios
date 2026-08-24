@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
+import { invokeErrorMessage } from "@/components/marketing/lib/invokeErrorMessage";
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { CreativeBriefEditor } from "@/components/marketing/departments/creative/CreativeBriefEditor";
@@ -64,6 +65,39 @@ interface Props {
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const ensureCreativeStageReady = (context: {
+  pipeline: { id: string };
+  creativeStage: { id: string };
+} | null | undefined) => {
+  if (!context?.creativeStage) {
+    throw new Error("שלב הקריאייטיב לא נמצא — בדוק/י שהלקוח משויך לפייפליין קמפיינים");
+  }
+  return context;
+};
+
+const syncCreativePipelineStage = async ({
+  itemId,
+  tenantId,
+  pipelineId,
+  stageId,
+}: {
+  itemId: string;
+  tenantId: string;
+  pipelineId: string;
+  stageId: string;
+}) => {
+  const { error } = await supabase
+    .from("marketing_work_items")
+    .update({
+      pipeline_id: pipelineId,
+      current_stage_id: stageId,
+      status: "draft",
+    })
+    .eq("id", itemId)
+    .eq("tenant_id", tenantId);
+  if (error) throw error;
+};
+
 export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -101,20 +135,23 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const storyboard = useMemo(() => getStoryboard(selected?.payload ?? null), [selected?.payload]);
   const selectedVariation = variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1] ?? null;
 
-  const { data: context } = useQuery({
+  const { data: context, isLoading: loadingContext } = useQuery({
     queryKey: ["creative-department-context", selected?.client_id, tenantId],
     queryFn: async () => {
       if (!selected?.client_id) return null;
       const pipeline = await ensurePipelineForClient({ clientId: selected.client_id, tenantId, track: "campaigns" });
+      if (!pipeline) throw new Error("לא ניתן לפתוח פייפליין קמפיינים ללקוח");
       const { data: stages, error } = await supabase
         .from("marketing_pipeline_stages")
         .select("id, stage_type, sort_order")
         .eq("pipeline_id", pipeline.id)
         .order("sort_order");
       if (error) throw error;
+      const creativeStage = stages?.find((stage) => stage.stage_type === "creative") ?? null;
+      if (!creativeStage) throw new Error("שלב הקריאייטיב לא נמצא בפייפליין");
       return {
         pipeline,
-        creativeStage: stages?.find((stage) => stage.stage_type === "creative") ?? null,
+        creativeStage,
         copyStage: stages?.find((stage) => stage.stage_type === "copy") ?? null,
         campaignStage: stages?.find((stage) => stage.stage_type === "target_paid") ?? null,
       };
@@ -238,10 +275,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   };
 
   const generateStoryboardFrame = async (frame: StoryboardFrame, framesOverride?: StoryboardFrame[]) => {
-    if (!selected || !context?.creativeStage) {
+    if (!selected) return;
+    if (!selected.client_id) {
       toast.error("יש לשייך לקוח לפרויקט לפני יצירת פריימים");
       return;
     }
+    const readyContext = ensureCreativeStageReady(context);
     if (!frame.visualPrompt?.trim() && !frame.voiceover?.trim()) {
       toast.error("מלא/י 'מה רואים בפריים' או קריינות לפני יצירת הפריים");
       return;
@@ -255,9 +294,13 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         `סוג שוט: ${frame.shot}`,
         frame.overlayText && `טקסט שיופיע: ${frame.overlayText}`,
       ].filter(Boolean).join("\n");
+      await syncCreativePipelineStage({
+        itemId: selected.id,
+        tenantId,
+        pipelineId: readyContext.pipeline.id,
+        stageId: readyContext.creativeStage.id,
+      });
       await supabase.from("marketing_work_items").update({
-        current_stage_id: context.creativeStage.id,
-        status: "draft",
         payload: {
           ...(selected.payload ?? {}),
           notes: generationNotes,
@@ -275,9 +318,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         },
       }).eq("id", selected.id).eq("tenant_id", tenantId);
       const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
-        body: { item_id: selected.id, stage_id: context.creativeStage.id },
+        body: { item_id: selected.id, stage_id: readyContext.creativeStage.id },
       });
-      if (error) throw error;
+      if (error) throw new Error(await invokeErrorMessage(error, data, "יצירת הפריים נכשלה"));
       if (data?.error) throw new Error(data.error);
       const imageUrl = data.url ?? data.image_url;
       if (!imageUrl || typeof imageUrl !== "string") throw new Error("לא התקבלה תמונה מהיצירה");
@@ -342,17 +385,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       toast.error("יש לשייך לקוח לפרויקט לפני יצירת קריאייטיב");
       return;
     }
-    if (!context?.creativeStage) return;
     setGenerating(true);
     try {
-      if (selected.current_stage_id !== context.creativeStage.id) {
-        const { error: moveError } = await supabase
-          .from("marketing_work_items")
-          .update({ current_stage_id: context.creativeStage.id, status: "draft" })
-          .eq("id", selected.id)
-          .eq("tenant_id", tenantId);
-        if (moveError) throw moveError;
-      }
+      const readyContext = ensureCreativeStageReady(context);
+
+      await syncCreativePipelineStage({
+        itemId: selected.id,
+        tenantId,
+        pipelineId: readyContext.pipeline.id,
+        stageId: readyContext.creativeStage.id,
+      });
 
       const notes = [
         selected.payload?.notes,
@@ -370,9 +412,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         .eq("tenant_id", tenantId);
 
       const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
-        body: { item_id: selected.id, stage_id: context.creativeStage.id },
+        body: { item_id: selected.id, stage_id: readyContext.creativeStage.id },
       });
-      if (error) throw error;
+      if (error) throw new Error(await invokeErrorMessage(error, data, "יצירת הקריאייטיב נכשלה"));
       if (data?.error) throw new Error(data.error);
 
       const imageUrl = data.url ?? data.image_url ?? selected.payload?.image_url;
@@ -798,7 +840,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkCopyOpen(true)}>
                   <Link2 className="h-3.5 w-3.5" />שייך קופi
                 </Button>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={generate} disabled={generating || !selected.client_id}>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={generate} disabled={generating || loadingContext || !selected.client_id}>
                   {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
                   {variations.length ? "צור וריאציה" : "צור קריאייטיב"}
                 </Button>
@@ -827,7 +869,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                   <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
                   <h3 className="text-lg font-bold text-foreground">עדיין אין וריאציה ויזואלית</h3>
                   <p className="mt-2 max-w-md text-sm">ערכ/י את הבריף בלשונית &quot;עריכת פרויקט&quot;, ואז בקש/י מכרמן ליצור את הגרסה הראשונה.</p>
-                  <Button className="mt-5 gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={generate} disabled={generating || !selected.client_id}>
+                  <Button className="mt-5 gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={generate} disabled={generating || loadingContext || !selected.client_id}>
                     {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
                     צור קריאייטיב ראשון
                   </Button>
@@ -987,6 +1029,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
       let stageId: string | null = null;
       if (assignedClientId) {
         const pipeline = await ensurePipelineForClient({ clientId: assignedClientId, tenantId, track: "campaigns" });
+        if (!pipeline) throw new Error("לא ניתן לפתוח פייפליין קמפיינים ללקוח");
         const { data: stages, error: stageError } = await supabase
           .from("marketing_pipeline_stages")
           .select("id,stage_type")
