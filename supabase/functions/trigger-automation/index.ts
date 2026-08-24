@@ -7,6 +7,7 @@ import {
   queueLeadAlertFailureNotification,
 } from '../_shared/lead-alert-failure-notify.ts'
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
+import { formatTaskNotificationMessage } from '../_shared/task-notification-message.ts'
 // clearer error when ManyChat wa_id ghost on deleted contact — 2026-08-09
 
 const corsHeaders = {
@@ -555,7 +556,6 @@ interface AutomationPayload {
   source?: 'crm' | 'flow'
 }
 
-const TASK_NOTIFICATION_TENANT_NAMES = new Set(['dmm', 'marketing captain', 'marketingcaptain'])
 const TASK_NOTIFICATION_TYPES = new Set([
   'task_assigned',
   'task_high_priority_reminder',
@@ -565,79 +565,6 @@ const TASK_NOTIFICATION_TYPES = new Set([
   'task_overdue',
   'task_overdue_sent',
 ])
-const AIOS_APP_URL = 'https://aios.co.il'
-
-function formatTaskNotificationMessage(
-  notificationType: string,
-  task: any,
-  clientName: string,
-  assigneeName: string,
-  recipientName: string,
-): string {
-  const taskLink = `${AIOS_APP_URL}/tasks?task=${encodeURIComponent(task.id)}`
-  const details = [`היי ${recipientName || 'צוות'}, כאן כרמן 👋`, '']
-
-  if (notificationType === 'task_self_reminder') {
-    details.push(
-      'התזכורת שביקשת למשימה:',
-      `*${task.title}*`,
-      `לקוח: ${clientName}`,
-    )
-  } else if (notificationType === 'task_high_priority_reminder') {
-    details.push(
-      task.priority >= 8
-        ? 'תזכורת למשימה בדחיפות גבוהה שעדיין פתוחה:'
-        : 'תזכורת: המשימה עדיין פתוחה ומועד הביצוע שלה מתקרב:',
-      `*${task.title}*`,
-      `לקוח: ${clientName}`,
-    )
-  } else if (notificationType === 'task_high_priority_reminder_sent') {
-    details.push(
-      `נשלחה עכשיו תזכורת ל${assigneeName || 'קמפיינר'} על משימה שעדיין פתוחה:`,
-      `*${task.title}*`,
-      `לקוח: ${clientName}`,
-      '',
-      'אעדכן אותך כשהמשימה תסומן כבוצעה.',
-    )
-  } else if (notificationType === 'task_completed') {
-    details.push(
-      `המשימה שהגדרת ל${assigneeName || 'קמפיינר'} בוצעה ✅`,
-      `*${task.title}*`,
-      `לקוח: ${clientName}`,
-    )
-  } else if (notificationType === 'task_overdue') {
-    details.push(
-      'תזכורת: המשימה עברה את תאריך היעד ועדיין לא סומנה כבוצעה:',
-      `*${task.title}*`,
-      `לקוח: ${clientName}`,
-    )
-  } else if (notificationType === 'task_overdue_sent') {
-    details.push(
-      `נשלחה עכשיו תזכורת ל${assigneeName || 'קמפיינר'} על משימה שעברה את תאריך היעד ועדיין פתוחה:`,
-      `*${task.title}*`,
-      `לקוח: ${clientName}`,
-      '',
-      'אעדכן אותך כשהמשימה תסומן כבוצעה.',
-    )
-  } else {
-    details.push(
-      `משימה חדשה שויכה אליך עבור ${clientName}:`,
-      `*${task.title}*`,
-    )
-  }
-
-  if (task.notes) details.push('', String(task.notes))
-  if (Number(task.priority) >= 8) details.push('', 'דחיפות: גבוהה')
-  if (task.due_date) {
-    const due = task.due_time
-      ? `${task.due_date} בשעה ${String(task.due_time).slice(0, 5)}`
-      : task.due_date
-    details.push('', `תאריך יעד: ${due}`)
-  }
-  details.push('', `לצפייה במשימה: ${taskLink}`)
-  return details.join('\n')
-}
-
 async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: any) {
   const taskId = String(requestBody?.data?.task_id || '').trim()
   if (!taskId) return { handled: false }
@@ -646,7 +573,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
 
   const { data: task, error: taskError } = await supabase
     .from('tasks')
-    .select('id, title, notes, due_date, due_time, client_id, campaigner_id, tenant_id, created_by, priority, status')
+    .select('id, title, notes, due_date, due_time, client_id, campaigner_id, sales_person_id, tenant_id, created_by, priority, status')
     .eq('id', taskId)
     .maybeSingle()
   if (taskError) throw taskError
@@ -668,19 +595,8 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   const notificationTenantId = client?.tenant_id || task.tenant_id
   if (!notificationTenantId) return { handled: true, sent: false, reason: 'task tenant is missing' }
 
-  const { data: tenant, error: tenantError } = await supabase
-    .from('tenants')
-    .select('name')
-    .eq('id', notificationTenantId)
-    .maybeSingle()
-  if (tenantError) throw tenantError
-  const tenantName = String(tenant?.name || '').trim()
-  if (!TASK_NOTIFICATION_TENANT_NAMES.has(tenantName.toLowerCase())) {
-    return { handled: false }
-  }
-
   let campaignerId = task.campaigner_id
-  if (!campaignerId && client?.id) {
+  if (!campaignerId && !task.sales_person_id && client?.id) {
     const today = new Date().toISOString().slice(0, 10)
     const { data: team } = await supabase
       .from('client_team')
@@ -705,33 +621,60 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     campaigner = data
   }
 
-  const notifyCreator = ['task_high_priority_reminder_sent', 'task_completed', 'task_overdue_sent'].includes(notificationType)
-  let recipient: { id: string | null; full_name: string; phone: string } | null = null
-  if (notifyCreator) {
-    if (!task.created_by) {
-      return { handled: true, sent: false, reason: 'task creator is missing', tenant_id: notificationTenantId }
-    }
+  let salesPerson: any = null
+  if (!campaigner && task.sales_person_id) {
+    const { data, error: salesPersonError } = await supabase
+      .from('sales_people')
+      .select('id, full_name, phone, active')
+      .eq('id', task.sales_person_id)
+      .maybeSingle()
+    if (salesPersonError) throw salesPersonError
+    salesPerson = data
+  }
+
+  let creatorProfile: any = null
+  let creatorName = ''
+  let creatorPhone = ''
+  if (task.created_by) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id, full_name, phone, campaigner_id')
+      .select('id, full_name, phone, campaigner_id, sales_person_id')
       .eq('id', task.created_by)
       .maybeSingle()
     if (profileError) throw profileError
-
-    let creatorPhone = String(profile?.phone || '').trim()
-    let creatorName = String(profile?.full_name || '').trim()
-    if (!creatorPhone && profile?.campaigner_id) {
+    creatorProfile = profile
+    creatorName = String(profile?.full_name || '').trim()
+    creatorPhone = String(profile?.phone || '').trim()
+    if (profile?.campaigner_id && (!creatorName || !creatorPhone)) {
       const { data: creatorCampaigner, error: creatorCampaignerError } = await supabase
         .from('campaigners')
         .select('full_name, phone')
         .eq('id', profile.campaigner_id)
         .maybeSingle()
       if (creatorCampaignerError) throw creatorCampaignerError
-      creatorPhone = String(creatorCampaigner?.phone || '').trim()
       creatorName = creatorName || String(creatorCampaigner?.full_name || '').trim()
+      creatorPhone = creatorPhone || String(creatorCampaigner?.phone || '').trim()
+    }
+    if (profile?.sales_person_id && (!creatorName || !creatorPhone)) {
+      const { data: creatorSalesPerson, error: creatorSalesPersonError } = await supabase
+        .from('sales_people')
+        .select('full_name, phone')
+        .eq('id', profile.sales_person_id)
+        .maybeSingle()
+      if (creatorSalesPersonError) throw creatorSalesPersonError
+      creatorName = creatorName || String(creatorSalesPerson?.full_name || '').trim()
+      creatorPhone = creatorPhone || String(creatorSalesPerson?.phone || '').trim()
+    }
+  }
+
+  const notifyCreator = ['task_high_priority_reminder_sent', 'task_completed', 'task_overdue_sent'].includes(notificationType)
+  let recipient: { id: string | null; full_name: string; phone: string } | null = null
+  if (notifyCreator) {
+    if (!task.created_by) {
+      return { handled: true, sent: false, reason: 'task creator is missing', tenant_id: notificationTenantId }
     }
     if (creatorPhone) {
-      recipient = { id: profile?.id || task.created_by, full_name: creatorName, phone: creatorPhone }
+      recipient = { id: creatorProfile?.id || task.created_by, full_name: creatorName, phone: creatorPhone }
     }
   } else if (campaigner?.active && campaigner?.phone) {
     recipient = {
@@ -739,15 +682,22 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
       full_name: String(campaigner.full_name || ''),
       phone: String(campaigner.phone),
     }
+  } else if (salesPerson?.active && salesPerson?.phone) {
+    recipient = {
+      id: salesPerson.id,
+      full_name: String(salesPerson.full_name || ''),
+      phone: String(salesPerson.phone),
+    }
   }
 
   if (!recipient) {
     return {
       handled: true,
       sent: false,
-      reason: notifyCreator ? 'task creator phone is missing' : 'campaigner is missing, inactive, or has no phone',
+      reason: notifyCreator ? 'task creator phone is missing' : 'assignee is missing, inactive, or has no phone',
       tenant_id: notificationTenantId,
       campaigner_id: campaignerId,
+      sales_person_id: task.sales_person_id,
     }
   }
 
@@ -765,7 +715,9 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
 
   const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
   if (!automationIds.length) {
-    return { handled: true, sent: false, reason: 'tenant Carmen flow is missing', tenant_id: notificationTenantId }
+    // Let the regular task_assigned automation path handle tenants that do not
+    // use a Carmen WhatsApp flow.
+    return { handled: false }
   }
   const { data: activeAutomations, error: automationsError } = await supabase
     .from('automations')
@@ -813,15 +765,16 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   if (integrationError) throw integrationError
   const integration = integrations?.[0]
   if (!integration?.user_id) {
-    return { handled: true, sent: false, reason: 'tenant Carmen WhatsApp integration is missing', tenant_id: notificationTenantId }
+    return { handled: false }
   }
 
   const message = formatTaskNotificationMessage(
     notificationType,
     task,
     client?.name || 'משימה כללית',
-    campaigner?.full_name || '',
+    campaigner?.full_name || salesPerson?.full_name || '',
     recipient.full_name,
+    creatorName,
   )
   const sent = await sendCarmenReplyViaActionStep({
     supabase,
@@ -839,7 +792,6 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     task_id: task.id,
     client_id: client?.id || null,
     tenant_id: notificationTenantId,
-    tenant_name: tenantName,
     campaigner_id: campaigner?.id || null,
     recipient_id: recipient.id,
     sent,

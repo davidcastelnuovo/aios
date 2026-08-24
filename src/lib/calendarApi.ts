@@ -133,6 +133,56 @@ export async function disconnectDirectGoogleCalendar() {
   return await invokeDirectGoogle('google-calendar-auth', { action: 'disconnect' });
 }
 
-export async function syncTasksToCalendar(options: CalendarProxyOptions) {
+export async function syncTasksToCalendar(_options: CalendarProxyOptions) {
   return { synced: 0, failed: 0, message: 'סנכרון משימות אינו נתמך כרגע.' };
+}
+
+/**
+ * Create / update / delete the Google Calendar event that mirrors a task's
+ * scheduled date+time. Returns the event id to persist, or null when unscheduled.
+ * Calendar failures are non-fatal — callers should catch.
+ */
+export async function syncTaskCalendarEvent(opts: {
+  tenantId: string;
+  title: string;
+  dueDate: string | null;
+  dueTime: string | null;
+  durationMinutes?: number;
+  existingEventId?: string | null;
+}): Promise<string | null> {
+  const { tenantId, title, dueDate, dueTime, durationMinutes = 30, existingEventId } = opts;
+  if (!dueDate || !dueTime) {
+    if (existingEventId) {
+      await deleteCalendarEvent(existingEventId, { tenantId });
+    }
+    return null;
+  }
+
+  const time = dueTime.length === 5 ? `${dueTime}:00` : dueTime;
+  const startDateTime = new Date(`${dueDate}T${time}`);
+  const endDateTime = new Date(startDateTime.getTime() + durationMinutes * 60000);
+
+  if (existingEventId) {
+    await updateCalendarEvent(
+      {
+        eventId: existingEventId,
+        summary: title,
+        start: startDateTime.toISOString(),
+        end: endDateTime.toISOString(),
+      },
+      { tenantId },
+    );
+    return existingEventId;
+  }
+
+  const calendarResult = await addCalendarEvent(
+    {
+      summary: title,
+      description: "משימה ממערכת Marketing Captain",
+      start: startDateTime.toISOString(),
+      end: endDateTime.toISOString(),
+    },
+    { tenantId },
+  );
+  return calendarResult?.eventId ?? null;
 }

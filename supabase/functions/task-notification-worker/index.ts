@@ -40,7 +40,7 @@ type TaskRow = {
   overdue_creator_notified_at: string | null
 }
 
-async function invokeNotification(taskId: string, triggerType: NotificationType) {
+async function invokeNotification(task: TaskRow, triggerType: NotificationType) {
   const response = await fetch(`${SUPABASE_URL}/functions/v1/trigger-automation`, {
     method: 'POST',
     headers: {
@@ -49,14 +49,30 @@ async function invokeNotification(taskId: string, triggerType: NotificationType)
     },
     body: JSON.stringify({
       trigger_type: triggerType,
-      data: { task_id: taskId },
+      data: {
+        task_id: task.id,
+        title: task.title,
+        tenant_id: task.tenant_id,
+        campaigner_id: task.campaigner_id,
+        sales_person_id: task.sales_person_id,
+        created_by: task.created_by,
+      },
     }),
   })
   const body = await response.json().catch(() => ({}))
-  if (!response.ok || body?.sent !== true) {
+  if (!response.ok && response.status !== 202) {
     throw new Error(body?.reason || body?.error || `trigger-automation returned ${response.status}`)
   }
-  return body
+  if (body?.sent === true) return { delivered: true, body }
+  if (body?.handled === true && body?.sent === false) {
+    return { delivered: false, body }
+  }
+  if (body?.success === true) {
+    const delivered = Array.isArray(body.results)
+      && body.results.some((result: any) => result?.success === true)
+    return { delivered, body }
+  }
+  throw new Error(body?.reason || body?.error || 'task notification was not handled')
 }
 
 async function claimAndSend(
@@ -87,8 +103,14 @@ async function claimAndSend(
   if (!claimed) return { task_id: task.id, trigger_type: triggerType, skipped: 'already claimed' }
 
   try {
-    const result = await invokeNotification(task.id, triggerType)
-    return { task_id: task.id, trigger_type: triggerType, sent: true, result }
+    const result = await invokeNotification(task, triggerType)
+    return {
+      task_id: task.id,
+      trigger_type: triggerType,
+      sent: result.delivered,
+      skipped: result.delivered ? undefined : result.body?.reason || 'no notification channel configured',
+      result: result.body,
+    }
   } catch (error) {
     await supabase
       .from('tasks')
@@ -113,7 +135,9 @@ async function notificationScope(
   supabase: ReturnType<typeof createClient>,
   task: TaskRow,
 ) {
-  if (!task.created_by) return { isSelfAssigned: false, isManagedAssignment: false }
+  if (!task.created_by) {
+    return { isSelfAssigned: false, shouldNotifyAssignee: false, isManagedAssignment: false }
+  }
 
   const [{ data: creatorProfile, error: profileError }, { data: creatorRoles, error: rolesError }] = await Promise.all([
     supabase
@@ -136,6 +160,7 @@ async function notificationScope(
     creatorCampaignerId: creatorProfile?.campaigner_id || null,
     creatorSalesPersonId: creatorProfile?.sales_person_id || null,
     creatorRoles: (creatorRoles || []).map((row) => String(row.role)),
+    hasCreator: true,
   })
 }
 
@@ -143,14 +168,27 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
   const results: unknown[] = []
   const oneMinuteAgo = Date.now() - 60 * 1000
   const reminderAt = taskReminderAt(task)
-  const { isSelfAssigned, isManagedAssignment } = await notificationScope(supabase, task)
+  const { isSelfAssigned, shouldNotifyAssignee, isManagedAssignment } =
+    await notificationScope(supabase, task)
 
-  // Silent assignments must be marked as handled; otherwise the minute cron
-  // would select and re-evaluate the same self/non-manager task forever.
+  // Self assignments and rows without a known giver are silent. Mark only the
+  // assignment notification as handled; peer assignments must reach the assignee.
+  if (!shouldNotifyAssignee && !task.assignment_notification_sent_at) {
+    const handledAt = new Date().toISOString()
+    const { error } = await supabase
+      .from('tasks')
+      .update({ assignment_notification_sent_at: handledAt })
+      .eq('id', task.id)
+      .is('assignment_notification_sent_at', null)
+    if (error) throw error
+    task.assignment_notification_sent_at = handledAt
+  }
+
+  // Manager-only reminder/receipt markers must also be consumed for tasks
+  // created by peers, otherwise the minute cron would re-evaluate them forever.
   if (!isManagedAssignment) {
     const handledAt = new Date().toISOString()
     const silentMarkers: Record<string, string> = {}
-    if (!task.assignment_notification_sent_at) silentMarkers.assignment_notification_sent_at = handledAt
     if (!task.high_priority_reminder_sent_at) silentMarkers.high_priority_reminder_sent_at = handledAt
     if (!task.high_priority_creator_notified_at) silentMarkers.high_priority_creator_notified_at = handledAt
     if (!task.overdue_notified_at) silentMarkers.overdue_notified_at = handledAt
@@ -166,9 +204,9 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
   }
 
   if (
-    isManagedAssignment
+    shouldNotifyAssignee
     &&
-    task.campaigner_id
+    (task.campaigner_id || task.sales_person_id)
     && task.status !== 'done'
     && !task.assignment_notification_sent_at
   ) {
@@ -282,7 +320,7 @@ Deno.serve(async (req) => {
         supabase
           .from('tasks')
           .select(taskColumns)
-          .not('campaigner_id', 'is', null)
+          .or('campaigner_id.not.is.null,sales_person_id.not.is.null')
           .neq('status', 'done')
           .is('assignment_notification_sent_at', null)
           .limit(25),

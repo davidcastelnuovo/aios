@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
 interface CampaignerTasksTabProps {
   campaignerId: string;
@@ -26,9 +27,10 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
   const [editingTask, setEditingTask] = useState<any>(null);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
 
   const { data: tasks, isLoading } = useQuery({
-    queryKey: ["campaigner-tasks", tenantId, campaignerId, dateFilter],
+    queryKey: ["campaigner-tasks", tenantId, campaignerId, dateFilter, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
       let query = supabase
         .from("tasks")
@@ -40,8 +42,13 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
           leads (company_name)
         `)
         .eq("campaigner_id", campaignerId)
-        .eq("tenant_id", tenantId!)
         .order("due_date", { ascending: false });
+
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId!);
+      }
 
       if (dateFilter === "week") {
         const weekAgo = new Date();
@@ -69,7 +76,7 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaigner-tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigner-tasks", tenantId, campaignerId] });
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },
@@ -189,7 +196,7 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
         </RadioGroup>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />

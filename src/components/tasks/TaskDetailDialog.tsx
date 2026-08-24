@@ -22,7 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -31,6 +31,8 @@ import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
+import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
+import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 
 interface Task {
   id: string;
@@ -45,7 +47,12 @@ interface Task {
   agency_id: string | null;
   campaigner_id: string | null;
   tenant_id: string | null;
+  created_by?: string | null;
+  created_at?: string;
+  creator_name?: string | null;
   self_reminder_at?: string | null;
+  google_calendar_event_id?: string | null;
+  duration_minutes?: number | null;
 }
 
 interface TaskDetailDialogProps {
@@ -92,6 +99,8 @@ export function TaskDetailDialog({
   const [selfReminderEnabled, setSelfReminderEnabled] = useState(false);
   const [selfReminderAt, setSelfReminderAt] = useState("");
   const [viewLeadOpen, setViewLeadOpen] = useState(false);
+  const [googleCalendarEventId, setGoogleCalendarEventId] = useState<string | null>(null);
+  const [creatorName, setCreatorName] = useState("");
 
   // Fetch full lead data for viewing
   const { data: fullLeadData } = useQuery({
@@ -136,6 +145,20 @@ export function TaskDetailDialog({
             : ""
         );
         setAttachments(Array.isArray((t as any).attachments) ? (t as any).attachments : []);
+        setGoogleCalendarEventId((t as any).google_calendar_event_id || null);
+        const knownCreatorName = (t as any).creator_name || "";
+        if (knownCreatorName) {
+          setCreatorName(knownCreatorName);
+        } else if ((t as any).created_by) {
+          const { data: creator } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", (t as any).created_by)
+            .maybeSingle();
+          setCreatorName(creator?.full_name || "");
+        } else {
+          setCreatorName("");
+        }
         setClientSearch("");
         setCampaignerSearch("");
         setLeadSearch("");
@@ -178,16 +201,8 @@ export function TaskDetailDialog({
 
   // Fetch campaigners for collaboration
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners-for-tasks", tenantId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("tenant_id", tenantId)
-        .eq("active", true)
-        .order("full_name");
-      return data || [];
-    },
+    queryKey: ["campaigners-for-tasks", tenantId, crossTenantAgencyIds.join(",")],
+    queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId && open,
   });
 
@@ -269,6 +284,8 @@ export function TaskDetailDialog({
       if (selfReminderEnabled && assignedCampaignerId === userCampaignerId && !selfReminderAt) {
         throw new Error("יש לבחור תאריך ושעה לתזכורת");
       }
+      const nextDueDate = dueDate?.toISOString().split("T")[0] || null;
+      const nextDueTime = dueTime ? dueTime + ":00" : null;
       const { error } = await supabase
         .from("tasks")
         .update({
@@ -276,8 +293,8 @@ export function TaskDetailDialog({
           notes,
           priority,
           status,
-          due_date: dueDate?.toISOString().split("T")[0] || null,
-          due_time: dueTime ? dueTime + ":00" : null,
+          due_date: nextDueDate,
+          due_time: nextDueTime,
           duration_minutes: durationMinutes,
           client_id: clientId || null,
           lead_id: leadId || null,
@@ -290,6 +307,27 @@ export function TaskDetailDialog({
         })
         .eq("id", task!.id);
       if (error) throw error;
+
+      if (tenantId) {
+        try {
+          const eventId = await syncTaskCalendarEvent({
+            tenantId,
+            title,
+            dueDate: nextDueDate,
+            dueTime: nextDueTime,
+            durationMinutes,
+            existingEventId: googleCalendarEventId,
+          });
+          if ((eventId ?? null) !== (googleCalendarEventId ?? null)) {
+            await supabase
+              .from("tasks")
+              .update({ google_calendar_event_id: eventId })
+              .eq("id", task!.id);
+          }
+        } catch (calendarError) {
+          console.warn("לא הצלחנו לעדכן ביומן גוגל:", calendarError);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
@@ -401,6 +439,14 @@ export function TaskDetailDialog({
                   placeholder="כותרת המשימה"
                 />
               </div>
+
+              {creatorName && (
+                <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                  <UserRound className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">המשימה ניתנה על ידי</span>
+                  <span className="font-medium">{creatorName}</span>
+                </div>
+              )}
 
               {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
                 <div className="space-y-3 rounded-md border p-3">

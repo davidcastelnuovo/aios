@@ -1,6 +1,6 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical, Megaphone, Check } from "lucide-react";
+import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical, Megaphone, Check, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,8 @@ interface Task {
   campaigner_id: string | null;
   tenant_id: string | null;
   created_at?: string;
+  created_by?: string | null;
+  creator_name?: string | null;
   clients?: { name: string } | null;
   campaigners?: { full_name: string } | null;
   task_updates?: { id: string }[];
@@ -192,6 +194,12 @@ function DraggableBacklogTask({
               <Badge variant="outline" className="text-xs">
                 <Megaphone className="h-3 w-3 mr-1" />
                 {task.campaigners.full_name}
+              </Badge>
+            )}
+            {task.creator_name && (
+              <Badge variant="outline" className="text-xs">
+                <UserRound className="h-3 w-3 mr-1" />
+                מאת {task.creator_name}
               </Badge>
             )}
             {task.created_at && (
