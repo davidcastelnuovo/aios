@@ -30,6 +30,7 @@ type DepartmentId = "copy" | "creative" | "seo" | "campaigns" | "analytics";
 const DEPARTMENTS: Array<{
   id: DepartmentId;
   label: string;
+  tab: string;
   description: string;
   icon: typeof PenLine;
   gradient: string;
@@ -38,6 +39,7 @@ const DEPARTMENTS: Array<{
   {
     id: "copy",
     label: "מחלקת קופי",
+    tab: "קופי",
     description: "פרויקטי קופי, צ'אט עם כרמן ועורך חי",
     icon: PenLine,
     gradient: "from-violet-500 to-purple-700",
@@ -46,6 +48,7 @@ const DEPARTMENTS: Array<{
   {
     id: "creative",
     label: "מחלקת קריאייטיב",
+    tab: "קריאייטיב",
     description: "קונספטים, storyboard, גרפיקה וסרטונים במקום אחד",
     icon: Palette,
     gradient: "from-pink-500 to-rose-700",
@@ -54,6 +57,7 @@ const DEPARTMENTS: Array<{
   {
     id: "seo",
     label: "מחלקת SEO / GEO",
+    tab: "SEO / GEO",
     description: "מחקר ביטויים, תוכנית תוכן, מאמרים ונראות במנועי AI",
     icon: Search,
     gradient: "from-emerald-500 to-teal-700",
@@ -62,6 +66,7 @@ const DEPARTMENTS: Array<{
   {
     id: "campaigns",
     label: "מחלקת קמפיינים",
+    tab: "קמפיינים",
     description: "מבנה קמפיין, קהלים, מודעות, תקציב והכנה לפרסום",
     icon: Megaphone,
     gradient: "from-blue-500 to-indigo-700",
@@ -70,6 +75,7 @@ const DEPARTMENTS: Array<{
   {
     id: "analytics",
     label: "מחלקת אנליטיקה",
+    tab: "אנליטיקה",
     description: "כניסה לדשבורדים ולדוחות שכבר מחוברים למערכת",
     icon: BarChart3,
     gradient: "from-amber-500 to-orange-700",
@@ -106,23 +112,45 @@ export default function MarketingDepartment() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background" dir="rtl">
-      <header className="flex shrink-0 items-center gap-3 border-b bg-card/70 px-4 py-2 backdrop-blur">
-        <Button variant="ghost" size="sm" onClick={() => navigate(`/t/${tenantSlug}`)}>
+      <header className="flex shrink-0 items-stretch gap-2 border-b bg-card/70 px-3 backdrop-blur">
+        <Button variant="ghost" size="sm" className="my-1.5 shrink-0" onClick={() => navigate(`/t/${tenantSlug}`)}>
           <ArrowRight className="ml-1 h-4 w-4" />
           חזרה
         </Button>
-        <h1 className="text-base font-semibold">מחלקת שיווק</h1>
-        <div className="mx-2 h-5 w-px bg-border" />
-        {department && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mr-auto text-xs text-muted-foreground"
-            onClick={() => navigate(`/t/${tenantSlug}/marketing`)}
-          >
-            כל המחלקות
-          </Button>
-        )}
+        <button
+          type="button"
+          className={cn(
+            "my-1.5 shrink-0 rounded-md px-2 text-base font-semibold transition-colors",
+            !department ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+          )}
+          onClick={() => navigate(`/t/${tenantSlug}/marketing${selectedClientId ? `?client=${selectedClientId}` : ""}`)}
+        >
+          שיווק
+        </button>
+        <div className="mx-1 my-auto h-5 w-px shrink-0 bg-border" />
+        <nav className="-mb-px flex min-w-0 flex-1 items-stretch overflow-x-auto" aria-label="מחלקות">
+          {DEPARTMENTS.map((item) => {
+            const Icon = item.icon;
+            const active = department === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => selectDepartment(item.id)}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm transition-colors",
+                  active
+                    ? "border-foreground font-semibold text-foreground"
+                    : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
+                )}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {item.tab}
+              </button>
+            );
+          })}
+        </nav>
       </header>
 
       {!department ? (
