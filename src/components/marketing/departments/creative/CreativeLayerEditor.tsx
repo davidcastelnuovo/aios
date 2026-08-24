@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { cn } from "@/lib/utils";
-import { Loader2, Move, Save, Type } from "lucide-react";
+import { Loader2, Move, Save, Trash2, Type } from "lucide-react";
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
 import { aspectRatioClass } from "./utils";
 
@@ -61,6 +61,14 @@ export function CreativeLayerEditor({
     });
   }, [onChange, variation]);
 
+  const removeLayer = useCallback((layerId: string) => {
+    onChange({
+      ...variation,
+      layers: variation.layers.filter((layer) => layer.id !== layerId),
+    });
+    setSelectedLayerId((current) => current === layerId ? null : current);
+  }, [onChange, variation]);
+
   const addTextLayer = () => {
     const layer: CreativeLayer = {
       id: crypto.randomUUID(),
@@ -82,13 +90,31 @@ export function CreativeLayerEditor({
   };
 
   const removeSelectedLayer = () => {
-    if (!selectedLayerId) return;
+    if (selectedLayerId) removeLayer(selectedLayerId);
+  };
+
+  const removeAllTextLayers = () => {
     onChange({
       ...variation,
-      layers: variation.layers.filter((layer) => layer.id !== selectedLayerId),
+      layers: variation.layers.filter((layer) => layer.type !== "text"),
     });
     setSelectedLayerId(null);
   };
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (selectedLayerId) {
+        event.preventDefault();
+        removeLayer(selectedLayerId);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isEditing, selectedLayerId, removeLayer]);
 
   const beginDrag = (event: React.MouseEvent, layer: CreativeLayer, mode: DragMode) => {
     if (!isEditing) return;
@@ -203,7 +229,21 @@ export function CreativeLayerEditor({
                   setSelectedLayerId(layer.id);
                 }}
               >
-                <span className="block h-full overflow-hidden whitespace-pre-wrap break-words">{layer.text}</span>
+              {isEditing && (
+                <button
+                  type="button"
+                  className="absolute -top-2 -left-2 flex h-6 w-6 items-center justify-center rounded-full border border-white bg-destructive text-white shadow"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    removeLayer(layer.id);
+                  }}
+                  aria-label="מחק שכבה"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
+              <span className="block h-full overflow-hidden whitespace-pre-wrap break-words">{layer.text}</span>
                 {selectedLayerId === layer.id && (
                   <span
                     className="absolute -bottom-1 -left-1 h-3 w-3 cursor-se-resize rounded-full border border-white bg-pink-500"
@@ -238,22 +278,41 @@ export function CreativeLayerEditor({
                 <Move className="h-3.5 w-3.5" />רקע (תמונה)
               </button>
               {textLayers.map((layer, index) => (
-                <button
-                  key={layer.id}
-                  type="button"
-                  onClick={() => setSelectedLayerId(layer.id)}
-                  className={cn(
-                    "w-full rounded-lg border px-2 py-2 text-right text-xs transition-colors",
-                    selectedLayerId === layer.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "hover:bg-muted/50",
-                  )}
-                >
-                  <div className="font-semibold">טקסט {index + 1}</div>
-                  <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">{layer.text || "ריק"}</div>
-                </button>
+                <div key={layer.id} className="flex items-stretch gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLayerId(layer.id)}
+                    className={cn(
+                      "min-w-0 flex-1 rounded-lg border px-2 py-2 text-right text-xs transition-colors",
+                      selectedLayerId === layer.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "hover:bg-muted/50",
+                    )}
+                  >
+                    <div className="font-semibold">טקסט {index + 1}</div>
+                    <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">{layer.text || "ריק"}</div>
+                  </button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-auto shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => removeLayer(layer.id)}
+                    aria-label={`מחק טקסט ${index + 1}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               ))}
-              <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={addTextLayer}>
-                <Type className="h-3.5 w-3.5" />הוסף שכבת טקסט
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={addTextLayer}>
+                  <Type className="h-3.5 w-3.5" />הוסף
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1.5 text-destructive" onClick={removeAllTextLayers} disabled={textLayers.length === 0}>
+                  <Trash2 className="h-3.5 w-3.5" />מחק הכל
+                </Button>
+              </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                טקסט משובש בתוך התמונה עצמה לא נמחק משכבה — לחץ &quot;מחק הכל&quot; ואז &quot;צור וריאציה&quot; לתמונה נקייה בלי כיתוב.
+              </p>
 
               {selectedLayer?.type === "text" && (
                 <div className="space-y-3 border-t pt-4">

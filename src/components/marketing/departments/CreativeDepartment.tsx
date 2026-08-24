@@ -315,13 +315,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         },
       }).eq("id", selected.id).eq("tenant_id", tenantId);
       const framePrompt = [
-        selected.title,
-        frame.title,
-        frame.shot && `Shot: ${frame.shot}`,
-        frame.visualPrompt,
-        frame.voiceover && `Voiceover: ${frame.voiceover}`,
-        frame.overlayText && `On-screen text: ${frame.overlayText}`,
-        getBriefText(selected),
+        "Cinematic storyboard frame photograph.",
+        selected.title && `Campaign: ${selected.title}`,
+        frame.shot && `Shot type: ${frame.shot}`,
+        frame.visualPrompt && `What is in the frame: ${frame.visualPrompt}`,
+        getBriefText(selected) && `Visual brief (mood/setting only): ${getBriefText(selected)}`,
       ].filter(Boolean).join("\n");
       const { imageUrl, usedFallback } = await generateCreativeImage({
         supabase,
@@ -406,10 +404,6 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       const notes = [
         selected.payload?.notes,
         getBriefText(selected) && `בריף: ${getBriefText(selected)}`,
-        getLinkedCopyText(selected) && `קופי משויך: ${getLinkedCopyText(selected)}`,
-        variationDraft?.layers?.length
-          ? `שכבות טקסט לשמירה: ${variationDraft.layers.map((layer) => layer.text).filter(Boolean).join(" | ")}`
-          : null,
       ].filter(Boolean).join("\n");
 
       await supabase
@@ -419,12 +413,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         .eq("tenant_id", tenantId);
 
       const creativePrompt = [
-        selected.title,
-        getBriefText(selected) && `Brief: ${getBriefText(selected)}`,
-        getLinkedCopyText(selected) && `Copy: ${getLinkedCopyText(selected)}`,
-        variationDraft?.layers?.length
-          ? `Text layers: ${variationDraft.layers.map((layer) => layer.text).filter(Boolean).join(" | ")}`
-          : null,
+        "Create a polished advertising photograph for this campaign.",
+        selected.title && `Campaign: ${selected.title}`,
+        getBriefText(selected) && `Visual brief (ignore any copy/headlines, use only mood, audience, setting): ${getBriefText(selected)}`,
+        `Format: ${defaultFormat(selected.payload)}`,
       ].filter(Boolean).join("\n");
 
       const { imageUrl, usedFallback } = await generateCreativeImage({

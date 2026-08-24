@@ -10,6 +10,9 @@ interface GenerateCreativeImageArgs {
   prompt: string;
 }
 
+const NO_TEXT_ON_IMAGE =
+  "Photorealistic marketing visual only. Do not render any text, letters, numbers, captions, logos, watermarks, or typography in the image. Leave clean visual space. No Hebrew and no English words.";
+
 async function invokeSocialImage(
   supabase: SupabaseClient,
   tenantId: string,
@@ -17,7 +20,7 @@ async function invokeSocialImage(
   prompt: string,
 ) {
   return supabase.functions.invoke("ai-generate-social-image", {
-    body: { prompt, tenant_id: tenantId, post_id: itemId },
+    body: { prompt: `${prompt}\n\n${NO_TEXT_ON_IMAGE}`, tenant_id: tenantId, post_id: itemId },
   });
 }
 
