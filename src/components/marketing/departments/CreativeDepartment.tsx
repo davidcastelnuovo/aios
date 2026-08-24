@@ -659,7 +659,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-bold">{selected.title}</h2>
         <p className="text-[11px] text-muted-foreground">
-          {projectTypeLabel(projectType)} · Skin: social_media · תמונות: DALL-E 3
+          {projectTypeLabel(projectType)} · Skin: social_media · תמונות: gpt-image-1
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
@@ -786,7 +786,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-sm font-bold">{selected.title}</h2>
                   <p className="text-[11px] text-muted-foreground">
-                    {projectTypeLabel(projectType)} · Skin: social_media · תמונות: DALL-E 3
+                    {projectTypeLabel(projectType)} · Skin: social_media · תמונות: gpt-image-1
                   </p>
                 </div>
                 <Tabs value={workspaceTab} onValueChange={(value) => setWorkspaceTab(value as "project" | "creative")}>

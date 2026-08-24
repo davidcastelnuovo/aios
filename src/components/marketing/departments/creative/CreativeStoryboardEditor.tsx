@@ -210,7 +210,7 @@ export function CreativeStoryboardEditor({
                   {frameDraft.imageUrl ? "צור וריאציה" : "צור פריים"}
                 </Button>
                 <p className="text-[10px] leading-relaxed text-muted-foreground">
-                  יצירת פריים דורשת תיאור ויזואלי או קריינות. התמונה נוצרת ב-DALL-E 3 (1024×1024) דרך Skin social_media.
+                  יצירת פריים דורשת תיאור ויזואלי או קריינות. התמונה נוצרת ב-gpt-image-1 (לפי פורמט הפרויקט) דרך Skin social_media.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" size="sm" className="gap-1" onClick={duplicateFrame}><Copy className="h-3.5 w-3.5" />שכפל</Button>
