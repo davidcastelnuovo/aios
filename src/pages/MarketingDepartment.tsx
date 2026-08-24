@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
-import { ALL_CLIENTS_FILTER, clientFilterToParam, parseClientFilter } from "@/components/marketing/clientFilter";
+import { clientFilterToParam, entryClientFilter, parseClientFilter } from "@/components/marketing/clientFilter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -99,8 +99,18 @@ export default function MarketingDepartment() {
   const clientFilter = parseClientFilter(selectedClientId === clientId ? clientId : searchParams.get("client"));
 
   useEffect(() => {
-    if (clientId && department) navigate(`/t/${tenantSlug}/marketing/department/${department}?client=${clientId}`, { replace: true });
+    if (clientId && department) {
+      const param = clientFilterToParam(entryClientFilter(department, parseClientFilter(clientId)));
+      navigate(`/t/${tenantSlug}/marketing/department/${department}${param ? `?client=${param}` : ""}`, { replace: true });
+    }
   }, [clientId, department, navigate, tenantSlug]);
+
+  useEffect(() => {
+    if (department !== "creative") return;
+    if (searchParams.get("client")) return;
+    if (clientId) return;
+    navigate(`/t/${tenantSlug}/marketing/department/creative?client=all`, { replace: true });
+  }, [clientId, department, navigate, searchParams, tenantSlug]);
 
   const selectClient = (id: string | null) => {
     const param = clientFilterToParam(id);
@@ -113,7 +123,7 @@ export default function MarketingDepartment() {
       navigate(`/t/${tenantSlug}/dynamic-tables`);
       return;
     }
-    const param = clientFilterToParam(clientFilter);
+    const param = clientFilterToParam(entryClientFilter(id, clientFilter));
     navigate(`/t/${tenantSlug}/marketing/department/${id}${param ? `?client=${param}` : ""}`);
   };
 
