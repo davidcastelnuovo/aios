@@ -239,6 +239,16 @@ export type PulseStatusCounts = {
   attention: number
 }
 
+/** Keep only pulse rows for clients assigned to the given campaigner (client_team). */
+export function filterPulseRowsByClientIds<T extends { client_id: string }>(
+  rows: T[],
+  clientIds: Iterable<string>,
+): T[] {
+  const allowed = new Set(clientIds)
+  if (!allowed.size) return []
+  return rows.filter((row) => allowed.has(row.client_id))
+}
+
 export function countPulseStatuses(rows: Array<{ status?: string | null }>): PulseStatusCounts {
   const count = (status: string) => rows.filter((row) => row.status === status).length
   const warning = count('warning')
@@ -278,8 +288,6 @@ export function buildPulseWhatsAppDigest(
       '',
       'פירוט מלא בדשבורד בדיקת דופק:',
       dashboardUrl,
-      '',
-      'טבלאות לא מחוברות ופירוט לפי לקוח — בדשבורד בלבד (לא בוואטסאפ).',
     ].join('\n')
   }
   return [
@@ -288,8 +296,6 @@ export function buildPulseWhatsAppDigest(
     '',
     'צפה בדשבורד בדיקת דופק:',
     dashboardUrl,
-    '',
-    'טבלאות לא מחוברות ופירוט לפי לקוח — בדשבורד בלבד (לא בוואטסאפ).',
   ].join('\n')
 }
 

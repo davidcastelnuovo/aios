@@ -31,6 +31,8 @@ on:
       - 'supabase/ops/fix_seo_call_snapshots_cross_tenant.sql'
       - 'supabase/ops/fix_table_shares_cross_tenant.sql'
       - 'supabase/ops/fix_task_agency_and_assignment_notifications.sql'
+      - 'supabase/ops/apply_pulse_twice_daily_cadence.sql'
+      - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
 
 jobs:
   apply:
@@ -66,7 +68,13 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/fix_task_agency_and_assignment_notifications.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaigner_delivery.sql'; then
+              FILE="supabase/ops/apply_pulse_campaigner_delivery.sql"
+              NAME="apply_pulse_campaigner_delivery"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_twice_daily_cadence.sql'; then
+              FILE="supabase/ops/apply_pulse_twice_daily_cadence.sql"
+              NAME="apply_pulse_twice_daily_cadence"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_task_agency_and_assignment_notifications.sql'; then
               FILE="supabase/ops/fix_task_agency_and_assignment_notifications.sql"
               NAME="fix_task_agency_and_assignment_notifications"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_table_shares_cross_tenant.sql'; then

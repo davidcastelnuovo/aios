@@ -59,6 +59,7 @@ import {
   buildPulseDashboardAbsoluteUrl,
   buildPulseWhatsAppDigest,
   countPulseStatuses,
+  filterPulseRowsByClientIds,
   pulseSurfacePrefersWhatsAppDigest,
 } from '../_shared/campaign-pulse.ts'
 
@@ -2743,8 +2744,9 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const loadPulse = async () => {
         let query = supabase
           .from('campaign_pulse_snapshots')
-          .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)')
-          .eq('tenant_id', tenantId)
+          .select('tenant_id, calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)')
+          // Shared agencies may snapshot under a partner tenant — same scope as the dashboard.
+          .in('tenant_id', accessibleTenantIds)
           .order('calculated_at', { ascending: false })
         if (args.client_id) query = query.eq('client_id', args.client_id)
         if (args.agency_id) query = query.eq('agency_id', args.agency_id)
@@ -2765,13 +2767,31 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         const needle = String(args.agency_name).toLocaleLowerCase('he')
         rows = rows.filter((row: any) => String(row.agencies?.name || '').toLocaleLowerCase('he').includes(needle))
       }
-      const normalizedRows = rows.map((row: any) => ({
+      // One row per client: partner tenants can hold a snapshot for the same client.
+      const freshestByClient = new Map<string, any>()
+      for (const row of rows) {
+        const previous = freshestByClient.get(row.client_id)
+        if (!previous || String(row.calculated_at || '') > String(previous.calculated_at || '')) {
+          freshestByClient.set(row.client_id, row)
+        }
+      }
+      let normalizedRows = Array.from(freshestByClient.values()).map((row: any) => ({
         ...row,
         client_name: row.clients?.name || null,
         agency_name: row.agencies?.name || null,
         clients: undefined,
         agencies: undefined,
       }))
+      // Campaigners (WhatsApp / in-app) see only clients assigned via client_team.
+      if (callerCampaignerId && !bypassCampaignerScope) {
+        const { data: links, error: linksError } = await supabase
+          .from('client_team')
+          .select('client_id')
+          .eq('campaigner_id', callerCampaignerId)
+        if (linksError) throw linksError
+        const assignedClientIds = (links || []).map((link: any) => link.client_id).filter(Boolean)
+        normalizedRows = filterPulseRowsByClientIds(normalizedRows, assignedClientIds)
+      }
       const statusLabel: Record<string, string> = {
         healthy: '🟢 תקין',
         warning: '🟡 תשומת לב',
@@ -2837,7 +2857,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           whatsapp_digest: whatsappDigest,
           formatted_markdown: null,
           instructions_to_agent:
-            'בוואטסאפ החזירי את whatsapp_digest כלשונו בלבד. אסור טבלת Markdown, אסור פירוט לקוח-לקוח, אסור להדביק rows. הפירוט בדשבורד בלבד (dashboard_url). אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק ללקוח ספציפי.',
+            'בוואטסאפ החזירי את whatsapp_digest כלשונו בלבד — כולל שורת הקישור לדשבורד. אסור טבלת Markdown, אסור פירוט לקוח-לקוח, אסור להדביק rows. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק ללקוח ספציפי.',
         }
       }
       return {
@@ -6820,9 +6840,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // WhatsApp / scheduled tasks: pulse must stay short (counts + dashboard link).
     if (isCarmen && (surface === 'whatsapp' || surface === 'task')) {
       systemPrompt += `\n\n📱 === בדיקת דופק בוואטסאפ (חובה) ===
-• אחרי get_latest_campaign_pulse — החזירי רק את whatsapp_digest כלשונו.
-• אסור טבלת Markdown, אסור "בדיקת דופק אחרונה — חושבה ב־…" + פירוט לקוחות, אסור להמציא שורות מה-rows.
-• הפירוט המלא רק בדשבורד בדיקת דופק (הקישור ב-whatsapp_digest / dashboard_url).`
+• אחרי get_latest_campaign_pulse — החזירי את whatsapp_digest כלשונו, כולל שורת הקישור לדשבורד.
+• אסור טבלת Markdown, אסור "בדיקת דופק אחרונה — חושבה ב־…" + פירוט לקוחות, אסור להמציא שורות מה-rows.`
     }
 
     // 4. Filter tools
@@ -7274,6 +7293,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
       // Execute tool calls
       const toolResults: any[] = []
+      let pulseDigestShortcut: string | null = null
       for (const tc of msg.tool_calls) {
         const toolName = tc.function.name
         let toolArgs: Record<string, any> = {}
@@ -7311,9 +7331,25 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           const subTaskId = (result && typeof result === 'object' && (result as any).sub_task_id) || undefined
           emit({ type: 'tool_result', tool: toolName, sub_task_id: subTaskId, ok: !(result && (result as any).error), error: (result && (result as any).error) || undefined })
         }
+
+        if (
+          round === 0 &&
+          toolName === 'get_latest_campaign_pulse' &&
+          isStoredPulseRequest &&
+          pulseSurfacePrefersWhatsAppDigest(surface) &&
+          typeof result?.whatsapp_digest === 'string' &&
+          result.whatsapp_digest.trim()
+        ) {
+          pulseDigestShortcut = result.whatsapp_digest.trim()
+        }
       }
 
       messages.push(...toolResults)
+      if (pulseDigestShortcut) {
+        finalOutput = pulseDigestShortcut
+        if (emit) emit({ type: 'token', content: finalOutput })
+        break
+      }
     }
 
 
