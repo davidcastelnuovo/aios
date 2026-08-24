@@ -3157,6 +3157,9 @@ export type Database = {
           notes: string | null
           overall_status: string | null
           phone: string | null
+          follow_up_date: string | null
+          follow_up_campaigner_notified_at: string | null
+          follow_up_manager_notified_at: string | null
           retainer: number | null
           services: string[] | null
           start_date: string | null
@@ -3199,6 +3202,9 @@ export type Database = {
           notes?: string | null
           overall_status?: string | null
           phone?: string | null
+          follow_up_date?: string | null
+          follow_up_campaigner_notified_at?: string | null
+          follow_up_manager_notified_at?: string | null
           retainer?: number | null
           services?: string[] | null
           start_date?: string | null
@@ -3241,6 +3247,9 @@ export type Database = {
           notes?: string | null
           overall_status?: string | null
           phone?: string | null
+          follow_up_date?: string | null
+          follow_up_campaigner_notified_at?: string | null
+          follow_up_manager_notified_at?: string | null
           retainer?: number | null
           services?: string[] | null
           start_date?: string | null

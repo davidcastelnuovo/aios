@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { sendCarmenReplyViaActionStep } from '../_shared/carmen.ts'
+import { formatClientFollowUpMessage } from '../_shared/client-follow-up-message.ts'
 import { dropUnresolvedTemplateLines, sanitizeTemplateParameter } from '../_shared/meta-whatsapp.ts'
 import {
   deliverPendingLeadAlertFailureNotifications,
@@ -565,6 +566,11 @@ const TASK_NOTIFICATION_TYPES = new Set([
   'task_overdue',
   'task_overdue_sent',
 ])
+
+const CLIENT_FOLLOW_UP_NOTIFICATION_TYPES = new Set([
+  'client_follow_up_reminder',
+  'client_follow_up_reminder_manager',
+])
 async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: any) {
   const taskId = String(requestBody?.data?.task_id || '').trim()
   if (!taskId) return { handled: false }
@@ -808,6 +814,123 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   }
 }
 
+async function sendClientFollowUpFromTenantCarmen(supabase: any, requestBody: any) {
+  const clientId = String(requestBody?.data?.client_id || '').trim()
+  if (!clientId) return { handled: false }
+  const notificationType = String(requestBody?.trigger_type || '')
+  if (!CLIENT_FOLLOW_UP_NOTIFICATION_TYPES.has(notificationType)) return { handled: false }
+
+  const { data: client, error: clientError } = await supabase
+    .from('clients')
+    .select('id, name, tenant_id, agency_id, follow_up_date, status')
+    .eq('id', clientId)
+    .maybeSingle()
+  if (clientError) throw clientError
+  if (!client) return { handled: true, sent: false, reason: 'client not found' }
+  if (!client.tenant_id) return { handled: true, sent: false, reason: 'client tenant is missing' }
+
+  const recipientPhone = String(requestBody?.data?.recipient_phone || '').trim()
+  const recipientName = String(requestBody?.data?.recipient_name || '').trim()
+  if (!recipientPhone) {
+    return { handled: true, sent: false, reason: 'recipient phone is missing', tenant_id: client.tenant_id }
+  }
+
+  const assigneeNames = Array.isArray(requestBody?.data?.assignee_names)
+    ? requestBody.data.assignee_names.map((name: unknown) => String(name || '').trim()).filter(Boolean)
+    : []
+
+  const { data: triggerSteps, error: triggerStepsError } = await supabase
+    .from('automation_flow_steps')
+    .select('automation_id, configuration, created_at')
+    .eq('tenant_id', client.tenant_id)
+    .eq('step_type', 'trigger')
+    .eq('action_type', 'carmen_whatsapp_session')
+    .order('created_at', { ascending: true })
+  if (triggerStepsError) throw triggerStepsError
+
+  const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
+  if (!automationIds.length) return { handled: false }
+
+  const { data: activeAutomations, error: automationsError } = await supabase
+    .from('automations')
+    .select('id, name')
+    .in('id', automationIds)
+    .eq('active', true)
+  if (automationsError) throw automationsError
+  const activeIds = new Set((activeAutomations || []).map((automation: any) => automation.id))
+  const rankedSteps = (triggerSteps || [])
+    .filter((step: any) => activeIds.has(step.automation_id))
+    .sort((a: any, b: any) => {
+      const aAll = (a.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
+      const bAll = (b.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
+      return aAll - bAll
+    })
+  const carmenStep = rankedSteps[0]
+  if (!carmenStep) {
+    return { handled: true, sent: false, reason: 'tenant Carmen flow is inactive', tenant_id: client.tenant_id }
+  }
+
+  const { data: actionStep, error: actionStepError } = await supabase
+    .from('automation_flow_steps')
+    .select('configuration')
+    .eq('automation_id', carmenStep.automation_id)
+    .eq('step_type', 'action')
+    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (actionStepError) throw actionStepError
+  const integrationId = actionStep?.configuration?.green_api_integration_id
+    || actionStep?.configuration?.integration_id
+    || carmenStep.configuration?.carmen_integration_id
+    || null
+
+  let integrationQuery = supabase
+    .from('tenant_integrations')
+    .select('id, user_id')
+    .eq('tenant_id', client.tenant_id)
+    .eq('is_active', true)
+  integrationQuery = integrationId
+    ? integrationQuery.eq('id', integrationId)
+    : integrationQuery.in('integration_type', ['green_api', 'greenapi', 'manus_wa', 'manuswa']).order('created_at', { ascending: false }).limit(1)
+  const { data: integrations, error: integrationError } = await integrationQuery
+  if (integrationError) throw integrationError
+  const integration = integrations?.[0]
+  if (!integration?.user_id) return { handled: false }
+
+  const message = formatClientFollowUpMessage(
+    notificationType,
+    client,
+    recipientName,
+    assigneeNames,
+  )
+  const sent = await sendCarmenReplyViaActionStep({
+    supabase,
+    automationId: carmenStep.automation_id,
+    tenantId: client.tenant_id,
+    connectionUserId: integration.user_id,
+    chatId: `${String(recipientPhone).replace(/\D/g, '')}@c.us`,
+    phoneNumber: recipientPhone,
+    isGroup: false,
+    message,
+  })
+
+  console.log('[client-follow-up-carmen]', {
+    notification_type: notificationType,
+    client_id: client.id,
+    tenant_id: client.tenant_id,
+    recipient_phone: recipientPhone,
+    sent,
+  })
+  return {
+    handled: true,
+    sent,
+    client_id: client.id,
+    notification_type: notificationType,
+    tenant_id: client.tenant_id,
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -832,6 +955,16 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify(taskNotification), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: taskNotification.sent ? 200 : 202,
+        })
+      }
+    }
+
+    if (CLIENT_FOLLOW_UP_NOTIFICATION_TYPES.has(requestBody.trigger_type)) {
+      const clientFollowUp = await sendClientFollowUpFromTenantCarmen(supabase, requestBody)
+      if (clientFollowUp.handled) {
+        return new Response(JSON.stringify(clientFollowUp), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: clientFollowUp.sent ? 200 : 202,
         })
       }
     }

@@ -307,6 +307,9 @@ verify_jwt = true
 [functions.task-notification-worker]
 verify_jwt = true
 
+[functions.client-follow-up-worker]
+verify_jwt = true
+
 [functions.run-ai-agent-v2]
 verify_jwt = true
 
