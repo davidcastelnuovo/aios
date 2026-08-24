@@ -37,6 +37,7 @@ import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
+import { useAgencies } from "@/hooks/useEntityLists";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -86,6 +87,18 @@ export function WeeklyTaskBoard() {
 
   // Fetch clients for inline selector
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+  const { data: ownAgencies = [] } = useAgencies();
+
+  // A task carries the tenant its creator was working in, which for a shared
+  // agency is not always the agency's home tenant: a task opened from a promo
+  // client card inside the Promo workspace is stamped Promo even though the
+  // agency and the client live on MarketingCaptain. Match on every agency this
+  // tenant can reach — the ones it owns and the ones shared with it — so the
+  // board shows the agency's whole queue instead of half of it.
+  const visibleAgencyIds = useMemo(
+    () => Array.from(new Set([...crossTenantAgencyIds, ...ownAgencies.map((agency) => agency.id)])),
+    [crossTenantAgencyIds, ownAgencies]
+  );
 
   // Fetch campaigners for quick filter (include cross-tenant via shared agencies)
   const { data: campaignersList = [] } = useQuery({
@@ -290,7 +303,7 @@ export function WeeklyTaskBoard() {
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
+    queryKey: ["tasks", tenantId, visibleAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
     enabled: !!tenantId && !!user?.id,
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
@@ -307,9 +320,9 @@ export function WeeklyTaskBoard() {
           task_collaborators (id)
         `);
 
-      // Cross-tenant: include tasks from shared agencies
-      if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      // Cross-tenant: include tasks on any agency this tenant owns or shares
+      if (visibleAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${visibleAgencyIds.join(",")})`);
       } else {
         query = query.eq("tenant_id", tenantId);
       }
