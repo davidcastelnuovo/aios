@@ -1,146 +1,109 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Background,
-  Controls,
-  Handle,
-  Position,
-  ReactFlow,
-  type Edge,
-  type Node,
-  type NodeProps,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
+import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
+import { CreativeBriefEditor } from "@/components/marketing/departments/creative/CreativeBriefEditor";
+import { CreativeLayerEditor } from "@/components/marketing/departments/creative/CreativeLayerEditor";
+import { CreativeStoryboardEditor } from "@/components/marketing/departments/creative/CreativeStoryboardEditor";
+import type { CreativeAssetRow, CreativeComment, CreativeItem, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "@/components/marketing/departments/creative/types";
+import {
+  defaultFormat,
+  getBriefText,
+  getLinkedCopyText,
+  getProjectType,
+  getStoryboard,
+  getVariations,
+  makeStoryboardFrame,
+  makeVariation,
+  projectTypeLabel,
+} from "@/components/marketing/departments/creative/utils";
+import { isCreativeDepartmentItem, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
+  Archive,
   Check,
+  ChevronDown,
+  Clock3,
   Clapperboard,
-  Copy,
+  FilePlus2,
+  History,
   Image as ImageIcon,
+  Link2,
   Loader2,
+  MessageSquare,
   Palette,
+  PenLine,
   Plus,
-  Save,
   Send,
   Sparkles,
-  Trash2,
   WandSparkles,
 } from "lucide-react";
 
 interface Props {
-  clientId?: string;
+  clientFilter: MarketingClientFilter;
   tenantId: string;
-  onClientChange: (id: string | null) => void;
+  onClientChange?: (id: string | null) => void;
 }
-
-interface StoryboardFrame {
-  id: string;
-  order: number;
-  title: string;
-  shot: string;
-  visualPrompt: string;
-  overlayText: string;
-  voiceover: string;
-  duration: number;
-  imageUrl?: string;
-  x: number;
-  y: number;
-}
-
-interface CreativeItem {
-  id: string;
-  title: string | null;
-  status: string;
-  payload: Record<string, unknown> | null;
-  current_stage_id: string | null;
-  target_channel: string | null;
-  updated_at: string;
-}
-
-type StoryboardNode = Node<StoryboardFrame, "storyboard">;
 
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
-const makeFrame = (order: number, x = (order - 1) * 300, y = 100): StoryboardFrame => ({
-  id: crypto.randomUUID(),
-  order,
-  title: `סצנה ${order}`,
-  shot: "Medium shot",
-  visualPrompt: "",
-  overlayText: "",
-  voiceover: "",
-  duration: 3,
-  x,
-  y,
-});
-
-const getStoryboard = (payload: Record<string, unknown> | null): StoryboardFrame[] => {
-  const value = payload?.storyboard;
-  if (!Array.isArray(value)) return [];
-  return value.filter((frame): frame is StoryboardFrame => {
-    if (!frame || typeof frame !== "object") return false;
-    return typeof (frame as StoryboardFrame).id === "string";
-  });
-};
-
-function StoryboardCard({ data, selected }: NodeProps<StoryboardNode>) {
-  return (
-    <Card className={cn("w-60 overflow-hidden border-2 bg-card p-0 shadow-lg", selected && "border-pink-500 ring-4 ring-pink-500/10")} dir="rtl">
-      <Handle type="target" position={Position.Right} />
-      <div className="relative aspect-video bg-muted">
-        {data.imageUrl ? (
-          <img src={data.imageUrl} alt={data.title} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-            <ImageIcon className="mb-2 h-7 w-7 opacity-40" />
-            <span className="text-[10px]">פריים טרם נוצר</span>
-          </div>
-        )}
-        <Badge className="absolute right-2 top-2 bg-black/70 text-white hover:bg-black/70">{data.order}</Badge>
-        <Badge variant="secondary" className="absolute bottom-2 left-2 text-[10px]">{data.duration} שנ׳</Badge>
-      </div>
-      <div className="p-3">
-        <div className="truncate text-xs font-bold">{data.title}</div>
-        <div className="mt-1 line-clamp-2 min-h-8 text-[10px] leading-relaxed text-muted-foreground">
-          {data.visualPrompt || data.voiceover || "בחר את הסצנה והוסף הנחיות"}
-        </div>
-      </div>
-      <Handle type="source" position={Position.Left} />
-    </Card>
-  );
-}
-
-const nodeTypes = { storyboard: StoryboardCard };
-
-export function CreativeDepartment({ clientId, tenantId, onClientChange }: Props) {
+export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
-  const [frameDraft, setFrameDraft] = useState<StoryboardFrame | null>(null);
+  const [selectedVariationId, setSelectedVariationId] = useState<string | null>(null);
+  const [variationDraft, setVariationDraft] = useState<CreativeVariation | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
+  const [linkCopyOpen, setLinkCopyOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [workspaceTab, setWorkspaceTab] = useState<"project" | "creative">("project");
+  const [storyboardDraft, setStoryboardDraft] = useState<StoryboardFrame[]>([]);
 
-  const { data: context, isLoading: loadingContext } = useQuery({
-    queryKey: ["creative-department-context", clientId, tenantId],
+  const { data: items = [], isLoading: loadingItems } = useQuery({
+    queryKey: ["creative-department-items", clientFilter, tenantId],
     queryFn: async () => {
-      if (!clientId) return null;
-      const pipeline = await ensurePipelineForClient({ clientId, tenantId, track: "campaigns" });
-      if (!pipeline) throw new Error("לא ניתן לפתוח סביבת קריאייטיב");
+      let query = supabase
+        .from("marketing_work_items")
+        .select("id,title,status,client_id,payload,current_stage_id,target_channel,created_at,updated_at")
+        .eq("tenant_id", tenantId)
+        .order("updated_at", { ascending: false });
+      query = applyClientFilter(query, clientFilter);
+      const { data, error } = await query;
+      if (error) throw error;
+      return ((data ?? []) as CreativeItem[]).filter((item) =>
+        isCreativeDepartmentItem(item, context?.creativeStage?.id ?? null),
+      );
+    },
+  });
+
+  const selected = items.find((item) => item.id === selectedId) ?? null;
+  const projectType = getProjectType(selected?.payload ?? null);
+  const variations = useMemo(() => getVariations(selected?.payload ?? null), [selected?.payload]);
+  const storyboard = useMemo(() => getStoryboard(selected?.payload ?? null), [selected?.payload]);
+  const selectedVariation = variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1] ?? null;
+
+  const { data: context } = useQuery({
+    queryKey: ["creative-department-context", selected?.client_id, tenantId],
+    queryFn: async () => {
+      if (!selected?.client_id) return null;
+      const pipeline = await ensurePipelineForClient({ clientId: selected.client_id, tenantId, track: "campaigns" });
       const { data: stages, error } = await supabase
         .from("marketing_pipeline_stages")
         .select("id, stage_type, sort_order")
@@ -150,27 +113,28 @@ export function CreativeDepartment({ clientId, tenantId, onClientChange }: Props
       return {
         pipeline,
         creativeStage: stages?.find((stage) => stage.stage_type === "creative") ?? null,
+        copyStage: stages?.find((stage) => stage.stage_type === "copy") ?? null,
         campaignStage: stages?.find((stage) => stage.stage_type === "target_paid") ?? null,
       };
-    }, enabled: !!clientId,
+    },
+    enabled: !!selected?.client_id,
   });
 
-  const { data: items = [], isLoading: loadingItems } = useQuery({
-    queryKey: ["creative-department-items", clientId, tenantId],
+  const linkCopyClientFilter = selected?.client_id ?? (clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null);
+
+  const { data: copyItems = [] } = useQuery({
+    queryKey: ["creative-linkable-copy", linkCopyClientFilter, tenantId],
+    enabled: linkCopyOpen && !!linkCopyClientFilter,
     queryFn: async () => {
       let query = supabase
         .from("marketing_work_items")
-        .select("id,title,status,payload,current_stage_id,target_channel,updated_at")
+        .select("id,title,payload,updated_at")
         .eq("tenant_id", tenantId)
         .order("updated_at", { ascending: false });
-      if (clientId) query = query.eq("client_id", clientId);
-      else query = query.is("client_id", null);
+      query = applyClientFilter(query, linkCopyClientFilter);
       const { data, error } = await query;
       if (error) throw error;
-      return ((data ?? []) as CreativeItem[]).filter((item) => {
-        const payload = item.payload ?? {};
-        return (!!context?.creativeStage?.id && item.current_stage_id === context.creativeStage.id) || payload.department === "creative" || Array.isArray(payload.storyboard) || !!payload.image_url;
-      });
+      return ((data ?? []) as CreativeItem[]).filter((item) => isLinkableCopyItem(item));
     },
   });
 
@@ -179,45 +143,79 @@ export function CreativeDepartment({ clientId, tenantId, onClientChange }: Props
     if (selectedId && !items.some((item) => item.id === selectedId)) setSelectedId(items[0]?.id ?? null);
   }, [items, selectedId]);
 
-  const selected = items.find((item) => item.id === selectedId) ?? null;
-  const frames = useMemo(() => getStoryboard(selected?.payload ?? null), [selected?.payload]);
-  const selectedFrame = frames.find((frame) => frame.id === selectedFrameId) ?? frames[0] ?? null;
+  useEffect(() => {
+    setWorkspaceTab("project");
+  }, [selectedId]);
 
   useEffect(() => {
-    if (!selectedFrameId && frames[0]?.id) setSelectedFrameId(frames[0].id);
-    if (selectedFrameId && !frames.some((frame) => frame.id === selectedFrameId)) setSelectedFrameId(frames[0]?.id ?? null);
-  }, [frames, selectedFrameId]);
+    setStoryboardDraft(storyboard);
+  }, [storyboard, selectedId]);
 
   useEffect(() => {
-    const frame = frames.find((value) => value.id === selectedFrameId) ?? frames[0] ?? null;
-    setFrameDraft(frame ? { ...frame } : null);
-  }, [frames, selectedFrameId]);
+    if (!selectedVariationId && variations[0]?.id) setSelectedVariationId(variations[0].id);
+    if (selectedVariationId && !variations.some((variation) => variation.id === selectedVariationId)) {
+      setSelectedVariationId(variations[variations.length - 1]?.id ?? null);
+    }
+  }, [variations, selectedVariationId]);
 
-  const nodes: StoryboardNode[] = useMemo(() => frames.map((frame) => ({
-    id: frame.id,
-    type: "storyboard",
-    position: { x: frame.x, y: frame.y },
-    data: frame,
-  })), [frames]);
+  useEffect(() => {
+    setVariationDraft(selectedVariation ? { ...selectedVariation } : null);
+  }, [selectedVariation]);
 
-  const edges: Edge[] = useMemo(() => frames.slice(0, -1).map((frame, index) => ({
-    id: `${frame.id}-${frames[index + 1].id}`,
-    source: frame.id,
-    target: frames[index + 1].id,
-    animated: true,
-    style: { stroke: "#ec4899", strokeWidth: 2 },
-  })), [frames]);
+  const { data: assetVersions = [] } = useQuery({
+    queryKey: ["creative-department-assets", selectedId, tenantId],
+    enabled: !!selectedId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("marketing_assets")
+        .select("id,type,url,content,meta,created_at,run_id")
+        .eq("tenant_id", tenantId)
+        .eq("item_id", selectedId!)
+        .in("type", ["image", "data"])
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as CreativeAssetRow[];
+    },
+  });
 
   const refresh = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["creative-department-items", clientId, tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ["creative-department-items", clientFilter, tenantId] }),
       queryClient.invalidateQueries({ queryKey: ["creative-department-assets", selectedId, tenantId] }),
     ]);
   };
 
-  const saveFrames = async (nextFrames: StoryboardFrame[], message = "ה־storyboard נשמר") => {
+  const saveProject = async (draft: CreativeProjectDraft) => {
     if (!selected) return;
-    const nextPayload = { ...(selected.payload ?? {}), storyboard: nextFrames, department: "creative" };
+    setSaving(true);
+    try {
+      const nextPayload = {
+        ...(selected.payload ?? {}),
+        brief_text: draft.briefText.trim(),
+        copy_text: draft.copyText.trim() || undefined,
+        instructions: draft.instructions.trim() || undefined,
+        format: draft.format,
+        project_type: draft.projectType,
+        department: "creative",
+      };
+      const { error } = await supabase
+        .from("marketing_work_items")
+        .update({ title: draft.title.trim() || selected.title, payload: nextPayload })
+        .eq("id", selected.id)
+        .eq("tenant_id", tenantId);
+      if (error) throw error;
+      toast.success("הפרויקט נשמר");
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "שמירת הפרויקט נכשלה"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const persistStoryboard = async (nextFrames: StoryboardFrame[], message = "ה-storyboard נשמר") => {
+    if (!selected) return;
+    const nextPayload = { ...(selected.payload ?? {}), storyboard: nextFrames, project_type: "video", department: "creative" };
     const { error } = await supabase
       .from("marketing_work_items")
       .update({ payload: nextPayload })
@@ -228,7 +226,7 @@ export function CreativeDepartment({ clientId, tenantId, onClientChange }: Props
       tenant_id: tenantId,
       item_id: selected.id,
       stage_id: context?.creativeStage?.id ?? selected.current_stage_id,
-      type: "storyboard",
+      type: "data",
       content: JSON.stringify(nextFrames),
       meta: { source: "visual_editor", skin_slug: "social_media", frame_count: nextFrames.length },
     });
@@ -236,79 +234,227 @@ export function CreativeDepartment({ clientId, tenantId, onClientChange }: Props
     await refresh();
   };
 
-  const initializeStoryboard = async () => {
-    if (!selected) return;
-    const copy = String(selected.payload?.copy_text ?? selected.payload?.brief_text ?? "");
-    const lines = copy.split("\n").map((line) => line.trim()).filter(Boolean).slice(0, 4);
-    const nextFrames = (lines.length ? lines : ["הוק", "הבעיה", "הפתרון", "קריאה לפעולה"]).map((line, index) => ({
-      ...makeFrame(index + 1),
-      title: index === 0 ? "הוק" : index === (lines.length || 4) - 1 ? "קריאה לפעולה" : `סצנה ${index + 1}`,
-      voiceover: line,
-      overlayText: line.length <= 80 ? line : "",
-    }));
-    await saveFrames(nextFrames, "נוצר storyboard ראשוני מהקופי");
-  };
-
-  const saveFrameDraft = async () => {
-    if (!frameDraft) return;
-    const next = frames.map((frame) => frame.id === frameDraft.id ? frameDraft : frame);
-    await saveFrames(next, "הסצנה נשמרה כגרסה חדשה");
-  };
-
-  const saveFramePosition = (frameId: string, x: number, y: number) => {
-    const next = frames.map((frame) => frame.id === frameId ? { ...frame, x, y } : frame);
-    void saveFrames(next, "מיקום הסצנה נשמר").catch((error: unknown) => toast.error(errorMessage(error, "השמירה נכשלה")));
-  };
-
-  const addFrame = async () => {
-    const next = [...frames, makeFrame(frames.length + 1)];
-    await saveFrames(next, "סצנה חדשה נוספה");
-    setSelectedFrameId(next[next.length - 1].id);
-  };
-
-  const duplicateFrame = async () => {
-    if (!selectedFrame) return;
-    const copy = { ...selectedFrame, id: crypto.randomUUID(), order: frames.length + 1, x: selectedFrame.x + 300 };
-    await saveFrames([...frames, copy], "הסצנה שוכפלה");
-    setSelectedFrameId(copy.id);
-  };
-
-  const removeFrame = async () => {
-    if (!selectedFrame) return;
-    const next = frames.filter((frame) => frame.id !== selectedFrame.id).map((frame, index) => ({ ...frame, order: index + 1 }));
-    await saveFrames(next, "הסצנה הוסרה");
-  };
-
-  const generateFrame = async () => {
-    const frameToGenerate = frameDraft ?? selectedFrame;
-    if (!selected || !frameToGenerate || !context?.creativeStage) return;
+  const generateStoryboardFrame = async (frame: StoryboardFrame, framesOverride?: StoryboardFrame[]) => {
+    if (!selected || !context?.creativeStage) {
+      toast.error("יש לשייך לקוח לפרויקט לפני יצירת פריימים");
+      return;
+    }
+    if (!frame.visualPrompt?.trim() && !frame.voiceover?.trim()) {
+      toast.error("מלא/י 'מה רואים בפריים' או קריינות לפני יצירת הפריים");
+      return;
+    }
     setGenerating(true);
     try {
-      const originalNotes = String(selected.payload?.notes ?? "");
+      const activeFrames = framesOverride ?? storyboardDraft;
       const generationNotes = [
-        originalNotes,
-        `בקשת פריים ${frameToGenerate.order}: ${frameToGenerate.visualPrompt || frameToGenerate.voiceover || frameToGenerate.title}`,
-        `סוג שוט: ${frameToGenerate.shot}`,
-        frameToGenerate.overlayText && `טקסט שיופיע: ${frameToGenerate.overlayText}`,
+        selected.payload?.notes,
+        `בקשת פריים ${frame.order}: ${frame.visualPrompt || frame.voiceover || frame.title}`,
+        `סוג שוט: ${frame.shot}`,
+        frame.overlayText && `טקסט שיופיע: ${frame.overlayText}`,
       ].filter(Boolean).join("\n");
-      const { error: prepareError } = await supabase.from("marketing_work_items").update({
+      await supabase.from("marketing_work_items").update({
         current_stage_id: context.creativeStage.id,
         status: "draft",
-        payload: { ...(selected.payload ?? {}), notes: generationNotes, department: "creative" },
+        payload: {
+          ...(selected.payload ?? {}),
+          notes: generationNotes,
+          storyboard_frame: {
+            id: frame.id,
+            order: frame.order,
+            title: frame.title,
+            shot: frame.shot,
+            visualPrompt: frame.visualPrompt,
+            overlayText: frame.overlayText,
+            voiceover: frame.voiceover,
+          },
+          department: "creative",
+          project_type: "video",
+        },
       }).eq("id", selected.id).eq("tenant_id", tenantId);
-      if (prepareError) throw prepareError;
       const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
         body: { item_id: selected.id, stage_id: context.creativeStage.id },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      const next = frames.map((frame) => frame.id === frameToGenerate.id ? { ...frameToGenerate, imageUrl: data.url } : frame);
-      await saveFrames(next, "הפריים נוצר ונשמר ב־storyboard");
+      const imageUrl = data.url ?? data.image_url;
+      if (!imageUrl || typeof imageUrl !== "string") throw new Error("לא התקבלה תמונה מהיצירה");
+      const next = activeFrames.map((value) => value.id === frame.id ? { ...frame, imageUrl } : value);
+      setStoryboardDraft(next);
+      await persistStoryboard(next, "הפריים נוצר ונשמר");
     } catch (error: unknown) {
       toast.error(errorMessage(error, "יצירת הפריים נכשלה"));
     } finally {
       setGenerating(false);
     }
+  };
+
+  const persistVariations = async (nextVariations: CreativeVariation[], message = "הגרסה נשמרה") => {
+    if (!selected) return;
+    const active = selectedVariationId
+      ? nextVariations.find((variation) => variation.id === selectedVariationId) ?? nextVariations[nextVariations.length - 1]
+      : nextVariations[nextVariations.length - 1];
+
+    const nextPayload = {
+      ...(selected.payload ?? {}),
+      variations: nextVariations,
+      department: "creative",
+      image_url: active?.imageUrl ?? selected.payload?.image_url,
+    };
+
+    const { error: itemError } = await supabase
+      .from("marketing_work_items")
+      .update({ payload: nextPayload })
+      .eq("id", selected.id)
+      .eq("tenant_id", tenantId);
+    if (itemError) throw itemError;
+
+    if (active) {
+      const { error: assetError } = await supabase.from("marketing_assets").insert({
+        tenant_id: tenantId,
+        item_id: selected.id,
+        stage_id: context?.creativeStage?.id ?? selected.current_stage_id,
+        type: "image",
+        url: active.imageUrl,
+        content: JSON.stringify({ layers: active.layers, format: active.format }),
+        meta: {
+          source: "manual_edit",
+          skin_slug: "social_media",
+          variation_id: active.id,
+          variation_name: active.name,
+          comments: active.comments,
+          layers: active.layers,
+          format: active.format,
+        },
+      });
+      if (assetError) throw assetError;
+    }
+
+    toast.success(message);
+    await refresh();
+  };
+
+  const generate = async () => {
+    if (!selected) return;
+    if (!selected.client_id) {
+      toast.error("יש לשייך לקוח לפרויקט לפני יצירת קריאייטיב");
+      return;
+    }
+    if (!context?.creativeStage) return;
+    setGenerating(true);
+    try {
+      if (selected.current_stage_id !== context.creativeStage.id) {
+        const { error: moveError } = await supabase
+          .from("marketing_work_items")
+          .update({ current_stage_id: context.creativeStage.id, status: "draft" })
+          .eq("id", selected.id)
+          .eq("tenant_id", tenantId);
+        if (moveError) throw moveError;
+      }
+
+      const notes = [
+        selected.payload?.notes,
+        getBriefText(selected) && `בריף: ${getBriefText(selected)}`,
+        getLinkedCopyText(selected) && `קופי משויך: ${getLinkedCopyText(selected)}`,
+        variationDraft?.layers?.length
+          ? `שכבות טקסט לשמירה: ${variationDraft.layers.map((layer) => layer.text).filter(Boolean).join(" | ")}`
+          : null,
+      ].filter(Boolean).join("\n");
+
+      await supabase
+        .from("marketing_work_items")
+        .update({ payload: { ...(selected.payload ?? {}), notes, department: "creative" } })
+        .eq("id", selected.id)
+        .eq("tenant_id", tenantId);
+
+      const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
+        body: { item_id: selected.id, stage_id: context.creativeStage.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const imageUrl = data.url ?? data.image_url ?? selected.payload?.image_url;
+      if (!imageUrl || typeof imageUrl !== "string") throw new Error("לא התקבלה תמונה מהיצירה");
+
+      const nextVariation = makeVariation({
+        imageUrl,
+        format: defaultFormat(selected.payload),
+        copyText: getLinkedCopyText(selected),
+        name: `גרסה ${variations.length + 1}`,
+        source: "ai",
+      });
+
+      const nextVariations = [...variations, nextVariation];
+      await persistVariations(nextVariations, "כרמן יצרה וריאציה ויזואלית חדשה");
+      setSelectedVariationId(nextVariation.id);
+      setWorkspaceTab("creative");
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "יצירת הקריאייטיב נכשלה"));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const saveVariation = async () => {
+    if (!variationDraft) return;
+    setSaving(true);
+    try {
+      const nextVariations = variations.map((variation) =>
+        variation.id === variationDraft.id ? { ...variationDraft, source: "manual_edit" as const } : variation,
+      );
+      await persistVariations(nextVariations);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "השמירה נכשלה"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addComment = async () => {
+    if (!variationDraft || !commentDraft.trim()) return;
+    const comment: CreativeComment = {
+      id: crypto.randomUUID(),
+      text: commentDraft.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    const nextDraft = {
+      ...variationDraft,
+      comments: [...variationDraft.comments, comment],
+    };
+    setVariationDraft(nextDraft);
+    setCommentDraft("");
+    try {
+      const nextVariations = variations.map((variation) =>
+        variation.id === nextDraft.id ? nextDraft : variation,
+      );
+      await persistVariations(nextVariations, "ההערה נשמרה");
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "שמירת ההערה נכשלה"));
+    }
+  };
+
+  const linkCopyFromItem = async (copyItem: CreativeItem) => {
+    if (!selected) return;
+    const copyText = String(copyItem.payload?.copy_text ?? "");
+    const briefText = String(copyItem.payload?.brief_text ?? "");
+    const nextPayload = {
+      ...(selected.payload ?? {}),
+      copy_text: copyText,
+      brief_text: briefText || selected.payload?.brief_text,
+      linked_copy_item_id: copyItem.id,
+      linked_copy_title: copyItem.title,
+      content_type: copyItem.payload?.content_type ?? selected.payload?.content_type,
+      channel: copyItem.payload?.channel ?? selected.payload?.channel,
+      department: "creative",
+    };
+    const { error } = await supabase
+      .from("marketing_work_items")
+      .update({ payload: nextPayload })
+      .eq("id", selected.id)
+      .eq("tenant_id", tenantId);
+    if (error) throw error;
+    toast.success("הקופי שויך לפרויקט");
+    setLinkCopyOpen(false);
+    await refresh();
   };
 
   const handoff = useMutation({
@@ -317,133 +463,583 @@ export function CreativeDepartment({ clientId, tenantId, onClientChange }: Props
       const { error } = await supabase.from("marketing_work_items").update({
         current_stage_id: context.campaignStage.id,
         status: "draft",
-        payload: { ...(selected.payload ?? {}), storyboard: frames, creative_approved: true, department: "campaigns" },
+        payload: {
+          ...(selected.payload ?? {}),
+          variations,
+          storyboard: storyboardDraft,
+          creative_approved: true,
+          department: "campaigns",
+        },
       }).eq("id", selected.id).eq("tenant_id", tenantId);
       if (error) throw error;
     },
-    onSuccess: async () => { toast.success("הקריאייטיב אושר והועבר למחלקת הקמפיינים"); await refresh(); },
+    onSuccess: async () => {
+      toast.success("הקריאייטיב אושר והועבר למחלקת הקמפיינים");
+      await refresh();
+    },
     onError: (error: unknown) => toast.error(errorMessage(error, "ההעברה נכשלה")),
   });
 
-  if (loadingContext) return <div className="flex flex-1 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-pink-500" /></div>;
+  const canHandoff = projectType === "video" ? storyboardDraft.length > 0 : variations.length > 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-3 border-b bg-background px-4 py-2"><span className="text-xs font-medium text-muted-foreground">תצוגה:</span><ClientSelector tenantId={tenantId} value={clientId ?? null} onChange={onClientChange} allowGeneral generalLabel="תוכן כללי" /></div>
-    <div className="grid min-h-0 flex-1 grid-cols-[270px_minmax(0,1fr)_320px] bg-muted/10">
-      <aside className="flex min-h-0 flex-col border-l bg-card/70">
-        <div className="flex items-center justify-between border-b p-3">
-          <div><h2 className="text-sm font-bold">פרויקטים לקריאייטיב</h2><p className="text-[11px] text-muted-foreground">מהקופי או מבריף ידני</p></div>
-          <Button size="icon" className="h-8 w-8 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /></Button>
-        </div>
-        <ScrollArea className="flex-1"><div className="space-y-2 p-2">
-          {loadingItems ? <Loader2 className="mx-auto mt-8 h-5 w-5 animate-spin" /> : items.length === 0 ? (
-            <div className="px-4 py-10 text-center text-xs text-muted-foreground"><Palette className="mx-auto mb-2 h-8 w-8 opacity-30" />אין פרויקטים עדיין</div>
-          ) : items.map((item) => (
-            <button key={item.id} onClick={() => { setSelectedId(item.id); setSelectedFrameId(null); }} className={cn("w-full rounded-xl border p-3 text-right", selectedId === item.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "bg-background hover:bg-muted/50")}>
-              <div className="truncate text-xs font-semibold">{item.title || "ללא כותרת"}</div>
-              <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground"><span>{item.target_channel || "כללי"}</span><span>{getStoryboard(item.payload).length} סצנות</span></div>
-            </button>
-          ))}
-        </div></ScrollArea>
-      </aside>
-
-      <main className="flex min-h-0 min-w-0 flex-col">
-        {selected ? <>
-          <div className="flex items-center gap-3 border-b bg-card/60 px-4 py-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-700 text-white"><Clapperboard className="h-4 w-4" /></div>
-            <div className="min-w-0 flex-1"><h2 className="truncate text-sm font-bold">{selected.title}</h2><p className="text-[11px] text-muted-foreground">Creative Studio · storyboard חי עם גרסאות</p></div>
-            <Badge variant="outline">Skin: social_media</Badge>
-            <Button size="sm" className="gap-1.5 bg-gradient-to-r from-pink-600 to-violet-600" onClick={() => setAiOpen(true)}><WandSparkles className="h-3.5 w-3.5" />כרמן תבנה הכול</Button>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={addFrame}><Plus className="h-3.5 w-3.5" />סצנה</Button>
-            <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" onClick={() => handoff.mutate()} disabled={handoff.isPending || frames.length === 0}><Send className="h-3.5 w-3.5" />אשר לקמפיינים</Button>
+      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_300px] bg-muted/10">
+        <aside className="flex min-h-0 flex-col border-l bg-card/70">
+          <div className="flex items-center justify-between border-b p-3">
+            <div>
+              <h2 className="text-sm font-bold">פרויקטים לקריאייטיב</h2>
+              <p className="text-[11px] text-muted-foreground">מהקופי, מבריף ידני או AI</p>
+            </div>
+            <Button size="icon" className="h-8 w-8 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
-          {frames.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center p-8 text-center"><div><Clapperboard className="mx-auto mb-4 h-14 w-14 text-pink-400/40" /><h3 className="text-xl font-black">מתחילים מהרעיון, לא מהתמונה</h3><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">אפשר לתת לכרמן פרומפט אחד, לבנות אוטומטית מהבריף או להתחיל ידנית ולבקש ממנה להשלים.</p><div className="mt-5 flex justify-center gap-2"><Button className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={() => setAiOpen(true)}><WandSparkles className="h-4 w-4" />כרמן תבנה הכול</Button><Button variant="outline" className="gap-2" onClick={initializeStoryboard}><Sparkles className="h-4 w-4" />טיוטה מהקופי</Button></div></div></div>
+          <ScrollArea className="flex-1">
+            <div className="space-y-2 p-2">
+              {loadingItems ? (
+                <Loader2 className="mx-auto mt-8 h-5 w-5 animate-spin" />
+              ) : items.length === 0 ? (
+                <div className="px-4 py-10 text-center text-xs text-muted-foreground">
+                  <Palette className="mx-auto mb-2 h-8 w-8 opacity-30" />
+                  אין פרויקטים עדיין
+                </div>
+              ) : items.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { setSelectedId(item.id); setSelectedVariationId(null); }}
+                  className={cn(
+                    "w-full rounded-xl border p-3 text-right transition-colors",
+                    selectedId === item.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "bg-background hover:bg-muted/50",
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    <StatusDot status={item.status} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold">{item.title || "ללא כותרת"}</div>
+                      <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+                        {getBriefText(item) || getLinkedCopyText(item) || "מחכה לבריף או לקופי"}
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                        <Badge variant="outline" className="h-4 px-1 text-[9px]">{projectTypeLabel(getProjectType(item.payload))}</Badge>
+                        <span>{getProjectType(item.payload) === "video" ? `${getStoryboard(item.payload).length} סצנות` : `${getVariations(item.payload).length} וריאציות`}</span>
+                        {item.payload?.handoff_from === "copy" && <Badge variant="secondary" className="h-4 px-1 text-[9px]">מהקופי</Badge>}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        </aside>
+
+        <main className="flex min-h-0 min-w-0 flex-col">
+          {selected ? (
+            <>
+              <div className="flex flex-wrap items-center gap-3 border-b bg-card/50 px-4 py-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-700 text-white">
+                  {projectType === "video" ? <Clapperboard className="h-4 w-4" /> : <Palette className="h-4 w-4" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-sm font-bold">{selected.title}</h2>
+                  <p className="text-[11px] text-muted-foreground">
+                    {projectTypeLabel(projectType)} · Skin: social_media · תמונות: DALL-E 3
+                  </p>
+                </div>
+                <Tabs value={workspaceTab} onValueChange={(value) => setWorkspaceTab(value as "project" | "creative")}>
+                  <TabsList>
+                    <TabsTrigger value="project">עריכת פרויקט</TabsTrigger>
+                    <TabsTrigger value="creative">{projectType === "video" ? "Storyboard" : "קריאייטיב"}</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkCopyOpen(true)}>
+                  <Link2 className="h-3.5 w-3.5" />שייך קופי
+                </Button>
+                {projectType === "static" && (
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={generate} disabled={generating || !selected.client_id}>
+                    {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+                    {variations.length ? "צור וריאציה" : "צור קריאייטיב"}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => handoff.mutate()}
+                  disabled={handoff.isPending || !canHandoff}
+                >
+                  <Send className="h-3.5 w-3.5" />אשר לקמפיינים
+                </Button>
+              </div>
+
+              {workspaceTab === "project" ? (
+                <CreativeBriefEditor item={selected} onSave={saveProject} saving={saving} />
+              ) : projectType === "video" ? (
+                <CreativeStoryboardEditor
+                  frames={storyboardDraft}
+                  onChange={setStoryboardDraft}
+                  onSave={() => persistStoryboard(storyboardDraft)}
+                  onGenerateFrame={async (frame) => {
+                    const merged = storyboardDraft.map((value) => value.id === frame.id ? frame : value);
+                    setStoryboardDraft(merged);
+                    await generateStoryboardFrame(frame, merged);
+                  }}
+                  generating={generating}
+                  saving={saving}
+                />
+              ) : variationDraft ? (
+                <CreativeLayerEditor
+                  key={variationDraft.id}
+                  variation={variationDraft}
+                  onChange={setVariationDraft}
+                  onSave={saveVariation}
+                  saving={saving}
+                />
+              ) : (
+                <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
+                  <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
+                  <h3 className="text-lg font-bold text-foreground">עדיין אין וריאציה ויזואלית</h3>
+                  <p className="mt-2 max-w-md text-sm">ערכ/י את הבריף בלשונית &quot;עריכת פרויקט&quot;, ואז בקש/י מכרמן ליצור את הגרסה הראשונה.</p>
+                  <Button className="mt-5 gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={generate} disabled={generating || !selected.client_id}>
+                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                    צור קריאייטיב ראשון
+                  </Button>
+                </div>
+              )}
+            </>
           ) : (
-            <div className="min-h-0 flex-1" dir="ltr">
-              <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.2 }} onNodeClick={(_, node) => setSelectedFrameId(node.id)} onNodeDragStop={(_, node) => saveFramePosition(node.id, node.position.x, node.position.y)} proOptions={{ hideAttribution: true }}>
-                <Background gap={24} size={1} /><Controls position="bottom-left" />
-              </ReactFlow>
+            <div className="flex flex-1 items-center justify-center text-center text-muted-foreground">
+              <div>
+                <ImageIcon className="mx-auto mb-3 h-10 w-10 opacity-30" />
+                <p className="text-sm">בחר פרויקט או צור אחד חדש</p>
+              </div>
             </div>
           )}
-        </> : <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">בחר פרויקט קריאייטיב</div>}
-      </main>
+        </main>
 
-      <aside className="flex min-h-0 flex-col border-r bg-card/80">
-        {selectedFrame && frameDraft ? <>
-          <div className="border-b p-4"><div className="flex items-center justify-between"><div><h3 className="text-sm font-bold">עריכת סצנה {selectedFrame.order}</h3><p className="text-[11px] text-muted-foreground">כל שינוי נשמר כגרסה</p></div><Badge variant="secondary">{selectedFrame.duration} שנ׳</Badge></div></div>
-          <ScrollArea className="flex-1"><div className="space-y-4 p-4">
-            <div><Label>שם הסצנה</Label><Input className="mt-1" value={frameDraft.title} onChange={(event) => setFrameDraft({ ...frameDraft, title: event.target.value })} /></div>
-            <div><Label>סוג שוט</Label><Select value={frameDraft.shot} onValueChange={(value) => setFrameDraft({ ...frameDraft, shot: value })}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{["Close-up", "Medium shot", "Wide shot", "POV", "Product shot", "UGC handheld", "Cinematic tracking"].map((shot) => <SelectItem key={shot} value={shot}>{shot}</SelectItem>)}</SelectContent></Select></div>
-            <div><Label>מה רואים בפריים?</Label><Textarea className="mt-1 min-h-24" value={frameDraft.visualPrompt} onChange={(event) => setFrameDraft({ ...frameDraft, visualPrompt: event.target.value })} placeholder="דמות, סביבה, תאורה, קומפוזיציה, סגנון והשראה" /></div>
-            <div><Label>טקסט על המסך</Label><Textarea className="mt-1 min-h-16" value={frameDraft.overlayText} onChange={(event) => setFrameDraft({ ...frameDraft, overlayText: event.target.value })} /></div>
-            <div><Label>קריינות / דיאלוג</Label><Textarea className="mt-1 min-h-20" value={frameDraft.voiceover} onChange={(event) => setFrameDraft({ ...frameDraft, voiceover: event.target.value })} /></div>
-            <div><Label>משך בשניות</Label><Input className="mt-1" type="number" min={1} max={30} value={frameDraft.duration} onChange={(event) => setFrameDraft({ ...frameDraft, duration: Number(event.target.value) || 1 })} /></div>
-            <Button variant="outline" className="w-full gap-2" onClick={() => void saveFrameDraft().catch((error: unknown) => toast.error(errorMessage(error, "השמירה נכשלה")))}><Save className="h-4 w-4" />שמור סצנה כגרסה</Button>
-            <Button className="w-full gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={generateFrame} disabled={generating}>{generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}{selectedFrame.imageUrl ? "צור וריאציה חדשה" : "צור את הפריים"}</Button>
-            <div className="grid grid-cols-2 gap-2"><Button variant="outline" size="sm" className="gap-1" onClick={duplicateFrame}><Copy className="h-3.5 w-3.5" />שכפל</Button><Button variant="outline" size="sm" className="gap-1 text-destructive" onClick={removeFrame}><Trash2 className="h-3.5 w-3.5" />מחק</Button></div>
-          </div></ScrollArea>
-        </> : <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-muted-foreground"><Save className="ml-2 h-4 w-4" />בחר סצנה כדי לערוך אותה</div>}
-      </aside>
+        <aside className="flex min-h-0 flex-col border-r bg-card/70">
+          <div className="border-b p-3">
+            <h3 className="flex items-center gap-1.5 text-sm font-bold">
+              <History className="h-4 w-4" />גרסאות והערות
+            </h3>
+            <p className="mt-1 text-[11px] text-muted-foreground">כל יצירה, שמירה והערה נשמרות</p>
+          </div>
+          <ScrollArea className="flex-1">
+            <div className="space-y-3 p-3">
+              {(getBriefText(selected) || getLinkedCopyText(selected)) && (
+                <Collapsible defaultOpen={false}>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs font-semibold hover:bg-muted/50">
+                    <span>בריף וקופי משויך</span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-60 transition-transform [[data-state=open]_&]:rotate-180" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 space-y-2">
+                    {getBriefText(selected) && (
+                      <Card className="p-3">
+                        <Badge variant="secondary" className="mb-2">בריף מקור</Badge>
+                        <p className="text-xs leading-relaxed whitespace-pre-wrap">{getBriefText(selected)}</p>
+                      </Card>
+                    )}
+                    {getLinkedCopyText(selected) && (
+                      <Card className="p-3">
+                        <Badge variant="outline" className="mb-2 gap-1"><PenLine className="h-3 w-3" />קופי משויך</Badge>
+                        <p className="text-xs leading-relaxed whitespace-pre-wrap">{getLinkedCopyText(selected)}</p>
+                        {selected?.payload?.linked_copy_title && (
+                          <p className="mt-2 text-[10px] text-muted-foreground">מקור: {String(selected.payload.linked_copy_title)}</p>
+                        )}
+                      </Card>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
 
-      <ManualCreativeDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenantId} defaultClientId={clientId} onCreated={async (id) => { setSelectedId(id); setCreateOpen(false); await refresh(); }} />
-      {selected && <CreativeAIDialog open={aiOpen} onClose={() => setAiOpen(false)} item={selected} hasStoryboard={frames.length > 0} onCompleted={async () => { setAiOpen(false); setSelectedFrameId(null); await refresh(); }} />}
-    </div>
+              {selectedVariation && (
+                <Card className="overflow-hidden p-0 ring-2 ring-pink-400">
+                  {selectedVariation.imageUrl && (
+                    <img src={selectedVariation.imageUrl} alt={selectedVariation.name} className="aspect-video w-full object-cover" />
+                  )}
+                  <div className="p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <Badge>גרסה נוכחית</Badge>
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(selectedVariation.createdAt).toLocaleString("he-IL")}
+                      </span>
+                    </div>
+                    <div className="text-xs font-semibold">{selectedVariation.name}</div>
+                    {selectedVariation.comments.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {selectedVariation.comments.slice(-3).map((comment) => (
+                          <div key={comment.id} className="rounded-md bg-muted/60 px-2 py-1 text-[10px] leading-relaxed">
+                            {comment.text}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+
+              {(variations.filter((v) => v.id !== selectedVariationId).length > 0 || (assetVersions as CreativeAssetRow[]).length > 0) && (
+                <Collapsible defaultOpen={false}>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs font-semibold hover:bg-muted/50">
+                    <span>
+                      גרסאות ישנות
+                      ({variations.filter((v) => v.id !== selectedVariationId).length + (assetVersions as CreativeAssetRow[]).length})
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-60 transition-transform [[data-state=open]_&]:rotate-180" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 space-y-2">
+                    {variations.filter((variation) => variation.id !== selectedVariationId).map((variation, index) => (
+                      <Card
+                        key={variation.id}
+                        className="cursor-pointer overflow-hidden p-0 hover:bg-muted/20"
+                        onClick={() => setSelectedVariationId(variation.id)}
+                      >
+                        {variation.imageUrl && (
+                          <img src={variation.imageUrl} alt={variation.name} className="aspect-video w-full object-cover" />
+                        )}
+                        <div className="p-3">
+                          <div className="mb-2 flex items-center justify-between">
+                            <Badge variant="outline">גרסה {index + 1}</Badge>
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(variation.createdAt).toLocaleString("he-IL")}
+                            </span>
+                          </div>
+                          <div className="text-xs font-semibold">{variation.name}</div>
+                        </div>
+                      </Card>
+                    ))}
+                    {(assetVersions as CreativeAssetRow[]).map((asset, index) => (
+                      <Card key={asset.id} className="p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <Badge variant="outline">שמירה {(assetVersions as CreativeAssetRow[]).length - index}</Badge>
+                          <span className="text-[10px] text-muted-foreground">{new Date(asset.created_at).toLocaleString("he-IL")}</span>
+                        </div>
+                        {asset.meta?.source === "manual_edit" && <div className="text-[10px] text-muted-foreground">עריכה ידנית</div>}
+                      </Card>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {selected && variations.length === 0 && projectType === "static" && (
+                <div className="py-8 text-center text-xs text-muted-foreground">הגרסה הראשונה תופיע כאן</div>
+              )}
+            </div>
+          </ScrollArea>
+
+          {variationDraft && (
+            <div className="border-t p-3">
+              <Label className="flex items-center gap-1 text-xs"><MessageSquare className="h-3.5 w-3.5" />הערה לגרסה הנוכחית</Label>
+              <Textarea
+                className="mt-2 min-h-16 text-xs"
+                value={commentDraft}
+                onChange={(event) => setCommentDraft(event.target.value)}
+                placeholder="פידבק ללקוח, לצוות או לכרמן..."
+              />
+              <Button size="sm" variant="outline" className="mt-2 w-full" onClick={addComment} disabled={!commentDraft.trim()}>
+                שמור הערה
+              </Button>
+            </div>
+          )}
+        </aside>
+      </div>
+
+      <ManualCreativeDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        tenantId={tenantId}
+        clientFilter={clientFilter}
+        defaultClientId={clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null}
+        onClientChange={onClientChange}
+        onCreated={async (id, createdClientId) => {
+          if (onClientChange && createdClientId !== undefined) {
+            const filterClient = clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null;
+            if (createdClientId !== filterClient) onClientChange(createdClientId);
+          }
+          setSelectedId(id);
+          setWorkspaceTab("project");
+          setCreateOpen(false);
+          await refresh();
+        }}
+      />
+
+      <Dialog open={linkCopyOpen} onOpenChange={(value) => !value && setLinkCopyOpen(false)}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader><DialogTitle>שיוך קופי ממחלקת הקופי</DialogTitle></DialogHeader>
+          <ScrollArea className="max-h-80">
+            <div className="space-y-2 py-2">
+              {copyItems.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  {linkCopyClientFilter ? "אין פריטי קופי זמינים ללקוח הזה" : "בחר פרויקט עם לקוח משויך כדי לשייך קופi"}
+                </p>
+              ) : copyItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => void linkCopyFromItem(item)}
+                  className="w-full rounded-xl border p-3 text-right hover:bg-muted/50"
+                >
+                  <div className="text-sm font-semibold">{item.title || "ללא כותרת"}</div>
+                  <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{String(item.payload?.copy_text ?? "")}</p>
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function CreativeAIDialog({ open, onClose, item, hasStoryboard, onCompleted }: { open: boolean; onClose: () => void; item: CreativeItem; hasStoryboard: boolean; onCompleted: () => Promise<void> }) {
-  const [mode, setMode] = useState<"autopilot" | "fill" | "brief">("autopilot");
-  const [prompt, setPrompt] = useState("");
-  const [frameCount, setFrameCount] = useState("4");
-  const [running, setRunning] = useState(false);
-  const run = async () => {
-    setRunning(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("marketing-creative-plan", { body: { item_id: item.id, prompt: prompt.trim(), mode, frame_count: Number(frameCount) } });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      toast.success(`כרמן בנתה קונספט ו-${data.frames?.length ?? 0} סצנות מלאות`);
-      await onCompleted();
-    } catch (error: unknown) { toast.error(errorMessage(error, "כרמן לא הצליחה לבנות את ה-storyboard")); } finally { setRunning(false); }
-  };
-  const modes = [
-    { id: "autopilot" as const, title: "כרמן עושה הכול", description: "פרומפט אחד → קונספט, hook, סצנות, שוטים, טקסט וקריינות" },
-    { id: "brief" as const, title: "מתוך הבריף", description: "כרמן הופכת את הבריף והקופי הקיימים ל-storyboard מלא" },
-    { id: "fill" as const, title: "מילוי ושיפור AI", description: "שומרת על מה שבנית ומשלימה שדות חסרים או חלשים", disabled: !hasStoryboard },
-  ];
-  return <Dialog open={open} onOpenChange={(value) => !value && onClose()}><DialogContent className="max-w-2xl" dir="rtl"><DialogHeader><DialogTitle className="flex items-center gap-2"><WandSparkles className="h-5 w-5 text-pink-500" />עבודה עם כרמן — Skin קריאייטיב</DialogTitle></DialogHeader><div className="grid gap-5 py-2"><div className="grid grid-cols-3 gap-2">{modes.map((option) => <button key={option.id} disabled={option.disabled} onClick={() => setMode(option.id)} className={cn("rounded-xl border p-3 text-right transition-all", mode === option.id ? "border-pink-500 bg-pink-50 ring-2 ring-pink-500/10 dark:bg-pink-950/20" : "hover:bg-muted/50", option.disabled && "cursor-not-allowed opacity-40")}><div className="text-xs font-bold">{option.title}</div><div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{option.description}</div></button>)}</div><div><Label>{mode === "autopilot" ? "מה אתה רוצה שכרמן תיצור?" : "הנחיות נוספות לכרמן (לא חובה)"}</Label><Textarea className="mt-1 min-h-32" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === "autopilot" ? "לדוגמה: סרטון UGC חד ומשעשע שמתחיל בכאב של בעל העסק, שובר ציפייה ומציג את המוצר כפתרון. אל תיראה כמו פרסומת AI גנרית." : "דגשים, השראות, דברים שחייבים להופיע או אסור להמציא"} /></div><div className="flex items-end gap-3"><div className="w-40"><Label>מספר סצנות</Label><Select value={frameCount} onValueChange={setFrameCount}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{[3,4,5,6,8].map((count) => <SelectItem key={count} value={String(count)}>{count} סצנות</SelectItem>)}</SelectContent></Select></div><div className="flex-1 rounded-lg bg-muted/60 px-3 py-2 text-[11px] text-muted-foreground">כרמן משתמשת בבריף, בקופי, במידע על הלקוח וב־Skin <b>social_media</b>. אחרי היצירה אפשר לערוך ידנית כל פרט וליצור פריימים.</div></div><Button onClick={run} disabled={running || (mode === "autopilot" && !prompt.trim())} className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600">{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}{running ? "כרמן בונה קונספט ו-storyboard..." : mode === "fill" ? "השלימי ושפרי את ה-storyboard" : "בני קונספט ו-storyboard מלא"}</Button></div></DialogContent></Dialog>;
-}
-
-function ManualCreativeDialog({ open, onClose, tenantId, defaultClientId, onCreated }: { open: boolean; onClose: () => void; tenantId: string; defaultClientId?: string; onCreated: (id: string) => void }) {
+function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultClientId, onClientChange, onCreated }: {
+  open: boolean;
+  onClose: () => void;
+  tenantId: string;
+  clientFilter: MarketingClientFilter;
+  defaultClientId?: string | null;
+  onClientChange?: (id: string | null) => void;
+  onCreated: (id: string, createdClientId: string | null) => void;
+}) {
+  const [mode, setMode] = useState<"manual" | "from_copy">("manual");
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
-  const [format, setFormat] = useState("9:16");
+  const [format, setFormat] = useState("1:1");
+  const [projectType, setProjectType] = useState<CreativeProjectType>("static");
+  const [copyText, setCopyText] = useState("");
+  const [selectedCopyId, setSelectedCopyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [assignedClientId, setAssignedClientId] = useState<string | null>(defaultClientId ?? null);
-  useEffect(() => { if (open) setAssignedClientId(defaultClientId ?? null); }, [defaultClientId, open]);
+  const clientLocked = !!clientFilter && clientFilter !== ALL_CLIENTS_FILTER;
+
+  const { data: copyItems = [] } = useQuery({
+    queryKey: ["creative-create-copy-items", assignedClientId, tenantId],
+    enabled: open && mode === "from_copy" && !!assignedClientId,
+    queryFn: async () => {
+      let query = supabase
+        .from("marketing_work_items")
+        .select("id,title,payload,updated_at")
+        .eq("tenant_id", tenantId)
+        .order("updated_at", { ascending: false });
+      query = applyClientFilter(query, assignedClientId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return ((data ?? []) as CreativeItem[]).filter((item) => isLinkableCopyItem(item));
+    },
+  });
+
+  const selectedCopyItem = copyItems.find((item) => item.id === selectedCopyId) ?? null;
+
+  useEffect(() => {
+    if (open) {
+      setAssignedClientId(defaultClientId ?? null);
+      setProjectType("static");
+      setFormat("1:1");
+      setMode("manual");
+      setSelectedCopyId(null);
+      setTitle("");
+      setBrief("");
+      setCopyText("");
+    }
+  }, [defaultClientId, open]);
+
+  useEffect(() => {
+    if (mode !== "from_copy" || !selectedCopyItem) return;
+    setTitle(selectedCopyItem.title?.trim() || "קריאייטיב מקופי");
+    setBrief(String(selectedCopyItem.payload?.brief_text ?? ""));
+    setCopyText(String(selectedCopyItem.payload?.copy_text ?? ""));
+  }, [mode, selectedCopyItem]);
+
+  useEffect(() => {
+    if (projectType === "video" && format === "1:1") setFormat("9:16");
+  }, [projectType, format]);
+
+  const canCreate = mode === "manual"
+    ? !!title.trim()
+    : !!assignedClientId && !!selectedCopyId && !!title.trim();
+
+  const createHint = !canCreate && !saving
+    ? mode === "from_copy" && !assignedClientId
+      ? "בחר לקוח (לא תוכן כללי) כדי לשייך פרויקט קופי"
+      : mode === "from_copy" && !selectedCopyId
+        ? "בחר פרויקט קופי מהרשימה"
+        : !title.trim()
+          ? "הזן שם לפרויקט"
+          : null
+    : null;
+
   const create = async () => {
-    if (!title.trim() || !brief.trim()) return;
+    if (!canCreate) return;
     setSaving(true);
     try {
       let pipelineId: string | null = null;
       let stageId: string | null = null;
       if (assignedClientId) {
         const pipeline = await ensurePipelineForClient({ clientId: assignedClientId, tenantId, track: "campaigns" });
-        const { data: stages, error: stageError } = await supabase.from("marketing_pipeline_stages").select("id,stage_type").eq("pipeline_id", pipeline.id);
+        const { data: stages, error: stageError } = await supabase
+          .from("marketing_pipeline_stages")
+          .select("id,stage_type")
+          .eq("pipeline_id", pipeline.id);
         if (stageError) throw stageError;
         pipelineId = pipeline.id;
         stageId = stages?.find((stage) => stage.stage_type === "creative")?.id ?? null;
         if (!stageId) throw new Error("שלב הקריאייטיב לא נמצא");
       }
-      const { data, error } = await supabase.from("marketing_work_items").insert({ tenant_id: tenantId, client_id: assignedClientId, pipeline_id: pipelineId, current_stage_id: stageId, title: title.trim(), status: "draft", target_channel: "creative", payload: { brief_text: brief.trim(), format, department: "creative", intake_source: "manual" } }).select("id").single();
+      const linkedCopy = mode === "from_copy" ? selectedCopyItem : null;
+      const payload: Record<string, unknown> = {
+        brief_text: brief.trim() || String(linkedCopy?.payload?.brief_text ?? "") || undefined,
+        copy_text: copyText.trim() || undefined,
+        format,
+        project_type: projectType,
+        department: "creative",
+        intake_source: mode === "from_copy" ? "copy_link" : "manual",
+        handoff_from: mode === "from_copy" ? "copy" : undefined,
+        linked_copy_item_id: linkedCopy?.id,
+        linked_copy_title: linkedCopy?.title,
+        content_type: linkedCopy?.payload?.content_type,
+        channel: linkedCopy?.payload?.channel,
+        instructions: linkedCopy?.payload?.instructions,
+      };
+      if (projectType === "video") payload.storyboard = [makeStoryboardFrame(1)];
+
+      const { data, error } = await supabase.from("marketing_work_items").insert({
+        tenant_id: tenantId,
+        client_id: assignedClientId,
+        pipeline_id: pipelineId,
+        current_stage_id: stageId,
+        title: title.trim(),
+        status: "draft",
+        target_channel: projectType === "video" ? "video" : "creative",
+        payload,
+      }).select("id").single();
       if (error) throw error;
-      toast.success("הבריף נכנס למחלקת הקריאייטיב");
-      setTitle(""); setBrief("");
-      onCreated(data.id);
-    } catch (error: unknown) { toast.error(errorMessage(error, "יצירת הפרויקט נכשלה")); } finally { setSaving(false); }
+      toast.success(mode === "from_copy" ? "פרויקט קריאייטיב נוצר ושויך לקופי הקיים" : "הפרויקט נכנס למחלקת הקריאייטיב");
+      onCreated(data.id, assignedClientId);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "יצירת הפרויקט נכשלה"));
+    } finally {
+      setSaving(false);
+    }
   };
-  return <Dialog open={open} onOpenChange={(value) => !value && onClose()}><DialogContent className="max-w-xl" dir="rtl"><DialogHeader><DialogTitle>פרויקט קריאייטיב חדש</DialogTitle></DialogHeader><div className="grid gap-4 py-2"><div><Label>שיוך</Label><div className="mt-1"><ClientSelector tenantId={tenantId} value={assignedClientId} onChange={setAssignedClientId} allowGeneral generalLabel="תוכן כללי — ללא לקוח" /></div></div><div><Label>שם הפרויקט</Label><Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="לדוגמה: סרטון השקת השירות" /></div><div><Label>פורמט</Label><Select value={format} onValueChange={setFormat}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="9:16">סטורי / רילס 9:16</SelectItem><SelectItem value="1:1">פוסט מרובע 1:1</SelectItem><SelectItem value="4:5">פיד 4:5</SelectItem><SelectItem value="16:9">וידאו רחב 16:9</SelectItem></SelectContent></Select></div><div><Label>בריף ויזואלי</Label><Textarea className="mt-1 min-h-36" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, מסר, סגנון, רפרנסים, מגבלות ומה חייב להופיע" /></div><Button onClick={create} disabled={saving || !title.trim() || !brief.trim()} className="gap-2 bg-pink-600 hover:bg-pink-700">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}פתח פרויקט</Button></div></DialogContent></Dialog>;
+
+  return (
+    <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
+      <DialogContent className="flex max-h-[min(90vh,760px)] max-w-2xl flex-col gap-0 overflow-hidden p-0" dir="rtl">
+        <DialogHeader className="shrink-0 border-b px-6 py-4">
+          <DialogTitle>פרויקט קריאייטיב חדש</DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="grid gap-4 px-6 py-4">
+          <Tabs value={mode} onValueChange={(value) => setMode(value as "manual" | "from_copy")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="manual">בריף ידני</TabsTrigger>
+              <TabsTrigger value="from_copy">מפרויקט קיים בקופי</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div>
+            <Label>שיוך לקוח</Label>
+            <div className="mt-1">
+              {clientLocked ? (
+                <ClientSelector tenantId={tenantId} value={assignedClientId} onChange={() => undefined} disabled />
+              ) : (
+                <ClientSelector
+                  tenantId={tenantId}
+                  value={assignedClientId}
+                  onChange={(id) => { setAssignedClientId(id); setSelectedCopyId(null); }}
+                  allowGeneral={mode === "manual"}
+                  generalLabel="תוכן כללי — ללא לקוח"
+                />
+              )}
+            </div>
+            {clientLocked && (
+              <p className="mt-2 text-xs text-muted-foreground">הפרויקט ייווצר עבור הלקוח שנבחר במסנן ההדר</p>
+            )}
+            {mode === "from_copy" && !assignedClientId && (
+              <p className="mt-2 text-xs text-amber-600">מצב שיוך לקופי דורש בחירת לקוח ספציפי</p>
+            )}
+          </div>
+          {mode === "from_copy" ? (
+            <div>
+              <Label>פרויקט קופי לשיוך</Label>
+              <ScrollArea className="mt-2 max-h-40 rounded-xl border">
+                <div className="space-y-2 p-2">
+                  {!assignedClientId ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">בחר לקוח קודם</p>
+                  ) : copyItems.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">אין פרויקטי קופי ללקוח הזה</p>
+                  ) : copyItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedCopyId(item.id)}
+                      className={cn(
+                        "w-full rounded-xl border p-3 text-right transition-colors",
+                        selectedCopyId === item.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "hover:bg-muted/50",
+                      )}
+                    >
+                      <div className="text-sm font-semibold">{item.title || "ללא כותרת"}</div>
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{String(item.payload?.copy_text ?? item.payload?.brief_text ?? "")}</p>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          ) : null}
+          <div><Label>שם הפרויקט</Label><Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="לדוגמה: מודעת השקה לפייסבוק" /></div>
+          <div>
+            <Label>סוג פרויקט</Label>
+            <Select value={projectType} onValueChange={(value: CreativeProjectType) => setProjectType(value)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="בחר סוג פרויקט" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="static">מודעה / גרפיקה סטטית</SelectItem>
+                <SelectItem value="video">וידאו / storyboard</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>פורמט</Label>
+            <Select value={format} onValueChange={setFormat}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="9:16">סטורי / רילס 9:16</SelectItem>
+                <SelectItem value="1:1">פוסט מרובע 1:1</SelectItem>
+                <SelectItem value="4:5">פיד 4:5</SelectItem>
+                <SelectItem value="16:9">וידאו רחב 16:9</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {mode === "manual" ? (
+            <>
+              <div><Label>בריף / חומר גלם (אופציונלי)</Label><Textarea className="mt-1 min-h-24" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, סגנון, רפרנסים, מגבלות" /></div>
+              <div><Label>קופי משויך (אופציונלי)</Label><Textarea className="mt-1 min-h-20" value={copyText} onChange={(event) => setCopyText(event.target.value)} placeholder="אפשר להדביק קופi ידנית או לשייך אחר כך ממחלקת הקופi" /></div>
+            </>
+          ) : selectedCopyItem ? (
+            <div className="max-h-32 overflow-y-auto rounded-xl border bg-muted/20 p-3 text-sm">
+              <div className="font-semibold">קופi שיושב לפרויקט</div>
+              <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{copyText || "אין טקסט קופi"}</p>
+              {brief ? <p className="mt-3 whitespace-pre-wrap text-xs text-muted-foreground">{brief}</p> : null}
+            </div>
+          ) : null}
+          </div>
+        </ScrollArea>
+        <div className="shrink-0 border-t bg-background px-6 py-4">
+          {createHint ? <p className="mb-2 text-xs text-amber-600">{createHint}</p> : null}
+          <Button onClick={create} disabled={saving || !canCreate} className="w-full gap-1.5 bg-pink-600 hover:bg-pink-700">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {mode === "from_copy" ? "צור קריאייטיב מקופi קיים" : "הכנס למחלקת קריאייטיב"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StatusDot({ status }: { status: string }) {
+  const config = status === "waiting_approval"
+    ? { icon: Clock3, className: "text-amber-500" }
+    : status === "approved" || status === "published"
+      ? { icon: Check, className: "text-emerald-500" }
+      : status === "archived"
+        ? { icon: Archive, className: "text-gray-400" }
+        : { icon: Sparkles, className: "text-pink-500" };
+  const Icon = config.icon;
+  return <Icon className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", config.className)} />;
 }

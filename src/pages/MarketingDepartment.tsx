@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { ClientSelector } from "@/components/marketing/ClientSelector";
+import { ALL_CLIENTS_FILTER, clientFilterToParam, parseClientFilter } from "@/components/marketing/clientFilter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +51,7 @@ const DEPARTMENTS: Array<{
     id: "creative",
     label: "מחלקת קריאייטיב",
     tab: "קריאייטיב",
-    description: "קונספטים, storyboard, גרפיקה וסרטונים במקום אחד",
+    description: "בריף, וריאציות ויזואליות, שכבות טקסט ואישור",
     icon: Palette,
     gradient: "from-pink-500 to-rose-700",
     status: "active",
@@ -94,20 +96,25 @@ export default function MarketingDepartment() {
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
   const selectedClientId = searchParams.get("client") ?? clientId;
+  const clientFilter = parseClientFilter(selectedClientId === clientId ? clientId : searchParams.get("client"));
 
   useEffect(() => {
     if (clientId && department) navigate(`/t/${tenantSlug}/marketing/department/${department}?client=${clientId}`, { replace: true });
   }, [clientId, department, navigate, tenantSlug]);
 
-  const selectClient = (id: string | null) => department
-    ? navigate(`/t/${tenantSlug}/marketing/department/${department}${id ? `?client=${id}` : ""}`)
-    : navigate(`/t/${tenantSlug}/marketing${id ? `?client=${id}` : ""}`);
+  const selectClient = (id: string | null) => {
+    const param = clientFilterToParam(id);
+    const suffix = param ? `?client=${param}` : "";
+    if (department) navigate(`/t/${tenantSlug}/marketing/department/${department}${suffix}`);
+    else navigate(`/t/${tenantSlug}/marketing${suffix}`);
+  };
   const selectDepartment = (id: DepartmentId) => {
     if (id === "analytics") {
       navigate(`/t/${tenantSlug}/dynamic-tables`);
       return;
     }
-    navigate(`/t/${tenantSlug}/marketing/department/${id}${selectedClientId ? `?client=${selectedClientId}` : ""}`);
+    const param = clientFilterToParam(clientFilter);
+    navigate(`/t/${tenantSlug}/marketing/department/${id}${param ? `?client=${param}` : ""}`);
   };
 
   return (
@@ -123,7 +130,10 @@ export default function MarketingDepartment() {
             "my-1.5 shrink-0 rounded-md px-2 text-base font-semibold transition-colors",
             !department ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
-          onClick={() => navigate(`/t/${tenantSlug}/marketing${selectedClientId ? `?client=${selectedClientId}` : ""}`)}
+          onClick={() => {
+            const param = clientFilterToParam(clientFilter);
+            navigate(`/t/${tenantSlug}/marketing${param ? `?client=${param}` : ""}`);
+          }}
         >
           שיווק
         </button>
@@ -151,6 +161,23 @@ export default function MarketingDepartment() {
             );
           })}
         </nav>
+        {department && tenantId && (
+          <>
+            <div className="mx-1 my-auto h-5 w-px shrink-0 bg-border" />
+            <div className="my-1.5 flex shrink-0 items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">תצוגה:</span>
+              <ClientSelector
+                tenantId={tenantId}
+                value={clientFilter}
+                onChange={selectClient}
+                allowGeneral
+                allowAllClients
+                generalLabel="תוכן כללי"
+                allClientsLabel="כל הלקוחות"
+              />
+            </div>
+          </>
+        )}
       </header>
 
       {!department ? (
@@ -158,16 +185,16 @@ export default function MarketingDepartment() {
       ) : department === "copy" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-violet-500" /></div>}>
           <div className="flex min-h-0 flex-1">
-            <CopyDepartment clientId={selectedClientId ?? undefined} tenantId={tenantId} onClientChange={selectClient} />
+            <CopyDepartment clientFilter={clientFilter} tenantId={tenantId} onClientChange={selectClient} />
           </div>
         </Suspense>
       ) : department === "creative" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-pink-500" /></div>}>
-          <CreativeDepartment clientId={selectedClientId ?? undefined} tenantId={tenantId} onClientChange={selectClient} />
+          <CreativeDepartment clientFilter={clientFilter} tenantId={tenantId} onClientChange={selectClient} />
         </Suspense>
       ) : department === "seo" && tenantId ? (
         <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-emerald-500" /></div>}>
-          <SeoGeoDepartment clientId={selectedClientId} tenantId={tenantId} onClientChange={selectClient} />
+          <SeoGeoDepartment clientFilter={clientFilter} tenantId={tenantId} />
         </Suspense>
       ) : (
         <ComingSoon department={department} onBack={() => navigate(`/t/${tenantSlug}/marketing`)} />

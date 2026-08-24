@@ -6,6 +6,8 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
+import { applyClientFilter, ALL_CLIENTS_FILTER, type MarketingClientFilter } from "@/components/marketing/clientFilter";
+import { isCopyDepartmentItem } from "@/components/marketing/departmentFilters";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +48,7 @@ import {
 } from "lucide-react";
 
 interface Props {
-  clientId?: string;
+  clientFilter: MarketingClientFilter;
   tenantId: string;
   onClientChange: (id: string | null) => void;
 }
@@ -178,7 +180,7 @@ const extractCopyDocument = (output: string) => {
   return body.replace(/^```(?:markdown|md)?\s*/i, "").replace(/\s*```$/, "").trim();
 };
 
-export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
+export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -193,14 +195,16 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ["copy-department-items", tenantId],
+    queryKey: ["copy-department-items", clientFilter, tenantId],
     queryFn: async () => {
+      let query = supabase
+        .from("marketing_work_items")
+        .select("id,title,status,payload,current_stage_id,target_channel,client_id,created_at,updated_at")
+        .eq("tenant_id", tenantId)
+        .order("updated_at", { ascending: false });
+      query = applyClientFilter(query, clientFilter);
       const [{ data, error }, { data: copyStages, error: stageError }] = await Promise.all([
-        supabase
-          .from("marketing_work_items")
-          .select("id,title,status,payload,current_stage_id,target_channel,client_id,created_at,updated_at")
-          .eq("tenant_id", tenantId)
-          .order("updated_at", { ascending: false }),
+        query,
         supabase
           .from("marketing_pipeline_stages")
           .select("id")
@@ -211,14 +215,10 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
       if (stageError) throw stageError;
       const copyStageIds = new Set((copyStages ?? []).map((stage) => stage.id));
       return ((data ?? []) as CopyItem[]).filter((item) => {
-        const payload = item.payload ?? {};
-        return (
-          (!!item.current_stage_id && copyStageIds.has(item.current_stage_id)) ||
-          payload.department === "copy" ||
-          !!payload.brief_text ||
-          !!payload.copy_text ||
-          !!payload.copy_chat
-        );
+        const copyStageId = item.current_stage_id && copyStageIds.has(item.current_stage_id)
+          ? item.current_stage_id
+          : undefined;
+        return isCopyDepartmentItem(item, copyStageId);
       });
     },
   });
@@ -265,7 +265,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
   }, [chat.length, copyText, sending]);
 
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["copy-department-items", tenantId] });
+    await queryClient.invalidateQueries({ queryKey: ["copy-department-items", clientFilter, tenantId] });
   };
 
   const sendPrompt = async () => {
@@ -384,9 +384,31 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
       if (stageError) throw stageError;
       const creativeStage = stages?.find((stage) => stage.stage_type === "creative");
       if (!creativeStage) throw new Error("שלב קריאייטיב לא נמצא");
+      const nextPayload = {
+        ...(selected.payload ?? {}),
+        department: "creative",
+        project_type: selected.payload?.project_type ?? "static",
+        handoff_from: "copy",
+        handoff_at: new Date().toISOString(),
+        linked_copy_item_id: selected.id,
+        linked_copy_title: selected.title,
+        copy_text: selected.payload?.copy_text ?? "",
+        brief_text: selected.payload?.brief_text ?? "",
+        content_type: selected.payload?.content_type,
+        channel: selected.payload?.channel,
+        instructions: selected.payload?.instructions,
+        notes: selected.payload?.notes,
+        format: selected.payload?.format ?? "1:1",
+        intake_source: "copy_handoff",
+      };
       const { error } = await supabase
         .from("marketing_work_items")
-        .update({ current_stage_id: creativeStage.id, status: "draft", pipeline_id: pipeline.id })
+        .update({
+          current_stage_id: creativeStage.id,
+          status: "draft",
+          pipeline_id: pipeline.id,
+          payload: nextPayload,
+        })
         .eq("id", selected.id)
         .eq("tenant_id", tenantId);
       if (error) throw error;
@@ -658,7 +680,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         tenantId={tenantId}
-        defaultClientId={clientId}
+        defaultClientId={clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null}
         onCreated={async (id) => {
           setSelectedId(id);
           setCreateOpen(false);
