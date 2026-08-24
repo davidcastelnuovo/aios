@@ -270,8 +270,9 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
       // phrases in command_text or resolveActiveSkills will load those skins.
       const studioAddon = [
         "זה שרשור סטודיו קופי נפרד מהצ׳ט הראשי של כרמן.",
-        "עבדי רק כקופירייטרית (סקין copywriter) על הפרויקט הזה. כתבי בעברית טבעית. אל תמציאי מחירים, תוצאות או פיצ'רים.",
+        "עבדי רק כקופירייטרית (סקין copywriter) על הפרויקט הזה. כתבי בעברית טבעית, לא תרגום מאנגלית. אל תמציאי מחירים, תוצאות, פיצ'רים או הוכחות חברתיות.",
         "משימות רקע אחרות של כרמן רצות במקביל בשיחות ובקרונים נפרדים — אל תערבבי אותן לכאן ואל תריצי אותן בשרשור הזה.",
+        "בהירות לפני חכמות. תועלת לפני פיצ'ר. כל וריאציה = זווית שונה (לא אותו משפט בניסוח אחר).",
         `פרויקט: ${selected.title || "בלי שם"}`,
         `סוג תוצר: ${type}`,
         clientName && `לקוח: ${clientName}`,
@@ -279,7 +280,13 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
         website && `אתר הלקוח: ${website}`,
         brief && `בריף:\n${brief}`,
         recordingTitle && `הקלטה משויכת: ${recordingTitle}`,
-        "החזירי קודם שורת ---COPY--- ואחריה את המסמך המלא במרקדאון, בלי הקדמות.",
+        "פורמט פלט חובה:",
+        "---COPY---",
+        "וריאציה N — [framework: AIDA/PAS/BAB/4Ps] — [זווית]",
+        "כותרת:",
+        "גוף:",
+        "CTA:",
+        "רציונל: משפט אחד מה בודקים מול שאר הווריאציות.",
       ].filter(Boolean).join("\n");
       const commandText = [
         `כתבי קופי לפרויקט "${selected.title || "בלי שם"}" (${type}).`,
@@ -425,7 +432,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/20" dir="rtl">
-      <aside className="flex w-[280px] min-w-0 shrink-0 flex-col overflow-hidden border-l bg-background">
+      <aside className="flex w-[280px] min-w-0 shrink-0 flex-col overflow-hidden border-e bg-background">
         <div className="flex items-center gap-2 px-3 py-3">
           <Button className="h-9 w-full min-w-0 justify-start gap-2 rounded-lg bg-foreground text-background hover:bg-foreground/90" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4 shrink-0" />פרויקט חדש
@@ -471,8 +478,8 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                     />
                   ) : (
                     <button type="button" onClick={() => setSelectedId(item.id)} className="block w-full min-w-0 overflow-hidden text-right">
-                      <div className="block w-full truncate text-[13px] font-medium" dir="rtl" title={title}>{title}</div>
-                      <div className="mt-0.5 block w-full truncate text-[11px] text-muted-foreground" dir="rtl">
+                      <div className="block w-full truncate text-[13px] font-medium [unicode-bidi:plaintext]" dir="auto" title={title}>{title}</div>
+                      <div className="mt-0.5 block w-full truncate text-[11px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">
                         {owner?.name || "ללא לקוח"} · {typeLabel(asText(item.payload?.content_type) || "posts")} · {timeAgo(item.updated_at)}
                       </div>
                     </button>
@@ -522,9 +529,9 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white">
                 <PenLine className="h-4 w-4" />
               </div>
-              <div className="min-w-0 flex-1 overflow-hidden">
-                <div className="truncate text-sm font-semibold" dir="rtl" title={selected.title ?? ""}>{selected.title}</div>
-                <div className="truncate text-[11px] text-muted-foreground" dir="rtl">
+              <div className="min-w-0 flex-1 overflow-hidden text-right">
+                <div className="truncate text-sm font-semibold [unicode-bidi:plaintext]" dir="auto" title={selected.title ?? ""}>{selected.title}</div>
+                <div className="truncate text-[11px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">
                   {agencyName ? `${agencyName} · ` : ""}{clientName || "לא משויך ללקוח"} · {typeLabel(asText(selected.payload?.content_type) || "posts")} · כרמן · קופירייטר
                 </div>
               </div>
@@ -536,45 +543,48 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
               </Button>
             </header>
 
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-5 py-6">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-5 py-6" dir="rtl">
                 {chat.filter((turn) => turn.role === "user").map((turn, index) => (
                   <div key={`${turn.at}-${index}`} className="flex justify-start">
-                    <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-sm leading-relaxed">{turn.content}</div>
+                    <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-right text-sm leading-relaxed [unicode-bidi:plaintext]" dir="auto">{turn.content}</div>
                   </div>
                 ))}
                 {pendingPrompt && (
                   <div className="flex justify-start">
-                    <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-sm leading-relaxed">{pendingPrompt}</div>
+                    <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-right text-sm leading-relaxed [unicode-bidi:plaintext]" dir="auto">{pendingPrompt}</div>
                   </div>
                 )}
                 {sending && (
-                  <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-start gap-2 px-1 text-xs text-muted-foreground" dir="rtl">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    כרמן כותבת…
+                    <span>כרמן כותבת…</span>
                   </div>
                 )}
 
                 {copyText ? (
                   <div className="overflow-hidden rounded-2xl border bg-background shadow-sm">
-                    <div className="flex items-center justify-between border-b px-4 py-2 text-[11px] text-muted-foreground">
+                    <div className="flex items-center justify-between border-b px-4 py-2 text-[11px] text-muted-foreground" dir="rtl">
                       <span>הקופי — ניתן לערוך ישירות</span>
                       <Badge variant="outline" className="font-normal">כרמן · קופירייטר</Badge>
                     </div>
                     <CopyEditor key={`${selected.id}-${selected.updated_at}`} item={selected} tenantId={tenantId} onSaved={refresh} />
                   </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed bg-background/60 px-8 py-16 text-center">
+                ) : sending ? null : (
+                  <div className="rounded-2xl border border-dashed bg-background/60 px-8 py-16 text-center" dir="rtl">
                     <PenLine className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
                     <h2 className="text-lg font-semibold">פרויקט מוכן לכתיבה</h2>
-                    <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                      הצ׳ט מחובר לכרמן עם סקין הקופירייטר בשיחה מבודדת. פתחו הגדרות לבריף ושיוך, או כתבו למטה מה לכתוב.
+                    <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground [unicode-bidi:plaintext]">
+                      הצ׳ט מחובר לכרמן עם סקין הקופירייטר בשיחה מבודדת
+                    </p>
+                    <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-muted-foreground [unicode-bidi:plaintext]">
+                      פתחו הגדרות לבריף ושיוך, או כתבו למטה מה לכתוב
                     </p>
                   </div>
                 )}
                 <div ref={threadEndRef} />
               </div>
-            </ScrollArea>
+            </div>
 
             <div className="border-t bg-background px-5 py-3">
               <form
@@ -596,7 +606,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                       void sendPrompt();
                     }
                   }}
-                  placeholder={copyText ? "מה לשנות בקופי?" : "מה לכתוב? למשל: פוסט השקה לאינסטגרם, טון ישיר, CTA לשיחה"}
+                  placeholder={copyText ? "מה לשנות בקופי?" : "מה לכתוב? למשל: פוסט השקה לאינסטגרם, טון ישיר, קריאה לשיחה"}
                   className="min-h-[44px] max-h-36 flex-1 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
                   rows={1}
                 />
@@ -604,7 +614,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
               </form>
-              <p className="mx-auto mt-1.5 max-w-3xl px-1 text-[10px] text-muted-foreground">כרמן · סקין קופירייטר · שיחה נפרדת מהצ׳ט הראשי וממשימות הרקע</p>
+              <p className="mx-auto mt-1.5 max-w-3xl px-1 text-right text-[10px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">כרמן · סקין קופירייטר · שיחה נפרדת מהצ׳ט הראשי וממשימות הרקע</p>
             </div>
           </>
         ) : (
@@ -613,7 +623,7 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
               <PenLine className="h-7 w-7" />
             </div>
             <h2 className="text-xl font-semibold">מחלקת קופי</h2>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground">צרו פרויקט חדש כמו אייג׳נט. הקופי יופיע כאן לעריכה, והצ׳אט למטה ישפר אותו.</p>
+            <p className="mt-2 max-w-sm text-sm text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">צרו פרויקט חדש כמו אייג׳נט. הקופי יופיע כאן לעריכה, והצ׳אט למטה ישפר אותו.</p>
             <Button className="mt-5 gap-2" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />פרויקט חדש</Button>
           </div>
         )}
@@ -719,7 +729,7 @@ function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: str
           {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}שמור
         </Button>
       </div>
-      <div className="p-4" dir="rtl">
+      <div className="copy-bn p-4 [&_.bn-container]:[direction:rtl] [&_.bn-editor]:text-right [&_.bn-block-content]:text-right" dir="rtl">
         <BlockNoteView editor={editor} theme={dark ? "dark" : "light"} />
       </div>
     </div>
