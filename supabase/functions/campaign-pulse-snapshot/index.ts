@@ -178,6 +178,7 @@ async function deliverScopedPulseRecipients(
   plans: PulseDeliveryPlan[],
   previewPhone: string | null,
   skipPhones: Set<string>,
+  previewOnly = false,
 ): Promise<any[]> {
   const deliveries: any[] = []
   for (const plan of plans) {
@@ -205,6 +206,8 @@ async function deliverScopedPulseRecipients(
       })
     }
 
+    if (previewOnly) continue
+
     const queued = await queuePulseWhatsApp(supabase, tenantId, scopedDigest, recipientPhone)
     deliveries.push({
       type: plan.role,
@@ -229,6 +232,8 @@ Deno.serve(async (req) => {
   const deliveryRequested = body.deliver === true
   const manualDeliveryBypass =
     body.force_delivery === true && body.source === 'approved_manual_trigger'
+  const previewOnlyDelivery =
+    body.preview_only === true && body.source === 'approved_manual_trigger'
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
     .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
@@ -493,7 +498,7 @@ Deno.serve(async (req) => {
       )
 
       // Full-tenant digest to the configured management phone (e.g. Felix on DMM).
-      if (setting.campaign_pulse_phone) {
+      if (!previewOnlyDelivery && setting.campaign_pulse_phone) {
         sent = await queuePulseWhatsApp(supabase, tenantId, digest, setting.campaign_pulse_phone)
         if (!sent) {
           console.error('Failed to queue full campaign pulse via Carmen Direct')
@@ -527,10 +532,13 @@ Deno.serve(async (req) => {
           mergedPlans,
           setting.campaign_pulse_preview_phone || null,
           skipPhones,
+          previewOnlyDelivery,
         )
         scopedDeliveries.push(...recipientDeliveries)
         if (!sent) {
-          sent = recipientDeliveries.some((row) => row.type !== 'preview' && row.queued === true)
+          sent = previewOnlyDelivery
+            ? recipientDeliveries.some((row) => row.type === 'preview' && row.queued === true)
+            : recipientDeliveries.some((row) => row.type !== 'preview' && row.queued === true)
         }
       }
 
