@@ -35,6 +35,7 @@ export interface CalendarRecording {
   tenant_id: string;
   meeting_id?: string | null;
   meeting_topic?: string | null;
+  source?: string | null;
   start_time: string | null;
   duration?: number | null;
   host_email?: string | null;
@@ -130,11 +131,17 @@ function isMeaningfulEventTitle(title: string): boolean {
 }
 
 export function chooseCalendarRecordingMatch(
-  recording: Pick<CalendarRecording, "start_time" | "duration">,
+  recording: Pick<CalendarRecording, "start_time" | "duration" | "meeting_topic" | "source">,
   events: CalendarEventLike[],
   clients: CalendarClient[],
 ): CalendarRecordingMatch | null {
   if (!recording.start_time) return null;
+  const sourceAndTopic = normalizeCalendarMatchText(
+    `${recording.source || ""} ${recording.meeting_topic || ""}`,
+  );
+  if (/(?:google meet|google_meet|microsoft teams|teams|גוגל מיט|טימס)/i.test(sourceAndTopic)) {
+    return null;
+  }
   const recordingStart = new Date(recording.start_time).getTime();
   if (!Number.isFinite(recordingStart)) return null;
   const recordingEnd = recordingStart + Math.max(1, recording.duration || 1) * 60 * 1000;

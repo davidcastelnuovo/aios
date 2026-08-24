@@ -90,3 +90,19 @@ test("ignores non-Zoom, cancelled, all-day, distant, and generic events", () => 
     { ...zoomEvent(), summary: "Zoom Meeting" },
   ], clients), null);
 });
+
+test("never matches a known Google Meet or Teams recording to a Zoom event", () => {
+  assert.equal(chooseCalendarRecordingMatch({
+    start_time: "2026-08-24T07:00:00.000Z",
+    duration: 60,
+    meeting_topic: "Google Meet — כרמן",
+    source: "meeting_bot",
+  }, [zoomEvent()], clients), null);
+
+  assert.equal(chooseCalendarRecordingMatch({
+    start_time: "2026-08-24T07:00:00.000Z",
+    duration: 60,
+    meeting_topic: "פגישת צוות",
+    source: "teams",
+  }, [zoomEvent()], clients), null);
+});

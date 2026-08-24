@@ -11,6 +11,7 @@ export interface RecordingRow {
   id: string;
   tenant_id: string;
   meeting_id?: string | null;
+  source?: string | null;
   client_id: string | null;
   meeting_topic: string | null;
   start_time: string | null;

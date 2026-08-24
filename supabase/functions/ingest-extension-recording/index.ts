@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     // RLS-scoped read: enforces that the caller belongs to the recording's tenant.
     const { data: recording, error: recError } = await userClient
       .from("zoom_recordings")
-      .select("id, tenant_id, meeting_id, client_id, meeting_topic, start_time, duration, host_email, file_path, audio_file_path, audio_file_paths, transcription, calendar_event_id")
+      .select("id, tenant_id, meeting_id, source, client_id, meeting_topic, start_time, duration, host_email, file_path, audio_file_path, audio_file_paths, transcription, calendar_event_id")
       .eq("id", recording_id)
       .maybeSingle();
 

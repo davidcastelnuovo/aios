@@ -127,6 +127,8 @@ Deno.serve(async (req) => {
       const calendarMatch = chooseCalendarRecordingMatch({
         start_time: meeting.start_time || null,
         duration: meeting.duration || null,
+        meeting_topic: meeting.topic || null,
+        source: "zoom",
       }, calendarContext.events, calendarContext.clients);
 
       for (const file of recordingFiles) {

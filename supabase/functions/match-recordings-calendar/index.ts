@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     const { data: rows, error } = await admin
       .from("zoom_recordings")
-      .select("id, tenant_id, meeting_id, meeting_topic, start_time, duration, host_email, client_id, calendar_event_id")
+      .select("id, tenant_id, meeting_id, source, meeting_topic, start_time, duration, host_email, client_id, calendar_event_id")
       .eq("tenant_id", tenantId)
       .is("calendar_event_id", null)
       .gte("start_time", from.toISOString())
