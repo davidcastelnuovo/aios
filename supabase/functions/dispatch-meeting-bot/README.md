@@ -22,6 +22,16 @@
 אותו matcher משותף משמש גם הקלטות Recall, הקלטות Zoom webhook, משיכה ידנית
 מ-Zoom והקלטות התוסף.
 
+להשלמת הקלטות קיימות משתמשים ב-`match-recordings-calendar`. ברירת המחדל היא
+dry-run:
+
+```bash
+curl -X POST "$SUPABASE_URL/functions/v1/match-recordings-calendar" \
+  -H "Authorization: Bearer $USER_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant_id":"...","dry_run":true,"from":"2026-08-01T00:00:00Z"}'
+```
+
 ## סודות (Supabase Edge Functions)
 
 | Secret | חובה | תיאור |
