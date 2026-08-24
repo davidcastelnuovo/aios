@@ -30,6 +30,7 @@ interface Props {
   onChange: (frames: StoryboardFrame[]) => void;
   onSave: () => Promise<void>;
   onGenerateFrame: (frame: StoryboardFrame) => Promise<void>;
+  onGenerateAll?: () => Promise<void>;
   generating?: boolean;
   saving?: boolean;
   scenePanelOpen?: boolean;
@@ -72,6 +73,7 @@ export function CreativeStoryboardEditor({
   onChange,
   onSave,
   onGenerateFrame,
+  onGenerateAll,
   generating,
   saving,
   scenePanelOpen,
@@ -148,8 +150,14 @@ export function CreativeStoryboardEditor({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b px-4 py-2">
-        <span className="text-xs text-muted-foreground">Storyboard — לחץ על סצנה לעריכה</span>
+        <span className="text-xs text-muted-foreground">Storyboard עקבי — פריים 1 קובע סגנון, הבאים נוצרים מולו</span>
         <div className="flex gap-2">
+          {onGenerateAll && (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void onGenerateAll()} disabled={generating || frames.length === 0}>
+              {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+              צור הכל לפי סדר
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="gap-1.5" onClick={addFrame}><Plus className="h-3.5 w-3.5" />סצנה</Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void onSave()} disabled={saving}>
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}שמור
@@ -211,7 +219,7 @@ export function CreativeStoryboardEditor({
                   {frameDraft.imageUrl ? "צור וריאציה" : "צור פריים"}
                 </Button>
                 <p className="text-[10px] leading-relaxed text-muted-foreground">
-                  יצירת פריים דורשת תיאור ויזואלי או קריינות. התמונה נוצרת ב-gpt-image-1 (לפי פורמט הפרויקט) דרך Skin social_media.
+                  פריים 1 קובע את הסגנון (אנשים, תאורה, פלטה). פריימים הבאים נוצרים מולו כדי לשמור עקביות — לא קולאז׳ ולא איור. תאר רק מה משתנה בסצנה.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" size="sm" className="gap-1" onClick={duplicateFrame}><Copy className="h-3.5 w-3.5" />שכפל</Button>

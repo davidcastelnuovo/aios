@@ -30,6 +30,49 @@ export const getStoryboard = (payload: Record<string, unknown> | null | undefine
   });
 };
 
+export const DEFAULT_STORYBOARD_STYLE_LOCK = [
+  "VISUAL CONTINUITY BIBLE — every frame is the same commercial:",
+  "- Medium: photoreal cinematic photography only.",
+  "- Forbidden: illustration, infographic, collage, split-screen, comic, 3D arrows, stock montage, mixed art styles.",
+  "- Camera: 35mm, shallow depth of field, natural motivated lighting, same color grade.",
+  "- Palette: warm neutrals (cream, walnut, charcoal) plus one muted teal accent.",
+  "- Cast: same people, faces, age, and wardrobe if they already appeared.",
+  "- One continuous photographic moment per frame, same world and location family.",
+].join("\n");
+
+export const getStoryboardStyle = (payload: Record<string, unknown> | null | undefined): { lock: string; referenceImageUrl?: string } => {
+  const value = payload?.storyboard_style;
+  if (!value || typeof value !== "object") return { lock: DEFAULT_STORYBOARD_STYLE_LOCK };
+  const style = value as { lock?: unknown; referenceImageUrl?: unknown };
+  return {
+    lock: typeof style.lock === "string" && style.lock.trim() ? style.lock : DEFAULT_STORYBOARD_STYLE_LOCK,
+    referenceImageUrl: typeof style.referenceImageUrl === "string" ? style.referenceImageUrl : undefined,
+  };
+};
+
+export const storyboardReferenceUrls = (frames: StoryboardFrame[], currentId: string): string[] => {
+  const ordered = [...frames].sort((a, b) => a.order - b.order);
+  const current = ordered.find((frame) => frame.id === currentId);
+  const previous = ordered.filter((frame) => frame.imageUrl && frame.order < (current?.order ?? Number.MAX_SAFE_INTEGER));
+  const urls = previous.map((frame) => frame.imageUrl).filter((url): url is string => !!url);
+  return urls.slice(-2);
+};
+
+/** First image is the style bible (faces); second is the immediately previous shot. */
+export const pickStoryboardReferences = (
+  frames: StoryboardFrame[],
+  currentId: string,
+  styleUrl?: string,
+): string[] => {
+  const previous = storyboardReferenceUrls(frames, currentId);
+  const immediate = previous[previous.length - 1];
+  const firstGenerated = [...frames]
+    .sort((a, b) => a.order - b.order)
+    .find((frame) => frame.imageUrl)?.imageUrl;
+  const bible = styleUrl || firstGenerated;
+  return [bible, immediate].filter((url, index, list): url is string => !!url && list.indexOf(url) === index);
+};
+
 export const makeStoryboardFrame = (order: number, x = (order - 1) * 300, y = 100): StoryboardFrame => ({
   id: crypto.randomUUID(),
   order,

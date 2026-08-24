@@ -16,10 +16,12 @@ import {
   getLinkedCopyText,
   getProjectType,
   getStoryboard,
+  getStoryboardStyle,
   getVariations,
   makeStoryboardFrame,
   makeVariation,
   projectTypeLabel,
+  pickStoryboardReferences,
 } from "@/components/marketing/departments/creative/utils";
 import { isCreativeDepartmentItem, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
 import { Badge } from "@/components/ui/badge";
@@ -252,7 +254,18 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const persistStoryboard = async (nextFrames: StoryboardFrame[], message = "ה-storyboard נשמר") => {
     if (!selected) return;
-    const nextPayload = { ...(selected.payload ?? {}), storyboard: nextFrames, project_type: "video", department: "creative" };
+    const existingStyle = getStoryboardStyle(selected.payload);
+    const firstImage = [...nextFrames].sort((a, b) => a.order - b.order).find((frame) => frame.imageUrl)?.imageUrl;
+    const nextPayload = {
+      ...(selected.payload ?? {}),
+      storyboard: nextFrames,
+      storyboard_style: {
+        lock: existingStyle.lock,
+        referenceImageUrl: existingStyle.referenceImageUrl || firstImage,
+      },
+      project_type: "video",
+      department: "creative",
+    };
     const { error } = await supabase
       .from("marketing_work_items")
       .update({ payload: nextPayload })
@@ -267,29 +280,34 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       content: JSON.stringify(nextFrames),
       meta: { source: "visual_editor", skin_slug: "social_media", frame_count: nextFrames.length },
     });
-    toast.success(message);
+    if (message) toast.success(message);
     await refresh();
   };
 
-  const generateStoryboardFrame = async (frame: StoryboardFrame, framesOverride?: StoryboardFrame[]) => {
-    if (!selected) return;
+  const generateStoryboardFrame = async (
+    frame: StoryboardFrame,
+    framesOverride?: StoryboardFrame[],
+    options?: { lock?: boolean },
+  ): Promise<StoryboardFrame[]> => {
+    const fallback = framesOverride ?? storyboardDraft;
+    if (!selected) return fallback;
     if (!selected.client_id) {
       toast.error("יש לשייך לקוח לפרויקט לפני יצירת פריימים");
-      return;
+      return fallback;
     }
     const readyContext = ensureCreativeStageReady(context);
     if (!frame.visualPrompt?.trim() && !frame.voiceover?.trim()) {
       toast.error("מלא/י 'מה רואים בפריים' או קריינות לפני יצירת הפריים");
-      return;
+      return fallback;
     }
-    setGenerating(true);
+    const shouldLock = options?.lock !== false;
+    if (shouldLock) setGenerating(true);
     try {
       const activeFrames = framesOverride ?? storyboardDraft;
       const generationNotes = [
         selected.payload?.notes,
         `בקשת פריים ${frame.order}: ${frame.visualPrompt || frame.voiceover || frame.title}`,
         `סוג שוט: ${frame.shot}`,
-        frame.overlayText && `טקסט שיופיע: ${frame.overlayText}`,
       ].filter(Boolean).join("\n");
       await syncCreativePipelineStage({
         itemId: selected.id,
@@ -314,26 +332,65 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           project_type: "video",
         },
       }).eq("id", selected.id).eq("tenant_id", tenantId);
+      const style = getStoryboardStyle(selected.payload);
+      const referenceImageUrls = pickStoryboardReferences(activeFrames, frame.id, style.referenceImageUrl);
       const framePrompt = [
-        "Cinematic storyboard frame photograph.",
+        "Next shot in ONE continuous photoreal commercial. Keep the same world, people, wardrobe, lighting and grade.",
+        style.lock,
         selected.title && `Campaign: ${selected.title}`,
+        `Frame ${frame.order}: ${frame.title}`,
         frame.shot && `Shot type: ${frame.shot}`,
-        frame.visualPrompt && `What is in the frame: ${frame.visualPrompt}`,
-        getBriefText(selected) && `Visual brief (mood/setting only): ${getBriefText(selected)}`,
+        frame.visualPrompt && `Action/setting change only: ${frame.visualPrompt}`,
+        referenceImageUrls.length
+          ? "A reference still from this same storyboard is attached — match faces, wardrobe, location family, lens and color grade. Do not invent a new art style."
+          : "This is the first frame. Establish a single photoreal look that later frames must copy exactly.",
       ].filter(Boolean).join("\n");
-      const { imageUrl, usedFallback } = await generateCreativeImage({
+      const { imageUrl } = await generateCreativeImage({
         supabase,
         tenantId,
         itemId: selected.id,
         stageId: readyContext.creativeStage.id,
         prompt: framePrompt,
+        referenceImageUrls,
       });
-      if (usedFallback) toast.message("הפריים נוצר (gpt-image-1)");
+      if (shouldLock) {
+        toast.message(referenceImageUrls.length ? "הפריים נוצר מול ייחוס הסגנון" : "פריים ראשון — נשמר כסגנון לייחוס");
+      }
       const next = activeFrames.map((value) => value.id === frame.id ? { ...frame, imageUrl } : value);
       setStoryboardDraft(next);
-      await persistStoryboard(next, "הפריים נוצר ונשמר");
+      await persistStoryboard(next, shouldLock ? "הפריים נוצר ונשמר" : "");
+      return next;
     } catch (error: unknown) {
       toast.error(errorMessage(error, "יצירת הפריים נכשלה"));
+      if (!shouldLock) throw error;
+      return fallback;
+    } finally {
+      if (shouldLock) setGenerating(false);
+    }
+  };
+
+  const generateAllStoryboardFrames = async () => {
+    if (!selected?.client_id) {
+      toast.error("יש לשייך לקוח לפרויקט לפני יצירת פריימים");
+      return;
+    }
+    const queued = [...storyboardDraft]
+      .sort((a, b) => a.order - b.order)
+      .filter((frame) => frame.visualPrompt?.trim() || frame.voiceover?.trim());
+    if (queued.length === 0) {
+      toast.error("מלא/י הנחיות לפריימים לפני יצירה לפי סדר");
+      return;
+    }
+    setGenerating(true);
+    try {
+      let current = [...storyboardDraft].sort((a, b) => a.order - b.order);
+      for (const frame of queued) {
+        const latest = current.find((value) => value.id === frame.id) ?? frame;
+        current = await generateStoryboardFrame(latest, current, { lock: false });
+      }
+      toast.success("הפריימים נוצרו לפי סדר, עם אותו סגנון");
+    } catch {
+      // Per-frame toast already shown; stop the sequence so later frames do not drift.
     } finally {
       setGenerating(false);
     }
@@ -767,6 +824,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 setStoryboardDraft(merged);
                 await generateStoryboardFrame(frame, merged);
               }}
+              onGenerateAll={generateAllStoryboardFrames}
               generating={generating}
               saving={saving}
               scenePanelOpen={workspacePanel === "scene"}

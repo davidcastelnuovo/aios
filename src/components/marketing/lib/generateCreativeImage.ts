@@ -8,6 +8,7 @@ interface GenerateCreativeImageArgs {
   itemId: string;
   stageId: string;
   prompt: string;
+  referenceImageUrls?: string[];
 }
 
 const NO_TEXT_ON_IMAGE =
@@ -18,9 +19,16 @@ async function invokeSocialImage(
   tenantId: string,
   itemId: string,
   prompt: string,
+  referenceImageUrls?: string[],
 ) {
   return supabase.functions.invoke("ai-generate-social-image", {
-    body: { prompt: `${prompt}\n\n${NO_TEXT_ON_IMAGE}`, tenant_id: tenantId, post_id: itemId },
+    body: {
+      prompt: `${prompt}\n\n${NO_TEXT_ON_IMAGE}`,
+      tenant_id: tenantId,
+      post_id: itemId,
+      reference_image_url: referenceImageUrls?.[0],
+      reference_image_urls: referenceImageUrls,
+    },
   });
 }
 
@@ -34,15 +42,16 @@ async function invokeMarketingStage(
   });
 }
 
-/** Generate a marketing image. Uses ai-generate-social-image first (gpt-image-1, stable), then marketing-run-stage for full pipeline when available. */
+/** Generate a marketing image. Uses ai-generate-social-image first (gpt-image-1, stable), then marketing-run-stage. */
 export async function generateCreativeImage({
   supabase,
   tenantId,
   itemId,
   stageId,
   prompt,
+  referenceImageUrls,
 }: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean }> {
-  const socialResult = await invokeSocialImage(supabase, tenantId, itemId, prompt);
+  const socialResult = await invokeSocialImage(supabase, tenantId, itemId, prompt, referenceImageUrls);
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;
     if (imageUrl && typeof imageUrl === "string") {
