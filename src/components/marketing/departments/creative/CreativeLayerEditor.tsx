@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
+import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { cn } from "@/lib/utils";
 import { Loader2, Move, Save, Type } from "lucide-react";
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
@@ -15,15 +17,25 @@ interface Props {
   onChange: (next: CreativeVariation) => void;
   onSave: () => Promise<void>;
   saving?: boolean;
+  editing?: boolean;
+  onEditingChange?: (editing: boolean) => void;
 }
 
 const FONT_OPTIONS = ["Rubik", "Assistant", "Heebo", "Arial", "Georgia"];
 
 type DragMode = "move" | "resize-se";
 
-export function CreativeLayerEditor({ variation, onChange, onSave, saving }: Props) {
+export function CreativeLayerEditor({
+  variation,
+  onChange,
+  onSave,
+  saving,
+  editing,
+  onEditingChange,
+}: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(variation.layers[0]?.id ?? null);
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [internalEditing, setInternalEditing] = useState(false);
   const dragRef = useRef<{
     mode: DragMode;
     layerId: string;
@@ -32,9 +44,12 @@ export function CreativeLayerEditor({ variation, onChange, onSave, saving }: Pro
     origin: CreativeLayer;
   } | null>(null);
 
+  const isEditing = editing ?? internalEditing;
+  const setEditing = onEditingChange ?? setInternalEditing;
+
   useEffect(() => {
-    if (!selectedLayerId && variation.layers[0]?.id) setSelectedLayerId(variation.layers[0].id);
-  }, [selectedLayerId, variation.layers]);
+    if (!isEditing) setSelectedLayerId(null);
+  }, [isEditing]);
 
   const selectedLayer = variation.layers.find((layer) => layer.id === selectedLayerId) ?? null;
   const textLayers = variation.layers.filter((layer) => layer.type === "text");
@@ -63,6 +78,7 @@ export function CreativeLayerEditor({ variation, onChange, onSave, saving }: Pro
     };
     onChange({ ...variation, layers: [...variation.layers, layer] });
     setSelectedLayerId(layer.id);
+    setEditing(true);
   };
 
   const removeSelectedLayer = () => {
@@ -75,6 +91,7 @@ export function CreativeLayerEditor({ variation, onChange, onSave, saving }: Pro
   };
 
   const beginDrag = (event: React.MouseEvent, layer: CreativeLayer, mode: DragMode) => {
+    if (!isEditing) return;
     event.stopPropagation();
     setSelectedLayerId(layer.id);
     dragRef.current = {
@@ -125,130 +142,42 @@ export function CreativeLayerEditor({ variation, onChange, onSave, saving }: Pro
   const canvasClass = useMemo(() => aspectRatioClass(variation.format), [variation.format]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-background">
+    <div className="relative flex min-h-0 flex-1 flex-col bg-muted/10">
       <div className="flex items-center justify-between border-b px-4 py-2">
-        <span className="text-xs text-muted-foreground">עורך שכבות — גרור, שנה גודל, ערוך טקסט ופונטים</span>
+        <span className="text-xs text-muted-foreground">
+          {isEditing ? "מצב עריכה — גרור שכבות, שנה טקסט ופונטים" : "לחץ על הקריאייטיב כדי לערוך"}
+        </span>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={addTextLayer}>
-            <Type className="h-3.5 w-3.5" />שכבת טקסט
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={onSave} disabled={saving}>
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            שמור גרסה
-          </Button>
+          {isEditing && (
+            <>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={addTextLayer}>
+                <Type className="h-3.5 w-3.5" />שכבת טקסט
+              </Button>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={onSave} disabled={saving}>
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                שמור גרסה
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>סיום עריכה</Button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="overflow-y-auto border-l bg-card/40 p-3">
-          <Label className="text-[11px] text-muted-foreground">שכבות</Label>
-          <div className="mt-2 space-y-1.5">
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-lg border bg-muted/40 px-2 py-2 text-right text-xs"
-              disabled
-            >
-              <Move className="h-3.5 w-3.5" />רקע (תמונה)
-            </button>
-            {textLayers.map((layer, index) => (
-              <button
-                key={layer.id}
-                type="button"
-                onClick={() => setSelectedLayerId(layer.id)}
-                className={cn(
-                  "w-full rounded-lg border px-2 py-2 text-right text-xs transition-colors",
-                  selectedLayerId === layer.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "hover:bg-muted/50",
-                )}
-              >
-                <div className="font-semibold">טקסט {index + 1}</div>
-                <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">{layer.text || "ריק"}</div>
-              </button>
-            ))}
-          </div>
-
-          {selectedLayer?.type === "text" && (
-            <div className="mt-4 space-y-3 border-t pt-4">
-              <div>
-                <Label>תוכן</Label>
-                <Textarea
-                  className="mt-1 min-h-20 text-sm"
-                  value={selectedLayer.text ?? ""}
-                  onChange={(event) => updateLayer(selectedLayer.id, { text: event.target.value })}
-                />
-              </div>
-              <div>
-                <Label>פונט</Label>
-                <Select
-                  value={selectedLayer.fontFamily ?? "Rubik"}
-                  onValueChange={(value) => updateLayer(selectedLayer.id, { fontFamily: value })}
-                >
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{FONT_OPTIONS.map((font) => <SelectItem key={font} value={font}>{font}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>גודל ({selectedLayer.fontSize ?? 24}px)</Label>
-                <Slider
-                  className="mt-3"
-                  min={12}
-                  max={72}
-                  step={1}
-                  value={[selectedLayer.fontSize ?? 24]}
-                  onValueChange={([value]) => updateLayer(selectedLayer.id, { fontSize: value })}
-                />
-              </div>
-              <div>
-                <Label>משקל</Label>
-                <Select
-                  value={selectedLayer.fontWeight ?? "600"}
-                  onValueChange={(value) => updateLayer(selectedLayer.id, { fontWeight: value })}
-                >
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="400">רגיל</SelectItem>
-                    <SelectItem value="600">מודגש</SelectItem>
-                    <SelectItem value="700">כהה</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>צבע</Label>
-                <Input
-                  className="mt-1 h-9"
-                  type="color"
-                  value={selectedLayer.color ?? "#ffffff"}
-                  onChange={(event) => updateLayer(selectedLayer.id, { color: event.target.value })}
-                />
-              </div>
-              <div>
-                <Label>יישור</Label>
-                <Select
-                  value={selectedLayer.textAlign ?? "right"}
-                  onValueChange={(value: "right" | "center" | "left") => updateLayer(selectedLayer.id, { textAlign: value })}
-                >
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="right">ימין</SelectItem>
-                    <SelectItem value="center">מרכז</SelectItem>
-                    <SelectItem value="left">שמאל</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button variant="outline" size="sm" className="w-full text-destructive" onClick={removeSelectedLayer}>
-                מחק שכבת טקסט
-              </Button>
-            </div>
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-6">
+        <div
+          className={cn(
+            "relative w-full max-w-3xl overflow-hidden rounded-2xl border bg-muted shadow-xl",
+            !isEditing && "cursor-zoom-in ring-offset-background hover:ring-2 hover:ring-pink-400/40",
+            canvasClass,
           )}
-        </aside>
-
-        <div className="flex min-h-0 items-center justify-center overflow-auto p-6">
-          <div
-            ref={canvasRef}
-            className={cn("relative w-full max-w-xl overflow-hidden rounded-2xl border bg-black shadow-xl", canvasClass)}
-            onClick={() => setSelectedLayerId(null)}
-          >
-            <img src={variation.imageUrl} alt={variation.name} className="absolute inset-0 h-full w-full object-cover" />
-            {variation.layers.filter((layer) => layer.type === "text").map((layer) => (
+          onClick={() => {
+            if (!isEditing) setEditing(true);
+            else setSelectedLayerId(null);
+          }}
+        >
+          <div ref={canvasRef} className="absolute inset-0">
+            <CreativeImage src={variation.imageUrl} alt={variation.name} className="absolute inset-0 h-full w-full object-cover" />
+            {isEditing && variation.layers.filter((layer) => layer.type === "text").map((layer) => (
               <div
                 key={layer.id}
                 className={cn(
@@ -283,9 +212,126 @@ export function CreativeLayerEditor({ variation, onChange, onSave, saving }: Pro
                 )}
               </div>
             ))}
+            {!isEditing && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent p-4 text-right text-xs text-white">
+                לחץ לעריכת שכבות
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {isEditing && (
+        <aside className="absolute inset-y-0 left-0 z-20 flex w-[320px] max-w-[90vw] flex-col border-r bg-background shadow-xl" dir="rtl">
+          <div className="border-b px-4 py-3">
+            <div className="text-sm font-semibold">עריכת קריאייטיב</div>
+            <p className="text-[11px] text-muted-foreground">התמונה נשארת במסך — עורכים רק שכבות</p>
+          </div>
+          <ScrollArea className="flex-1">
+            <div className="space-y-4 p-4">
+              <Label className="text-[11px] text-muted-foreground">שכבות</Label>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg border bg-muted/40 px-2 py-2 text-right text-xs"
+                disabled
+              >
+                <Move className="h-3.5 w-3.5" />רקע (תמונה)
+              </button>
+              {textLayers.map((layer, index) => (
+                <button
+                  key={layer.id}
+                  type="button"
+                  onClick={() => setSelectedLayerId(layer.id)}
+                  className={cn(
+                    "w-full rounded-lg border px-2 py-2 text-right text-xs transition-colors",
+                    selectedLayerId === layer.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "hover:bg-muted/50",
+                  )}
+                >
+                  <div className="font-semibold">טקסט {index + 1}</div>
+                  <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">{layer.text || "ריק"}</div>
+                </button>
+              ))}
+              <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={addTextLayer}>
+                <Type className="h-3.5 w-3.5" />הוסף שכבת טקסט
+              </Button>
+
+              {selectedLayer?.type === "text" && (
+                <div className="space-y-3 border-t pt-4">
+                  <div>
+                    <Label>תוכן</Label>
+                    <Textarea
+                      className="mt-1 min-h-20 text-sm"
+                      value={selectedLayer.text ?? ""}
+                      onChange={(event) => updateLayer(selectedLayer.id, { text: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>פונט</Label>
+                    <Select
+                      value={selectedLayer.fontFamily ?? "Rubik"}
+                      onValueChange={(value) => updateLayer(selectedLayer.id, { fontFamily: value })}
+                    >
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>{FONT_OPTIONS.map((font) => <SelectItem key={font} value={font}>{font}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>גודל ({selectedLayer.fontSize ?? 24}px)</Label>
+                    <Slider
+                      className="mt-3"
+                      min={12}
+                      max={72}
+                      step={1}
+                      value={[selectedLayer.fontSize ?? 24]}
+                      onValueChange={([value]) => updateLayer(selectedLayer.id, { fontSize: value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>משקל</Label>
+                    <Select
+                      value={selectedLayer.fontWeight ?? "600"}
+                      onValueChange={(value) => updateLayer(selectedLayer.id, { fontWeight: value })}
+                    >
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="400">רגיל</SelectItem>
+                        <SelectItem value="600">מודגש</SelectItem>
+                        <SelectItem value="700">כהה</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>צבע</Label>
+                    <Input
+                      className="mt-1 h-9"
+                      type="color"
+                      value={selectedLayer.color ?? "#ffffff"}
+                      onChange={(event) => updateLayer(selectedLayer.id, { color: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>יישור</Label>
+                    <Select
+                      value={selectedLayer.textAlign ?? "right"}
+                      onValueChange={(value: "right" | "center" | "left") => updateLayer(selectedLayer.id, { textAlign: value })}
+                    >
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="right">ימין</SelectItem>
+                        <SelectItem value="center">מרכז</SelectItem>
+                        <SelectItem value="left">שמאל</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="outline" size="sm" className="w-full text-destructive" onClick={removeSelectedLayer}>
+                    מחק שכבת טקסט
+                  </Button>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </aside>
+      )}
     </div>
   );
 }

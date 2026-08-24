@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { Copy, Image as ImageIcon, Loader2, Plus, Save, Trash2, WandSparkles } from "lucide-react";
 import type { StoryboardFrame } from "./types";
 import { makeStoryboardFrame } from "./utils";
@@ -43,7 +44,7 @@ function StoryboardCard({ data, selected }: NodeProps<StoryboardNode>) {
       <Handle type="target" position={Position.Right} />
       <div className="relative aspect-video bg-muted">
         {data.imageUrl ? (
-          <img src={data.imageUrl} alt={data.title} className="h-full w-full object-cover" />
+          <CreativeImage src={data.imageUrl} alt={data.title} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
             <ImageIcon className="mb-2 h-7 w-7 opacity-40" />

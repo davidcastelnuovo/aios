@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { invokeErrorMessage } from "@/components/marketing/lib/invokeErrorMessage";
+import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
 
 interface GenerateCreativeImageArgs {
   supabase: SupabaseClient;
@@ -42,7 +43,7 @@ export async function generateCreativeImage({
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;
     if (imageUrl && typeof imageUrl === "string") {
-      return { imageUrl, usedFallback: true };
+      return { imageUrl: (await resolveCreativeImageUrl(imageUrl)) ?? imageUrl, usedFallback: true };
     }
   }
 
@@ -54,7 +55,7 @@ export async function generateCreativeImage({
   if (!stageResult.error && !stageResult.data?.error) {
     const imageUrl = stageResult.data?.url ?? stageResult.data?.image_url;
     if (imageUrl && typeof imageUrl === "string") {
-      return { imageUrl, usedFallback: false };
+      return { imageUrl: (await resolveCreativeImageUrl(imageUrl)) ?? imageUrl, usedFallback: false };
     }
   }
 

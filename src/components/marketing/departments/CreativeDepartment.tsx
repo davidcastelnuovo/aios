@@ -6,6 +6,7 @@ import { generateCreativeImage } from "@/components/marketing/lib/generateCreati
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { CreativeBriefEditor } from "@/components/marketing/departments/creative/CreativeBriefEditor";
+import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { CreativeLayerEditor } from "@/components/marketing/departments/creative/CreativeLayerEditor";
 import { CreativeStoryboardEditor } from "@/components/marketing/departments/creative/CreativeStoryboardEditor";
 import type { CreativeAssetRow, CreativeComment, CreativeItem, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "@/components/marketing/departments/creative/types";
@@ -31,7 +32,6 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,6 @@ import {
   ChevronDown,
   Clock3,
   Clapperboard,
-  FilePlus2,
   History,
   Image as ImageIcon,
   Link2,
@@ -108,8 +107,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
-  const [workspaceTab, setWorkspaceTab] = useState<"project" | "creative">("project");
-  const [videoPanel, setVideoPanel] = useState<"projects" | "project" | "scene" | "versions" | null>(null);
+  const [workspacePanel, setWorkspacePanel] = useState<"projects" | "project" | "scene" | "versions" | "edit" | null>(null);
   const [storyboardDraft, setStoryboardDraft] = useState<StoryboardFrame[]>([]);
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
@@ -183,8 +181,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   }, [items, selectedId]);
 
   useEffect(() => {
-    setWorkspaceTab("project");
-    setVideoPanel(null);
+    setWorkspacePanel(null);
   }, [selectedId]);
 
   useEffect(() => {
@@ -450,7 +447,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       const nextVariations = [...variations, nextVariation];
       await persistVariations(nextVariations, "כרמן יצרה וריאציה ויזואלית חדשה");
       setSelectedVariationId(nextVariation.id);
-      setWorkspaceTab("creative");
+      setWorkspacePanel(null);
     } catch (error: unknown) {
       toast.error(errorMessage(error, "יצירת הקריאייטיב נכשלה"));
     } finally {
@@ -547,8 +544,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const canHandoff = projectType === "video" ? storyboardDraft.length > 0 : variations.length > 0;
   const isVideoWorkspace = projectType === "video";
 
-  const toggleVideoPanel = (panel: "projects" | "project" | "scene" | "versions") => {
-    setVideoPanel((current) => (current === panel ? null : panel));
+  const toggleWorkspacePanel = (panel: "projects" | "project" | "scene" | "versions" | "edit") => {
+    setWorkspacePanel((current) => (current === panel ? null : panel));
   };
 
   const projectsList = (
@@ -564,7 +561,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         ) : items.map((item) => (
           <button
             key={item.id}
-            onClick={() => { setSelectedId(item.id); setSelectedVariationId(null); setVideoPanel(null); }}
+            onClick={() => { setSelectedId(item.id); setSelectedVariationId(null); setWorkspacePanel(null); }}
             className={cn(
               "w-full rounded-xl border p-3 text-right transition-colors",
               selectedId === item.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "bg-background hover:bg-muted/50",
@@ -623,7 +620,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           {selectedVariation && (
             <Card className="overflow-hidden p-0 ring-2 ring-pink-400">
               {selectedVariation.imageUrl && (
-                <img src={selectedVariation.imageUrl} alt={selectedVariation.name} className="aspect-video w-full object-cover" />
+                <CreativeImage src={selectedVariation.imageUrl} alt={selectedVariation.name} className="aspect-video w-full object-cover" />
               )}
               <div className="p-3">
                 <div className="mb-2 flex items-center justify-between">
@@ -663,7 +660,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                     onClick={() => setSelectedVariationId(variation.id)}
                   >
                     {variation.imageUrl && (
-                      <img src={variation.imageUrl} alt={variation.name} className="aspect-video w-full object-cover" />
+                      <CreativeImage src={variation.imageUrl} alt={variation.name} className="aspect-video w-full object-cover" />
                     )}
                     <div className="p-3">
                       <div className="mb-2 flex items-center justify-between">
@@ -712,10 +709,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     </>
   );
 
-  const videoHeader = selected ? (
+  const workspaceHeader = selected ? (
     <div className="flex flex-wrap items-center gap-2 border-b bg-card/50 px-4 py-2">
       <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-700 text-white">
-        <Clapperboard className="h-4 w-4" />
+        {isVideoWorkspace ? <Clapperboard className="h-4 w-4" /> : <Palette className="h-4 w-4" />}
       </div>
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-bold">{selected.title}</h2>
@@ -724,22 +721,34 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
-        <Button size="sm" variant={videoPanel === "projects" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleVideoPanel("projects")}>
+        <Button size="sm" variant={workspacePanel === "projects" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("projects")}>
           פרויקטים
         </Button>
-        <Button size="sm" variant={videoPanel === "project" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleVideoPanel("project")}>
+        <Button size="sm" variant={workspacePanel === "project" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("project")}>
           עריכת פרויקט
         </Button>
-        <Button size="sm" variant={videoPanel === "scene" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleVideoPanel("scene")} disabled={storyboardDraft.length === 0}>
-          סצנה
-        </Button>
-        <Button size="sm" variant={videoPanel === "versions" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleVideoPanel("versions")}>
+        {isVideoWorkspace ? (
+          <Button size="sm" variant={workspacePanel === "scene" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("scene")} disabled={storyboardDraft.length === 0}>
+            סצנה
+          </Button>
+        ) : (
+          <Button size="sm" variant={workspacePanel === "edit" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("edit")} disabled={!variationDraft}>
+            עריכה
+          </Button>
+        )}
+        <Button size="sm" variant={workspacePanel === "versions" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("versions")}>
           גרסאות
         </Button>
       </div>
       <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkCopyOpen(true)}>
         <Link2 className="h-3.5 w-3.5" />שייך קופi
       </Button>
+      {!isVideoWorkspace && (
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={generate} disabled={generating || loadingContext || !selected.client_id}>
+          {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+          {variations.length ? "צור וריאציה" : "צור קריאייטיב"}
+        </Button>
+      )}
       <Button
         size="sm"
         className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
@@ -753,169 +762,97 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {isVideoWorkspace ? (
-        <>
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/10">
-            {videoHeader}
-            {selected ? (
-              <CreativeStoryboardEditor
-                frames={storyboardDraft}
-                onChange={setStoryboardDraft}
-                onSave={() => persistStoryboard(storyboardDraft)}
-                onGenerateFrame={async (frame) => {
-                  const merged = storyboardDraft.map((value) => value.id === frame.id ? frame : value);
-                  setStoryboardDraft(merged);
-                  await generateStoryboardFrame(frame, merged);
-                }}
-                generating={generating}
-                saving={saving}
-                scenePanelOpen={videoPanel === "scene"}
-                onScenePanelOpenChange={(open) => setVideoPanel(open ? "scene" : null)}
-              />
-            ) : (
-              <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center text-muted-foreground">
-                <Clapperboard className="h-12 w-12 opacity-30" />
-                <p className="text-sm">בחר פרויקט storyboard או צור חדש</p>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setVideoPanel("projects")}>פתח פרויקטים</Button>
-                  <Button className="bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>פרויקט חדש</Button>
-                </div>
-              </div>
-            )}
-          </main>
-
-          <Sheet open={videoPanel === "projects"} onOpenChange={(open) => setVideoPanel(open ? "projects" : null)}>
-            <SheetContent side="right" className="flex w-[320px] max-w-[90vw] flex-col gap-0 p-0 sm:max-w-[320px]" dir="rtl">
-              <SheetHeader className="flex-row items-center justify-between border-b px-6 py-4 text-right">
-                <div>
-                  <SheetTitle className="text-sm">פרויקטים לקריאייטיב</SheetTitle>
-                  <p className="text-[11px] text-muted-foreground">מהקופi, מבריף ידני או AI</p>
-                </div>
-                <Button size="icon" className="h-8 w-8 shrink-0 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
-                  <Plus className="h-4 w-4" />
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/10">
+        {workspaceHeader}
+        {selected ? (
+          isVideoWorkspace ? (
+            <CreativeStoryboardEditor
+              frames={storyboardDraft}
+              onChange={setStoryboardDraft}
+              onSave={() => persistStoryboard(storyboardDraft)}
+              onGenerateFrame={async (frame) => {
+                const merged = storyboardDraft.map((value) => value.id === frame.id ? frame : value);
+                setStoryboardDraft(merged);
+                await generateStoryboardFrame(frame, merged);
+              }}
+              generating={generating}
+              saving={saving}
+              scenePanelOpen={workspacePanel === "scene"}
+              onScenePanelOpenChange={(open) => setWorkspacePanel(open ? "scene" : null)}
+            />
+          ) : variationDraft ? (
+            <CreativeLayerEditor
+              key={variationDraft.id}
+              variation={variationDraft}
+              onChange={setVariationDraft}
+              onSave={saveVariation}
+              saving={saving}
+              editing={workspacePanel === "edit"}
+              onEditingChange={(open) => setWorkspacePanel(open ? "edit" : null)}
+            />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
+              <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
+              <h3 className="text-lg font-bold text-foreground">עדיין אין קריאייטיב</h3>
+              <p className="mt-2 max-w-md text-sm">לחץ על &quot;צור קריאייטיב&quot; כדי לייצר תמונה מוכנה. עריכת שכבות תיפתח רק בלחיצה על התמונה.</p>
+              <div className="mt-5 flex gap-2">
+                <Button variant="outline" onClick={() => setWorkspacePanel("project")}>עריכת פרויקט</Button>
+                <Button className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={generate} disabled={generating || loadingContext || !selected.client_id}>
+                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                  צור קריאייטיב
                 </Button>
-              </SheetHeader>
-              {projectsList}
-            </SheetContent>
-          </Sheet>
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center text-muted-foreground">
+            <Palette className="h-12 w-12 opacity-30" />
+            <p className="text-sm">בחר פרויקט או צור אחד חדש</p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setWorkspacePanel("projects")}>פתח פרויקטים</Button>
+              <Button className="bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>פרויקט חדש</Button>
+            </div>
+          </div>
+        )}
+      </main>
 
-          <Sheet open={videoPanel === "project"} onOpenChange={(open) => setVideoPanel(open ? "project" : null)}>
-            <SheetContent side="right" className="flex w-[min(560px,92vw)] max-w-none flex-col gap-0 p-0 sm:max-w-[560px]" dir="rtl">
-              <SheetHeader className="border-b px-6 py-4 text-right">
-                <SheetTitle>עריכת פרויקט</SheetTitle>
-              </SheetHeader>
-              {selected ? (
-                <CreativeBriefEditor item={selected} onSave={saveProject} saving={saving} />
-              ) : null}
-            </SheetContent>
-          </Sheet>
-
-          <Sheet open={videoPanel === "versions"} onOpenChange={(open) => setVideoPanel(open ? "versions" : null)}>
-            <SheetContent side="left" className="flex w-[320px] max-w-[90vw] flex-col gap-0 p-0 sm:max-w-[320px]" dir="rtl">
-              <SheetHeader className="border-b px-6 py-4 text-right">
-                <SheetTitle className="flex items-center gap-1.5 text-sm">
-                  <History className="h-4 w-4" />גרסאות והערות
-                </SheetTitle>
-                <p className="text-[11px] text-muted-foreground">כל יצירה, שמירה והערה נשמרות</p>
-              </SheetHeader>
-              {versionsPanel}
-            </SheetContent>
-          </Sheet>
-        </>
-      ) : (
-      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_300px] bg-muted/10">
-        <aside className="flex min-h-0 flex-col border-l bg-card/70">
-          <div className="flex items-center justify-between border-b p-3">
+      <Sheet open={workspacePanel === "projects"} onOpenChange={(open) => setWorkspacePanel(open ? "projects" : null)}>
+        <SheetContent side="right" className="flex w-[320px] max-w-[90vw] flex-col gap-0 p-0 sm:max-w-[320px]" dir="rtl">
+          <SheetHeader className="flex-row items-center justify-between border-b px-6 py-4 text-right">
             <div>
-              <h2 className="text-sm font-bold">פרויקטים לקריאייטיב</h2>
+              <SheetTitle className="text-sm">פרויקטים לקריאייטיב</SheetTitle>
               <p className="text-[11px] text-muted-foreground">מהקופi, מבריף ידני או AI</p>
             </div>
-            <Button size="icon" className="h-8 w-8 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
+            <Button size="icon" className="h-8 w-8 shrink-0 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" />
             </Button>
-          </div>
+          </SheetHeader>
           {projectsList}
-        </aside>
+        </SheetContent>
+      </Sheet>
 
-        <main className="flex min-h-0 min-w-0 flex-col">
+      <Sheet open={workspacePanel === "project"} onOpenChange={(open) => setWorkspacePanel(open ? "project" : null)}>
+        <SheetContent side="right" className="flex w-[min(560px,92vw)] max-w-none flex-col gap-0 p-0 sm:max-w-[560px]" dir="rtl">
+          <SheetHeader className="border-b px-6 py-4 text-right">
+            <SheetTitle>עריכת פרויקט</SheetTitle>
+          </SheetHeader>
           {selected ? (
-            <>
-              <div className="flex flex-wrap items-center gap-3 border-b bg-card/50 px-4 py-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500 to-rose-700 text-white">
-                  <Palette className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-sm font-bold">{selected.title}</h2>
-                  <p className="text-[11px] text-muted-foreground">
-                    {projectTypeLabel(projectType)} · Skin: social_media · תמונות: gpt-image-1
-                  </p>
-                </div>
-                <Tabs value={workspaceTab} onValueChange={(value) => setWorkspaceTab(value as "project" | "creative")}>
-                  <TabsList>
-                    <TabsTrigger value="project">עריכת פרויקט</TabsTrigger>
-                    <TabsTrigger value="creative">קריאייטיב</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkCopyOpen(true)}>
-                  <Link2 className="h-3.5 w-3.5" />שייך קופi
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={generate} disabled={generating || loadingContext || !selected.client_id}>
-                  {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
-                  {variations.length ? "צור וריאציה" : "צור קריאייטיב"}
-                </Button>
-                <Button
-                  size="sm"
-                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                  onClick={() => handoff.mutate()}
-                  disabled={handoff.isPending || !canHandoff}
-                >
-                  <Send className="h-3.5 w-3.5" />אשר לקמפיינים
-                </Button>
-              </div>
+            <CreativeBriefEditor item={selected} onSave={saveProject} saving={saving} />
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
-              {workspaceTab === "project" ? (
-                <CreativeBriefEditor item={selected} onSave={saveProject} saving={saving} />
-              ) : variationDraft ? (
-                <CreativeLayerEditor
-                  key={variationDraft.id}
-                  variation={variationDraft}
-                  onChange={setVariationDraft}
-                  onSave={saveVariation}
-                  saving={saving}
-                />
-              ) : (
-                <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
-                  <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
-                  <h3 className="text-lg font-bold text-foreground">עדיין אין וריאציה ויזואלית</h3>
-                  <p className="mt-2 max-w-md text-sm">ערכ/י את הבריף בלשונית &quot;עריכת פרויקט&quot;, ואז בקש/י מכרמן ליצור את הגרסה הראשונה.</p>
-                  <Button className="mt-5 gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={generate} disabled={generating || loadingContext || !selected.client_id}>
-                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                    צור קריאייטיב ראשון
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="flex flex-1 items-center justify-center text-center text-muted-foreground">
-              <div>
-                <ImageIcon className="mx-auto mb-3 h-10 w-10 opacity-30" />
-                <p className="text-sm">בחר פרויקט או צור אחד חדש</p>
-              </div>
-            </div>
-          )}
-        </main>
-
-        <aside className="flex min-h-0 flex-col border-r bg-card/70">
-          <div className="border-b p-3">
-            <h3 className="flex items-center gap-1.5 text-sm font-bold">
+      <Sheet open={workspacePanel === "versions"} onOpenChange={(open) => setWorkspacePanel(open ? "versions" : null)}>
+        <SheetContent side="left" className="flex w-[320px] max-w-[90vw] flex-col gap-0 p-0 sm:max-w-[320px]" dir="rtl">
+          <SheetHeader className="border-b px-6 py-4 text-right">
+            <SheetTitle className="flex items-center gap-1.5 text-sm">
               <History className="h-4 w-4" />גרסאות והערות
-            </h3>
-            <p className="mt-1 text-[11px] text-muted-foreground">כל יצירה, שמירה והערה נשמרות</p>
-          </div>
+            </SheetTitle>
+            <p className="text-[11px] text-muted-foreground">כל יצירה, שמירה והערה נשמרות</p>
+          </SheetHeader>
           {versionsPanel}
-        </aside>
-      </div>
-      )}
+        </SheetContent>
+      </Sheet>
 
       <ManualCreativeDialog
         open={createOpen}
@@ -930,7 +867,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             if (createdClientId !== filterClient) onClientChange(createdClientId);
           }
           setSelectedId(id);
-          setWorkspaceTab("project");
+          setWorkspacePanel("project");
           setCreateOpen(false);
           await refresh();
         }}
