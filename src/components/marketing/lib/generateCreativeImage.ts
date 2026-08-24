@@ -1,6 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { invokeErrorMessage } from "@/components/marketing/lib/invokeErrorMessage";
 import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
+import {
+  costFromApiUsage,
+  estimateGptImage1,
+  type ImageGenerationCost,
+  type ImageQuality,
+  type ImageSize,
+} from "@/components/marketing/departments/creative/imageCost";
 
 interface GenerateCreativeImageArgs {
   supabase: SupabaseClient;
@@ -9,11 +16,11 @@ interface GenerateCreativeImageArgs {
   stageId: string;
   prompt: string;
   referenceImageUrls?: string[];
-  size?: "1024x1024" | "1024x1536" | "1536x1024";
-  quality?: "low" | "medium" | "high";
+  size?: ImageSize;
+  quality?: ImageQuality;
 }
 
-const NO_TEXT_ON_IMAGE =
+export const NO_TEXT_ON_IMAGE =
   "No letters, numbers, captions, logos, watermarks, buttons, or typography anywhere. Keep a clean open center, lower third, and a reserved top-right pad (~18% width) so a title, CTA, and brand logo can be composited later. Do not invent or redraw a logo. Supporting objects may sit in the scene. No Hebrew and no English words.";
 
 async function invokeSocialImage(
@@ -48,6 +55,49 @@ async function invokeMarketingStage(
   });
 }
 
+const logCreativeRun = async (
+  supabase: SupabaseClient,
+  args: { tenantId: string; itemId: string; stageId: string; prompt: string; cost: ImageGenerationCost },
+) => {
+  try {
+    const { error } = await supabase.from("marketing_runs").insert({
+      tenant_id: args.tenantId,
+      item_id: args.itemId,
+      stage_id: args.stageId,
+      model: args.cost.model,
+      status: "completed",
+      tokens_in: args.cost.textTokens + args.cost.imageInTokens,
+      tokens_out: args.cost.outputTokens,
+      cost_usd: args.cost.costUsd,
+      started_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+      input: { prompt: args.prompt.slice(0, 2000), quality: args.cost.quality, size: args.cost.size, source: args.cost.source },
+      output: { usage_source: args.cost.source, total_tokens: args.cost.totalTokens },
+    });
+    if (error) return;
+  } catch {
+    /* cost is still stored on the variation */
+  }
+};
+
+export const estimateCreativeImageCall = ({
+  prompt,
+  quality = "high",
+  size = "1024x1024",
+  referenceCount = 0,
+}: {
+  prompt: string;
+  quality?: ImageQuality;
+  size?: ImageSize;
+  referenceCount?: number;
+}): ImageGenerationCost =>
+  estimateGptImage1({
+    prompt: `${prompt}\n\n${NO_TEXT_ON_IMAGE}`,
+    quality,
+    size,
+    referenceCount,
+  });
+
 /** Generate a marketing image. Uses ai-generate-social-image first (gpt-image-1, stable), then marketing-run-stage. */
 export async function generateCreativeImage({
   supabase,
@@ -56,14 +106,22 @@ export async function generateCreativeImage({
   stageId,
   prompt,
   referenceImageUrls,
-  size,
-  quality,
-}: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean }> {
+  size = "1024x1024",
+  quality = "high",
+}: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean; cost: ImageGenerationCost }> {
+  const estimate = estimateCreativeImageCall({
+    prompt,
+    quality,
+    size,
+    referenceCount: referenceImageUrls?.length ?? 0,
+  });
   const socialResult = await invokeSocialImage(supabase, tenantId, itemId, prompt, referenceImageUrls, size, quality);
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;
     if (imageUrl && typeof imageUrl === "string") {
-      return { imageUrl: (await resolveCreativeImageUrl(imageUrl)) ?? imageUrl, usedFallback: true };
+      const cost = costFromApiUsage(socialResult.data?.usage, quality, size, referenceImageUrls?.length ?? 0) ?? estimate;
+      await logCreativeRun(supabase, { tenantId, itemId, stageId, prompt, cost });
+      return { imageUrl: (await resolveCreativeImageUrl(imageUrl)) ?? imageUrl, usedFallback: true, cost };
     }
   }
 
@@ -75,7 +133,7 @@ export async function generateCreativeImage({
   if (!stageResult.error && !stageResult.data?.error) {
     const imageUrl = stageResult.data?.url ?? stageResult.data?.image_url;
     if (imageUrl && typeof imageUrl === "string") {
-      return { imageUrl: (await resolveCreativeImageUrl(imageUrl)) ?? imageUrl, usedFallback: false };
+      return { imageUrl: (await resolveCreativeImageUrl(imageUrl)) ?? imageUrl, usedFallback: false, cost: estimate };
     }
   }
 

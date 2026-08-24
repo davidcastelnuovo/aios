@@ -1,6 +1,7 @@
 export type CreativeFormat = "9:16" | "1:1" | "4:5" | "16:9";
 
 import type { BrandBook, StyleReference } from "./brandKit";
+import type { ImageGenerationCost } from "./imageCost";
 import type { CreativeVisualStyleId } from "./visualStyles";
 
 export type CreativeProjectType = "static" | "video";
@@ -22,6 +23,7 @@ export interface StoryboardFrame {
   voiceover: string;
   duration: number;
   imageUrl?: string;
+  generationCost?: ImageGenerationCost;
   x: number;
   y: number;
 }
@@ -80,6 +82,7 @@ export interface CreativeVariation {
   rejected?: boolean;
   rejectNote?: string;
   parentId?: string;
+  generationCost?: ImageGenerationCost;
 }
 
 export interface CreativeItem {

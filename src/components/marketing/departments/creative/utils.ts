@@ -228,6 +228,7 @@ export const makeVariation = ({
   rejectNote,
   parentId,
   logoUrl,
+  generationCost,
 }: {
   imageUrl: string;
   format: CreativeFormat;
@@ -242,6 +243,7 @@ export const makeVariation = ({
   rejectNote?: string;
   parentId?: string;
   logoUrl?: string;
+  generationCost?: CreativeVariation["generationCost"];
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
   name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
@@ -260,6 +262,7 @@ export const makeVariation = ({
   rejected,
   rejectNote,
   parentId,
+  generationCost,
 });
 
 export const getLinkedCopyText = (item: CreativeItem | null) => {

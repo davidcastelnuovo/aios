@@ -16,6 +16,7 @@ import {
 } from "@/components/marketing/departments/creative/brandKit";
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
+import { CreativeCostDialog, buildNextGenerateEstimate } from "@/components/marketing/departments/creative/CreativeCostDialog";
 import { CreativeBriefEditor } from "@/components/marketing/departments/creative/CreativeBriefEditor";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { CreativeLayerEditor } from "@/components/marketing/departments/creative/CreativeLayerEditor";
@@ -36,6 +37,7 @@ import {
   projectTypeLabel,
   pickStoryboardReferences,
 } from "@/components/marketing/departments/creative/utils";
+import { formatUsd, summarizeStoredImageCosts } from "@/components/marketing/departments/creative/imageCost";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
 import { buildCopySceneBrief, hydrateVariationLayers, isInternalCopyLine, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
 import {
@@ -67,6 +69,7 @@ import {
   Archive,
   Check,
   ChevronDown,
+  Coins,
   Clock3,
   Clapperboard,
   History,
@@ -142,6 +145,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<CreativeVariation | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [costOpen, setCostOpen] = useState(false);
   const generateAbortRef = useRef(false);
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
@@ -179,6 +183,53 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const copyBlocks = useMemo(() => splitCopyVariations(getLinkedCopyText(selected)), [selected]);
   const storyboard = useMemo(() => getStoryboard(selected?.payload ?? null), [selected?.payload]);
   const selectedVariation = variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1] ?? null;
+  const itemIds = items.map((item) => item.id);
+
+  const { data: runCosts = [] } = useQuery({
+    queryKey: ["creative-project-runs", tenantId, itemIds.join(",")],
+    enabled: itemIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("marketing_runs")
+        .select("item_id, tokens_in, tokens_out, cost_usd, model")
+        .eq("tenant_id", tenantId)
+        .in("item_id", itemIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const costRows = useMemo(() => {
+    const runsByItem = new Map<string, typeof runCosts>();
+    for (const run of runCosts) {
+      const list = runsByItem.get(run.item_id) ?? [];
+      list.push(run);
+      runsByItem.set(run.item_id, list);
+    }
+    return items.map((item) => {
+      const isVideo = getProjectType(item.payload) === "video";
+      const format = defaultFormat(item.payload);
+      const images = isVideo
+        ? getStoryboard(item.payload).map((frame) => ({
+          generationCost: frame.generationCost,
+          imageUrl: frame.imageUrl,
+          format,
+        }))
+        : getVariations(item.payload).map((variation) => ({
+          generationCost: variation.generationCost,
+          imageUrl: variation.imageUrl,
+          source: variation.source,
+          format: variation.format,
+        }));
+      const next = buildNextGenerateEstimate(item);
+      return {
+        item,
+        spent: summarizeStoredImageCosts(images, isVideo ? "medium" : "high", runsByItem.get(item.id) ?? []),
+        next: next.cost,
+        nextCount: next.count,
+      };
+    });
+  }, [items, runCosts]);
 
   const { data: context, isLoading: loadingContext } = useQuery({
     queryKey: ["creative-department-context", selected?.client_id, tenantId],
@@ -298,6 +349,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["creative-department-items", clientFilter, tenantId] }),
       queryClient.invalidateQueries({ queryKey: ["creative-department-assets", selectedId, tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ["creative-project-runs", tenantId] }),
     ]);
   };
 
@@ -521,7 +573,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           : `This is the first frame. Establish a single ${visual.label} look that later frames must copy exactly.`,
       ].filter(Boolean).join("\n");
       throwIfGenerationAborted(generateAbortRef.current);
-      const { imageUrl } = await generateCreativeImage({
+      const { imageUrl, cost } = await generateCreativeImage({
         supabase,
         tenantId,
         itemId: selected.id,
@@ -529,11 +581,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         prompt: framePrompt,
         referenceImageUrls,
         size: imageSizeForFormat(defaultFormat(selected.payload)),
+        quality: "medium",
       });
       if (shouldLock) {
         toast.message(referenceImageUrls.length ? "הפריים נוצר מול ייחוס הסגנון" : "פריים ראשון — נשמר כסגנון לייחוס");
       }
-      const next = activeFrames.map((value) => value.id === frame.id ? { ...frame, imageUrl } : value);
+      const next = activeFrames.map((value) => value.id === frame.id ? { ...frame, imageUrl, generationCost: cost } : value);
       setStoryboardDraft(next);
       await persistStoryboard(next, shouldLock ? "הפריים נוצר ונשמר" : "");
       return next;
@@ -722,7 +775,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, Canva templates, UI chrome, invented logos, baked lettering.",
     ].filter(Boolean).join("\n");
     throwIfGenerationAborted(generateAbortRef.current);
-    const { imageUrl } = await generateCreativeImage({
+    const { imageUrl, cost } = await generateCreativeImage({
       supabase,
       tenantId,
       itemId: selected.id,
@@ -745,6 +798,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       rejectNote: directorNote,
       parentId,
       logoUrl: kit.logoUrl,
+      generationCost: cost,
     });
     return replaceId ? { ...created, id: replaceId } : created;
   };
@@ -1022,6 +1076,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                   <Badge variant="outline" className="h-4 px-1 text-[9px]">{projectTypeLabel(getProjectType(item.payload))}</Badge>
                   <span>{getProjectType(item.payload) === "video" ? `${getStoryboard(item.payload).length} סצנות` : `${getVariations(item.payload).length} וריאציות`}</span>
                   {item.payload?.handoff_from === "copy" && <Badge variant="secondary" className="h-4 px-1 text-[9px]">מהקופi</Badge>}
+                  {!!costRows.find((row) => row.item.id === item.id)?.spent.costUsd && (
+                    <span>{formatUsd(costRows.find((row) => row.item.id === item.id)!.spent.costUsd)}</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1184,6 +1241,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           גרסאות
         </Button>
       </div>
+      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setCostOpen(true)}>
+        <Coins className="h-3.5 w-3.5" />
+        {formatUsd(costRows.find((row) => row.item.id === selected.id)?.spent.costUsd ?? 0)}
+      </Button>
       <VisualStyleSelect
         compact
         value={getVisualStyleId(selected.payload)}
@@ -1322,6 +1383,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             <p className="text-sm">בחר פרויקט או צור אחד חדש</p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setWorkspacePanel("projects")}>פתח פרויקטים</Button>
+              <Button variant="outline" className="gap-1.5" onClick={() => setCostOpen(true)}>
+                <Coins className="h-4 w-4" />עלות טוקנים
+              </Button>
               <Button className="bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>פרויקט חדש</Button>
             </div>
           </div>
@@ -1335,9 +1399,14 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               <SheetTitle className="text-sm">פרויקטים לקריאייטיב</SheetTitle>
               <p className="text-[11px] text-muted-foreground">מהקופi, מבריף ידני או AI</p>
             </div>
-            <Button size="icon" className="h-8 w-8 shrink-0 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCostOpen(true)} title="עלות טוקנים">
+                <Coins className="h-4 w-4" />
+              </Button>
+              <Button size="icon" className="h-8 w-8 shrink-0 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </SheetHeader>
           {projectsList}
         </SheetContent>
@@ -1440,6 +1509,18 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CreativeCostDialog
+        open={costOpen}
+        onOpenChange={setCostOpen}
+        rows={costRows}
+        selectedId={selectedId}
+        onSelect={(id) => {
+          setSelectedId(id);
+          setSelectedVariationId(null);
+          setWorkspacePanel(null);
+        }}
+      />
     </div>
   );
 }

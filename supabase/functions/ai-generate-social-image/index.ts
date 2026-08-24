@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAIKey } from "../_shared/ai.ts";
+import { logAiUsage, resolveOpenAIKey } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,6 +19,32 @@ const extractAttachmentPath = (url: string): string | null => {
   } catch {
     return match[1];
   }
+};
+
+const parseImageUsage = (usage: unknown, quality: string, size: string) => {
+  if (!usage || typeof usage !== "object") return null;
+  const row = usage as {
+    input_tokens?: number;
+    output_tokens?: number;
+    input_tokens_details?: { text_tokens?: number; image_tokens?: number };
+  };
+  const details = row.input_tokens_details;
+  const textTokens = Number(details?.text_tokens ?? (details ? 0 : row.input_tokens) ?? 0);
+  const imageInTokens = Number(details?.image_tokens ?? 0);
+  const outputTokens = Number(row.output_tokens ?? 0);
+  if (textTokens + imageInTokens + outputTokens <= 0) return null;
+  const costUsd = +((textTokens * 5 + imageInTokens * 10 + outputTokens * 40) / 1e6).toFixed(6);
+  return {
+    model: "gpt-image-1",
+    quality,
+    size,
+    textTokens,
+    imageInTokens,
+    outputTokens,
+    totalTokens: textTokens + imageInTokens + outputTokens,
+    costUsd,
+    source: "api",
+  };
 };
 
 const uniqueUrls = (urls: unknown[]): string[] => {
@@ -138,6 +164,18 @@ serve(async (req) => {
     }
 
     const aiData = await aiResponse.json();
+    const usage = parseImageUsage(aiData?.usage, quality, size);
+    if (usage) {
+      logAiUsage({
+        source: "ai-generate-social-image",
+        model: "gpt-image-1",
+        tenant_id,
+        tokens_in: usage.textTokens + usage.imageInTokens,
+        tokens_out: usage.outputTokens,
+        cost_usd: usage.costUsd,
+        meta: { size, quality, used_reference: usedReference, post_id },
+      });
+    }
     const b64 = aiData?.data?.[0]?.b64_json;
     const base64Image = b64 ? `data:image/png;base64,${b64}` : undefined;
 
@@ -167,7 +205,7 @@ serve(async (req) => {
       .getPublicUrl(filePath);
 
     return new Response(
-      JSON.stringify({ image_url: urlData.publicUrl, used_reference: usedReference }),
+      JSON.stringify({ image_url: urlData.publicUrl, used_reference: usedReference, usage }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },
