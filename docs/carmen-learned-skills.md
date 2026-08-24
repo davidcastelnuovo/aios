@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-24 — Copywriter: canonical campaign inspiration library
+- **Skin slug:** `copywriter` (global)
+- **What Carmen can now do:** When writing ads/posts/emails/landing copy, pick 0–2 methods from a built-in library of canonical campaigns (VW Think Small, Steve Jobs keynotes, Durex humor, Nike, Dove Real Beauty, Old Spice, Patagonia, Mastercard Priceless), name the reference in the rationale, and steal the craft — never the original line.
+- **How:** `ai_skills.system_prompt` / `steps` / `output_template` updated; applied on merge via `supabase/ops/apply_copywriter_inspiration_library.sql`. Copy studio addon reminds the isolated thread to cite a reference.
+- **Origin:** David — give the copywriter skin a library of all-time campaigns for inspiration, including VW 1960s, Jobs presentations, Durex humor, plus at least five more niches.
+
 ### 2026-08-24 — Pulse: client-call freshness + critical campaign alerts
 - **Skin slug:** `pulse_check` (global + tenant overrides updated)
 - **What Carmen can now do:** (1) Report the latest client-card call — when it happened and who logged it — and flag campaign clients with no documented phone call in the last 14 days. A weekly update that affirmatively says the campaigner spoke by phone with the client is automatically marked `call`; negative notes such as "לא הצלחתי לדבר" are not. (2) Report open critical alerts (stopped campaign, disapproved ad) in a `🔴 דורש טיפול` block, but only for clients whose campaign table is still active. (3) Stop appending the redundant "details are dashboard-only" sign-off to WhatsApp digests. (4) Show the same pulse across tenants that share an agency, instead of "no pulse available" on one side.

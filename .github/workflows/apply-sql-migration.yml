@@ -36,6 +36,7 @@ on:
       - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
       - 'supabase/ops/apply_pulse_goal_metrics.sql'
       - 'supabase/ops/apply_campaign_pulse_client_call_freshness.sql'
+      - 'supabase/ops/apply_copywriter_inspiration_library.sql'
 
 jobs:
   apply:
@@ -71,7 +72,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_campaign_pulse_client_call_freshness.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_copywriter_inspiration_library.sql'; then
+              FILE="supabase/ops/apply_copywriter_inspiration_library.sql"
+              NAME="apply_copywriter_inspiration_library"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_campaign_pulse_client_call_freshness.sql'; then
               FILE="supabase/ops/apply_campaign_pulse_client_call_freshness.sql"
               NAME="apply_campaign_pulse_client_call_freshness"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/notify_felix_calendar_fix_ready.sql'; then
