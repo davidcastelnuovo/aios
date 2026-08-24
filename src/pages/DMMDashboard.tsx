@@ -51,6 +51,7 @@ import {
   formatGoalChange,
   formatGoalEfficiency,
   formatGoalOutcomes,
+  formatLastClientCall,
   formatMetaChangeDetails,
   formatPulseMoney,
   getPulsePeriodBounds,
@@ -250,13 +251,17 @@ export default function DMMDashboard() {
     queryKey: ["pulse-dash-snapshots", tenantId, clientIds.join(","), selectedAgency],
     queryFn: async () => {
       if (!tenantId || !clientIds.length) return [] as PulseSnapshotRow[];
-      // Snapshots may live on this tenant or a partner tenant for shared agencies.
-      const { data, error } = await (supabase as any)
-        .from("campaign_pulse_snapshots")
-        .select(
-          "client_id, agency_id, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability",
-        )
-        .in("client_id", clientIds);
+      const baseColumns =
+        "client_id, agency_id, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability";
+      const load = (columns: string) =>
+        (supabase as any)
+          .from("campaign_pulse_snapshots")
+          .select(columns)
+          .in("client_id", clientIds);
+      let { data, error } = await load(`${baseColumns}, last_client_call_at, last_client_call_by`);
+      if (error && /last_client_call/.test(error.message ?? "")) {
+        ({ data, error } = await load(baseColumns));
+      }
       if (error) throw error;
       return (data ?? []) as PulseSnapshotRow[];
     },
@@ -605,6 +610,7 @@ export default function DMMDashboard() {
                 <TableHead className="text-right">לידים/רכישות</TableHead>
                 <TableHead className="text-right">CPL/ROAS</TableHead>
                 <TableHead className="text-right">שינוי</TableHead>
+                <TableHead className="text-right">שיחת לקוח אחרונה</TableHead>
                 <TableHead className="text-right">שינוי במטה</TableHead>
                 <TableHead className="text-right">הערה</TableHead>
                 <TableHead className="text-right">פעולות</TableHead>
@@ -613,7 +619,7 @@ export default function DMMDashboard() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={13} className="text-center text-muted-foreground py-10">
                     אין לקוחות להצגה
                   </TableCell>
                 </TableRow>
@@ -670,6 +676,12 @@ export default function DMMDashboard() {
                         {goalRow ? formatGoalChange(goalRow) : "—"}
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
+                        {pulse ? formatLastClientCall(pulse) : "—"}
+                        {pulse?.last_client_call_by ? (
+                          <div className="text-muted-foreground">תיעד/ה: {pulse.last_client_call_by}</div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[180px]">
                         {metaSource ? (
                           metaSource.last_meta_change_at ? (
                             <Popover>

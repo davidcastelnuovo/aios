@@ -6,6 +6,11 @@
 
 export const CAMPAIGN_SERVICES = new Set(['ppc_meta', 'ppc_google'])
 export const CAMPAIGN_TABLE_TYPES = ['facebook_insights', 'facebook_ecommerce', 'google_ads'] as const
+export const CLIENT_CALL_STALE_MS = 14 * 24 * 60 * 60 * 1000
+/** Alert types worth interrupting someone's morning for. */
+export const PULSE_CRITICAL_ALERT_TYPES = ['campaign_stopped', 'ad_disapproved'] as const
+/** Keep the WhatsApp digest readable — remaining issues are counted, not listed. */
+export const PULSE_CRITICAL_LINE_LIMIT = 5
 /**
  * Sync cadence is twice-daily (05:xx / 12:xx UTC). When a noon run misses a
  * table, the next morning gap is ~24h — and the morning pulse often races the
@@ -119,8 +124,133 @@ export function buildHealthWhatsAppDigest(input: {
     lines.push(`נמצאו ${input.issueCount} נקודות לטיפול — הפירוט בדשבורד בלבד.`)
   }
   lines.push('', 'צפה בדשבורד בדיקת דופק:', input.dashboardUrl)
-  lines.push('', 'פירוט לקוח-לקוח וטבלאות לא מחוברות — בדשבורד בלבד (לא בוואטסאפ).')
   return lines.join('\n')
+}
+
+const ALERT_TYPE_LABELS: Record<string, string> = {
+  campaign_stopped: 'קמפיין נעצר',
+  ad_disapproved: 'מודעה נדחתה',
+  campaign_with_issues: 'תקלה בקמפיין',
+  cpl_spike: 'CPL חורג',
+}
+
+export type CampaignAlertLike = {
+  alert_type?: string | null
+  severity?: string | null
+  client_id?: string | null
+  ad_account_id?: string | null
+  campaign_id?: string | null
+  campaign_name?: string | null
+}
+
+/** Client an alert can be attributed to. */
+export type PulseAlertClient = {
+  clientId: string
+  clientName?: string | null
+  adAccountIds: string[]
+  /** Alerts are only reported for clients whose campaign table is still active. */
+  hasActiveCampaignTable: boolean
+}
+
+export type PulseCriticalIssue = {
+  clientId: string
+  clientName: string | null
+  alertType: string
+  label: string
+  campaignName: string | null
+}
+
+/** Meta reports `act_123`; table settings often store the bare id. */
+export function normalizeAdAccountId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim().replace(/^act_/i, '')
+  return trimmed ? trimmed : null
+}
+
+/** Every ad-account id configured on a client's campaign tables. */
+export function clientAdAccountIds(tables: CampaignTableLike[]): string[] {
+  const ids = new Set<string>()
+  for (const table of tables) {
+    const settings = table.integration_settings || {}
+    for (const key of ['ad_account_id', 'account_id', 'meta_account_id', 'customer_id']) {
+      const id = normalizeAdAccountId(settings[key])
+      if (id) ids.add(id)
+    }
+  }
+  return Array.from(ids)
+}
+
+function isCriticalAlert(alert: CampaignAlertLike): boolean {
+  const type = String(alert.alert_type || '')
+  if ((PULSE_CRITICAL_ALERT_TYPES as readonly string[]).includes(type)) return true
+  return String(alert.severity || '') === 'critical'
+}
+
+/**
+ * Attribute open critical campaign alerts to clients.
+ *
+ * Meta's monitor records the ad account but usually no client_id, so fall back to
+ * matching on ad account. An alert that cannot be tied to a client with an active
+ * campaign table is dropped rather than reported against the wrong client.
+ */
+export function selectPulseCriticalAlerts(
+  alerts: CampaignAlertLike[],
+  clients: PulseAlertClient[],
+): PulseCriticalIssue[] {
+  const byClientId = new Map<string, PulseAlertClient>()
+  const byAdAccount = new Map<string, PulseAlertClient>()
+  for (const client of clients) {
+    byClientId.set(client.clientId, client)
+    for (const adAccountId of client.adAccountIds) {
+      if (!byAdAccount.has(adAccountId)) byAdAccount.set(adAccountId, client)
+    }
+  }
+
+  const issues: PulseCriticalIssue[] = []
+  const seen = new Set<string>()
+  for (const alert of alerts) {
+    if (!isCriticalAlert(alert)) continue
+    const adAccountId = normalizeAdAccountId(alert.ad_account_id)
+    const client = (alert.client_id ? byClientId.get(alert.client_id) : undefined)
+      ?? (adAccountId ? byAdAccount.get(adAccountId) : undefined)
+    if (!client || !client.hasActiveCampaignTable) continue
+
+    const alertType = String(alert.alert_type || 'alert')
+    const campaignName = alert.campaign_name || alert.campaign_id || null
+    const key = `${client.clientId}|${alertType}|${campaignName ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    issues.push({
+      clientId: client.clientId,
+      clientName: client.clientName || null,
+      alertType,
+      label: ALERT_TYPE_LABELS[alertType] || alertType,
+      campaignName,
+    })
+  }
+  return issues.sort((a, b) => (a.clientName || '').localeCompare(b.clientName || '', 'he'))
+}
+
+export function countStoppedCampaignsByClient(issues: PulseCriticalIssue[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const issue of issues) {
+    if (issue.alertType !== 'campaign_stopped') continue
+    counts.set(issue.clientId, (counts.get(issue.clientId) || 0) + 1)
+  }
+  return counts
+}
+
+function criticalIssueLines(issues: PulseCriticalIssue[]): string[] {
+  if (!issues.length) return []
+  const lines = ['', '🔴 דורש טיפול:']
+  for (const issue of issues.slice(0, PULSE_CRITICAL_LINE_LIMIT)) {
+    const client = issue.clientName || 'לקוח לא מזוהה'
+    const campaign = issue.campaignName ? ` — ${issue.campaignName}` : ''
+    lines.push(`• ${client}: ${issue.label}${campaign}`)
+  }
+  const remaining = issues.length - PULSE_CRITICAL_LINE_LIMIT
+  if (remaining > 0) lines.push(`• ועוד ${remaining} התראות קריטיות בדשבורד`)
+  return lines
 }
 
 /** Ecommerce metrics when client flag is set OR an active facebook_ecommerce table exists. */
@@ -160,7 +290,41 @@ export type ClassifyPulseInput = {
   purchases7: number
   roas: number | null
   cplChangePct: number | null
+  /** Latest client-card update with update_type='call'. Undefined skips this rule. */
+  lastClientCallAt?: string | null
+  /** Open `campaign_stopped` alerts attributed to this client's active tables. */
+  stoppedCampaignCount?: number
   nowMs?: number
+}
+
+function applyStoppedCampaigns(
+  status: PulseStatus,
+  flags: string[],
+  stoppedCampaignCount: number | undefined,
+): { status: PulseStatus; flags: string[] } {
+  const count = stoppedCampaignCount ?? 0
+  if (count <= 0) return { status, flags }
+  flags.push(count === 1 ? 'קמפיין נעצר' : `${count} קמפיינים נעצרו`)
+  return { status: 'critical', flags }
+}
+
+function applyClientCallFreshness(
+  status: PulseStatus,
+  flags: string[],
+  lastClientCallAt: string | null | undefined,
+  nowMs: number,
+): { status: PulseStatus; flags: string[] } {
+  if (lastClientCallAt === undefined) return { status, flags }
+
+  const timestamp = lastClientCallAt ? new Date(lastClientCallAt).getTime() : Number.NaN
+  const missing = Number.isNaN(timestamp)
+  const stale = !missing && nowMs - timestamp > CLIENT_CALL_STALE_MS
+  if (!missing && !stale) return { status, flags }
+
+  flags.push(missing
+    ? 'לא תועדה שיחה טלפונית עם הלקוח'
+    : 'לא תועדה שיחה טלפונית עם הלקוח ב-14 הימים האחרונים')
+  return { status: status === 'healthy' ? 'warning' : status, flags }
 }
 
 /**
@@ -183,9 +347,14 @@ export function classifyCampaignPulseStatus(input: ClassifyPulseInput): {
     .map((table) => platformLabel(table.integration_type))
 
   if (!input.hasConfiguredCampaignTable || input.activeTables.length === 0) {
+    const result = applyClientCallFreshness(
+      'no_data',
+      ['אין טבלת קמפיין מחוברת'],
+      input.lastClientCallAt,
+      nowMs,
+    )
     return {
-      status: 'no_data',
-      flags: ['אין טבלת קמפיין מחוברת'],
+      ...result,
       stalePlatforms,
     }
   }
@@ -194,11 +363,18 @@ export function classifyCampaignPulseStatus(input: ClassifyPulseInput): {
     const staleNote = stalePlatforms.length
       ? ` (${stalePlatforms.join(', ')})`
       : ''
-    return {
-      status: 'warning',
-      flags: [`סנכרון ישן או חסר — אין נתונים ב-30 הימים האחרונים${staleNote}`],
-      stalePlatforms,
-    }
+    const stopped = applyStoppedCampaigns(
+      'warning',
+      [`סנכרון ישן או חסר — אין נתונים ב-30 הימים האחרונים${staleNote}`],
+      input.stoppedCampaignCount,
+    )
+    const result = applyClientCallFreshness(
+      stopped.status,
+      stopped.flags,
+      input.lastClientCallAt,
+      nowMs,
+    )
+    return { ...result, stalePlatforms }
   }
 
   let status: PulseStatus = 'healthy'
@@ -226,7 +402,9 @@ export function classifyCampaignPulseStatus(input: ClassifyPulseInput): {
     if (status === 'healthy') status = 'warning'
   }
 
-  return { status, flags, stalePlatforms }
+  const stopped = applyStoppedCampaigns(status, flags, input.stoppedCampaignCount)
+  const result = applyClientCallFreshness(stopped.status, stopped.flags, input.lastClientCallAt, nowMs)
+  return { ...result, stalePlatforms }
 }
 
 export type PulseStatusCounts = {
@@ -499,6 +677,7 @@ export function countPulseStatuses(rows: Array<{ status?: string | null }>): Pul
 export function buildPulseWhatsAppDigest(
   rows: Array<{ status?: string | null; client_name?: string | null; campaign_goal_mode?: string | null; is_ecommerce?: boolean | null; lead_goal_status?: string | null; ecommerce_goal_status?: string | null; leads_7d?: number | null; purchases_7d?: number | null; cpl_7d?: number | null; roas_7d?: number | null; cpl_change_pct?: number | null; roas_change_pct?: number | null; lead_spend_7d?: number | null; ecommerce_spend_7d?: number | null; spend_7d?: number | null }>,
   dashboardUrl: string,
+  criticalIssues: PulseCriticalIssue[] = [],
 ): string {
   const goalRows = expandSnapshotsToGoalRows(rows as SnapshotExpandable[])
   const counts = countPulseStatuses(goalRows)
@@ -506,6 +685,7 @@ export function buildPulseWhatsAppDigest(
   const goalHint = hybridClients > 0
     ? ` (כולל ${hybridClients} לקוחות משולבים עם יעד לידים + איקומרס)`
     : ''
+  const issueLines = criticalIssueLines(criticalIssues)
   if (goalRows.length === 1) {
     const statusLabel: Record<string, string> = {
       healthy: '🟢 תקין',
@@ -524,6 +704,7 @@ export function buildPulseWhatsAppDigest(
       `*בדיקת דופק${name}${goalSuffix}*`,
       `סטטוס: ${label}`,
       metricLine,
+      ...issueLines,
       '',
       'פירוט מלא בדשבורד בדיקת דופק:',
       dashboardUrl,
@@ -536,6 +717,7 @@ export function buildPulseWhatsAppDigest(
     `🟢 *${counts.healthy}* תקינים`,
     `🟡 *${counts.attention}* לתשומת לב`,
     `🔴 *${counts.critical}* קריטיים`,
+    ...issueLines,
     '',
     'צפה בדשבורד בדיקת דופק:',
     dashboardUrl,

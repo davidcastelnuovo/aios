@@ -56,13 +56,16 @@ import {
   redactSecretsFromText,
 } from '../_shared/openai-billing.ts'
 import {
+  CAMPAIGN_TABLE_TYPES,
   buildPulseDashboardAbsoluteUrl,
   buildPulseWhatsAppDigest,
+  clientAdAccountIds,
   countPulseStatuses,
   expandSnapshotsToGoalRows,
   filterPulseRowsByClientIds,
   goalLabel,
   pulseSurfacePrefersWhatsAppDigest,
+  selectPulseCriticalAlerts,
 } from '../_shared/campaign-pulse.ts'
 
 function scoreNameMatchSafe(fullName: string, query: string): number {
@@ -1659,6 +1662,52 @@ async function fbTryConnectClients(
   return { connected, stillNotConnected }
 }
 
+/**
+ * Open critical campaign alerts (stopped campaigns, disapproved ads) for the
+ * clients in a pulse snapshot, limited to clients with an active campaign table.
+ */
+async function loadPulseCriticalIssues(
+  supabase: any,
+  accessibleTenantIds: string[],
+  rows: Array<{ client_id: string; client_name?: string | null }>,
+) {
+  const clientIds = rows.map((row) => row.client_id).filter(Boolean)
+  if (!clientIds.length) return []
+  try {
+    const [tables, alerts] = await Promise.all([
+      supabase.from('crm_tables')
+        .select('client_id, integration_settings, campaign_active, integration_type')
+        .in('client_id', clientIds)
+        .in('integration_type', [...CAMPAIGN_TABLE_TYPES]),
+      supabase.from('campaign_alerts')
+        .select('client_id, ad_account_id, campaign_id, campaign_name, alert_type, severity')
+        .in('tenant_id', accessibleTenantIds)
+        .is('resolved_at', null)
+        .order('created_at', { ascending: false })
+        .limit(500),
+    ])
+    if (tables.error || alerts.error) return []
+
+    const activeTablesByClient = new Map<string, any[]>()
+    for (const table of tables.data || []) {
+      if (table.campaign_active === false) continue
+      activeTablesByClient.set(table.client_id, [...(activeTablesByClient.get(table.client_id) || []), table])
+    }
+    return selectPulseCriticalAlerts(alerts.data || [], rows.map((row) => {
+      const activeTables = activeTablesByClient.get(row.client_id) || []
+      return {
+        clientId: row.client_id,
+        clientName: row.client_name || null,
+        adAccountIds: clientAdAccountIds(activeTables),
+        hasActiveCampaignTable: activeTables.length > 0,
+      }
+    }))
+  } catch (error) {
+    console.warn('[pulse] critical alert lookup failed', error instanceof Error ? error.message : String(error))
+    return []
+  }
+}
+
 async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<string[]> {
   try {
     const { data } = await supabase
@@ -2747,10 +2796,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return await r.json()
     }
     case 'get_latest_campaign_pulse': {
-      const loadPulse = async () => {
+      const PULSE_BASE_COLUMNS = 'tenant_id, calculated_at, data_fresh_through, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)'
+      const PULSE_CALL_COLUMNS = 'last_client_call_at, last_client_call_by'
+      const loadPulse = async (columns: string) => {
         let query = supabase
           .from('campaign_pulse_snapshots')
-          .select('tenant_id, calculated_at, data_fresh_through, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)')
+          .select(columns)
           // Shared agencies may snapshot under a partner tenant — same scope as the dashboard.
           .in('tenant_id', accessibleTenantIds)
           .order('calculated_at', { ascending: false })
@@ -2762,7 +2813,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
         return await query
       }
-      let { data, error } = await loadPulse()
+      let { data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}`)
+      if (error && /last_client_call/.test(error.message)) {
+        // Call-freshness columns not deployed yet — still serve the pulse.
+        ({ data, error } = await loadPulse(PULSE_BASE_COLUMNS))
+      }
       if (error) throw error
       let rows = data || []
       if (args.client_name) {
@@ -2816,8 +2871,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         : '—'
       const escapeCell = (value: any) => String(value ?? '—').replace(/\|/g, '\\|').replace(/\n/g, ' ')
       const tableLines = [
-        '| סוכנות | לקוח | יעד | סטטוס | הוצאה 7 ימים | לידים/רכישות | CPL/ROAS | שינוי | שינוי במטה | הערה |',
-        '|---|---|---|---:|---:|---:|---:|---|---|',
+        '| סוכנות | לקוח | יעד | סטטוס | הוצאה 7 ימים | לידים/רכישות | CPL/ROAS | שינוי | שיחת לקוח אחרונה | תועדה ע"י | שינוי במטה | הערה |',
+        '|---|---|---|---:|---:|---:|---:|---|---|---|---|',
         ...goalRows.map((row: any) => {
           const outcomes = fmtNumber(row.outcomes_7d)
           const efficiencyLabel = row.efficiency_kind === 'roas'
@@ -2829,16 +2884,18 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           const metaChange = row.last_meta_change_at
             ? fmtDate(row.last_meta_change_at)
             : row.meta_change_availability === 'no_campaign_change_in_30d' ? 'לא נמצא ב-30 יום' : 'לא זמין'
-          const agencyName = normalizedRows.find((client: any) => client.client_id === row.client_id)?.agency_name
-          return `| ${escapeCell(agencyName)} | ${escapeCell(row.client_name)} | ${escapeCell(goalLabel(row.goal))} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(metaChange)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
+          const snapshotRow = normalizedRows.find((client: any) => client.client_id === row.client_id)
+          const agencyName = snapshotRow?.agency_name
+          return `| ${escapeCell(agencyName)} | ${escapeCell(row.client_name)} | ${escapeCell(goalLabel(row.goal))} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(fmtDate(snapshotRow?.last_client_call_at))} | ${escapeCell(snapshotRow?.last_client_call_by)} | ${escapeCell(metaChange)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
         }),
       ]
       const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
       const tenantSlug = tenantRow?.slug || tenantId
       const dashboardUrl = buildPulseDashboardAbsoluteUrl(tenantSlug)
       const statusCounts = countPulseStatuses(goalRows)
+      const criticalIssues = await loadPulseCriticalIssues(supabase, accessibleTenantIds, normalizedRows)
       const whatsappDigest = normalizedRows.length
-        ? buildPulseWhatsAppDigest(normalizedRows, dashboardUrl)
+        ? buildPulseWhatsAppDigest(normalizedRows, dashboardUrl, criticalIssues)
         : null
       const preferDigest = pulseSurfacePrefersWhatsAppDigest(surface)
       if (!normalizedRows.length) {
@@ -2872,7 +2929,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           whatsapp_digest: whatsappDigest,
           formatted_markdown: null,
           instructions_to_agent:
-            'בוואטסאפ החזירי את whatsapp_digest כלשונו בלבד — כולל שורת הקישור לדשבורד. אסור טבלת Markdown, אסור פירוט לקוח-לקוח, אסור להדביק rows. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק ללקוח ספציפי.',
+            'בוואטסאפ החזירי את whatsapp_digest כלשונו בלבד — כולל בלוק "🔴 דורש טיפול" כשיש ושורת הקישור לדשבורד. אסור טבלת Markdown, אסור פירוט לקוח-לקוח, אסור להדביק rows. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק ללקוח ספציפי.',
         }
       }
       return {
@@ -6856,7 +6913,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     if (isCarmen && (surface === 'whatsapp' || surface === 'task')) {
       systemPrompt += `\n\n📱 === בדיקת דופק בוואטסאפ (חובה) ===
 • בקשה ל"בדיקת דופק" / "דופק" / "מצב קמפיינים" — חובה get_latest_campaign_pulse בלבד.
-• אחרי הכלי — החזירי את whatsapp_digest כלשונו, כולל שורת הקישור לדשבורד. בלי הקדמה, בלי סיכום נוסף.
+• אחרי הכלי — החזירי את whatsapp_digest כלשונו, כולל בלוק "🔴 דורש טיפול" כשיש ושורת הקישור לדשבורד. בלי הקדמה, בלי סיכום נוסף.
 • "בדיקת תקינות מערכות וקמפיינים" זה דוח אחר (health probe) — לא בדיקת דופק. אל תערבבי ביניהם.
 • אסור טבלת Markdown, אסור "בדיקת דופק אחרונה — חושבה ב־…" + פירוט לקוחות, אסור להמציא שורות מה-rows.`
     }

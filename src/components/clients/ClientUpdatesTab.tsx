@@ -36,6 +36,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { resolveClientUpdateType } from "@/lib/clientUpdateType";
 
 interface ClientUpdatesTabProps {
   clientId: string;
@@ -203,6 +204,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   const addUpdateMutation = useMutation({
     mutationFn: async ({ content, updateType }: { content: string; updateType: string }) => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
+      const resolvedUpdateType = resolveClientUpdateType(updateType, content);
       const { error } = await supabase
         .from("client_updates")
         .insert({
@@ -210,7 +212,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
           tenant_id: tenantId,
           user_id: user.id,
           content,
-          update_type: updateType,
+          update_type: resolvedUpdateType,
         } as any);
       if (error) throw error;
     },
