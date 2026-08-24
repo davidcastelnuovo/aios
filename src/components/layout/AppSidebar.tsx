@@ -27,7 +27,6 @@ import {
   Menu,
   ListTree,
   Table,
-  Plus,
   Table2,
   MessageSquare,
   MessagesSquare,
@@ -76,11 +75,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { useAgency } from "@/contexts/AgencyContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -119,11 +116,9 @@ export function AppSidebar() {
   const { menuItems: dbMenuItems, isLoading: isLoadingMenuItems } = useMenuItems();
   const isCollapsed = state === "collapsed";
   const [activeTab, setActiveTab] = useState<string>("daily");
-  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
 
   const { userId } = useCurrentUser();
   const { currentTenantId } = useTenant();
-  const { selectedAgency } = useAgency();
 
   // Build a set of visible menu_keys from DB
   const visibleKeys = new Set<string>(
@@ -190,23 +185,6 @@ export function AppSidebar() {
       return data?.map(tu => tu.tenants).filter(Boolean) as Array<{ id: string; name: string }>;
     },
     enabled: !!userId,
-  });
-
-  // Fetch dynamic CRM tables
-  const { data: crmTables } = useQuery({
-    queryKey: ["crm-tables", currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return [];
-      const response = await supabase.functions.invoke(`crm-tables?tenant_id=${currentTenantId}`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      if (response.error) return [];
-      return Array.isArray(response.data) ? response.data : [];
-    },
-    enabled: !!currentTenantId,
   });
 
   const handleTenantChange = async (newTenantId: string) => {
@@ -450,87 +428,10 @@ export function AppSidebar() {
           );
         })}
 
-        {/* Dynamic CRM Tables — shown in marketing tab */}
-        {activeTab === "marketing" && hasPermission("dynamic_tables") && (() => {
-          const filteredCrmTables = (crmTables || []).filter((table: any) => {
-            if (!selectedAgency || selectedAgency === "all") return true;
-            return table.agency_id === null || table.agency_id === selectedAgency;
-          });
-          return (
-            <Collapsible defaultOpen className="group/collapsible">
-              <SidebarGroup>
-                <SidebarGroupLabel asChild>
-                  <div className="flex items-center justify-between">
-                    <CollapsibleTrigger className="flex items-center gap-2 flex-1 hover:bg-accent rounded-md px-2 py-1" dir="rtl">
-                      <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180 ml-auto" />
-                      {!isCollapsed && <span className="flex-1 text-right">טבלאות דינמיות</span>}
-                      <Table2 className="h-4 w-4" />
-                    </CollapsibleTrigger>
-                    {!isCollapsed && (
-                      <button
-                        onClick={() => setIsQuickCreateOpen(true)}
-                        className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent transition-colors"
-                        title="טבלה חדשה"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </SidebarGroupLabel>
-                <CollapsibleContent>
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton asChild>
-                          <NavLink
-                            to={buildPath("dynamic-tables")}
-                            onClick={handleLinkClick}
-                            className={({ isActive }) =>
-                              isActive
-                                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                                : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                            }
-                          >
-                            <Settings className="h-4 w-4" />
-                            {!isCollapsed && <span>ניהול דוחות</span>}
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                      {filteredCrmTables.map((table: any) => {
-                        const Icon = iconMap[table.icon] || Table;
-                        return (
-                          <SidebarMenuItem key={table.id}>
-                            <SidebarMenuButton asChild>
-                              <NavLink
-                                to={buildPath(`table/${table.slug}`)}
-                                onClick={handleLinkClick}
-                                className={({ isActive }) =>
-                                  isActive
-                                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                                    : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                                }
-                              >
-                                <Icon className="h-4 w-4" />
-                                {!isCollapsed && <span>{table.name}</span>}
-                              </NavLink>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        );
-                      })}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </CollapsibleContent>
-              </SidebarGroup>
-            </Collapsible>
-          );
-        })()}
       </SidebarContent>
 
       {/* Install PWA Button */}
       <InstallAppButton isCollapsed={isCollapsed} />
-
-      {/* Quick Create Table Dialog */}
-      <SimpleTableDialog open={isQuickCreateOpen} onOpenChange={setIsQuickCreateOpen} />
     </Sidebar>
   );
 }
