@@ -40,8 +40,10 @@ import {
 import { formatUsd, summarizeStoredImageCosts } from "@/components/marketing/departments/creative/imageCost";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
 import { buildCompositionLock, pickCompositionId, type CompositionId } from "@/components/marketing/departments/creative/compositions";
-import { buildCopySceneBrief, hydrateVariationLayers, isInternalCopyLine, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
+import { buildAdaptiveTreatment, isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
+import { buildCopySceneBrief, hydrateVariationLayers, isInternalCopyLine } from "@/components/marketing/departments/creative/designedLayers";
 import {
+  buildStaticQualityLock,
   buildVisualStyleLock,
   getVisualStyle,
   getVisualStyleId,
@@ -763,18 +765,26 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       .map((variation) => variation.compositionId)
       .filter((value): value is CompositionId => !!value);
     const compositionId = pickCompositionId(`${copyKey || copyLabel || style.id}-${Date.now()}`, usedCompositions);
+    const costume = isOptionalCostume(style.id) ? style : undefined;
     const creativePrompt = [
       `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
       sceneBrief,
       buildCompositionLock(compositionId),
-      `TREATMENT ONLY: dress that same situation in a ${style.label} material/light system. Invent the structure. Do not recall or copy any style-board layout or cliché subject.`,
-      buildVisualStyleLock(selected.payload, { styleId: style.id }),
+      buildAdaptiveTreatment({
+        copyText,
+        copyLabel,
+        title: selected.title ?? undefined,
+        brief: getBriefText(selected),
+        brandColors: kit.brandBook?.colors,
+        costumeLabel: costume?.label,
+      }),
+      buildStaticQualityLock(),
       brandKitPrompt(kit),
       directorNote && `Art director REJECT — do not repeat these mistakes: ${directorNote}`,
       `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
       kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
       "RTL/production: Hebrew is composited as layers after generation — the image API still garbles Hebrew (reversed letters, missing glyphs). Do not paint letters.",
-      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, attached style-board layouts.",
+      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes.",
     ].filter(Boolean).join("\n");
     throwIfGenerationAborted(generateAbortRef.current);
     const { imageUrl, cost } = await generateCreativeImage({
@@ -792,7 +802,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       copyText,
       title: selected.title ?? undefined,
       visualStyle: style.id,
-      name: name ?? `${copyLabel || "וריאציה"} · ${style.label}`,
+      name: name ?? (copyLabel || "וריאציה"),
       source: "ai",
       copyKey,
       copyLabel,
@@ -815,13 +825,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       const replaceTarget = mode === "replace"
         ? target ?? variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1]
         : undefined;
-      const usedStyles = variations
-        .map((variation) => variation.visualStyle)
-        .filter((value): value is CreativeVisualStyleId => !!value);
-      const projectStyle = getVisualStyleId(selected.payload);
-      const style = mode === "new"
-        ? (variations.length > 0 ? pickNextVariationStyle([projectStyle, ...usedStyles]) : visualStyleById(projectStyle))
-        : visualStyleById(replaceTarget?.visualStyle ?? projectStyle);
+      const style = visualStyleById("adaptive");
       const usedCopyKeys = new Set(variations.filter((variation) => !variation.rejected).map((variation) => variation.copyKey).filter(Boolean));
       const copyBlock = replaceTarget
         ? copyBlocks.find((block) => block.key === replaceTarget.copyKey) ?? copyBlocks[0]
@@ -841,9 +845,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       const nextVariations = replaceTarget
         ? variations.map((variation) => variation.id === replaceTarget.id ? { ...replaceTarget, ...nextVariation, rejected: false } : variation)
         : [...variations, nextVariation];
-      await persistVariations(
+        await persistVariations(
         nextVariations,
-        replaceTarget ? `העיצוב נוצר מחדש בסגנון ${style.label}` : `נוצר קריאייטיב ל${nextVariation.copyLabel || "קופי"} בסגנון ${style.label}`,
+        replaceTarget ? "העיצוב נוצר מחדש לפי הקופי והמותג" : `נוצר קריאייטיב ל${nextVariation.copyLabel || "קופי"}`,
       );
       setSelectedVariationId(nextVariation.id);
       if (mode !== "replace") setWorkspacePanel(null);
@@ -869,17 +873,13 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     try {
       await prepareCreativeStage();
       const projectStyle = getVisualStyleId(selected.payload);
-      let usedStyles: CreativeVisualStyleId[] = variations
-        .map((variation) => variation.visualStyle)
-        .filter((value): value is CreativeVisualStyleId => !!value);
       let current = [...variations];
       for (const [index, block] of blocks.entries()) {
         throwIfGenerationAborted(generateAbortRef.current);
         setGenerateProgress(`יוצר ${index + 1}/${blocks.length} · ${copyBlockLabel(block)}`);
-        const style = styleMode === "same"
+        const style = styleMode === "same" && isOptionalCostume(projectStyle)
           ? visualStyleById(projectStyle)
-          : pickNextVariationStyle([projectStyle, ...usedStyles]);
-        usedStyles = [...usedStyles, style.id];
+          : visualStyleById("adaptive");
         const created = await buildCreative({
           copyText: block.text || getBriefText(selected),
           copyKey: block.key,
@@ -887,11 +887,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           styleId: style.id,
         });
         current = [...current, created];
-        await persistVariations(current, `נוצר ${copyBlockLabel(block)} בסגנון ${style.label}`);
+        await persistVariations(current, `נוצר ${copyBlockLabel(block)}`);
         setSelectedVariationId(created.id);
       }
       setWorkspacePanel(null);
-      toast.success(styleMode === "same" ? "נוצר קריאייטיב לכל וריאציית קופי בסגנון הנבחר" : "נוצר קריאייטיב לכל וריאציית קופי בסגנון אחר");
+      toast.success("נוצר קריאייטיב לכל וריאציית קופי לפי הקופי והמותג");
     } catch (error: unknown) {
       if (isGenerationAborted(error)) toast.message("היצירה נעצרה — מה שכבר נוצר נשמר");
       else toast.error(errorMessage(error, "יצירת הגריד נכשלה"));
@@ -914,11 +914,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     setGeneratingId(rejectTarget.id);
     try {
       await prepareCreativeStage();
-      const projectStyle = getVisualStyleId(selected.payload);
-      const usedStyles = variations
-        .map((variation) => variation.visualStyle)
-        .filter((value): value is CreativeVisualStyleId => !!value);
-      const style = pickNextVariationStyle([rejectTarget.visualStyle ?? projectStyle, ...usedStyles]);
+      const style = visualStyleById("adaptive");
       const copyBlock = copyBlocks.find((block) => block.key === rejectTarget.copyKey);
       const created = await buildCreative({
         copyText: rejectTarget.copyText || copyBlock?.text || getLinkedCopyText(selected),
@@ -1268,10 +1264,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => void generateAllFromCopy("same")}>
-                לכל וריאציות הקופי · בסגנון {getVisualStyle(selected.payload).label}
+                לכל וריאציות הקופי · מותאם לקופי ולמותג
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void generateAllFromCopy("mixed")}>
-                לכל וריאציות הקופי · סגנון שונה לכל אחת
+                לכל וריאציות הקופי · מבנה גרפי שונה לכל אחת
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1358,7 +1354,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
               <h3 className="text-lg font-bold text-foreground">גריד וריאציות</h3>
               <p className="mt-2 max-w-md text-sm">
-                כל וריאציית קופי מקבלת קריאייטיב משלה לפי הבריף. אפשר סגנון אחד לכולן או סגנון שונה לכל אחת, ואז לערוך / למחוק / לג׳נרט / לרג׳קט מכל כרטיס.
+                כל וריאציית קופי מקבלת קריאייטיב משלה: הסגנון מותאם לקופי, לצבעי הלוגו ולנושא, והמבנה הגרפי משתנה בין הכרטיסים. אחר כך אפשר לערוך / למחוק / לג׳נרט / לרג׳קט.
               </p>
               {copyBlocks.length > 0 && (
                 <p className="mt-2 text-xs">נמצאו {copyBlocks.length} וריאציות קופי משויכות</p>
@@ -1367,10 +1363,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 <Button variant="outline" onClick={() => setWorkspacePanel("project")}>עריכת פרויקט</Button>
                 <Button className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={() => void generateAllFromCopy("same")} disabled={generating || loadingContext || !selected.client_id}>
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                  צור לכל הקופי בסגנון הנבחר
+                  צור לכל הקופי
                 </Button>
                 <Button variant="outline" className="gap-2" onClick={() => void generateAllFromCopy("mixed")} disabled={generating || loadingContext || !selected.client_id}>
-                  סגנון שונה לכל קופי
+                  מבנה שונה לכל קופי
                 </Button>
                 {generating && (
                   <Button variant="destructive" className="gap-2" onClick={stopGeneration}>

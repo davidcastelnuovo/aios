@@ -2,8 +2,6 @@ import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
 import { compositionById, pickCompositionId, type CompositionId } from "./compositions";
 import { withLayerShadow } from "./layerShadow";
 import {
-  CREATIVE_VISUAL_STYLES,
-  stylesInGroup,
   type CreativeVisualStyle,
   type CreativeVisualStyleId,
   visualStyleById,
@@ -28,6 +26,7 @@ interface Palette {
 }
 
 const PALETTES: Record<CreativeVisualStyleId, Palette> = {
+  adaptive: { headline: "#111111", extrude: "#1f2937", body: "#111111", pill: "#111111", pillText: "#ffffff", cta: "#111111", ctaText: "#ffffff", band: "#111111e6" },
   swiss: { headline: "#1e3a8a", extrude: "#93c5fd", body: "#1e3a8a", pill: "#1d4ed8", pillText: "#ffffff", cta: "#1d4ed8", ctaText: "#ffffff", band: "#1e3a8af0" },
   industrial: { headline: "#facc15", extrude: "#1a1a1a", body: "#fde68a", pill: "#eab308", pillText: "#111827", cta: "#eab308", ctaText: "#111827", band: "#111111e6" },
   mediterranean: { headline: "#fffbeb", extrude: "#1e3a5f", body: "#fffbeb", pill: "#c4a574", pillText: "#1c1917", cta: "#1e3a5f", ctaText: "#fffbeb", band: "#1e3a5fe6" },
@@ -86,7 +85,7 @@ export const applyBrandPalette = (base: Palette, colors?: string[]): Palette => 
 };
 
 const FAT_DISPLAY_STYLES = new Set<CreativeVisualStyleId>([
-  "industrial", "kinetic", "cinematic", "collage", "organic", "mediterranean",
+  "adaptive", "industrial", "kinetic", "cinematic", "collage", "organic", "mediterranean",
   "popart", "comic", "render3d", "editorial", "photoreal", "ugc",
 ]);
 
@@ -412,18 +411,8 @@ export const shouldRebuildDesignedLayers = (layers: CreativeLayer[], copyText?: 
   return false;
 };
 
-export const pickNextVariationStyle = (used: CreativeVisualStyleId[]): CreativeVisualStyle => {
-  const unusedReference = stylesInGroup("reference").filter((item) => !used.includes(item.id));
-  if (unusedReference.length > 0) {
-    return unusedReference[Math.floor(Math.random() * unusedReference.length)];
-  }
-  const unused = CREATIVE_VISUAL_STYLES.filter((item) => !used.includes(item.id));
-  const last = used[used.length - 1];
-  const pool = unused.length > 0
-    ? unused
-    : CREATIVE_VISUAL_STYLES.filter((item) => item.id !== last);
-  return pool[Math.floor(Math.random() * Math.max(pool.length, 1))] ?? CREATIVE_VISUAL_STYLES[0];
-};
+export const pickNextVariationStyle = (_used: CreativeVisualStyleId[] = []): CreativeVisualStyle =>
+  visualStyleById("adaptive");
 
 const layer = (partial: Omit<CreativeLayer, "id">): CreativeLayer => ({
   id: crypto.randomUUID(),

@@ -1,4 +1,5 @@
 export type CreativeVisualStyleId =
+  | "adaptive"
   | "swiss"
   | "industrial"
   | "mediterranean"
@@ -19,7 +20,7 @@ export type CreativeVisualStyleId =
   | "watercolor"
   | "comic";
 
-export type CreativeVisualStyleGroup = "reference" | "more";
+export type CreativeVisualStyleGroup = "auto" | "reference" | "more";
 
 export interface CreativeVisualStyle {
   id: CreativeVisualStyleId;
@@ -29,7 +30,7 @@ export interface CreativeVisualStyle {
   lock: string;
 }
 
-export const DEFAULT_VISUAL_STYLE_ID: CreativeVisualStyleId = "swiss";
+export const DEFAULT_VISUAL_STYLE_ID: CreativeVisualStyleId = "adaptive";
 
 const style = (
   id: CreativeVisualStyleId,
@@ -40,6 +41,10 @@ const style = (
 ): CreativeVisualStyle => ({ id, label, hint, group, lock: lock.join(" ") });
 
 export const CREATIVE_VISUAL_STYLES: CreativeVisualStyle[] = [
+  style("adaptive", "מותאם לקופי", "סגנון שנבנה מהקופי, מצבעי הלוגו ומהנושא", "auto", [
+    "ADAPTIVE STYLE: invent a treatment from this copy, this topic, and the logo colors.",
+    "Do not apply a named style-board recipe.",
+  ]),
   style("swiss", "מסחרי נקי", "שוויצרי, אוויר, צל רך, גריד נקי", "reference", [
     "ART DIRECTION only: clean Swiss / international commercial still applied to THIS copy's subject.",
     "Light grey-to-white field, generous negative space, catalog-precise 35mm, high-key daylight, one soft contact shadow.",
@@ -200,19 +205,28 @@ const STATIC_QUALITY = [
   "A stranger should recognize which variation this is without reading type. If the still could be reused for a different angle, it failed.",
   "Do not replace the copy with a prettier default (vacation village, airplane, suitcase, jet engine, generic landscape, abstract glass toy) unless the copy is about that.",
   "MILLION-DOLLAR GRAPHIC DESIGN — not a stock photo with a caption. Build the still from several designed pieces (hero acting the copy + 2-4 graphic objects: geometric field, torn paper, 3D object, light, architectural frame, printed texture).",
-  "The ten style boards were examples of RANGE, not layouts to copy. Do not recall those boards. Invent a new graphic structure. Forbidden template: logo top-right + top headline strip + bottom CTA pill.",
+  "The ten style boards were examples of RANGE, not a style system. Do not recall or apply those recipes. Invent a treatment that fits THIS copy, THIS topic, and the logo colors.",
+  "Forbidden template: logo top-right + top headline strip + bottom CTA pill.",
   "Type will be composited into a designed zone that is already part of the art (slash, rail, badge, split field, shadow pocket). Do not leave a white/cream rectangle or caption plate.",
   "If BRAND COLOR LOCK is present, it OVERRIDES any palette listed in this style. Use only those logo/brand colors plus black, white, or paper.",
   "No letters, numbers, logos, watermarks, buttons, or fake UI with words — Hebrew is composited later because the image API still garbles Hebrew glyphs. Never invent or redraw a logo.",
   "Forbidden: grey/white seamless studio headshot, thinking-hand pose, caption plate, Canva template, random portrait unrelated to the copy.",
 ].join(" ");
 
+export const buildStaticQualityLock = () => STATIC_QUALITY;
+
 export const buildVisualStyleLock = (
   payload: Record<string, unknown> | null | undefined,
   options?: { storyboard?: boolean; styleId?: CreativeVisualStyleId },
 ): string => {
   const selected = options?.styleId ? visualStyleById(options.styleId) : getVisualStyle(payload);
-  return [selected.lock, options?.storyboard ? STORYBOARD_CONTINUITY : STATIC_QUALITY].join("\n");
+  if (options?.storyboard) return [selected.lock, STORYBOARD_CONTINUITY].join("\n");
+  if (selected.id === "adaptive") return [selected.lock, STATIC_QUALITY].join("\n");
+  return [
+    `OPTIONAL COSTUME only — ${selected.label}. Borrow material/light if it helps THIS copy. Do not import this style's palette, layout, or cliché subject.`,
+    selected.lock,
+    STATIC_QUALITY,
+  ].join("\n");
 };
 
 export const imageSizeForFormat = (format?: string): "1024x1024" | "1024x1536" | "1536x1024" => {

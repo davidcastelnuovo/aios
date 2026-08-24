@@ -10,6 +10,7 @@ interface Props {
 
 export function VisualStyleSelect({ value, onChange, compact }: Props) {
   const selected = CREATIVE_VISUAL_STYLES.find((item) => item.id === value) ?? CREATIVE_VISUAL_STYLES[0];
+  const auto = stylesInGroup("auto");
   const reference = stylesInGroup("reference");
   const more = stylesInGroup("more");
 
@@ -22,12 +23,25 @@ export function VisualStyleSelect({ value, onChange, compact }: Props) {
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectLabel>רפרנס עיצוב</SelectLabel>
-            {reference.map((item, index) => (
+            <SelectLabel>ברירת מחדל</SelectLabel>
+            {auto.map((item) => (
               <SelectItem key={item.id} value={item.id}>
-                {compact ? `${String(index + 1).padStart(2, "0")} · ${item.label}` : (
+                {compact ? item.label : (
                   <>
-                    <span className="font-medium">{String(index + 1).padStart(2, "0")} · {item.label}</span>
+                    <span className="font-medium">{item.label}</span>
+                    <span className="ms-2 text-muted-foreground">· {item.hint}</span>
+                  </>
+                )}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+          <SelectGroup>
+            <SelectLabel>כיוון אופציונלי</SelectLabel>
+            {reference.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {compact ? item.label : (
+                  <>
+                    <span className="font-medium">{item.label}</span>
                     <span className="ms-2 text-muted-foreground">· {item.hint}</span>
                   </>
                 )}
@@ -51,7 +65,9 @@ export function VisualStyleSelect({ value, onChange, compact }: Props) {
       </Select>
       {!compact && (
         <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-          כל הפריימים והוריאציות יישארו בסגנון {selected.label}. וריאציה חדשה תיקח סגנון רפרנס אחר. הטקסט העברי מתווסף אחר כך כשכבה — לא בתוך התמונה.
+          ברירת המחדל: הסגנון נבנה מהקופי, מצבעי הלוגו ומהנושא — לא מעשרת לוחות הרפרנס.
+          כיוון אופציונלי הוא רמז לחומר בלבד. הטקסט העברי מתווסף אחר כך כשכבה.
+          {selected.id !== "adaptive" ? ` נבחר כרגע: ${selected.label}.` : ""}
         </p>
       )}
     </div>
