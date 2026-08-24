@@ -195,15 +195,30 @@ export function CopyDepartment({ clientId, tenantId, onClientChange }: Props) {
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["copy-department-items", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("marketing_work_items")
-        .select("id,title,status,payload,current_stage_id,target_channel,client_id,created_at,updated_at")
-        .eq("tenant_id", tenantId)
-        .order("updated_at", { ascending: false });
+      const [{ data, error }, { data: copyStages, error: stageError }] = await Promise.all([
+        supabase
+          .from("marketing_work_items")
+          .select("id,title,status,payload,current_stage_id,target_channel,client_id,created_at,updated_at")
+          .eq("tenant_id", tenantId)
+          .order("updated_at", { ascending: false }),
+        supabase
+          .from("marketing_pipeline_stages")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("stage_type", "copy"),
+      ]);
       if (error) throw error;
+      if (stageError) throw stageError;
+      const copyStageIds = new Set((copyStages ?? []).map((stage) => stage.id));
       return ((data ?? []) as CopyItem[]).filter((item) => {
         const payload = item.payload ?? {};
-        return payload.department === "copy" || !!payload.brief_text || !!payload.copy_text || !!payload.copy_chat;
+        return (
+          (!!item.current_stage_id && copyStageIds.has(item.current_stage_id)) ||
+          payload.department === "copy" ||
+          !!payload.brief_text ||
+          !!payload.copy_text ||
+          !!payload.copy_chat
+        );
       });
     },
   });
@@ -909,10 +924,11 @@ function ProjectSettings({
       client_website: website,
       client_files: files.map((file) => ({ name: file.name, path: file.path })),
     };
+    const keepExistingStage = !!nextClientId && nextClientId === item.client_id && !!item.current_stage_id;
     const { error } = await supabase.from("marketing_work_items").update({
       client_id: nextClientId,
       pipeline_id: pipelineId,
-      current_stage_id: nextClientId ? (stageId ?? item.current_stage_id) : null,
+      current_stage_id: nextClientId ? (keepExistingStage ? item.current_stage_id : stageId) : null,
       payload: nextPayload,
     }).eq("id", item.id).eq("tenant_id", tenantId);
     if (error) throw error;
