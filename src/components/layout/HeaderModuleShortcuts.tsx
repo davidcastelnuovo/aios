@@ -5,6 +5,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -28,7 +29,7 @@ export function HeaderModuleShortcuts() {
 
   return (
     <div className="flex items-center gap-1">
-      <div className="hidden lg:flex items-center gap-1">
+      <div className="hidden xl:flex items-center gap-1">
         {selectedModules.map((module) => {
           const Icon = module.icon;
           const path = buildPath(module.route);
@@ -82,6 +83,31 @@ export function HeaderModuleShortcuts() {
           </div>
           <DropdownMenuSeparator />
 
+          {selectedModules.length > 0 && (
+            <>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                מעבר מהיר
+              </DropdownMenuLabel>
+              {selectedModules.map((module) => {
+                const Icon = module.icon;
+                return (
+                  <DropdownMenuItem
+                    key={`open-${module.key}`}
+                    className="gap-2 font-medium"
+                    onClick={() => navigate(buildPath(module.route))}
+                  >
+                    <Icon className="h-4 w-4 text-primary" />
+                    <span className="truncate">{module.label}</span>
+                  </DropdownMenuItem>
+                );
+              })}
+              <DropdownMenuSeparator />
+            </>
+          )}
+
+          <DropdownMenuLabel className="text-xs text-muted-foreground">
+            בחירת קיצורים
+          </DropdownMenuLabel>
           {groups.map((group, groupIndex) => (
             <div key={group.id}>
               {groupIndex > 0 && <DropdownMenuSeparator />}

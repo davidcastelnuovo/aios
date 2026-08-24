@@ -7,6 +7,7 @@ import {
   type MenuModule,
   type MenuTabId,
 } from "@/lib/menuStructure";
+import { computeSidebarOverlay } from "@/visual-workspace/hooks/useSitemap";
 
 export type AccessibleMenuGroup = {
   id: MenuTabId;
@@ -20,24 +21,34 @@ export function useAccessibleMenuModules() {
 
   const groups = useMemo<AccessibleMenuGroup[]>(() => {
     const dbByKey = new Map(menuItems.map((item) => [item.menu_key, item]));
+    const overlay = computeSidebarOverlay(menuItems);
+    const modulesByTab = new Map<MenuTabId, MenuModule[]>(
+      MENU_TABS.map((tab) => [tab.id, []]),
+    );
 
-    return MENU_TABS.map((tab) => {
-      const modules = tab.sections.flatMap((section) => section.items)
-        .filter((module) => {
+    for (const tab of MENU_TABS) {
+      for (const module of tab.sections.flatMap((section) => section.items)) {
+        const targetTabId = overlay.moduleHome.get(module.key)?.tabId || tab.id;
+        if (!modulesByTab.has(targetTabId)) continue;
+        const accessible = (() => {
           const configured = dbByKey.get(module.key);
           if (configured && !configured.is_visible) return false;
           if (module.key === "my-profile") return true;
           return hasPermission(permissionForMenuKey(module.key));
-        })
-        .map((module) => ({
+        })();
+        if (!accessible) continue;
+        modulesByTab.get(targetTabId)!.push({
           ...module,
           label: dbByKey.get(module.key)?.custom_label || module.label,
-        }));
+        });
+      }
+    }
 
+    return MENU_TABS.map((tab) => {
       return {
         id: tab.id,
-        label: dbByKey.get(`tab:${tab.id}`)?.custom_label || tab.label,
-        modules,
+        label: overlay.tabLabels.get(tab.id) || tab.label,
+        modules: modulesByTab.get(tab.id) || [],
       };
     }).filter((group) => group.modules.length > 0);
   }, [menuItems, hasPermission]);

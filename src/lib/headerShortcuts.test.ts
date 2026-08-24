@@ -17,6 +17,11 @@ test("saved empty selection remains empty", () => {
   assert.deepEqual(resolveHeaderShortcuts("[]", accessible), []);
 });
 
+test("corrupt storage recovers to defaults", () => {
+  assert.deepEqual(resolveHeaderShortcuts("{bad json", accessible), [...DEFAULT_HEADER_SHORTCUT_KEYS]);
+  assert.deepEqual(resolveHeaderShortcuts(JSON.stringify({ tasks: true }), accessible), [...DEFAULT_HEADER_SHORTCUT_KEYS]);
+});
+
 test("inaccessible, stale and duplicate modules are removed", () => {
   assert.deepEqual(
     resolveHeaderShortcuts(JSON.stringify(["tasks", "forbidden", "tasks", "leads"]), accessible),

@@ -14,20 +14,23 @@ export function resolveHeaderShortcuts(
   storedValue: string | null,
   accessibleKeys: readonly string[],
 ): string[] {
-  if (storedValue === null) {
-    return uniqueAccessible([...DEFAULT_HEADER_SHORTCUT_KEYS], accessibleKeys)
+  const defaults = () =>
+    uniqueAccessible([...DEFAULT_HEADER_SHORTCUT_KEYS], accessibleKeys)
       .slice(0, MAX_HEADER_SHORTCUTS);
+
+  if (storedValue === null) {
+    return defaults();
   }
 
   try {
     const parsed = JSON.parse(storedValue);
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) return defaults();
     return uniqueAccessible(
       parsed.filter((key): key is string => typeof key === "string"),
       accessibleKeys,
     ).slice(0, MAX_HEADER_SHORTCUTS);
   } catch {
-    return [];
+    return defaults();
   }
 }
 
