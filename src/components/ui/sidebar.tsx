@@ -28,6 +28,10 @@ type SidebarContext = {
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
   toggleSidebar: () => void;
+  /** When true, the sidebar expands while the pointer is over it. */
+  expandOnHover: boolean;
+  hoverOpen: boolean;
+  setHoverOpen: (open: boolean) => void;
 };
 
 const SidebarContext = React.createContext<SidebarContext | null>(null);
@@ -47,10 +51,24 @@ const SidebarProvider = React.forwardRef<
     defaultOpen?: boolean;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
+    expandOnHover?: boolean;
   }
->(({ defaultOpen = true, open: openProp, onOpenChange: setOpenProp, className, style, children, ...props }, ref) => {
+>((
+  {
+    defaultOpen = true,
+    open: openProp,
+    onOpenChange: setOpenProp,
+    expandOnHover = false,
+    className,
+    style,
+    children,
+    ...props
+  },
+  ref,
+) => {
   const isMobile = useIsMobile();
   const [openMobile, setOpenMobile] = React.useState(false);
+  const [hoverOpen, setHoverOpen] = React.useState(false);
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -91,7 +109,8 @@ const SidebarProvider = React.forwardRef<
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
-  const state = open ? "expanded" : "collapsed";
+  const hoverExpanded = expandOnHover && !isMobile && hoverOpen;
+  const state = open || hoverExpanded ? "expanded" : "collapsed";
 
   const contextValue = React.useMemo<SidebarContext>(
     () => ({
@@ -102,8 +121,11 @@ const SidebarProvider = React.forwardRef<
       openMobile,
       setOpenMobile,
       toggleSidebar,
+      expandOnHover,
+      hoverOpen,
+      setHoverOpen,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, expandOnHover, hoverOpen],
   );
 
   return (
@@ -137,7 +159,47 @@ const Sidebar = React.forwardRef<
     collapsible?: "offcanvas" | "icon" | "none";
   }
 >(({ side = "left", variant = "sidebar", collapsible = "offcanvas", className, children, ...props }, ref) => {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+  const { isMobile, state, open, openMobile, setOpenMobile, expandOnHover, hoverOpen, setHoverOpen } = useSidebar();
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const collapseTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverEnabled = expandOnHover && !isMobile && collapsible === "icon";
+  const hoverExpanded = hoverEnabled && hoverOpen && !open;
+
+  const clearCollapseTimer = React.useCallback(() => {
+    if (collapseTimer.current) {
+      clearTimeout(collapseTimer.current);
+      collapseTimer.current = null;
+    }
+  }, []);
+
+  React.useEffect(() => clearCollapseTimer, [clearCollapseTimer]);
+
+  const handlePointerEnter = React.useCallback(() => {
+    if (!hoverEnabled) return;
+    clearCollapseTimer();
+    setHoverOpen(true);
+  }, [clearCollapseTimer, hoverEnabled, setHoverOpen]);
+
+  const handlePointerLeave = React.useCallback(() => {
+    if (!hoverEnabled) return;
+    clearCollapseTimer();
+    // A popup opened from inside the sidebar (tenant select, dropdown menu) is
+    // rendered in a portal, so the pointer leaves the sidebar while the user is
+    // still interacting with it. Stay expanded until that popup closes.
+    const scheduleCollapse = () => {
+      collapseTimer.current = setTimeout(() => {
+        const popupOpen = panelRef.current?.querySelector(
+          '[data-state="open"][role="combobox"], [data-state="open"][aria-haspopup]',
+        );
+        if (popupOpen) {
+          scheduleCollapse();
+          return;
+        }
+        setHoverOpen(false);
+      }, 150);
+    };
+    scheduleCollapse();
+  }, [clearCollapseTimer, hoverEnabled, setHoverOpen]);
 
   if (collapsible === "none") {
     return (
@@ -177,6 +239,7 @@ const Sidebar = React.forwardRef<
       className="group peer hidden text-sidebar-foreground md:block"
       data-state={state}
       data-collapsible={state === "collapsed" ? collapsible : ""}
+      data-hover-expanded={hoverExpanded ? "true" : undefined}
       data-variant={variant}
       data-side={side}
     >
@@ -189,11 +252,20 @@ const Sidebar = React.forwardRef<
           variant === "floating" || variant === "inset"
             ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
             : "group-data-[collapsible=icon]:w-[--sidebar-width-icon]",
+          // While hover-expanded the sidebar floats above the page instead of
+          // pushing the content, so the reserved gap stays at icon width.
+          variant === "floating" || variant === "inset"
+            ? "group-data-[hover-expanded=true]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
+            : "group-data-[hover-expanded=true]:w-[--sidebar-width-icon]",
         )}
       />
       <div
+        ref={panelRef}
+        onMouseEnter={handlePointerEnter}
+        onMouseLeave={handlePointerLeave}
         className={cn(
           "fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear md:flex",
+          "group-data-[hover-expanded=true]:z-[60] group-data-[hover-expanded=true]:shadow-2xl",
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
