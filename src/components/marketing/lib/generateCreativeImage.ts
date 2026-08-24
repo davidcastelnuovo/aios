@@ -9,7 +9,28 @@ interface GenerateCreativeImageArgs {
   prompt: string;
 }
 
-/** Primary path: marketing-run-stage (skins, runs, pipeline). Fallback: ai-generate-social-image (OPENAI_API_KEY secret). */
+async function invokeSocialImage(
+  supabase: SupabaseClient,
+  tenantId: string,
+  itemId: string,
+  prompt: string,
+) {
+  return supabase.functions.invoke("ai-generate-social-image", {
+    body: { prompt, tenant_id: tenantId, post_id: itemId },
+  });
+}
+
+async function invokeMarketingStage(
+  supabase: SupabaseClient,
+  itemId: string,
+  stageId: string,
+) {
+  return supabase.functions.invoke("marketing-run-stage", {
+    body: { item_id: itemId, stage_id: stageId },
+  });
+}
+
+/** Generate a marketing image. Uses ai-generate-social-image first (gpt-image-1, stable), then marketing-run-stage for full pipeline when available. */
 export async function generateCreativeImage({
   supabase,
   tenantId,
@@ -17,10 +38,19 @@ export async function generateCreativeImage({
   stageId,
   prompt,
 }: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean }> {
-  const stageResult = await supabase.functions.invoke("marketing-run-stage", {
-    body: { item_id: itemId, stage_id: stageId },
-  });
+  const socialResult = await invokeSocialImage(supabase, tenantId, itemId, prompt);
+  if (!socialResult.error && !socialResult.data?.error) {
+    const imageUrl = socialResult.data?.image_url;
+    if (imageUrl && typeof imageUrl === "string") {
+      return { imageUrl, usedFallback: true };
+    }
+  }
 
+  const socialError = socialResult.error
+    ? await invokeErrorMessage(socialResult.error, socialResult.data, "יצירת תמונה נכשלה", socialResult.response)
+    : socialResult.data?.error ?? "לא התקבלה תמונה";
+
+  const stageResult = await invokeMarketingStage(supabase, itemId, stageId);
   if (!stageResult.error && !stageResult.data?.error) {
     const imageUrl = stageResult.data?.url ?? stageResult.data?.image_url;
     if (imageUrl && typeof imageUrl === "string") {
@@ -32,31 +62,5 @@ export async function generateCreativeImage({
     ? await invokeErrorMessage(stageResult.error, stageResult.data, "יצירת הקריאייטיב נכשלה", stageResult.response)
     : stageResult.data?.error ?? "לא התקבלה תמונה מהיצירה";
 
-  const fallbackResult = await supabase.functions.invoke("ai-generate-social-image", {
-    body: {
-      prompt,
-      tenant_id: tenantId,
-      post_id: itemId,
-    },
-  });
-
-  if (fallbackResult.error) {
-    const fallbackError = await invokeErrorMessage(
-      fallbackResult.error,
-      fallbackResult.data,
-      "יצירת תמונה נכשלה",
-      fallbackResult.response,
-    );
-    throw new Error(`${stageError} · גיבוי: ${fallbackError}`);
-  }
-  if (fallbackResult.data?.error) {
-    throw new Error(`${stageError} · גיבוי: ${fallbackResult.data.error}`);
-  }
-
-  const imageUrl = fallbackResult.data?.image_url;
-  if (!imageUrl || typeof imageUrl !== "string") {
-    throw new Error(stageError);
-  }
-
-  return { imageUrl, usedFallback: true };
+  throw new Error(`${socialError} · pipeline: ${stageError}`);
 }

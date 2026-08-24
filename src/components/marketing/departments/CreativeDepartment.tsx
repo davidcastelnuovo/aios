@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
-import { invokeErrorMessage } from "@/components/marketing/lib/invokeErrorMessage";
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { CreativeBriefEditor } from "@/components/marketing/departments/creative/CreativeBriefEditor";
@@ -334,7 +333,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         stageId: readyContext.creativeStage.id,
         prompt: framePrompt,
       });
-      if (usedFallback) toast.message("הפריים נוצר דרך מנוע גיבוי (gpt-image-1)");
+      if (usedFallback) toast.message("הפריים נוצר (gpt-image-1)");
       const next = activeFrames.map((value) => value.id === frame.id ? { ...frame, imageUrl } : value);
       setStoryboardDraft(next);
       await persistStoryboard(next, "הפריים נוצר ונשמר");
@@ -438,7 +437,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         stageId: readyContext.creativeStage.id,
         prompt: creativePrompt || selected.title || "Marketing creative",
       });
-      if (usedFallback) toast.message("הקריאייטיב נוצר דרך מנוע גיבוי (gpt-image-1)");
+      if (usedFallback) toast.message("הקריאייטיב נוצר (gpt-image-1)");
 
       const nextVariation = makeVariation({
         imageUrl,
