@@ -531,7 +531,11 @@ export function buildPulseWhatsAppDigest(
   }
   return [
     '*בדיקת דופק הושלמה*',
-    `נבדקו ${counts.total} יעדי קמפיין פעילים${goalHint}: 🟢 ${counts.healthy} תקינים | 🟡 ${counts.attention} לתשומת לב | 🔴 ${counts.critical} קריטיים`,
+    `נבדקו ${counts.total} יעדי קמפיין פעילים${goalHint}`,
+    '',
+    `🟢 *${counts.healthy}* תקינים`,
+    `🟡 *${counts.attention}* לתשומת לב`,
+    `🔴 *${counts.critical}* קריטיים`,
     '',
     'צפה בדשבורד בדיקת דופק:',
     dashboardUrl,

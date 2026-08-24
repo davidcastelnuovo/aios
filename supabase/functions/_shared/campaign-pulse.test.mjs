@@ -287,9 +287,9 @@ test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)
     "https://aios.co.il/t/marketingcaptain/dmm-dashboard",
   );
   assert.match(digest, /בדיקת דופק הושלמה/);
-  assert.match(digest, /🟢 1 תקינים/);
-  assert.match(digest, /🟡 2 לתשומת לב/);
-  assert.match(digest, /🔴 1 קריטיים/);
+  assert.match(digest, /🟢 \*1\* תקינים/);
+  assert.match(digest, /🟡 \*2\* לתשומת לב/);
+  assert.match(digest, /🔴 \*1\* קריטיים/);
   assert.match(digest, /https:\/\/aios\.co\.il\/t\/marketingcaptain\/dmm-dashboard/);
   assert.equal(digest.includes("| סוכנות |"), false);
   assert.equal(digest.includes("חושבה ב־"), false);
