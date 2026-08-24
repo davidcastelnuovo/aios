@@ -34,6 +34,7 @@ on:
       - 'supabase/ops/apply_pulse_twice_daily_cadence.sql'
       - 'supabase/ops/notify_felix_calendar_fix_ready.sql'
       - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
+      - 'supabase/ops/apply_pulse_goal_metrics.sql'
 
 jobs:
   apply:
@@ -72,6 +73,9 @@ jobs:
             if echo "$CHANGED" | grep -qx 'supabase/ops/notify_felix_calendar_fix_ready.sql'; then
               FILE="supabase/ops/notify_felix_calendar_fix_ready.sql"
               NAME="notify_felix_calendar_fix_ready"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_goal_metrics.sql'; then
+              FILE="supabase/ops/apply_pulse_goal_metrics.sql"
+              NAME="apply_pulse_goal_metrics"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaigner_delivery.sql'; then
               FILE="supabase/ops/apply_pulse_campaigner_delivery.sql"
               NAME="apply_pulse_campaigner_delivery"
