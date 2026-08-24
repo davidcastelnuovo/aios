@@ -1,6 +1,7 @@
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
 import {
   CREATIVE_VISUAL_STYLES,
+  stylesInGroup,
   type CreativeVisualStyle,
   type CreativeVisualStyleId,
   visualStyleById,
@@ -24,8 +25,17 @@ interface Palette {
 }
 
 const PALETTES: Record<CreativeVisualStyleId, Palette> = {
+  swiss: { headline: "#1e3a8a", extrude: "#93c5fd", body: "#1e3a8a", pill: "#1d4ed8", pillText: "#ffffff", cta: "#1d4ed8", ctaText: "#ffffff" },
+  industrial: { headline: "#facc15", extrude: "#1a1a1a", body: "#fde68a", pill: "#eab308", pillText: "#111827", cta: "#eab308", ctaText: "#111827" },
+  mediterranean: { headline: "#1e3a5f", extrude: "#d6c4a8", body: "#3f3a32", pill: "#c4a574", pillText: "#1c1917", cta: "#1e3a5f", ctaText: "#fffbeb" },
+  kinetic: { headline: "#fb923c", extrude: "#4c1d95", body: "#fed7aa", pill: "#f97316", pillText: "#ffffff", cta: "#f97316", ctaText: "#ffffff" },
+  glass: { headline: "#e0f2fe", extrude: "#0e7490", body: "#e0f2fe", pill: "#22d3ee", pillText: "#082f49", cta: "#22d3ee", ctaText: "#082f49" },
+  collage: { headline: "#1e3a8a", extrude: "#fecaca", body: "#1f2937", pill: "#dc2626", pillText: "#ffffff", cta: "#1e3a8a", ctaText: "#ffffff" },
+  bauhaus: { headline: "#111827", extrude: "#facc15", body: "#111827", pill: "#2563eb", pillText: "#ffffff", cta: "#2563eb", ctaText: "#ffffff" },
+  cinematic: { headline: "#f8fafc", extrude: "#0f172a", body: "#e2e8f0", pill: "#1d4ed8", pillText: "#ffffff", cta: "#1d4ed8", ctaText: "#ffffff" },
+  holographic: { headline: "#ffffff", extrude: "#db2777", body: "#ffffff", pill: "#ffffff", pillText: "#111827", cta: "#ffffff", ctaText: "#111827" },
+  organic: { headline: "#fff7ed", extrude: "#3f3a32", body: "#fff7ed", pill: "#4d7c0f", pillText: "#fffbeb", cta: "#1d4ed8", ctaText: "#ffffff" },
   photoreal: { headline: "#ffffff", extrude: "#1e3a8a", body: "#f8fafc", pill: "#1d4ed8", pillText: "#ffffff", cta: "#1d4ed8", ctaText: "#ffffff" },
-  cinematic: { headline: "#f8fafc", extrude: "#0f172a", body: "#e2e8f0", pill: "#d97706", pillText: "#111827", cta: "#f8fafc", ctaText: "#0f172a" },
   animation: { headline: "#ffffff", extrude: "#312e81", body: "#fff7ed", pill: "#ea580c", pillText: "#ffffff", cta: "#ea580c", ctaText: "#ffffff" },
   illustration: { headline: "#fffbeb", extrude: "#9a3412", body: "#1c1917", pill: "#c2410c", pillText: "#fff7ed", cta: "#1c1917", ctaText: "#fff7ed" },
   popart: { headline: "#fef08a", extrude: "#1d4ed8", body: "#111827", pill: "#dc2626", pillText: "#ffffff", cta: "#111827", ctaText: "#facc15" },
@@ -200,11 +210,15 @@ export const shouldRebuildDesignedLayers = (layers: CreativeLayer[]): boolean =>
   layers.some((layer) => (typeof layer.text === "string" && isInternalCopyLine(layer.text)) || isLegacyCaptionPlate(layer));
 
 export const pickNextVariationStyle = (used: CreativeVisualStyleId[]): CreativeVisualStyle => {
-  const unused = CREATIVE_VISUAL_STYLES.filter((style) => !used.includes(style.id));
+  const unusedReference = stylesInGroup("reference").filter((item) => !used.includes(item.id));
+  if (unusedReference.length > 0) {
+    return unusedReference[Math.floor(Math.random() * unusedReference.length)];
+  }
+  const unused = CREATIVE_VISUAL_STYLES.filter((item) => !used.includes(item.id));
   const last = used[used.length - 1];
   const pool = unused.length > 0
     ? unused
-    : CREATIVE_VISUAL_STYLES.filter((style) => style.id !== last);
+    : CREATIVE_VISUAL_STYLES.filter((item) => item.id !== last);
   return pool[Math.floor(Math.random() * Math.max(pool.length, 1))] ?? CREATIVE_VISUAL_STYLES[0];
 };
 
@@ -238,7 +252,7 @@ export const buildDesignedCopyLayers = ({
   const hero = heroWord(parts.headline);
   if (!hero && !parts.offer && !parts.body && !parts.cta) return [];
 
-  const palette = PALETTES[styleId] ?? PALETTES.photoreal;
+  const palette = PALETTES[styleId] ?? PALETTES.swiss;
   const wide = format === "16:9";
   const story = format === "9:16" || format === "4:5";
   const shortHero = (hero?.length ?? 0) <= 12;
@@ -348,7 +362,7 @@ export const hydrateVariationLayers = (
     layers: buildDesignedCopyLayers({
       copyText,
       format: variation.format,
-      styleId: variation.visualStyle ?? styleId ?? "photoreal",
+      styleId: variation.visualStyle ?? styleId ?? "swiss",
       title,
     }),
   };

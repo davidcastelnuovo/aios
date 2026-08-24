@@ -31,6 +31,7 @@ import {
   getVisualStyleId,
   imageSizeForFormat,
   visualStyleById,
+  DEFAULT_VISUAL_STYLE_ID,
   type CreativeVisualStyleId,
 } from "@/components/marketing/departments/creative/visualStyles";
 import { isCreativeDepartmentItem, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
@@ -1077,7 +1078,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
   const [brief, setBrief] = useState("");
   const [format, setFormat] = useState("1:1");
   const [projectType, setProjectType] = useState<CreativeProjectType>("static");
-  const [visualStyle, setVisualStyle] = useState<CreativeVisualStyleId>("photoreal");
+  const [visualStyle, setVisualStyle] = useState<CreativeVisualStyleId>(DEFAULT_VISUAL_STYLE_ID);
   const [copyText, setCopyText] = useState("");
   const [selectedCopyId, setSelectedCopyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1107,7 +1108,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
       setAssignedClientId(defaultClientId ?? null);
       setProjectType("static");
       setFormat("1:1");
-      setVisualStyle("photoreal");
+      setVisualStyle(DEFAULT_VISUAL_STYLE_ID);
       setMode("manual");
       setSelectedCopyId(null);
       setTitle("");
