@@ -3,6 +3,7 @@
 //
 // This is deliberately deterministic: calendar + time + an explicit client
 // name is strong enough for auto-assignment without asking an LLM.
+/* eslint-disable @typescript-eslint/no-explicit-any -- Supabase Edge client is dynamically imported. */
 
 const GOOGLE_CALENDAR_BASE = "https://www.googleapis.com/calendar/v3";
 const EVENT_START_TOLERANCE_MS = 30 * 60 * 1000;
