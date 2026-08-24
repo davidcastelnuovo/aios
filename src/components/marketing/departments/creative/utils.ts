@@ -213,6 +213,11 @@ export const makeVariation = ({
   source = "ai",
   visualStyle,
   title,
+  copyKey,
+  copyLabel,
+  rejected,
+  rejectNote,
+  parentId,
 }: {
   imageUrl: string;
   format: CreativeFormat;
@@ -221,6 +226,11 @@ export const makeVariation = ({
   source?: CreativeVariation["source"];
   visualStyle?: CreativeVisualStyleId;
   title?: string;
+  copyKey?: string;
+  copyLabel?: string;
+  rejected?: boolean;
+  rejectNote?: string;
+  parentId?: string;
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
   name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
@@ -233,6 +243,12 @@ export const makeVariation = ({
   createdAt: new Date().toISOString(),
   source,
   visualStyle,
+  copyKey,
+  copyLabel,
+  copyText,
+  rejected,
+  rejectNote,
+  parentId,
 });
 
 export const getLinkedCopyText = (item: CreativeItem | null) => {

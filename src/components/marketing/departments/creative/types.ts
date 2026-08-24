@@ -64,6 +64,12 @@ export interface CreativeVariation {
   createdAt: string;
   source?: "ai" | "manual_edit" | "storyboard_import";
   visualStyle?: CreativeVisualStyleId;
+  copyKey?: string;
+  copyLabel?: string;
+  copyText?: string;
+  rejected?: boolean;
+  rejectNote?: string;
+  parentId?: string;
 }
 
 export interface CreativeItem {

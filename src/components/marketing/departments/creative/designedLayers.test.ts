@@ -64,6 +64,19 @@ test("visual brief uses real offer copy, never the AIDA header", () => {
   assert.doesNotMatch(brief, /פומו תחרותי/);
 });
 
+test("headline sits in the top band, not over the face", () => {
+  const layers = buildDesignedCopyLayers({
+    copyText: "כותרת:\nהמתחרים\nגוף:\nלקוחות כבר לא מחפשים רק בגוגל\nCTA:\nהשאירו פרטים",
+    format: "1:1",
+    styleId: "swiss",
+  });
+  const headline = layers.find((layer) => layer.text === "המתחרים");
+  assert.ok(headline);
+  assert.ok((headline?.y ?? 99) <= 8);
+  const cta = layers.find((layer) => layer.text === "השאירו פרטים");
+  assert.ok((cta?.y ?? 0) >= 80);
+});
+
 test("designed layers never paint AIDA labels or a bottom caption plate", () => {
   const layers = buildDesignedCopyLayers({
     copyText: AIDA_DOC,

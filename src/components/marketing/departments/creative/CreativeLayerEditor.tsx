@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { cn } from "@/lib/utils";
-import { Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
+import { ArrowRight, Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
 import { aspectRatioClass } from "./utils";
 
@@ -21,6 +21,7 @@ interface Props {
   onEditingChange?: (editing: boolean) => void;
   onRegenerate?: () => void;
   regenerating?: boolean;
+  onBack?: () => void;
 }
 
 const FONT_OPTIONS = ["Rubik", "Assistant", "Heebo", "Arial", "Georgia"];
@@ -36,6 +37,7 @@ export function CreativeLayerEditor({
   onEditingChange,
   onRegenerate,
   regenerating,
+  onBack,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -174,9 +176,16 @@ export function CreativeLayerEditor({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col bg-muted/10">
       <div className="flex items-center justify-between border-b px-4 py-2">
-        <span className="text-xs text-muted-foreground">
-          {isEditing ? "מצב עריכה — גרור שכבות, שנה טקסט ופונטים" : "לחץ פעמיים על הקריאייטיב או על עריכה כדי לערוך שכבות"}
-        </span>
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <Button size="sm" variant="ghost" className="gap-1" onClick={onBack}>
+              <ArrowRight className="h-3.5 w-3.5" />חזרה לגריד
+            </Button>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {isEditing ? "מצב עריכה — גרור שכבות, שנה טקסט ופונטים" : "לחץ פעמיים על הקריאייטיב או על עריכה כדי לערוך שכבות"}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           {onRegenerate && (
             <Button size="sm" variant="outline" className="gap-1.5" onClick={onRegenerate} disabled={regenerating}>

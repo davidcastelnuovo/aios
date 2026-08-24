@@ -156,7 +156,7 @@ export const parseCreativeCopy = (copyText: string, fallbackTitle?: string): Cop
     headline: clip(parts.headline, 48),
     offer: clip(parts.offer, 42),
     body: clip(parts.body, 80),
-    cta: clip(parts.cta, 36),
+    cta: clip(parts.cta, 48),
   };
 };
 
@@ -255,32 +255,32 @@ export const buildDesignedCopyLayers = ({
   const palette = PALETTES[styleId] ?? PALETTES.swiss;
   const wide = format === "16:9";
   const story = format === "9:16" || format === "4:5";
-  const shortHero = (hero?.length ?? 0) <= 12;
   const layers: CreativeLayer[] = [];
 
   if (hero) {
+    const punchy = (hero.length ?? 0) <= 8;
     layers.push(layer({
       type: "text",
-      x: wide ? 6 : 5,
-      y: wide ? 24 : story ? 30 : 28,
-      width: wide ? 52 : 90,
-      height: shortHero ? (story ? 18 : 16) : 12,
+      x: wide ? 6 : 6,
+      y: 5,
+      width: wide ? 50 : 88,
+      height: punchy ? 12 : 10,
       text: hero,
       fontFamily: "Rubik",
-      fontSize: shortHero ? (story ? 88 : 72) : story ? 44 : 38,
+      fontSize: punchy ? (story ? 56 : 44) : story ? 32 : 28,
       fontWeight: "800",
       color: palette.headline,
-      textAlign: "center",
-      letterSpacing: "-0.04em",
-      textShadow: extrudeShadow(palette.extrude),
+      textAlign: "right",
+      letterSpacing: "-0.03em",
+      textShadow: punchy ? extrudeShadow(palette.extrude, 8) : "0 3px 14px rgba(0,0,0,0.55)",
     }));
   }
 
   const offer = parts.offer && parts.offer !== hero ? parts.offer : undefined;
   if (offer) {
     const pill = wide
-      ? { x: 10, y: 50, width: 40, height: 7 }
-      : { x: 18, y: story ? 54 : 52, width: 64, height: 7 };
+      ? { x: 6, y: 72, width: 42, height: 7 }
+      : { x: 8, y: 70, width: 70, height: 7 };
     layers.push(layer({
       type: "shape",
       ...pill,
@@ -296,7 +296,7 @@ export const buildDesignedCopyLayers = ({
       height: 5.4,
       text: offer,
       fontFamily: "Rubik",
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: "700",
       color: palette.pillText,
       textAlign: "center",
@@ -304,43 +304,44 @@ export const buildDesignedCopyLayers = ({
   }
 
   const body = parts.body && parts.body !== hero && parts.body !== offer ? parts.body : undefined;
-  if (body && !offer) {
+  if (body) {
     layers.push(layer({
       type: "text",
-      x: wide ? 8 : 10,
-      y: wide ? 58 : story ? 62 : 60,
-      width: wide ? 46 : 80,
-      height: 7,
+      x: wide ? 6 : 8,
+      y: offer ? 64 : 68,
+      width: wide ? 52 : 84,
+      height: 8,
       text: body,
       fontFamily: "Rubik",
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: "600",
       color: palette.body,
-      textAlign: "center",
-      textShadow: "0 2px 16px rgba(0,0,0,0.45)",
+      textAlign: "right",
+      textShadow: "0 2px 16px rgba(0,0,0,0.55)",
     }));
   }
 
   if (parts.cta) {
+    const longCta = parts.cta.length > 22;
     const cta = wide
-      ? { x: 12, y: 78, width: 36, height: 9 }
-      : { x: 22, y: story ? 82 : 80, width: 56, height: 9 };
+      ? { x: 6, y: 84, width: longCta ? 52 : 40, height: longCta ? 11 : 9 }
+      : { x: 8, y: 84, width: longCta ? 84 : 72, height: longCta ? 11 : 9 };
     layers.push(layer({
       type: "shape",
       ...cta,
       fill: palette.cta,
-      borderRadius: 18,
+      borderRadius: 16,
       boxShadow: "0 14px 30px rgba(29,78,216,0.28)",
     }));
     layers.push(layer({
       type: "text",
-      x: cta.x,
-      y: cta.y + 1.6,
-      width: cta.width,
-      height: 6,
+      x: cta.x + 1,
+      y: cta.y + 1.4,
+      width: cta.width - 2,
+      height: longCta ? 8 : 6,
       text: parts.cta,
       fontFamily: "Rubik",
-      fontSize: 16,
+      fontSize: longCta ? 13 : 15,
       fontWeight: "700",
       color: palette.ctaText,
       textAlign: "center",
@@ -360,7 +361,7 @@ export const hydrateVariationLayers = (
   return {
     ...variation,
     layers: buildDesignedCopyLayers({
-      copyText,
+      copyText: variation.copyText || copyText,
       format: variation.format,
       styleId: variation.visualStyle ?? styleId ?? "swiss",
       title,
