@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +41,7 @@ import {
   UserRound,
   Sparkles,
   Mic,
+  Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -84,6 +86,7 @@ interface RecordingCardProps {
   onShare: (rec: FeedRecording) => void;
   onAssignClient: (rec: FeedRecording, clientId: string | null) => void;
   onMoveToFolder: (rec: FeedRecording, folderId: string | null) => void;
+  onRename: (rec: FeedRecording, name: string) => Promise<void>;
   onDelete: (rec: FeedRecording) => void;
   onAcceptSuggestion?: (rec: FeedRecording) => void;
   onRejectSuggestion?: (rec: FeedRecording) => void;
@@ -116,6 +119,7 @@ export function RecordingCard({
   onShare,
   onAssignClient,
   onMoveToFolder,
+  onRename,
   onDelete,
   onAcceptSuggestion,
   onRejectSuggestion,
@@ -124,6 +128,9 @@ export function RecordingCard({
     ? clients.find((c) => c.id === rec.suggested_client_id)?.name ?? null
     : null;
   const [playOpen, setPlayOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data: thumbnailUrl } = useQuery({
@@ -188,6 +195,18 @@ export function RecordingCard({
     }
   };
 
+  const handleRename = async () => {
+    const nextName = renameValue.trim();
+    if (!nextName || nextName === (rec.meeting_topic || "").trim()) return;
+    setIsRenaming(true);
+    try {
+      await onRename(rec, nextName);
+      setRenameOpen(false);
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
   return (
     <>
       <Card className="overflow-hidden group hover:shadow-lg transition-all">
@@ -243,6 +262,17 @@ export function RecordingCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setRenameValue(rec.meeting_topic || "");
+                    setRenameOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 ml-2" />
+                  שנה שם
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
                     <UserRound className="h-4 w-4 ml-2" />
@@ -349,6 +379,46 @@ export function RecordingCard({
           </div>
         </div>
       </Card>
+
+      {/* Rename */}
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>שינוי שם ההקלטה</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleRename();
+            }}
+          >
+            <Input
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              placeholder="שם ההקלטה"
+              autoFocus
+              maxLength={200}
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>
+                ביטול
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  isRenaming ||
+                  !renameValue.trim() ||
+                  renameValue.trim() === (rec.meeting_topic || "").trim()
+                }
+              >
+                {isRenaming && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
+                שמור
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Player */}
       <Dialog open={playOpen} onOpenChange={setPlayOpen}>

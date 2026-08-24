@@ -204,6 +204,23 @@ export default function Recordings() {
     onError: (err: any) => toast({ title: "שגיאה בהעברה", description: err.message, variant: "destructive" }),
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async ({ recordingIds, name }: { recordingIds: string[]; name: string }) => {
+      const { error } = await supabase
+        .from("zoom_recordings")
+        .update({ meeting_topic: name.trim() })
+        .in("id", recordingIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "שם ההקלטה עודכן" });
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה בשינוי השם", description: err.message, variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async ({ recordingIds, filePaths }: { recordingIds: string[]; filePaths: string[] }) => {
       if (filePaths.length > 0) {
@@ -644,6 +661,7 @@ export default function Recordings() {
                   onShare={setShareRec}
                   onAssignClient={(r, clientId) => assignMutation.mutate({ recordingIds: groupIds(r), clientId })}
                   onMoveToFolder={(r, folderId) => moveFolderMutation.mutate({ recordingIds: groupIds(r), folderId })}
+                  onRename={(r, name) => renameMutation.mutateAsync({ recordingIds: groupIds(r), name })}
                   onDelete={handleDelete}
                 />
               ))}
