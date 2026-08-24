@@ -150,6 +150,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [rejectTarget, setRejectTarget] = useState<CreativeVariation | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [costOpen, setCostOpen] = useState(false);
+  const [pendingStyleId, setPendingStyleId] = useState<CreativeVisualStyleId | null>(null);
   const generateAbortRef = useRef(false);
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
@@ -307,6 +308,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   useEffect(() => {
     setWorkspacePanel(null);
+    setPendingStyleId(null);
   }, [selectedId]);
 
   useEffect(() => {
@@ -688,8 +690,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     await refresh();
   };
 
+  const selectedStyleId = pendingStyleId ?? getVisualStyleId(selected?.payload);
+
   const persistVisualStyle = async (visualStyle: CreativeVisualStyleId) => {
     if (!selected) return;
+    setPendingStyleId(visualStyle);
     const { error } = await supabase
       .from("marketing_work_items")
       .update({
@@ -702,10 +707,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       .eq("id", selected.id)
       .eq("tenant_id", tenantId);
     if (error) {
+      setPendingStyleId(null);
       toast.error(errorMessage(error, "שמירת הסגנון נכשלה"));
       return;
     }
     await refresh();
+    setPendingStyleId(null);
   };
 
   const prepareCreativeStage = async () => {
@@ -784,15 +791,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         })
         : buildCompositionLock(compositionId),
       styleSource && "Keep the approved still's graphic architecture. Type will sit flush in a designed pocket — no rectangle plates.",
-      !styleSource && buildAdaptiveTreatment({
-        copyText,
-        copyLabel,
-        title: selected.title ?? undefined,
-        brief: getBriefText(selected),
-        brandColors: kit.brandBook?.colors,
-        costumeLabel: costume?.label,
-      }),
-      buildStaticQualityLock(),
+      !styleSource && (costume
+        ? buildVisualStyleLock(selected.payload, { styleId: style.id })
+        : buildAdaptiveTreatment({
+          copyText,
+          copyLabel,
+          title: selected.title ?? undefined,
+          brief: getBriefText(selected),
+          brandColors: kit.brandBook?.colors,
+        })),
+      buildStaticQualityLock({ selectedStyle: !!costume }),
       brandKitPrompt(kit),
       directorNote && `Art director REJECT — do not repeat these mistakes: ${directorNote}`,
       styleSource
@@ -843,7 +851,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       const replaceTarget = mode === "replace"
         ? target ?? variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1]
         : undefined;
-      const style = visualStyleById("adaptive");
+      const style = visualStyleById(selectedStyleId);
       const usedCopyKeys = new Set(variations.filter((variation) => !variation.rejected).map((variation) => variation.copyKey).filter(Boolean));
       const copyBlock = replaceTarget
         ? copyBlocks.find((block) => block.key === replaceTarget.copyKey) ?? copyBlocks[0]
@@ -865,7 +873,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         : [...variations, nextVariation];
         await persistVariations(
         nextVariations,
-        replaceTarget ? "העיצוב נוצר מחדש לפי הקופי והמותג" : `נוצר קריאייטיב ל${nextVariation.copyLabel || "קופי"}`,
+        replaceTarget
+          ? `העיצוב נוצר מחדש בסגנון ${style.label}`
+          : `נוצר קריאייטיב ל${nextVariation.copyLabel || "קופי"} בסגנון ${style.label}`,
       );
       setSelectedVariationId(nextVariation.id);
       if (mode !== "replace") setWorkspacePanel(null);
@@ -890,14 +900,13 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     setGenerating(true);
     try {
       await prepareCreativeStage();
-      const projectStyle = getVisualStyleId(selected.payload);
       let current = [...variations];
       for (const [index, block] of blocks.entries()) {
         throwIfGenerationAborted(generateAbortRef.current);
         setGenerateProgress(`יוצר ${index + 1}/${blocks.length} · ${copyBlockLabel(block)}`);
-        const style = styleMode === "same" && isOptionalCostume(projectStyle)
-          ? visualStyleById(projectStyle)
-          : visualStyleById("adaptive");
+        const style = visualStyleById(styleMode === "mixed" && !isOptionalCostume(selectedStyleId)
+          ? "adaptive"
+          : selectedStyleId);
         const created = await buildCreative({
           copyText: block.text || getBriefText(selected),
           copyKey: block.key,
@@ -1302,7 +1311,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       </Button>
       <VisualStyleSelect
         compact
-        value={getVisualStyleId(selected.payload)}
+        value={selectedStyleId}
         onChange={(style) => void persistVisualStyle(style)}
       />
       <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkCopyOpen(true)}>

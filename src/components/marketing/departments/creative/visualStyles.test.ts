@@ -45,7 +45,8 @@ test("style locks are treatment only and never require a travel cliché", () => 
     assert.match(lock, /THIS copy/i);
     assert.match(lock, /IRON RULE/i);
     assert.match(lock, /style is costume and lighting only/i);
-    assert.match(lock, /RANGE, not a style system/i);
+    assert.match(lock, /SELECTED STYLE/i);
+    assert.match(lock, /APPLY that look/i);
     assert.match(lock, /BRAND COLOR LOCK/i);
     assert.doesNotMatch(lock, /destination coast/i);
   }
@@ -58,6 +59,14 @@ test("new variations stay adaptive instead of cycling the style boards", () => {
   const next = pickNextVariationStyle(["swiss", "industrial"]);
   assert.equal(next.id, "adaptive");
   assert.equal(next.group, "auto");
+});
+
+test("a user-selected named style is applied, not treated as optional", () => {
+  const lock = buildVisualStyleLock({}, { styleId: "collage" });
+  assert.match(lock, /SELECTED STYLE/i);
+  assert.match(lock, /APPLY that look/i);
+  assert.match(lock, /analog mixed-media collage/i);
+  assert.doesNotMatch(lock, /OPTIONAL COSTUME/i);
 });
 
 test("adaptive lock does not apply a named style-board recipe", () => {

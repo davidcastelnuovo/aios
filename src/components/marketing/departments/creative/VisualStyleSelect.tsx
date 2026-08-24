@@ -65,9 +65,10 @@ export function VisualStyleSelect({ value, onChange, compact }: Props) {
       </Select>
       {!compact && (
         <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-          ברירת המחדל: הסגנון נבנה מהקופי, מצבעי הלוגו ומהנושא — לא מעשרת לוחות הרפרנס.
-          כיוון אופציונלי הוא רמז לחומר בלבד. הטקסט העברי מתווסף אחר כך כשכבה.
-          {selected.id !== "adaptive" ? ` נבחר כרגע: ${selected.label}.` : ""}
+          {selected.id === "adaptive"
+            ? "מותאם לקופי: הסגנון נבנה מהקופי, מצבעי הלוגו ומהנושא."
+            : `הסגנון שנבחר (${selected.label}) חל על וריאציה אחת ועל צור לכל הקופי.`}
+          {" "}הטקסט העברי מתווסף אחר כך כשכבה.
         </p>
       )}
     </div>
