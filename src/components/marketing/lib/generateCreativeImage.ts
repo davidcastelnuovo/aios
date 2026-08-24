@@ -13,7 +13,7 @@ interface GenerateCreativeImageArgs {
 }
 
 const NO_TEXT_ON_IMAGE =
-  "Photorealistic marketing visual only. Do not render any text, letters, numbers, captions, logos, watermarks, or typography in the image. Leave clean visual space. No Hebrew and no English words.";
+  "Finished advertising layout only. Do not render any text, letters, numbers, captions, logos, watermarks, buttons, or typography. You MAY paint an empty designed copy plate, gradient band, or solid field for later typesetting. No Hebrew and no English words.";
 
 async function invokeSocialImage(
   supabase: SupabaseClient,

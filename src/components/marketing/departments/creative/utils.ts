@@ -1,5 +1,6 @@
 import type { CreativeFormat, CreativeItem, CreativeLayer, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "./types";
-import { buildVisualStyleLock, getVisualStyleId } from "./visualStyles";
+import { buildDesignedCopyLayers } from "./designedLayers";
+import { buildVisualStyleLock, getVisualStyleId, type CreativeVisualStyleId } from "./visualStyles";
 
 export type { CreativeProjectType, StoryboardFrame };
 
@@ -210,21 +211,28 @@ export const makeVariation = ({
   copyText,
   name,
   source = "ai",
+  visualStyle,
+  title,
 }: {
   imageUrl: string;
   format: CreativeFormat;
   copyText?: string;
   name?: string;
   source?: CreativeVariation["source"];
+  visualStyle?: CreativeVisualStyleId;
+  title?: string;
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
   name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
   imageUrl,
   format,
-  layers: [],
+  layers: visualStyle
+    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title })
+    : [],
   comments: [],
   createdAt: new Date().toISOString(),
   source,
+  visualStyle,
 });
 
 export const getLinkedCopyText = (item: CreativeItem | null) => {

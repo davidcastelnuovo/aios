@@ -24,11 +24,13 @@ import {
   pickStoryboardReferences,
 } from "@/components/marketing/departments/creative/utils";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
+import { buildDesignedCopyLayers, pickNextVariationStyle } from "@/components/marketing/departments/creative/designedLayers";
 import {
   buildVisualStyleLock,
   getVisualStyle,
   getVisualStyleId,
   imageSizeForFormat,
+  visualStyleById,
   type CreativeVisualStyleId,
 } from "@/components/marketing/departments/creative/visualStyles";
 import { isCreativeDepartmentItem, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
@@ -501,15 +503,26 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         .eq("id", selected.id)
         .eq("tenant_id", tenantId);
 
-      const visual = getVisualStyle(selected.payload);
+      const replaceTarget = mode === "replace"
+        ? variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1]
+        : undefined;
+      const usedStyles = variations
+        .map((variation) => variation.visualStyle)
+        .filter((value): value is CreativeVisualStyleId => !!value);
+      const projectStyle = getVisualStyleId(selected.payload);
+      const style = mode === "new" && variations.length > 0
+        ? pickNextVariationStyle([projectStyle, ...usedStyles])
+        : visualStyleById(replaceTarget?.visualStyle ?? projectStyle);
       const format = defaultFormat(selected.payload);
+      const copyText = getLinkedCopyText(selected);
       const creativePrompt = [
-        `Create one finished advertising still in a ${visual.label} style.`,
-        buildVisualStyleLock(selected.payload),
-        selected.title && `Campaign: ${selected.title}`,
-        getBriefText(selected) && `Visual brief (ignore any copy/headlines, use only mood, audience, setting): ${getBriefText(selected)}`,
+        `Art-direct a finished ${format} paid-social ad in a ${style.label} style, as if designed in Photoshop or Illustrator.`,
+        "This must communicate the campaign message — not a random pretty picture.",
+        buildVisualStyleLock(selected.payload, { styleId: style.id }),
+        selected.title && `Campaign / message: ${selected.title}`,
+        getBriefText(selected) && `Visual brief (mood, audience, offer — do not paint the words): ${getBriefText(selected)}`,
         selected.payload?.instructions && `Director notes: ${String(selected.payload.instructions)}`,
-        `Format: ${format}`,
+        `Format: ${format}. Leave a designed empty plate for Hebrew typesetting.`,
       ].filter(Boolean).join("\n");
 
       const { imageUrl } = await generateCreativeImage({
@@ -521,29 +534,43 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         size: imageSizeForFormat(format),
       });
 
-      const replaceTarget = mode === "replace"
-        ? variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1]
-        : undefined;
+      const designedLayers = buildDesignedCopyLayers({
+        copyText,
+        format,
+        styleId: style.id,
+        title: selected.title ?? undefined,
+      });
 
       if (replaceTarget) {
         const nextVariation = {
           ...replaceTarget,
           imageUrl,
           format,
+          layers: designedLayers,
+          visualStyle: style.id,
           source: "ai" as const,
           createdAt: new Date().toISOString(),
+          name: replaceTarget.name.includes("·") ? replaceTarget.name : `${replaceTarget.name} · ${style.label}`,
         };
         const nextVariations = variations.map((variation) => variation.id === replaceTarget.id ? nextVariation : variation);
-        await persistVariations(nextVariations, "הקריאייטיב נוצר מחדש לפי הסגנון שנבחר");
+        await persistVariations(nextVariations, `העיצוב נוצר מחדש בסגנון ${style.label}`);
         setSelectedVariationId(nextVariation.id);
       } else {
         const nextVariation = makeVariation({
           imageUrl,
           format,
-          name: `גרסה ${variations.length + 1}`,
+          copyText,
+          title: selected.title ?? undefined,
+          visualStyle: style.id,
+          name: `גרסה ${variations.length + 1} · ${style.label}`,
           source: "ai",
         });
-        await persistVariations([...variations, nextVariation], "כרמן יצרה וריאציה ויזואלית חדשה");
+        await persistVariations(
+          [...variations, nextVariation],
+          variations.length
+            ? `וריאציה חדשה בסגנון ${style.label}`
+            : `כרמן עיצבה קריאייטיב בסגנון ${style.label}`,
+        );
         setSelectedVariationId(nextVariation.id);
       }
       setWorkspacePanel(null);
@@ -914,7 +941,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
               <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
               <h3 className="text-lg font-bold text-foreground">עדיין אין קריאייטיב</h3>
-              <p className="mt-2 max-w-md text-sm">לחץ על &quot;צור קריאייטיב&quot; כדי לייצר תמונה מוכנה. עריכת שכבות תיפתח רק בלחיצה על התמונה.</p>
+              <p className="mt-2 max-w-md text-sm">לחץ על &quot;צור קריאייטיב&quot; כדי לקבל עיצוב מוכן עם מקום לקופי ושכבות טקסט. וריאציה חדשה תבוא בסגנון אחר.</p>
               <div className="mt-5 flex gap-2">
                 <Button variant="outline" onClick={() => setWorkspacePanel("project")}>עריכת פרויקט</Button>
                 <Button className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={() => void generate("new")} disabled={generating || loadingContext || !selected.client_id}>

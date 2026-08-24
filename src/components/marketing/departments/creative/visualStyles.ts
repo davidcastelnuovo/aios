@@ -145,8 +145,11 @@ export const getVisualStyleId = (payload: Record<string, unknown> | null | undef
   return isVisualStyleId(value) ? value : DEFAULT_VISUAL_STYLE_ID;
 };
 
+export const visualStyleById = (id: CreativeVisualStyleId): CreativeVisualStyle =>
+  STYLE_BY_ID[id] ?? STYLE_BY_ID[DEFAULT_VISUAL_STYLE_ID];
+
 export const getVisualStyle = (payload: Record<string, unknown> | null | undefined): CreativeVisualStyle =>
-  STYLE_BY_ID[getVisualStyleId(payload)];
+  visualStyleById(getVisualStyleId(payload));
 
 const STORYBOARD_CONTINUITY = [
   "STORYBOARD CONTINUITY — every frame is the same commercial in THIS style only.",
@@ -156,16 +159,18 @@ const STORYBOARD_CONTINUITY = [
 ].join(" ");
 
 const STATIC_QUALITY = [
-  "SINGLE polished advertising still with one hero subject and a clear focal point.",
-  "Leave clean negative space in a third of the frame for later text overlay.",
-  "Forbidden: on-image text, letters, numbers, logos, watermarks, collage, split-screen, UI mock clutter.",
+  "This is a FINISHED paid-social ad layout, as if art-directed in Photoshop or Illustrator — not a random pretty photo.",
+  "Sell the campaign idea through composition, contrast, one hero subject, and a designed copy area.",
+  "Reserve 30-40% of the frame as an EMPTY designed plate: lower-third band, side panel, or solid/gradient field with clean margins.",
+  "The copy area must contain no letters, numbers, logos, buttons, or fake UI — typesetting is added later as layers.",
+  "Think hierarchy and safe zones. Forbidden: stock lifestyle with no layout, collage, split-screen, on-image typography.",
 ].join(" ");
 
 export const buildVisualStyleLock = (
   payload: Record<string, unknown> | null | undefined,
-  options?: { storyboard?: boolean },
+  options?: { storyboard?: boolean; styleId?: CreativeVisualStyleId },
 ): string => {
-  const style = getVisualStyle(payload);
+  const style = options?.styleId ? visualStyleById(options.styleId) : getVisualStyle(payload);
   return [style.lock, options?.storyboard ? STORYBOARD_CONTINUITY : STATIC_QUALITY].join("\n");
 };
 

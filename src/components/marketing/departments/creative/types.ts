@@ -33,7 +33,7 @@ export interface CreativeComment {
 
 export interface CreativeLayer {
   id: string;
-  type: "background" | "text";
+  type: "background" | "text" | "shape";
   x: number;
   y: number;
   width: number;
@@ -45,6 +45,9 @@ export interface CreativeLayer {
   fontWeight?: string;
   color?: string;
   textAlign?: "right" | "center" | "left";
+  fill?: string;
+  opacity?: number;
+  borderRadius?: number;
   locked?: boolean;
 }
 
@@ -57,6 +60,7 @@ export interface CreativeVariation {
   comments: CreativeComment[];
   createdAt: string;
   source?: "ai" | "manual_edit" | "storyboard_import";
+  visualStyle?: CreativeVisualStyleId;
 }
 
 export interface CreativeItem {
