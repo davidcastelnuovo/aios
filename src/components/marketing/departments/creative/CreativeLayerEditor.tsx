@@ -227,16 +227,21 @@ export function CreativeLayerEditor({
                   top: `${layer.y}%`,
                   width: `${layer.width}%`,
                   height: `${layer.height}%`,
+                  display: layer.type === "text" ? "flex" : undefined,
+                  alignItems: layer.type === "text" ? "center" : undefined,
+                  justifyContent: layer.textAlign === "center" ? "center" : layer.textAlign === "left" ? "flex-start" : "flex-end",
                   background: layer.type === "shape" ? layer.fill ?? "#0f172acc" : undefined,
                   borderRadius: layer.type === "shape" ? layer.borderRadius ?? 20 : undefined,
+                  boxShadow: layer.boxShadow,
                   opacity: layer.opacity,
                   color: layer.color ?? "#fff",
                   fontFamily: layer.fontFamily ?? "Rubik",
                   fontSize: `${layer.fontSize ?? 24}px`,
                   fontWeight: layer.fontWeight ?? "600",
                   textAlign: layer.textAlign ?? "right",
-                  lineHeight: 1.15,
-                  textShadow: layer.type === "text" ? "0 2px 14px rgba(0,0,0,0.35)" : undefined,
+                  letterSpacing: layer.letterSpacing,
+                  lineHeight: 1.05,
+                  textShadow: layer.type === "text" ? layer.textShadow ?? "0 2px 14px rgba(0,0,0,0.35)" : undefined,
                 }}
                 onMouseDown={(event) => {
                   if (!isEditing) return;
@@ -263,7 +268,7 @@ export function CreativeLayerEditor({
                   </button>
                 )}
                 {layer.type === "text" && (
-                  <span className="block h-full overflow-hidden whitespace-pre-wrap break-words px-1 py-0.5">{layer.text}</span>
+                  <span className="block w-full overflow-hidden whitespace-pre-wrap break-words px-1">{layer.text}</span>
                 )}
                 {isEditing && selectedLayerId === layer.id && (
                   <span
@@ -360,7 +365,7 @@ export function CreativeLayerEditor({
                     <Slider
                       className="mt-3"
                       min={12}
-                      max={96}
+                      max={120}
                       step={1}
                       value={[selectedLayer.fontSize ?? 24]}
                       onValueChange={([value]) => updateLayer(selectedLayer.id, { fontSize: value })}
@@ -377,6 +382,7 @@ export function CreativeLayerEditor({
                         <SelectItem value="400">רגיל</SelectItem>
                         <SelectItem value="600">מודגש</SelectItem>
                         <SelectItem value="700">כהה</SelectItem>
+                        <SelectItem value="800">תצוגה</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

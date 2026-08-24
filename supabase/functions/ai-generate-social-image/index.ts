@@ -38,7 +38,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls, size: requestedSize } = await req.json();
+    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls, size: requestedSize, quality: requestedQuality } = await req.json();
 
     if (!prompt || !tenant_id) {
       return new Response(
@@ -74,6 +74,7 @@ serve(async (req) => {
 
     const allowedSizes = new Set(["1024x1024", "1024x1536", "1536x1024"]);
     const size = allowedSizes.has(requestedSize) ? requestedSize : "1024x1024";
+    const quality = requestedQuality === "high" || requestedQuality === "low" ? requestedQuality : "medium";
 
     const generateFromPrompt = () =>
       fetch("https://api.openai.com/v1/images/generations", {
@@ -87,7 +88,7 @@ serve(async (req) => {
           prompt,
           n: 1,
           size,
-          quality: "medium",
+          quality,
           output_format: "png",
         }),
       });
@@ -111,7 +112,7 @@ serve(async (req) => {
       );
       form.append("n", "1");
       form.append("size", size);
-      form.append("quality", "medium");
+      form.append("quality", quality);
       form.append("output_format", "png");
       form.append("input_fidelity", "high");
       for (const file of files) form.append("image", file);

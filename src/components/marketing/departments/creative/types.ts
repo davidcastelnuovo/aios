@@ -48,6 +48,9 @@ export interface CreativeLayer {
   fill?: string;
   opacity?: number;
   borderRadius?: number;
+  textShadow?: string;
+  boxShadow?: string;
+  letterSpacing?: string;
   locked?: boolean;
 }
 

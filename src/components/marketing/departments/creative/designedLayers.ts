@@ -8,29 +8,32 @@ import {
 
 interface CopyParts {
   headline?: string;
-  subline?: string;
+  offer?: string;
+  body?: string;
   cta?: string;
 }
 
 interface Palette {
-  plate: string;
-  text: string;
-  muted: string;
-  accent: string;
-  accentText: string;
+  headline: string;
+  extrude: string;
+  body: string;
+  pill: string;
+  pillText: string;
+  cta: string;
+  ctaText: string;
 }
 
 const PALETTES: Record<CreativeVisualStyleId, Palette> = {
-  photoreal: { plate: "#0f172acc", text: "#ffffff", muted: "#e2e8f0", accent: "#0f766e", accentText: "#ffffff" },
-  cinematic: { plate: "#020617d9", text: "#f8fafc", muted: "#cbd5e1", accent: "#d97706", accentText: "#111827" },
-  animation: { plate: "#1e1b4bd9", text: "#ffffff", muted: "#e0e7ff", accent: "#ea580c", accentText: "#ffffff" },
-  illustration: { plate: "#fff7edd9", text: "#1c1917", muted: "#44403c", accent: "#c2410c", accentText: "#fff7ed" },
-  popart: { plate: "#facc15e6", text: "#111827", muted: "#1f2937", accent: "#dc2626", accentText: "#ffffff" },
-  render3d: { plate: "#18181bd9", text: "#f8fafc", muted: "#d4d4d8", accent: "#0284c7", accentText: "#ffffff" },
-  editorial: { plate: "#fffffff2", text: "#111827", muted: "#3f3f46", accent: "#111827", accentText: "#ffffff" },
-  ugc: { plate: "#00000099", text: "#ffffff", muted: "#f4f4f5", accent: "#ffffff", accentText: "#111827" },
-  watercolor: { plate: "#fffcf5d9", text: "#3f2e1f", muted: "#57534e", accent: "#9a3412", accentText: "#fff7ed" },
-  comic: { plate: "#fef08ae6", text: "#111827", muted: "#1f2937", accent: "#111827", accentText: "#fef08a" },
+  photoreal: { headline: "#ffffff", extrude: "#1e3a8a", body: "#0f172a", pill: "#1d4ed8", pillText: "#ffffff", cta: "#1d4ed8", ctaText: "#ffffff" },
+  cinematic: { headline: "#f8fafc", extrude: "#0f172a", body: "#e2e8f0", pill: "#d97706", pillText: "#111827", cta: "#f8fafc", ctaText: "#0f172a" },
+  animation: { headline: "#ffffff", extrude: "#312e81", body: "#1e1b4b", pill: "#ea580c", pillText: "#ffffff", cta: "#ea580c", ctaText: "#ffffff" },
+  illustration: { headline: "#fffbeb", extrude: "#9a3412", body: "#1c1917", pill: "#c2410c", pillText: "#fff7ed", cta: "#1c1917", ctaText: "#fff7ed" },
+  popart: { headline: "#fef08a", extrude: "#1d4ed8", body: "#111827", pill: "#dc2626", pillText: "#ffffff", cta: "#111827", ctaText: "#facc15" },
+  render3d: { headline: "#ffffff", extrude: "#0c4a6e", body: "#e2e8f0", pill: "#0284c7", pillText: "#ffffff", cta: "#0284c7", ctaText: "#ffffff" },
+  editorial: { headline: "#ffffff", extrude: "#111827", body: "#111827", pill: "#111827", pillText: "#ffffff", cta: "#111827", ctaText: "#ffffff" },
+  ugc: { headline: "#ffffff", extrude: "#334155", body: "#ffffff", pill: "#ffffff", pillText: "#111827", cta: "#ffffff", ctaText: "#111827" },
+  watercolor: { headline: "#fff7ed", extrude: "#7c2d12", body: "#3f2e1f", pill: "#9a3412", pillText: "#fff7ed", cta: "#7c2d12", ctaText: "#fff7ed" },
+  comic: { headline: "#fef08a", extrude: "#111827", body: "#111827", pill: "#111827", pillText: "#fef08a", cta: "#111827", ctaText: "#fef08a" },
 };
 
 const cleanLine = (line: string) =>
@@ -40,19 +43,19 @@ export const parseCreativeCopy = (copyText: string, fallbackTitle?: string): Cop
   const lines = copyText.split("\n").map(cleanLine).filter(Boolean);
   if (lines.length === 0) {
     const headline = fallbackTitle?.trim();
-    return headline ? { headline: headline.slice(0, 72) } : {};
+    return headline ? { headline: headline.slice(0, 28) } : {};
   }
-  const headline = lines[0].slice(0, 72);
+  const headline = lines[0].slice(0, 28);
   const last = lines.length > 1 ? lines[lines.length - 1] : undefined;
   const cta = last && last !== headline && (
     (lines.length >= 3 && last.length <= 36) ||
     (lines.length === 2 && last.length <= 18)
   ) ? last : undefined;
   const middle = lines.slice(1, cta ? -1 : lines.length);
-  const subSource = middle[0];
   return {
     headline,
-    subline: subSource && subSource !== cta ? subSource.slice(0, 140) : undefined,
+    offer: middle[0] && middle[0] !== cta ? middle[0].slice(0, 42) : undefined,
+    body: middle[1] && middle[1] !== cta ? middle[1].slice(0, 80) : undefined,
     cta,
   };
 };
@@ -71,6 +74,15 @@ const layer = (partial: Omit<CreativeLayer, "id">): CreativeLayer => ({
   ...partial,
 });
 
+const extrudeShadow = (color: string, depth = 7) => {
+  const steps = Array.from({ length: depth }, (_, index) => {
+    const offset = index + 1;
+    return `${offset}px ${offset}px 0 ${color}`;
+  });
+  steps.push(`${depth + 2}px ${depth + 10}px 22px rgba(15,23,42,0.28)`);
+  return steps.join(", ");
+};
+
 export const buildDesignedCopyLayers = ({
   copyText,
   format,
@@ -83,84 +95,96 @@ export const buildDesignedCopyLayers = ({
   title?: string;
 }): CreativeLayer[] => {
   const parts = parseCreativeCopy(copyText ?? "", title);
-  if (!parts.headline && !parts.subline && !parts.cta) return [];
+  if (!parts.headline && !parts.offer && !parts.body && !parts.cta) return [];
 
   const palette = PALETTES[styleId] ?? PALETTES.photoreal;
   const wide = format === "16:9";
   const story = format === "9:16" || format === "4:5";
-  const plate = wide
-    ? { x: 54, y: 16, width: 40, height: 68 }
-    : story
-      ? { x: 6, y: 58, width: 88, height: 36 }
-      : { x: 6, y: 60, width: 88, height: 34 };
-  const textX = plate.x + 4;
-  const textW = plate.width - 8;
-
-  const layers: CreativeLayer[] = [
-    layer({
-      type: "shape",
-      ...plate,
-      fill: palette.plate,
-      borderRadius: wide ? 28 : 24,
-    }),
-  ];
+  const shortHero = (parts.headline?.length ?? 0) <= 12;
+  const layers: CreativeLayer[] = [];
 
   if (parts.headline) {
     layers.push(layer({
       type: "text",
-      x: textX,
-      y: plate.y + 3,
-      width: textW,
-      height: story ? 14 : 16,
+      x: wide ? 8 : 6,
+      y: wide ? 28 : story ? 36 : 34,
+      width: wide ? 48 : 88,
+      height: shortHero ? (story ? 16 : 14) : 12,
       text: parts.headline,
       fontFamily: "Rubik",
-      fontSize: story ? 34 : 30,
-      fontWeight: "700",
-      color: palette.text,
-      textAlign: "right",
+      fontSize: shortHero ? (story ? 80 : 64) : story ? 42 : 36,
+      fontWeight: "800",
+      color: palette.headline,
+      textAlign: "center",
+      letterSpacing: "-0.03em",
+      textShadow: extrudeShadow(palette.extrude),
     }));
   }
 
-  if (parts.subline) {
+  if (parts.offer) {
+    const pill = wide
+      ? { x: 10, y: 52, width: 44, height: 8 }
+      : { x: 16, y: story ? 56 : 54, width: 68, height: 8 };
+    layers.push(layer({
+      type: "shape",
+      ...pill,
+      fill: palette.pill,
+      borderRadius: 999,
+      boxShadow: "0 10px 24px rgba(15,23,42,0.18)",
+    }));
     layers.push(layer({
       type: "text",
-      x: textX,
-      y: plate.y + (story ? 18 : 20),
-      width: textW,
-      height: 10,
-      text: parts.subline,
+      x: pill.x,
+      y: pill.y + 1.2,
+      width: pill.width,
+      height: 6,
+      text: parts.offer,
       fontFamily: "Rubik",
       fontSize: 16,
-      fontWeight: "500",
-      color: palette.muted,
-      textAlign: "right",
+      fontWeight: "700",
+      color: palette.pillText,
+      textAlign: "center",
+    }));
+  }
+
+  if (parts.body) {
+    layers.push(layer({
+      type: "text",
+      x: wide ? 8 : 10,
+      y: wide ? 64 : story ? 67 : 65,
+      width: wide ? 48 : 80,
+      height: 8,
+      text: parts.body,
+      fontFamily: "Rubik",
+      fontSize: 15,
+      fontWeight: "600",
+      color: palette.body,
+      textAlign: "center",
     }));
   }
 
   if (parts.cta) {
-    const ctaY = plate.y + plate.height - 10;
-    const ctaW = Math.min(42, textW);
-    const ctaX = plate.x + plate.width - ctaW - 4;
+    const cta = wide
+      ? { x: 12, y: 78, width: 40, height: 10 }
+      : { x: 18, y: story ? 82 : 80, width: 64, height: 10 };
     layers.push(layer({
       type: "shape",
-      x: ctaX,
-      y: ctaY,
-      width: ctaW,
-      height: 7,
-      fill: palette.accent,
-      borderRadius: 999,
+      ...cta,
+      fill: palette.cta,
+      borderRadius: 18,
+      boxShadow: "0 14px 30px rgba(29,78,216,0.28)",
     }));
     layers.push(layer({
       type: "text",
-      x: ctaX,
-      y: ctaY + 0.6,
-      width: ctaW,
+      x: cta.x,
+      y: cta.y + 2,
+      width: cta.width,
       height: 6,
       text: parts.cta,
       fontFamily: "Rubik",
-      fontSize: 14,
+      fontSize: 16,
       fontWeight: "700",
-      color: palette.accentText,
+      color: palette.ctaText,
       textAlign: "center",
     }));
   }

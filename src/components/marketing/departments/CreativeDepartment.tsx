@@ -516,13 +516,13 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       const format = defaultFormat(selected.payload);
       const copyText = getLinkedCopyText(selected);
       const creativePrompt = [
-        `Art-direct a finished ${format} paid-social ad in a ${style.label} style, as if designed in Photoshop or Illustrator.`,
-        "This must communicate the campaign message — not a random pretty picture.",
+        `Create a million-dollar ${format} commercial key visual in a ${style.label} style.`,
+        "Art-direct like a luxury OTA / flagship brand ad: one hero, cinematic light, depth, clean sky.",
         buildVisualStyleLock(selected.payload, { styleId: style.id }),
-        selected.title && `Campaign / message: ${selected.title}`,
-        getBriefText(selected) && `Visual brief (mood, audience, offer — do not paint the words): ${getBriefText(selected)}`,
+        selected.title && `Campaign idea (do not paint the words): ${selected.title}`,
+        getBriefText(selected) && `Visual brief (mood, destination, offer — no lettering): ${getBriefText(selected)}`,
         selected.payload?.instructions && `Director notes: ${String(selected.payload.instructions)}`,
-        `Format: ${format}. Leave a designed empty plate for Hebrew typesetting.`,
+        `Format ${format}. Hero top, empty center for a floating 3D title, open bottom for a button.`,
       ].filter(Boolean).join("\n");
 
       const { imageUrl } = await generateCreativeImage({
@@ -532,6 +532,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         stageId: readyContext.creativeStage.id,
         prompt: creativePrompt || selected.title || "Marketing creative",
         size: imageSizeForFormat(format),
+        quality: "high",
       });
 
       const designedLayers = buildDesignedCopyLayers({

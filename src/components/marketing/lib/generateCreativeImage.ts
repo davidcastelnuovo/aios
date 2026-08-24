@@ -10,10 +10,11 @@ interface GenerateCreativeImageArgs {
   prompt: string;
   referenceImageUrls?: string[];
   size?: "1024x1024" | "1024x1536" | "1536x1024";
+  quality?: "low" | "medium" | "high";
 }
 
 const NO_TEXT_ON_IMAGE =
-  "Finished advertising layout only. Do not render any text, letters, numbers, captions, logos, watermarks, buttons, or typography. You MAY paint an empty designed copy plate, gradient band, or solid field for later typesetting. No Hebrew and no English words.";
+  "No letters, numbers, captions, logos, watermarks, buttons, or typography anywhere. Keep a clean open center and lower third so a 3D title and CTA can be typeset later. Supporting objects may sit in the scene. No Hebrew and no English words.";
 
 async function invokeSocialImage(
   supabase: SupabaseClient,
@@ -22,6 +23,7 @@ async function invokeSocialImage(
   prompt: string,
   referenceImageUrls?: string[],
   size?: GenerateCreativeImageArgs["size"],
+  quality?: GenerateCreativeImageArgs["quality"],
 ) {
   return supabase.functions.invoke("ai-generate-social-image", {
     body: {
@@ -31,6 +33,7 @@ async function invokeSocialImage(
       reference_image_url: referenceImageUrls?.[0],
       reference_image_urls: referenceImageUrls,
       size,
+      quality,
     },
   });
 }
@@ -54,8 +57,9 @@ export async function generateCreativeImage({
   prompt,
   referenceImageUrls,
   size,
+  quality,
 }: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean }> {
-  const socialResult = await invokeSocialImage(supabase, tenantId, itemId, prompt, referenceImageUrls, size);
+  const socialResult = await invokeSocialImage(supabase, tenantId, itemId, prompt, referenceImageUrls, size, quality);
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;
     if (imageUrl && typeof imageUrl === "string") {

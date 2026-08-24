@@ -159,11 +159,12 @@ const STORYBOARD_CONTINUITY = [
 ].join(" ");
 
 const STATIC_QUALITY = [
-  "This is a FINISHED paid-social ad layout, as if art-directed in Photoshop or Illustrator — not a random pretty photo.",
-  "Sell the campaign idea through composition, contrast, one hero subject, and a designed copy area.",
-  "Reserve 30-40% of the frame as an EMPTY designed plate: lower-third band, side panel, or solid/gradient field with clean margins.",
-  "The copy area must contain no letters, numbers, logos, buttons, or fake UI — typesetting is added later as layers.",
-  "Think hierarchy and safe zones. Forbidden: stock lifestyle with no layout, collage, split-screen, on-image typography.",
+  "MILLION-DOLLAR commercial still — luxury travel / premium brand ad, not a stock photo and not a flat Canva template.",
+  "Vertical hierarchy: hero object in the top third, open center sky for a floating 3D title, clean bottom for a CTA.",
+  "One hero product/vehicle/place, photoreal, 8K, cinematic depth of field, consistent light from upper-right, soft lens flare.",
+  "Cohesive 3-color world. Supporting props sit IN the environment (on clouds, water, ground) with matching shadows.",
+  "Leave the center and lower third visually open — no letters, numbers, logos, buttons, or fake UI. Typesetting is added later.",
+  "Forbidden: clutter, collage, split-screen, generic lifestyle, muddy dark plates covering the scene, cheap clipart.",
 ].join(" ");
 
 export const buildVisualStyleLock = (
