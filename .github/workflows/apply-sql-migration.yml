@@ -30,6 +30,7 @@ on:
       - 'supabase/ops/create_lead_alert_failure_notifications.sql'
       - 'supabase/ops/fix_seo_call_snapshots_cross_tenant.sql'
       - 'supabase/ops/fix_table_shares_cross_tenant.sql'
+      - 'supabase/ops/fix_tasks_own_agency_cross_tenant.sql'
 
 jobs:
   apply:
@@ -65,7 +66,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/fix_table_shares_cross_tenant.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/fix_tasks_own_agency_cross_tenant.sql'; then
+              FILE="supabase/ops/fix_tasks_own_agency_cross_tenant.sql"
+              NAME="fix_tasks_own_agency_cross_tenant"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_table_shares_cross_tenant.sql'; then
               FILE="supabase/ops/fix_table_shares_cross_tenant.sql"
               NAME="fix_table_shares_cross_tenant"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_seo_call_snapshots_cross_tenant.sql'; then
