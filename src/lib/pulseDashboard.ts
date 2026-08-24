@@ -18,15 +18,45 @@ export type PulseSnapshotRow = {
   client_id: string;
   agency_id: string | null;
   status: PulseStatus;
+  campaign_goal_mode?: CampaignGoalMode | null;
   is_ecommerce: boolean | null;
   spend_7d: number | null;
+  lead_spend_7d?: number | null;
+  ecommerce_spend_7d?: number | null;
   leads_7d: number | null;
   cpl_7d: number | null;
   cpl_change_pct: number | null;
   purchases_7d: number | null;
   revenue_7d: number | null;
   roas_7d: number | null;
+  roas_change_pct?: number | null;
+  lead_goal_status?: PulseStatus | null;
+  ecommerce_goal_status?: PulseStatus | null;
   flags: string[] | null;
+  data_fresh_through: string | null;
+  calculated_at: string | null;
+  last_meta_change_at: string | null;
+  last_meta_change_type: string | null;
+  last_meta_change_actor: string | null;
+  last_meta_change_object: string | null;
+  meta_change_availability: string | null;
+};
+
+export type CampaignGoal = "leads" | "ecommerce";
+export type CampaignGoalMode = CampaignGoal | "hybrid";
+
+export type PulseGoalDisplayRow = {
+  rowKey: string;
+  client_id: string;
+  goal: CampaignGoal;
+  campaign_goal_mode: CampaignGoalMode;
+  status: PulseStatus;
+  spend_7d: number;
+  outcomes_7d: number;
+  efficiency: number | null;
+  change_pct: number | null;
+  efficiency_kind: "cpl" | "roas";
+  flags: string[];
   data_fresh_through: string | null;
   calculated_at: string | null;
   last_meta_change_at: string | null;
@@ -79,6 +109,109 @@ export function clientHasCampaignService(services: string[] | null | undefined):
 export function formatPulseMoney(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
   return `₪${Math.round(Number(value) * 100) / 100}`;
+}
+
+export function goalLabel(goal: CampaignGoal): string {
+  return goal === "ecommerce" ? "איקומרס" : "לידים";
+}
+
+function snapshotGoalMode(row: PulseSnapshotRow): CampaignGoalMode {
+  if (row.campaign_goal_mode) return row.campaign_goal_mode;
+  return row.is_ecommerce ? "ecommerce" : "leads";
+}
+
+export function expandPulseSnapshotToGoalRows(snapshot: PulseSnapshotRow): PulseGoalDisplayRow[] {
+  const mode = snapshotGoalMode(snapshot);
+  const shared = {
+    client_id: snapshot.client_id,
+    campaign_goal_mode: mode,
+    flags: Array.isArray(snapshot.flags) ? snapshot.flags : [],
+    data_fresh_through: snapshot.data_fresh_through,
+    calculated_at: snapshot.calculated_at,
+    last_meta_change_at: snapshot.last_meta_change_at,
+    last_meta_change_type: snapshot.last_meta_change_type,
+    last_meta_change_actor: snapshot.last_meta_change_actor,
+    last_meta_change_object: snapshot.last_meta_change_object,
+    meta_change_availability: snapshot.meta_change_availability,
+  };
+
+  const leadRow: PulseGoalDisplayRow = {
+    ...shared,
+    rowKey: `${snapshot.client_id}:leads`,
+    goal: "leads",
+    status: (snapshot.lead_goal_status ?? (mode !== "ecommerce" ? snapshot.status : "healthy")) as PulseStatus,
+    spend_7d: Number(snapshot.lead_spend_7d ?? (mode === "ecommerce" ? 0 : snapshot.spend_7d) ?? 0),
+    outcomes_7d: Number(snapshot.leads_7d ?? 0),
+    efficiency: snapshot.cpl_7d === null || snapshot.cpl_7d === undefined ? null : Number(snapshot.cpl_7d),
+    change_pct: snapshot.cpl_change_pct === null || snapshot.cpl_change_pct === undefined ? null : Number(snapshot.cpl_change_pct),
+    efficiency_kind: "cpl",
+  };
+
+  const ecommerceRow: PulseGoalDisplayRow = {
+    ...shared,
+    rowKey: `${snapshot.client_id}:ecommerce`,
+    goal: "ecommerce",
+    status: (snapshot.ecommerce_goal_status ?? (mode !== "leads" ? snapshot.status : "healthy")) as PulseStatus,
+    spend_7d: Number(snapshot.ecommerce_spend_7d ?? (mode === "leads" ? 0 : snapshot.spend_7d) ?? 0),
+    outcomes_7d: Number(snapshot.purchases_7d ?? 0),
+    efficiency: snapshot.roas_7d === null || snapshot.roas_7d === undefined ? null : Number(snapshot.roas_7d),
+    change_pct: snapshot.roas_change_pct === null || snapshot.roas_change_pct === undefined ? null : Number(snapshot.roas_change_pct),
+    efficiency_kind: "roas",
+  };
+
+  if (mode === "hybrid") return [leadRow, ecommerceRow];
+  if (mode === "ecommerce") return [ecommerceRow];
+  return [leadRow];
+}
+
+export function formatGoalOutcomes(row: Pick<PulseGoalDisplayRow, "goal" | "outcomes_7d">): string {
+  return String(row.outcomes_7d);
+}
+
+export function formatGoalEfficiency(row: Pick<PulseGoalDisplayRow, "efficiency_kind" | "efficiency">): string {
+  if (row.efficiency === null || row.efficiency === undefined) return "—";
+  return row.efficiency_kind === "roas" ? `ROAS ${row.efficiency}` : `₪${row.efficiency}`;
+}
+
+export function formatGoalChange(row: Pick<PulseGoalDisplayRow, "change_pct">): string {
+  return formatPulseChange(row.change_pct);
+}
+
+export function formatMetaChangeDate(row: PulseSnapshotRow | PulseGoalDisplayRow): string | null {
+  if (!row.last_meta_change_at) return null;
+  return new Date(row.last_meta_change_at).toLocaleDateString("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  });
+}
+
+export function formatMetaChangeDetails(row: PulseSnapshotRow | PulseGoalDisplayRow): string {
+  if (row.last_meta_change_at) {
+    const when = new Date(row.last_meta_change_at).toLocaleString("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+    const lines = [
+      `תאריך: ${when}`,
+      `סוג: ${row.last_meta_change_type || "שינוי"}`,
+    ];
+    if (row.last_meta_change_object) lines.push(`אובייקט: ${row.last_meta_change_object}`);
+    if (row.last_meta_change_actor) lines.push(`מי ביצע: ${row.last_meta_change_actor}`);
+    return lines.join("\n");
+  }
+  if (row.meta_change_availability === "no_campaign_change_in_30d") return "לא נמצא שינוי במטה ב-30 הימים האחרונים";
+  if (row.meta_change_availability === "not_applicable") return "לא רלוונטי";
+  return "לא זמין";
+}
+
+export function metaChangeSummary(row: PulseSnapshotRow | PulseGoalDisplayRow): string {
+  if (row.last_meta_change_at) return formatMetaChangeDate(row) || "—";
+  if (row.meta_change_availability === "no_campaign_change_in_30d") return "לא נמצא";
+  if (row.meta_change_availability === "not_applicable") return "—";
+  return "לא זמין";
 }
 
 export function formatPulseOutcomes(row: Pick<PulseSnapshotRow, "is_ecommerce" | "leads_7d" | "purchases_7d">): string {

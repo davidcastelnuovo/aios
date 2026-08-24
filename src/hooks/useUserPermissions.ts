@@ -12,7 +12,7 @@ import { useUserRole } from "./useUserRole";
 export type ModulePermission = string;
 
 export function useUserPermissions() {
-  const { isOwner, isSuperAdmin, userId } = useUserRole();
+  const { isOwner, isSuperAdmin, isCampaigner, userId } = useUserRole();
 
   const {
     data: permissionsData,
@@ -99,6 +99,9 @@ export function useUserPermissions() {
     if (restrictedModules.includes(module)) {
       return permissions?.[module] === true;
     }
+
+    // Campaigners need pulse dashboard access; row scope is enforced in DMMDashboard + RLS.
+    if (isCampaigner && module === "crm_dashboard") return true;
 
     // ── מודולים נגישים לכל המשתמשים המאומתים ─────────────────────────
     const alwaysAccessibleModules: ModulePermission[] = [

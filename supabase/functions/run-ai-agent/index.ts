@@ -59,7 +59,9 @@ import {
   buildPulseDashboardAbsoluteUrl,
   buildPulseWhatsAppDigest,
   countPulseStatuses,
+  expandSnapshotsToGoalRows,
   filterPulseRowsByClientIds,
+  goalLabel,
   pulseSurfacePrefersWhatsAppDigest,
 } from '../_shared/campaign-pulse.ts'
 
@@ -2744,7 +2746,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const loadPulse = async () => {
         let query = supabase
           .from('campaign_pulse_snapshots')
-          .select('tenant_id, calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)')
+          .select('tenant_id, calculated_at, data_fresh_through, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)')
           // Shared agencies may snapshot under a partner tenant — same scope as the dashboard.
           .in('tenant_id', accessibleTenantIds)
           .order('calculated_at', { ascending: false })
@@ -2792,6 +2794,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         const assignedClientIds = (links || []).map((link: any) => link.client_id).filter(Boolean)
         normalizedRows = filterPulseRowsByClientIds(normalizedRows, assignedClientIds)
       }
+      const goalRows = expandSnapshotsToGoalRows(normalizedRows.map((row: any) => ({
+        ...row,
+        client_name: row.client_name,
+        agency_name: row.agency_name,
+      })))
       const statusLabel: Record<string, string> = {
         healthy: '🟢 תקין',
         warning: '🟡 תשומת לב',
@@ -2801,27 +2808,31 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       const fmtNumber = (value: any) => value === null || value === undefined ? '—' : String(value)
       const fmtDate = (value: any) => value
-        ? new Date(value).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
+        ? new Date(value).toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric' })
         : '—'
       const escapeCell = (value: any) => String(value ?? '—').replace(/\|/g, '\\|').replace(/\n/g, ' ')
       const tableLines = [
-        '| סוכנות | לקוח | סטטוס | הוצאה 7 ימים | לידים/רכישות | CPL/ROAS | שינוי | נתונים עד | שינוי אחרון במטה | מי שינה | הערה |',
-        '|---|---|---|---:|---:|---:|---:|---|---|---|---|',
-        ...normalizedRows.map((row: any) => {
-          const outcomes = row.is_ecommerce ? fmtNumber(row.purchases_7d) : fmtNumber(row.leads_7d)
-          const efficiency = row.is_ecommerce ? fmtNumber(row.roas_7d) : fmtNumber(row.cpl_7d)
-          const efficiencyLabel = row.is_ecommerce ? `ROAS ${efficiency}` : `₪${efficiency}`
-          const change = row.cpl_change_pct === null || row.cpl_change_pct === undefined ? '—' : `${row.cpl_change_pct}%`
+        '| סוכנות | לקוח | יעד | סטטוס | הוצאה 7 ימים | לידים/רכישות | CPL/ROAS | שינוי | שינוי במטה | הערה |',
+        '|---|---|---|---:|---:|---:|---:|---|---|',
+        ...goalRows.map((row: any) => {
+          const outcomes = fmtNumber(row.outcomes_7d)
+          const efficiencyLabel = row.efficiency_kind === 'roas'
+            ? `ROAS ${fmtNumber(row.efficiency)}`
+            : `₪${fmtNumber(row.efficiency)}`
+          const change = row.change_pct === null || row.change_pct === undefined
+            ? '—'
+            : `${row.change_pct > 0 ? '+' : ''}${row.change_pct}%`
           const metaChange = row.last_meta_change_at
-            ? `${fmtDate(row.last_meta_change_at)} — ${row.last_meta_change_type || 'שינוי'}${row.last_meta_change_object ? ` (${row.last_meta_change_object})` : ''}`
+            ? fmtDate(row.last_meta_change_at)
             : row.meta_change_availability === 'no_campaign_change_in_30d' ? 'לא נמצא ב-30 יום' : 'לא זמין'
-          return `| ${escapeCell(row.agency_name)} | ${escapeCell(row.client_name)} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(row.data_fresh_through)} | ${escapeCell(metaChange)} | ${escapeCell(row.last_meta_change_actor)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
+          const agencyName = normalizedRows.find((client: any) => client.client_id === row.client_id)?.agency_name
+          return `| ${escapeCell(agencyName)} | ${escapeCell(row.client_name)} | ${escapeCell(goalLabel(row.goal))} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(metaChange)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
         }),
       ]
       const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
       const tenantSlug = tenantRow?.slug || tenantId
       const dashboardUrl = buildPulseDashboardAbsoluteUrl(tenantSlug)
-      const statusCounts = countPulseStatuses(normalizedRows)
+      const statusCounts = countPulseStatuses(goalRows)
       const whatsappDigest = normalizedRows.length
         ? buildPulseWhatsAppDigest(normalizedRows, dashboardUrl)
         : null
@@ -2850,7 +2861,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           external_api_called: false,
           ai_used_to_calculate: false,
           auto_refreshed: false,
-          count: normalizedRows.length,
+          count: goalRows.length,
           freshness: normalizedRows[0]?.calculated_at || null,
           status_counts: statusCounts,
           dashboard_url: dashboardUrl,

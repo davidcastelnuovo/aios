@@ -8,7 +8,9 @@ import {
   classifyCampaignPulseStatus,
   countPulseStatuses,
   effectiveIsEcommerce,
+  expandSnapshotToGoalRows,
   filterPulseRowsByClientIds,
+  isPulseDeliveryExcludedRecipient,
   pickFreshestTablePerPlatform,
   resolveLastSyncAt,
   isSyncStale,
@@ -318,7 +320,36 @@ test("filterPulseRowsByClientIds keeps only assigned clients", () => {
     filtered,
     "https://aios.co.il/t/dmm/dmm-dashboard",
   );
-  assert.match(digest, /נבדקו 2 לקוחות/);
+  assert.match(digest, /נבדקו 2 יעדי קמפיין/);
   assert.match(digest, /https:\/\/aios\.co\.il\/t\/dmm\/dmm-dashboard/);
   assert.equal(filterPulseRowsByClientIds(rows, []).length, 0);
+});
+
+test("hybrid snapshot expands to separate lead and ecommerce goal rows", () => {
+  const rows = expandSnapshotToGoalRows({
+    client_id: "c1",
+    client_name: "Hybrid Co",
+    status: "warning",
+    campaign_goal_mode: "hybrid",
+    lead_spend_7d: 100,
+    ecommerce_spend_7d: 200,
+    leads_7d: 5,
+    purchases_7d: 8,
+    cpl_7d: 20,
+    roas_7d: 2.5,
+    cpl_change_pct: 10,
+    roas_change_pct: -5,
+    lead_goal_status: "warning",
+    ecommerce_goal_status: "healthy",
+  });
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].goal, "leads");
+  assert.equal(rows[1].goal, "ecommerce");
+  assert.equal(rows[0].efficiency_kind, "cpl");
+  assert.equal(rows[1].efficiency_kind, "roas");
+});
+
+test("isPulseDeliveryExcludedRecipient blocks אילנית", () => {
+  assert.equal(isPulseDeliveryExcludedRecipient("אילנית"), true);
+  assert.equal(isPulseDeliveryExcludedRecipient("דנה"), false);
 });
