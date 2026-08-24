@@ -336,6 +336,10 @@ verify_jwt = false
 [functions.meeting-bot-reconcile]
 verify_jwt = false
 
+# Authenticated dry-run/apply endpoint for existing recording calendar matches.
+[functions.match-recordings-calendar]
+verify_jwt = true
+
 [functions.publishing-feed]
 verify_jwt = false
 

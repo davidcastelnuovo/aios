@@ -45,10 +45,24 @@ export default function SummarizeRecordingDialog({
   const [transcript, setTranscript] = useState("");
   const [focusPoints, setFocusPoints] = useState<string[]>(["decisions", "action_items", "next_steps"]);
   const [customFocus, setCustomFocus] = useState("");
-  const [targetType, setTargetType] = useState<"client" | "lead">(
-    recording?.client_id ? "client" : recording?.lead_id ? "lead" : "client"
+  const [targetType, setTargetType] = useState<"client" | "lead" | "campaigner" | "agency">(
+    recording?.client_id
+      ? "client"
+      : recording?.lead_id
+      ? "lead"
+      : recording?.campaigner_ids?.length
+      ? "campaigner"
+      : recording?.agency_id
+      ? "agency"
+      : "agency"
   );
-  const [targetId, setTargetId] = useState<string>(recording?.client_id || recording?.lead_id || "");
+  const [targetId, setTargetId] = useState<string>(
+    recording?.client_id ||
+      recording?.lead_id ||
+      recording?.campaigner_ids?.[0] ||
+      recording?.agency_id ||
+      "",
+  );
   const [isGenerating, setIsGenerating] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
@@ -200,6 +214,43 @@ export default function SummarizeRecordingDialog({
     enabled: !!currentTenantId && open,
   });
 
+  const { data: campaigners = [] } = useQuery({
+    queryKey: ["campaigners-summary", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("tenant_id", currentTenantId)
+        .eq("active", true)
+        .order("full_name");
+      return data || [];
+    },
+    enabled: !!currentTenantId && open,
+  });
+
+  const { data: agencies = [] } = useQuery({
+    queryKey: ["agencies-summary", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data } = await supabase
+        .from("agencies")
+        .select("id, name, is_default")
+        .eq("tenant_id", currentTenantId)
+        .eq("status", "active")
+        .order("is_default", { ascending: false })
+        .order("name");
+      return data || [];
+    },
+    enabled: !!currentTenantId && open,
+  });
+
+  useEffect(() => {
+    if (targetType === "agency" && !targetId && agencies.length > 0) {
+      setTargetId(agencies.find((agency) => agency.is_default)?.id || agencies[0].id);
+    }
+  }, [agencies, targetId, targetType]);
+
   const toggleFocus = (key: string) => {
     setFocusPoints((prev) =>
       prev.includes(key) ? prev.filter((f) => f !== key) : [...prev, key]
@@ -294,7 +345,7 @@ export default function SummarizeRecordingDialog({
       return;
     }
     if (!targetId) {
-      toast({ title: "נא לבחור לקוח או ליד", variant: "destructive" });
+      toast({ title: "נא לבחור יעד לסיכום", variant: "destructive" });
       return;
     }
 
@@ -547,20 +598,37 @@ export default function SummarizeRecordingDialog({
           <div className="space-y-3">
             <Label className="text-base font-medium">שיוך הסיכום</Label>
             <div className="flex gap-3">
-              <Select value={targetType} onValueChange={(val: "client" | "lead") => { setTargetType(val); setTargetId(""); }}>
-                <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+              <Select
+                value={targetType}
+                onValueChange={(val: "client" | "lead" | "campaigner" | "agency") => {
+                  setTargetType(val);
+                  setTargetId(
+                    val === "agency"
+                      ? agencies.find((agency) => agency.is_default)?.id || agencies[0]?.id || ""
+                      : "",
+                  );
+                }}
+              >
+                <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="client">לקוח</SelectItem>
                   <SelectItem value="lead">ליד</SelectItem>
+                  <SelectItem value="campaigner">איש צוות / קמפיינר</SelectItem>
+                  <SelectItem value="agency">סוכנות — סיכום כללי</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={targetId || "none"} onValueChange={(val) => setTargetId(val === "none" ? "" : val)}>
                 <SelectTrigger className="flex-1"><SelectValue placeholder="בחר..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">בחר...</SelectItem>
-                  {targetType === "client"
-                    ? clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)
-                    : leads.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.company_name}</SelectItem>)}
+                  {targetType === "client" &&
+                    clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  {targetType === "lead" &&
+                    leads.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.company_name}</SelectItem>)}
+                  {targetType === "campaigner" &&
+                    campaigners.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
+                  {targetType === "agency" &&
+                    agencies.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

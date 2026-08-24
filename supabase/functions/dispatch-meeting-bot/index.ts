@@ -35,13 +35,16 @@ Deno.serve(async (req) => {
 
     let userId: string | null = null;
     let tenantId: string | null = null;
-    let isServiceCall = token === SERVICE_ROLE_KEY;
+    const isServiceCall = token === SERVICE_ROLE_KEY;
 
     const body = await req.json();
     const {
       meeting_url: rawUrl,
       client_id,
       lead_id,
+      agency_id: requestedAgencyId,
+      campaigner_ids: requestedCampaignerIds,
+      summary_scope: requestedSummaryScope,
       meeting_topic,
       join_at,
       tenant_id: bodyTenantId,
@@ -83,6 +86,58 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    const campaignerIds = Array.isArray(requestedCampaignerIds)
+      ? [...new Set(requestedCampaignerIds.filter((id): id is string => typeof id === "string" && !!id))]
+      : [];
+    const validScopes = new Set(["auto", "client", "lead", "campaigner", "agency"]);
+    const summaryScope = validScopes.has(requestedSummaryScope)
+      ? requestedSummaryScope
+      : client_id
+      ? "client"
+      : lead_id
+      ? "lead"
+      : campaignerIds.length > 0
+      ? "campaigner"
+      : requestedAgencyId
+      ? "agency"
+      : "auto";
+
+    if (summaryScope === "campaigner" && campaignerIds.length === 0) {
+      return json({ error: "נא לבחור איש צוות אחד לפחות" }, 400);
+    }
+
+    let agencyId = requestedAgencyId || null;
+    if (agencyId) {
+      const { data: agency } = await admin
+        .from("agencies")
+        .select("id")
+        .eq("id", agencyId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (!agency) return json({ error: "הסוכנות אינה שייכת לארגון הפעיל" }, 403);
+    } else if (summaryScope === "agency" || summaryScope === "campaigner") {
+      const { data: agency } = await admin
+        .from("agencies")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      agencyId = agency?.id || null;
+      if (!agencyId) return json({ error: "לא נמצאה סוכנות לשיוך הסיכום" }, 400);
+    }
+
+    if (campaignerIds.length > 0) {
+      const { data: team } = await admin
+        .from("campaigners")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .in("id", campaignerIds);
+      if ((team || []).length !== campaignerIds.length) {
+        return json({ error: "אחד מאנשי הצוות אינו שייך לארגון הפעיל" }, 403);
+      }
+    }
 
     const { data: session, error: insertError } = await admin
       .from("meeting_bot_sessions")
@@ -90,6 +145,9 @@ Deno.serve(async (req) => {
         tenant_id: tenantId,
         client_id: client_id || null,
         lead_id: lead_id || null,
+        agency_id: agencyId,
+        campaigner_ids: campaignerIds,
+        summary_scope: summaryScope,
         meeting_url,
         platform,
         meeting_topic: meeting_topic || `${platformLabel(platform)} — כרמן`,
