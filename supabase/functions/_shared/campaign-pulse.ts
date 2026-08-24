@@ -417,6 +417,245 @@ export type PulseStatusCounts = {
   attention: number
 }
 
+/** Keep only pulse rows for clients assigned to the given campaigner (client_team). */
+export type CampaignGoal = 'leads' | 'ecommerce'
+export type CampaignGoalMode = CampaignGoal | 'hybrid'
+
+/** Team managers / recipients who must never receive scoped pulse digests. */
+export const PULSE_DELIVERY_EXCLUDED_RECIPIENT_NAMES = ['אילנית'] as const
+
+export function isPulseDeliveryExcludedRecipient(name: string | null | undefined): boolean {
+  const normalized = String(name || '').trim()
+  if (!normalized) return false
+  return PULSE_DELIVERY_EXCLUDED_RECIPIENT_NAMES.some(
+    (excluded) => normalized === excluded || normalized.startsWith(`${excluded} `),
+  )
+}
+
+export function integrationTypeToGoal(integrationType: string | null | undefined): CampaignGoal | null {
+  if (integrationType === 'facebook_ecommerce') return 'ecommerce'
+  if (integrationType === 'facebook_insights' || integrationType === 'google_ads') return 'leads'
+  return null
+}
+
+export function detectCampaignGoalMode(tables: CampaignTableLike[]): CampaignGoalMode {
+  const goals = new Set<CampaignGoal>()
+  for (const table of tables) {
+    if (table.campaign_active === false) continue
+    const goal = integrationTypeToGoal(table.integration_type)
+    if (goal) goals.add(goal)
+  }
+  if (goals.has('leads') && goals.has('ecommerce')) return 'hybrid'
+  if (goals.has('ecommerce')) return 'ecommerce'
+  return 'leads'
+}
+
+export type GoalMetricBundle = {
+  spend: number
+  outcomes: number
+  revenue: number
+  efficiency: number | null
+  changePct: number | null
+}
+
+type RecordLike = { data?: Record<string, unknown> | null }
+
+function sumRecordFields(rows: RecordLike[], fields: string[]): number {
+  return rows.reduce((total, row) => {
+    const data = row.data || {}
+    const field = fields.find((candidate) => data[candidate] !== undefined && data[candidate] !== null)
+    return total + (field ? Number(data[field]) || 0 : 0)
+  }, 0)
+}
+
+function roundMetric(value: number | null, digits = 2): number | null {
+  if (value === null || Number.isNaN(value)) return null
+  const factor = 10 ** digits
+  return Math.round(value * factor) / factor
+}
+
+/** Aggregate 7d + prior-window metrics for one campaign goal from CRM rows. */
+export function computeGoalMetricsFromRecords(
+  records: RecordLike[],
+  goal: CampaignGoal,
+  d7Str: string,
+  d14Str: string,
+): GoalMetricBundle {
+  const recent = records.filter((row) => {
+    const date = typeof row.data?.date === 'string' ? row.data.date : null
+    return date && date >= d14Str
+  })
+  const current = recent.filter((row) => typeof row.data?.date === 'string' && row.data.date >= d7Str)
+  const previous = recent.filter((row) => {
+    const date = row.data?.date
+    return typeof date === 'string' && date >= d14Str && date < d7Str
+  })
+
+  const spend = sumRecordFields(current, ['spend', 'cost'])
+  const prevSpend = sumRecordFields(previous, ['spend', 'cost'])
+
+  if (goal === 'ecommerce') {
+    const purchases = sumRecordFields(current, ['purchases'])
+    const revenue = sumRecordFields(current, ['purchase_value', 'conversions_value', 'revenue'])
+    const prevRevenue = sumRecordFields(previous, ['purchase_value', 'conversions_value', 'revenue'])
+    const roas = spend > 0 ? revenue / spend : null
+    const prevRoas = prevSpend > 0 ? prevRevenue / prevSpend : null
+    const changePct =
+      roas !== null && prevRoas !== null && prevRoas > 0
+        ? ((roas - prevRoas) / prevRoas) * 100
+        : null
+    return {
+      spend: roundMetric(spend) ?? 0,
+      outcomes: roundMetric(purchases) ?? 0,
+      revenue: roundMetric(revenue) ?? 0,
+      efficiency: roundMetric(roas),
+      changePct: roundMetric(changePct, 1),
+    }
+  }
+
+  const leads = sumRecordFields(current, ['leads', 'conversions', 'all_conversions'])
+  const prevLeads = sumRecordFields(previous, ['leads', 'conversions', 'all_conversions'])
+  const cpl = leads > 0 ? spend / leads : null
+  const prevCpl = prevLeads > 0 ? prevSpend / prevLeads : null
+  const changePct =
+    cpl !== null && prevCpl !== null && prevCpl > 0
+      ? ((cpl - prevCpl) / prevCpl) * 100
+      : null
+  return {
+    spend: roundMetric(spend) ?? 0,
+    outcomes: roundMetric(leads) ?? 0,
+    revenue: 0,
+    efficiency: roundMetric(cpl),
+    changePct: roundMetric(changePct, 1),
+  }
+}
+
+export function worstPulseStatus(a: PulseStatus, b: PulseStatus): PulseStatus {
+  const rank: Record<PulseStatus, number> = { critical: 0, warning: 1, no_data: 2, healthy: 3 }
+  return rank[a] <= rank[b] ? a : b
+}
+
+export type PulseGoalRow = {
+  client_id: string
+  client_name?: string | null
+  agency_id?: string | null
+  agency_name?: string | null
+  goal: CampaignGoal
+  campaign_goal_mode: CampaignGoalMode
+  status: PulseStatus
+  spend_7d: number
+  outcomes_7d: number
+  efficiency: number | null
+  change_pct: number | null
+  efficiency_kind: 'cpl' | 'roas'
+  flags: string[]
+  data_fresh_through?: string | null
+  calculated_at?: string | null
+  last_meta_change_at?: string | null
+  last_meta_change_type?: string | null
+  last_meta_change_actor?: string | null
+  last_meta_change_object?: string | null
+  meta_change_availability?: string | null
+}
+
+type SnapshotExpandable = {
+  client_id: string
+  client_name?: string | null
+  agency_id?: string | null
+  agency_name?: string | null
+  status: PulseStatus
+  campaign_goal_mode?: CampaignGoalMode | null
+  is_ecommerce?: boolean | null
+  spend_7d?: number | null
+  lead_spend_7d?: number | null
+  ecommerce_spend_7d?: number | null
+  leads_7d?: number | null
+  purchases_7d?: number | null
+  cpl_7d?: number | null
+  cpl_change_pct?: number | null
+  roas_7d?: number | null
+  roas_change_pct?: number | null
+  lead_goal_status?: PulseStatus | null
+  ecommerce_goal_status?: PulseStatus | null
+  flags?: string[] | null
+  data_fresh_through?: string | null
+  calculated_at?: string | null
+  last_meta_change_at?: string | null
+  last_meta_change_type?: string | null
+  last_meta_change_actor?: string | null
+  last_meta_change_object?: string | null
+  meta_change_availability?: string | null
+}
+
+function snapshotGoalMode(row: SnapshotExpandable): CampaignGoalMode {
+  if (row.campaign_goal_mode) return row.campaign_goal_mode
+  return row.is_ecommerce ? 'ecommerce' : 'leads'
+}
+
+/** Expand one snapshot into one or two dashboard / WhatsApp goal rows. */
+export function expandSnapshotToGoalRows(row: SnapshotExpandable): PulseGoalRow[] {
+  const mode = snapshotGoalMode(row)
+  const shared = {
+    client_id: row.client_id,
+    client_name: row.client_name ?? null,
+    agency_id: row.agency_id ?? null,
+    agency_name: row.agency_name ?? null,
+    campaign_goal_mode: mode,
+    flags: Array.isArray(row.flags) ? row.flags : [],
+    data_fresh_through: row.data_fresh_through ?? null,
+    calculated_at: row.calculated_at ?? null,
+    last_meta_change_at: row.last_meta_change_at ?? null,
+    last_meta_change_type: row.last_meta_change_type ?? null,
+    last_meta_change_actor: row.last_meta_change_actor ?? null,
+    last_meta_change_object: row.last_meta_change_object ?? null,
+    meta_change_availability: row.meta_change_availability ?? null,
+  }
+
+  const leadRow: PulseGoalRow = {
+    ...shared,
+    goal: 'leads',
+    status: (row.lead_goal_status ?? (mode !== 'ecommerce' ? row.status : 'healthy')) as PulseStatus,
+    spend_7d: Number(row.lead_spend_7d ?? (mode === 'ecommerce' ? 0 : row.spend_7d) ?? 0),
+    outcomes_7d: Number(row.leads_7d ?? 0),
+    efficiency: row.cpl_7d === null || row.cpl_7d === undefined ? null : Number(row.cpl_7d),
+    change_pct: row.cpl_change_pct === null || row.cpl_change_pct === undefined ? null : Number(row.cpl_change_pct),
+    efficiency_kind: 'cpl',
+  }
+
+  const ecommerceRow: PulseGoalRow = {
+    ...shared,
+    goal: 'ecommerce',
+    status: (row.ecommerce_goal_status ?? (mode !== 'leads' ? row.status : 'healthy')) as PulseStatus,
+    spend_7d: Number(row.ecommerce_spend_7d ?? (mode === 'leads' ? 0 : row.spend_7d) ?? 0),
+    outcomes_7d: Number(row.purchases_7d ?? 0),
+    efficiency: row.roas_7d === null || row.roas_7d === undefined ? null : Number(row.roas_7d),
+    change_pct: row.roas_change_pct === null || row.roas_change_pct === undefined ? null : Number(row.roas_change_pct),
+    efficiency_kind: 'roas',
+  }
+
+  if (mode === 'hybrid') return [leadRow, ecommerceRow]
+  if (mode === 'ecommerce') return [ecommerceRow]
+  return [leadRow]
+}
+
+export function expandSnapshotsToGoalRows<T extends SnapshotExpandable>(rows: T[]): PulseGoalRow[] {
+  return rows.flatMap((row) => expandSnapshotToGoalRows(row))
+}
+
+export function goalLabel(goal: CampaignGoal): string {
+  return goal === 'ecommerce' ? 'איקומרס' : 'לידים'
+}
+
+/** Keep only pulse rows for clients assigned to the given campaigner (client_team). */
+export function filterPulseRowsByClientIds<T extends { client_id: string }>(
+  rows: T[],
+  clientIds: Iterable<string>,
+): T[] {
+  const allowed = new Set(clientIds)
+  if (!allowed.size) return []
+  return rows.filter((row) => allowed.has(row.client_id))
+}
+
 export function countPulseStatuses(rows: Array<{ status?: string | null }>): PulseStatusCounts {
   const count = (status: string) => rows.filter((row) => row.status === status).length
   const warning = count('warning')
@@ -436,25 +675,35 @@ export function countPulseStatuses(rows: Array<{ status?: string | null }>): Pul
  * Policy: never paste per-client Markdown tables on WhatsApp.
  */
 export function buildPulseWhatsAppDigest(
-  rows: Array<{ status?: string | null; client_name?: string | null }>,
+  rows: Array<{ status?: string | null; client_name?: string | null; campaign_goal_mode?: string | null; is_ecommerce?: boolean | null; lead_goal_status?: string | null; ecommerce_goal_status?: string | null; leads_7d?: number | null; purchases_7d?: number | null; cpl_7d?: number | null; roas_7d?: number | null; cpl_change_pct?: number | null; roas_change_pct?: number | null; lead_spend_7d?: number | null; ecommerce_spend_7d?: number | null; spend_7d?: number | null }>,
   dashboardUrl: string,
   criticalIssues: PulseCriticalIssue[] = [],
 ): string {
-  const counts = countPulseStatuses(rows)
+  const goalRows = expandSnapshotsToGoalRows(rows as SnapshotExpandable[])
+  const counts = countPulseStatuses(goalRows)
+  const hybridClients = rows.filter((row) => snapshotGoalMode(row as SnapshotExpandable) === 'hybrid').length
+  const goalHint = hybridClients > 0
+    ? ` (כולל ${hybridClients} לקוחות משולבים עם יעד לידים + איקומרס)`
+    : ''
   const issueLines = criticalIssueLines(criticalIssues)
-  if (rows.length === 1) {
+  if (goalRows.length === 1) {
     const statusLabel: Record<string, string> = {
       healthy: '🟢 תקין',
       warning: '🟡 תשומת לב',
       critical: '🔴 קריטי',
       no_data: '🟡 אין טבלת קמפיין מחוברת',
     }
-    const row = rows[0]
+    const row = goalRows[0]
     const label = statusLabel[String(row.status || '')] || String(row.status || '—')
     const name = row.client_name ? ` — ${row.client_name}` : ''
+    const goalSuffix = row.campaign_goal_mode === 'hybrid' ? ` (${goalLabel(row.goal)})` : ''
+    const metricLine = row.efficiency_kind === 'roas'
+      ? `רכישות: ${row.outcomes_7d} · ROAS: ${row.efficiency ?? '—'}${row.change_pct !== null && row.change_pct !== undefined ? ` · שינוי ${row.change_pct > 0 ? '+' : ''}${row.change_pct}%` : ''}`
+      : `לידים: ${row.outcomes_7d} · CPL: ₪${row.efficiency ?? '—'}${row.change_pct !== null && row.change_pct !== undefined ? ` · שינוי ${row.change_pct > 0 ? '+' : ''}${row.change_pct}%` : ''}`
     return [
-      `*בדיקת דופק${name}*`,
+      `*בדיקת דופק${name}${goalSuffix}*`,
       `סטטוס: ${label}`,
+      metricLine,
       ...issueLines,
       '',
       'פירוט מלא בדשבורד בדיקת דופק:',
@@ -463,7 +712,11 @@ export function buildPulseWhatsAppDigest(
   }
   return [
     '*בדיקת דופק הושלמה*',
-    `נבדקו ${counts.total} לקוחות קמפיין פעילים: 🟢 ${counts.healthy} תקינים | 🟡 ${counts.attention} לתשומת לב | 🔴 ${counts.critical} קריטיים`,
+    `נבדקו ${counts.total} יעדי קמפיין פעילים${goalHint}`,
+    '',
+    `🟢 *${counts.healthy}* תקינים`,
+    `🟡 *${counts.attention}* לתשומת לב`,
+    `🔴 *${counts.critical}* קריטיים`,
     ...issueLines,
     '',
     'צפה בדשבורד בדיקת דופק:',

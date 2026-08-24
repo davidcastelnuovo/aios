@@ -1,6 +1,6 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical, Megaphone, Check } from "lucide-react";
+import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical, Megaphone, Check, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { QuickTaskInput, QuickTaskPayload } from "./QuickTaskInput";
+import { isTaskOverdue } from "@/lib/taskDeadline";
 
 interface Task {
   id: string;
@@ -18,12 +19,15 @@ interface Task {
   priority: number;
   due_date: string | null;
   due_time: string | null;
+  target_date?: string | null;
   client_id: string | null;
   lead_id: string | null;
   agency_id: string | null;
   campaigner_id: string | null;
   tenant_id: string | null;
   created_at?: string;
+  created_by?: string | null;
+  creator_name?: string | null;
   clients?: { name: string } | null;
   campaigners?: { full_name: string } | null;
   task_updates?: { id: string }[];
@@ -114,6 +118,22 @@ function DraggableBacklogTask({
             >
               {task.title}
             </p>
+            {(task.target_date || (task.due_date && task.due_time)) && (
+              <div className="flex flex-wrap gap-1 mt-1 text-[10px] text-muted-foreground">
+                {task.due_date && (
+                  <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5">
+                    <CalendarDays className="h-3 w-3" />
+                    ביצוע {new Date(task.due_date).toLocaleDateString("he-IL", { day: "numeric", month: "numeric" })}
+                    {task.due_time ? ` ${String(task.due_time).substring(0, 5)}` : ""}
+                  </span>
+                )}
+                {task.target_date && (
+                  <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-800 dark:text-amber-200">
+                    יעד {new Date(task.target_date).toLocaleDateString("he-IL", { day: "numeric", month: "numeric" })}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Inline client & campaigner selectors */}
@@ -194,6 +214,12 @@ function DraggableBacklogTask({
                 {task.campaigners.full_name}
               </Badge>
             )}
+            {task.creator_name && (
+              <Badge variant="outline" className="text-xs">
+                <UserRound className="h-3 w-3 mr-1" />
+                מאת {task.creator_name}
+              </Badge>
+            )}
             {task.created_at && (
               <span className="text-[11px] text-muted-foreground">
                 נוצר {new Date(task.created_at).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}
@@ -268,14 +294,12 @@ export function TaskBacklogPanel({
     return b.id.localeCompare(a.id);
   };
   
-  const overdueTasks = tasks.filter(t => {
-    if (!t.due_date) return false;
-    const dueDate = new Date(t.due_date);
-    return dueDate < today;
-  }).sort(sortNewestFirst);
-  
-  const untimedTasks = tasks.filter(t => {
-    if (!t.due_date) return false;
+  const overdueTasks = tasks
+    .filter((t) => isTaskOverdue(t, today))
+    .sort(sortNewestFirst);
+
+  const untimedTasks = tasks.filter((t) => {
+    if (!t.due_date || isTaskOverdue(t, today)) return false;
     const dueDate = new Date(t.due_date);
     return dueDate >= today && !t.due_time;
   }).sort(sortNewestFirst);

@@ -12,10 +12,16 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { isSeoTaggedClient } from "@/lib/seoClients";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -35,23 +41,27 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ExternalLink, Link2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
-import { SERVICE_LABELS, type OverallStatus } from "@/lib/healthScore";
+import { type OverallStatus } from "@/lib/healthScore";
 import {
   aggregatePulseMetricsFromRecords,
   applyPeriodMetricsToSnapshot,
   buildPulseDashboardUrl,
   clientHasCampaignService,
+  expandPulseSnapshotToGoalRows,
+  formatGoalChange,
+  formatGoalEfficiency,
+  formatGoalOutcomes,
   formatLastClientCall,
-  formatMetaChange,
-  formatPulseChange,
-  formatPulseEfficiency,
+  formatMetaChangeDetails,
   formatPulseMoney,
-  formatPulseOutcomes,
   getPulsePeriodBounds,
+  goalLabel,
+  metaChangeSummary,
   PULSE_PERIOD_OPTIONS,
   pulseSpendColumnLabel,
   pulseStatusLabel,
   pulseStatusToOverall,
+  type PulseGoalDisplayRow,
   type PulsePeriod,
   type PulseSnapshotRow,
 } from "@/lib/pulseDashboard";
@@ -67,7 +77,9 @@ type ClientBase = {
 };
 
 type PulseRow = ClientBase & {
+  clientId: string;
   pulse: PulseSnapshotRow | null;
+  goalRow: PulseGoalDisplayRow | null;
   overall: OverallStatus;
   flags: string[];
 };
@@ -99,6 +111,7 @@ export default function DMMDashboard() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
+  const [filterCampaigner, setFilterCampaigner] = useState("all");
   const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
   const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
 
@@ -207,15 +220,30 @@ export default function DMMDashboard() {
   });
 
   const needsCampaignerFilter = isCampaigner && !isSeo && !isOwner && !isTeamManager && !isSuperAdmin;
+  const showCampaignerPicker = !needsCampaignerFilter;
+
+  const { data: campaigners = [] } = useQuery({
+    queryKey: ["pulse-dash-campaigners", tenantId, crossTenantAgencyIds.join(",")],
+    queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
+    enabled: !!tenantId && showCampaignerPicker,
+    staleTime: 60_000,
+  });
   const filteredByRole = useMemo(() => {
     if (isSeo && !isOwner && !isTeamManager && !isSuperAdmin) {
       return rawClients.filter((c: any) => isSeoTaggedClient(c));
     }
-    if (!needsCampaignerFilter || !campaignerId) return rawClients;
-    return rawClients.filter((c: any) =>
-      c.client_team?.some((ct: any) => ct.campaigner_id === campaignerId),
-    );
-  }, [rawClients, isSeo, isOwner, isTeamManager, isSuperAdmin, needsCampaignerFilter, campaignerId]);
+    let clients = rawClients;
+    if (needsCampaignerFilter && campaignerId) {
+      clients = clients.filter((c: any) =>
+        c.client_team?.some((ct: any) => ct.campaigner_id === campaignerId),
+      );
+    } else if (showCampaignerPicker && filterCampaigner !== "all") {
+      clients = clients.filter((c: any) =>
+        c.client_team?.some((ct: any) => ct.campaigner_id === filterCampaigner),
+      );
+    }
+    return clients;
+  }, [rawClients, isSeo, isOwner, isTeamManager, isSuperAdmin, needsCampaignerFilter, campaignerId, showCampaignerPicker, filterCampaigner]);
 
   const clientIds = filteredByRole.map((c: any) => c.id);
 
@@ -224,8 +252,7 @@ export default function DMMDashboard() {
     queryFn: async () => {
       if (!tenantId || !clientIds.length) return [] as PulseSnapshotRow[];
       const baseColumns =
-        "client_id, agency_id, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability";
-      // Snapshots may live on this tenant or a partner tenant for shared agencies.
+        "client_id, agency_id, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability";
       const load = (columns: string) =>
         (supabase as any)
           .from("campaign_pulse_snapshots")
@@ -233,7 +260,6 @@ export default function DMMDashboard() {
           .in("client_id", clientIds);
       let { data, error } = await load(`${baseColumns}, last_client_call_at, last_client_call_by`);
       if (error && /last_client_call/.test(error.message ?? "")) {
-        // Call-freshness columns not deployed yet — render the rest of the pulse.
         ({ data, error } = await load(baseColumns));
       }
       if (error) throw error;
@@ -339,33 +365,40 @@ export default function DMMDashboard() {
   }, [pulseRows, periodMetricsByClient, needsPeriodOverride]);
 
   const rows: PulseRow[] = useMemo(() => {
-    return filteredByRole.map((c: any) => {
+    const expanded: PulseRow[] = [];
+    for (const c of filteredByRole) {
       const services: string[] = Array.isArray(c.services) ? [...c.services] : [];
       if (c.is_seo_client === true && !services.includes("seo")) services.push("seo");
       const pulse = pulseByClient.get(c.id) ?? null;
       const hasCampaign = clientHasCampaignService(services);
-      const overall = pulse
-        ? pulseStatusToOverall(pulse.status)
-        : hasCampaign
-          ? "yellow"
-          : "green";
-      const flags = [
-        ...(pulse?.flags || []),
-        ...(!pulse && hasCampaign ? ["ממתין לבדיקת דופק"] : []),
-      ];
-      return {
-        id: c.id,
-        name: c.name,
-        status: c.status,
-        agency_id: c.agency_id,
-        services,
-        campaignerName: c.client_team?.[0]?.campaigners?.full_name ?? "—",
-        agencyName: c.agencies?.name ?? "—",
-        pulse,
-        overall,
-        flags,
-      } as PulseRow;
-    });
+      const goalRows = pulse ? expandPulseSnapshotToGoalRows(pulse) : [null];
+      for (const goalRow of goalRows) {
+        const overall = goalRow
+          ? pulseStatusToOverall(goalRow.status)
+          : hasCampaign
+            ? "yellow"
+            : "green";
+        const flags = [
+          ...(goalRow?.flags || pulse?.flags || []),
+          ...(!pulse && hasCampaign ? ["ממתין לבדיקת דופק"] : []),
+        ];
+        expanded.push({
+          id: goalRow?.rowKey || c.id,
+          clientId: c.id,
+          name: c.name,
+          status: c.status,
+          agency_id: c.agency_id,
+          services,
+          campaignerName: c.client_team?.[0]?.campaigners?.full_name ?? "—",
+          agencyName: c.agencies?.name ?? "—",
+          pulse,
+          goalRow,
+          overall,
+          flags,
+        });
+      }
+    }
+    return expanded;
   }, [filteredByRole, pulseByClient]);
 
   const filtered = useMemo(() => {
@@ -394,7 +427,9 @@ export default function DMMDashboard() {
       yellow: base.filter((c) => c.overall === "yellow").length,
       green: base.filter((c) => c.overall === "green").length,
       total: base.length,
-      missingPulse: base.filter((c) => clientHasCampaignService(c.services) && !c.pulse).length,
+      missingPulse: new Set(
+        base.filter((c) => clientHasCampaignService(c.services) && !c.pulse).map((c) => c.clientId),
+      ).size,
     };
   }, [rows, filterService]);
 
@@ -423,9 +458,8 @@ export default function DMMDashboard() {
             {` · ${periodBounds.label}`}
             {period !== "last_7_days"
               ? ` (${periodBounds.startDate}–${periodBounds.endDate})`
-              : freshness
-                ? ` · עודכן ${freshness}`
-                : ""}
+              : ""}
+            {freshness ? ` · עודכן ${freshness}` : ""}
             {summary.missingPulse > 0 ? ` · ${summary.missingPulse} ממתינים לחישוב` : ""}
           </p>
         </div>
@@ -545,6 +579,21 @@ export default function DMMDashboard() {
             <SelectItem value="seo">SEO</SelectItem>
           </SelectContent>
         </Select>
+        {showCampaignerPicker && (
+          <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+            <SelectTrigger className="w-[170px]">
+              <SelectValue placeholder="קמפיינר" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל הקמפיינרים</SelectItem>
+              {campaigners.map((campaigner) => (
+                <SelectItem key={campaigner.id} value={campaigner.id}>
+                  {campaigner.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Card>
@@ -555,13 +604,12 @@ export default function DMMDashboard() {
                 <TableHead className="text-right w-8">סטטוס</TableHead>
                 <TableHead className="text-right">סוכנות</TableHead>
                 <TableHead className="text-right">לקוח</TableHead>
+                <TableHead className="text-right">יעד</TableHead>
                 <TableHead className="text-right">קמפיינר</TableHead>
-                <TableHead className="text-right">שירותים</TableHead>
                 <TableHead className="text-right">{pulseSpendColumnLabel(period)}</TableHead>
                 <TableHead className="text-right">לידים/רכישות</TableHead>
                 <TableHead className="text-right">CPL/ROAS</TableHead>
                 <TableHead className="text-right">שינוי</TableHead>
-                <TableHead className="text-right">נתונים עד</TableHead>
                 <TableHead className="text-right">שיחת לקוח אחרונה</TableHead>
                 <TableHead className="text-right">שינוי במטה</TableHead>
                 <TableHead className="text-right">הערה</TableHead>
@@ -571,13 +619,15 @@ export default function DMMDashboard() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={14} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={13} className="text-center text-muted-foreground py-10">
                     אין לקוחות להצגה
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((client) => {
                   const pulse = client.pulse;
+                  const goalRow = client.goalRow;
+                  const metaSource = goalRow || pulse;
                   return (
                     <TableRow
                       key={client.id}
@@ -598,35 +648,32 @@ export default function DMMDashboard() {
                       <TableCell>
                         <div className="font-medium whitespace-nowrap">{client.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {pulse ? pulseStatusLabel(pulse.status) : "🟡 ממתין לבדיקה"}
+                          {goalRow ? pulseStatusLabel(goalRow.status) : pulse ? pulseStatusLabel(pulse.status) : "🟡 ממתין לבדיקה"}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {goalRow ? (
+                          <Badge variant="outline" className="text-xs">
+                            {goalLabel(goalRow.goal)}
+                          </Badge>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {client.campaignerName}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {client.services.map((svc) => (
-                            <Badge key={svc} variant="secondary" className="text-xs">
-                              {SERVICE_LABELS[svc] || svc}
-                            </Badge>
-                          ))}
-                        </div>
+                      <TableCell className="whitespace-nowrap tabular-nums">
+                        {goalRow ? formatPulseMoney(goalRow.spend_7d) : pulse ? formatPulseMoney(pulse.spend_7d) : "—"}
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
-                        {pulse ? formatPulseMoney(pulse.spend_7d) : "—"}
+                        {goalRow ? formatGoalOutcomes(goalRow) : "—"}
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
-                        {pulse ? formatPulseOutcomes(pulse) : "—"}
+                        {goalRow ? formatGoalEfficiency(goalRow) : "—"}
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">
-                        {pulse ? formatPulseEfficiency(pulse) : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {pulse ? formatPulseChange(pulse.cpl_change_pct) : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {pulse?.data_fresh_through || "—"}
+                        {goalRow ? formatGoalChange(goalRow) : "—"}
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
                         {pulse ? formatLastClientCall(pulse) : "—"}
@@ -635,10 +682,27 @@ export default function DMMDashboard() {
                         ) : null}
                       </TableCell>
                       <TableCell className="text-xs max-w-[180px]">
-                        {pulse ? formatMetaChange(pulse) : "—"}
-                        {pulse?.last_meta_change_actor ? (
-                          <div className="text-muted-foreground">מי: {pulse.last_meta_change_actor}</div>
-                        ) : null}
+                        {metaSource ? (
+                          metaSource.last_meta_change_at ? (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="underline decoration-dotted underline-offset-2 hover:text-primary"
+                                >
+                                  {metaChangeSummary(metaSource)}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-72 text-sm whitespace-pre-wrap" align="start">
+                                {formatMetaChangeDetails(metaSource)}
+                              </PopoverContent>
+                            </Popover>
+                          ) : (
+                            metaChangeSummary(metaSource)
+                          )
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1 max-w-[220px]">
@@ -666,7 +730,7 @@ export default function DMMDashboard() {
                           variant="outline"
                           size="sm"
                           className="h-8 px-2 gap-1"
-                          onClick={() => openClientCard(client.id)}
+                          onClick={() => openClientCard(client.clientId)}
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
                           <span className="text-xs">פתח כרטיס</span>

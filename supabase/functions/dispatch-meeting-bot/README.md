@@ -9,6 +9,29 @@
 3. `meeting-bot-webhook` — מקבל אירועי Recall (`bot.done` וכו')
 4. בסיום: הורדת וידאו + תמלול → `zoom_recordings` (`source=meeting_bot`) → pipeline משותף (סיכום + בריף)
 
+## התאמה אוטומטית ליומן
+
+לפני שיוך AI, ה-pipeline מחפש ביומני Google המחוברים לארגון אירוע Zoom שהזמן שלו
+חופף להתחלת ההקלטה (עד 30 דקות סטייה). כשנמצאה התאמה:
+
+- שם ההקלטה משתנה לכותרת האירוע ביומן.
+- אם שם לקוח אחד מופיע במפורש בכותרת, כל קבצי אותה פגישה משויכים אליו.
+- שיוך לקוח קיים לעולם אינו נדרס.
+- `calendar_event_id` נשמר כדי שההתאמה תהיה אידמפוטנטית ושינוי שם ידני מאוחר יותר יישמר.
+
+אותו matcher משותף משמש גם הקלטות Recall, הקלטות Zoom webhook, משיכה ידנית
+מ-Zoom והקלטות התוסף.
+
+להשלמת הקלטות קיימות משתמשים ב-`match-recordings-calendar`. ברירת המחדל היא
+dry-run:
+
+```bash
+curl -X POST "$SUPABASE_URL/functions/v1/match-recordings-calendar" \
+  -H "Authorization: Bearer $USER_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant_id":"...","dry_run":true,"from":"2026-08-01T00:00:00Z"}'
+```
+
 ## סודות (Supabase Edge Functions)
 
 | Secret | חובה | תיאור |

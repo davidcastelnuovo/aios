@@ -2,6 +2,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { LogOut, Building2 } from "lucide-react";
 import { GlobalApprovalsBell } from "@/components/agents/GlobalApprovalsBell";
+import { HeaderModuleShortcuts } from "./HeaderModuleShortcuts";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -186,7 +187,7 @@ export function AppLayout() {
 
   return (
     <ViewAsProvider>
-      <SidebarProvider defaultOpen={true}>
+      <SidebarProvider defaultOpen={false} expandOnHover>
         <div className="flex h-screen max-h-screen w-full overflow-hidden" dir="rtl">
           <AppSidebar />
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -199,6 +200,7 @@ export function AppLayout() {
                 </h1>
               </div>
               <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+                <HeaderModuleShortcuts />
                 {agencies && agencies.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>

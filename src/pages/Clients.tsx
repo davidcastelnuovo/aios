@@ -77,10 +77,27 @@ export default function Clients() {
   const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
   // Restricted viewer: pure campaigner (no SEO / team_manager / owner / super_admin)
   const isRestrictedClientViewer = isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
-  // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
+  // Deep-link support: ?clientId=xxx&tab=updates|recordings (from DMM / recordings)
+  const CLIENT_DEEP_LINK_TABS = new Set([
+    "details",
+    "connections",
+    "business",
+    "docs",
+    "credentials",
+    "meeting",
+    "recordings",
+    "report",
+    "updates",
+    "calls",
+    "wordpress",
+    "whatsapp",
+  ]);
   const [searchParams] = useSearchParams();
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
-  const deepLinkTab = (searchParams.get("tab") as "updates" | "details" | undefined) ?? undefined;
+  const rawDeepLinkTab = searchParams.get("tab");
+  const deepLinkTab = rawDeepLinkTab && CLIENT_DEEP_LINK_TABS.has(rawDeepLinkTab)
+    ? rawDeepLinkTab
+    : undefined;
   const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("chat");
   const [pendingChatClientId, setPendingChatClientId] = useState<string | null>(null);
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -70,6 +70,10 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useUserRole } from "@/hooks/useUserRole";
 import { resolveListCategory } from "@/lib/crmTableCategories";
 import { isSeoTaggedClient } from "@/lib/seoClients";
+import {
+  clearLegacyDynamicTablesCategory,
+  DYNAMIC_TABLES_CATEGORY_PARAM,
+} from "@/lib/dynamicTablesHub";
 
 interface CrmTable {
   id: string;
@@ -87,7 +91,9 @@ interface CrmTable {
 
 export default function DynamicTables() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { buildPath } = useTenantPath();
+  const selectedCategory = searchParams.get(DYNAMIC_TABLES_CATEGORY_PARAM);
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
@@ -112,10 +118,6 @@ export default function DynamicTables() {
   const [editAgencyId, setEditAgencyId] = useState<string>("");
   const [editClientId, setEditClientId] = useState<string>("");
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return sessionStorage.getItem('dynamicTables.selectedCategory');
-  });
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
   const [editAdAccountId, setEditAdAccountId] = useState<string>("");
@@ -518,12 +520,31 @@ export default function DynamicTables() {
     return Object.keys(groupedTables);
   }, [groupedTables]);
 
-  // Clear selectedCategory if it no longer exists in categories (don't auto-select first)
-  useMemo(() => {
-    if (categories.length === 0) return;
-    if (selectedCategory && !categories.includes(selectedCategory)) {
-      setSelectedCategory(null);
-      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
+  const selectCategory = (category: string) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set(DYNAMIC_TABLES_CATEGORY_PARAM, category);
+      return next;
+    }, { replace: true });
+  };
+
+  const clearSelectedCategory = () => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete(DYNAMIC_TABLES_CATEGORY_PARAM);
+      return next;
+    }, { replace: true });
+  };
+
+  useEffect(() => {
+    clearLegacyDynamicTablesCategory();
+  }, []);
+
+  // Drop stale category params; hub navigation must not auto-open the last category.
+  useEffect(() => {
+    if (categories.length === 0 || !selectedCategory) return;
+    if (!categories.includes(selectedCategory)) {
+      clearSelectedCategory();
     }
   }, [categories, selectedCategory]);
 
@@ -729,10 +750,7 @@ export default function DynamicTables() {
                   return (
                     <Card
                       key={category}
-                      onClick={() => {
-                        setSelectedCategory(category);
-                        try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
-                      }}
+                      onClick={() => selectCategory(category)}
                       className={cn(
                         "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
                         "bg-gradient-to-br border-2",
@@ -767,10 +785,7 @@ export default function DynamicTables() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setSelectedCategory(null);
-                      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
-                    }}
+                    onClick={clearSelectedCategory}
                     className="gap-1"
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -804,10 +819,7 @@ export default function DynamicTables() {
                         key={category}
                         variant={isActive ? "default" : "outline"}
                         size="sm"
-                        onClick={() => {
-                          setSelectedCategory(category);
-                          try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
-                        }}
+                        onClick={() => selectCategory(category)}
                         className={cn("gap-1.5 h-8 text-xs", !isActive && style.border)}
                       >
                         <span className="capitalize">{category}</span>

@@ -11,6 +11,9 @@ import {
   countStoppedCampaignsByClient,
   effectiveIsEcommerce,
   normalizeAdAccountId,
+  expandSnapshotToGoalRows,
+  filterPulseRowsByClientIds,
+  isPulseDeliveryExcludedRecipient,
   pickFreshestTablePerPlatform,
   resolveLastSyncAt,
   isSyncStale,
@@ -440,15 +443,14 @@ test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)
     "https://aios.co.il/t/marketingcaptain/dmm-dashboard",
   );
   assert.match(digest, /בדיקת דופק הושלמה/);
-  assert.match(digest, /🟢 1 תקינים/);
-  assert.match(digest, /🟡 2 לתשומת לב/);
-  assert.match(digest, /🔴 1 קריטיים/);
+  assert.match(digest, /🟢 \*1\* תקינים/);
+  assert.match(digest, /🟡 \*2\* לתשומת לב/);
+  assert.match(digest, /🔴 \*1\* קריטיים/);
   assert.match(digest, /https:\/\/aios\.co\.il\/t\/marketingcaptain\/dmm-dashboard/);
   assert.equal(digest.includes("| סוכנות |"), false);
   assert.equal(digest.includes("חושבה ב־"), false);
-  // The redundant "details are dashboard-only" sign-off is gone from both shapes.
-  assert.equal(digest.includes("בדשבורד בלבד"), false);
   assert.equal(digest.includes("לא בוואטסאפ"), false);
+  assert.equal(digest.includes("בדשבורד בלבד"), false);
   assert.equal(
     buildPulseWhatsAppDigest(
       [{ status: "healthy", client_name: "בילבי" }],
@@ -466,4 +468,52 @@ test("WhatsApp pulse digest is short counts + dashboard link (no markdown table)
   assert.equal(pulseSurfacePrefersWhatsAppDigest("whatsapp"), true);
   assert.equal(pulseSurfacePrefersWhatsAppDigest("task"), true);
   assert.equal(pulseSurfacePrefersWhatsAppDigest("internal_chat"), false);
+});
+
+test("filterPulseRowsByClientIds keeps only assigned clients", () => {
+  const rows = [
+    { client_id: "a", status: "healthy", client_name: "Alpha" },
+    { client_id: "b", status: "warning", client_name: "Beta" },
+    { client_id: "c", status: "critical", client_name: "Gamma" },
+  ];
+  const filtered = filterPulseRowsByClientIds(rows, ["a", "c"]);
+  assert.equal(filtered.length, 2);
+  assert.deepEqual(filtered.map((row) => row.client_id), ["a", "c"]);
+
+  const digest = buildPulseWhatsAppDigest(
+    filtered,
+    "https://aios.co.il/t/dmm/dmm-dashboard",
+  );
+  assert.match(digest, /נבדקו 2 יעדי קמפיין/);
+  assert.match(digest, /https:\/\/aios\.co\.il\/t\/dmm\/dmm-dashboard/);
+  assert.equal(filterPulseRowsByClientIds(rows, []).length, 0);
+});
+
+test("hybrid snapshot expands to separate lead and ecommerce goal rows", () => {
+  const rows = expandSnapshotToGoalRows({
+    client_id: "c1",
+    client_name: "Hybrid Co",
+    status: "warning",
+    campaign_goal_mode: "hybrid",
+    lead_spend_7d: 100,
+    ecommerce_spend_7d: 200,
+    leads_7d: 5,
+    purchases_7d: 8,
+    cpl_7d: 20,
+    roas_7d: 2.5,
+    cpl_change_pct: 10,
+    roas_change_pct: -5,
+    lead_goal_status: "warning",
+    ecommerce_goal_status: "healthy",
+  });
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].goal, "leads");
+  assert.equal(rows[1].goal, "ecommerce");
+  assert.equal(rows[0].efficiency_kind, "cpl");
+  assert.equal(rows[1].efficiency_kind, "roas");
+});
+
+test("isPulseDeliveryExcludedRecipient blocks אילנית", () => {
+  assert.equal(isPulseDeliveryExcludedRecipient("אילנית"), true);
+  assert.equal(isPulseDeliveryExcludedRecipient("דנה"), false);
 });

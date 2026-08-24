@@ -59,6 +59,7 @@ Deno.serve(async (req) => {
         tenant_id: tenantId,
         deliver: true,
         force_delivery: true,
+        preview_only: true,
         source: 'approved_manual_trigger',
       }),
     })

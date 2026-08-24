@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -39,9 +39,18 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
-import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
+import {
+  resolveBoardTaskAgency,
+  resolveNewTaskAgency,
+  resolveTasksBoardScope,
+  filterTasksBySelectedAgency,
+  syncLocalTasksForAgencyFilter,
+} from "@/lib/taskBoardAgency";
+import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
+import { buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
+import { isTaskOverdue } from "@/lib/taskDeadline";
 
 interface Task {
   id: string;
@@ -57,10 +66,13 @@ interface Task {
   campaigner_id: string | null;
   sales_person_id?: string | null;
   tenant_id: string | null;
+  created_by?: string | null;
+  creator_name?: string | null;
   sort_order?: number;
+  target_date?: string | null;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
-  clients?: { name: string } | null;
+  clients?: { name: string; agency_id?: string | null } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
 }
@@ -90,32 +102,7 @@ export function WeeklyTaskBoard() {
   // Fetch campaigners for quick filter (include cross-tenant via shared agencies)
   const { data: campaignersList = [] } = useQuery({
     queryKey: ["campaigners-for-task-filter", tenantId, crossTenantAgencyIds.join(",")],
-    queryFn: async () => {
-      let crossTenantCampaignerIds: string[] = [];
-      if (crossTenantAgencyIds.length > 0) {
-        const { data: caRows } = await supabase
-          .from("campaigner_agencies")
-          .select("campaigner_id")
-          .in("agency_id", crossTenantAgencyIds);
-        crossTenantCampaignerIds = Array.from(new Set((caRows || []).map((r: any) => r.campaigner_id)));
-      }
-
-      let query = supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("active", true)
-        .order("full_name");
-
-      if (crossTenantCampaignerIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantCampaignerIds.join(",")})`);
-      } else {
-        query = query.eq("tenant_id", tenantId!);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId,
   });
   const { selectedAgency } = useAgency();
@@ -123,7 +110,7 @@ export function WeeklyTaskBoard() {
   const { data: clientsList = [] } = useQuery({
     queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
-      let query = supabase.from("clients").select("id, name");
+      let query = supabase.from("clients").select("id, name, agency_id");
       if (crossTenantAgencyIds.length > 0) {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
       } else {
@@ -142,22 +129,10 @@ export function WeeklyTaskBoard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const { isTeamManager, isOwner, isSuperAdmin } = useUserRole();
-  const seesTeamTasksByDefault = isTeamManager || isOwner || isSuperAdmin;
+  // Everyone — including owners and team managers — lands on their own queue.
+  // The campaigner filter switches to the full team board on demand.
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
-  // Team managers / owners land on the agency's full board, not "mine" only —
-  // otherwise filtering the header to DMM/Promo looks empty when their personal
-  // queue happens to have no open tasks in that agency.
-  const didApplyRoleDefault = useRef(false);
-  useEffect(() => {
-    if (didApplyRoleDefault.current) return;
-    if (!seesTeamTasksByDefault) return;
-    didApplyRoleDefault.current = true;
-    setFilters((prev) =>
-      prev.campaignerId === "mine" ? { ...prev, campaignerId: "all" } : prev
-    );
-  }, [seesTeamTasksByDefault]);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
   const [quickAddSlot, setQuickAddSlot] = useState<{ date: Date; time: string } | null>(null);
@@ -167,7 +142,7 @@ export function WeeklyTaskBoard() {
 
   // Full task type from DB
   type FullTask = Task & {
-    clients?: { name: string } | null;
+    clients?: { name: string; agency_id?: string | null } | null;
     campaigners?: { full_name: string } | null;
     task_updates?: { id: string }[];
     task_collaborators?: { id: string }[];
@@ -183,7 +158,7 @@ export function WeeklyTaskBoard() {
         .from("tasks")
         .select(`
           *,
-          clients (name),
+          clients (name, agency_id),
           campaigners (full_name),
           task_updates (id),
           task_collaborators (id)
@@ -301,38 +276,39 @@ export function WeeklyTaskBoard() {
         .from("tasks")
         .select(`
           *,
-          clients (name),
+          clients (name, agency_id),
           campaigners (full_name),
           task_updates (id),
           task_collaborators (id)
         `);
 
-      // Cross-tenant: include tasks from shared agencies
-      if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      // Tenant scope only. The header agency is applied after the fetch, on the
+      // task's effective agency (its client's agency when it has one), because
+      // `tasks.agency_id` alone both leaks foreign clients and hides tasks that
+      // do belong to the selected agency.
+      const boardScope = resolveTasksBoardScope({
+        tenantId: tenantId!,
+        crossTenantAgencyIds,
+      });
+      if (boardScope.type === "tenant_or_shared") {
+        query = query.or(
+          `tenant_id.eq.${boardScope.tenantId},agency_id.in.(${boardScope.crossTenantAgencyIds.join(",")})`,
+        );
       } else {
-        query = query.eq("tenant_id", tenantId);
+        query = query.eq("tenant_id", boardScope.tenantId);
       }
 
       // Include: current range OR overdue (past due_date with status != done) OR null due_date
       // Overdue = due_date < today AND status != 'done'
-      if (filters.startDate && filters.endDate) {
-        // Custom date range
-        const customStart = format(filters.startDate, "yyyy-MM-dd");
-        const customEnd = format(filters.endDate, "yyyy-MM-dd");
-        query = query.or(
-          `and(due_date.gte.${customStart},due_date.lte.${customEnd}),` +
-          `and(due_date.lt.${today},status.neq.done),` +
-          `due_date.is.null`
-        );
-      } else {
-        // View range + overdue + unscheduled
-        query = query.or(
-          `and(due_date.gte.${rangeStartStr},due_date.lte.${rangeEndStr}),` +
-          `and(due_date.lt.${today},status.neq.done),` +
-          `due_date.is.null`
-        );
-      }
+      query = query.or(
+        buildTaskDueDateOrFilter({
+          rangeStart: rangeStartStr,
+          rangeEnd: rangeEndStr,
+          today,
+          customStart: filters.startDate ? format(filters.startDate, "yyyy-MM-dd") : undefined,
+          customEnd: filters.endDate ? format(filters.endDate, "yyyy-MM-dd") : undefined,
+        }),
+      );
 
       // Apply "mine" filter - tasks ASSIGNED to me (campaigner or sales person).
       // We intentionally do NOT include `created_by` here: an admin/owner creates
@@ -381,14 +357,6 @@ export function WeeklyTaskBoard() {
         query = query.is("client_id", null);
       }
 
-      // Apply agency filter from header. Filter on tasks.agency_id directly —
-      // the previous client_id IN (...) subquery added a fourth PostgREST `.or()`
-      // (on top of tenant / date / mine) that could empty the board for shared
-      // agencies, and hid tasks whose client row the user could not SELECT.
-      if (selectedAgency && selectedAgency !== "all") {
-        query = query.eq("agency_id", selectedAgency);
-      }
-
 
       const { data, error } = await query
         .order("due_date", { ascending: true })
@@ -396,7 +364,21 @@ export function WeeklyTaskBoard() {
         .order("sort_order", { ascending: true });
 
       if (error) throw error;
-      return data as FullTask[];
+      const taskRows = (data || []) as FullTask[];
+      const creatorIds = Array.from(new Set(
+        taskRows.map((task) => task.created_by).filter((id): id is string => Boolean(id))
+      ));
+      if (creatorIds.length === 0) return taskRows;
+
+      const { data: creators } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", creatorIds);
+      const creatorNames = new Map((creators || []).map((creator) => [creator.id, creator.full_name]));
+      return taskRows.map((task) => ({
+        ...task,
+        creator_name: task.created_by ? creatorNames.get(task.created_by) || null : null,
+      }));
     },
     staleTime: 1000 * 60,
   });
@@ -405,17 +387,26 @@ export function WeeklyTaskBoard() {
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
   
   useEffect(() => {
-    // Don't clobber the current list while a refetch is in flight (avoids an empty flash).
-    if (isFetching) return;
-    // Sync with the settled server result, INCLUDING an empty list. This is critical:
-    // when a filter (campaigner / agency / type / association / date) matches no tasks,
-    // we must clear the board. The old `length > 0` guard kept the previous (broader) set,
-    // which made filters look like they were ignored and showed all tasks.
-    setLocalTasks(fetchedTasks ?? []);
-  }, [isFetching, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+    // Sync with server results (including empty). While a refetch is in flight we keep
+    // previous rows to avoid an empty flash — but ALWAYS narrow by selectedAgency so the
+    // header agency filter cannot leave other agencies' tasks on the board.
+    const next = syncLocalTasksForAgencyFilter({
+      isFetching,
+      fetchedTasks,
+      previousLocal: localTasks,
+      selectedAgency,
+    });
+    setLocalTasks(next);
+    // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
+    // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFetching, selectedAgency, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
 
-  // localTasks is the source of truth for rendering (kept in sync with the filtered query above).
-  const tasks = localTasks;
+  // Defense in depth (Clients.tsx pattern): never render tasks outside the header agency.
+  const tasks = useMemo(
+    () => filterTasksBySelectedAgency(localTasks, selectedAgency),
+    [localTasks, selectedAgency],
+  );
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates)
   // Also hide calendar events when filtering by a specific campaigner (not "mine" or "all")
@@ -425,14 +416,21 @@ export function WeeklyTaskBoard() {
     if (filters.campaignerId && filters.campaignerId !== "mine" && filters.campaignerId !== "all") {
       return [];
     }
-    
+
+    const gridToday = startOfDay(new Date());
+    // Hide a Google event only when the linked task is actually on the timed grid.
+    // Otherwise the event vanishes while the task sits in backlog / off-screen.
     const syncedEventIds = new Set(
       tasks
-        .filter(t => t.google_calendar_event_id)
-        .map(t => t.google_calendar_event_id)
+        .filter(
+          (t) =>
+            t.google_calendar_event_id &&
+            taskAppearsOnTimeGrid(t, dateRange, gridToday),
+        )
+        .map((t) => t.google_calendar_event_id as string),
     );
-    return calendarEvents.filter(event => !syncedEventIds.has(event.id));
-  }, [calendarEvents, tasks, filters.campaignerId]);
+    return calendarEvents.filter((event) => !syncedEventIds.has(event.id));
+  }, [calendarEvents, tasks, filters.campaignerId, dateRange]);
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
@@ -448,7 +446,8 @@ export function WeeklyTaskBoard() {
     enabled: !!tenantId,
   });
 
-  const canQuickAddTask = !!tenantId && !!firstAgency?.id;
+  const boardAgencyId = resolveBoardTaskAgency(selectedAgency, firstAgency?.id);
+  const canQuickAddTask = !!tenantId && !!boardAgencyId;
 
   // Add task mutation
   const addTask = useMutation({
@@ -459,6 +458,7 @@ export function WeeklyTaskBoard() {
       clientId,
       campaignerId,
       selfReminderAt,
+      targetDate,
     }: {
       title: string;
       date: Date | null;
@@ -466,9 +466,19 @@ export function WeeklyTaskBoard() {
       clientId?: string | null;
       campaignerId?: string | null;
       selfReminderAt?: string | null;
+      targetDate?: string | null;
     }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
-      if (!firstAgency?.id) throw new Error("NO_AGENCY");
+      // A task attached to a client must carry that client's agency, otherwise
+      // it shows up under whichever agency the header happened to be on.
+      const agencyId = resolveNewTaskAgency({
+        clientAgencyId: clientId
+          ? clientsList?.find((client) => client.id === clientId)?.agency_id
+          : null,
+        selectedAgency,
+        fallbackAgencyId: firstAgency?.id,
+      });
+      if (!agencyId) throw new Error("NO_AGENCY");
 
       const myCampaignerId = userProfile?.campaigner_id || null;
       const mySalesPersonId = userProfile?.sales_person_id || null;
@@ -482,13 +492,17 @@ export function WeeklyTaskBoard() {
         status: "open",
         priority: 5,
         tenant_id: tenantId,
-        agency_id: firstAgency.id,
+        agency_id: agencyId,
+        created_by: user?.id || null,
         campaigner_id: assignedCampaignerId,
         sales_person_id: assignedCampaignerId ? null : mySalesPersonId,
         client_id: clientId ?? null,
       };
       if (selfReminderAt) {
         insertData.self_reminder_at = selfReminderAt;
+      }
+      if (targetDate) {
+        insertData.target_date = targetDate;
       }
       if (validDate) {
         insertData.due_date = format(validDate, "yyyy-MM-dd");
@@ -566,6 +580,10 @@ export function WeeklyTaskBoard() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
+      if (data.synced === 0) {
+        toast.info(data.message || "סנכרון משימות אינו נתמך כרגע.");
+        return;
+      }
       toast.success(`סונכרנו ${data.synced} משימות ליומן גוגל`);
       if (data.failed > 0) {
         toast.warning(`${data.failed} משימות נכשלו בסנכרון`);
@@ -582,12 +600,17 @@ export function WeeklyTaskBoard() {
       toast.error("המערכת עדיין נטענת, נסי שוב בעוד רגע");
       return;
     }
+    const executionDate = payload.executionDate
+      ? new Date(`${payload.executionDate}T12:00:00`)
+      : null;
     addTask.mutate({
       title: payload.title,
-      date: null,
+      date: executionDate,
+      time: payload.executionTime?.substring(0, 5),
       clientId: payload.clientId,
       campaignerId: payload.campaignerId,
       selfReminderAt: payload.selfReminderAt,
+      targetDate: payload.targetDate,
     });
   };
 
@@ -644,13 +667,17 @@ export function WeeklyTaskBoard() {
       durationMinutes,
     }: {
       taskId: string;
-      newDate: string;
+      newDate: string | null;
       newTime?: string | null;
       title?: string;
       googleCalendarEventId?: string | null;
       durationMinutes?: number;
     }) => {
-      const updateData: { due_date: string; due_time?: string | null } = { due_date: newDate };
+      const updateData: {
+        due_date: string | null;
+        due_time?: string | null;
+        google_calendar_event_id?: string | null;
+      } = { due_date: newDate };
       if (newTime !== undefined) {
         updateData.due_time = newTime;
       }
@@ -660,37 +687,25 @@ export function WeeklyTaskBoard() {
         .eq("id", taskId);
       if (error) throw error;
 
-      // אם יש תאריך ושעה - עדכן או צור אירוע ביומן גוגל
-      if (newDate && newTime && title) {
-        try {
-          const startDateTime = new Date(`${newDate}T${newTime}`);
-          const duration = durationMinutes || 30;
-          const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
-          
-          if (googleCalendarEventId) {
-            // עדכון אירוע קיים דרך Unified
-            const { updateCalendarEvent: updateCalEvent } = await import("@/lib/calendarApi");
-            await updateCalEvent(
-              { eventId: googleCalendarEventId, summary: title, start: startDateTime.toISOString(), end: endDateTime.toISOString() },
-              { tenantId: tenantId! }
-            );
-          } else {
-            // יצירת אירוע חדש דרך Unified
-            const { addCalendarEvent: addCalEvent } = await import("@/lib/calendarApi");
-            const calendarResult = await addCalEvent(
-              { summary: title, description: `משימה ממערכת Marketing Captain`, start: startDateTime.toISOString(), end: endDateTime.toISOString() },
-              { tenantId: tenantId! }
-            );
-            
-            if (calendarResult?.eventId) {
-              await supabase.from("tasks")
-                .update({ google_calendar_event_id: calendarResult.eventId })
-                .eq("id", taskId);
-            }
-          }
-        } catch (calendarError) {
-          console.warn("לא הצלחנו לעדכן ביומן גוגל:", calendarError);
+      try {
+        const { syncTaskCalendarEvent } = await import("@/lib/calendarApi");
+        const eventId = await syncTaskCalendarEvent({
+          tenantId: tenantId!,
+          title: title || "משימה",
+          dueDate: newDate,
+          dueTime: newTime ?? null,
+          durationMinutes: durationMinutes || 30,
+          existingEventId: googleCalendarEventId,
+        });
+        const calendarChanged =
+          (eventId ?? null) !== (googleCalendarEventId ?? null);
+        if (calendarChanged) {
+          await supabase.from("tasks")
+            .update({ google_calendar_event_id: eventId })
+            .eq("id", taskId);
         }
+      } catch (calendarError) {
+        console.warn("לא הצלחנו לעדכן ביומן גוגל:", calendarError);
       }
     },
     onSuccess: () => {
@@ -707,18 +722,31 @@ export function WeeklyTaskBoard() {
   // Update client assignment
   const updateTaskClient = useMutation({
     mutationFn: async ({ taskId, clientId }: { taskId: string; clientId: string | null }) => {
+      // Re-stamp the agency with the new client's, so the task follows its
+      // client instead of staying under the agency it was created in.
+      const clientAgencyId = clientId
+        ? clientsList?.find((client) => client.id === clientId)?.agency_id ?? null
+        : null;
+      const update: { client_id: string | null; agency_id?: string } = { client_id: clientId };
+      if (clientAgencyId) update.agency_id = clientAgencyId;
+
       const { error } = await supabase
         .from("tasks")
-        .update({ client_id: clientId })
+        .update(update)
         .eq("id", taskId);
       if (error) throw error;
     },
     onMutate: async ({ taskId, clientId }) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
-      const clientName = clientsList?.find((c) => c.id === clientId)?.name ?? null;
+      const client = clientsList?.find((c) => c.id === clientId) ?? null;
       const patch = (t: any) =>
         t?.id === taskId
-          ? { ...t, client_id: clientId, clients: clientName ? { name: clientName } : null }
+          ? {
+              ...t,
+              client_id: clientId,
+              agency_id: client?.agency_id ?? t.agency_id,
+              clients: client ? { name: client.name, agency_id: client.agency_id } : null,
+            }
           : t;
       queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
         if (!Array.isArray(old)) return old;
@@ -913,6 +941,8 @@ export function WeeklyTaskBoard() {
         taskId,
         newDate: null,
         newTime: null,
+        title: draggedTask.title,
+        googleCalendarEventId: draggedTask.google_calendar_event_id,
       });
       toast.success("המשימה הועברה לרשימת המשימות");
       return;
@@ -1064,10 +1094,9 @@ export function WeeklyTaskBoard() {
   // Backlog includes: overdue, no due_date, or has due_date but no due_time
   const backlogTasks = tasks.filter((t) => {
     if (t.status === "done") return false;
-    if (t.due_date === null) return true; // Unscheduled
-    const dueDate = new Date(t.due_date);
-    if (dueDate < today) return true; // Overdue
-    if (!t.due_time) return true; // Has date but no time - goes to backlog
+    if (isTaskOverdue(t, today)) return true;
+    if (t.due_date === null) return true;
+    if (!t.due_time) return true;
     return false;
   });
 
@@ -1570,6 +1599,8 @@ export function WeeklyTaskBoard() {
             taskId,
             newDate: null,
             newTime: null,
+            title: selectedTask?.title,
+            googleCalendarEventId: selectedTask?.google_calendar_event_id,
           });
           toast.success("המשימה הועברה לרשימת המשימות");
         }}
@@ -1592,7 +1623,8 @@ export function WeeklyTaskBoard() {
         onDelete={(eventId) => deleteCalendarEvent.mutate(eventId)}
         onCreateTask={(data) => {
           // Create a new task from calendar event
-          if (!tenantId || !firstAgency?.id) {
+          const agencyId = resolveBoardTaskAgency(selectedAgency, firstAgency?.id);
+          if (!tenantId || !agencyId) {
             toast.error("לא ניתן ליצור משימה כרגע");
             return;
           }
@@ -1606,7 +1638,8 @@ export function WeeklyTaskBoard() {
             status: "open",
             priority: 5,
             tenant_id: tenantId,
-            agency_id: firstAgency.id,
+            agency_id: agencyId,
+            created_by: user?.id || null,
             campaigner_id: myCampaignerId,
             sales_person_id: myCampaignerId ? null : mySalesPersonId,
             due_date: data.dueDate,

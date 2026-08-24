@@ -8,10 +8,22 @@ import {
   clientAdAccountIds,
   clientCampaignServices as servicesFromClient,
   countStoppedCampaignsByClient,
-  effectiveIsEcommerce,
+  computeGoalMetricsFromRecords,
+  detectCampaignGoalMode,
+  integrationTypeToGoal,
   selectPulseCriticalAlerts,
   tableMatchesServices,
+  worstPulseStatus,
 } from '../_shared/campaign-pulse.ts'
+import { normalizeNotifyPhone } from '../_shared/carmen-notify-target.ts'
+import {
+  buildPulsePreviewMessage,
+  mergePulseDeliveryPlans,
+  planCampaignerPulseDeliveries,
+  planTeamManagerPulseDeliveries,
+  scopeSnapshotsForPlan,
+  type PulseDeliveryPlan,
+} from '../_shared/pulse-delivery.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -109,6 +121,111 @@ function bearerAuthorized(authHeader: string | null): boolean {
   }
 }
 
+async function queuePulseWhatsApp(
+  supabase: any,
+  tenantId: string,
+  message: string,
+  chatId: string | null,
+): Promise<boolean> {
+  const delivery = await supabase.rpc('claude_notify_david', {
+    p_message: message,
+    p_tenant: tenantId,
+    p_chat_id: chatId,
+  })
+  return !delivery.error && delivery.data?.queued === true
+}
+
+async function loadTeamManagerDeliveryPlans(
+  supabase: any,
+  tenantId: string,
+  snapshots: Array<{ client_id: string; agency_id?: string | null }>,
+): Promise<PulseDeliveryPlan[]> {
+  const { data: roles } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('tenant_id', tenantId)
+    .eq('role', 'team_manager')
+  const userIds = Array.from(new Set((roles || []).map((row: any) => row.user_id).filter(Boolean)))
+  if (!userIds.length) return []
+
+  const [{ data: profiles }, { data: managed }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, full_name, campaigner_id, campaigners ( phone )')
+      .in('id', userIds),
+    supabase
+      .from('user_managed_agencies')
+      .select('user_id, agency_id')
+      .in('user_id', userIds),
+  ])
+
+  const agenciesByUser = new Map<string, string[]>()
+  for (const row of managed || []) {
+    if (!row.user_id || !row.agency_id) continue
+    agenciesByUser.set(row.user_id, [...(agenciesByUser.get(row.user_id) || []), row.agency_id])
+  }
+
+  return planTeamManagerPulseDeliveries(
+    snapshots,
+    (profiles || []).map((profile: any) => ({
+      user_id: profile.id,
+      full_name: profile.full_name,
+      phone: profile.campaigners?.phone || null,
+      agency_ids: agenciesByUser.get(profile.id) || [],
+    })),
+  )
+}
+
+async function deliverScopedPulseRecipients(
+  supabase: any,
+  tenantId: string,
+  snapshots: any[],
+  dashboardUrl: string,
+  plans: PulseDeliveryPlan[],
+  previewPhone: string | null,
+  skipPhones: Set<string>,
+  previewOnly = false,
+): Promise<any[]> {
+  const deliveries: any[] = []
+  for (const plan of plans) {
+    const recipientPhone = normalizeNotifyPhone(plan.phone)
+    if (!recipientPhone || skipPhones.has(recipientPhone)) continue
+
+    const scoped = scopeSnapshotsForPlan(snapshots, plan)
+    if (!scoped.length) continue
+
+    const scopedDigest = buildPulseWhatsAppDigest(scoped, dashboardUrl)
+    if (previewPhone) {
+      const previewQueued = await queuePulseWhatsApp(
+        supabase,
+        tenantId,
+        buildPulsePreviewMessage(plan.name, scopedDigest),
+        previewPhone,
+      )
+      deliveries.push({
+        type: 'preview',
+        recipient: plan.name,
+        role: plan.role,
+        preview_phone: previewPhone,
+        clients: scoped.length,
+        queued: previewQueued,
+      })
+    }
+
+    if (previewOnly) continue
+
+    const queued = await queuePulseWhatsApp(supabase, tenantId, scopedDigest, recipientPhone)
+    deliveries.push({
+      type: plan.role,
+      recipient: plan.name,
+      phone: recipientPhone,
+      clients: scoped.length,
+      queued,
+    })
+  }
+  return deliveries
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok')
   if (!bearerAuthorized(req.headers.get('authorization'))) {
@@ -117,12 +234,14 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
   let body: any = {}
   try { body = await req.json() } catch { /* empty cron body */ }
-  const deliveryRequested = body.deliver !== false
-  const forceDelivery = body.force_delivery === true && (
-    body.source === 'approved_manual_trigger' || body.source === 'morning_cron'
-  )
+  // Only explicit deliver:true may send WhatsApp — sync crons refresh snapshots only.
+  const deliveryRequested = body.deliver === true
+  const manualDeliveryBypass =
+    body.force_delivery === true && body.source === 'approved_manual_trigger'
+  const previewOnlyDelivery =
+    body.preview_only === true && body.source === 'approved_manual_trigger'
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
-    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone')
+    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
   const { data: settings, error: settingsError } = await settingsQuery
   if (settingsError) return json({ error: settingsError.message }, 500)
@@ -287,7 +406,7 @@ Deno.serve(async (req) => {
         }
         let records: any[] = []
         if (tableIds.length) {
-          const filtered = await supabase.from('crm_records').select('data')
+          const filtered = await supabase.from('crm_records').select('table_id, data')
             .in('table_id', tableIds)
             .filter('data->>date', 'gte', d30Str)
             .limit(5000)
@@ -297,7 +416,7 @@ Deno.serve(async (req) => {
             if (filtered.error) {
               console.warn('[campaign-pulse] crm_records date filter failed', client.id, filtered.error.message)
             }
-            const fallback = await supabase.from('crm_records').select('data')
+            const fallback = await supabase.from('crm_records').select('table_id, data')
               .in('table_id', tableIds)
               .limit(5000)
             records = fallback.data || []
@@ -306,44 +425,76 @@ Deno.serve(async (req) => {
             }
           }
         }
+        const tableTypeById = new Map(activeTables.map((table: any) => [table.id, table.integration_type]))
+        const recordsForGoal = (goal: 'leads' | 'ecommerce') =>
+          records.filter((row: any) => integrationTypeToGoal(tableTypeById.get(row.table_id)) === goal)
+        const leadRecords = recordsForGoal('leads')
+        const ecommerceRecords = recordsForGoal('ecommerce')
         const recent = records.filter((row: any) => row.data?.date && row.data.date >= d30Str)
-        const current = recent.filter((row: any) => row.data.date >= d7Str)
-        const previous = recent.filter((row: any) => row.data.date >= d14Str && row.data.date < d7Str)
-        const sum = (rows: any[], fields: string[]) =>
-          rows.reduce((total, row) => {
-            const field = fields.find((candidate) => row.data?.[candidate] !== undefined && row.data?.[candidate] !== null)
-            return total + (field ? Number(row.data[field]) || 0 : 0)
-          }, 0)
-        const spend7 = sum(current, ['spend', 'cost'])
-        const leads7 = sum(current, ['leads', 'conversions', 'all_conversions'])
-        const previousSpend = sum(previous, ['spend', 'cost'])
-        const previousLeads = sum(previous, ['leads', 'conversions', 'all_conversions'])
-        const cpl7 = leads7 > 0 ? spend7 / leads7 : null
-        const previousCpl = previousLeads > 0 ? previousSpend / previousLeads : null
-        const cplChange = cpl7 !== null && previousCpl ? ((cpl7 - previousCpl) / previousCpl) * 100 : null
-        const purchases = sum(current, ['purchases'])
-        const revenue = sum(current, ['purchase_value', 'conversions_value', 'revenue'])
-        const roas = spend7 > 0 ? revenue / spend7 : null
+        const goalMode = detectCampaignGoalMode(activeTables)
+        const leadMetrics = computeGoalMetricsFromRecords(leadRecords, 'leads', d7Str, d14Str)
+        const ecommerceMetrics = computeGoalMetricsFromRecords(ecommerceRecords, 'ecommerce', d7Str, d14Str)
+        const spend7 = leadMetrics.spend + ecommerceMetrics.spend
+        const leads7 = leadMetrics.outcomes
+        const purchases = ecommerceMetrics.outcomes
+        const revenue = ecommerceMetrics.revenue
+        const cpl7 = leadMetrics.efficiency
+        const cplChange = leadMetrics.changePct
+        const roas = ecommerceMetrics.efficiency
+        const roasChange = ecommerceMetrics.changePct
         const freshest = recent.map((row: any) => row.data?.date).filter(Boolean).sort().reverse()[0] || null
         const configuredForClient = (tableResult.data || []).filter((table: any) =>
           table.client_id === client.id && tableMatchesServices(table, clientCampaignServices(client))
         )
         const latestCall = latestCallByClient.get(client.id) || null
-        const isEcommerce = effectiveIsEcommerce(client.is_ecommerce, activeTables)
-        const { status, flags, stalePlatforms } = classifyCampaignPulseStatus({
-          activeTables,
-          hasConfiguredCampaignTable: configuredForClient.length > 0,
-          recentRecordCount: recent.length,
-          isEcommerce,
-          spend7,
-          leads7,
-          purchases7: purchases,
-          roas,
-          cplChangePct: cplChange,
-          lastClientCallAt: clientCallDataAvailable ? (latestCall?.last_client_call_at || null) : undefined,
-          stoppedCampaignCount: stoppedByClient.get(client.id) || 0,
+        const lastClientCallAt = clientCallDataAvailable ? (latestCall?.last_client_call_at || null) : undefined
+        const stoppedCount = stoppedByClient.get(client.id) || 0
+        const leadTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type) === 'leads')
+        const ecommerceTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type) === 'ecommerce')
+        const leadClassification = classifyCampaignPulseStatus({
+          activeTables: leadTables,
+          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type) === 'leads'),
+          recentRecordCount: leadRecords.filter((row: any) => row.data?.date && row.data.date >= d30Str).length,
+          isEcommerce: false,
+          spend7: leadMetrics.spend,
+          leads7: leadMetrics.outcomes,
+          purchases7: 0,
+          roas: null,
+          cplChangePct: leadMetrics.changePct,
+          lastClientCallAt: goalMode !== 'ecommerce' ? lastClientCallAt : undefined,
+          stoppedCampaignCount: goalMode !== 'ecommerce' ? stoppedCount : 0,
           nowMs: now.getTime(),
         })
+        const ecommerceClassification = classifyCampaignPulseStatus({
+          activeTables: ecommerceTables,
+          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type) === 'ecommerce'),
+          recentRecordCount: ecommerceRecords.filter((row: any) => row.data?.date && row.data.date >= d30Str).length,
+          isEcommerce: true,
+          spend7: ecommerceMetrics.spend,
+          leads7: 0,
+          purchases7: ecommerceMetrics.outcomes,
+          roas: ecommerceMetrics.efficiency,
+          cplChangePct: null,
+          lastClientCallAt: goalMode === 'ecommerce' ? lastClientCallAt : undefined,
+          stoppedCampaignCount: goalMode === 'ecommerce' ? stoppedCount : 0,
+          nowMs: now.getTime(),
+        })
+        const leadStatus = goalMode === 'ecommerce' ? null : leadClassification.status
+        const ecommerceStatus = goalMode === 'leads' ? null : ecommerceClassification.status
+        const status = goalMode === 'hybrid'
+          ? worstPulseStatus(leadClassification.status, ecommerceClassification.status)
+          : goalMode === 'ecommerce'
+            ? ecommerceClassification.status
+            : leadClassification.status
+        const flags = Array.from(new Set([
+          ...(goalMode !== 'ecommerce' ? leadClassification.flags : []),
+          ...(goalMode !== 'leads' ? ecommerceClassification.flags : []),
+        ]))
+        const stalePlatforms = Array.from(new Set([
+          ...leadClassification.stalePlatforms,
+          ...ecommerceClassification.stalePlatforms,
+        ]))
+        const isEcommerce = goalMode === 'ecommerce' || goalMode === 'hybrid'
         console.log('[campaign-pulse] client classified', {
           client_id: client.id,
           client_name: client.name,
@@ -361,9 +512,21 @@ Deno.serve(async (req) => {
         snapshots.push({
           tenant_id: tenantId, agency_id: client.agency_id, client_id: client.id,
           calculated_at: now.toISOString(), data_fresh_through: freshest, status,
-          is_ecommerce: isEcommerce, spend_7d: round(spend7), leads_7d: round(leads7),
-          cpl_7d: round(cpl7), cpl_change_pct: round(cplChange, 1), purchases_7d: round(purchases),
-          revenue_7d: round(revenue), roas_7d: round(roas), flags, source: 'synced_crm',
+          campaign_goal_mode: goalMode,
+          is_ecommerce: isEcommerce,
+          lead_spend_7d: round(leadMetrics.spend),
+          ecommerce_spend_7d: round(ecommerceMetrics.spend),
+          spend_7d: round(spend7),
+          leads_7d: round(leads7),
+          cpl_7d: round(cpl7),
+          cpl_change_pct: round(cplChange, 1),
+          purchases_7d: round(purchases),
+          revenue_7d: round(revenue),
+          roas_7d: round(roas),
+          roas_change_pct: round(roasChange, 1),
+          lead_goal_status: leadStatus,
+          ecommerce_goal_status: ecommerceStatus,
+          flags, source: 'synced_crm',
           last_meta_change_at: lastMetaChange.at,
           last_meta_change_type: lastMetaChange.type,
           last_meta_change_actor: lastMetaChange.actor,
@@ -378,9 +541,12 @@ Deno.serve(async (req) => {
         snapshots.push({
           tenant_id: tenantId, agency_id: client.agency_id, client_id: client.id,
           calculated_at: now.toISOString(), data_fresh_through: null, status: 'no_data',
+          campaign_goal_mode: detectCampaignGoalMode(activeTablesByClient.get(client.id) || []),
           is_ecommerce: !!client.is_ecommerce, spend_7d: 0, leads_7d: 0,
+          lead_spend_7d: 0, ecommerce_spend_7d: 0,
           cpl_7d: null, cpl_change_pct: null, purchases_7d: 0,
-          revenue_7d: 0, roas_7d: null,
+          revenue_7d: 0, roas_7d: null, roas_change_pct: null,
+          lead_goal_status: 'no_data', ecommerce_goal_status: null,
           flags: ['שגיאה בחישוב דופק — נסה שוב'],
           source: 'synced_crm',
           last_meta_change_at: null, last_meta_change_type: null,
@@ -423,25 +589,67 @@ Deno.serve(async (req) => {
     const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl, criticalIssues)
     let sent = false
     let deliveryClaimed = false
-    if (deliveryRequested && setting.campaign_pulse_enabled && forceDelivery) {
-      deliveryClaimed = true
-    } else if (deliveryRequested && setting.campaign_pulse_enabled) {
-      const claim = await supabase.rpc('claim_campaign_pulse_delivery', { p_tenant_id: tenantId })
-      deliveryClaimed = claim.data === true && !claim.error
-      if (claim.error) console.error('Failed to claim campaign pulse delivery:', claim.error.message)
+    const scopedDeliveries: any[] = []
+    if (deliveryRequested && setting.campaign_pulse_enabled) {
+      if (manualDeliveryBypass) {
+        deliveryClaimed = true
+      } else {
+        const claim = await supabase.rpc('claim_campaign_pulse_delivery', { p_tenant_id: tenantId })
+        deliveryClaimed = claim.data === true && !claim.error
+        if (claim.error) console.error('Failed to claim campaign pulse delivery:', claim.error.message)
+      }
     }
     if (deliveryClaimed) {
-      // Deliver via Carmen Direct, but pin the recipient when
-      // campaign_pulse_phone is set (e.g. Felix on DMM). claude-notify also
-      // refuses cross-tenant owner fallback (David's newest session on DMM).
-      const delivery = await supabase.rpc('claude_notify_david', {
-        p_message: digest,
-        p_tenant: tenantId,
-        p_chat_id: setting.campaign_pulse_phone || null,
-      })
-      sent = !delivery.error && delivery.data?.queued === true
+      const skipPhones = new Set(
+        [normalizeNotifyPhone(setting.campaign_pulse_phone)].filter((phone): phone is string => !!phone),
+      )
+
+      // Full-tenant digest to the configured management phone (e.g. Felix on DMM).
+      if (!previewOnlyDelivery && setting.campaign_pulse_phone) {
+        sent = await queuePulseWhatsApp(supabase, tenantId, digest, setting.campaign_pulse_phone)
+        if (!sent) {
+          console.error('Failed to queue full campaign pulse via Carmen Direct')
+        }
+      }
+
+      const deliverToCampaigners = setting.campaign_pulse_deliver_to_campaigners === true
+      const deliverToManagers = setting.campaign_pulse_deliver_to_team_managers === true
+      if (deliverToCampaigners || deliverToManagers) {
+        const snapshotClientIds = snapshots.map((snapshot) => snapshot.client_id)
+        const plans: PulseDeliveryPlan[] = []
+
+        if (deliverToCampaigners && snapshotClientIds.length) {
+          const [{ data: links }, { data: campaigners }] = await Promise.all([
+            supabase.from('client_team').select('campaigner_id, client_id').in('client_id', snapshotClientIds),
+            supabase.from('campaigners').select('id, full_name, phone').eq('tenant_id', tenantId).eq('active', true),
+          ])
+          plans.push(...planCampaignerPulseDeliveries(snapshots, links || [], campaigners || []))
+        }
+
+        if (deliverToManagers) {
+          plans.push(...await loadTeamManagerDeliveryPlans(supabase, tenantId, snapshots))
+        }
+
+        const mergedPlans = mergePulseDeliveryPlans(plans)
+        const recipientDeliveries = await deliverScopedPulseRecipients(
+          supabase,
+          tenantId,
+          snapshots,
+          dashboardUrl,
+          mergedPlans,
+          setting.campaign_pulse_preview_phone || null,
+          skipPhones,
+          previewOnlyDelivery,
+        )
+        scopedDeliveries.push(...recipientDeliveries)
+        if (!sent) {
+          sent = previewOnlyDelivery
+            ? recipientDeliveries.some((row) => row.type === 'preview' && row.queued === true)
+            : recipientDeliveries.some((row) => row.type !== 'preview' && row.queued === true)
+        }
+      }
+
       if (!sent) {
-        console.error('Failed to queue deterministic campaign pulse via Carmen Direct:', delivery.error?.message)
         await supabase.from('tenant_heartbeat_settings')
           .update({ campaign_pulse_last_sent_at: null }).eq('tenant_id', tenantId)
       }
@@ -455,6 +663,7 @@ Deno.serve(async (req) => {
         external_api_calls: metaActivityCalls,
         dashboard_url: dashboardUrl,
         clients_checked: snapshots.length,
+        scoped_deliveries: scopedDeliveries,
       }],
       summary: digest, duration_ms: Date.now() - started,
     })
@@ -464,9 +673,10 @@ Deno.serve(async (req) => {
       onboarding_clients: onboardingClients.length,
       onboarding_open_tasks: onboardingClients.reduce((total: number, client: any) => total + client.open_tasks.length, 0),
       sent,
+      scoped_deliveries: scopedDeliveries,
       delivery_channel: 'carmen_direct',
       delivery_requested: deliveryRequested,
-      skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !forceDelivery && !deliveryClaimed,
+      skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !manualDeliveryBypass && !deliveryClaimed,
       ai_used: false,
       external_api_calls: metaActivityCalls,
     })
