@@ -1079,7 +1079,7 @@ export function ImportLeadsWithMapping() {
       queryClient.invalidateQueries({ queryKey: ["lead-statuses", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-tags-bulk", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates"] });
       
       toast({
         title: "הצלחה!",
