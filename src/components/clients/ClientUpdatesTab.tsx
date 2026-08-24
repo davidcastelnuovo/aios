@@ -27,7 +27,8 @@ import {
   Phone,
   Mail,
   Video,
-  AlertTriangle
+  AlertTriangle,
+  Smile
 } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -61,6 +62,7 @@ const INTERACTION_TYPES = [
   { value: "seo_update",      label: "עדכון SEO",     icon: AlertTriangle },
   { value: "meeting_summary", label: "סיכום פגישה",   icon: Video },
   { value: "other",           label: "אחר",           icon: AlertTriangle },
+  { value: "mood_status",     label: "שביעות רצון",   icon: Smile },
 ];
 
 export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: ClientUpdatesTabProps) {
@@ -130,6 +132,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["clients-chat", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["client", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
       toast.success("מצב לקוח עודכן");
     },
     onError: (err: any) => toast.error(err?.message || "שגיאה בשמירת עדכון"),
@@ -506,6 +509,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
             {updates.map((update: any) => {
               const isEditing = editingUpdateId === update.id;
               const isOwner = user?.id === update.user_id;
+              const isMoodHistory = update.update_type === "mood_status";
               
               return (
                 <Card key={update.id} className="bg-muted/50">
@@ -563,7 +567,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                             <Calendar className="h-3 w-3 shrink-0" />
                             <span>{format(new Date(update.created_at), "d/M/yy HH:mm", { locale: he })}</span>
                           </div>
-                          {isOwner && (
+                          {isOwner && !isMoodHistory && (
                             <div className="flex gap-1 shrink-0">
                               <Button
                                 size="icon"
