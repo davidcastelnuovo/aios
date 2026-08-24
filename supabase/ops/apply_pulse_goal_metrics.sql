@@ -10,3 +10,5 @@ ALTER TABLE public.campaign_pulse_snapshots
     CHECK (lead_goal_status IS NULL OR lead_goal_status IN ('healthy', 'warning', 'critical', 'no_data')),
   ADD COLUMN IF NOT EXISTS ecommerce_goal_status text
     CHECK (ecommerce_goal_status IS NULL OR ecommerce_goal_status IN ('healthy', 'warning', 'critical', 'no_data'));
+
+-- applied via hotfix trigger 2026-08-24T12:52:49Z
