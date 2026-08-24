@@ -81,9 +81,9 @@ export const CREATIVE_VISUAL_STYLES: CreativeVisualStyle[] = [
     "Palette: black, iridescent cyan/magenta/gold highlights.",
   ]),
   style("collage", "קולאז'", "נייר קרוע, דיו, טקסטורה", "reference", [
-    "ART DIRECTION only: analog mixed-media collage of THIS copy's story.",
-    "Torn paper, ink splatters, charcoal, physical paper texture. Cut-outs must depict the copy idea, not a generic explorer map or random vehicle.",
-    "One coherent handmade board, not a digital mashup of styles.",
+    "ART DIRECTION only: analog mixed-media collage TECHNIQUE of THIS copy's story.",
+    "Torn paper, ink splatters, charcoal, physical paper texture. Every collage is a NEW board: new figure, new cut-outs, new marks that illustrate THIS sentence.",
+    "One coherent handmade board, not a reprint of a previous collage and not a digital mashup of styles.",
     "Forbidden: photoreal studio, neon glass, clean Swiss grid, 3D render.",
     "Palette: beige paper, grey newsprint, black ink, one red accent.",
   ]),
@@ -219,7 +219,9 @@ const STATIC_QUALITY = [
 
 const STATIC_QUALITY_SELECTED = [
   ...STATIC_QUALITY_CORE,
-  "A named style was selected by the user. APPLY that look (material, light, graphic language). Still stage THIS copy and this topic. Logo/brand colors override the style palette if present.",
+  "A named style was selected. APPLY that TECHNIQUE (material, color family, composition approach) — not a photocopy of a previous card.",
+  "STYLE ≠ CLONE. Change people, poses, props, graphic marks, and crop so they fit THIS copy. Two cards in the same style must be instantly distinguishable.",
+  "If this still could be mistaken for another variation, it failed. Logo/brand colors override the style palette if present.",
 ].join(" ");
 
 export const buildStaticQualityLock = (options?: { selectedStyle?: boolean }) =>
@@ -233,7 +235,7 @@ export const buildVisualStyleLock = (
   if (options?.storyboard) return [selected.lock, STORYBOARD_CONTINUITY].join("\n");
   if (selected.id === "adaptive") return [selected.lock, STATIC_QUALITY].join("\n");
   return [
-    `SELECTED STYLE — ${selected.label}. The user chose this look. Apply it.`,
+    `SELECTED STYLE — ${selected.label}. The user chose this TECHNIQUE (craft, color family, composition approach). Apply the technique. Do not reprint the same picture.`,
     selected.lock,
     STATIC_QUALITY_SELECTED,
   ].join("\n");

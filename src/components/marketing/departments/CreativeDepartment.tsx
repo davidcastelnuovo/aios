@@ -42,7 +42,7 @@ import { VisualStyleSelect } from "@/components/marketing/departments/creative/V
 import { buildCompositionLock, pickCompositionId, type CompositionId } from "@/components/marketing/departments/creative/compositions";
 import { buildAdaptiveTreatment, isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
 import { buildCopySceneBrief, hydrateVariationLayers, isInternalCopyLine, strongestLine } from "@/components/marketing/departments/creative/designedLayers";
-import { buildStyleContinuityLock, missingCopyBlocks, usesIntegratedType } from "@/components/marketing/departments/creative/styleContinuity";
+import { buildStyleContinuityLock, buildStylePlayLock, missingCopyBlocks, usesIntegratedType } from "@/components/marketing/departments/creative/styleContinuity";
 import {
   buildStaticQualityLock,
   buildVisualStyleLock,
@@ -747,6 +747,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     replaceId,
     name,
     styleSource,
+    existing,
   }: {
     copyText: string;
     copyKey?: string;
@@ -757,6 +758,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     replaceId?: string;
     name?: string;
     styleSource?: CreativeVariation;
+    existing?: CreativeVariation[];
   }): Promise<CreativeVariation> => {
     if (!selected) throw new Error("לא נבחר פרויקט");
     throwIfGenerationAborted(generateAbortRef.current);
@@ -764,6 +766,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const style = visualStyleById(styleId);
     const format = defaultFormat(selected.payload);
     const kit = getBrandKit(selected.payload);
+    const live = existing ?? variations;
     const sceneBrief = buildCopySceneBrief({
       copyText,
       title: selected.title ?? undefined,
@@ -771,16 +774,25 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
       copyLabel,
     });
-    const usedCompositions = variations
+    const usedCompositions = live
       .map((variation) => variation.compositionId)
       .filter((value): value is CompositionId => !!value);
     const compositionId = styleSource
       ? (usesIntegratedType(styleSource) ? "flush" : styleSource.compositionId ?? "flush")
       : pickCompositionId(`${copyKey || copyLabel || style.id}-${Date.now()}`, usedCompositions);
     const costume = isOptionalCostume(style.id) ? style : undefined;
-    const styleRefUrl = styleSource?.imageUrl
+    // Named styles already encode the technique in text. Attaching the liked still
+    // makes gpt-image-1 reprint the same face/crop. Keep the image only when the
+    // look was invented (adaptive) and we have no named recipe to follow.
+    const attachStyleStill = !!styleSource?.imageUrl && !costume;
+    const styleRefUrl = attachStyleStill && styleSource?.imageUrl
       ? await resolveCreativeImageUrl(styleSource.imageUrl)
       : undefined;
+    const priorLabels = live
+      .filter((variation) => !variation.rejected && variation.id !== replaceId && variation.id !== styleSource?.id)
+      .map((variation) => variation.copyLabel || variation.name)
+      .filter(Boolean)
+      .slice(-4);
     const creativePrompt = [
       `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
       sceneBrief,
@@ -788,10 +800,18 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         ? buildStyleContinuityLock({
           sourceLabel: styleSource.copyLabel || styleSource.name,
           sourceIdea: strongestLine(styleSource.copyText || "", selected.title ?? undefined),
+          attachStill: attachStyleStill,
         })
         : buildCompositionLock(compositionId),
-      styleSource && "Keep the approved still's graphic architecture. Type will sit flush in a designed pocket — no rectangle plates.",
-      !styleSource && (costume
+      buildStylePlayLock({
+        copyText,
+        copyLabel,
+        copyKey,
+        index: live.length,
+        avoidLabels: priorLabels,
+      }),
+      attachStyleStill && "The attached still is a technique sample, not a layout to trace. New cast, new props, new crop. Type sits flush — no rectangle plates.",
+      costume
         ? buildVisualStyleLock(selected.payload, { styleId: style.id })
         : buildAdaptiveTreatment({
           copyText,
@@ -799,16 +819,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           title: selected.title ?? undefined,
           brief: getBriefText(selected),
           brandColors: kit.brandBook?.colors,
-        })),
+        }),
       buildStaticQualityLock({ selectedStyle: !!costume }),
       brandKitPrompt(kit),
       directorNote && `Art director REJECT — do not repeat these mistakes: ${directorNote}`,
       styleSource
-        ? `Format ${format}. Same campaign look as the attached approved still. New situation for this copy only.`
+        ? `Format ${format}. Same TECHNIQUE family (paper, ink, light, color). Completely different picture, people, and props for this copy.`
         : `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
       kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
       "RTL/production: Hebrew is composited as layers after generation — the image API still garbles Hebrew (reversed letters, missing glyphs). Do not paint letters.",
-      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes.",
+      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes, reprinting a previous collage.",
     ].filter(Boolean).join("\n");
     throwIfGenerationAborted(generateAbortRef.current);
     const { imageUrl, cost } = await generateCreativeImage({
@@ -912,6 +932,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           copyKey: block.key,
           copyLabel: copyBlockLabel(block),
           styleId: style.id,
+          existing: current,
         });
         current = [...current, created];
         await persistVariations(current, `נוצר ${copyBlockLabel(block)}`);
@@ -949,8 +970,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           copyText: block.text,
           copyKey: block.key,
           copyLabel: copyBlockLabel(block),
-          styleId: "adaptive",
+          styleId: source.visualStyle || selectedStyleId,
           styleSource: source,
+          existing: current,
         });
         current = [...current, created];
         await persistVariations(current, `נוצר ${copyBlockLabel(block)} בסגנון שאישרת`);

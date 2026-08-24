@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildStyleContinuityLock, isTypePlate, missingCopyBlocks, usesIntegratedType } from "./styleContinuity.ts";
+import { buildStyleContinuityLock, buildStylePlayLock, isTypePlate, missingCopyBlocks, usesIntegratedType } from "./styleContinuity.ts";
 
 test("missingCopyBlocks skips the approved card and existing live keys", () => {
   const blocks = [
@@ -35,7 +35,34 @@ test("style continuity lock keeps the campaign look and changes the copy beat", 
   });
   assert.match(lock, /CAMPAIGN STYLE LOCK/i);
   assert.match(lock, /מגולל לצ'אט/);
-  assert.match(lock, /approved still/i);
+  assert.match(lock, /Technique sample/);
+  assert.match(lock, /STYLE ≠ CLONE/);
+  assert.match(lock, /new people/);
   assert.match(lock, /No caption plates/i);
-  assert.match(lock, /new copy idea/i);
+  assert.match(lock, /approved still/i);
+});
+
+test("style continuity without an attached still does not ask the model to copy a picture", () => {
+  const lock = buildStyleContinuityLock({
+    sourceLabel: "קולאז'",
+    sourceIdea: "עדיין מגלגל בטיקטוק?",
+    attachStill: false,
+  });
+  assert.match(lock, /No still is attached/i);
+  assert.doesNotMatch(lock, /approved still is attached/i);
+});
+
+test("style play lock gives each copy a different cast, crop, and marks", () => {
+  const a = buildStylePlayLock({ copyText: "עדיין מגלגל בטיקטוק?", copyKey: "1", copyLabel: "מגולל" });
+  const b = buildStylePlayLock({
+    copyText: "המתחרים כבר שם",
+    copyKey: "2",
+    copyLabel: "פומו",
+    avoidLabels: ["מגולל"],
+  });
+  assert.match(a, /STYLE PLAY/);
+  assert.match(a, /not a photocopy/i);
+  assert.match(a, /unique staging/);
+  assert.match(b, /Do not echo these earlier cards: מגולל/);
+  assert.notEqual(a, b);
 });
