@@ -33,7 +33,7 @@ export function CopyConceptsPanel({
             )}
           </div>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            אשרו קונספט לפני ההעברה — הקריאייטיב יבנה גרפיקה מהרעיון, לא רק מהטקסט
+            אשרו קונספט ולחצו לקריאייטיב — אם כבר יש פרויקט משויך הוא יעודכן, והרעיון ייכנס לפרומפט העיצוב
           </p>
         </div>
         <Button

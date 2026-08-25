@@ -206,13 +206,16 @@ serve(async (req) => {
     const systemPrompt = systemParts.join("\n\n");
 
     const userParts: string[] = [];
+    const approvedConcepts = formatApprovedConceptsFromPayload((item.payload ?? {}) as Record<string, unknown>);
+    if (stageType === "creative" && approvedConcepts) {
+      userParts.push(`MUST FOLLOW THIS APPROVED VISUAL CONCEPT — build the picture around it, not a generic text-on-background graphic:\n${approvedConcepts}`);
+    }
     userParts.push(`כותרת הפריט: ${item.title ?? "—"}`);
     const sourceBrief =
       item.payload?.brief_text ?? item.payload?.brief ?? item.payload?.source_summary ?? "";
     if (sourceBrief) userParts.push(`בריף מקור / סיכום פגישה:\n${sourceBrief}`);
-    const approvedConcepts = formatApprovedConceptsFromPayload((item.payload ?? {}) as Record<string, unknown>);
-    if (approvedConcepts) {
-      userParts.push(`קונספטים מאושרים ממחלקת הקופי — בנה את הוויזואל סביבם, לא כטקסט על רקע:\n${approvedConcepts}`);
+    if (stageType !== "creative" && approvedConcepts) {
+      userParts.push(`קונספטים מאושרים ממחלקת הקופי:\n${approvedConcepts}`);
     }
     if (item.payload?.notes) userParts.push(`הערות: ${item.payload.notes}`);
     const storyboardFrame = item.payload?.storyboard_frame as Record<string, unknown> | undefined;

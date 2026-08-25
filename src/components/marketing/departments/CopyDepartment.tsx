@@ -15,6 +15,12 @@ import {
   parseConceptsFromCarmen,
   parseCopyConceptsFromPayload,
 } from "@/components/marketing/copyConcepts";
+import {
+  findExistingCreativeSibling,
+  overlayCopyHandoffPayload,
+  stampCopyPayloadAfterHandoff,
+  type HandoffWorkItem,
+} from "@/components/marketing/copyHandoff";
 import { CopyConceptsPanel } from "@/components/marketing/departments/CopyConceptsPanel";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { Button } from "@/components/ui/button";
@@ -279,7 +285,10 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   }, [chat.length, copyText, sending]);
 
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["copy-department-items", clientFilter, tenantId] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["copy-department-items", clientFilter, tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ["creative-department-items"] }),
+    ]);
   };
 
   const sendPrompt = async () => {
@@ -504,49 +513,103 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       if (readyConcepts.length === 0) {
         throw new Error("אשרו לפחות קונספט אחד לפני ההעברה לקריאייטיב");
       }
-      const primary = readyConcepts[0];
-      const conceptBrief = formatCopyConceptsForCreative(readyConcepts);
-      const nextPayload = {
-        ...(selected.payload ?? {}),
-        department: "creative",
-        project_type: selected.payload?.project_type ?? "static",
-        handoff_from: "copy",
-        handoff_at: new Date().toISOString(),
-        linked_copy_item_id: selected.id,
-        linked_copy_title: selected.title,
-        copy_text: selected.payload?.copy_text ?? "",
-        brief_text: selected.payload?.brief_text ?? "",
-        copy_concepts: JSON.parse(JSON.stringify(concepts)) as JsonValue,
-        approved_concepts: JSON.parse(JSON.stringify(readyConcepts)) as JsonValue,
-        creative_concept: {
-          name: primary.name,
-          bigIdea: primary.bigIdea,
-          visualLanguage: primary.visualLanguage,
-          whyItWorks: primary.whyItWorks,
-          hook: primary.hook,
-        } as unknown as JsonValue,
-        concept_brief: conceptBrief,
-        content_type: selected.payload?.content_type,
-        channel: selected.payload?.channel,
-        instructions: selected.payload?.instructions,
-        notes: [asText(selected.payload?.notes), `קונספטים מאושרים:\n${conceptBrief}`].filter(Boolean).join("\n\n"),
-        format: selected.payload?.format ?? "1:1",
-        intake_source: "copy_handoff",
-      };
-      const { error } = await supabase
+      const at = new Date().toISOString();
+      const pointedId = asText(selected.payload?.handoff_to_creative_item_id);
+      const { data: siblings, error: siblingError } = await supabase
+        .from("marketing_work_items")
+        .select("id,title,status,payload,current_stage_id,client_id,pipeline_id,created_at,updated_at")
+        .eq("tenant_id", tenantId)
+        .eq("client_id", selected.client_id)
+        .neq("id", selected.id);
+      if (siblingError) throw siblingError;
+      let candidates = siblings ?? [];
+      if (pointedId && !candidates.some((row) => row.id === pointedId)) {
+        const { data: pointed, error: pointedError } = await supabase
+          .from("marketing_work_items")
+          .select("id,title,status,payload,current_stage_id,client_id,pipeline_id,created_at,updated_at")
+          .eq("tenant_id", tenantId)
+          .eq("id", pointedId)
+          .maybeSingle();
+        if (pointedError) throw pointedError;
+        if (pointed) candidates = [pointed, ...candidates];
+      }
+      const existing = findExistingCreativeSibling(
+        {
+          id: selected.id,
+          title: selected.title,
+          payload: (selected.payload ?? {}) as Record<string, unknown>,
+          client_id: selected.client_id,
+        },
+        (candidates ?? []) as HandoffWorkItem[],
+      );
+      const nextCreativePayload = overlayCopyHandoffPayload({
+        existingPayload: (existing?.payload ?? null) as Record<string, unknown> | null,
+        copyPayload: (selected.payload ?? {}) as Record<string, unknown>,
+        copyItem: { id: selected.id, title: selected.title },
+        concepts,
+        approved: readyConcepts,
+        at,
+      });
+      let creativeId = existing?.id ?? null;
+      let creativeTitle = existing?.title ?? selected.title;
+      if (existing) {
+        const { error } = await supabase
+          .from("marketing_work_items")
+          .update({
+            status: "draft",
+            payload: nextCreativePayload,
+          })
+          .eq("id", existing.id)
+          .eq("tenant_id", tenantId);
+        if (error) throw error;
+      } else {
+        const { data: created, error } = await supabase
+          .from("marketing_work_items")
+          .insert({
+            tenant_id: tenantId,
+            client_id: selected.client_id,
+            pipeline_id: pipeline.id,
+            current_stage_id: creativeStage.id,
+            title: selected.title,
+            status: "draft",
+            target_channel: "creative",
+            payload: nextCreativePayload,
+          })
+          .select("id,title")
+          .single();
+        if (error) throw error;
+        creativeId = created.id;
+        creativeTitle = created.title ?? selected.title;
+      }
+      if (!creativeId) throw new Error("לא הצלחתי לזהות את פרויקט הקריאייטיב");
+      const { error: stampError } = await supabase
         .from("marketing_work_items")
         .update({
-          current_stage_id: creativeStage.id,
-          status: "draft",
-          pipeline_id: pipeline.id,
-          payload: nextPayload,
+          payload: stampCopyPayloadAfterHandoff(
+            (selected.payload ?? {}) as Record<string, unknown>,
+            creativeId,
+            at,
+          ),
         })
         .eq("id", selected.id)
         .eq("tenant_id", tenantId);
-      if (error) throw error;
+      if (stampError) throw stampError;
+      await supabase.from("marketing_assets").insert({
+        tenant_id: tenantId,
+        item_id: creativeId,
+        stage_id: existing?.current_stage_id ?? creativeStage.id,
+        type: "brief",
+        content: formatCopyConceptsForCreative(readyConcepts),
+        meta: { source: "copy_handoff", skin_slug: "copywriter" },
+      });
+      return { mode: existing ? "updated" as const : "created" as const, title: creativeTitle || selected.title || "קריאייטיב" };
     },
-    onSuccess: async () => {
-      toast.success("הועברו קופי וקונספטים מאושרים לקריאייטיב");
+    onSuccess: async (result) => {
+      toast.success(
+        result.mode === "updated"
+          ? `עודכן הפרויקט «${result.title}» בקריאייטיב`
+          : `נוצר פרויקט קריאייטיב «${result.title}»`,
+      );
       await refresh();
     },
     onError: (error: unknown) => toast.error(errorMessage(error, "ההעברה נכשלה")),
@@ -723,7 +786,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                 className="gap-1.5"
                 onClick={() => handoff.mutate()}
                 disabled={handoff.isPending}
-                title={approvedConcepts.length === 0 ? "אשרו לפחות קונספט אחד" : "העבר קופי וקונספטים מאושרים"}
+                title={approvedConcepts.length === 0 ? "אשרו לפחות קונספט אחד" : "עדכן את פרויקט הקריאייטיב הקיים, או צור אחד אם אין"}
               >
                 <Send className="h-3.5 w-3.5" />לקריאייטיב
                 {approvedConcepts.length > 0 && (

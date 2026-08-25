@@ -303,5 +303,12 @@ export const getConceptBrief = (item: CreativeItem | null) => {
   return formatCopyConceptsForCreative(getApprovedCopyConcepts(item));
 };
 
-export const cameFromCopy = (item: CreativeItem | null) =>
-  item?.payload?.handoff_from === "copy" || item?.payload?.department === "copy";
+export const cameFromCopy = (item: CreativeItem | null) => {
+  const payload = item?.payload;
+  if (!payload) return false;
+  return payload.handoff_from === "copy"
+    || payload.intake_source === "copy_link"
+    || payload.intake_source === "copy_handoff"
+    || typeof payload.linked_copy_item_id === "string"
+    || payload.department === "copy";
+};

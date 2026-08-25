@@ -21,6 +21,14 @@ const extractAttachmentPath = (url: string): string | null => {
   }
 };
 
+const CONCEPT_LEAD = /MUST FOLLOW THIS APPROVED VISUAL CONCEPT/i;
+
+const wrapSocialImagePrompt = (prompt: string) => {
+  const trimmed = prompt.trim();
+  if (CONCEPT_LEAD.test(trimmed)) return trimmed;
+  return trimmed;
+};
+
 const parseImageUsage = (usage: unknown, quality: string, size: string) => {
   if (!usage || typeof usage !== "object") return null;
   const row = usage as {
@@ -111,7 +119,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: "gpt-image-1",
-          prompt,
+          prompt: wrapSocialImagePrompt(prompt),
           n: 1,
           size,
           quality,

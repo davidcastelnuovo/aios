@@ -32,6 +32,7 @@ import {
   getProjectType,
   getApprovedCopyConcepts,
   getConceptBrief,
+  cameFromCopy,
   getStoryboard,
   getStoryboardStyle,
   getVariations,
@@ -57,6 +58,7 @@ import {
   type CreativeVisualStyleId,
 } from "@/components/marketing/departments/creative/visualStyles";
 import { isCreativeDepartmentItem, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
+import { resolveVisualPrompt } from "@/components/marketing/copyConcepts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -575,8 +577,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         brandKitPrompt(kit),
         `Next shot in ONE continuous ${visual.label} commercial. Keep the same world, people, wardrobe, lighting and grade.`,
         style.lock,
+        resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected)),
         selected.title && !isInternalCopyLine(selected.title) && `Campaign: ${selected.title}`,
-        getConceptBrief(selected) && `Approved copy concepts (keep the visual idea, not the words):\n${getConceptBrief(selected)}`,
         `Frame ${frame.order}: ${frame.title}`,
         frame.shot && `Shot type: ${frame.shot}`,
         frame.visualPrompt && `Action/setting change only: ${frame.visualPrompt}`,
@@ -661,6 +663,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       variations: nextVariations,
       department: "creative",
       image_url: active?.imageUrl ?? selected.payload?.image_url,
+      visual_prompt: resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected))
+        || selected.payload?.visual_prompt,
     };
 
     const { error: itemError } = await supabase
@@ -733,10 +737,22 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const notes = [
       selected.payload?.notes,
       getBriefText(selected) && `בריף: ${getBriefText(selected)}`,
+      getConceptBrief(selected) && `קונספטים מאושרים מהקופי:\n${getConceptBrief(selected)}`,
     ].filter(Boolean).join("\n");
+    const approved = getApprovedCopyConcepts(selected);
+    const visualPrompt = resolveVisualPrompt(selected.payload, approved);
     await supabase
       .from("marketing_work_items")
-      .update({ payload: { ...(selected.payload ?? {}), notes, visual_style: getVisualStyleId(selected.payload), department: "creative" } })
+      .update({
+        payload: {
+          ...(selected.payload ?? {}),
+          notes,
+          visual_style: getVisualStyleId(selected.payload),
+          department: "creative",
+          visual_prompt: visualPrompt || selected.payload?.visual_prompt,
+          approved_concepts: approved.length > 0 ? approved : selected.payload?.approved_concepts,
+        },
+      })
       .eq("id", selected.id)
       .eq("tenant_id", tenantId);
     return readyContext;
@@ -797,11 +813,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       .map((variation) => variation.copyLabel || variation.name)
       .filter(Boolean)
       .slice(-4);
+    const visualPrompt = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
     const creativePrompt = [
+      visualPrompt,
       `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
       buildNoGlyphLock({ regenerate }),
       sceneBrief,
-      getConceptBrief(selected) && `Approved copy concepts (keep the visual idea, not the words):\n${getConceptBrief(selected)}`,
       styleSource
         ? buildStyleContinuityLock({
           sourceLabel: styleSource.copyLabel || styleSource.name,
@@ -872,6 +889,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const generate = async (mode: "new" | "replace" = "new", target?: CreativeVariation) => {
     if (!selected) return;
+    const visualPrompt = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
+    if (cameFromCopy(selected) && !visualPrompt) {
+      toast.error("אין קונספטים מאושרים על הפרויקט. חזרו לקופי, אשרו קונספט ולחצו לקריאייטיב — זה יעדכן את הפרויקט הקיים.");
+      return;
+    }
     generateAbortRef.current = false;
     setGenerating(true);
     try {
@@ -920,6 +942,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const generateAllFromCopy = async (styleMode: "same" | "mixed") => {
     if (!selected) return;
+    const visualPrompt = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
+    if (cameFromCopy(selected) && !visualPrompt) {
+      toast.error("אין קונספטים מאושרים על הפרויקט. חזרו לקופי, אשרו קונספט ולחצו לקריאייטיב — זה יעדכן את הפרויקט הקיים.");
+      return;
+    }
     const blocks = copyBlocks.length > 0 ? copyBlocks : [{ key: "1", index: 1, label: "וריאציה 1", text: getLinkedCopyText(selected), parts: {}, angle: undefined }];
     if (blocks.every((block) => !block.text.trim()) && !getBriefText(selected)) {
       toast.error("שייך קופי או מלא בריף לפני יצירה לכל הווריאציות");
@@ -1100,11 +1127,14 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       approved_concepts: copyItem.payload?.approved_concepts ?? approved,
       creative_concept: copyItem.payload?.creative_concept,
       concept_brief: getConceptBrief(copyItem) || undefined,
+      visual_prompt: resolveVisualPrompt(copyItem.payload, approved),
       linked_copy_item_id: copyItem.id,
       linked_copy_title: copyItem.title,
       content_type: copyItem.payload?.content_type ?? selected.payload?.content_type,
       channel: copyItem.payload?.channel ?? selected.payload?.channel,
       department: "creative",
+      handoff_from: "copy",
+      intake_source: selected.payload?.intake_source ?? "copy_link",
     };
     const { error } = await supabase
       .from("marketing_work_items")
@@ -1740,6 +1770,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
         if (!stageId) throw new Error("שלב הקריאייטיב לא נמצא");
       }
       const linkedCopy = mode === "from_copy" ? selectedCopyItem : null;
+      const linkedApproved = linkedCopy ? getApprovedCopyConcepts(linkedCopy) : [];
       const payload: Record<string, unknown> = {
         brief_text: brief.trim() || String(linkedCopy?.payload?.brief_text ?? "") || undefined,
         copy_text: copyText.trim() || undefined,
@@ -1752,9 +1783,10 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
         linked_copy_item_id: linkedCopy?.id,
         linked_copy_title: linkedCopy?.title,
         copy_concepts: linkedCopy?.payload?.copy_concepts,
-        approved_concepts: linkedCopy?.payload?.approved_concepts,
+        approved_concepts: linkedCopy?.payload?.approved_concepts ?? (linkedApproved.length > 0 ? linkedApproved : undefined),
         creative_concept: linkedCopy?.payload?.creative_concept,
         concept_brief: linkedCopy ? getConceptBrief(linkedCopy) || undefined : undefined,
+        visual_prompt: linkedCopy ? resolveVisualPrompt(linkedCopy.payload, linkedApproved) || undefined : undefined,
         content_type: linkedCopy?.payload?.content_type,
         channel: linkedCopy?.payload?.channel,
         instructions: linkedCopy?.payload?.instructions,
