@@ -53,11 +53,14 @@ test("isAuthorizedDevRequester true for David and Ana only", () => {
 test("tool allowlist by tier", () => {
   assert.equal(isDevEscalationToolAllowed("mcp_Cursor__request_dev_task", "full"), true);
   assert.equal(isDevEscalationToolAllowed("mcp_Claude__ask_claude", "full"), true);
+  assert.equal(isDevEscalationToolAllowed("mcp_Grok__ask_grok", "full"), true);
   assert.equal(isDevEscalationToolAllowed("delegate_to_github_agent", "full"), true);
 
   assert.equal(isDevEscalationToolAllowed("mcp_Cursor__request_dev_task", "bugfix"), true);
   assert.equal(isDevEscalationToolAllowed("mcp_Cursor__ask_cursor", "bugfix"), false);
   assert.equal(isDevEscalationToolAllowed("mcp_Claude__ask_claude", "bugfix"), false);
+  assert.equal(isDevEscalationToolAllowed("mcp_Grok__ask_grok", "bugfix"), false);
+  assert.equal(isDevEscalationToolAllowed("mcp_Grok__request_dev_task", "bugfix"), false);
   assert.equal(isDevEscalationToolAllowed("delegate_to_github_agent", "bugfix"), false);
   assert.equal(isDevEscalationToolAllowed("list_clients", "bugfix"), false);
   assert.equal(isDevEscalationToolAllowed("mcp_Cursor__request_dev_task", null), false);
@@ -67,8 +70,11 @@ test("isDevEscalationTool covers MCP + github agent", () => {
   assert.equal(isDevEscalationTool("mcp_Cursor__request_dev_task"), true);
   assert.equal(isDevEscalationTool("mcp_Claude__ask_claude"), true);
   assert.equal(isDevEscalationTool("mcp_Manus__request_dev_task"), true);
+  assert.equal(isDevEscalationTool("mcp_Grok__ask_grok"), true);
+  assert.equal(isDevEscalationTool("mcp_Grok__request_dev_task"), true);
   assert.equal(isDevEscalationTool("delegate_to_github_agent"), true);
   assert.equal(isDevEscalationTool("request_dev_task"), true);
+  assert.equal(isDevEscalationTool("ask_grok"), true);
 
   assert.equal(isDevEscalationTool("list_clients"), false);
   assert.equal(isDevEscalationTool("toggle_facebook_campaign"), false);
@@ -77,6 +83,7 @@ test("isDevEscalationTool covers MCP + github agent", () => {
 test("isDevEscalationSkill matches escalation skins", () => {
   assert.equal(isDevEscalationSkill("cursor_escalation"), true);
   assert.equal(isDevEscalationSkill("claude_escalation"), true);
+  assert.equal(isDevEscalationSkill("grok_escalation"), true);
   assert.equal(isDevEscalationSkill("facebook-campaign-analysis"), false);
   assert.equal(isBugfixEscalationSkill("bugfix_escalation_to_cursor"), true);
 });

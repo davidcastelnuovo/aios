@@ -213,6 +213,12 @@ logged.
 - **How:** Call `create-org-for-client` edge function with `{ client_id, clone_carmen: true, share_llm: false }`. Set `share_llm: true` only if user explicitly asks to share the AI key. Parse `owner_status` (existing_user / invited / no_email) and `shared` counts for the summary message.
 - **Origin:** PR #32 — implemented from the agreed plan in `docs/plan-create-org-for-client.md`. Also fixed a correlated-subquery bug in the pre-existing shared-access RLS policies on `social_pages` and `social_media_wordpress_sites`.
 
+### 2026-08-25 — escalate-to-Grok Bot + teach-back loop
+- **Skin slug:** `grok_escalation` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When stuck on complex tasks, code fixes, DB/GitHub work she cannot do independently, Carmen can escalate to **Grok Bot** via MCP (`mcp_Grok__ask_grok` / `mcp_Grok__request_dev_task`), relay the Cloud Agent URL (`https://cursor.com/agents/<bcId>`) to David, and learn a skin from the solution next time.
+- **How:** `agent_mcp_connections` entry named `Grok` → `grok-mcp` edge function + `GROK_MCP_BEARER` (or existing `CURSOR_MCP_BEARER`). Trigger phrases: "תעבירי לגרוק", "ask grok", "גרוק בוט", "צריך גרוק".
+- **Origin:** Quick-connect preset parallel to Cursor / Claude / Manus in MCP Connections.
+
 ### 2026-08-03 — escalate-to-Cursor + teach-back loop
 - **Skin slug:** `cursor_escalation` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When stuck on complex tasks, code fixes, DB/GitHub work she cannot do independently, Carmen escalates to **Cursor** via MCP (`mcp_Cursor__ask_cursor` / `mcp_Cursor__request_dev_task`), relays the Cloud Agent URL (`https://cursor.com/agents/<bcId>`) to David, and learns a skin from the solution next time.

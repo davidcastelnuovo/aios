@@ -460,7 +460,7 @@ const LOW_PRIORITY_TOOLS = new Set([
 ])
 function isEscalationMcpTool(name: string | undefined): boolean {
   if (!name) return false
-  return name.startsWith('mcp_Cursor__') || name.startsWith('mcp_Claude__') || name.startsWith('mcp_Manus__')
+  return name.startsWith('mcp_Cursor__') || name.startsWith('mcp_Claude__') || name.startsWith('mcp_Manus__') || name.startsWith('mcp_Grok__')
 }
 
 /**
@@ -7071,15 +7071,17 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         // 'cursor'  → Cursor MCP only
         // 'claude'  → Claude MCP only
         // 'manus'   → Manus MCP only
+        // 'grok'    → Grok Bot MCP only
         // 'none'    → no external escalation MCPs
         // 'all'/unset → keep everything (default, backward-compatible)
         const escalationAgent: string = (agent as any).metadata?.escalation_agent || 'all'
         const isEscalationMcp = (n: string) =>
-          n.startsWith('mcp_Claude__') || n.startsWith('mcp_Manus__') || n.startsWith('mcp_Cursor__')
+          n.startsWith('mcp_Claude__') || n.startsWith('mcp_Manus__') || n.startsWith('mcp_Cursor__') || n.startsWith('mcp_Grok__')
         for (const t of mcp.toolDefs) {
-          if (escalationAgent === 'cursor' && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Manus__'))) continue
-          if (escalationAgent === 'claude' && (t.name.startsWith('mcp_Manus__') || t.name.startsWith('mcp_Cursor__'))) continue
-          if (escalationAgent === 'manus'  && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Cursor__'))) continue
+          if (escalationAgent === 'cursor' && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Manus__') || t.name.startsWith('mcp_Grok__'))) continue
+          if (escalationAgent === 'claude' && (t.name.startsWith('mcp_Manus__') || t.name.startsWith('mcp_Cursor__') || t.name.startsWith('mcp_Grok__'))) continue
+          if (escalationAgent === 'manus'  && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Cursor__') || t.name.startsWith('mcp_Grok__'))) continue
+          if (escalationAgent === 'grok'   && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Cursor__') || t.name.startsWith('mcp_Manus__'))) continue
           if (escalationAgent === 'none'   && isEscalationMcp(t.name)) continue
           // 4b-ii. Hard auth: only allowlisted tiers may see/call coding-agent MCP tools.
           if (isDevEscalationTool(t.name) && !isDevEscalationToolAllowed(t.name, devEscalationTier)) continue
