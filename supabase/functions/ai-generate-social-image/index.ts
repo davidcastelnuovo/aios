@@ -140,10 +140,16 @@ serve(async (req) => {
     if (files.length > 0) {
       const form = new FormData();
       form.append("model", "gpt-image-1");
-      const referenceRole = requestedRole === "technique" ? "technique" : "continuity";
+      const referenceRole = requestedRole === "technique"
+        ? "technique"
+        : requestedRole === "talent"
+          ? "talent"
+          : "continuity";
       const referencePrefix = referenceRole === "technique"
         ? "Use attached image(s) as TECHNIQUE only (material, paper, ink, light, color family). Do not copy faces, pose, crop, lettering, logos, or layout. Output must contain zero letters, digits, or logos. "
-        : "Continue this exact visual world. Match faces, wardrobe, lighting, lens and color grade from the reference. Do not copy or invent lettering or logos. ";
+        : referenceRole === "talent"
+          ? "Image 1 is the exact talent/spokesman. Keep this face, glasses, age, hair, and body. Photograph a NEW scene with THIS person. Do not copy the source ad's layout, lettering, logo, or UI chrome. If a second image is attached it is technique only. Output must contain zero letters, digits, or logos. "
+          : "Continue this exact visual world. Match faces, wardrobe, lighting, lens and color grade from the reference. Do not copy or invent lettering or logos. ";
       form.append(
         "prompt",
         `${referencePrefix}${prompt}`,

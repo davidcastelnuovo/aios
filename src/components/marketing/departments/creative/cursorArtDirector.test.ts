@@ -1,0 +1,55 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  buildCursorArtDirectorLock,
+  collectStaticReferencePlan,
+  wantsTalentLock,
+} from "./cursorArtDirector.ts";
+
+const kit = {
+  logoUrl: "https://example.com/logo.png",
+  styleReferences: [{ url: "https://example.com/person.jpg", name: "talent" }],
+  brandBook: { name: "פרומו", colors: ["#c00000"], notes: "", source: "auto" as const },
+};
+
+test("talent lock fires on the Hebrew character instruction", () => {
+  assert.equal(wantsTalentLock("תשתמש בדמות מהרפרנס"), true);
+  assert.equal(wantsTalentLock("keep the same color grade"), false);
+});
+
+test("static refs attach the spokesman first when instructions ask for the character", () => {
+  const plan = collectStaticReferencePlan({
+    talentUrls: ["https://talent"],
+    techniqueUrl: "https://technique",
+    instructions: "תשתמש בדמות מהרפרנס",
+  });
+  assert.deepEqual(plan.urls, ["https://talent", "https://technique"]);
+  assert.equal(plan.role, "talent");
+});
+
+test("without a talent instruction, only the technique still is sent", () => {
+  const plan = collectStaticReferencePlan({
+    talentUrls: ["https://talent"],
+    techniqueUrl: "https://technique",
+    instructions: "",
+  });
+  assert.deepEqual(plan.urls, ["https://technique"]);
+  assert.equal(plan.role, "technique");
+});
+
+test("art director lock keeps Hebrew as composited RTL and honors the character note", () => {
+  const lock = buildCursorArtDirectorLock({
+    format: "1:1",
+    instructions: "תשתמש בדמות מהרפרנס",
+    kit,
+    hasTalentRef: true,
+  });
+  assert.match(lock, /CURSOR ART DIRECTOR/);
+  assert.match(lock, /SUBJECT FIRST/);
+  assert.match(lock, /TALENT LOCK/);
+  assert.match(lock, /דמות מהרפרנס/);
+  assert.match(lock, /dir=rtl/);
+  assert.match(lock, /unicode-bidi:isolate/);
+  assert.match(lock, /do not paint any letters/i);
+  assert.match(lock, /פרומו/);
+});

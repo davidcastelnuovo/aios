@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-25 — Cursor is the Creative department art director (RTL type)
+- **Skin slug:** `cursor_creative_director` (code: `src/components/marketing/departments/creative/cursorArtDirector.ts`)
+- **What Carmen can now do:** Explain that מחלקת קריאייטיב is art-directed by Cursor: subject-first stills, talent lock when instructions say «תשתמש בדמות מהרפרנס», and Hebrew is never painted — it is composited as isolated RTL layers (`dir=rtl`, `unicode-bidi:isolate`).
+- **How:** `assembleStaticCreativePrompt` prepends the Cursor director lock; static generate attaches style-reference faces as `reference_role=talent`; overlay text in the grid/editor uses `rtlText.ts` (box stays LTR for geometry). Image API remains `gpt-image-1` via `ai-generate-social-image`.
+- **Origin:** David — connect Cursor as the creative-department brain; pay attention to RTL of the text.
+
 ### 2026-08-25 — Campaigner "mine" tasks hidden by header agency filter
 - **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When a campaigner/team_manager says they see no tasks despite open assignments, explain that "שלי בלבד" needs header agency **"כל הסוכנויות"** (not MarketingCaptain alone); agency filter still works to narrow afterward.

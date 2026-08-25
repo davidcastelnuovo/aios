@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { OfferIconMark, isIconLayer } from "./layerMarks";
+import { hebrewTextDir, hebrewTextStyle, overlayBoxDir, overlayBoxStyle } from "./rtlText";
 import { cn } from "@/lib/utils";
 import { Layers2, Loader2, PenLine, RotateCcw, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
 import type { CreativeVariation } from "./types";
@@ -66,7 +67,7 @@ export function CreativeVariationGrid({
                       height: `${layer.height}%`,
                       display: layer.type === "text" || isIconLayer(layer) ? "flex" : undefined,
                       alignItems: layer.type === "text" || isIconLayer(layer) ? "center" : undefined,
-                      justifyContent: layer.textAlign === "center" ? "center" : layer.textAlign === "left" ? "flex-start" : "flex-end",
+                      ...overlayBoxStyle(layer.textAlign),
                       background: layer.type === "shape" ? layer.fill : undefined,
                       borderRadius: layer.borderRadius,
                       transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
@@ -75,13 +76,13 @@ export function CreativeVariationGrid({
                       fontFamily: layer.fontFamily,
                       fontSize: `${Math.max(11, (layer.fontSize ?? 18) * 0.52)}px`,
                       fontWeight: layer.fontWeight,
-                      textAlign: layer.textAlign,
                       letterSpacing: layer.letterSpacing,
                       lineHeight: layer.lineHeight ?? 0.9,
                       textShadow: layer.textShadow,
                       boxShadow: layer.boxShadow,
                       opacity: layer.opacity,
                     }}
+                    dir={layer.type === "text" ? overlayBoxDir : undefined}
                   >
                     {layer.type === "image" && layer.src ? (
                       <CreativeImage src={layer.src} alt="לוגו" className="h-full w-full object-contain" />
@@ -90,7 +91,7 @@ export function CreativeVariationGrid({
                         <OfferIconMark name={layer.icon} color={layer.color || layer.fill} className="h-[62%] w-[62%]" />
                       </span>
                     ) : layer.type === "text" ? (
-                      <span className="block w-full overflow-hidden whitespace-pre-wrap break-words px-0.5">{layer.text}</span>
+                      <span dir={hebrewTextDir} className="block w-full overflow-hidden whitespace-pre-wrap break-words px-0.5" style={hebrewTextStyle(layer.textAlign)}>{layer.text}</span>
                     ) : null}
                   </div>
                 ))}

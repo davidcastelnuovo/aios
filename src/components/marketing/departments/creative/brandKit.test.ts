@@ -52,6 +52,17 @@ test("brandKitPrompt locks logo colors and refuses style-board layouts", () => {
   assert.match(prompt, /smartair\.co\.il/);
 });
 
+test("brandKitPrompt talent lock keeps the spokesman instead of forbidding faces", () => {
+  const prompt = brandKitPrompt({
+    logoUrl: "https://example.com/logo.png",
+    brandBook: { colors: ["#c00000"], notes: "", source: "auto" },
+    styleReferences: [{ url: "https://example.com/person.jpg" }],
+  }, { talentLock: true });
+  assert.match(prompt, /Keep that spokesman/i);
+  assert.doesNotMatch(prompt, /RANGE only/i);
+  assert.doesNotMatch(prompt, /Do not attach, recall, or copy/i);
+});
+
 test("client attachments become image style refs and ignore non-images", () => {
   const files = filesFromAttachments([
     { name: "look.jpg", path: "tenant/a.jpg", type: "image/jpeg" },

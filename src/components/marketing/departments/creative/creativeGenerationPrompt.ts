@@ -2,6 +2,7 @@ import { buildNoGlyphLock } from "@/components/marketing/lib/creativeImagePrompt
 import { brandKitPrompt, type CreativeBrandKit } from "./brandKit";
 import { buildAdaptiveTreatment } from "./adaptiveTreatment";
 import { buildCompositionLock, type CompositionId } from "./compositions";
+import { buildCursorArtDirectorLock } from "./cursorArtDirector";
 import { buildCopyOverlayLock, buildCopySceneBrief, strongestLine } from "./designedLayers";
 import { buildStyleContinuityLock, buildStylePlayLock } from "./styleContinuity";
 import { buildStaticQualityLock, buildVisualStyleLock, type CreativeVisualStyleId } from "./visualStyles";
@@ -26,6 +27,7 @@ export function assembleStaticCreativePrompt({
   variationIndex,
   directorNote,
   regenerate,
+  hasTalentRef,
 }: {
   visualPrompt?: string;
   copyText: string;
@@ -46,14 +48,22 @@ export function assembleStaticCreativePrompt({
   variationIndex: number;
   directorNote?: string;
   regenerate?: boolean;
+  hasTalentRef?: boolean;
 }): string {
   const concept = visualPrompt?.trim() || "";
   const copyLock = concept
     ? buildCopyOverlayLock({ copyText, title, copyLabel })
     : buildCopySceneBrief({ copyText, title, brief, instructions, copyLabel });
+  const director = buildCursorArtDirectorLock({
+    format,
+    instructions,
+    kit,
+    hasTalentRef,
+  });
 
   return [
     concept,
+    director,
     concept && "The concept above is the photograph. Later style/copy instructions may change crop, grade, and a quiet type pocket — they may NOT replace the concept's subject, location, props, or hook.",
     concept
       ? `Use case: ads-marketing. Asset type: ${format} cinematic advertising still of the approved concept — not a slogan-on-background graphic.`
@@ -76,7 +86,8 @@ export function assembleStaticCreativePrompt({
         index: variationIndex,
         avoidLabels: priorLabels,
       }),
-    attachStyleStill && "The attached still is a technique sample, not a layout to trace. New cast, new props, new crop. Type sits flush — no rectangle plates.",
+    attachStyleStill && !hasTalentRef && "The attached still is a technique sample, not a layout to trace. New cast, new props, new crop. Type sits flush — no rectangle plates.",
+    attachStyleStill && hasTalentRef && "A second attached still is technique only (material, ink, light). The first still is the spokesman — keep that face. New scene.",
     costume
       ? [
         buildVisualStyleLock(payload, { styleId }),
@@ -92,7 +103,7 @@ export function assembleStaticCreativePrompt({
           brandColors: kit.brandBook?.colors,
         }),
     buildStaticQualityLock({ selectedStyle: !!costume }),
-    brandKitPrompt(kit),
+    brandKitPrompt(kit, { talentLock: hasTalentRef }),
     directorNote && `Art director REJECT (visual mistakes only — if they mention type/text, the fix is a letter-empty PNG, never new painted words): ${directorNote}`,
     styleSource
       ? `Format ${format}. Same TECHNIQUE family (paper, ink, light, color). Completely different picture, people, and props for this copy.`
@@ -101,7 +112,7 @@ export function assembleStaticCreativePrompt({
         : `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
     kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
     "QUIET POCKET: one naturally empty atmospheric region (shadow, wall, sky) so Hebrew type can be composited later. Do not paint a layout, panel, footer, or letter-shaped hole.",
-    "RTL/production: Hebrew is composited as layers after generation — the image API still garbles Hebrew (reversed letters, missing glyphs, gibberish). Do not paint letters.",
+    "RTL/production: Hebrew is composited later as isolated RTL layers (dir=rtl, unicode-bidi:isolate). Never paint or reverse letters.",
     "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes, reprinting a previous collage.",
   ].filter(Boolean).join("\n");
 }

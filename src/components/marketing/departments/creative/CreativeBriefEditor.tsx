@@ -480,10 +480,14 @@ export function CreativeBriefEditor({
             <Label>הנחיות מיוחדות</Label>
             <Textarea
               className="mt-1 min-h-24"
+              dir="rtl"
               value={draft.instructions}
               onChange={(event) => setDraft({ ...draft, instructions: event.target.value })}
               placeholder="טון, דברים שחייבים להופיע, מה אסור"
             />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              יש דמות ברפרנס? כתבו «תשתמש בדמות מהרפרנס» — Cursor ישמור את הפנים. העברית תמיד מורכבת כשכבת RTL, לא מצוירת בתמונה.
+            </p>
           </div>
         </div>
       </div>

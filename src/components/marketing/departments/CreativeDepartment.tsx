@@ -45,6 +45,7 @@ import { VisualStyleSelect } from "@/components/marketing/departments/creative/V
 import { pickVariationComposition } from "@/components/marketing/departments/creative/compositions";
 import { isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
 import { assembleStaticCreativePrompt } from "@/components/marketing/departments/creative/creativeGenerationPrompt";
+import { collectStaticReferencePlan } from "@/components/marketing/departments/creative/cursorArtDirector";
 import { hydrateVariationLayers, isInternalCopyLine } from "@/components/marketing/departments/creative/designedLayers";
 import { missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
 import {
@@ -843,6 +844,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const styleRefUrl = attachStyleStill && styleSource?.imageUrl
       ? await resolveCreativeImageUrl(styleSource.imageUrl)
       : undefined;
+    const instructions = selected.payload?.instructions ? String(selected.payload.instructions) : undefined;
+    const talentUrls = (await Promise.all(
+      kit.styleReferences.map((reference) => resolveCreativeImageUrl(reference.url)),
+    )).filter((url): url is string => !!url);
+    const referencePlan = collectStaticReferencePlan({
+      talentUrls,
+      techniqueUrl: styleRefUrl,
+      instructions,
+    });
     const priorLabels = live
       .filter((variation) => !variation.rejected && variation.id !== replaceId && variation.id !== styleSource?.id)
       .map((variation) => variation.copyLabel || variation.name)
@@ -855,7 +865,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       copyKey,
       title: selected.title ?? undefined,
       brief: getBriefText(selected),
-      instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
+      instructions,
       format,
       styleId: style.id,
       costume: !!costume,
@@ -868,6 +878,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       variationIndex: live.length,
       directorNote,
       regenerate,
+      hasTalentRef: referencePlan.role === "talent",
     });
     throwIfGenerationAborted(generateAbortRef.current);
     const { imageUrl, cost } = await generateCreativeImage({
@@ -876,8 +887,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       itemId: selected.id,
       stageId: readyContext.creativeStage.id,
       prompt: creativePrompt || selected.title || "Marketing creative",
-      referenceImageUrls: styleRefUrl ? [styleRefUrl] : undefined,
-      referenceRole: styleRefUrl ? "technique" : undefined,
+      referenceImageUrls: referencePlan.urls.length ? referencePlan.urls : undefined,
+      referenceRole: referencePlan.role,
       size: imageSizeForFormat(format),
       quality: "high",
       regenerate,
@@ -1450,7 +1461,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-bold">{selected.title}</h2>
         <p className="text-[11px] text-muted-foreground">
-          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · gpt-image-1
+          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · ארט דירקטור Cursor · עברית ב־RTL
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">

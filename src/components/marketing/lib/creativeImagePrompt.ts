@@ -1,4 +1,4 @@
-export type CreativeReferenceRole = "continuity" | "technique";
+export type CreativeReferenceRole = "continuity" | "technique" | "talent";
 
 export const NO_TEXT_ON_IMAGE = [
   "ZERO GLYPHS ON THE PNG.",
