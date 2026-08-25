@@ -1,14 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
+import { buildNoGlyphLock } from "@/components/marketing/lib/creativeImagePrompt";
+import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
+import {
+  brandKitPrompt,
+  deriveBrandBook,
+  filesFromAttachments,
+  getBrandKit,
+  isGenerationAborted,
+  mergeStyleReferences,
+  styleRefsFromClientFiles,
+  throwIfGenerationAborted,
+} from "@/components/marketing/departments/creative/brandKit";
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
+import { CreativeCostDialog, buildNextGenerateEstimate } from "@/components/marketing/departments/creative/CreativeCostDialog";
 import { CreativeBriefEditor } from "@/components/marketing/departments/creative/CreativeBriefEditor";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { CreativeLayerEditor } from "@/components/marketing/departments/creative/CreativeLayerEditor";
 import { CreativeStoryboardEditor } from "@/components/marketing/departments/creative/CreativeStoryboardEditor";
+import { CreativeVariationGrid } from "@/components/marketing/departments/creative/CreativeVariationGrid";
+import { copyBlockLabel, splitCopyVariations } from "@/components/marketing/departments/creative/copyVariations";
 import type { CreativeAssetRow, CreativeComment, CreativeItem, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "@/components/marketing/departments/creative/types";
 import {
   defaultFormat,
@@ -25,12 +40,29 @@ import {
   projectTypeLabel,
   pickStoryboardReferences,
 } from "@/components/marketing/departments/creative/utils";
+import { formatUsd, summarizeStoredImageCosts } from "@/components/marketing/departments/creative/imageCost";
+import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
+import { buildCompositionLock, DEFAULT_COMPOSITION_ID } from "@/components/marketing/departments/creative/compositions";
+import { buildAdaptiveTreatment, isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
+import { buildCopySceneBrief, hydrateVariationLayers, isInternalCopyLine, strongestLine } from "@/components/marketing/departments/creative/designedLayers";
+import { buildStyleContinuityLock, buildStylePlayLock, missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
+import {
+  buildStaticQualityLock,
+  buildVisualStyleLock,
+  getVisualStyle,
+  getVisualStyleId,
+  imageSizeForFormat,
+  visualStyleById,
+  DEFAULT_VISUAL_STYLE_ID,
+  type CreativeVisualStyleId,
+} from "@/components/marketing/departments/creative/visualStyles";
 import { isCreativeDepartmentItem, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,6 +76,7 @@ import {
   Archive,
   Check,
   ChevronDown,
+  Coins,
   Clock3,
   Clapperboard,
   History,
@@ -56,6 +89,8 @@ import {
   Plus,
   Send,
   Sparkles,
+  Square,
+  ThumbsDown,
   WandSparkles,
 } from "lucide-react";
 
@@ -113,6 +148,13 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [commentDraft, setCommentDraft] = useState("");
   const [workspacePanel, setWorkspacePanel] = useState<"projects" | "project" | "scene" | "versions" | "edit" | null>(null);
   const [storyboardDraft, setStoryboardDraft] = useState<StoryboardFrame[]>([]);
+  const [generateProgress, setGenerateProgress] = useState<string | null>(null);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<CreativeVariation | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [costOpen, setCostOpen] = useState(false);
+  const [pendingStyleId, setPendingStyleId] = useState<CreativeVisualStyleId | null>(null);
+  const generateAbortRef = useRef(false);
 
   const { data: items = [], isLoading: loadingItems } = useQuery({
     queryKey: ["creative-department-items", clientFilter, tenantId],
@@ -133,9 +175,70 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const projectType = getProjectType(selected?.payload ?? null);
-  const variations = useMemo(() => getVariations(selected?.payload ?? null), [selected?.payload]);
+  const variations = useMemo(() => {
+    const raw = getVariations(selected?.payload ?? null);
+    const kit = getBrandKit(selected?.payload);
+    const copyText = getLinkedCopyText(selected);
+    const styleId = getVisualStyleId(selected?.payload);
+    return raw.map((variation) => hydrateVariationLayers(
+      variation,
+      variation.copyText || copyText,
+      selected?.title ?? undefined,
+      variation.visualStyle ?? styleId,
+      kit.logoUrl,
+      kit.brandBook?.colors,
+    ));
+  }, [selected]);
+  const copyBlocks = useMemo(() => splitCopyVariations(getLinkedCopyText(selected)), [selected]);
   const storyboard = useMemo(() => getStoryboard(selected?.payload ?? null), [selected?.payload]);
   const selectedVariation = variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1] ?? null;
+  const itemIds = items.map((item) => item.id);
+
+  const { data: runCosts = [] } = useQuery({
+    queryKey: ["creative-project-runs", tenantId, itemIds.join(",")],
+    enabled: itemIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("marketing_runs")
+        .select("item_id, tokens_in, tokens_out, cost_usd, model")
+        .eq("tenant_id", tenantId)
+        .in("item_id", itemIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const costRows = useMemo(() => {
+    const runsByItem = new Map<string, typeof runCosts>();
+    for (const run of runCosts) {
+      const list = runsByItem.get(run.item_id) ?? [];
+      list.push(run);
+      runsByItem.set(run.item_id, list);
+    }
+    return items.map((item) => {
+      const isVideo = getProjectType(item.payload) === "video";
+      const format = defaultFormat(item.payload);
+      const images = isVideo
+        ? getStoryboard(item.payload).map((frame) => ({
+          generationCost: frame.generationCost,
+          imageUrl: frame.imageUrl,
+          format,
+        }))
+        : getVariations(item.payload).map((variation) => ({
+          generationCost: variation.generationCost,
+          imageUrl: variation.imageUrl,
+          source: variation.source,
+          format: variation.format,
+        }));
+      const next = buildNextGenerateEstimate(item);
+      return {
+        item,
+        spent: summarizeStoredImageCosts(images, isVideo ? "medium" : "high", runsByItem.get(item.id) ?? []),
+        next: next.cost,
+        nextCount: next.count,
+      };
+    });
+  }, [items, runCosts]);
 
   const { data: context, isLoading: loadingContext } = useQuery({
     queryKey: ["creative-department-context", selected?.client_id, tenantId],
@@ -163,6 +266,28 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const linkCopyClientFilter = selected?.client_id ?? (clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null);
 
+  const { data: selectedClient } = useQuery({
+    queryKey: ["creative-client", selected?.client_id, tenantId],
+    enabled: !!selected?.client_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id,name,website,industry,notes,attachments")
+        .eq("id", selected!.client_id!)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as {
+        id: string;
+        name: string;
+        website: string | null;
+        industry: string | null;
+        notes: string | null;
+        attachments: unknown;
+      } | null;
+    },
+  });
+
   const { data: copyItems = [] } = useQuery({
     queryKey: ["creative-linkable-copy", linkCopyClientFilter, tenantId],
     enabled: linkCopyOpen && !!linkCopyClientFilter,
@@ -186,6 +311,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   useEffect(() => {
     setWorkspacePanel(null);
+    setPendingStyleId(null);
   }, [selectedId]);
 
   useEffect(() => {
@@ -200,8 +326,19 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   }, [variations, selectedVariationId]);
 
   useEffect(() => {
-    setVariationDraft(selectedVariation ? { ...selectedVariation } : null);
-  }, [selectedVariation]);
+    if (!selectedVariation) {
+      setVariationDraft(null);
+      return;
+    }
+    setVariationDraft(hydrateVariationLayers(
+      selectedVariation,
+      getLinkedCopyText(selected),
+      selected?.title ?? undefined,
+      getVisualStyleId(selected?.payload),
+      getBrandKit(selected?.payload).logoUrl,
+      getBrandKit(selected?.payload).brandBook?.colors,
+    ));
+  }, [selectedVariation, selected]);
 
   const { data: assetVersions = [] } = useQuery({
     queryKey: ["creative-department-assets", selectedId, tenantId],
@@ -223,6 +360,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["creative-department-items", clientFilter, tenantId] }),
       queryClient.invalidateQueries({ queryKey: ["creative-department-assets", selectedId, tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ["creative-project-runs", tenantId] }),
     ]);
   };
 
@@ -237,6 +375,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         instructions: draft.instructions.trim() || undefined,
         format: draft.format,
         project_type: draft.projectType,
+        visual_style: draft.visualStyle,
+        logo_url: draft.logoUrl || null,
+        brand_book: draft.brandBook || null,
+        style_references: draft.styleReferences,
+        client_website: draft.clientWebsite || null,
         department: "creative",
       };
       const { error } = await supabase
@@ -254,6 +397,86 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     }
   };
 
+  const assignCreativeClient = async (nextClientId: string | null, draft: CreativeProjectDraft) => {
+    if (!selected) return;
+    let pipelineId: string | null = null;
+    let stageId: string | null = null;
+    let website: string | null = null;
+    let attachments: unknown = [];
+    let clientName: string | undefined;
+    let industry: string | undefined;
+    let notes: string | undefined;
+    if (nextClientId) {
+      const pipeline = await ensurePipelineForClient({ clientId: nextClientId, tenantId, track: "campaigns" });
+      if (pipeline) {
+        const { data: stages, error } = await supabase
+          .from("marketing_pipeline_stages")
+          .select("id,stage_type")
+          .eq("pipeline_id", pipeline.id);
+        if (error) throw error;
+        pipelineId = pipeline.id;
+        stageId = stages?.find((stage) => stage.stage_type === "creative")?.id ?? null;
+      }
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .select("id,name,website,industry,notes,attachments")
+        .eq("id", nextClientId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (clientError) throw clientError;
+      website = client?.website ?? null;
+      attachments = client?.attachments ?? [];
+      clientName = client?.name ?? undefined;
+      industry = client?.industry ?? undefined;
+      notes = client?.notes ?? undefined;
+      onClientChange?.(nextClientId);
+    }
+    const clientFiles = filesFromAttachments(attachments);
+    const pulledRefs = styleRefsFromClientFiles(supabase, attachments);
+    const styleReferences = mergeStyleReferences(draft.styleReferences, pulledRefs);
+    const brandBook = draft.brandBook?.source === "manual" && draft.brandBook.notes
+      ? draft.brandBook
+      : deriveBrandBook({
+        clientName,
+        website: website ?? undefined,
+        industry,
+        brief: [draft.briefText, notes].filter(Boolean).join("\n"),
+        copy: draft.copyText,
+        colors: draft.brandBook?.colors,
+        existing: draft.brandBook,
+      });
+    const nextPayload = {
+      ...(selected.payload ?? {}),
+      brief_text: draft.briefText.trim(),
+      copy_text: draft.copyText.trim() || undefined,
+      instructions: draft.instructions.trim() || undefined,
+      format: draft.format,
+      project_type: draft.projectType,
+      visual_style: draft.visualStyle,
+      logo_url: draft.logoUrl || null,
+      brand_book: brandBook,
+      style_references: styleReferences,
+      client_website: website,
+      client_files: clientFiles.map((file) => ({ name: file.name, path: file.path ?? null })),
+      department: "creative",
+    };
+    const keepStage = !!nextClientId && nextClientId === selected.client_id && !!selected.current_stage_id;
+    const { error } = await supabase.from("marketing_work_items").update({
+      title: draft.title.trim() || selected.title,
+      client_id: nextClientId,
+      pipeline_id: pipelineId,
+      current_stage_id: nextClientId ? (keepStage ? selected.current_stage_id : stageId) : null,
+      payload: nextPayload,
+    }).eq("id", selected.id).eq("tenant_id", tenantId);
+    if (error) throw error;
+    await Promise.all([
+      refresh(),
+      queryClient.invalidateQueries({ queryKey: ["creative-client", nextClientId, tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ["creative-department-context", nextClientId, tenantId] }),
+    ]);
+    toast.success(nextClientId ? "נמשך האתר, הקבצים והסגנון של הלקוח" : "השיוך הוסר");
+  };
+
   const persistStoryboard = async (nextFrames: StoryboardFrame[], message = "ה-storyboard נשמר") => {
     if (!selected) return;
     const existingStyle = getStoryboardStyle(selected.payload);
@@ -262,9 +485,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       ...(selected.payload ?? {}),
       storyboard: nextFrames,
       storyboard_style: {
-        lock: existingStyle.lock,
+        lock: buildVisualStyleLock(selected.payload, { storyboard: true }),
         referenceImageUrl: existingStyle.referenceImageUrl || firstImage,
       },
+      visual_style: getVisualStyleId(selected.payload),
       project_type: "video",
       department: "creative",
     };
@@ -303,7 +527,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       return fallback;
     }
     const shouldLock = options?.lock !== false;
-    if (shouldLock) setGenerating(true);
+    if (shouldLock) {
+      generateAbortRef.current = false;
+      setGenerating(true);
+    }
     try {
       const activeFrames = framesOverride ?? storyboardDraft;
       const generationNotes = [
@@ -335,35 +562,53 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         },
       }).eq("id", selected.id).eq("tenant_id", tenantId);
       const style = getStoryboardStyle(selected.payload);
-      const referenceImageUrls = pickStoryboardReferences(activeFrames, frame.id, style.referenceImageUrl);
+      const visual = getVisualStyle(selected.payload);
+      const kit = getBrandKit(selected.payload);
+      const storyboardRefs = pickStoryboardReferences(activeFrames, frame.id, style.referenceImageUrl);
+      const styleRefs = (
+        await Promise.all(kit.styleReferences.map((reference) => resolveCreativeImageUrl(reference.url)))
+      ).filter((url): url is string => !!url);
+      const referenceImageUrls = [...storyboardRefs, ...styleRefs].filter((url, index, list) => list.indexOf(url) === index);
       const framePrompt = [
-        "Next shot in ONE continuous photoreal commercial. Keep the same world, people, wardrobe, lighting and grade.",
+        `Use case: ads-marketing. Asset type: storyboard still, ${defaultFormat(selected.payload)}.`,
+        referenceImageUrls.length && "Input-image roles: earlier frames = continuity (faces/wardrobe/world). Extra stills = style reference only — match grade/material, do not copy lettering or logo.",
+        brandKitPrompt(kit),
+        `Next shot in ONE continuous ${visual.label} commercial. Keep the same world, people, wardrobe, lighting and grade.`,
         style.lock,
-        selected.title && `Campaign: ${selected.title}`,
+        selected.title && !isInternalCopyLine(selected.title) && `Campaign: ${selected.title}`,
         getConceptBrief(selected) && `Approved copy concepts (keep the visual idea, not the words):\n${getConceptBrief(selected)}`,
         `Frame ${frame.order}: ${frame.title}`,
         frame.shot && `Shot type: ${frame.shot}`,
         frame.visualPrompt && `Action/setting change only: ${frame.visualPrompt}`,
         referenceImageUrls.length
-          ? "A reference still from this same storyboard is attached — match faces, wardrobe, location family, lens and color grade. Do not invent a new art style."
-          : "This is the first frame. Establish a single photoreal look that later frames must copy exactly.",
+          ? "A reference still from this same storyboard is attached — match faces, wardrobe, location family and color language. Do not invent a new art style."
+          : `This is the first frame. Establish a single ${visual.label} look that later frames must copy exactly.`,
       ].filter(Boolean).join("\n");
-      const { imageUrl } = await generateCreativeImage({
+      throwIfGenerationAborted(generateAbortRef.current);
+      const { imageUrl, cost } = await generateCreativeImage({
         supabase,
         tenantId,
         itemId: selected.id,
         stageId: readyContext.creativeStage.id,
         prompt: framePrompt,
         referenceImageUrls,
+        referenceRole: referenceImageUrls.length ? "continuity" : undefined,
+        size: imageSizeForFormat(defaultFormat(selected.payload)),
+        quality: "medium",
       });
       if (shouldLock) {
         toast.message(referenceImageUrls.length ? "הפריים נוצר מול ייחוס הסגנון" : "פריים ראשון — נשמר כסגנון לייחוס");
       }
-      const next = activeFrames.map((value) => value.id === frame.id ? { ...frame, imageUrl } : value);
+      const next = activeFrames.map((value) => value.id === frame.id ? { ...frame, imageUrl, generationCost: cost } : value);
       setStoryboardDraft(next);
       await persistStoryboard(next, shouldLock ? "הפריים נוצר ונשמר" : "");
       return next;
     } catch (error: unknown) {
+      if (isGenerationAborted(error)) {
+        if (!shouldLock) throw error;
+        toast.message("היצירה נעצרה");
+        return fallback;
+      }
       toast.error(errorMessage(error, "יצירת הפריים נכשלה"));
       if (!shouldLock) throw error;
       return fallback;
@@ -384,18 +629,24 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       toast.error("מלא/י הנחיות לפריימים לפני יצירה לפי סדר");
       return;
     }
+    generateAbortRef.current = false;
     setGenerating(true);
     try {
       let current = [...storyboardDraft].sort((a, b) => a.order - b.order);
       for (const frame of queued) {
+        throwIfGenerationAborted(generateAbortRef.current);
         const latest = current.find((value) => value.id === frame.id) ?? frame;
         current = await generateStoryboardFrame(latest, current, { lock: false });
       }
       toast.success("הפריימים נוצרו לפי סדר, עם אותו סגנון");
-    } catch {
+    } catch (error: unknown) {
+      if (isGenerationAborted(error)) {
+        toast.message("היצירה נעצרה — הפריימים שכבר נוצרו נשמרו");
+      }
       // Per-frame toast already shown; stop the sequence so later frames do not drift.
     } finally {
       setGenerating(false);
+      setGenerateProgress(null);
     }
   };
 
@@ -444,74 +695,357 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     await refresh();
   };
 
-  const generate = async () => {
+  const selectedStyleId = pendingStyleId ?? getVisualStyleId(selected?.payload);
+
+  const persistVisualStyle = async (visualStyle: CreativeVisualStyleId) => {
     if (!selected) return;
-    if (!selected.client_id) {
-      toast.error("יש לשייך לקוח לפרויקט לפני יצירת קריאייטיב");
+    setPendingStyleId(visualStyle);
+    const { error } = await supabase
+      .from("marketing_work_items")
+      .update({
+        payload: {
+          ...(selected.payload ?? {}),
+          visual_style: visualStyle,
+          department: "creative",
+        },
+      })
+      .eq("id", selected.id)
+      .eq("tenant_id", tenantId);
+    if (error) {
+      setPendingStyleId(null);
+      toast.error(errorMessage(error, "שמירת הסגנון נכשלה"));
       return;
     }
+    await refresh();
+    setPendingStyleId(null);
+  };
+
+  const prepareCreativeStage = async () => {
+    if (!selected) throw new Error("לא נבחר פרויקט");
+    if (!selected.client_id) throw new Error("יש לשייך לקוח לפרויקט לפני יצירת קריאייטיב");
+    const readyContext = ensureCreativeStageReady(context);
+    await syncCreativePipelineStage({
+      itemId: selected.id,
+      tenantId,
+      pipelineId: readyContext.pipeline.id,
+      stageId: readyContext.creativeStage.id,
+    });
+    const notes = [
+      selected.payload?.notes,
+      getBriefText(selected) && `בריף: ${getBriefText(selected)}`,
+    ].filter(Boolean).join("\n");
+    await supabase
+      .from("marketing_work_items")
+      .update({ payload: { ...(selected.payload ?? {}), notes, visual_style: getVisualStyleId(selected.payload), department: "creative" } })
+      .eq("id", selected.id)
+      .eq("tenant_id", tenantId);
+    return readyContext;
+  };
+
+  const buildCreative = async ({
+    copyText,
+    copyKey,
+    copyLabel,
+    styleId,
+    rejectNote: directorNote,
+    parentId,
+    replaceId,
+    name,
+    styleSource,
+    existing,
+    regenerate,
+  }: {
+    copyText: string;
+    copyKey?: string;
+    copyLabel?: string;
+    styleId: CreativeVisualStyleId;
+    rejectNote?: string;
+    parentId?: string;
+    replaceId?: string;
+    name?: string;
+    styleSource?: CreativeVariation;
+    existing?: CreativeVariation[];
+    regenerate?: boolean;
+  }): Promise<CreativeVariation> => {
+    if (!selected) throw new Error("לא נבחר פרויקט");
+    throwIfGenerationAborted(generateAbortRef.current);
+    const readyContext = ensureCreativeStageReady(context);
+    const style = visualStyleById(styleId);
+    const format = defaultFormat(selected.payload);
+    const kit = getBrandKit(selected.payload);
+    const live = existing ?? variations;
+    const sceneBrief = buildCopySceneBrief({
+      copyText,
+      title: selected.title ?? undefined,
+      brief: getBriefText(selected),
+      instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
+      copyLabel,
+    });
+    const compositionId = styleSource
+      ? (styleSource.compositionId ?? DEFAULT_COMPOSITION_ID)
+      : DEFAULT_COMPOSITION_ID;
+    const costume = isOptionalCostume(style.id) ? style : undefined;
+    // Named styles already encode the technique in text. Attaching the liked still
+    // makes gpt-image-1 reprint the same face/crop. Keep the image only when the
+    // look was invented (adaptive) and we have no named recipe to follow.
+    const attachStyleStill = !!styleSource?.imageUrl && !costume;
+    const styleRefUrl = attachStyleStill && styleSource?.imageUrl
+      ? await resolveCreativeImageUrl(styleSource.imageUrl)
+      : undefined;
+    const priorLabels = live
+      .filter((variation) => !variation.rejected && variation.id !== replaceId && variation.id !== styleSource?.id)
+      .map((variation) => variation.copyLabel || variation.name)
+      .filter(Boolean)
+      .slice(-4);
+    const creativePrompt = [
+      `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
+      buildNoGlyphLock({ regenerate }),
+      sceneBrief,
+      getConceptBrief(selected) && `Approved copy concepts (keep the visual idea, not the words):\n${getConceptBrief(selected)}`,
+      styleSource
+        ? buildStyleContinuityLock({
+          sourceLabel: styleSource.copyLabel || styleSource.name,
+          sourceIdea: strongestLine(styleSource.copyText || "", selected.title ?? undefined),
+          attachStill: attachStyleStill,
+        })
+        : buildCompositionLock(compositionId),
+      buildStylePlayLock({
+        copyText,
+        copyLabel,
+        copyKey,
+        index: live.length,
+        avoidLabels: priorLabels,
+      }),
+      attachStyleStill && "The attached still is a technique sample, not a layout to trace. New cast, new props, new crop. Type sits flush — no rectangle plates.",
+      costume
+        ? buildVisualStyleLock(selected.payload, { styleId: style.id })
+        : buildAdaptiveTreatment({
+          copyText,
+          copyLabel,
+          title: selected.title ?? undefined,
+          brief: getBriefText(selected),
+          brandColors: kit.brandBook?.colors,
+        }),
+      buildStaticQualityLock({ selectedStyle: !!costume }),
+      brandKitPrompt(kit),
+      directorNote && `Art director REJECT (visual mistakes only — if they mention type/text, the fix is a letter-empty PNG, never new painted words): ${directorNote}`,
+      styleSource
+        ? `Format ${format}. Same TECHNIQUE family (paper, ink, light, color). Completely different picture, people, and props for this copy.`
+        : `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
+      kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
+      "RTL/production: Hebrew is composited as layers after generation — the image API still garbles Hebrew (reversed letters, missing glyphs, gibberish). Do not paint letters.",
+      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes, reprinting a previous collage.",
+    ].filter(Boolean).join("\n");
+    throwIfGenerationAborted(generateAbortRef.current);
+    const { imageUrl, cost } = await generateCreativeImage({
+      supabase,
+      tenantId,
+      itemId: selected.id,
+      stageId: readyContext.creativeStage.id,
+      prompt: creativePrompt || selected.title || "Marketing creative",
+      referenceImageUrls: styleRefUrl ? [styleRefUrl] : undefined,
+      referenceRole: styleRefUrl ? "technique" : undefined,
+      size: imageSizeForFormat(format),
+      quality: "high",
+      regenerate,
+    });
+    const created = makeVariation({
+      imageUrl,
+      format,
+      copyText,
+      title: selected.title ?? undefined,
+      visualStyle: style.id,
+      name: name ?? (copyLabel || "וריאציה"),
+      source: "ai",
+      copyKey,
+      copyLabel,
+      rejectNote: directorNote,
+      parentId,
+      logoUrl: kit.logoUrl,
+      generationCost: cost,
+      compositionId,
+      brandColors: kit.brandBook?.colors,
+      styleSourceId: styleSource?.id,
+    });
+    return replaceId ? { ...created, id: replaceId } : created;
+  };
+
+  const generate = async (mode: "new" | "replace" = "new", target?: CreativeVariation) => {
+    if (!selected) return;
+    generateAbortRef.current = false;
     setGenerating(true);
     try {
-      const readyContext = ensureCreativeStageReady(context);
-
-      await syncCreativePipelineStage({
-        itemId: selected.id,
-        tenantId,
-        pipelineId: readyContext.pipeline.id,
-        stageId: readyContext.creativeStage.id,
+      await prepareCreativeStage();
+      const replaceTarget = mode === "replace"
+        ? target ?? variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1]
+        : undefined;
+      const style = visualStyleById(selectedStyleId);
+      const usedCopyKeys = new Set(variations.filter((variation) => !variation.rejected).map((variation) => variation.copyKey).filter(Boolean));
+      const copyBlock = replaceTarget
+        ? copyBlocks.find((block) => block.key === replaceTarget.copyKey) ?? copyBlocks[0]
+        : copyBlocks.find((block) => !usedCopyKeys.has(block.key)) ?? copyBlocks[0];
+      const copyText = copyBlock?.text || getLinkedCopyText(selected);
+      const nextVariation = await buildCreative({
+        copyText,
+        copyKey: copyBlock?.key ?? replaceTarget?.copyKey,
+        copyLabel: copyBlock ? copyBlockLabel(copyBlock) : replaceTarget?.copyLabel,
+        styleId: style.id,
+        replaceId: replaceTarget?.id,
+        parentId: replaceTarget?.parentId,
+        name: replaceTarget
+          ? (replaceTarget.name.includes("·") ? replaceTarget.name : `${replaceTarget.name} · ${style.label}`)
+          : undefined,
+        regenerate: !!replaceTarget,
       });
-
-      const notes = [
-        selected.payload?.notes,
-        getBriefText(selected) && `בריף: ${getBriefText(selected)}`,
-        getConceptBrief(selected) && `קונספטים מאושרים מהקופי:\n${getConceptBrief(selected)}`,
-      ].filter(Boolean).join("\n");
-
-      await supabase
-        .from("marketing_work_items")
-        .update({ payload: { ...(selected.payload ?? {}), notes, department: "creative" } })
-        .eq("id", selected.id)
-        .eq("tenant_id", tenantId);
-
-      const approved = getApprovedCopyConcepts(selected);
-      const primary = approved[0];
-      const creativePrompt = [
-        "Create a polished advertising photograph for this campaign. Build the picture around the approved concept — not a generic text-on-background graphic.",
-        selected.title && `Campaign: ${selected.title}`,
-        primary && `Approved concept: ${primary.name}`,
-        primary?.bigIdea && `Big idea: ${primary.bigIdea}`,
-        primary?.visualLanguage && `Visual language: ${primary.visualLanguage}`,
-        primary?.hook && `First-second hook / scene: ${primary.hook}`,
-        getConceptBrief(selected) && `All approved concepts:\n${getConceptBrief(selected)}`,
-        getBriefText(selected) && `Visual brief (ignore any copy/headlines, use only mood, audience, setting): ${getBriefText(selected)}`,
-        `Format: ${defaultFormat(selected.payload)}`,
-      ].filter(Boolean).join("\n");
-
-      const { imageUrl, usedFallback } = await generateCreativeImage({
-        supabase,
-        tenantId,
-        itemId: selected.id,
-        stageId: readyContext.creativeStage.id,
-        prompt: creativePrompt || selected.title || "Marketing creative",
-      });
-      if (usedFallback) toast.message("הקריאייטיב נוצר (gpt-image-1)");
-
-      const nextVariation = makeVariation({
-        imageUrl,
-        format: defaultFormat(selected.payload),
-        copyText: getLinkedCopyText(selected),
-        name: `גרסה ${variations.length + 1}`,
-        source: "ai",
-      });
-
-      const nextVariations = [...variations, nextVariation];
-      await persistVariations(nextVariations, "כרמן יצרה וריאציה ויזואלית חדשה");
+      const nextVariations = replaceTarget
+        ? variations.map((variation) => variation.id === replaceTarget.id ? { ...replaceTarget, ...nextVariation, rejected: false } : variation)
+        : [...variations, nextVariation];
+      await persistVariations(
+        nextVariations,
+        replaceTarget
+          ? `העיצוב נוצר מחדש בסגנון ${style.label}`
+          : `נוצר קריאייטיב ל${nextVariation.copyLabel || "קופי"} בסגנון ${style.label}`,
+      );
       setSelectedVariationId(nextVariation.id);
-      setWorkspacePanel(null);
+      if (mode !== "replace") setWorkspacePanel(null);
     } catch (error: unknown) {
-      toast.error(errorMessage(error, "יצירת הקריאייטיב נכשלה"));
+      if (isGenerationAborted(error)) toast.message("היצירה נעצרה");
+      else toast.error(errorMessage(error, "יצירת הקריאייטיב נכשלה"));
     } finally {
       setGenerating(false);
+      setGeneratingId(null);
+      setGenerateProgress(null);
+    }
+  };
+
+  const generateAllFromCopy = async (styleMode: "same" | "mixed") => {
+    if (!selected) return;
+    const blocks = copyBlocks.length > 0 ? copyBlocks : [{ key: "1", index: 1, label: "וריאציה 1", text: getLinkedCopyText(selected), parts: {}, angle: undefined }];
+    if (blocks.every((block) => !block.text.trim()) && !getBriefText(selected)) {
+      toast.error("שייך קופי או מלא בריף לפני יצירה לכל הווריאציות");
+      return;
+    }
+    generateAbortRef.current = false;
+    setGenerating(true);
+    try {
+      await prepareCreativeStage();
+      let current = [...variations];
+      for (const [index, block] of blocks.entries()) {
+        throwIfGenerationAborted(generateAbortRef.current);
+        setGenerateProgress(`יוצר ${index + 1}/${blocks.length} · ${copyBlockLabel(block)}`);
+        const style = visualStyleById(styleMode === "mixed" && !isOptionalCostume(selectedStyleId)
+          ? "adaptive"
+          : selectedStyleId);
+        const created = await buildCreative({
+          copyText: block.text || getBriefText(selected),
+          copyKey: block.key,
+          copyLabel: copyBlockLabel(block),
+          styleId: style.id,
+          existing: current,
+        });
+        current = [...current, created];
+        await persistVariations(current, `נוצר ${copyBlockLabel(block)}`);
+        setSelectedVariationId(created.id);
+      }
+      setWorkspacePanel(null);
+      toast.success("נוצר קריאייטיב לכל וריאציית קופי לפי הקופי והמותג");
+    } catch (error: unknown) {
+      if (isGenerationAborted(error)) toast.message("היצירה נעצרה — מה שכבר נוצר נשמר");
+      else toast.error(errorMessage(error, "יצירת הגריד נכשלה"));
+    } finally {
+      setGenerating(false);
+      setGenerateProgress(null);
+    }
+  };
+
+  const generateSiblingsInStyle = async (source: CreativeVariation) => {
+    if (!selected) return;
+    const missing = missingCopyBlocks(copyBlocks, variations, source);
+    if (missing.length === 0) {
+      toast.message("אין וריאציות קופי נוספות — כל הקופי כבר בגריד");
+      return;
+    }
+    generateAbortRef.current = false;
+    setGenerating(true);
+    setSelectedVariationId(source.id);
+    setWorkspacePanel(null);
+    try {
+      await prepareCreativeStage();
+      let current = [...variations];
+      for (const [index, block] of missing.entries()) {
+        throwIfGenerationAborted(generateAbortRef.current);
+        setGenerateProgress(`בסגנון שאישרת · ${index + 1}/${missing.length} · ${copyBlockLabel(block)}`);
+        const created = await buildCreative({
+          copyText: block.text,
+          copyKey: block.key,
+          copyLabel: copyBlockLabel(block),
+          styleId: source.visualStyle || selectedStyleId,
+          styleSource: source,
+          existing: current,
+        });
+        current = [...current, created];
+        await persistVariations(current, `נוצר ${copyBlockLabel(block)} בסגנון שאישרת`);
+        setSelectedVariationId(created.id);
+      }
+      toast.success(`נוצרו ${missing.length} וריאציות באותו סגנון, מותאמות לקופי`);
+    } catch (error: unknown) {
+      if (isGenerationAborted(error)) toast.message("היצירה נעצרה — מה שכבר נוצר נשמר");
+      else toast.error(errorMessage(error, "יצירת הווריאציות בסגנון הזה נכשלה"));
+    } finally {
+      setGenerating(false);
+      setGenerateProgress(null);
+    }
+  };
+
+  const stopGeneration = () => {
+    if (!generating) return;
+    generateAbortRef.current = true;
+    setGenerateProgress("עוצר אחרי הווריאציה הנוכחית...");
+  };
+
+  const rejectVariation = async () => {
+    if (!selected || !rejectTarget || !rejectNote.trim()) return;
+    generateAbortRef.current = false;
+    setGenerating(true);
+    setGeneratingId(rejectTarget.id);
+    try {
+      await prepareCreativeStage();
+      const style = visualStyleById("adaptive");
+      const copyBlock = copyBlocks.find((block) => block.key === rejectTarget.copyKey);
+      const created = await buildCreative({
+        copyText: rejectTarget.copyText || copyBlock?.text || getLinkedCopyText(selected),
+        copyKey: rejectTarget.copyKey ?? copyBlock?.key,
+        copyLabel: rejectTarget.copyLabel ?? (copyBlock ? copyBlockLabel(copyBlock) : undefined),
+        styleId: style.id,
+        rejectNote: rejectNote.trim(),
+        parentId: rejectTarget.id,
+        name: `${rejectTarget.copyLabel || rejectTarget.name} · תיקון`,
+        regenerate: true,
+      });
+      const nextVariations = [
+        ...variations.map((variation) => variation.id === rejectTarget.id ? { ...variation, rejected: true, rejectNote: rejectNote.trim() } : variation),
+        created,
+      ];
+      await persistVariations(nextVariations, "נוצרה וריאציה לפי הרג׳קט");
+      setSelectedVariationId(created.id);
+      setRejectTarget(null);
+      setRejectNote("");
+      setWorkspacePanel(null);
+    } catch (error: unknown) {
+      if (isGenerationAborted(error)) toast.message("היצירה נעצרה");
+      else toast.error(errorMessage(error, "יצירת וריאציית הרג׳קט נכשלה"));
+    } finally {
+      setGenerating(false);
+      setGeneratingId(null);
+    }
+  };
+
+  const deleteVariation = async (target: CreativeVariation) => {
+    const nextVariations = variations.filter((variation) => variation.id !== target.id);
+    await persistVariations(nextVariations, "הוריאציה נמחקה");
+    if (selectedVariationId === target.id) {
+      setSelectedVariationId(nextVariations[nextVariations.length - 1]?.id ?? null);
+      setWorkspacePanel(null);
     }
   };
 
@@ -643,6 +1177,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                   <Badge variant="outline" className="h-4 px-1 text-[9px]">{projectTypeLabel(getProjectType(item.payload))}</Badge>
                   <span>{getProjectType(item.payload) === "video" ? `${getStoryboard(item.payload).length} סצנות` : `${getVariations(item.payload).length} וריאציות`}</span>
                   {item.payload?.handoff_from === "copy" && <Badge variant="secondary" className="h-4 px-1 text-[9px]">מהקופi</Badge>}
+                  {!!costRows.find((row) => row.item.id === item.id)?.spent.costUsd && (
+                    <span>{formatUsd(costRows.find((row) => row.item.id === item.id)!.spent.costUsd)}</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -795,7 +1332,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-bold">{selected.title}</h2>
         <p className="text-[11px] text-muted-foreground">
-          {projectTypeLabel(projectType)} · Skin: social_media · תמונות: gpt-image-1
+          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · gpt-image-1
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
@@ -818,13 +1355,46 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           גרסאות
         </Button>
       </div>
+      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setCostOpen(true)}>
+        <Coins className="h-3.5 w-3.5" />
+        {formatUsd(costRows.find((row) => row.item.id === selected.id)?.spent.costUsd ?? 0)}
+      </Button>
+      <VisualStyleSelect
+        compact
+        value={selectedStyleId}
+        onChange={(style) => void persistVisualStyle(style)}
+      />
       <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkCopyOpen(true)}>
         <Link2 className="h-3.5 w-3.5" />שייך קופi
       </Button>
       {!isVideoWorkspace && (
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={generate} disabled={generating || loadingContext || !selected.client_id}>
-          {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
-          {variations.length ? "צור וריאציה" : "צור קריאייטיב"}
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="gap-1.5 bg-gradient-to-r from-pink-600 to-violet-600" disabled={generating || loadingContext || !selected.client_id}>
+                {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+                צור לכל הקופי
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => void generateAllFromCopy("same")}>
+                לכל וריאציות הקופי · מותאם לקופי ולמותג
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void generateAllFromCopy("mixed")}>
+                לכל וריאציות הקופי · מבנה גרפי שונה לכל אחת
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void generate("new")} disabled={generating || loadingContext || !selected.client_id}>
+            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+            וריאציה אחת
+          </Button>
+        </>
+      )}
+      {generating && (
+        <Button variant="destructive" size="sm" className="gap-1.5" onClick={stopGeneration}>
+          <Square className="h-3.5 w-3.5 fill-current" />עצור
         </Button>
       )}
       <Button
@@ -854,32 +1424,74 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 await generateStoryboardFrame(frame, merged);
               }}
               onGenerateAll={generateAllStoryboardFrames}
+              onStop={stopGeneration}
               generating={generating}
               saving={saving}
               scenePanelOpen={workspacePanel === "scene"}
               onScenePanelOpenChange={(open) => setWorkspacePanel(open ? "scene" : null)}
             />
-          ) : variationDraft ? (
+          ) : workspacePanel === "edit" && variationDraft ? (
             <CreativeLayerEditor
               key={variationDraft.id}
               variation={variationDraft}
               onChange={setVariationDraft}
               onSave={saveVariation}
               saving={saving}
-              editing={workspacePanel === "edit"}
+              editing
               onEditingChange={(open) => setWorkspacePanel(open ? "edit" : null)}
+              onRegenerate={() => void generate("replace", variationDraft)}
+              regenerating={generating}
+              onExpandStyle={() => void generateSiblingsInStyle(variationDraft)}
+              expandStyleCount={missingCopyBlocks(copyBlocks, variations, variationDraft).length}
+              onBack={() => setWorkspacePanel(null)}
+            />
+          ) : variations.length > 0 ? (
+            <CreativeVariationGrid
+              variations={variations}
+              generatingId={generatingId}
+              progressLabel={generateProgress ?? undefined}
+              disabled={generating}
+              onEdit={(variation) => {
+                setSelectedVariationId(variation.id);
+                setWorkspacePanel("edit");
+              }}
+              onDelete={(variation) => void deleteVariation(variation)}
+              onRegenerate={(variation) => {
+                setSelectedVariationId(variation.id);
+                setGeneratingId(variation.id);
+                void generate("replace", variation);
+              }}
+              onReject={(variation) => {
+                setRejectTarget(variation);
+                setRejectNote("");
+              }}
+              onExpandStyle={(variation) => void generateSiblingsInStyle(variation)}
+              remainingCopyCount={(variation) => missingCopyBlocks(copyBlocks, variations, variation).length}
             />
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground">
               <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
-              <h3 className="text-lg font-bold text-foreground">עדיין אין קריאייטיב</h3>
-              <p className="mt-2 max-w-md text-sm">לחץ על &quot;צור קריאייטיב&quot; כדי לייצר תמונה מוכנה. עריכת שכבות תיפתח רק בלחיצה על התמונה.</p>
-              <div className="mt-5 flex gap-2">
+              <h3 className="text-lg font-bold text-foreground">גריד וריאציות</h3>
+              <p className="mt-2 max-w-md text-sm">
+                כל וריאציית קופי מקבלת קריאייטיב משלה. אם יש כרטיס שאהבת — «עוד בסגנון הזה» יוצר את שאר הקופי באותו מראה, עם התאמה לנושא של כל וריאציה.
+              </p>
+              {copyBlocks.length > 0 && (
+                <p className="mt-2 text-xs">נמצאו {copyBlocks.length} וריאציות קופי משויכות</p>
+              )}
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
                 <Button variant="outline" onClick={() => setWorkspacePanel("project")}>עריכת פרויקט</Button>
-                <Button className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={generate} disabled={generating || loadingContext || !selected.client_id}>
+                <Button className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={() => void generateAllFromCopy("same")} disabled={generating || loadingContext || !selected.client_id}>
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                  צור קריאייטיב
+                  צור לכל הקופי
                 </Button>
+                <Button variant="outline" className="gap-2" onClick={() => void generateAllFromCopy("mixed")} disabled={generating || loadingContext || !selected.client_id}>
+                  מבנה שונה לכל קופי
+                </Button>
+                {generating && (
+                  <Button variant="destructive" className="gap-2" onClick={stopGeneration}>
+                    <Square className="h-4 w-4 fill-current" />עצור
+                  </Button>
+                )}
               </div>
             </div>
           )
@@ -889,6 +1501,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             <p className="text-sm">בחר פרויקט או צור אחד חדש</p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setWorkspacePanel("projects")}>פתח פרויקטים</Button>
+              <Button variant="outline" className="gap-1.5" onClick={() => setCostOpen(true)}>
+                <Coins className="h-4 w-4" />עלות טוקנים
+              </Button>
               <Button className="bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>פרויקט חדש</Button>
             </div>
           </div>
@@ -902,9 +1517,14 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               <SheetTitle className="text-sm">פרויקטים לקריאייטיב</SheetTitle>
               <p className="text-[11px] text-muted-foreground">מהקופi, מבריף ידני או AI</p>
             </div>
-            <Button size="icon" className="h-8 w-8 shrink-0 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCostOpen(true)} title="עלות טוקנים">
+                <Coins className="h-4 w-4" />
+              </Button>
+              <Button size="icon" className="h-8 w-8 shrink-0 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </SheetHeader>
           {projectsList}
         </SheetContent>
@@ -916,7 +1536,14 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             <SheetTitle>עריכת פרויקט</SheetTitle>
           </SheetHeader>
           {selected ? (
-            <CreativeBriefEditor item={selected} onSave={saveProject} saving={saving} />
+            <CreativeBriefEditor
+              item={selected}
+              tenantId={tenantId}
+              client={selectedClient}
+              onSave={saveProject}
+              onAssignClient={assignCreativeClient}
+              saving={saving}
+            />
           ) : null}
         </SheetContent>
       </Sheet>
@@ -976,6 +1603,42 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!rejectTarget} onOpenChange={(open) => { if (!open) setRejectTarget(null); }}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>רג׳קט לוריאציה</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            מה לא עבד ב־{rejectTarget?.copyLabel || rejectTarget?.name}? ניצור וריאציה חדשה לפי ההערה ונשאיר את הישנה מסומנת כנדחתה.
+          </p>
+          <Textarea
+            className="min-h-28"
+            value={rejectNote}
+            onChange={(event) => setRejectNote(event.target.value)}
+            placeholder="למשל: הכותרת על הפנים, נראה כמו סטוק, ה־CTA חתוך, לא קשור לבריף..."
+          />
+          <DialogFooter className="gap-2 sm:justify-start">
+            <Button onClick={() => void rejectVariation()} disabled={generating || !rejectNote.trim()}>
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsDown className="h-4 w-4" />}
+              צור וריאציה לפי הרג׳קט
+            </Button>
+            <Button variant="outline" onClick={() => setRejectTarget(null)}>ביטול</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <CreativeCostDialog
+        open={costOpen}
+        onOpenChange={setCostOpen}
+        rows={costRows}
+        selectedId={selectedId}
+        onSelect={(id) => {
+          setSelectedId(id);
+          setSelectedVariationId(null);
+          setWorkspacePanel(null);
+        }}
+      />
     </div>
   );
 }
@@ -994,6 +1657,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
   const [brief, setBrief] = useState("");
   const [format, setFormat] = useState("1:1");
   const [projectType, setProjectType] = useState<CreativeProjectType>("static");
+  const [visualStyle, setVisualStyle] = useState<CreativeVisualStyleId>(DEFAULT_VISUAL_STYLE_ID);
   const [copyText, setCopyText] = useState("");
   const [selectedCopyId, setSelectedCopyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1023,6 +1687,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
       setAssignedClientId(defaultClientId ?? null);
       setProjectType("static");
       setFormat("1:1");
+      setVisualStyle(DEFAULT_VISUAL_STYLE_ID);
       setMode("manual");
       setSelectedCopyId(null);
       setTitle("");
@@ -1080,6 +1745,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
         copy_text: copyText.trim() || undefined,
         format,
         project_type: projectType,
+        visual_style: visualStyle,
         department: "creative",
         intake_source: mode === "from_copy" ? "copy_link" : "manual",
         handoff_from: mode === "from_copy" ? "copy" : undefined,
@@ -1201,6 +1867,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
               </SelectContent>
             </Select>
           </div>
+          <VisualStyleSelect value={visualStyle} onChange={setVisualStyle} />
           {mode === "manual" ? (
             <>
               <div><Label>בריף / חומר גלם (אופציונלי)</Label><Textarea className="mt-1 min-h-24" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, סגנון, רפרנסים, מגבלות" /></div>

@@ -28,3 +28,9 @@ export function clientFilterLabel(filter: MarketingClientFilter): string {
   if (!filter) return "תוכן כללי";
   return "לקוח";
 }
+
+/** Creative always opens on every client so the project list is complete. */
+export function entryClientFilter(department: string | undefined, current: MarketingClientFilter): MarketingClientFilter {
+  if (department === "creative") return ALL_CLIENTS_FILTER;
+  return current;
+}

@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveOpenAIKey } from "../_shared/ai.ts";
+import { logAiUsage, resolveOpenAIKey } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +21,32 @@ const extractAttachmentPath = (url: string): string | null => {
   }
 };
 
+const parseImageUsage = (usage: unknown, quality: string, size: string) => {
+  if (!usage || typeof usage !== "object") return null;
+  const row = usage as {
+    input_tokens?: number;
+    output_tokens?: number;
+    input_tokens_details?: { text_tokens?: number; image_tokens?: number };
+  };
+  const details = row.input_tokens_details;
+  const textTokens = Number(details?.text_tokens ?? (details ? 0 : row.input_tokens) ?? 0);
+  const imageInTokens = Number(details?.image_tokens ?? 0);
+  const outputTokens = Number(row.output_tokens ?? 0);
+  if (textTokens + imageInTokens + outputTokens <= 0) return null;
+  const costUsd = +((textTokens * 5 + imageInTokens * 10 + outputTokens * 40) / 1e6).toFixed(6);
+  return {
+    model: "gpt-image-1",
+    quality,
+    size,
+    textTokens,
+    imageInTokens,
+    outputTokens,
+    totalTokens: textTokens + imageInTokens + outputTokens,
+    costUsd,
+    source: "api",
+  };
+};
+
 const uniqueUrls = (urls: unknown[]): string[] => {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -38,7 +64,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls } = await req.json();
+    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls, reference_role: requestedRole, size: requestedSize, quality: requestedQuality } = await req.json();
 
     if (!prompt || !tenant_id) {
       return new Response(
@@ -72,6 +98,10 @@ serve(async (req) => {
       return new Uint8Array(await res.arrayBuffer());
     };
 
+    const allowedSizes = new Set(["1024x1024", "1024x1536", "1536x1024"]);
+    const size = allowedSizes.has(requestedSize) ? requestedSize : "1024x1024";
+    const quality = requestedQuality === "high" || requestedQuality === "low" ? requestedQuality : "medium";
+
     const generateFromPrompt = () =>
       fetch("https://api.openai.com/v1/images/generations", {
         method: "POST",
@@ -81,10 +111,10 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: "gpt-image-1",
-          prompt: `Professional social media post image: ${prompt}. Visually appealing, modern, suitable for social media marketing.`,
+          prompt,
           n: 1,
-          size: "1024x1024",
-          quality: "medium",
+          size,
+          quality,
           output_format: "png",
         }),
       });
@@ -102,13 +132,17 @@ serve(async (req) => {
     if (files.length > 0) {
       const form = new FormData();
       form.append("model", "gpt-image-1");
+      const referenceRole = requestedRole === "technique" ? "technique" : "continuity";
+      const referencePrefix = referenceRole === "technique"
+        ? "Use attached image(s) as TECHNIQUE only (material, paper, ink, light, color family). Do not copy faces, pose, crop, lettering, logos, or layout. Output must contain zero letters, digits, or logos. "
+        : "Continue this exact visual world. Match faces, wardrobe, lighting, lens and color grade from the reference. Do not copy or invent lettering or logos. ";
       form.append(
         "prompt",
-        `Continue this exact visual world. Match faces, wardrobe, lighting, lens and color grade from the reference. ${prompt}`,
+        `${referencePrefix}${prompt}`,
       );
       form.append("n", "1");
-      form.append("size", "1024x1024");
-      form.append("quality", "medium");
+      form.append("size", size);
+      form.append("quality", quality);
       form.append("output_format", "png");
       form.append("input_fidelity", "high");
       for (const file of files) form.append("image", file);
@@ -134,6 +168,18 @@ serve(async (req) => {
     }
 
     const aiData = await aiResponse.json();
+    const usage = parseImageUsage(aiData?.usage, quality, size);
+    if (usage) {
+      logAiUsage({
+        source: "ai-generate-social-image",
+        model: "gpt-image-1",
+        tenant_id,
+        tokens_in: usage.textTokens + usage.imageInTokens,
+        tokens_out: usage.outputTokens,
+        cost_usd: usage.costUsd,
+        meta: { size, quality, used_reference: usedReference, post_id },
+      });
+    }
     const b64 = aiData?.data?.[0]?.b64_json;
     const base64Image = b64 ? `data:image/png;base64,${b64}` : undefined;
 
@@ -163,7 +209,7 @@ serve(async (req) => {
       .getPublicUrl(filePath);
 
     return new Response(
-      JSON.stringify({ image_url: urlData.publicUrl, used_reference: usedReference }),
+      JSON.stringify({ image_url: urlData.publicUrl, used_reference: usedReference, usage }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       },

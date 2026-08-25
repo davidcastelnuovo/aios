@@ -21,7 +21,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
-import { Copy, Image as ImageIcon, Loader2, Plus, Save, Trash2, WandSparkles } from "lucide-react";
+import { Copy, Image as ImageIcon, Loader2, Plus, Save, Square, Trash2, WandSparkles } from "lucide-react";
 import type { StoryboardFrame } from "./types";
 import { STORYBOARD_FRAME_GAP, makeStoryboardFrame, storyboardFrameX } from "./utils";
 
@@ -31,6 +31,7 @@ interface Props {
   onSave: () => Promise<void>;
   onGenerateFrame: (frame: StoryboardFrame) => Promise<void>;
   onGenerateAll?: () => Promise<void>;
+  onStop?: () => void;
   generating?: boolean;
   saving?: boolean;
   scenePanelOpen?: boolean;
@@ -74,6 +75,7 @@ export function CreativeStoryboardEditor({
   onSave,
   onGenerateFrame,
   onGenerateAll,
+  onStop,
   generating,
   saving,
   scenePanelOpen,
@@ -158,10 +160,16 @@ export function CreativeStoryboardEditor({
         <span className="text-xs text-muted-foreground">Storyboard עקבי — פריים 1 קובע סגנון, הבאים נוצרים מולו</span>
         <div className="flex gap-2">
           {onGenerateAll && (
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void onGenerateAll()} disabled={generating || frames.length === 0}>
-              {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
-              צור הכל לפי סדר
-            </Button>
+            generating && onStop ? (
+              <Button size="sm" variant="destructive" className="gap-1.5" onClick={onStop}>
+                <Square className="h-3.5 w-3.5 fill-current" />עצור
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void onGenerateAll()} disabled={generating || frames.length === 0}>
+                {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+                צור הכל לפי סדר
+              </Button>
+            )
           )}
           <Button size="sm" variant="outline" className="gap-1.5" onClick={addFrame}><Plus className="h-3.5 w-3.5" />סצנה</Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void onSave()} disabled={saving}>

@@ -8,8 +8,12 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { cn } from "@/lib/utils";
-import { Loader2, Move, Save, Trash2, Type } from "lucide-react";
-import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
+import { ArrowRight, Layers2, Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
+import type { CreativeFormat, CreativeLayer, CreativeVariation, LayerShadowStyle } from "./types";
+import { inferLayerShadow, withLayerShadow } from "./layerShadow";
+import { OfferIconMark, isIconLayer, layerLabel } from "./layerMarks";
+import { EDITOR_FONT_WEIGHTS, safeFontWeight, safeHexColor, safeSelectValue } from "./layerEditorGuards";
+import { OFFER_ICON_NAMES } from "./offerBoard";
 import { aspectRatioClass } from "./utils";
 
 interface Props {
@@ -19,9 +23,14 @@ interface Props {
   saving?: boolean;
   editing?: boolean;
   onEditingChange?: (editing: boolean) => void;
+  onRegenerate?: () => void;
+  regenerating?: boolean;
+  onExpandStyle?: () => void;
+  expandStyleCount?: number;
+  onBack?: () => void;
 }
 
-const FONT_OPTIONS = ["Rubik", "Assistant", "Heebo", "Arial", "Georgia"];
+const FONT_OPTIONS = ["Suez One", "Heebo", "Rubik", "Assistant", "Arial", "Georgia"];
 
 type DragMode = "move" | "resize-se";
 
@@ -32,6 +41,11 @@ export function CreativeLayerEditor({
   saving,
   editing,
   onEditingChange,
+  onRegenerate,
+  regenerating,
+  onExpandStyle,
+  expandStyleCount,
+  onBack,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -48,26 +62,38 @@ export function CreativeLayerEditor({
   const setEditing = onEditingChange ?? setInternalEditing;
 
   useEffect(() => {
-    if (!isEditing) setSelectedLayerId(null);
-  }, [isEditing]);
+    if (!isEditing) {
+      setSelectedLayerId(null);
+      return;
+    }
+    setSelectedLayerId((current) => {
+      const layers = variation.layers ?? [];
+      if (current && layers.some((layer) => layer.id === current)) return current;
+      return layers.find((layer) => layer.type === "text")?.id
+        ?? layers.find((layer) => layer.type !== "background")?.id
+        ?? null;
+    });
+  }, [isEditing, variation.id]);
 
-  const selectedLayer = variation.layers.find((layer) => layer.id === selectedLayerId) ?? null;
-  const textLayers = variation.layers.filter((layer) => layer.type === "text");
+  const layers = variation.layers ?? [];
+  const selectedLayer = layers.find((layer) => layer.id === selectedLayerId) ?? null;
+  const selectedShadow = selectedLayer?.type === "text" ? inferLayerShadow(selectedLayer) : null;
+  const overlayLayers = layers.filter((layer) => layer.type !== "background");
 
   const updateLayer = useCallback((layerId: string, patch: Partial<CreativeLayer>) => {
     onChange({
       ...variation,
-      layers: variation.layers.map((layer) => layer.id === layerId ? { ...layer, ...patch } : layer),
+      layers: layers.map((layer) => layer.id === layerId ? { ...layer, ...patch } : layer),
     });
-  }, [onChange, variation]);
+  }, [onChange, variation, layers]);
 
   const removeLayer = useCallback((layerId: string) => {
     onChange({
       ...variation,
-      layers: variation.layers.filter((layer) => layer.id !== layerId),
+      layers: layers.filter((layer) => layer.id !== layerId),
     });
     setSelectedLayerId((current) => current === layerId ? null : current);
-  }, [onChange, variation]);
+  }, [onChange, variation, layers]);
 
   const addTextLayer = () => {
     const layer: CreativeLayer = {
@@ -84,7 +110,7 @@ export function CreativeLayerEditor({
       color: "#ffffff",
       textAlign: "right",
     };
-    onChange({ ...variation, layers: [...variation.layers, layer] });
+    onChange({ ...variation, layers: [...layers, layer] });
     setSelectedLayerId(layer.id);
     setEditing(true);
   };
@@ -93,10 +119,16 @@ export function CreativeLayerEditor({
     if (selectedLayerId) removeLayer(selectedLayerId);
   };
 
+  const applyShadow = (layerId: string, patch: Partial<ReturnType<typeof inferLayerShadow>>) => {
+    const layer = layers.find((item) => item.id === layerId);
+    if (!layer) return;
+    updateLayer(layerId, withLayerShadow({ ...inferLayerShadow(layer), ...patch }));
+  };
+
   const removeAllTextLayers = () => {
     onChange({
       ...variation,
-      layers: variation.layers.filter((layer) => layer.type !== "text"),
+      layers: layers.filter((layer) => layer.type === "background" || layer.type === "image"),
     });
     setSelectedLayerId(null);
   };
@@ -170,10 +202,30 @@ export function CreativeLayerEditor({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col bg-muted/10">
       <div className="flex items-center justify-between border-b px-4 py-2">
-        <span className="text-xs text-muted-foreground">
-          {isEditing ? "מצב עריכה — גרור שכבות, שנה טקסט ופונטים" : "לחץ על הקריאייטיב כדי לערוך"}
-        </span>
         <div className="flex items-center gap-2">
+          {onBack && (
+            <Button size="sm" variant="ghost" className="gap-1" onClick={onBack}>
+              <ArrowRight className="h-3.5 w-3.5" />חזרה לגריד
+            </Button>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {isEditing ? "מצב עריכה — הקלד על השכבה, גרור, ושלוט בהצללה" : "לחץ פעמיים על הקריאייטיב או על עריכה כדי לערוך שכבות"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {onRegenerate && (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={onRegenerate} disabled={regenerating}>
+              {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+              ג׳נרט מחדש
+            </Button>
+          )}
+          {onExpandStyle && (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={onExpandStyle} disabled={regenerating || !expandStyleCount}>
+              <Layers2 className="h-3.5 w-3.5" />
+              עוד בסגנון הזה
+              {!!expandStyleCount && <span className="text-[10px] text-muted-foreground">{expandStyleCount}</span>}
+            </Button>
+          )}
           {isEditing && (
             <>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={addTextLayer}>
@@ -193,58 +245,103 @@ export function CreativeLayerEditor({
         <div
           className={cn(
             "relative w-full max-w-3xl overflow-hidden rounded-2xl border bg-muted shadow-xl",
-            !isEditing && "cursor-zoom-in ring-offset-background hover:ring-2 hover:ring-pink-400/40",
+            !isEditing && "cursor-default",
             canvasClass,
           )}
           onClick={() => {
+            if (isEditing) setSelectedLayerId(null);
+          }}
+          onDoubleClick={() => {
             if (!isEditing) setEditing(true);
-            else setSelectedLayerId(null);
           }}
         >
           <div ref={canvasRef} className="absolute inset-0">
             <CreativeImage src={variation.imageUrl} alt={variation.name} className="absolute inset-0 h-full w-full object-cover" />
-            {isEditing && variation.layers.filter((layer) => layer.type === "text").map((layer) => (
+            {overlayLayers.map((layer) => (
               <div
                 key={layer.id}
                 className={cn(
-                  "absolute cursor-move rounded-md border border-transparent px-1 py-0.5",
-                  selectedLayerId === layer.id && "border-pink-400 ring-2 ring-pink-400/30",
+                  "absolute",
+                  isEditing && "cursor-move",
+                  !isEditing && "pointer-events-none",
+                  isEditing && selectedLayerId === layer.id && "ring-2 ring-pink-400/40",
                 )}
                 style={{
                   left: `${layer.x}%`,
                   top: `${layer.y}%`,
                   width: `${layer.width}%`,
                   height: `${layer.height}%`,
+                  display: layer.type === "text" || isIconLayer(layer) ? "flex" : undefined,
+                  alignItems: layer.type === "text" || isIconLayer(layer) ? "center" : undefined,
+                  justifyContent: layer.textAlign === "center" ? "center" : layer.textAlign === "left" ? "flex-start" : "flex-end",
+                  background: layer.type === "shape" ? layer.fill ?? "#0f172acc" : undefined,
+                  borderRadius: layer.type === "shape" ? layer.borderRadius : undefined,
+                  transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
+                  transformOrigin: "center center",
+                  boxShadow: layer.boxShadow,
+                  opacity: layer.opacity,
                   color: layer.color ?? "#fff",
                   fontFamily: layer.fontFamily ?? "Rubik",
                   fontSize: `${layer.fontSize ?? 24}px`,
                   fontWeight: layer.fontWeight ?? "600",
                   textAlign: layer.textAlign ?? "right",
-                  lineHeight: 1.15,
-                  textShadow: "0 2px 10px rgba(0,0,0,0.45)",
+                  letterSpacing: layer.letterSpacing,
+                  lineHeight: layer.lineHeight ?? 1.05,
+                  textShadow: layer.type === "text" ? layer.textShadow ?? "0 2px 14px rgba(0,0,0,0.35)" : undefined,
                 }}
-                onMouseDown={(event) => beginDrag(event, layer, "move")}
+                onMouseDown={(event) => {
+                  if (!isEditing) return;
+                  beginDrag(event, layer, "move");
+                }}
                 onClick={(event) => {
+                  if (!isEditing) return;
                   event.stopPropagation();
                   setSelectedLayerId(layer.id);
                 }}
               >
-              {isEditing && (
-                <button
-                  type="button"
-                  className="absolute -top-2 -left-2 flex h-6 w-6 items-center justify-center rounded-full border border-white bg-destructive text-white shadow"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    removeLayer(layer.id);
-                  }}
-                  aria-label="מחק שכבה"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              )}
-              <span className="block h-full overflow-hidden whitespace-pre-wrap break-words">{layer.text}</span>
-                {selectedLayerId === layer.id && (
+                {isEditing && selectedLayerId === layer.id && (
+                  <button
+                    type="button"
+                    className="absolute -top-2 -left-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-white bg-destructive text-white shadow"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeLayer(layer.id);
+                    }}
+                    aria-label="מחק שכבה"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+                {layer.type === "image" && layer.src ? (
+                  <CreativeImage src={layer.src} alt={layer.role === "logo" ? "לוגו" : "שכבת תמונה"} className="h-full w-full object-contain" />
+                ) : isIconLayer(layer) ? (
+                  <span className="flex h-full w-full items-center justify-center rounded-full border-2" style={{ borderColor: layer.color || layer.fill || "#dc2626" }}>
+                    <OfferIconMark name={layer.icon} color={layer.color || layer.fill} className="h-[62%] w-[62%]" />
+                  </span>
+                ) : layer.type === "text" && isEditing && selectedLayerId === layer.id ? (
+                  <textarea
+                    className="h-full w-full resize-none bg-transparent px-1 outline-none"
+                    dir="auto"
+                    value={layer.text ?? ""}
+                    onChange={(event) => updateLayer(layer.id, { text: event.target.value })}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                    style={{
+                      color: "inherit",
+                      fontFamily: "inherit",
+                      fontSize: "inherit",
+                      fontWeight: "inherit",
+                      textAlign: "inherit",
+                      letterSpacing: "inherit",
+                      lineHeight: "inherit",
+                      textShadow: "inherit",
+                    }}
+                  />
+                ) : layer.type === "text" ? (
+                  <span className="block w-full overflow-hidden whitespace-pre-wrap break-words px-1">{layer.text}</span>
+                ) : null}
+                {isEditing && selectedLayerId === layer.id && (
                   <span
                     className="absolute -bottom-1 -left-1 h-3 w-3 cursor-se-resize rounded-full border border-white bg-pink-500"
                     onMouseDown={(event) => beginDrag(event, layer, "resize-se")}
@@ -253,8 +350,8 @@ export function CreativeLayerEditor({
               </div>
             ))}
             {!isEditing && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent p-4 text-right text-xs text-white">
-                לחץ לעריכת שכבות
+              <div className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[10px] text-white">
+                לחץ לעריכה
               </div>
             )}
           </div>
@@ -277,7 +374,7 @@ export function CreativeLayerEditor({
               >
                 <Move className="h-3.5 w-3.5" />רקע (תמונה)
               </button>
-              {textLayers.map((layer, index) => (
+              {overlayLayers.map((layer, index) => (
                 <div key={layer.id} className="flex items-stretch gap-1">
                   <button
                     type="button"
@@ -287,8 +384,12 @@ export function CreativeLayerEditor({
                       selectedLayerId === layer.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "hover:bg-muted/50",
                     )}
                   >
-                    <div className="font-semibold">טקסט {index + 1}</div>
-                    <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">{layer.text || "ריק"}</div>
+                    <div className="font-semibold">
+                      {layerLabel(layer, index)}
+                    </div>
+                    <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">
+                      {layer.type === "image" ? "מורכב מהקובץ שהועלה" : layer.text || (layer.type === "shape" ? "רקע לקופי" : "ריק")}
+                    </div>
                   </button>
                   <Button
                     type="button"
@@ -296,7 +397,7 @@ export function CreativeLayerEditor({
                     variant="ghost"
                     className="h-auto shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => removeLayer(layer.id)}
-                    aria-label={`מחק טקסט ${index + 1}`}
+                    aria-label={`מחק שכבה ${index + 1}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -306,28 +407,60 @@ export function CreativeLayerEditor({
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={addTextLayer}>
                   <Type className="h-3.5 w-3.5" />הוסף
                 </Button>
-                <Button size="sm" variant="outline" className="gap-1.5 text-destructive" onClick={removeAllTextLayers} disabled={textLayers.length === 0}>
+                <Button size="sm" variant="outline" className="gap-1.5 text-destructive" onClick={removeAllTextLayers} disabled={overlayLayers.length === 0}>
                   <Trash2 className="h-3.5 w-3.5" />מחק הכל
                 </Button>
               </div>
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                טקסט משובש בתוך התמונה עצמה לא נמחק משכבה — לחץ &quot;מחק הכל&quot; ואז &quot;צור וריאציה&quot; לתמונה נקייה בלי כיתוב.
+                השכבות הן העיצוב — פלטה + כותרת + CTA כמו בפוטושופ. טקסט משובש בתוך התמונה עצמה דורש ג׳נרט מחדש.
               </p>
+
+              {selectedLayer && isIconLayer(selectedLayer) && (
+                <div className="space-y-3 border-t pt-4">
+                  <Label>אייקון — אובייקט נפרד, אפשר להחליף</Label>
+                  <Select
+                    value={safeSelectValue(selectedLayer.icon, OFFER_ICON_NAMES, "badge-check")}
+                    onValueChange={(value) => updateLayer(selectedLayer.id, { icon: value })}
+                  >
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {OFFER_ICON_NAMES.map((name) => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">האייקון לא חלק מהתמונה — מחליפים בלי לג׳נרט מחדש.</p>
+                </div>
+              )}
+
+              {selectedLayer?.type === "image" && (
+                <div className="space-y-3 border-t pt-4">
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    שכבת לוגו — מורכבת מהקובץ המקורי. אפשר לגרור ולשנות גודל, בלי לצייר מחדש.
+                  </p>
+                  <Button variant="outline" size="sm" className="w-full text-destructive" onClick={removeSelectedLayer}>
+                    מחק שכבת לוגו
+                  </Button>
+                </div>
+              )}
 
               {selectedLayer?.type === "text" && (
                 <div className="space-y-3 border-t pt-4">
                   <div>
-                    <Label>תוכן</Label>
+                    <Label>הטקסט עצמו</Label>
                     <Textarea
-                      className="mt-1 min-h-20 text-sm"
+                      className="mt-1 min-h-24 text-sm"
+                      dir="auto"
                       value={selectedLayer.text ?? ""}
                       onChange={(event) => updateLayer(selectedLayer.id, { text: event.target.value })}
+                      placeholder="כתוב כאן את הכותרת, ההצעה או ה-CTA"
                     />
+                    <p className="mt-1 text-[11px] text-muted-foreground">אפשר גם להקליד ישירות על השכבה בקנבס.</p>
                   </div>
                   <div>
                     <Label>פונט</Label>
                     <Select
-                      value={selectedLayer.fontFamily ?? "Rubik"}
+                      value={safeSelectValue(selectedLayer.fontFamily, FONT_OPTIONS, "Rubik")}
                       onValueChange={(value) => updateLayer(selectedLayer.id, { fontFamily: value })}
                     >
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -339,7 +472,7 @@ export function CreativeLayerEditor({
                     <Slider
                       className="mt-3"
                       min={12}
-                      max={72}
+                      max={120}
                       step={1}
                       value={[selectedLayer.fontSize ?? 24]}
                       onValueChange={([value]) => updateLayer(selectedLayer.id, { fontSize: value })}
@@ -348,14 +481,16 @@ export function CreativeLayerEditor({
                   <div>
                     <Label>משקל</Label>
                     <Select
-                      value={selectedLayer.fontWeight ?? "600"}
+                      value={safeFontWeight(selectedLayer.fontWeight)}
                       onValueChange={(value) => updateLayer(selectedLayer.id, { fontWeight: value })}
                     >
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="400">רגיל</SelectItem>
-                        <SelectItem value="600">מודגש</SelectItem>
-                        <SelectItem value="700">כהה</SelectItem>
+                        {EDITOR_FONT_WEIGHTS.map((weight) => (
+                          <SelectItem key={weight} value={weight}>
+                            {weight === "400" ? "רגיל" : weight === "600" ? "מודגש" : weight === "700" ? "כהה" : weight === "800" ? "תצוגה" : "שחור"}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -364,7 +499,7 @@ export function CreativeLayerEditor({
                     <Input
                       className="mt-1 h-9"
                       type="color"
-                      value={selectedLayer.color ?? "#ffffff"}
+                      value={safeHexColor(selectedLayer.color, "#ffffff")}
                       onChange={(event) => updateLayer(selectedLayer.id, { color: event.target.value })}
                     />
                   </div>
@@ -382,6 +517,58 @@ export function CreativeLayerEditor({
                       </SelectContent>
                     </Select>
                   </div>
+                  {selectedShadow && (
+                    <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                      <Label>הצללה</Label>
+                      <Select
+                        value={selectedShadow.shadowStyle}
+                        onValueChange={(value: LayerShadowStyle) => applyShadow(selectedLayer.id, { shadowStyle: value, shadowDepth: value === "none" ? 0 : Math.max(selectedShadow.shadowDepth, 4) })}
+                      >
+                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">בלי הצללה</SelectItem>
+                          <SelectItem value="soft">רכה</SelectItem>
+                          <SelectItem value="extrude">תלת־ממד / עומק</SelectItem>
+                          <SelectItem value="halo">הילה / קו מתאר</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {selectedShadow.shadowStyle !== "none" && (
+                        <>
+                          <div>
+                            <Label>עומק ({selectedShadow.shadowDepth})</Label>
+                            <Slider
+                              className="mt-3"
+                              min={1}
+                              max={24}
+                              step={1}
+                              value={[selectedShadow.shadowDepth]}
+                              onValueChange={([value]) => applyShadow(selectedLayer.id, { shadowDepth: value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>טשטוש ({selectedShadow.shadowBlur}px)</Label>
+                            <Slider
+                              className="mt-3"
+                              min={0}
+                              max={40}
+                              step={1}
+                              value={[selectedShadow.shadowBlur]}
+                              onValueChange={([value]) => applyShadow(selectedLayer.id, { shadowBlur: value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>צבע הצללה</Label>
+                            <Input
+                              className="mt-1 h-9"
+                              type="color"
+                              value={safeHexColor(selectedShadow.shadowColor, "#0f172a")}
+                              onChange={(event) => applyShadow(selectedLayer.id, { shadowColor: event.target.value })}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <Button variant="outline" size="sm" className="w-full text-destructive" onClick={removeSelectedLayer}>
                     מחק שכבת טקסט
                   </Button>
