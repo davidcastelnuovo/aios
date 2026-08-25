@@ -15,3 +15,8 @@ test('shouldShowQueryError hides errors while a fetch is in flight', () => {
   assert.equal(shouldShowQueryError(true, false, false, false), true);
   assert.equal(shouldShowQueryError(false, false, false, false), false);
 });
+
+test('shouldShowQueryError hides cached errors until this observer has fetched', () => {
+  assert.equal(shouldShowQueryError(true, false, false, false, false), false);
+  assert.equal(shouldShowQueryError(true, false, false, false, true), true);
+});

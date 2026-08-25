@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Suspense } from "react";
+import { RoutedModulePermissionGate } from "@/components/ModulePermissionGate";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useEffect } from "react";
@@ -258,9 +259,11 @@ export function AppLayout() {
               </div>
             </header>
             <main className="flex-1 min-h-0 overflow-y-auto">
-              <Suspense fallback={<RouteContentLoader />}>
-                <Outlet />
-              </Suspense>
+              <RoutedModulePermissionGate>
+                <Suspense fallback={<RouteContentLoader />}>
+                  <Outlet />
+                </Suspense>
+              </RoutedModulePermissionGate>
             </main>
           </div>
 
