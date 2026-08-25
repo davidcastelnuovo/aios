@@ -15,7 +15,7 @@ import {
   styleRefsFromClientFiles,
   throwIfGenerationAborted,
 } from "@/components/marketing/departments/creative/brandKit";
-import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
+import { ALL_CLIENTS_FILTER, applyClientFilter, resolveCreativeListFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { CreativeCostDialog, buildNextGenerateEstimate } from "@/components/marketing/departments/creative/CreativeCostDialog";
 import { CreativeBriefEditor } from "@/components/marketing/departments/creative/CreativeBriefEditor";
@@ -57,7 +57,7 @@ import {
   DEFAULT_VISUAL_STYLE_ID,
   type CreativeVisualStyleId,
 } from "@/components/marketing/departments/creative/visualStyles";
-import { isCreativeDepartmentItem, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
+import { filterCreativeDepartmentItems, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
 import { resolveVisualPrompt } from "@/components/marketing/copyConcepts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -158,20 +158,46 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [pendingStyleId, setPendingStyleId] = useState<CreativeVisualStyleId | null>(null);
   const generateAbortRef = useRef(false);
 
+  const listFilter = resolveCreativeListFilter(clientFilter);
+  const clientScoped = listFilter !== ALL_CLIENTS_FILTER;
+
   const { data: items = [], isLoading: loadingItems } = useQuery({
-    queryKey: ["creative-department-items", clientFilter, tenantId],
+    queryKey: ["creative-department-items", listFilter, tenantId],
     queryFn: async () => {
       let query = supabase
         .from("marketing_work_items")
         .select("id,title,status,client_id,payload,current_stage_id,target_channel,created_at,updated_at")
         .eq("tenant_id", tenantId)
         .order("updated_at", { ascending: false });
-      query = applyClientFilter(query, clientFilter);
-      const { data, error } = await query;
+      query = applyClientFilter(query, listFilter);
+      const [{ data, error }, { data: creativeStages, error: stageError }] = await Promise.all([
+        query,
+        supabase
+          .from("marketing_pipeline_stages")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("stage_type", "creative"),
+      ]);
       if (error) throw error;
-      return ((data ?? []) as CreativeItem[]).filter((item) =>
-        isCreativeDepartmentItem(item, context?.creativeStage?.id ?? null),
+      if (stageError) throw stageError;
+      return filterCreativeDepartmentItems(
+        (data ?? []) as CreativeItem[],
+        (creativeStages ?? []).map((stage) => stage.id),
       );
+    },
+  });
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ["creative-department-clients", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id,name")
+        .eq("tenant_id", tenantId)
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
     },
   });
 
@@ -360,7 +386,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const refresh = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["creative-department-items", clientFilter, tenantId] }),
+      queryClient.invalidateQueries({ queryKey: ["creative-department-items", listFilter, tenantId] }),
       queryClient.invalidateQueries({ queryKey: ["creative-department-assets", selectedId, tenantId] }),
       queryClient.invalidateQueries({ queryKey: ["creative-project-runs", tenantId] }),
     ]);
@@ -1178,46 +1204,67 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     setWorkspacePanel((current) => (current === panel ? null : panel));
   };
 
+  const projectsPinned = !selected || workspacePanel === "projects";
+  const projectDetailsClass = projectsPinned
+    ? "block"
+    : "hidden group-hover/sidebar:block group-focus-within/sidebar:block";
+  const projectIconClass = projectsPinned
+    ? "hidden"
+    : "flex h-5 items-center justify-center group-hover/sidebar:hidden group-focus-within/sidebar:hidden";
+
   const projectsList = (
-    <ScrollArea className="flex-1">
-      <div className="space-y-2 p-2">
-        {loadingItems ? (
-          <Loader2 className="mx-auto mt-8 h-5 w-5 animate-spin" />
-        ) : items.length === 0 ? (
-          <div className="px-4 py-10 text-center text-xs text-muted-foreground">
-            <Palette className="mx-auto mb-2 h-8 w-8 opacity-30" />
-            אין פרויקטים עדיין
-          </div>
-        ) : items.map((item) => (
+    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3">
+      <div className={cn("px-2 pb-2 text-[11px] font-medium text-muted-foreground", projectDetailsClass)}>
+        פרויקטים
+      </div>
+      {loadingItems ? (
+        <Loader2 className="mx-auto my-8 h-5 w-5 animate-spin text-muted-foreground" />
+      ) : items.length === 0 ? (
+        <div className={cn("px-3 py-8 text-center text-xs text-muted-foreground", projectDetailsClass)}>
+          <Palette className="mx-auto mb-2 h-8 w-8 opacity-30" />
+          {clientScoped ? "אין פרויקטים ללקוח הזה" : "אין פרויקטים עדיין"}
+          {clientScoped && onClientChange && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => onClientChange(ALL_CLIENTS_FILTER)}
+            >
+              הצג את כל הלקוחות
+            </Button>
+          )}
+        </div>
+      ) : items.map((item) => {
+        const owner = clients.find((client) => client.id === item.client_id);
+        const type = getProjectType(item.payload);
+        return (
           <button
             key={item.id}
+            type="button"
             onClick={() => { setSelectedId(item.id); setSelectedVariationId(null); setWorkspacePanel(null); }}
             className={cn(
-              "w-full rounded-xl border p-3 text-right transition-colors",
-              selectedId === item.id ? "border-pink-400 bg-pink-50 dark:bg-pink-950/20" : "bg-background hover:bg-muted/50",
+              "mb-0.5 flex w-full min-w-0 items-start gap-2 rounded-lg px-1 py-2 text-right transition-colors",
+              projectsPinned ? "px-2" : "group-hover/sidebar:px-2 group-focus-within/sidebar:px-2",
+              selectedId === item.id ? "bg-pink-50 dark:bg-pink-950/20" : "hover:bg-muted/60",
             )}
+            title={item.title || "ללא כותרת"}
           >
-            <div className="flex items-start gap-2">
-              <StatusDot status={item.status} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-semibold">{item.title || "ללא כותרת"}</div>
-                <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-                  {getBriefText(item) || getLinkedCopyText(item) || "מחכה לבריף או לקופi"}
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                  <Badge variant="outline" className="h-4 px-1 text-[9px]">{projectTypeLabel(getProjectType(item.payload))}</Badge>
-                  <span>{getProjectType(item.payload) === "video" ? `${getStoryboard(item.payload).length} סצנות` : `${getVariations(item.payload).length} וריאציות`}</span>
-                  {item.payload?.handoff_from === "copy" && <Badge variant="secondary" className="h-4 px-1 text-[9px]">מהקופi</Badge>}
-                  {!!costRows.find((row) => row.item.id === item.id)?.spent.costUsd && (
-                    <span>{formatUsd(costRows.find((row) => row.item.id === item.id)!.spent.costUsd)}</span>
-                  )}
-                </div>
+            <div className={projectIconClass}>
+              {type === "video" ? <Clapperboard className="h-3.5 w-3.5 text-muted-foreground" /> : <Palette className="h-3.5 w-3.5 text-muted-foreground" />}
+            </div>
+            <div className={cn("min-w-0 flex-1", projectDetailsClass)}>
+              <div className="flex items-center gap-1.5">
+                <StatusDot status={item.status} />
+                <div className="truncate text-[13px] font-medium">{item.title || "ללא כותרת"}</div>
+              </div>
+              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {owner?.name || "ללא לקוח"} · {projectTypeLabel(type)} · {type === "video" ? `${getStoryboard(item.payload).length} סצנות` : `${getVariations(item.payload).length} וריאציות`}
               </div>
             </div>
           </button>
-        ))}
-      </div>
-    </ScrollArea>
+        );
+      })}
+    </div>
   );
 
   const versionsPanel = (
@@ -1441,8 +1488,32 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {workspaceHeader}
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden" dir="rtl">
+      <aside
+        className={cn(
+          "flex shrink-0 flex-col overflow-hidden border-e bg-background transition-[width] duration-200 ease-out",
+          projectsPinned ? "w-[280px]" : "group/sidebar w-14 hover:w-[280px] focus-within:w-[280px]",
+        )}
+      >
+        <div className={cn("flex items-center gap-2 px-2 py-3", projectsPinned ? "px-3" : "group-hover/sidebar:px-3 group-focus-within/sidebar:px-3")}>
+          <Button
+            className={cn(
+              "h-9 w-full min-w-0 justify-center gap-2 rounded-lg bg-pink-600 text-white hover:bg-pink-700",
+              projectsPinned ? "justify-start" : "group-hover/sidebar:justify-start group-focus-within/sidebar:justify-start",
+            )}
+            onClick={() => setCreateOpen(true)}
+            title="פרויקט חדש"
+          >
+            <Plus className="h-4 w-4 shrink-0" />
+            <span className={cn(projectsPinned ? "inline" : "hidden group-hover/sidebar:inline group-focus-within/sidebar:inline", "truncate")}>
+              פרויקט חדש
+            </span>
+          </Button>
+        </div>
+        {projectsList}
+      </aside>
       <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/10">
-        {workspaceHeader}
         {selected ? (
           isVideoWorkspace ? (
             <CreativeStoryboardEditor
@@ -1534,9 +1605,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center text-muted-foreground">
             <Palette className="h-12 w-12 opacity-30" />
-            <p className="text-sm">בחר פרויקט או צור אחד חדש</p>
+            <p className="text-sm">{items.length > 0 ? "בחר פרויקט מהרשימה או צור אחד חדש" : clientScoped ? "אין פרויקטים ללקוח שנבחר" : "בחר פרויקט או צור אחד חדש"}</p>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setWorkspacePanel("projects")}>פתח פרויקטים</Button>
+              {clientScoped && onClientChange && (
+                <Button variant="outline" onClick={() => onClientChange(ALL_CLIENTS_FILTER)}>כל הלקוחות</Button>
+              )}
               <Button variant="outline" className="gap-1.5" onClick={() => setCostOpen(true)}>
                 <Coins className="h-4 w-4" />עלות טוקנים
               </Button>
@@ -1545,26 +1618,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           </div>
         )}
       </main>
-
-      <Sheet open={workspacePanel === "projects"} onOpenChange={(open) => setWorkspacePanel(open ? "projects" : null)}>
-        <SheetContent side="right" className="flex w-[320px] max-w-[90vw] flex-col gap-0 p-0 sm:max-w-[320px]" dir="rtl">
-          <SheetHeader className="flex-row items-center justify-between border-b px-6 py-4 text-right">
-            <div>
-              <SheetTitle className="text-sm">פרויקטים לקריאייטיב</SheetTitle>
-              <p className="text-[11px] text-muted-foreground">מהקופi, מבריף ידני או AI</p>
-            </div>
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCostOpen(true)} title="עלות טוקנים">
-                <Coins className="h-4 w-4" />
-              </Button>
-              <Button size="icon" className="h-8 w-8 shrink-0 bg-pink-600 hover:bg-pink-700" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-          </SheetHeader>
-          {projectsList}
-        </SheetContent>
-      </Sheet>
+      </div>
 
       <Sheet open={workspacePanel === "project"} onOpenChange={(open) => setWorkspacePanel(open ? "project" : null)}>
         <SheetContent side="right" className="flex w-[min(560px,92vw)] max-w-none flex-col gap-0 p-0 sm:max-w-[560px]" dir="rtl">
@@ -1600,12 +1654,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         tenantId={tenantId}
-        clientFilter={clientFilter}
-        defaultClientId={clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null}
+        clientFilter={listFilter}
+        defaultClientId={listFilter !== ALL_CLIENTS_FILTER ? listFilter : null}
         onClientChange={onClientChange}
         onCreated={async (id, createdClientId) => {
           if (onClientChange && createdClientId !== undefined) {
-            const filterClient = clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null;
+            const filterClient = listFilter !== ALL_CLIENTS_FILTER ? listFilter : null;
             if (createdClientId !== filterClient) onClientChange(createdClientId);
           }
           setSelectedId(id);

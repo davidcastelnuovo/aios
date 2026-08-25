@@ -180,7 +180,7 @@ export default function MarketingDepartment() {
                 tenantId={tenantId}
                 value={clientFilter}
                 onChange={selectClient}
-                allowGeneral
+                allowGeneral={department !== "creative"}
                 allowAllClients
                 generalLabel="תוכן כללי"
                 allClientsLabel="כל הלקוחות"
