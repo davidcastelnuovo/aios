@@ -73,6 +73,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { LeadTagSelector, LeadTagBadges } from "@/components/leads/LeadTagSelector";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
+import { applyLeadClientFilters, endOfDayIso } from "@/lib/leadFilters";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 import { LeadsChatView } from "@/components/leads/LeadsChatView";
@@ -879,7 +880,7 @@ export default function Leads() {
 
   // Kanban view: use RPC that fetches leads per stage
   const { data: kanbanStageData, isLoading: isKanbanLoading, refetch: refetchKanban, isFetching: isKanbanFetching } = useQuery({
-    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(','), isViewingAs, viewAsSalesPersonId],
+    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(','), isViewingAs, viewAsSalesPersonId, viewMode],
     queryFn: async () => {
       if (!tenantId) return null;
       
@@ -887,7 +888,9 @@ export default function Leads() {
         ? [selectedAgency]
         : agencies?.map(a => a.id) || null;
       
-      const stageIds = PIPELINE_STAGES.map(s => s.id);
+      const stageIds = filterStage !== "all"
+        ? [filterStage]
+        : PIPELINE_STAGES.map(s => s.id);
       
       // Build sales person filter - support multi-select
       // When viewing as a sales person, override the filter
@@ -903,13 +906,13 @@ export default function Leads() {
         p_tenant_id: tenantId,
         p_agency_ids: agencyIds,
         p_stages: stageIds,
-        p_limit_per_stage: KANBAN_LEADS_PER_STAGE_LIMIT,
+        p_limit_per_stage: viewMode === "chat" ? 200 : KANBAN_LEADS_PER_STAGE_LIMIT,
         p_search_query: searchQuery.trim() || null,
         p_sales_person_ids: salesPersonFilter,
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
         p_follow_up_today: filterFollowUpToday,
         p_start_date: startDate?.toISOString() || null,
-        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
+        p_end_date: endDate ? endOfDayIso(endDate) : null,
         p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null
       });
       
@@ -1721,37 +1724,21 @@ export default function Leads() {
     clearActiveIdWithDelay();
   };
 
-  // Filters are now applied server-side, but we still need to handle "none" tag filter client-side
-  // IMPORTANT: always start from secureFilteredLeads to avoid cross-tenant/agency leakage
+  // Chat/kanban RPC misses stage + "none" filters; apply them here so every view matches.
+  // Always start from secureFilteredLeads to avoid cross-tenant/agency leakage.
   const filteredLeads = useMemo(() => {
     if (!secureFilteredLeads) return [];
-
-    let result = secureFilteredLeads;
-
-    // Client-side filter for "none" tag filter (leads without any tags)
-    if (filterTagIds.includes("none")) {
-      result = result.filter((lead: any) => {
-        const leadTags = leadsTagsMap[lead.id] || [];
-        // If only "none" selected, show leads without tags
-        if (filterTagIds.length === 1) {
-          return leadTags.length === 0;
-        }
-        // If "none" and other tags selected, show leads without tags OR with selected tags
-        const otherTagIds = filterTagIds.filter(t => t !== "none");
-        return leadTags.length === 0 || leadTags.some((t: string) => otherTagIds.includes(t));
-      });
-    }
-
-    // Client-side filter for complex response status (when "none" + other statuses selected)
-    if (filterResponseStatus.includes("none") && filterResponseStatus.length > 1) {
-      const otherStatuses = filterResponseStatus.filter(s => s !== "none");
-      result = result.filter((lead: any) => {
-        return lead.response_status === null || otherStatuses.includes(lead.response_status);
-      });
-    }
-
-    return result;
-  }, [secureFilteredLeads, filterTagIds, filterResponseStatus, leadsTagsMap]);
+    return applyLeadClientFilters(
+      secureFilteredLeads,
+      {
+        stageId: filterStage,
+        salesPersonIds: filterSalesPersonIds,
+        responseStatus: filterResponseStatus,
+        tagIds: filterTagIds,
+      },
+      leadsTagsMap,
+    );
+  }, [secureFilteredLeads, filterStage, filterSalesPersonIds, filterResponseStatus, filterTagIds, leadsTagsMap]);
 
   // Helper to check if any filters are active
   const hasActiveFilters = useMemo(() => {
@@ -1951,7 +1938,7 @@ export default function Leads() {
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
         p_follow_up_today: filterFollowUpToday,
         p_start_date: startDate?.toISOString() || null,
-        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
+        p_end_date: endDate ? endOfDayIso(endDate) : null,
         p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null
       });
       
