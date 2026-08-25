@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
@@ -46,6 +46,10 @@ import {
   PulseStatusOverrideDialog,
   type PulseStatusOverrideTarget,
 } from "@/components/clients/PulseStatusOverrideDialog";
+import {
+  PulseClientCallDialog,
+  type PulseClientCallTarget,
+} from "@/components/clients/PulseClientCallDialog";
 import {
   aggregatePulseMetricsFromRecords,
   applyPeriodMetricsToSnapshot,
@@ -109,6 +113,7 @@ function StatusDot({ status }: { status: OverallStatus }) {
 
 export default function DMMDashboard() {
   const { tenantId } = useCurrentTenant();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath, tenantSlug } = useTenantPath();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
@@ -122,6 +127,7 @@ export default function DMMDashboard() {
   const [filterCampaigner, setFilterCampaigner] = useState("all");
   const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
   const [overrideTarget, setOverrideTarget] = useState<PulseStatusOverrideTarget | null>(null);
+  const [callLogTarget, setCallLogTarget] = useState<PulseClientCallTarget | null>(null);
   const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
 
   // Sync agency from shareable URL (?agency=...)
@@ -728,7 +734,27 @@ export default function DMMDashboard() {
                         {goalRow ? formatGoalChange(goalRow) : "—"}
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
-                        {pulse ? formatLastClientCall(pulse) : "—"}
+                        {pulse ? (
+                          <button
+                            type="button"
+                            className={`text-right hover:text-primary ${
+                              pulse.last_client_call_at
+                                ? "underline decoration-dotted underline-offset-2"
+                                : "text-amber-700 underline decoration-dotted underline-offset-2 font-medium"
+                            }`}
+                            onClick={() =>
+                              setCallLogTarget({
+                                clientId: client.clientId,
+                                clientName: client.name,
+                                pulse,
+                              })
+                            }
+                          >
+                            {formatLastClientCall(pulse)}
+                          </button>
+                        ) : (
+                          "—"
+                        )}
                         {pulse?.last_client_call_by ? (
                           <div className="text-muted-foreground">תיעד/ה: {pulse.last_client_call_by}</div>
                         ) : null}
@@ -833,6 +859,31 @@ export default function DMMDashboard() {
         onSaved={() => {
           refetchOverrides();
           refetchClients();
+        }}
+      />
+
+      <PulseClientCallDialog
+        open={!!callLogTarget}
+        onOpenChange={(open) => {
+          if (!open) setCallLogTarget(null);
+        }}
+        target={callLogTarget}
+        onSaved={({ clientId, lastClientCallAt, lastClientCallBy }) => {
+          const pulseQueryKey = ["pulse-dash-snapshots", tenantId, clientIds.join(","), selectedAgency] as const;
+          queryClient.setQueryData<PulseSnapshotRow[]>(pulseQueryKey, (old) => {
+            if (!old) return old;
+            return old.map((row) =>
+              row.client_id === clientId
+                ? {
+                    ...row,
+                    last_client_call_at: lastClientCallAt,
+                    last_client_call_by: lastClientCallBy,
+                  }
+                : row,
+            );
+          });
+          queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
+          queryClient.invalidateQueries({ queryKey: ["pulse-client-call-updates", clientId] });
         }}
       />
     </div>
