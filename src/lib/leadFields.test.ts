@@ -4,8 +4,12 @@ import {
   autoDetectLeadImportField,
   classifyLeadImportStatus,
   inferLeadSource,
+  leadArrivalSourceChanged,
+  leadCreatedAtWasBumped,
+  leadFirstSourceDisplay,
   leadOriginTagNames,
   leadSourceDisplay,
+  leadSourceFieldLabel,
   looksLikePipelineStatusLabel,
   looksLikeResponseStatusLabel,
   resolveResponseStatusKey,
@@ -36,6 +40,33 @@ test("leadSourceDisplay shows the channel, not the campaign name", () => {
   assert.equal(leadSourceDisplay({ campaign_name: "Promo Q3", source: "website" }), "אתר");
   assert.equal(leadSourceDisplay({ source: "other" }), "אחר");
   assert.equal(leadSourceDisplay({ source: "facebook" }), "FB");
+});
+
+test("repeat inbound keeps the first created_at and first source", () => {
+  assert.equal(
+    leadCreatedAtWasBumped({
+      created_at: "2026-08-25T15:00:00.000Z",
+      first_created_at: "2026-04-15T00:00:00.000Z",
+    }),
+    true,
+  );
+  assert.equal(
+    leadCreatedAtWasBumped({
+      created_at: "2026-04-15T00:00:00.000Z",
+      first_created_at: "2026-04-15T00:00:00.000Z",
+    }),
+    false,
+  );
+  assert.equal(
+    leadArrivalSourceChanged({ source: "whatsapp", first_source: "paid_ads" }),
+    true,
+  );
+  assert.equal(leadArrivalSourceChanged({ source: "paid_ads", first_source: "paid_ads" }), false);
+  assert.equal(
+    leadSourceFieldLabel({ source: "whatsapp", first_source: "paid_ads" }),
+    "מקור הגעה מעודכן",
+  );
+  assert.equal(leadFirstSourceDisplay({ first_source: "paid_ads" }), "FB");
 });
 
 test("leadOriginTagNames creates campaign and source tags without duplicating אחר", () => {

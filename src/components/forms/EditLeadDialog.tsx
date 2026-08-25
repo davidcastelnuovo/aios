@@ -40,6 +40,10 @@ import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
 import {
   findLeadStatus,
   inferLeadSource,
+  leadArrivalSourceChanged,
+  leadCreatedAtWasBumped,
+  leadFirstSourceDisplay,
+  leadSourceFieldLabel,
   LEAD_SOURCE_SELECT_OPTIONS,
   resolveResponseStatusKey,
   responseStatusSelectValue,
@@ -838,6 +842,11 @@ const updateMutation = useMutation({
                     </FormItem>
                   )}
                 />
+                {leadCreatedAtWasBumped(lead) && (
+                  <div className="text-sm text-muted-foreground">
+                    תאריך יצירה ראשוני: {format(new Date(lead.first_created_at), "dd/MM/yyyy HH:mm")}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
@@ -846,7 +855,7 @@ const updateMutation = useMutation({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-sm font-medium">
-                          {getFieldLabel("source", "מקור הליד")}
+                          {getFieldLabel("source", leadSourceFieldLabel(lead))}
                         </FormLabel>
                         <Select
                           onValueChange={field.onChange}
@@ -865,6 +874,11 @@ const updateMutation = useMutation({
                             ))}
                           </SelectContent>
                         </Select>
+                        {leadArrivalSourceChanged(lead) && (
+                          <p className="text-xs text-muted-foreground">
+                            מקור הגעה ראשוני: {leadFirstSourceDisplay(lead)}
+                          </p>
+                        )}
                         <FormMessage />
                       </FormItem>
                     )}

@@ -1,4 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import {
+  applyRepeatInboundReopen,
+  updateLeadWithRepeatReopen,
+} from '../_shared/lead-repeat-reopen.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -258,11 +262,10 @@ Deno.serve(async (req) => {
       if (!existingLead.contact_name && contactName) {
         updates.contact_name = contactName
       }
+
+      Object.assign(updates, applyRepeatInboundReopen(existingLead, { source: 'cold_call' }))
       
-      await supabase
-        .from('leads')
-        .update(updates)
-        .eq('id', existingLead.id)
+      await updateLeadWithRepeatReopen(supabase, existingLead.id, updates)
       
       
       // Trigger automations for existing lead

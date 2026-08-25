@@ -4,6 +4,10 @@ import {
   resolveLeadClient,
 } from '../_shared/lead-routing.ts'
 import { unarchiveExistingLead } from '../_shared/unarchive-lead.ts'
+import {
+  applyRepeatInboundReopen,
+  updateLeadWithRepeatReopen,
+} from '../_shared/lead-repeat-reopen.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -479,14 +483,18 @@ Deno.serve(async (req) => {
       if (unarchiveExistingLead(existingLead, updates)) {
         hasUpdates = true;
       }
+
+      Object.assign(updates, applyRepeatInboundReopen(existingLead, { source: leadSource }));
+      hasUpdates = true;
       
       if (hasUpdates) {
         updates.updated_at = new Date().toISOString();
         
-        const { error: updateError } = await supabase
-          .from('leads')
-          .update(updates)
-          .eq('id', existingLead.id);
+        const { error: updateError } = await updateLeadWithRepeatReopen(
+          supabase,
+          existingLead.id,
+          updates,
+        );
         
         if (updateError) {
           console.error('❌ Error updating existing lead:', updateError);

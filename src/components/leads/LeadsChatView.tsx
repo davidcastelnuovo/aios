@@ -30,10 +30,10 @@ import { archiveLeads } from "@/lib/leadArchive";
 import { leadMatchesPhoneSearch } from "@/lib/leadPhone";
 import {
   findLeadStatus,
-  leadSourceDisplay,
   responseStatusSelectValue,
   unmatchedResponseStatusValue,
 } from "@/lib/leadFields";
+import { LeadCreatedAtLines, LeadSourceLines } from "@/components/leads/LeadOriginLines";
 
 interface LeadsChatViewProps {
   leads: any[];
@@ -374,11 +374,7 @@ export function LeadsChatView({
                           {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
                         </span>
                       </div>
-                      {(leadSourceDisplay(lead) || lead.campaign_name) && (
-                        <p dir="rtl" className="text-[11px] text-muted-foreground truncate text-right">
-                          {[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}
-                        </p>
-                      )}
+                      <LeadSourceLines lead={lead} compact />
                       {isCompanyNameVisible && lead.company_name && (
                         <p dir="rtl" className="text-xs text-muted-foreground truncate text-right">{lead.company_name}</p>
                       )}
@@ -734,18 +730,8 @@ export function LeadsChatView({
                         <Clock className="h-4 w-4 text-primary" />
                       </h3>
                       <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">
-                            {selectedLead.created_at
-                              ? format(new Date(selectedLead.created_at), "dd/MM/yyyy HH:mm", { locale: he })
-                              : "—"}
-                          </span>
-                          <span className="text-muted-foreground">:נוצר</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{leadSourceDisplay(selectedLead) || "—"}</span>
-                          <span className="text-muted-foreground">:מקור הליד</span>
-                        </div>
+                        <LeadCreatedAtLines lead={selectedLead} />
+                        <LeadSourceLines lead={selectedLead} />
                         <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">{selectedLead.campaign_name || "—"}</span>
                           <span className="text-muted-foreground">:שם הקמפיין</span>

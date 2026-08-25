@@ -5066,6 +5066,8 @@ export type Database = {
           estimated_deal_value: number | null
           facebook_form_id: string | null
           facebook_leadgen_id: string | null
+          first_created_at: string | null
+          first_source: Database["public"]["Enums"]["lead_source"] | null
           folder_link: string | null
           folder_links: Json
           follow_up_date: string | null
@@ -5120,6 +5122,8 @@ export type Database = {
           estimated_deal_value?: number | null
           facebook_form_id?: string | null
           facebook_leadgen_id?: string | null
+          first_created_at?: string | null
+          first_source?: Database["public"]["Enums"]["lead_source"] | null
           folder_link?: string | null
           folder_links?: Json
           follow_up_date?: string | null
@@ -5174,6 +5178,8 @@ export type Database = {
           estimated_deal_value?: number | null
           facebook_form_id?: string | null
           facebook_leadgen_id?: string | null
+          first_created_at?: string | null
+          first_source?: Database["public"]["Enums"]["lead_source"] | null
           folder_link?: string | null
           folder_links?: Json
           follow_up_date?: string | null

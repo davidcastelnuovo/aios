@@ -4,7 +4,9 @@
 
 ALTER TABLE public.leads
   ADD COLUMN IF NOT EXISTS archived_at timestamptz,
-  ADD COLUMN IF NOT EXISTS archived_by uuid;
+  ADD COLUMN IF NOT EXISTS archived_by uuid,
+  ADD COLUMN IF NOT EXISTS first_created_at timestamptz,
+  ADD COLUMN IF NOT EXISTS first_source public.lead_source;
 
 CREATE INDEX IF NOT EXISTS idx_leads_tenant_archived
   ON public.leads (tenant_id, archived_at)
@@ -12,6 +14,38 @@ CREATE INDEX IF NOT EXISTS idx_leads_tenant_archived
 
 COMMENT ON COLUMN public.leads.archived_at IS 'When set, the lead is hidden from the pipeline and lives in the archive';
 COMMENT ON COLUMN public.leads.archived_by IS 'User who archived the lead';
+COMMENT ON COLUMN public.leads.first_created_at IS 'Original created_at; kept when a repeat inbound bumps created_at to the top of the list';
+COMMENT ON COLUMN public.leads.first_source IS 'Original arrival source; kept when a later inbound arrives from a different channel';
+
+UPDATE public.leads
+SET first_created_at = created_at
+WHERE first_created_at IS NULL;
+
+UPDATE public.leads
+SET first_source = source
+WHERE first_source IS NULL;
+
+CREATE OR REPLACE FUNCTION public.leads_set_first_origin()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.first_created_at IS NULL THEN
+    NEW.first_created_at := COALESCE(NEW.created_at, now());
+  END IF;
+  IF NEW.first_source IS NULL THEN
+    NEW.first_source := NEW.source;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS leads_set_first_origin ON public.leads;
+CREATE TRIGGER leads_set_first_origin
+BEFORE INSERT ON public.leads
+FOR EACH ROW
+EXECUTE FUNCTION public.leads_set_first_origin();
 
 CREATE OR REPLACE FUNCTION public.can_manage_lead_archive(_tenant_id uuid)
 RETURNS boolean
@@ -256,6 +290,7 @@ BEGIN
           'email', l.email,
           'phone', l.phone,
           'source', l.source,
+          'first_source', l.first_source,
           'campaign_name', l.campaign_name,
           'status', l.status,
           'response_status', l.response_status,
@@ -263,6 +298,7 @@ BEGIN
           'agency_id', l.agency_id,
           'sales_person_id', l.sales_person_id,
           'created_at', l.created_at,
+          'first_created_at', l.first_created_at,
           'updated_at', l.updated_at,
           'follow_up_date', l.follow_up_date,
           'estimated_deal_value', l.estimated_deal_value,

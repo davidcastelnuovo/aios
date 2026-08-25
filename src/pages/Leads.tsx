@@ -80,10 +80,12 @@ import { archiveLeads, excludeArchivedLeads } from "@/lib/leadArchive";
 import { leadSearchOrFilter } from "@/lib/leadPhone";
 import {
   findLeadStatus,
+  leadFirstSourceDisplay,
   leadSourceDisplay,
   responseStatusSelectValue,
   unmatchedResponseStatusValue,
 } from "@/lib/leadFields";
+import { LeadCreatedAtLines, LeadSourceLines } from "@/components/leads/LeadOriginLines";
 
 
 // Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
@@ -298,21 +300,8 @@ function LeadCardContent({
         )}
 
         {/* Created At */}
-        {lead.created_at && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3 shrink-0" />
-            <span>
-              {new Date(lead.created_at).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-              {' '}
-              {new Date(lead.created_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </div>
-        )}
-        {(leadSourceDisplay(lead) || lead.campaign_name) && (
-          <div className="text-xs text-muted-foreground truncate" title={[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}>
-            {[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}
-          </div>
-        )}
+        {lead.created_at && <LeadCreatedAtLines lead={lead} compact />}
+        <LeadSourceLines lead={lead} compact />
 
         {/* Stage/Status Selector */}
         <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
@@ -1182,6 +1171,8 @@ export default function Leads() {
           sales_person_id,
           follow_up_date,
           created_at,
+          first_created_at,
+          first_source,
           updated_at,
           agencies (name),
           sales_people (full_name)
@@ -1990,6 +1981,7 @@ export default function Leads() {
       "שלב",
       "סטטוס תגובה",
       "מקור",
+      "מקור ראשוני",
       "שם קמפיין",
       "תעשייה",
       "ערך עסקה משוער",
@@ -1997,6 +1989,7 @@ export default function Leads() {
       "סוכנות",
       "הערות",
       "תאריך יצירה",
+      "תאריך יצירה ראשוני",
     ];
 
     const rows = filteredLeads.map((lead: any) => {
@@ -2012,6 +2005,7 @@ export default function Leads() {
         stageName || "",
         statusName,
         sourceName,
+        leadFirstSourceDisplay(lead) || "",
         lead.campaign_name || "",
         lead.industry || "",
         lead.estimated_deal_value || "",
@@ -2019,6 +2013,7 @@ export default function Leads() {
         lead.agencies?.name || "",
         lead.notes || "",
         lead.created_at ? new Date(lead.created_at).toLocaleDateString('he-IL') : "",
+        lead.first_created_at ? new Date(lead.first_created_at).toLocaleDateString('he-IL') : "",
       ];
     });
 
@@ -3638,9 +3633,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
             {
               id: "source",
               label: "מקור הליד",
-              width: 110,
+              width: 140,
               render: (lead: any) => (
-                <span className="truncate">{leadSourceDisplay(lead) || "—"}</span>
+                <LeadSourceLines lead={lead} compact showCampaign={false} />
               )
             },
             { 
