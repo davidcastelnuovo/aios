@@ -18,5 +18,9 @@ export const buildNoGlyphLock = (options?: { regenerate?: boolean }): string => 
 
 export const wrapCreativeImagePrompt = (prompt: string, options?: { regenerate?: boolean }): string => {
   const lock = buildNoGlyphLock(options);
-  return `${lock}\n\n${prompt}\n\n${lock}`;
+  const trimmed = prompt.trim();
+  if (/MUST FOLLOW THIS APPROVED VISUAL CONCEPT/i.test(trimmed)) {
+    return `${trimmed}\n\n${lock}`;
+  }
+  return `${lock}\n\n${trimmed}\n\n${lock}`;
 };

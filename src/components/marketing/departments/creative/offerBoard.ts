@@ -99,11 +99,25 @@ export const parseOfferBullets = (copyText: string): string[] => {
   return [];
 };
 
-export const footerModules = (bullets: string[] = []) =>
-  DEFAULT_OFFER_MODULES.map((mod, index) => ({
-    ...mod,
-    label: bullets[index] && bullets[index].length <= 16 ? bullets[index] : mod.label,
+export const footerModules = (bullets: string[] = []) => {
+  const usable = bullets.filter((item) => item.length >= 2 && item.length <= 16);
+  if (usable.length < 2) return [];
+  return usable.slice(0, 4).map((label, index) => ({
+    icon: iconForLabel(label, index),
+    label,
   }));
+};
+
+const iconForLabel = (label: string, index: number): OfferIconName => {
+  const value = label.toLowerCase();
+  if (/חיפוש|search|\bai\b|גוגל|צ['׳]אט/.test(value)) return "search";
+  if (/אתר|audit|בדיק/.test(value)) return "file-search";
+  if (/אסטרטג|תכנון|strategy/.test(value)) return "clipboard-list";
+  if (/ליווי|support|הגנ/.test(value)) return "shield";
+  if (/שיח|וואטסאפ|whatsapp|message/.test(value)) return "message-circle";
+  if (/טלפון|שיחה|phone/.test(value)) return "phone";
+  return OFFER_ICON_NAMES[index % OFFER_ICON_NAMES.length];
+};
 
 const iconX = (index: number, count: number) => {
   const slot = OFFER_BOARD_SLOTS.icon;
@@ -134,6 +148,13 @@ export const buildOfferBoardLayers = ({
   const marks = (bullets ?? []).filter(Boolean).slice(0, 3);
   const modules = footerModules(bullets);
   const accent = palette.cta || "#dc2626";
+  const compactFooter = modules.length === 0;
+  const footer = compactFooter
+    ? { x: 0, y: 86, width: 100, height: 14 }
+    : OFFER_BOARD_SLOTS.footer;
+  const ctaFill = compactFooter
+    ? { x: 22, y: 88.2, width: 56, height: 8.2 }
+    : OFFER_BOARD_SLOTS.ctaFill;
   const layers: CreativeLayer[] = [];
 
   layers.push(layer({
@@ -216,21 +237,23 @@ export const buildOfferBoardLayers = ({
   layers.push(layer({
     type: "shape",
     role: "footer",
-    ...OFFER_BOARD_SLOTS.footer,
+    ...footer,
     fill: "#111111",
   }));
 
-  layers.push(layer({
-    type: "text",
-    role: "sub",
-    ...OFFER_BOARD_SLOTS.footerTitle,
-    text: footerTitle || "מה מקבלים איתנו?",
-    fontFamily: "Heebo",
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#ffffff",
-    textAlign: "center",
-  }));
+  if (!compactFooter) {
+    layers.push(layer({
+      type: "text",
+      role: "sub",
+      ...OFFER_BOARD_SLOTS.footerTitle,
+      text: footerTitle || "מה מקבלים איתנו?",
+      fontFamily: "Heebo",
+      fontSize: 13,
+      fontWeight: "700",
+      color: "#ffffff",
+      textAlign: "center",
+    }));
+  }
 
   modules.forEach((mod, index) => {
     const x = iconX(index, modules.length);
@@ -267,7 +290,7 @@ export const buildOfferBoardLayers = ({
   layers.push(layer({
     type: "shape",
     role: "cta_fill",
-    ...OFFER_BOARD_SLOTS.ctaFill,
+    ...ctaFill,
     fill: accent,
     borderRadius: 999,
     boxShadow: "0 10px 24px rgba(0,0,0,0.28)",
@@ -275,13 +298,13 @@ export const buildOfferBoardLayers = ({
   layers.push(layer({
     type: "text",
     role: "cta",
-    x: OFFER_BOARD_SLOTS.ctaFill.x,
-    y: OFFER_BOARD_SLOTS.ctaFill.y + 1.4,
-    width: OFFER_BOARD_SLOTS.ctaFill.width,
+    x: ctaFill.x,
+    y: ctaFill.y + 1.4,
+    width: ctaFill.width,
     height: 5.4,
     text: ctaText,
     fontFamily: "Heebo",
-    fontSize: fitFontSize(ctaText, OFFER_BOARD_SLOTS.ctaFill.width, 15, 12),
+    fontSize: fitFontSize(ctaText, ctaFill.width, 15, 12),
     fontWeight: "800",
     color: palette.ctaText || "#ffffff",
     textAlign: "center",

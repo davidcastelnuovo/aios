@@ -85,7 +85,9 @@ export function formatCopyConceptsForImagePrompt(concepts: CopyConcept[]): strin
   const primary = concepts[0];
   const extras = concepts.slice(1);
   const lines = [
-    "MUST FOLLOW THIS APPROVED VISUAL CONCEPT. Build a cinematic advertising photograph around this idea — never a generic text-on-background graphic.",
+    "MUST FOLLOW THIS APPROVED VISUAL CONCEPT. This block IS the photograph — subject, location, props, lighting, and the first-second hook.",
+    "The slogan and headline do NOT choose the scene. Never replace this concept with a literal illustration of the copy.",
+    "Build a cinematic advertising still around this idea — never a generic text-on-background graphic.",
     primary.name && `Concept name: ${primary.name}`,
     primary.bigIdea && `Big idea: ${primary.bigIdea}`,
     primary.visualLanguage && `Visual language, composition, color, typography mood: ${primary.visualLanguage}`,
@@ -108,10 +110,19 @@ export function resolveVisualPrompt(
   payload: Record<string, unknown> | null | undefined,
   concepts?: CopyConcept[],
 ): string {
-  const stored = typeof payload?.visual_prompt === "string" ? payload.visual_prompt.trim() : "";
-  if (stored) return stored;
-  const approved = concepts ?? approvedCopyConcepts(parseCopyConceptsFromPayload(payload));
-  return formatCopyConceptsForImagePrompt(approved);
+  const fromCaller = concepts?.length
+    ? (approvedCopyConcepts(concepts).length > 0 ? approvedCopyConcepts(concepts) : concepts)
+    : [];
+  const fromPayload = approvedCopyConcepts(parseCopyConceptsFromPayload(payload));
+  const storedApproved = parseCopyConceptsFromPayload({ copy_concepts: payload?.approved_concepts });
+  const approved = fromCaller.length > 0
+    ? fromCaller
+    : storedApproved.length > 0
+      ? storedApproved.map((concept) => ({ ...concept, approved: true }))
+      : fromPayload;
+  const live = formatCopyConceptsForImagePrompt(approved);
+  if (live) return live;
+  return typeof payload?.visual_prompt === "string" ? payload.visual_prompt.trim() : "";
 }
 
 export function extractConceptsDocument(output: string): string {

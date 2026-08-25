@@ -18,11 +18,12 @@ import {
   filesFromAttachments,
   websiteHref,
 } from "./brandKit";
-import { Globe, Loader2, Paperclip, Save, Sparkles, Trash2, Upload } from "lucide-react";
+import { Globe, Lightbulb, Link2, Loader2, Paperclip, RefreshCw, Save, Sparkles, Trash2, Upload } from "lucide-react";
 import type { CreativeItem, CreativeProjectDraft } from "./types";
-import { getApprovedCopyConcepts, itemToProjectDraft, projectTypeLabel } from "./utils";
+import { itemToProjectDraft, projectTypeLabel } from "./utils";
 import { VisualStyleSelect } from "./VisualStyleSelect";
 import { toast } from "sonner";
+import { parseCopyConceptsFromPayload } from "@/components/marketing/copyConcepts";
 
 export interface CreativeClientHint {
   id?: string;
@@ -40,19 +41,39 @@ interface Props {
   onSave: (draft: CreativeProjectDraft) => Promise<void>;
   onAssignClient?: (clientId: string | null, draft: CreativeProjectDraft) => Promise<void>;
   saving?: boolean;
+  pullingCopy?: boolean;
+  refreshingLinkedCopy?: boolean;
+  onPullCopy?: () => void;
+  onRefreshLinkedCopy?: () => void;
 }
 
-export function CreativeBriefEditor({ item, tenantId, client, onSave, onAssignClient, saving }: Props) {
+export function CreativeBriefEditor({
+  item,
+  tenantId,
+  client,
+  onSave,
+  onAssignClient,
+  saving,
+  pullingCopy,
+  refreshingLinkedCopy,
+  onPullCopy,
+  onRefreshLinkedCopy,
+}: Props) {
   const [draft, setDraft] = useState<CreativeProjectDraft>(() => itemToProjectDraft(item));
   const [assigning, setAssigning] = useState(false);
   const [uploading, setUploading] = useState<"logo" | "reference" | "brandbook" | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const refsInputRef = useRef<HTMLInputElement>(null);
   const bookInputRef = useRef<HTMLInputElement>(null);
+  const concepts = parseCopyConceptsFromPayload(item.payload);
+  const linkedCopyTitle = typeof item.payload?.linked_copy_title === "string" ? item.payload.linked_copy_title.trim() : "";
+  const linkedCopyId = typeof item.payload?.linked_copy_item_id === "string" ? item.payload.linked_copy_item_id : "";
+  const approvedCount = concepts.filter((concept) => concept.approved).length;
+  const copyBusy = !!pullingCopy || !!refreshingLinkedCopy;
 
   useEffect(() => {
     setDraft(itemToProjectDraft(item));
-  }, [item.id, item.updated_at, item.client_id]);
+  }, [item.id, item.updated_at, item.client_id, item.payload?.linked_copy_item_id, item.payload?.copy_text]);
 
   const patchBook = (patch: Partial<BrandBook>) => {
     const current = draft.brandBook ?? { colors: [], notes: "", source: "manual" as const };
@@ -373,7 +394,14 @@ export function CreativeBriefEditor({ item, tenantId, client, onSave, onAssignCl
             />
           </div>
           <div>
-            <Label>קופי משויך</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>קופי משויך</Label>
+              {linkedCopyTitle ? (
+                <span className="truncate text-[11px] text-muted-foreground">מקור: {linkedCopyTitle}</span>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">אין פרויקט קופי משויך</span>
+              )}
+            </div>
             <Textarea
               className="mt-1 min-h-28"
               value={draft.copyText}
@@ -381,12 +409,59 @@ export function CreativeBriefEditor({ item, tenantId, client, onSave, onAssignCl
               placeholder="הטקסט שיופיע על הקריאייטיב או ילווה את הסרטון"
             />
           </div>
-          {getApprovedCopyConcepts(item).length > 0 && (
-            <div className="grid gap-2">
-              <Label>קונספטים מאושרים מהקופי</Label>
-              {getApprovedCopyConcepts(item).map((concept) => (
+          <div className="grid gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="h-3.5 w-3.5 text-muted-foreground" />
+                <Label>קונספטים מהקופי</Label>
+                {approvedCount > 0 && (
+                  <Badge variant="secondary" className="h-5 font-normal">{approvedCount} מאושרים</Badge>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {linkedCopyId && onRefreshLinkedCopy && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 gap-1.5"
+                    onClick={onRefreshLinkedCopy}
+                    disabled={copyBusy}
+                  >
+                    {refreshingLinkedCopy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    רענן מהמשויך
+                  </Button>
+                )}
+                {onPullCopy && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5"
+                    onClick={onPullCopy}
+                    disabled={copyBusy}
+                  >
+                    {pullingCopy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+                    משוך מקופי
+                  </Button>
+                )}
+              </div>
+            </div>
+            {concepts.length === 0 ? (
+              <p className="rounded-lg border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
+                אין קונספטים על הפרויקט. משכו פרויקט ממחלקת הקופי כדי לצרף קופי וקונספטים מאושרים.
+              </p>
+            ) : (
+              concepts.map((concept) => (
                 <div key={concept.id} className="rounded-lg border bg-muted/30 p-3 text-right">
-                  <div className="text-sm font-semibold">{concept.name}</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm font-semibold">{concept.name}</div>
+                    {concept.approved ? (
+                      <Badge className="h-5 bg-emerald-600 hover:bg-emerald-600">מאושר</Badge>
+                    ) : (
+                      <Badge variant="outline" className="h-5 font-normal">לא אושר</Badge>
+                    )}
+                  </div>
                   {concept.bigIdea && <p className="mt-1 text-xs leading-relaxed">{concept.bigIdea}</p>}
                   {concept.visualLanguage && (
                     <p className="mt-1 text-[11px] text-muted-foreground">ויזואל: {concept.visualLanguage}</p>
@@ -394,10 +469,13 @@ export function CreativeBriefEditor({ item, tenantId, client, onSave, onAssignCl
                   {concept.hook && (
                     <p className="mt-1 text-[11px] text-muted-foreground">הוק: {concept.hook}</p>
                   )}
+                  {concept.copyAngle && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">זווית קופי: {concept.copyAngle}</p>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
           <div>
             <Label>הנחיות מיוחדות</Label>
             <Textarea

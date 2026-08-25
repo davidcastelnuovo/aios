@@ -68,7 +68,7 @@ export const brandKitPrompt = (kit: CreativeBrandKit) => {
     kit.brandBook?.voice && `Brand voice: ${kit.brandBook.voice}`,
     kit.website && `Brand website: ${kit.website}. Match that commercial world (color temperature, materials, locations) without copying UI chrome or inventing a logo.`,
     kit.logoUrl && "A logo asset exists and will be composited later as a layer. Leave a quiet designed pocket for it wherever THIS composition asks — not always top-right. Do not redraw or invent a logo.",
-    kit.styleReferences.length > 0 && `${kit.styleReferences.length} style-range board(s) live on the project as examples of RANGE only. Do not attach, recall, or copy their layout, lettering, faces, logo, or composition. Invent a new graphic structure. The scene is this variation's copy.`,
+    kit.styleReferences.length > 0 && `${kit.styleReferences.length} style-range board(s) live on the project as examples of RANGE only. Do not attach, recall, or copy their layout, lettering, faces, logo, or composition. Invent a new graphic structure. Do not let those boards choose the scene.`,
   ].filter(Boolean);
   return lines.join("\n");
 };

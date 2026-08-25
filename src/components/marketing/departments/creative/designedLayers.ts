@@ -1,5 +1,5 @@
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
-import { compositionById, pickCompositionId, type CompositionId } from "./compositions";
+import { compositionById, pickVariationComposition, type CompositionId } from "./compositions";
 import { buildOfferBoardLayers, parseOfferBullets } from "./offerBoard";
 import { withLayerShadow } from "./layerShadow";
 import {
@@ -344,6 +344,27 @@ export const extractCopyAngle = (copyText?: string, copyLabel?: string): string 
   return sanitizeCopyAngle(copyLabel);
 };
 
+/** When an approved visual concept already chose the photograph, copy is overlay-only. */
+export const buildCopyOverlayLock = ({
+  copyText,
+  title,
+  copyLabel,
+}: {
+  copyText?: string;
+  title?: string;
+  copyLabel?: string;
+}): string => {
+  const parts = parseCreativeCopy(copyText ?? "", title);
+  const idea = strongestLine(copyText ?? "", title) || parts.headline || parts.body;
+  return [
+    "COPY IS OVERLAY ONLY. The approved visual concept already chose the photograph (people, place, props, light, first-second hook).",
+    "Do not invent a new subject from the slogan. Do not restage the headline. Do not swap the concept's scene for a more literal reading of the copy.",
+    idea && `These lines will be composited later as Hebrew type (never paint them, never restage them): «${idea}»`,
+    parts.cta && parts.cta !== idea && `CTA composited later: «${parts.cta}»`,
+    copyLabel && `This card is copy variation «${copyLabel}» — same concept world, this line of type.`,
+  ].filter(Boolean).join("\n");
+};
+
 export const buildCopySceneBrief = ({
   copyText,
   title,
@@ -620,7 +641,7 @@ export const hydrateVariationLayers = (
   logoUrl?: string,
   brandColors?: string[],
 ): CreativeVariation => {
-  const compositionId = variation.compositionId ?? pickCompositionId(variation.id);
+  const compositionId = variation.compositionId ?? pickVariationComposition({ seed: variation.id });
   const existing = variation.layers ?? [];
   const layers = shouldRebuildDesignedLayers(existing, variation.copyText || copyText)
     ? buildDesignedCopyLayers({

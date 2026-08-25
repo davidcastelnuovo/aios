@@ -5,6 +5,9 @@ import {
   findExistingCreativeSibling,
   overlayCopyHandoffPayload,
   stampCopyPayloadAfterHandoff,
+  listOpenCreativeProjects,
+  suggestedCreativeTarget,
+  copyPullSummary,
   type HandoffWorkItem,
 } from "./copyHandoff.ts";
 import { isCopyDepartmentItem } from "./departmentFilters.ts";
@@ -132,4 +135,71 @@ test("formatCopyConceptsForImagePrompt leads with the approved concept", () => {
   assert.equal(prompt.startsWith("MUST FOLLOW THIS APPROVED VISUAL CONCEPT"), true);
   assert.match(prompt, /Concept name: הכיס הריק/);
   assert.match(prompt, /2\. וריאציה שנייה/);
+});
+
+test("listOpenCreativeProjects returns every open creative for the client", () => {
+  const copy = item({ id: "copy-1" });
+  const open = listOpenCreativeProjects(copy, [
+    item({ id: "linked", payload: { linked_copy_item_id: "copy-1", department: "creative" } }),
+    item({ id: "manual", title: "באנר קיץ", payload: { department: "creative", intake_source: "manual" } }),
+    item({ id: "archived", payload: { department: "creative" }, status: "archived" }),
+    item({ id: "other-client", client_id: "client-2", payload: { department: "creative" } }),
+    item({ id: "copy-self", payload: { department: "copy" } }),
+  ]);
+  assert.deepEqual(open.map((row) => row.id), ["linked", "manual"]);
+});
+
+test("overlayCopyHandoffPayload keeps existing concepts when the copy has none", () => {
+  const existingConcept = concept({ id: "keep" });
+  const payload = overlayCopyHandoffPayload({
+    existingPayload: {
+      department: "creative",
+      copy_concepts: [existingConcept],
+      approved_concepts: [existingConcept],
+    },
+    copyPayload: { copy_text: "כותרת חדשה", brief_text: "בריף" },
+    copyItem: { id: "copy-2", title: "seo / geo" },
+    concepts: [],
+    approved: [],
+    at: "2026-08-25T09:00:00.000Z",
+  });
+  assert.equal((payload.copy_concepts as CopyConcept[])[0]?.id, "keep");
+  assert.equal((payload.approved_concepts as CopyConcept[])[0]?.id, "keep");
+  assert.equal(payload.copy_text, "כותרת חדשה");
+});
+
+test("overlayCopyHandoffPayload keeps an existing visual_prompt when nothing is approved", () => {
+  const payload = overlayCopyHandoffPayload({
+    existingPayload: {
+      department: "creative",
+      visual_prompt: "KEEP THIS",
+      notes: "הערת קריאייטיב",
+    },
+    copyPayload: { copy_text: "כותרת" },
+    copyItem: { id: "copy-1", title: "seo / geo" },
+    concepts: [concept({ approved: false, approvedAt: null })],
+    approved: [],
+    at: "2026-08-25T09:00:00.000Z",
+  });
+  assert.equal(payload.visual_prompt, "KEEP THIS");
+  assert.equal(payload.copy_text, "כותרת");
+  assert.equal(payload.linked_copy_item_id, "copy-1");
+  assert.equal((payload.copy_concepts as CopyConcept[])[0]?.approved, false);
+});
+
+test("copyPullSummary marks items with copy or concepts as pullable", () => {
+  assert.equal(copyPullSummary({ copy_text: "כותרת" }).pullable, true);
+  assert.equal(copyPullSummary({ copy_concepts: [concept()] }).pullable, true);
+  assert.equal(copyPullSummary({ copy_concepts: [concept()] }).approvedCount, 1);
+  assert.equal(copyPullSummary({ brief_text: "בריף בלבד" }).pullable, true);
+  assert.equal(copyPullSummary({}).pullable, false);
+});
+
+test("suggestedCreativeTarget prefers the linked sibling among open projects", () => {
+  const copy = item({ id: "copy-1", payload: { handoff_to_creative_item_id: "pointed" } });
+  const open = [
+    item({ id: "newer-manual", payload: { department: "creative" }, updated_at: "2026-08-25T12:00:00.000Z" }),
+    item({ id: "pointed", payload: { department: "creative" }, updated_at: "2026-08-24T10:00:00.000Z" }),
+  ];
+  assert.equal(suggestedCreativeTarget(copy, open)?.id, "pointed");
 });

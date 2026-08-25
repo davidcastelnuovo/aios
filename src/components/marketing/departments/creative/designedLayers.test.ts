@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCampaignVisualBrief,
+  buildCopyOverlayLock,
   buildCopySceneBrief,
   buildDesignedCopyLayers,
   ensureLogoLayer,
@@ -80,6 +81,19 @@ test("extractCopyAngle reads the variation idea from em-dash or bullet labels", 
     extractCopyAngle(`וריאציה 2 — בעיית "אני לא יודע אם אני שם"`),
     `בעיית "אני לא יודע אם אני שם"`,
   );
+});
+
+test("copy overlay lock keeps the concept in charge of the photograph", () => {
+  const lock = buildCopyOverlayLock({
+    title: "seo / geo",
+    copyLabel: "וריאציה 1",
+    copyText: `כותרת: עדיין מגלגל בטיקטוק?
+גוף: תפתח צ'אט. נסגור לך טיסה.`,
+  });
+  assert.match(lock, /COPY IS OVERLAY ONLY/);
+  assert.match(lock, /Do not invent a new subject from the slogan/);
+  assert.match(lock, /טיקטוק/);
+  assert.doesNotMatch(lock, /STAGE THIS IDEA/);
 });
 
 test("copy scene brief stages chat-scroll copy, not a style postcard", () => {
