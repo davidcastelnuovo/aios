@@ -41,6 +41,7 @@ export default function LeadIntegrations() {
   "email": "email@example.com",
   "phone": "050-1234567",
   "source": "website",
+  "campaign_name": "שיווק",
   "notes": "הערות נוספות",
   "monthly_budget": 5000,
   "three_month_budget": 15000,
@@ -127,6 +128,7 @@ export default function LeadIntegrations() {
                   <li><code className="bg-muted px-1 py-0.5 rounded">email</code> - כתובת אימייל</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">phone</code> - מספר טלפון</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">source</code> - מקור הליד (website/referral/social_media/paid_ads/cold_call/email_campaign/event/whatsapp/other)</li>
+                  <li><code className="bg-muted px-1 py-0.5 rounded">campaign_name</code> - שם הקמפיין</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">notes</code> - הערות</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">monthly_budget</code> - תקציב חודשי</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">three_month_budget</code> - תקציב ל-3 חודשים</li>
@@ -265,7 +267,8 @@ export default function LeadIntegrations() {
 contact_name: {{Full Name}}
 email: {{Email Address}}
 phone: {{Phone Number}}
-source: website`}
+source: website
+campaign_name: {{Campaign}}`}
                 </pre>
               </div>
             </CardContent>
@@ -295,7 +298,8 @@ document.getElementById('contactForm').addEventListener('submit', async (e) => {
     email: document.getElementById('email').value,
     phone: document.getElementById('phone').value,
     notes: document.getElementById('message').value,
-    source: 'website'
+    source: 'website',
+    campaign_name: document.getElementById('campaign')?.value,
   };
 
   try {

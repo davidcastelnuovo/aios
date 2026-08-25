@@ -15,6 +15,7 @@ interface LeadPayload {
   email?: string
   phone?: string
   source?: string
+  campaign_name?: string
   notes?: string
   monthly_budget?: number
   three_month_budget?: number
@@ -27,6 +28,21 @@ interface LeadPayload {
   tag_name?: string
   tenant_slug?: string
   tenant_id?: string
+}
+
+function pickCampaignName(body: Record<string, unknown> | null | undefined): string | undefined {
+  if (!body) return undefined
+  const candidates = [
+    body.campaign_name,
+    body.campaign,
+    body['קמפיין'],
+    body['שם קמפיין'],
+    body['שם הקמפיין'],
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+  }
+  return undefined
 }
 
 // Normalize phone for comparison
@@ -105,6 +121,8 @@ Deno.serve(async (req) => {
           parsed.industry = value
         } else if (['מוצרים', 'products', 'שירותים', 'services'].includes(label)) {
           parsed.products = value
+        } else if (['קמפיין', 'שם קמפיין', 'שם הקמפיין', 'campaign', 'campaign name', 'campaign_name'].includes(label)) {
+          parsed.campaign_name = value
         } else {
           // Unknown fields go to notes
           parsed.notes = (parsed.notes ? parsed.notes + '\n' : '') + `${sub.label}: ${value}`
@@ -138,6 +156,7 @@ Deno.serve(async (req) => {
         monthly_budget: parsed.monthly_budget ? Number(parsed.monthly_budget) || undefined : undefined,
         industry: parsed.industry || undefined,
         products: parsed.products || undefined,
+        campaign_name: parsed.campaign_name || undefined,
         source: 'website',
         // Preserve any tenant/agency from body-level fields
         tenant_slug: rawBody.tenant_slug || undefined,
@@ -149,6 +168,7 @@ Deno.serve(async (req) => {
     } else {
       // Standard flat JSON payload
       payload = rawBody as LeadPayload
+      payload.campaign_name = pickCampaignName(rawBody) || payload.campaign_name
       const suppliedAnswers = rawBody?.form_data ?? rawBody?.answers ?? rawBody?.questions_and_answers
       if (suppliedAnswers && typeof suppliedAnswers === 'object' && !Array.isArray(suppliedAnswers)) {
         parsedFormData = Object.fromEntries(
@@ -159,6 +179,8 @@ Deno.serve(async (req) => {
       }
     }
     // ========== END WIX FORM PARSER ==========
+
+    payload.campaign_name = payload.campaign_name || pickCampaignName(rawBody)
 
     // Merge: body takes priority, then query params
     let agencyId = payload.agency_id || queryAgencyId || undefined
@@ -446,6 +468,10 @@ Deno.serve(async (req) => {
         updates.industry = payload.industry;
         hasUpdates = true;
       }
+      if (!existingLead.campaign_name && payload.campaign_name) {
+        updates.campaign_name = payload.campaign_name;
+        hasUpdates = true;
+      }
       if (!existingLead.manychat_subscriber_id && payload.manychat_subscriber_id) {
         updates.manychat_subscriber_id = payload.manychat_subscriber_id;
         hasUpdates = true;
@@ -559,6 +585,7 @@ Deno.serve(async (req) => {
         three_month_budget: payload.three_month_budget || null,
         products: payload.products || null,
         industry: payload.industry || null,
+        campaign_name: payload.campaign_name?.trim() || null,
         agency_id: agencyId,
         client_id: routedClient?.client_id || null,
         form_data: parsedFormData,
@@ -668,6 +695,7 @@ Deno.serve(async (req) => {
             email: lead.email,
             status: lead.status,
             source: lead.source,
+            campaign_name: lead.campaign_name,
             agency_id: lead.agency_id,
             ...routingPayload,
           },
