@@ -1196,19 +1196,20 @@ export function ClientsChatView({
                           <Button size="sm" className="h-7 text-xs" disabled={!newContact.contact_name.trim()} onClick={async () => {
                             try {
                               const contactTenantId = resolveClientChildTenantId(selectedClient, tenantId);
-                              const { error } = await supabase.from("client_contacts").insert({
+                              const { data: inserted, error } = await supabase.from("client_contacts").insert({
                                 client_id: selectedClient.id,
                                 tenant_id: contactTenantId,
                                 contact_name: newContact.contact_name.trim(),
                                 phone: newContact.phone.trim() || null,
                                 email: newContact.email.trim() || null,
                                 role: newContact.role.trim() || null,
-                              });
+                              }).select("id").maybeSingle();
                               if (error) throw error;
+                              if (!inserted) throw new Error("איש הקשר נשמר אך אין הרשאת צפייה — נסה לרענן");
                               toast.success("איש קשר נוסף");
                               setAddingContact(false);
                               setNewContact({ contact_name: "", phone: "", email: "", role: "" });
-                              queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                              await queryClient.refetchQueries({ queryKey: ["client-contacts", selectedClient.id] });
                             } catch (err: any) {
                               toast.error(err?.message ? `שגיאה בהוספת איש קשר: ${err.message}` : "שגיאה בהוספת איש קשר");
                             }
