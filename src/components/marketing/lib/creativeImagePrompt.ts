@@ -6,6 +6,7 @@ export const NO_TEXT_ON_IMAGE = [
   "Not Hebrew. Not English. Not numbers. Not newspaper headlines. Not street signs with words.",
   "Hebrew type and the real logo are composited later as layers — the image API garbles Hebrew (reversed letters, missing glyphs, gibberish).",
   "Do not invent or redraw a logo. Do NOT reserve a top headline strip, a bottom CTA pill, or a top-right logo pad (that is the old caption template).",
+  "Leave one naturally quiet atmospheric pocket (soft shadow, wall, sky, or out-of-focus area) where type can sit later. No hard geometric cutout, white panel, footer bar, or painted silhouette of a layout.",
   "Build a finished multi-element graphic poster: several designed pieces already in the still (rail, slash, badge, split field, shadow pocket, object, light) so type can sit inside the art later.",
 ].join(" ");
 

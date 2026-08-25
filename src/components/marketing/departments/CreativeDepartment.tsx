@@ -850,6 +850,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         ? `Format ${format}. Same TECHNIQUE family (paper, ink, light, color). Completely different picture, people, and props for this copy.`
         : `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
       kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
+      "QUIET POCKET: one naturally empty atmospheric region (shadow, wall, sky) so Hebrew type can be composited later. Do not paint a layout, panel, footer, or letter-shaped hole.",
       "RTL/production: Hebrew is composited as layers after generation — the image API still garbles Hebrew (reversed letters, missing glyphs, gibberish). Do not paint letters.",
       "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes, reprinting a previous collage.",
     ].filter(Boolean).join("\n");
@@ -1474,6 +1475,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               onExpandStyle={() => void generateSiblingsInStyle(variationDraft)}
               expandStyleCount={missingCopyBlocks(copyBlocks, variations, variationDraft).length}
               onBack={() => setWorkspacePanel(null)}
+              brandColors={getBrandKit(selected.payload).brandBook?.colors}
+              logoUrl={getBrandKit(selected.payload).logoUrl}
+              copyText={variationDraft.copyText || getLinkedCopyText(selected)}
+              projectTitle={selected.title ?? undefined}
+              styleId={variationDraft.visualStyle ?? getVisualStyleId(selected.payload)}
             />
           ) : variations.length > 0 ? (
             <CreativeVariationGrid
