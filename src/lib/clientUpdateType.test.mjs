@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   describesCompletedClientPhoneCall,
+  isClientCallUpdate,
   resolveClientUpdateType,
 } from "./clientUpdateType.ts";
 
