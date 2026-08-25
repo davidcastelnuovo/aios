@@ -129,7 +129,7 @@ export function PulseClientCallDialog({
         lastClientCallAt: inserted.created_at,
         lastClientCallBy: recordedBy,
       });
-      toast.success("השיחה תועדה — תופיע בדופק לאחר רענון הבדיקה");
+      toast.success("השיחה תועדה — תופיע מיד בדשבורד; צבע הדופק יתעדכן ברענון הבדיקה הבא");
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err?.message || "שגיאה בשמירה");

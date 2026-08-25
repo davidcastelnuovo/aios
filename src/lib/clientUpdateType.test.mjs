@@ -46,3 +46,13 @@ test("promotes only qualifying weekly updates to call", () => {
     "meeting",
   );
 });
+
+test("isClientCallUpdate matches call rows and qualifying weekly notes", () => {
+  assert.equal(isClientCallUpdate("call", "כל תוכן"), true);
+  assert.equal(
+    isClientCallUpdate("weekly_update", "דיברתי עם הלקוח על מצב הקמפיין"),
+    true,
+  );
+  assert.equal(isClientCallUpdate("weekly_update", "שלחתי סיכום במייל"), false);
+  assert.equal(isClientCallUpdate("email", "דיברתי עם הלקוח"), false);
+});
