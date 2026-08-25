@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Save } from "lucide-react";
 import type { CreativeItem, CreativeProjectDraft } from "./types";
-import { itemToProjectDraft, projectTypeLabel } from "./utils";
+import { itemToProjectDraft, projectTypeLabel, getApprovedCopyConcepts } from "./utils";
 
 interface Props {
   item: CreativeItem;
@@ -74,6 +74,23 @@ export function CreativeBriefEditor({ item, onSave, saving }: Props) {
               placeholder="הטקסט שיופיע על הקריאייטיב או ילווה את הסרטון"
             />
           </div>
+          {getApprovedCopyConcepts(item).length > 0 && (
+            <div className="grid gap-2">
+              <Label>קונספטים מאושרים מהקופי</Label>
+              {getApprovedCopyConcepts(item).map((concept) => (
+                <div key={concept.id} className="rounded-lg border bg-muted/30 p-3 text-right">
+                  <div className="text-sm font-semibold">{concept.name}</div>
+                  {concept.bigIdea && <p className="mt-1 text-xs leading-relaxed">{concept.bigIdea}</p>}
+                  {concept.visualLanguage && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">ויזואל: {concept.visualLanguage}</p>
+                  )}
+                  {concept.hook && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">הוק: {concept.hook}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <div>
             <Label>הנחיות מיוחדות</Label>
             <Textarea

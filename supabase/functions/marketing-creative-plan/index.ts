@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuth } from "../_shared/security.ts";
 import { buildSkillsBlockBySlug } from "../_shared/skills/registry.ts";
+import { formatApprovedConceptsFromPayload } from "../_shared/copy-concepts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,6 +58,7 @@ serve(async (req) => {
     const payload = (item.payload ?? {}) as Record<string, unknown>;
     const existingStoryboard = Array.isArray(payload.storyboard) ? payload.storyboard : [];
     const requestedCount = Math.max(1, Math.min(Number(frame_count) || 4, 10));
+    const approvedConcepts = formatApprovedConceptsFromPayload(payload);
     const sourceContext = [
       `לקוח: ${client?.name ?? "—"}`,
       `תחום: ${client?.industry ?? "—"}`,
@@ -64,6 +66,7 @@ serve(async (req) => {
       `כותרת המשימה: ${item.title ?? "—"}`,
       payload.brief_text && `בריף: ${payload.brief_text}`,
       payload.copy_text && `קופי/תסריט: ${payload.copy_text}`,
+      approvedConcepts && `קונספטים מאושרים מהקופי:\n${approvedConcepts}`,
       payload.format && `פורמט: ${payload.format}`,
       prompt && `הנחיית המשתמש: ${prompt}`,
       mode === "fill" && existingStoryboard.length > 0 && `Storyboard קיים להשלמה: ${JSON.stringify(existingStoryboard)}`,
