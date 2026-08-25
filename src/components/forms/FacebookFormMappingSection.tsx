@@ -303,6 +303,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       if (error) throw error;
 
       // Auto-subscribe the page to leadgen webhook
+      let subscribed = false;
       if (selectedPageId) {
         const { data: subscribeResult, error: subscribeError } = await supabase.functions.invoke('facebook-auth', {
           body: {
@@ -312,16 +313,23 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
           },
         });
 
-        if (subscribeError) {
-          console.error('Error subscribing page to webhook:', subscribeError);
-          // Don't throw - mapping was saved successfully, just log the webhook issue
-          toast.warning('המיפוי נשמר, אך ייתכן שיש בעיה ברישום לקבלת לידים אוטומטית');
+        if (subscribeError || (subscribeResult as { error?: string } | null)?.error) {
+          console.error('Error subscribing page to webhook:', subscribeError || subscribeResult);
         } else {
+          subscribed = true;
         }
       }
+      return { subscribed };
     },
-    onSuccess: () => {
-      toast.success('מיפוי השדות נשמר והעמוד נרשם לקבלת לידים');
+    onSuccess: (result) => {
+      if (result?.subscribed) {
+        toast.success('מיפוי השדות נשמר והעמוד נרשם לקבלת לידים חדשים');
+      } else {
+        toast.success('מיפוי השדות נשמר');
+        if (selectedPageId) {
+          toast.warning('הטופס מחובר, אבל הרישום לקבלת לידים אוטומטית נכשל — לידים חדשים יימשכו בסנכרון');
+        }
+      }
       setIsAddingNewForm(false);
       setEditingFormId(null);
       setSelectedFormId("");

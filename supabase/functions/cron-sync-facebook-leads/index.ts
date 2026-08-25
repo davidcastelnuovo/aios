@@ -26,6 +26,26 @@ interface IntegrationSettings {
   pages?: Array<{ id: string; name: string; access_token: string }>;
 }
 
+/** Meta ignores `since=` on Instant Form /leads; use time_created filtering instead. */
+function facebookFormLeadsUrl(formId: string, accessToken: string, sinceSec: number): string {
+  const filtering = encodeURIComponent(JSON.stringify([
+    { field: "time_created", operator: "GREATER_THAN", value: sinceSec },
+  ]));
+  return `https://graph.facebook.com/v21.0/${formId}/leads?fields=id,created_time,field_data&filtering=${filtering}&limit=100&access_token=${accessToken}`;
+}
+
+function last9Digits(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "").slice(-9);
+  return digits.length >= 9 ? digits : null;
+}
+
+function isCreatedAfter(createdTime: string | undefined, sinceDate: Date): boolean {
+  if (!createdTime) return false;
+  const t = new Date(createdTime).getTime();
+  return Number.isFinite(t) && t >= sinceDate.getTime();
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -109,12 +129,28 @@ serve(async (req) => {
       const sinceDate = lastSyncAt || new Date(Date.now() - 24 * 60 * 60 * 1000);
       const sinceTimestamp = Math.floor(sinceDate.getTime() / 1000);
 
+      const { data: existingContacts } = await supabase
+        .from('leads')
+        .select('phone, email, facebook_leadgen_id')
+        .eq('tenant_id', integration.tenant_id);
+      const existingPhones = new Set(
+        (existingContacts ?? []).map((row) => last9Digits(row.phone)).filter((v): v is string => !!v),
+      );
+      const existingEmails = new Set(
+        (existingContacts ?? [])
+          .map((row) => (row.email || '').trim().toLowerCase())
+          .filter(Boolean),
+      );
+      const existingLeadgens = new Set(
+        (existingContacts ?? []).map((row) => row.facebook_leadgen_id).filter(Boolean),
+      );
+
       // Process each mapped form
       for (const [formId, mapping] of formEntries) {
 
         try {
 
-          const fbUrl = `https://graph.facebook.com/v19.0/${formId}/leads?access_token=${accessToken}&since=${sinceTimestamp}&limit=500`;
+          const fbUrl = facebookFormLeadsUrl(formId, accessToken, sinceTimestamp);
           const fbResponse = await fetch(fbUrl);
 
           if (!fbResponse.ok) {
@@ -130,6 +166,16 @@ serve(async (req) => {
 
           for (const fbLead of leads) {
             const leadgenId = fbLead.id;
+
+            if (!isCreatedAfter(fbLead.created_time, sinceDate)) {
+              totalSkipped++;
+              continue;
+            }
+
+            if (existingLeadgens.has(leadgenId)) {
+              totalSkipped++;
+              continue;
+            }
 
             // Check if lead already exists by leadgen_id in notes (both formats)
             const { data: existingLeads } = await supabase
@@ -209,6 +255,21 @@ serve(async (req) => {
             if (!leadRecord.contact_name && heurName) leadRecord.contact_name = heurName;
             if (!leadRecord.phone && heurPhone) leadRecord.phone = heurPhone;
             if (!leadRecord.email && heurEmail) leadRecord.email = heurEmail;
+
+            const phoneKey = last9Digits(leadRecord.phone);
+            const emailKey = (leadRecord.email || '').trim().toLowerCase();
+            if (phoneKey && existingPhones.has(phoneKey)) {
+              totalSkipped++;
+              continue;
+            }
+            if (emailKey && existingEmails.has(emailKey)) {
+              totalSkipped++;
+              continue;
+            }
+
+            if (!leadRecord.campaign_name && mapping.form_name) {
+              leadRecord.campaign_name = mapping.form_name;
+            }
 
             // Ensure company_name is set
             if (!leadRecord.company_name || leadRecord.company_name === 'ליד מפייסבוק') {
@@ -352,6 +413,16 @@ serve(async (req) => {
               // Same processing as above
               const leadgenId = fbLead.id;
 
+              if (!isCreatedAfter(fbLead.created_time, sinceDate)) {
+                totalSkipped++;
+                continue;
+              }
+
+              if (existingLeadgens.has(leadgenId)) {
+                totalSkipped++;
+                continue;
+              }
+
               const { data: existingLeads } = await supabase
                 .from('leads')
                 .select('id')
@@ -414,6 +485,31 @@ serve(async (req) => {
                     leadRecord[systemField] = fieldData[fbFieldName];
                   }
                 }
+              }
+
+              const heurName = fieldData['full_name'] || fieldData['full name'] || fieldData['name'] || fieldData['first_name']
+                || (Object.entries(fieldData).find(([k]) => /שם|name/i.test(k))?.[1] ?? null);
+              const heurPhone = fieldData['phone_number'] || fieldData['phone']
+                || (Object.entries(fieldData).find(([k]) => /טלפון|נייד|phone/i.test(k))?.[1] ?? null);
+              const heurEmail = fieldData['email'] || fieldData['email_address']
+                || (Object.entries(fieldData).find(([k]) => /אימייל|דוא|email|mail/i.test(k))?.[1] ?? null);
+              if (!leadRecord.contact_name && heurName) leadRecord.contact_name = heurName;
+              if (!leadRecord.phone && heurPhone) leadRecord.phone = heurPhone;
+              if (!leadRecord.email && heurEmail) leadRecord.email = heurEmail;
+
+              const phoneKey = last9Digits(leadRecord.phone);
+              const emailKey = (leadRecord.email || '').trim().toLowerCase();
+              if (phoneKey && existingPhones.has(phoneKey)) {
+                totalSkipped++;
+                continue;
+              }
+              if (emailKey && existingEmails.has(emailKey)) {
+                totalSkipped++;
+                continue;
+              }
+
+              if (!leadRecord.campaign_name && mapping.form_name) {
+                leadRecord.campaign_name = mapping.form_name;
               }
 
               if (!leadRecord.company_name || leadRecord.company_name === 'ליד מפייסבוק') {
@@ -644,7 +740,7 @@ serve(async (req) => {
         const flowSinceTimestamp = Math.floor(flowSinceDate.getTime() / 1000);
         
         try {
-          const fbUrl = `https://graph.facebook.com/v19.0/${info.formId}/leads?access_token=${flowToken}&since=${flowSinceTimestamp}&limit=500`;
+          const fbUrl = facebookFormLeadsUrl(info.formId, flowToken, flowSinceTimestamp);
           const fbResponse = await fetch(fbUrl);
           
           if (!fbResponse.ok) {
@@ -657,6 +753,11 @@ serve(async (req) => {
           
           for (const fbLead of leads) {
             const leadgenId = fbLead.id;
+
+            if (!isCreatedAfter(fbLead.created_time, flowSinceDate)) {
+              totalSkipped++;
+              continue;
+            }
             
             // Dedup check: first check flow_processed_leads table (per-flow dedup)
             const { data: alreadyProcessed } = await supabase

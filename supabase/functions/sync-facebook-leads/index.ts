@@ -126,6 +126,13 @@ serve(async (req) => {
 
           for (const lead of leads) {
             const leadgenId = lead.id;
+            if (lead.created_time) {
+              const createdMs = new Date(lead.created_time).getTime();
+              if (Number.isFinite(createdMs) && createdMs < sinceSec * 1000) {
+                totalSkipped++;
+                continue;
+              }
+            }
 
             // Parse lead fields early to check for duplicates
             const fieldData: Record<string, string> = {};
@@ -189,7 +196,7 @@ serve(async (req) => {
             // Map fields based on form mapping (fieldData already parsed above)
 
             // Map fields based on form mapping
-            const fieldMappings = formMapping.fields || {};
+            const fieldMappings = formMapping.field_mappings || formMapping.fields || {};
             
             // Support both legacy single and new multi-select salesperson
             const salesPersonIds: string[] = formMapping.sales_person_ids 
@@ -231,6 +238,10 @@ serve(async (req) => {
             }
             if (!leadRecord.phone && (fieldData.phone_number || fieldData.phone)) {
               leadRecord.phone = fieldData.phone_number || fieldData.phone;
+            }
+
+            if (!leadRecord.campaign_name && formMapping.form_name) {
+              leadRecord.campaign_name = formMapping.form_name;
             }
 
             // Insert the lead

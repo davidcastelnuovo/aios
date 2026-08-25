@@ -71,6 +71,12 @@ export const CRON_JOB_CATALOG: Record<string, CronJobMeta> = {
     category: "reminders",
     icon: "📅",
   },
+  "cron-sync-facebook-leads": {
+    label: "סנכרון לידים מפייסבוק",
+    description: "מושך לידים חדשים מטפסי Instant Form ל-CRM כל דקה (גיבוי ל-Webhook).",
+    category: "sync",
+    icon: "📥",
+  },
   "telegram-poll": {
     label: "Telegram — Polling",
     description: "מאזין להודעות חדשות מבוטים בטלגרם.",

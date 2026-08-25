@@ -567,6 +567,8 @@ serve(async (req) => {
       // Update integration settings with selected page
       // IMPORTANT: Use the current integration's settings, not the source settings
       const currentSettings = integration.settings as any || {};
+      const pageSubs = { ...(currentSettings.page_subscriptions || {}) };
+      pageSubs[page_id] = { status: 'subscribed', subscribed_at: new Date().toISOString() };
       await supabase
         .from('tenant_integrations')
         .update({
@@ -574,6 +576,7 @@ serve(async (req) => {
             ...currentSettings,
             page_id,
             page_name: page?.name,
+            page_subscriptions: pageSubs,
           },
           updated_at: new Date().toISOString(),
         })
