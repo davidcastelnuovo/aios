@@ -15,6 +15,7 @@ export default function LeadIntegrations() {
   const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const webhookBaseUrl = `${projectUrl}/functions/v1/webhook-lead-intake`;
   const webhookUrl = `${webhookBaseUrl}?tenant_slug=${tenantSlug}`;
+  const webhookSecretPlaceholder = "YOUR_WEBHOOK_SECRET";
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -50,6 +51,7 @@ export default function LeadIntegrations() {
 
   const curlExample = `curl -X POST ${webhookUrl} \\
   -H "Content-Type: application/json" \\
+  -H "x-webhook-secret: ${webhookSecretPlaceholder}" \\
   -d '${examplePayloadBasic.replace(/\n/g, '')}'`;
 
   return (
@@ -80,6 +82,11 @@ export default function LeadIntegrations() {
               העתק
             </Button>
           </div>
+          <p className="text-sm text-muted-foreground">
+            אבטחה: הוסף כותרת <code className="bg-muted px-1 py-0.5 rounded">x-webhook-secret</code> עם
+            הערך שקיבלת מהמנהל, או הוסף <code className="bg-muted px-1 py-0.5 rounded">?secret=...</code> ל-URL.
+            ללא הסוד, הבקשה תידחה כשהאימות מופעל בשרת.
+          </p>
         </AlertDescription>
       </Alert>
 
@@ -200,7 +207,7 @@ export default function LeadIntegrations() {
                     <ul className="list-disc list-inside mr-6 mt-1 space-y-1">
                       <li><strong>URL:</strong> {webhookUrl}</li>
                       <li><strong>Method:</strong> POST</li>
-                      <li><strong>Headers:</strong> Content-Type: application/json</li>
+                      <li><strong>Headers:</strong> Content-Type: application/json, x-webhook-secret: (הסוד שלך)</li>
                       <li><strong>Body type:</strong> Raw</li>
                       <li><strong>Request content:</strong> JSON עם השדות הנדרשים</li>
                     </ul>
@@ -242,6 +249,7 @@ export default function LeadIntegrations() {
                     <ul className="list-disc list-inside mr-6 mt-1 space-y-1">
                       <li><strong>URL:</strong> {webhookUrl}</li>
                       <li><strong>Payload Type:</strong> JSON</li>
+                      <li><strong>Headers:</strong> x-webhook-secret: (הסוד שלך)</li>
                       <li><strong>Data:</strong> מפה את השדות מה-Trigger</li>
                     </ul>
                   </li>
@@ -295,6 +303,7 @@ document.getElementById('contactForm').addEventListener('submit', async (e) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-webhook-secret': '${webhookSecretPlaceholder}',
       },
       body: JSON.stringify(formData)
     });

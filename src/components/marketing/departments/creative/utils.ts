@@ -1,4 +1,7 @@
+import { getBrandKit } from "./brandKit";
 import type { CreativeFormat, CreativeItem, CreativeLayer, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "./types";
+import { buildDesignedCopyLayers } from "./designedLayers";
+import { buildVisualStyleLock, getVisualStyleId, type CreativeVisualStyleId } from "./visualStyles";
 import {
   approvedCopyConcepts,
   formatCopyConceptsForCreative,
@@ -49,23 +52,12 @@ export const getStoryboard = (payload: Record<string, unknown> | null | undefine
   return layoutStoryboardRtl(frames);
 };
 
-export const DEFAULT_STORYBOARD_STYLE_LOCK = [
-  "VISUAL CONTINUITY BIBLE — every frame is the same commercial:",
-  "- Medium: photoreal cinematic photography only.",
-  "- Forbidden: illustration, infographic, collage, split-screen, comic, 3D arrows, stock montage, mixed art styles.",
-  "- Camera: 35mm, shallow depth of field, natural motivated lighting, same color grade.",
-  "- Palette: warm neutrals (cream, walnut, charcoal) plus one muted teal accent.",
-  "- Cast: same people, faces, age, and wardrobe if they already appeared.",
-  "- One continuous photographic moment per frame, same world and location family.",
-].join("\n");
-
 export const getStoryboardStyle = (payload: Record<string, unknown> | null | undefined): { lock: string; referenceImageUrl?: string } => {
   const value = payload?.storyboard_style;
-  if (!value || typeof value !== "object") return { lock: DEFAULT_STORYBOARD_STYLE_LOCK };
-  const style = value as { lock?: unknown; referenceImageUrl?: unknown };
+  const stored = value && typeof value === "object" ? value as { referenceImageUrl?: unknown } : {};
   return {
-    lock: typeof style.lock === "string" && style.lock.trim() ? style.lock : DEFAULT_STORYBOARD_STYLE_LOCK,
-    referenceImageUrl: typeof style.referenceImageUrl === "string" ? style.referenceImageUrl : undefined,
+    lock: buildVisualStyleLock(payload, { storyboard: true }),
+    referenceImageUrl: typeof stored.referenceImageUrl === "string" ? stored.referenceImageUrl : undefined,
   };
 };
 
@@ -105,14 +97,23 @@ export const makeStoryboardFrame = (order: number, x = storyboardFrameX(order), 
   y,
 });
 
-export const itemToProjectDraft = (item: CreativeItem | null): CreativeProjectDraft => ({
-  title: item?.title ?? "",
-  briefText: getBriefText(item),
-  copyText: getLinkedCopyText(item),
-  instructions: String(item?.payload?.instructions ?? ""),
-  format: defaultFormat(item?.payload),
-  projectType: getProjectType(item?.payload),
-});
+export const itemToProjectDraft = (item: CreativeItem | null): CreativeProjectDraft => {
+  const kit = getBrandKit(item?.payload);
+  return {
+    title: item?.title ?? "",
+    briefText: getBriefText(item),
+    copyText: getLinkedCopyText(item),
+    instructions: String(item?.payload?.instructions ?? ""),
+    format: defaultFormat(item?.payload),
+    projectType: getProjectType(item?.payload),
+    visualStyle: getVisualStyleId(item?.payload),
+    clientId: item?.client_id ?? null,
+    clientWebsite: kit.website,
+    logoUrl: kit.logoUrl,
+    brandBook: kit.brandBook,
+    styleReferences: kit.styleReferences,
+  };
+};
 
 export const defaultFormat = (payload: Record<string, unknown> | null | undefined): CreativeFormat => {
   const value = payload?.format;
@@ -225,21 +226,57 @@ export const makeVariation = ({
   copyText,
   name,
   source = "ai",
+  visualStyle,
+  title,
+  copyKey,
+  copyLabel,
+  rejected,
+  rejectNote,
+  parentId,
+  logoUrl,
+  generationCost,
+  compositionId,
+  brandColors,
+  styleSourceId,
 }: {
   imageUrl: string;
   format: CreativeFormat;
   copyText?: string;
   name?: string;
   source?: CreativeVariation["source"];
+  visualStyle?: CreativeVisualStyleId;
+  title?: string;
+  copyKey?: string;
+  copyLabel?: string;
+  rejected?: boolean;
+  rejectNote?: string;
+  parentId?: string;
+  logoUrl?: string;
+  generationCost?: CreativeVariation["generationCost"];
+  compositionId?: CreativeVariation["compositionId"];
+  brandColors?: string[];
+  styleSourceId?: string;
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
   name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
   imageUrl,
   format,
-  layers: [],
+  layers: visualStyle
+    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, logoUrl, compositionId, brandColors })
+    : [],
   comments: [],
   createdAt: new Date().toISOString(),
   source,
+  visualStyle,
+  copyKey,
+  copyLabel,
+  copyText,
+  rejected,
+  rejectNote,
+  parentId,
+  generationCost,
+  compositionId,
+  styleSourceId,
 });
 
 export const getLinkedCopyText = (item: CreativeItem | null) => {

@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-25 — Campaigner "mine" tasks hidden by header agency filter
+- **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When a campaigner/team_manager says they see no tasks despite open assignments, explain that "שלי בלבד" needs header agency **"כל הסוכנויות"** (not MarketingCaptain alone); agency filter still works to narrow afterward.
+- **How:** Tasks board resets header to `all` when campaigner filter is `mine`; normal `filterTasksBySelectedAgency` applies. Profile must load before mine query runs.
+- **Origin:** Ana — empty tasks screen; header stuck on MarketingCaptain hid promo/DMM-MC rows.
+
 ### 2026-08-24 — Copywriter: canonical campaign inspiration library
 - **Skin slug:** `copywriter` (global)
 - **What Carmen can now do:** When writing ads/posts/emails/landing copy, pick 0–2 methods from a built-in library of canonical campaigns (VW Think Small, Steve Jobs keynotes, Durex humor, Nike, Dove Real Beauty, Old Spice, Patagonia, Mastercard Priceless), name the reference in the rationale, and steal the craft — never the original line.

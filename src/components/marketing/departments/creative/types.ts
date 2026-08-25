@@ -1,6 +1,13 @@
 export type CreativeFormat = "9:16" | "1:1" | "4:5" | "16:9";
 
+import type { BrandBook, StyleReference } from "./brandKit";
+import type { CompositionId } from "./compositions";
+import type { ImageGenerationCost } from "./imageCost";
+import type { CreativeVisualStyleId } from "./visualStyles";
+
 export type CreativeProjectType = "static" | "video";
+
+export type { CreativeVisualStyleId };
 
 export interface StoryboardStyleLock {
   lock: string;
@@ -17,6 +24,7 @@ export interface StoryboardFrame {
   voiceover: string;
   duration: number;
   imageUrl?: string;
+  generationCost?: ImageGenerationCost;
   x: number;
   y: number;
 }
@@ -27,20 +35,50 @@ export interface CreativeComment {
   createdAt: string;
 }
 
+export type LayerShadowStyle = "none" | "soft" | "extrude" | "halo";
+
+export type CreativeLayerRole =
+  | "logo"
+  | "hero"
+  | "type_field"
+  | "headline"
+  | "sub"
+  | "bullet"
+  | "icon"
+  | "icon_label"
+  | "footer"
+  | "cta"
+  | "cta_fill"
+  | "divider";
+
 export interface CreativeLayer {
   id: string;
-  type: "background" | "text";
+  type: "background" | "text" | "shape" | "image";
   x: number;
   y: number;
   width: number;
   height: number;
   rotation?: number;
+  src?: string;
+  role?: CreativeLayerRole;
+  icon?: string;
   text?: string;
   fontFamily?: string;
   fontSize?: number;
   fontWeight?: string;
   color?: string;
   textAlign?: "right" | "center" | "left";
+  fill?: string;
+  opacity?: number;
+  borderRadius?: number;
+  textShadow?: string;
+  boxShadow?: string;
+  letterSpacing?: string;
+  lineHeight?: number;
+  shadowStyle?: LayerShadowStyle;
+  shadowDepth?: number;
+  shadowColor?: string;
+  shadowBlur?: number;
   locked?: boolean;
 }
 
@@ -53,6 +91,16 @@ export interface CreativeVariation {
   comments: CreativeComment[];
   createdAt: string;
   source?: "ai" | "manual_edit" | "storyboard_import";
+  visualStyle?: CreativeVisualStyleId;
+  copyKey?: string;
+  copyLabel?: string;
+  copyText?: string;
+  rejected?: boolean;
+  rejectNote?: string;
+  parentId?: string;
+  generationCost?: ImageGenerationCost;
+  compositionId?: CompositionId;
+  styleSourceId?: string;
 }
 
 export interface CreativeItem {
@@ -91,4 +139,10 @@ export interface CreativeProjectDraft {
   instructions: string;
   format: CreativeFormat;
   projectType: CreativeProjectType;
+  visualStyle: CreativeVisualStyleId;
+  clientId?: string | null;
+  clientWebsite?: string;
+  logoUrl?: string;
+  brandBook?: BrandBook;
+  styleReferences: StyleReference[];
 }

@@ -6,7 +6,7 @@ import {
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-secret',
 }
 
 interface LeadPayload {
@@ -39,6 +39,22 @@ Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
+  }
+
+  // Optional shared secret (WEBHOOK_LEAD_INTAKE_SECRET). When set in Supabase
+  // secrets, callers must pass x-webhook-secret header or ?secret= query param.
+  // When unset, requests are accepted for backward compatibility with existing
+  // Wix / Make / Zapier integrations until URLs are updated.
+  const expectedSecret = Deno.env.get('WEBHOOK_LEAD_INTAKE_SECRET')
+  if (expectedSecret) {
+    const providedSecret = req.headers.get('x-webhook-secret')
+      ?? new URL(req.url).searchParams.get('secret')
+    if (providedSecret !== expectedSecret) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
   }
 
   try {
