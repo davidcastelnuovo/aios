@@ -129,6 +129,10 @@ export function LeadFiltersDialog({
   }, [open, currentFilters]);
 
   const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      setSaveDialogOpen(false);
+      setPresetName("");
+    }
     onOpenChange(isOpen);
   };
 
@@ -154,7 +158,7 @@ export function LeadFiltersDialog({
   };
 
   const handleSavePreset = async () => {
-    if (!presetName.trim() || !tenantId || !userId) {
+    if (!presetName.trim()) {
       toast({
         title: "נא להזין שם לפריסט",
         variant: "destructive",
@@ -164,6 +168,13 @@ export function LeadFiltersDialog({
 
     setIsSaving(true);
     try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      const resolvedUserId = user?.id || userId;
+      if (!tenantId || !resolvedUserId) {
+        throw new Error("לא זוהה משתמש או ארגון — רענן את העמוד ונסה שוב");
+      }
+
       const filtersToSave = {
         searchQuery: filters.searchQuery || null,
         salesPersonIds: filters.salesPersonIds,
@@ -179,7 +190,7 @@ export function LeadFiltersDialog({
         .from("lead_filter_presets")
         .insert({
           tenant_id: tenantId,
-          user_id: userId,
+          user_id: resolvedUserId,
           name: presetName.trim(),
           filters: filtersToSave,
         });
@@ -193,6 +204,8 @@ export function LeadFiltersDialog({
       queryClient.invalidateQueries({ queryKey: ["lead-filter-presets", tenantId] });
       setSaveDialogOpen(false);
       setPresetName("");
+      onApply(filters);
+      onOpenChange(false);
     } catch (error: any) {
       toast({
         title: "שגיאה בשמירת פריסט",
@@ -704,63 +717,75 @@ export function LeadFiltersDialog({
             </div>
           </div>
 
+          {saveDialogOpen && !editingPreset && (
+            <div className="space-y-2 border-t pt-4">
+              <Label htmlFor="preset-name">שם הפריסט</Label>
+              <Input
+                id="preset-name"
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="לדוגמה: לידים חמים"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && presetName.trim()) {
+                    e.preventDefault();
+                    handleSavePreset();
+                  }
+                }}
+              />
+            </div>
+          )}
+
           <DialogFooter className="flex gap-2 sm:gap-2">
-            <Button variant="outline" onClick={handleReset} className="gap-2">
-              <RotateCcw className="h-4 w-4" />
-              איפוס
-            </Button>
-            {editingPreset ? (
-              <Button 
-                onClick={handleUpdatePreset} 
-                disabled={isUpdating}
-                className="gap-2"
-              >
-                <Save className="h-4 w-4" />
-                {isUpdating ? "מעדכן..." : "עדכן פריסט"}
-              </Button>
-            ) : (
+            {saveDialogOpen && !editingPreset ? (
               <>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setSaveDialogOpen(true)}
-                  disabled={!hasActiveFilters}
-                  className="gap-2"
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSaveDialogOpen(false);
+                    setPresetName("");
+                  }}
                 >
-                  <Save className="h-4 w-4" />
-                  שמור כפריסט
+                  ביטול
                 </Button>
-                <Button onClick={handleApply} className="gap-2">
-                  החל פילטרים
+                <Button onClick={handleSavePreset} disabled={isSaving || !presetName.trim()} className="gap-2">
+                  <Save className="h-4 w-4" />
+                  {isSaving ? "שומר..." : "שמור פריסט"}
                 </Button>
               </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={handleReset} className="gap-2">
+                  <RotateCcw className="h-4 w-4" />
+                  איפוס
+                </Button>
+                {editingPreset ? (
+                  <Button
+                    onClick={handleUpdatePreset}
+                    disabled={isUpdating}
+                    className="gap-2"
+                  >
+                    <Save className="h-4 w-4" />
+                    {isUpdating ? "מעדכן..." : "עדכן פריסט"}
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => setSaveDialogOpen(true)}
+                      disabled={!hasActiveFilters}
+                      className="gap-2"
+                    >
+                      <Save className="h-4 w-4" />
+                      שמור כפריסט
+                    </Button>
+                    <Button onClick={handleApply} className="gap-2">
+                      החל פילטרים
+                    </Button>
+                  </>
+                )}
+              </>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Save Preset Dialog */}
-      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>שמירת פריסט פילטרים</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="preset-name">שם הפריסט</Label>
-            <Input
-              id="preset-name"
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-              placeholder="לדוגמה: לידים חמים"
-              className="mt-2"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
-              ביטול
-            </Button>
-            <Button onClick={handleSavePreset} disabled={isSaving}>
-              {isSaving ? "שומר..." : "שמור"}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
