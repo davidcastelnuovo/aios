@@ -5,7 +5,7 @@ import {
   resolveLeadClient,
 } from "../_shared/lead-routing.ts";
 import {
-  findExistingFacebookLead,
+  facebookTriggerAutomationSucceeded,
   wasFacebookLeadAutomationClaimed,
 } from "../_shared/facebook-lead-dedup.ts";
 
@@ -684,15 +684,6 @@ serve(async (req) => {
               continue;
             }
 
-            const existing = await findExistingFacebookLead(supabase, {
-              tenantId: info.tenantId,
-              leadgenId,
-            });
-            if (existing) {
-              totalSkipped++;
-              continue;
-            }
-            
             // Check deleted
             const { data: deleted } = await supabase
               .from('deleted_facebook_leads')
@@ -764,8 +755,9 @@ serve(async (req) => {
             
             // Trigger automation — directly target the specific flow automation
             // (no lead_id because we did NOT create a CRM lead in this tenant)
+            let triggerSucceeded = false;
             try {
-              await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+              const triggerResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -789,17 +781,23 @@ serve(async (req) => {
                   tenant_id: info.tenantId,
                 }),
               });
+              if (triggerResponse.ok) {
+                triggerSucceeded = facebookTriggerAutomationSucceeded(await triggerResponse.json());
+              } else {
+                console.error('Flow automation trigger error:', await triggerResponse.text());
+              }
             } catch (e) {
               console.error('Flow automation trigger error:', e);
             }
-            
-            // Record in flow_processed_leads for dedup
-            await supabase.from('flow_processed_leads').insert({
-              automation_id: info.automationId,
-              tenant_id: info.tenantId,
-              leadgen_id: leadgenId,
-              facebook_form_id: info.formId,
-            });
+
+            if (triggerSucceeded) {
+              await supabase.from('flow_processed_leads').insert({
+                automation_id: info.automationId,
+                tenant_id: info.tenantId,
+                leadgen_id: leadgenId,
+                facebook_form_id: info.formId,
+              });
+            }
           }
         } catch (formError) {
           console.error(`Error processing flow form ${info.formId}:`, formError);

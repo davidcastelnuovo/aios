@@ -11,6 +11,7 @@ import {
 } from "../_shared/lead-repeat-reopen.ts";
 import { resolveTenantHomeAgencyId } from "../_shared/resolve-tenant-agency.ts";
 import {
+  facebookTriggerAutomationSucceeded,
   findExistingFacebookLead,
   wasFacebookLeadAutomationClaimed,
 } from "../_shared/facebook-lead-dedup.ts";
@@ -214,17 +215,15 @@ serve(async (req) => {
                     automationId: flowStep.automation_id,
                     leadgenId,
                   });
-                  const existingLead = alreadyClaimed
-                    ? { id: 'claimed' }
-                    : await findExistingFacebookLead(supabase, {
-                      tenantId: flowTenantId,
-                      leadgenId,
-                    });
-
-                  if (existingLead) {
+                  if (alreadyClaimed) {
                     processedTenants.add(flowTenantId);
                     continue;
                   }
+
+                  const existingLead = await findExistingFacebookLead(supabase, {
+                    tenantId: flowTenantId,
+                    leadgenId,
+                  });
                   
                   // Fetch lead data from Facebook
                   const flowLeadResponse = await fetch(
@@ -296,23 +295,27 @@ serve(async (req) => {
                     flowFbFields[`fb_${k}`] = v;
                   }
                   
-                  // Insert lead
-                  const { data: newFlowLead, error: flowInsertErr } = await supabase
-                    .from('leads')
-                    .insert(flowLeadRecord)
-                    .select('id')
-                    .single();
-                  
-                  if (flowInsertErr) {
-                    console.error('Error inserting flow-based lead:', flowInsertErr);
-                    continue;
+                  let flowLeadId = existingLead?.id || null;
+                  if (!flowLeadId) {
+                    const { data: newFlowLead, error: flowInsertErr } = await supabase
+                      .from('leads')
+                      .insert(flowLeadRecord)
+                      .select('id')
+                      .single();
+
+                    if (flowInsertErr) {
+                      console.error('Error inserting flow-based lead:', flowInsertErr);
+                      continue;
+                    }
+                    flowLeadId = newFlowLead.id;
                   }
-                  
+
                   processedTenants.add(flowTenantId);
-                  
+
                   // Trigger flow automation directly by automationId (source: 'flow')
+                  let triggerSucceeded = false;
                   try {
-                    await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+                    const triggerResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
@@ -322,7 +325,7 @@ serve(async (req) => {
                         automationId: flowStep.automation_id,
                         source: 'flow',
                         data: {
-                          lead_id: newFlowLead.id,
+                          lead_id: flowLeadId,
                           contact_name: flowLeadRecord.contact_name || '',
                           company_name: flowLeadRecord.company_name || '',
                           phone: flowLeadRecord.phone || '',
@@ -338,18 +341,25 @@ serve(async (req) => {
                         },
                       }),
                     });
+                    if (triggerResponse.ok) {
+                      triggerSucceeded = facebookTriggerAutomationSucceeded(await triggerResponse.json());
+                    } else {
+                      console.error('Error triggering flow automation:', await triggerResponse.text());
+                    }
                   } catch (e) {
                     console.error('Error triggering flow automation:', e);
                   }
 
-                  const { error: processedErr } = await supabase.from('flow_processed_leads').insert({
-                    automation_id: flowStep.automation_id,
-                    tenant_id: flowTenantId,
-                    leadgen_id: leadgenId,
-                    facebook_form_id: formId,
-                  });
-                  if (processedErr && processedErr.code !== '23505') {
-                    console.error('Error recording flow_processed_leads:', processedErr);
+                  if (triggerSucceeded) {
+                    const { error: processedErr } = await supabase.from('flow_processed_leads').insert({
+                      automation_id: flowStep.automation_id,
+                      tenant_id: flowTenantId,
+                      leadgen_id: leadgenId,
+                      facebook_form_id: formId,
+                    });
+                    if (processedErr && processedErr.code !== '23505') {
+                      console.error('Error recording flow_processed_leads:', processedErr);
+                    }
                   }
                 }
                 
