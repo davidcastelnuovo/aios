@@ -7,6 +7,7 @@ import {
 
 test("leads and lead-integrations keep distinct permissions", () => {
   assert.equal(permissionForSubpath("leads"), "leads");
+  assert.equal(permissionForSubpath("leads/archive"), "leads");
   assert.equal(permissionForSubpath("lead-integrations"), "lead_integrations");
   assert.equal(
     permissionHandleForPathname("/t/acme/lead-integrations")?.permission,
