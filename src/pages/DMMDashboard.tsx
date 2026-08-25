@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
@@ -39,9 +39,17 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ExternalLink, Link2, RefreshCw, Search } from "lucide-react";
+import { ExternalLink, Link2, Pencil, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { type OverallStatus } from "@/lib/healthScore";
+import {
+  PulseStatusOverrideDialog,
+  type PulseStatusOverrideTarget,
+} from "@/components/clients/PulseStatusOverrideDialog";
+import {
+  PulseClientCallDialog,
+  type PulseClientCallTarget,
+} from "@/components/clients/PulseClientCallDialog";
 import {
   aggregatePulseMetricsFromRecords,
   applyPeriodMetricsToSnapshot,
@@ -57,11 +65,13 @@ import {
   getPulsePeriodBounds,
   goalLabel,
   metaChangeSummary,
+  overallStatusLabel,
   PULSE_PERIOD_OPTIONS,
   pulseSpendColumnLabel,
   pulseStatusLabel,
   pulseStatusToOverall,
   type PulseGoalDisplayRow,
+  type PulseOverrideRow,
   type PulsePeriod,
   type PulseSnapshotRow,
 } from "@/lib/pulseDashboard";
@@ -80,7 +90,9 @@ type PulseRow = ClientBase & {
   clientId: string;
   pulse: PulseSnapshotRow | null;
   goalRow: PulseGoalDisplayRow | null;
+  algorithmOverall: OverallStatus;
   overall: OverallStatus;
+  manualOverride: PulseOverrideRow | null;
   flags: string[];
 };
 
@@ -101,6 +113,7 @@ function StatusDot({ status }: { status: OverallStatus }) {
 
 export default function DMMDashboard() {
   const { tenantId } = useCurrentTenant();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath, tenantSlug } = useTenantPath();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
@@ -113,6 +126,8 @@ export default function DMMDashboard() {
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
   const [filterCampaigner, setFilterCampaigner] = useState("all");
   const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
+  const [overrideTarget, setOverrideTarget] = useState<PulseStatusOverrideTarget | null>(null);
+  const [callLogTarget, setCallLogTarget] = useState<PulseClientCallTarget | null>(null);
   const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
 
   // Sync agency from shareable URL (?agency=...)
@@ -269,6 +284,31 @@ export default function DMMDashboard() {
     staleTime: 30_000,
   });
 
+  const { data: pulseOverrides = [], refetch: refetchOverrides } = useQuery({
+    queryKey: ["pulse-dash-overrides", tenantId, clientIds.join(",")],
+    queryFn: async () => {
+      if (!tenantId || !clientIds.length) return [] as PulseOverrideRow[];
+      const { data, error } = await (supabase as any)
+        .from("campaign_pulse_overrides")
+        .select("*")
+        .in("client_id", clientIds)
+        .is("cleared_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as PulseOverrideRow[];
+    },
+    enabled: !!tenantId && clientIds.length > 0,
+    staleTime: 30_000,
+  });
+
+  const activeOverrideByClient = useMemo(() => {
+    const map = new Map<string, PulseOverrideRow>();
+    for (const row of pulseOverrides) {
+      if (!map.has(row.client_id)) map.set(row.client_id, row);
+    }
+    return map;
+  }, [pulseOverrides]);
+
   // Calendar periods (השבוע / שבוע שעבר) re-aggregate from crm_records.
   // last_7_days keeps the deterministic snapshot (matches WA digest).
   const needsPeriodOverride = period !== "last_7_days";
@@ -371,13 +411,15 @@ export default function DMMDashboard() {
       if (c.is_seo_client === true && !services.includes("seo")) services.push("seo");
       const pulse = pulseByClient.get(c.id) ?? null;
       const hasCampaign = clientHasCampaignService(services);
+      const manualOverride = activeOverrideByClient.get(c.id) ?? null;
       const goalRows = pulse ? expandPulseSnapshotToGoalRows(pulse) : [null];
       for (const goalRow of goalRows) {
-        const overall = goalRow
+        const algorithmOverall = goalRow
           ? pulseStatusToOverall(goalRow.status)
           : hasCampaign
             ? "yellow"
             : "green";
+        const overall = manualOverride?.override_status ?? algorithmOverall;
         const flags = [
           ...(goalRow?.flags || pulse?.flags || []),
           ...(!pulse && hasCampaign ? ["ממתין לבדיקת דופק"] : []),
@@ -393,13 +435,15 @@ export default function DMMDashboard() {
           agencyName: c.agencies?.name ?? "—",
           pulse,
           goalRow,
+          algorithmOverall,
           overall,
+          manualOverride,
           flags,
         });
       }
     }
     return expanded;
-  }, [filteredByRole, pulseByClient]);
+  }, [filteredByRole, pulseByClient, activeOverrideByClient]);
 
   const filtered = useMemo(() => {
     return rows
@@ -475,6 +519,7 @@ export default function DMMDashboard() {
             onClick={() => {
               refetchClients();
               refetchPulse();
+              refetchOverrides();
               if (needsPeriodOverride) refetchPeriod();
             }}
           >
@@ -640,7 +685,14 @@ export default function DMMDashboard() {
                       }
                     >
                       <TableCell className="text-center">
-                        <StatusDot status={client.overall} />
+                        <div className="flex flex-col items-center gap-1">
+                          <StatusDot status={client.overall} />
+                          {client.manualOverride ? (
+                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                              ידני
+                            </Badge>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {client.agencyName}
@@ -648,7 +700,13 @@ export default function DMMDashboard() {
                       <TableCell>
                         <div className="font-medium whitespace-nowrap">{client.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {goalRow ? pulseStatusLabel(goalRow.status) : pulse ? pulseStatusLabel(pulse.status) : "🟡 ממתין לבדיקה"}
+                          {client.manualOverride
+                            ? `${goalRow ? pulseStatusLabel(goalRow.status) : pulse ? pulseStatusLabel(pulse.status) : overallStatusLabel(client.algorithmOverall)} → ${overallStatusLabel(client.overall)}`
+                            : goalRow
+                              ? pulseStatusLabel(goalRow.status)
+                              : pulse
+                                ? pulseStatusLabel(pulse.status)
+                                : "🟡 ממתין לבדיקה"}
                         </div>
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
@@ -676,7 +734,27 @@ export default function DMMDashboard() {
                         {goalRow ? formatGoalChange(goalRow) : "—"}
                       </TableCell>
                       <TableCell className="text-xs whitespace-nowrap">
-                        {pulse ? formatLastClientCall(pulse) : "—"}
+                        {pulse ? (
+                          <button
+                            type="button"
+                            className={`text-right hover:text-primary ${
+                              pulse.last_client_call_at
+                                ? "underline decoration-dotted underline-offset-2"
+                                : "text-amber-700 underline decoration-dotted underline-offset-2 font-medium"
+                            }`}
+                            onClick={() =>
+                              setCallLogTarget({
+                                clientId: client.clientId,
+                                clientName: client.name,
+                                pulse,
+                              })
+                            }
+                          >
+                            {formatLastClientCall(pulse)}
+                          </button>
+                        ) : (
+                          "—"
+                        )}
                         {pulse?.last_client_call_by ? (
                           <div className="text-muted-foreground">תיעד/ה: {pulse.last_client_call_by}</div>
                         ) : null}
@@ -726,15 +804,35 @@ export default function DMMDashboard() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-2 gap-1"
-                          onClick={() => openClientCard(client.clientId)}
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                          <span className="text-xs">פתח כרטיס</span>
-                        </Button>
+                        <div className="flex flex-wrap gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 gap-1"
+                            onClick={() =>
+                              setOverrideTarget({
+                                clientId: client.clientId,
+                                clientName: client.name,
+                                algorithmOverall: client.algorithmOverall,
+                                pulse: client.pulse,
+                                flags: client.flags,
+                                activeOverride: client.manualOverride,
+                              })
+                            }
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            <span className="text-xs">ערוך צבע</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 gap-1"
+                            onClick={() => openClientCard(client.clientId)}
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span className="text-xs">פתח כרטיס</span>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -747,8 +845,47 @@ export default function DMMDashboard() {
       {dataUpdatedAt ? (
         <p className="text-xs text-muted-foreground">
           טבלאות לא מחוברות מוצגות כאן ליד הלקוח (צהוב) — לא נשלחות בוואטסאפ.
+          {" "}
+          עריכת צבע ידנית נשמרת עם הסבר לכרמן ומשפיעה על הדשבורד (לא על וואטסאפ).
         </p>
       ) : null}
+
+      <PulseStatusOverrideDialog
+        open={!!overrideTarget}
+        onOpenChange={(open) => {
+          if (!open) setOverrideTarget(null);
+        }}
+        target={overrideTarget}
+        onSaved={() => {
+          refetchOverrides();
+          refetchClients();
+        }}
+      />
+
+      <PulseClientCallDialog
+        open={!!callLogTarget}
+        onOpenChange={(open) => {
+          if (!open) setCallLogTarget(null);
+        }}
+        target={callLogTarget}
+        onSaved={({ clientId, lastClientCallAt, lastClientCallBy }) => {
+          const pulseQueryKey = ["pulse-dash-snapshots", tenantId, clientIds.join(","), selectedAgency] as const;
+          queryClient.setQueryData<PulseSnapshotRow[]>(pulseQueryKey, (old) => {
+            if (!old) return old;
+            return old.map((row) =>
+              row.client_id === clientId
+                ? {
+                    ...row,
+                    last_client_call_at: lastClientCallAt,
+                    last_client_call_by: lastClientCallBy,
+                  }
+                : row,
+            );
+          });
+          queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
+          queryClient.invalidateQueries({ queryKey: ["pulse-client-call-updates", clientId] });
+        }}
+      />
     </div>
   );
 }

@@ -2858,6 +2858,34 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         client_name: row.client_name,
         agency_name: row.agency_name,
       })))
+      const pulseClientIds = normalizedRows.map((row: any) => row.client_id).filter(Boolean)
+      let manualOverrides: any[] = []
+      if (pulseClientIds.length) {
+        const { data: overrideRows } = await supabase
+          .from('campaign_pulse_overrides')
+          .select('client_id, algorithm_status, override_status, reason, algorithm_flags, algorithm_metrics, created_at, clients(name)')
+          .eq('tenant_id', tenantId)
+          .in('client_id', pulseClientIds)
+          .is('cleared_at', null)
+          .order('created_at', { ascending: false })
+        const seen = new Set<string>()
+        manualOverrides = (overrideRows || [])
+          .filter((row: any) => {
+            if (seen.has(row.client_id)) return false
+            seen.add(row.client_id)
+            return true
+          })
+          .map((row: any) => ({
+            client_id: row.client_id,
+            client_name: row.clients?.name || null,
+            algorithm_status: row.algorithm_status,
+            override_status: row.override_status,
+            reason: row.reason,
+            algorithm_flags: row.algorithm_flags || [],
+            algorithm_metrics: row.algorithm_metrics || {},
+            corrected_at: row.created_at,
+          }))
+      }
       const statusLabel: Record<string, string> = {
         healthy: '🟢 תקין',
         warning: '🟡 תשומת לב',
@@ -2942,10 +2970,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         status_counts: statusCounts,
         dashboard_url: dashboardUrl,
         whatsapp_digest: whatsappDigest,
+        manual_overrides: manualOverrides,
         rows: normalizedRows,
         formatted_markdown: tableLines.join('\n'),
         instructions_to_agent:
-          'בדשבורד הפנימי אפשר להציג את formatted_markdown. בוואטסאפ — רק whatsapp_digest (סיכום + קישור), בלי טבלה. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק.',
+          'בדשבורד הפנימי אפשר להציג את formatted_markdown. בוואטסאפ — רק whatsapp_digest (סיכום + קישור), בלי טבלה. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק. אם manual_overrides לא ריק — קראי את reason של כל תיקון ידני: זה feedback מקצועי על מתי האלגוריתם מגזים/מפחית. אל תתעלמי ממנו בדיונים על סיווג לקוחות; אל תשני snapshot בעצמך.',
       }
     }
     case 'analyze_campaign_performance': {

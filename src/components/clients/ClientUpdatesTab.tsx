@@ -27,7 +27,8 @@ import {
   Phone,
   Mail,
   Video,
-  AlertTriangle
+  AlertTriangle,
+  Activity
 } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -62,6 +63,7 @@ const INTERACTION_TYPES = [
   { value: "seo_update",      label: "עדכון SEO",     icon: AlertTriangle },
   { value: "meeting_summary", label: "סיכום פגישה",   icon: Video },
   { value: "other",           label: "אחר",           icon: AlertTriangle },
+  { value: "pulse_override",  label: "תיקון דופק",    icon: Activity },
 ];
 
 export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: ClientUpdatesTabProps) {

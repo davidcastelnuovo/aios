@@ -20,7 +20,7 @@ import {
 } from "./brandKit";
 import { Globe, Loader2, Paperclip, Save, Sparkles, Trash2, Upload } from "lucide-react";
 import type { CreativeItem, CreativeProjectDraft } from "./types";
-import { itemToProjectDraft, projectTypeLabel } from "./utils";
+import { getApprovedCopyConcepts, itemToProjectDraft, projectTypeLabel } from "./utils";
 import { VisualStyleSelect } from "./VisualStyleSelect";
 import { toast } from "sonner";
 
@@ -381,6 +381,23 @@ export function CreativeBriefEditor({ item, tenantId, client, onSave, onAssignCl
               placeholder="הטקסט שיופיע על הקריאייטיב או ילווה את הסרטון"
             />
           </div>
+          {getApprovedCopyConcepts(item).length > 0 && (
+            <div className="grid gap-2">
+              <Label>קונספטים מאושרים מהקופי</Label>
+              {getApprovedCopyConcepts(item).map((concept) => (
+                <div key={concept.id} className="rounded-lg border bg-muted/30 p-3 text-right">
+                  <div className="text-sm font-semibold">{concept.name}</div>
+                  {concept.bigIdea && <p className="mt-1 text-xs leading-relaxed">{concept.bigIdea}</p>}
+                  {concept.visualLanguage && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">ויזואל: {concept.visualLanguage}</p>
+                  )}
+                  {concept.hook && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">הוק: {concept.hook}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <div>
             <Label>הנחיות מיוחדות</Label>
             <Textarea

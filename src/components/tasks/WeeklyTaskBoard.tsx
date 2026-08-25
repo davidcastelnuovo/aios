@@ -106,7 +106,15 @@ export function WeeklyTaskBoard() {
     queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId,
   });
-  const { selectedAgency } = useAgency();
+  const { selectedAgency, setSelectedAgency } = useAgency();
+
+  // Personal queue ("mine"): default header to "all agencies" so cross-agency
+  // assignments are visible. User can still narrow by agency afterward.
+  useEffect(() => {
+    if (filters.campaignerId === "mine") {
+      setSelectedAgency("all");
+    }
+  }, [filters.campaignerId, setSelectedAgency]);
 
   const { data: clientsList = [] } = useQuery({
     queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
@@ -211,7 +219,7 @@ export function WeeklyTaskBoard() {
   }, [currentDate, viewMode]);
 
   // Fetch user profile to get campaigner_id / sales_person_id for "mine" filter
-  const { data: userProfile } = useQuery({
+  const { data: userProfile, isSuccess: userProfileReady } = useQuery({
     queryKey: ["user-profile-for-tasks", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -267,7 +275,7 @@ export function WeeklyTaskBoard() {
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching } = useQuery({
     queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
-    enabled: !!tenantId && !!user?.id,
+    enabled: !!tenantId && !!user?.id && (filters.campaignerId !== "mine" || userProfileReady),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
@@ -403,7 +411,6 @@ export function WeeklyTaskBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFetching, selectedAgency, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
 
-  // Defense in depth (Clients.tsx pattern): never render tasks outside the header agency.
   const tasks = useMemo(
     () => filterTasksBySelectedAgency(localTasks, selectedAgency),
     [localTasks, selectedAgency],

@@ -28,3 +28,10 @@ export function resolveClientUpdateType(selectedType: string, content: string): 
   if (selectedType === "weekly_update" && describesCompletedClientPhoneCall(content)) return "call";
   return selectedType;
 }
+
+/** Whether a client_updates row counts as a documented client phone call for pulse. */
+export function isClientCallUpdate(updateType: string | null | undefined, content: string): boolean {
+  if (updateType === "call") return true;
+  if (updateType === "weekly_update") return describesCompletedClientPhoneCall(content);
+  return false;
+}

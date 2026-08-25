@@ -2,6 +2,12 @@ import { getBrandKit } from "./brandKit";
 import type { CreativeFormat, CreativeItem, CreativeLayer, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "./types";
 import { buildDesignedCopyLayers } from "./designedLayers";
 import { buildVisualStyleLock, getVisualStyleId, type CreativeVisualStyleId } from "./visualStyles";
+import {
+  approvedCopyConcepts,
+  formatCopyConceptsForCreative,
+  parseCopyConceptsFromPayload,
+  type CopyConcept,
+} from "@/components/marketing/copyConcepts";
 
 export type { CreativeProjectType, StoryboardFrame };
 
@@ -281,6 +287,20 @@ export const getLinkedCopyText = (item: CreativeItem | null) => {
 export const getBriefText = (item: CreativeItem | null) => {
   if (!item?.payload) return "";
   return String(item.payload.brief_text ?? item.payload.brief ?? "");
+};
+
+export const getApprovedCopyConcepts = (item: CreativeItem | null): CopyConcept[] => {
+  if (!item?.payload) return [];
+  const storedApproved = parseCopyConceptsFromPayload({ copy_concepts: item.payload.approved_concepts });
+  if (storedApproved.length > 0) return storedApproved.map((concept) => ({ ...concept, approved: true }));
+  return approvedCopyConcepts(parseCopyConceptsFromPayload(item.payload));
+};
+
+export const getConceptBrief = (item: CreativeItem | null) => {
+  if (!item?.payload) return "";
+  const stored = item.payload.concept_brief;
+  if (typeof stored === "string" && stored.trim()) return stored.trim();
+  return formatCopyConceptsForCreative(getApprovedCopyConcepts(item));
 };
 
 export const cameFromCopy = (item: CreativeItem | null) =>

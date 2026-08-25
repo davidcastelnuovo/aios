@@ -44,6 +44,7 @@ import { he } from "date-fns/locale";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { CarmenWhatsAppAccess } from "@/components/carmen/CarmenWhatsAppAccess";
+import { resolveClientChildTenantId } from "@/lib/clientContactTenant";
 
 interface ClientsChatViewProps {
   clients: any[];
@@ -1193,22 +1194,25 @@ export function ClientsChatView({
                         <div className="flex gap-2 justify-end">
                           <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setAddingContact(false); setNewContact({ contact_name: "", phone: "", email: "", role: "" }); }}>ביטול</Button>
                           <Button size="sm" className="h-7 text-xs" disabled={!newContact.contact_name.trim()} onClick={async () => {
-                            if (!tenantId) return;
                             try {
-                              const { error } = await supabase.from("client_contacts").insert({
+                              const contactTenantId = resolveClientChildTenantId(selectedClient, tenantId);
+                              const { data: inserted, error } = await supabase.from("client_contacts").insert({
                                 client_id: selectedClient.id,
-                                tenant_id: tenantId,
+                                tenant_id: contactTenantId,
                                 contact_name: newContact.contact_name.trim(),
                                 phone: newContact.phone.trim() || null,
                                 email: newContact.email.trim() || null,
                                 role: newContact.role.trim() || null,
-                              });
+                              }).select("id").maybeSingle();
                               if (error) throw error;
+                              if (!inserted) throw new Error("איש הקשר נשמר אך אין הרשאת צפייה — נסה לרענן");
                               toast.success("איש קשר נוסף");
                               setAddingContact(false);
                               setNewContact({ contact_name: "", phone: "", email: "", role: "" });
-                              queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id, tenantId] });
-                            } catch { toast.error("שגיאה בהוספת איש קשר"); }
+                              await queryClient.refetchQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                            } catch (err: any) {
+                              toast.error(err?.message ? `שגיאה בהוספת איש קשר: ${err.message}` : "שגיאה בהוספת איש קשר");
+                            }
                           }}>שמור</Button>
                         </div>
                       </div>
@@ -1239,8 +1243,10 @@ export function ClientsChatView({
                                       if (error) throw error;
                                       toast.success("איש קשר עודכן");
                                       setEditingContactId(null);
-                                      queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id, tenantId] });
-                                    } catch { toast.error("שגיאה בעדכון איש קשר"); }
+                                      queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                                    } catch (err: any) {
+                                      toast.error(err?.message ? `שגיאה בעדכון איש קשר: ${err.message}` : "שגיאה בעדכון איש קשר");
+                                    }
                                   }}>שמור</Button>
                                 </div>
                               </div>
@@ -1253,8 +1259,10 @@ export function ClientsChatView({
                                         const { error } = await supabase.from("client_contacts").delete().eq("id", contact.id);
                                         if (error) throw error;
                                         toast.success("איש קשר נמחק");
-                                        queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id, tenantId] });
-                                      } catch { toast.error("שגיאה במחיקה"); }
+                                        queryClient.invalidateQueries({ queryKey: ["client-contacts", selectedClient.id] });
+                                      } catch (err: any) {
+                                        toast.error(err?.message ? `שגיאה במחיקה: ${err.message}` : "שגיאה במחיקה");
+                                      }
                                     }}>
                                     <Trash2 className="h-3 w-3" />
                                   </Button>

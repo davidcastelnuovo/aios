@@ -30,6 +30,8 @@ import {
   getBriefText,
   getLinkedCopyText,
   getProjectType,
+  getApprovedCopyConcepts,
+  getConceptBrief,
   getStoryboard,
   getStoryboardStyle,
   getVariations,
@@ -574,6 +576,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         `Next shot in ONE continuous ${visual.label} commercial. Keep the same world, people, wardrobe, lighting and grade.`,
         style.lock,
         selected.title && !isInternalCopyLine(selected.title) && `Campaign: ${selected.title}`,
+        getConceptBrief(selected) && `Approved copy concepts (keep the visual idea, not the words):\n${getConceptBrief(selected)}`,
         `Frame ${frame.order}: ${frame.title}`,
         frame.shot && `Shot type: ${frame.shot}`,
         frame.visualPrompt && `Action/setting change only: ${frame.visualPrompt}`,
@@ -798,6 +801,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
       buildNoGlyphLock({ regenerate }),
       sceneBrief,
+      getConceptBrief(selected) && `Approved copy concepts (keep the visual idea, not the words):\n${getConceptBrief(selected)}`,
       styleSource
         ? buildStyleContinuityLock({
           sourceLabel: styleSource.copyLabel || styleSource.name,
@@ -896,7 +900,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       const nextVariations = replaceTarget
         ? variations.map((variation) => variation.id === replaceTarget.id ? { ...replaceTarget, ...nextVariation, rejected: false } : variation)
         : [...variations, nextVariation];
-        await persistVariations(
+      await persistVariations(
         nextVariations,
         replaceTarget
           ? `העיצוב נוצר מחדש בסגנון ${style.label}`
@@ -1087,10 +1091,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     if (!selected) return;
     const copyText = String(copyItem.payload?.copy_text ?? "");
     const briefText = String(copyItem.payload?.brief_text ?? "");
+    const approved = getApprovedCopyConcepts(copyItem);
     const nextPayload = {
       ...(selected.payload ?? {}),
       copy_text: copyText,
       brief_text: briefText || selected.payload?.brief_text,
+      copy_concepts: copyItem.payload?.copy_concepts,
+      approved_concepts: copyItem.payload?.approved_concepts ?? approved,
+      creative_concept: copyItem.payload?.creative_concept,
+      concept_brief: getConceptBrief(copyItem) || undefined,
       linked_copy_item_id: copyItem.id,
       linked_copy_title: copyItem.title,
       content_type: copyItem.payload?.content_type ?? selected.payload?.content_type,
@@ -1184,10 +1193,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     <>
       <ScrollArea className="flex-1">
         <div className="space-y-3 p-3">
-          {(getBriefText(selected) || getLinkedCopyText(selected)) && (
+          {(getBriefText(selected) || getLinkedCopyText(selected) || getConceptBrief(selected)) && (
             <Collapsible defaultOpen={false}>
               <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs font-semibold hover:bg-muted/50">
-                <span>בריף וקופi משויך</span>
+                <span>בריף, קופי וקונספטים</span>
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-60 transition-transform [[data-state=open]_&]:rotate-180" />
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-2">
@@ -1199,13 +1208,26 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 )}
                 {getLinkedCopyText(selected) && (
                   <Card className="p-3">
-                    <Badge variant="outline" className="mb-2 gap-1"><PenLine className="h-3 w-3" />קופi משויך</Badge>
+                    <Badge variant="outline" className="mb-2 gap-1"><PenLine className="h-3 w-3" />קופי משויך</Badge>
                     <p className="text-xs leading-relaxed whitespace-pre-wrap">{getLinkedCopyText(selected)}</p>
                     {selected?.payload?.linked_copy_title && (
                       <p className="mt-2 text-[10px] text-muted-foreground">מקור: {String(selected.payload.linked_copy_title)}</p>
                     )}
                   </Card>
                 )}
+                {getApprovedCopyConcepts(selected).map((concept) => (
+                  <Card key={concept.id} className="p-3">
+                    <Badge className="mb-2 bg-emerald-600 hover:bg-emerald-600">קונספט מאושר</Badge>
+                    <div className="text-xs font-semibold">{concept.name}</div>
+                    {concept.bigIdea && <p className="mt-1 text-xs leading-relaxed">{concept.bigIdea}</p>}
+                    {concept.visualLanguage && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">ויזואל: {concept.visualLanguage}</p>
+                    )}
+                    {concept.hook && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">הוק: {concept.hook}</p>
+                    )}
+                  </Card>
+                ))}
               </CollapsibleContent>
             </Collapsible>
           )}
@@ -1729,6 +1751,10 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
         handoff_from: mode === "from_copy" ? "copy" : undefined,
         linked_copy_item_id: linkedCopy?.id,
         linked_copy_title: linkedCopy?.title,
+        copy_concepts: linkedCopy?.payload?.copy_concepts,
+        approved_concepts: linkedCopy?.payload?.approved_concepts,
+        creative_concept: linkedCopy?.payload?.creative_concept,
+        concept_brief: linkedCopy ? getConceptBrief(linkedCopy) || undefined : undefined,
         content_type: linkedCopy?.payload?.content_type,
         channel: linkedCopy?.payload?.channel,
         instructions: linkedCopy?.payload?.instructions,
