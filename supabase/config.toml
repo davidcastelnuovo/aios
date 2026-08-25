@@ -23,6 +23,10 @@ verify_jwt = false
 [functions.cursor-mcp]
 verify_jwt = false
 
+# Grok Bot MCP — custom bearer (GROK_MCP_BEARER, falls back to CURSOR_MCP_BEARER).
+[functions.grok-mcp]
+verify_jwt = false
+
 # Shared read-only architecture graph MCP. It validates its own bearer token.
 [functions.system-graph-mcp]
 verify_jwt = false
