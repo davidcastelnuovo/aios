@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuth } from "../_shared/security.ts";
 import { resolveOpenAIKey } from "../_shared/ai.ts";
 import { buildSkillsBlockBySlug } from "../_shared/skills/registry.ts";
+import { formatApprovedConceptsFromPayload } from "../_shared/copy-concepts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -209,6 +210,10 @@ serve(async (req) => {
     const sourceBrief =
       item.payload?.brief_text ?? item.payload?.brief ?? item.payload?.source_summary ?? "";
     if (sourceBrief) userParts.push(`בריף מקור / סיכום פגישה:\n${sourceBrief}`);
+    const approvedConcepts = formatApprovedConceptsFromPayload((item.payload ?? {}) as Record<string, unknown>);
+    if (approvedConcepts) {
+      userParts.push(`קונספטים מאושרים ממחלקת הקופי — בנה את הוויזואל סביבם, לא כטקסט על רקע:\n${approvedConcepts}`);
+    }
     if (item.payload?.notes) userParts.push(`הערות: ${item.payload.notes}`);
     const storyboardFrame = item.payload?.storyboard_frame as Record<string, unknown> | undefined;
     if (stageType === "creative" && storyboardFrame && typeof storyboardFrame === "object") {
@@ -237,7 +242,7 @@ serve(async (req) => {
     } else if (stageType === "copy") {
       userParts.push("\nכתוב את הקופי המלא לפריט. קצר וממוקד.");
     } else if (stageType === "creative") {
-      userParts.push("\nצור תמונה ויזואלית מקצועית לפריט הזה.");
+      userParts.push("\nצור תמונה ויזואלית מקצועית לפריט הזה. אם יש קונספטים מאושרים — בנה סצנה סביבם, לא טקסט על רקע.");
     } else if (stageType === "measurement") {
       userParts.push("\nהפק סיכום ביצועים והמלצות פעולה לשיפור.");
     }
@@ -264,7 +269,7 @@ serve(async (req) => {
           model: TEXT_MODEL,
           messages: [
             { role: "system", content: systemPrompt || "You are a creative director. Generate concise photorealistic image prompts in English." },
-            { role: "user", content: userPrompt + "\n\nGenerate a concise gpt-image-1 prompt (max 200 words) in English for this marketing creative. Focus on visual elements, style, composition, and lighting. Do not include on-image text unless explicitly requested in the brief." },
+            { role: "user", content: userPrompt + "\n\nGenerate a concise gpt-image-1 prompt (max 200 words) in English for this marketing creative. Build a striking scene from any approved concept (big idea, visual language, first-second hook). Focus on visual elements, style, composition, and lighting. Do not make a generic text-on-background ad. Do not include on-image text unless explicitly requested in the brief." },
           ],
           max_tokens: 300,
         }),

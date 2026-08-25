@@ -8,6 +8,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { applyClientFilter, ALL_CLIENTS_FILTER, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { isCopyDepartmentItem } from "@/components/marketing/departmentFilters";
+import {
+  approvedCopyConcepts,
+  CONCEPTS_OUTPUT_HINT,
+  formatCopyConceptsForCreative,
+  parseConceptsFromCarmen,
+  parseCopyConceptsFromPayload,
+} from "@/components/marketing/copyConcepts";
+import { CopyConceptsPanel } from "@/components/marketing/departments/CopyConceptsPanel";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -192,6 +200,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<CopyItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [generatingConcepts, setGeneratingConcepts] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const { data: items = [], isLoading } = useQuery({
@@ -254,6 +263,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const chat = useMemo(() => readChat(selected?.payload ?? null), [selected?.payload]);
   const copyText = asText(selected?.payload?.copy_text);
+  const concepts = useMemo(
+    () => parseCopyConceptsFromPayload(selected?.payload as Record<string, unknown> | null),
+    [selected?.payload],
+  );
+  const approvedConcepts = useMemo(() => approvedCopyConcepts(concepts), [concepts]);
   const clientName = clients.find((client) => client.id === selected?.client_id)?.name;
   const agencyName = (() => {
     const client = clients.find((row) => row.id === selected?.client_id);
@@ -376,6 +390,105 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     }
   };
 
+  const saveConcepts = async (nextConcepts: ReturnType<typeof parseCopyConceptsFromPayload>) => {
+    if (!selected) return;
+    const nextPayload = {
+      ...(selected.payload ?? {}),
+      department: "copy",
+      copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
+    };
+    const { error } = await supabase
+      .from("marketing_work_items")
+      .update({ payload: nextPayload, status: "draft" })
+      .eq("id", selected.id)
+      .eq("tenant_id", tenantId);
+    if (error) throw error;
+  };
+
+  const generateConcepts = async () => {
+    if (!selected || generatingConcepts) return;
+    const brief = asText(selected.payload?.brief_text);
+    if (!copyText && !brief) {
+      toast.error("כתבו קופי או בריף לפני יצירת קונספטים");
+      return;
+    }
+    setGeneratingConcepts(true);
+    try {
+      const type = typeLabel(asText(selected.payload?.content_type) || "posts");
+      const website = asText(selected.payload?.client_website);
+      const studioAddon = [
+        "זה שרשור סטודיו קופי נפרד מהצ׳ט הראשי של כרמן.",
+        "את מציעה קונספטים קריאייטיביים למחלקת הגרפיקה — לא עוד וריאציות טקסט.",
+        "כל קונספט = רעיון גדול + שפה ויזואלית + הוק בשנייה הראשונה. אסור טקסט על רקע חלק כברירת מחדל.",
+        "גנבי שיטה מספריית ההשראה (Think Small, ג'ובס, דורקס, נייקי, דאב, אולד ספייס, פטגוניה, מאסטרקארד) — לא סלוגן מקורי.",
+        "אל תמציאי מחירים, תוצאות, פיצ'רים או הוכחות חברתיות.",
+        `פרויקט: ${selected.title || "בלי שם"}`,
+        `סוג תוצר: ${type}`,
+        clientName && `לקוח: ${clientName}`,
+        "פורמט פלט חובה:",
+        CONCEPTS_OUTPUT_HINT,
+      ].filter(Boolean).join("\n");
+      const commandText = [
+        `הציעי 3 קונספטים ויזואליים שונים לפרויקט "${selected.title || "בלי שם"}" (${type}).`,
+        clientName && `לקוח: ${clientName}.`,
+        website && `אתר: ${website}.`,
+        brief && `בריף:\n${brief}`,
+        copyText && `קופי מאושר לכיוון:\n${copyText}`,
+        "כל קונספט חייב זווית אחרת (כאב / הומור / הוכחה / סקרנות). החזירי רק את בלוק ---CONCEPTS---.",
+      ].filter(Boolean).join("\n\n");
+      const { data, error } = await supabase.functions.invoke("run-ai-agent", {
+        body: {
+          command_text: commandText,
+          tenant_id: tenantId,
+          client_id: selected.client_id,
+          surface: "internal_chat",
+          task_mode: "copywriting",
+          task_skills: ["copywriter"],
+          pin_skills_only: true,
+          system_prompt_addon: studioAddon,
+          user_name: "מחלקת קופי",
+        },
+      });
+      if (error) throw new Error(await invokeErrorMessage(error, data, "כרמן לא הצליחה להציע קונספטים"));
+      if (data?.error) throw new Error(data.error);
+      const output = String(data?.output ?? data?.reply ?? data?.message ?? "").trim();
+      if (!output) throw new Error("כרמן החזירה תשובה ריקה");
+      const nextConcepts = parseConceptsFromCarmen(output);
+      if (nextConcepts.length === 0) throw new Error("לא הצלחתי לפענח קונספטים מהתשובה. נסו שוב.");
+      await saveConcepts(nextConcepts);
+      await supabase.from("marketing_assets").insert({
+        tenant_id: tenantId,
+        item_id: selected.id,
+        stage_id: selected.current_stage_id,
+        type: "brief",
+        content: formatCopyConceptsForCreative(nextConcepts),
+        meta: { source: "copy_concepts", skin_slug: "copywriter" },
+      });
+      toast.success("קונספטים מוכנים — אשרו לפחות אחד לפני ההעברה");
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "יצירת הקונספטים נכשלה"));
+    } finally {
+      setGeneratingConcepts(false);
+    }
+  };
+
+  const toggleConceptApproval = async (id: string) => {
+    if (!selected) return;
+    const now = new Date().toISOString();
+    const nextConcepts = concepts.map((concept) =>
+      concept.id === id
+        ? { ...concept, approved: !concept.approved, approvedAt: !concept.approved ? now : null }
+        : concept,
+    );
+    try {
+      await saveConcepts(nextConcepts);
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "לא הצלחתי לעדכן אישור קונספט"));
+    }
+  };
+
   const handoff = useMutation({
     mutationFn: async () => {
       if (!selected?.client_id) throw new Error("שייכו לקוח בהגדרות כדי להעביר לקריאייטיב");
@@ -385,6 +498,14 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       if (stageError) throw stageError;
       const creativeStage = stages?.find((stage) => stage.stage_type === "creative");
       if (!creativeStage) throw new Error("שלב קריאייטיב לא נמצא");
+      const readyConcepts = approvedCopyConcepts(
+        parseCopyConceptsFromPayload(selected.payload as Record<string, unknown>),
+      );
+      if (readyConcepts.length === 0) {
+        throw new Error("אשרו לפחות קונספט אחד לפני ההעברה לקריאייטיב");
+      }
+      const primary = readyConcepts[0];
+      const conceptBrief = formatCopyConceptsForCreative(readyConcepts);
       const nextPayload = {
         ...(selected.payload ?? {}),
         department: "creative",
@@ -395,10 +516,20 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         linked_copy_title: selected.title,
         copy_text: selected.payload?.copy_text ?? "",
         brief_text: selected.payload?.brief_text ?? "",
+        copy_concepts: JSON.parse(JSON.stringify(concepts)) as JsonValue,
+        approved_concepts: JSON.parse(JSON.stringify(readyConcepts)) as JsonValue,
+        creative_concept: {
+          name: primary.name,
+          bigIdea: primary.bigIdea,
+          visualLanguage: primary.visualLanguage,
+          whyItWorks: primary.whyItWorks,
+          hook: primary.hook,
+        } as unknown as JsonValue,
+        concept_brief: conceptBrief,
         content_type: selected.payload?.content_type,
         channel: selected.payload?.channel,
         instructions: selected.payload?.instructions,
-        notes: selected.payload?.notes,
+        notes: [asText(selected.payload?.notes), `קונספטים מאושרים:\n${conceptBrief}`].filter(Boolean).join("\n\n"),
         format: selected.payload?.format ?? "1:1",
         intake_source: "copy_handoff",
       };
@@ -415,7 +546,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       if (error) throw error;
     },
     onSuccess: async () => {
-      toast.success("הועבר למחלקת קריאייטיב");
+      toast.success("הועברו קופי וקונספטים מאושרים לקריאייטיב");
       await refresh();
     },
     onError: (error: unknown) => toast.error(errorMessage(error, "ההעברה נכשלה")),
@@ -586,8 +717,18 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
               <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => setSettingsOpen(true)}>
                 <Settings2 className="h-4 w-4" />הגדרות
               </Button>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => handoff.mutate()} disabled={handoff.isPending}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => handoff.mutate()}
+                disabled={handoff.isPending}
+                title={approvedConcepts.length === 0 ? "אשרו לפחות קונספט אחד" : "העבר קופי וקונספטים מאושרים"}
+              >
                 <Send className="h-3.5 w-3.5" />לקריאייטיב
+                {approvedConcepts.length > 0 && (
+                  <Badge variant="secondary" className="h-4 px-1 text-[9px]">{approvedConcepts.length}</Badge>
+                )}
               </Button>
             </header>
 
@@ -630,6 +771,13 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                     </p>
                   </div>
                 )}
+                <CopyConceptsPanel
+                  concepts={concepts}
+                  generating={generatingConcepts}
+                  canGenerate={!!copyText || !!asText(selected.payload?.brief_text)}
+                  onGenerate={() => void generateConcepts()}
+                  onToggleApprove={(id) => void toggleConceptApproval(id)}
+                />
                 <div ref={threadEndRef} />
               </div>
             </div>
@@ -671,7 +819,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
               <PenLine className="h-7 w-7" />
             </div>
             <h2 className="text-xl font-semibold">מחלקת קופי</h2>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">צרו פרויקט חדש כמו אייג׳נט. הקופי יופיע כאן לעריכה, והצ׳אט למטה ישפר אותו.</p>
+            <p className="mt-2 max-w-sm text-sm text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">צרו פרויקט, כתבו קופי, אשרו קונספטים, והעבירו לקריאייטיב כדי שהגרפיקה תיבנה מהרעיון.</p>
             <Button className="mt-5 gap-2" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />פרויקט חדש</Button>
           </div>
         )}
