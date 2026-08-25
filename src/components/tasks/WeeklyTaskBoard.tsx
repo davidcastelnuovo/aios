@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { markLinkedTaskDoneForCalendarEvent } from "@/lib/taskCalendarSync";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -31,13 +31,12 @@ import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
-import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters, resolveDefaultCampaignerFilter } from "./TaskFiltersDialog";
+import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters, resolveMineTaskAssignee } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import type { QuickTaskPayload } from "./QuickTaskInput";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useUserRole } from "@/hooks/useUserRole";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
@@ -47,7 +46,7 @@ import {
   resolveBoardTaskAgency,
   resolveNewTaskAgency,
   resolveTasksBoardScope,
-  filterTasksBySelectedAgency,
+  filterTasksForBoardView,
   syncLocalTasksForAgencyFilter,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
@@ -95,7 +94,6 @@ export function WeeklyTaskBoard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
-  const { isOwner, isSuperAdmin, isReady: rolesReady, isError: rolesError } = useUserRole();
   const { state: sidebarState } = useSidebar();
   const { t } = useTerminology();
 
@@ -108,7 +106,7 @@ export function WeeklyTaskBoard() {
     queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId,
   });
-  const { selectedAgency, setSelectedAgency } = useAgency();
+  const { selectedAgency, agencies } = useAgency();
 
   const { data: clientsList = [] } = useQuery({
     queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
@@ -132,19 +130,9 @@ export function WeeklyTaskBoard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  // Campaigners start on "mine". Owners/admins are switched to the team board
-  // once roles load — see resolveDefaultCampaignerFilter.
+  // Everyone lands on their own queue: tasks assigned to the staff member
+  // linked on the user (profiles.campaigner_id / sales_person_id).
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
-  const [defaultFilterReady, setDefaultFilterReady] = useState(false);
-  const appliedDefaultFilter = useRef(false);
-
-  // Personal queue ("mine"): default header to "all agencies" so cross-agency
-  // assignments are visible. User can still narrow by agency afterward.
-  useEffect(() => {
-    if (filters.campaignerId === "mine") {
-      setSelectedAgency("all");
-    }
-  }, [filters.campaignerId, setSelectedAgency]);
 
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
@@ -224,7 +212,7 @@ export function WeeklyTaskBoard() {
   }, [currentDate, viewMode]);
 
   // Fetch user profile to get campaigner_id / sales_person_id for "mine" filter
-  const { data: userProfile, isSuccess: userProfileReady, isError: userProfileError } = useQuery({
+  const { data: userProfile, isSuccess: userProfileReady } = useQuery({
     queryKey: ["user-profile-for-tasks", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -237,21 +225,6 @@ export function WeeklyTaskBoard() {
     },
     enabled: !!user?.id,
   });
-
-  useEffect(() => {
-    if (appliedDefaultFilter.current) return;
-    if (!rolesReady && !rolesError) return;
-    if (!isOwner && !isSuperAdmin && !userProfileReady && !userProfileError) return;
-
-    const next = resolveDefaultCampaignerFilter({
-      isOwner,
-      isSuperAdmin,
-      hasPersonalQueue: !!(userProfile?.campaigner_id || userProfile?.sales_person_id),
-    });
-    setFilters((prev) => (prev.campaignerId === next ? prev : { ...prev, campaignerId: next }));
-    appliedDefaultFilter.current = true;
-    setDefaultFilterReady(true);
-  }, [rolesReady, rolesError, isOwner, isSuperAdmin, userProfileReady, userProfileError, userProfile?.campaigner_id, userProfile?.sales_person_id]);
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
@@ -290,8 +263,8 @@ export function WeeklyTaskBoard() {
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
-    enabled: !!tenantId && !!user?.id && defaultFilterReady && (filters.campaignerId !== "mine" || userProfileReady),
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
+    enabled: !!tenantId && !!user?.id && (filters.campaignerId !== "mine" || userProfileReady),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
@@ -314,6 +287,7 @@ export function WeeklyTaskBoard() {
       const boardScope = resolveTasksBoardScope({
         tenantId: tenantId!,
         crossTenantAgencyIds,
+        accessibleAgencyIds: (agencies || []).map((agency) => agency.id),
       });
       if (boardScope.type === "tenant_or_shared") {
         query = query.or(
@@ -335,27 +309,26 @@ export function WeeklyTaskBoard() {
         }),
       );
 
-      // Apply "mine" filter - tasks ASSIGNED to me (campaigner or sales person).
-      // We intentionally do NOT include `created_by` here: an admin/owner creates
-      // most of the team's tasks, so OR-ing on created_by made "mine" show nearly
-      // everything. "Mine" = what I'm responsible for, not what I authored.
+      // "שלי בלבד" = tasks assigned to the staff member this user is linked to.
       if (filters.campaignerId === "mine") {
-        const myCampaignerId = userProfile?.campaigner_id;
-        const mySalesPersonId = userProfile?.sales_person_id;
-        const myUserId = user?.id;
+        const mine = resolveMineTaskAssignee({
+          campaignerId: userProfile?.campaigner_id,
+          salesPersonId: userProfile?.sales_person_id,
+          userId: user?.id,
+        });
 
-        const assignmentConditions: string[] = [];
-        if (myCampaignerId) assignmentConditions.push(`campaigner_id.eq.${myCampaignerId}`);
-        if (mySalesPersonId) assignmentConditions.push(`sales_person_id.eq.${mySalesPersonId}`);
-
-        if (assignmentConditions.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(assignmentConditions.join(','));
-        } else if (myUserId) {
-          // User has no campaigner/sales identity → fall back to tasks they created,
-          // scoped to created_by (never an unfiltered "show everything").
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).eq("created_by", myUserId);
+        if (mine.kind === "assigned") {
+          const assignmentConditions: string[] = [];
+          if (mine.campaignerId) assignmentConditions.push(`campaigner_id.eq.${mine.campaignerId}`);
+          if (mine.salesPersonId) assignmentConditions.push(`sales_person_id.eq.${mine.salesPersonId}`);
+          if (assignmentConditions.length === 1 && mine.campaignerId && !mine.salesPersonId) {
+            query = query.eq("campaigner_id", mine.campaignerId);
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            query = (query as any).or(assignmentConditions.join(","));
+          }
+        } else if (mine.kind === "created_by") {
+          query = query.eq("created_by", mine.userId);
         }
       } else if (filters.campaignerId === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -420,24 +393,32 @@ export function WeeklyTaskBoard() {
       fetchedTasks,
       previousLocal: localTasks,
       selectedAgency,
+      campaignerFilter: filters.campaignerId,
     });
     setLocalTasks(next);
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
     // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFetching, selectedAgency, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+  }, [isFetching, selectedAgency, filters.campaignerId, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
 
+  // Team board: header agency narrows rows. Personal "mine" queue is the linked
+  // staff member's assignments across every agency.
   const tasks = useMemo(
-    () => filterTasksBySelectedAgency(localTasks, selectedAgency),
-    [localTasks, selectedAgency],
+    () => filterTasksForBoardView(localTasks, selectedAgency, filters.campaignerId),
+    [localTasks, selectedAgency, filters.campaignerId],
   );
 
-  // Filter out calendar events that are actually synced tasks (to avoid duplicates)
-  // Also hide calendar events when filtering by a specific campaigner (not "mine" or "all")
+  // Filter out calendar events that are actually synced tasks (to avoid duplicates).
+  // Hide the signed-in user's Google calendar only when viewing someone else's
+  // queue — "mine" and the user's own staff row keep the calendar.
   const filteredCalendarEvents = useMemo(() => {
-    // If filtering by a specific campaigner (not mine or all), hide all calendar events
-    // The calendar shows the current user's events, not the filtered campaigner's
-    if (filters.campaignerId && filters.campaignerId !== "mine" && filters.campaignerId !== "all") {
+    const viewingOtherCampaigner =
+      !!filters.campaignerId &&
+      filters.campaignerId !== "mine" &&
+      filters.campaignerId !== "all" &&
+      filters.campaignerId !== "none" &&
+      filters.campaignerId !== userProfile?.campaigner_id;
+    if (viewingOtherCampaigner) {
       return [];
     }
 
@@ -454,7 +435,7 @@ export function WeeklyTaskBoard() {
         .map((t) => t.google_calendar_event_id as string),
     );
     return calendarEvents.filter((event) => !syncedEventIds.has(event.id));
-  }, [calendarEvents, tasks, filters.campaignerId, dateRange]);
+  }, [calendarEvents, tasks, filters.campaignerId, dateRange, userProfile?.campaigner_id]);
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],

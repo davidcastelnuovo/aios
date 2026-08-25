@@ -5,6 +5,8 @@ import {
   resolveNewTaskAgency,
   resolveTaskEffectiveAgency,
   filterTasksBySelectedAgency,
+  filterTasksForBoardView,
+  headerAgencyAppliesToBoard,
   resolveTasksBoardScope,
   syncLocalTasksForAgencyFilter,
 } from "./taskBoardAgency.ts";
@@ -70,6 +72,47 @@ test("filterTasksBySelectedAgency leaves the list alone for all", () => {
   const all = [misstampedDmmTask, promoClientTaskStampedDmm];
   assert.equal(filterTasksBySelectedAgency(all, "all"), all);
   assert.equal(filterTasksBySelectedAgency(all, null), all);
+});
+
+test("mine view keeps assigned tasks across agencies", () => {
+  const rows = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
+  assert.deepEqual(
+    filterTasksForBoardView(rows, PROMO, "mine").map((task) => task.id),
+    ["1", "2", "3"],
+  );
+});
+
+test("team view still honors the header agency", () => {
+  const rows = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
+  assert.deepEqual(
+    filterTasksForBoardView(rows, PROMO, "all").map((task) => task.id),
+    ["2", "3"],
+  );
+});
+
+test("header agency applies only on the team board", () => {
+  assert.equal(headerAgencyAppliesToBoard("all"), true);
+  assert.equal(headerAgencyAppliesToBoard("mine"), false);
+  assert.equal(headerAgencyAppliesToBoard("staff-david"), false);
+});
+
+test("picking a specific campaigner also keeps tasks across agencies", () => {
+  const rows = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
+  assert.deepEqual(
+    filterTasksForBoardView(rows, PROMO, "staff-david").map((task) => task.id),
+    ["1", "2", "3"],
+  );
+});
+
+test("syncLocalTasksForAgencyFilter keeps mine rows across agencies while fetching", () => {
+  const duringFetch = syncLocalTasksForAgencyFilter({
+    isFetching: true,
+    fetchedTasks: [],
+    previousLocal: [misstampedDmmTask, promoTaskNoClient],
+    selectedAgency: PROMO,
+    campaignerFilter: "mine",
+  });
+  assert.deepEqual(duringFetch.map((task) => task.id), ["1", "3"]);
 });
 
 test("syncLocalTasksForAgencyFilter narrows during an in-flight agency switch", () => {

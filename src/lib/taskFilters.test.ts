@@ -1,22 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultTaskFilters, resolveDefaultCampaignerFilter } from "./taskFilters.ts";
+import { defaultTaskFilters, resolveMineTaskAssignee } from "./taskFilters.ts";
 
-test("the stored default stays on my own tasks for campaigners", () => {
+test("the tasks board opens on my own tasks", () => {
   assert.equal(defaultTaskFilters.campaignerId, "mine");
 });
 
-test("owners and super admins open the team board", () => {
-  assert.equal(resolveDefaultCampaignerFilter({ isOwner: true, hasPersonalQueue: true }), "all");
-  assert.equal(resolveDefaultCampaignerFilter({ isSuperAdmin: true }), "all");
+test("mine follows the campaigner linked on the user, including owners", () => {
+  const mine = resolveMineTaskAssignee({
+    campaignerId: "staff-david",
+    userId: "user-david",
+  });
+  assert.deepEqual(mine, { kind: "assigned", campaignerId: "staff-david", salesPersonId: undefined });
 });
 
-test("campaigners and sales people open their personal queue", () => {
-  assert.equal(resolveDefaultCampaignerFilter({ hasPersonalQueue: true }), "mine");
+test("mine uses sales-person when that is the linked staff row", () => {
+  const mine = resolveMineTaskAssignee({ salesPersonId: "sales-1", userId: "user-1" });
+  assert.deepEqual(mine, { kind: "assigned", campaignerId: undefined, salesPersonId: "sales-1" });
 });
 
-test("users without a personal queue open the team board", () => {
-  assert.equal(resolveDefaultCampaignerFilter({}), "all");
+test("without a staff link, mine falls back to tasks the user created", () => {
+  assert.deepEqual(resolveMineTaskAssignee({ userId: "user-1" }), {
+    kind: "created_by",
+    userId: "user-1",
+  });
 });
 
 test("no other filter narrows the board on entry", () => {

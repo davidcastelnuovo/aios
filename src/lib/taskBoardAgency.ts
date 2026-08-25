@@ -58,6 +58,25 @@ export function filterTasksBySelectedAgency<T extends AgencyScopedTask>(
 }
 
 /**
+ * Header agency (same control as Clients) only narrows the team board.
+ * A person view — "שלי בלבד", a specific campaigner, or unassigned — spans
+ * every accessible agency. Clients filters by `client.agency_id`; applying
+ * that same header here hid assigned tasks whose client lives on another agency.
+ */
+export function headerAgencyAppliesToBoard(campaignerFilter: string): boolean {
+  return campaignerFilter === "all";
+}
+
+export function filterTasksForBoardView<T extends AgencyScopedTask>(
+  tasks: T[],
+  selectedAgency: string | null | undefined,
+  campaignerFilter: string,
+): T[] {
+  if (!headerAgencyAppliesToBoard(campaignerFilter)) return tasks;
+  return filterTasksBySelectedAgency(tasks, selectedAgency);
+}
+
+/**
  * Tenant scope for the board query.
  *
  * The header agency is deliberately NOT pushed into the query: a task can be
@@ -73,10 +92,12 @@ export type TasksBoardScope =
 export function resolveTasksBoardScope(input: {
   tenantId: string;
   crossTenantAgencyIds?: string[];
+  accessibleAgencyIds?: string[];
 }): TasksBoardScope {
-  const { tenantId, crossTenantAgencyIds = [] } = input;
-  if (crossTenantAgencyIds.length > 0) {
-    return { type: "tenant_or_shared", tenantId, crossTenantAgencyIds };
+  const { tenantId, crossTenantAgencyIds = [], accessibleAgencyIds = [] } = input;
+  const agencyIds = Array.from(new Set([...crossTenantAgencyIds, ...accessibleAgencyIds]));
+  if (agencyIds.length > 0) {
+    return { type: "tenant_or_shared", tenantId, crossTenantAgencyIds: agencyIds };
   }
   return { type: "tenant", tenantId };
 }
@@ -91,10 +112,11 @@ export function syncLocalTasksForAgencyFilter<T extends AgencyScopedTask>(input:
   fetchedTasks: T[] | undefined | null;
   previousLocal: T[];
   selectedAgency: string | null | undefined;
+  campaignerFilter?: string;
 }): T[] {
-  const { isFetching, fetchedTasks, previousLocal, selectedAgency } = input;
+  const { isFetching, fetchedTasks, previousLocal, selectedAgency, campaignerFilter = "all" } = input;
   if (isFetching) {
-    return filterTasksBySelectedAgency(previousLocal, selectedAgency);
+    return filterTasksForBoardView(previousLocal, selectedAgency, campaignerFilter);
   }
-  return filterTasksBySelectedAgency(fetchedTasks ?? [], selectedAgency);
+  return filterTasksForBoardView(fetchedTasks ?? [], selectedAgency, campaignerFilter);
 }

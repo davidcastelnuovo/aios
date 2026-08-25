@@ -26,9 +26,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
-import { defaultTaskFilters, resolveDefaultCampaignerFilter, type TaskFilterState } from "@/lib/taskFilters";
+import { defaultTaskFilters, resolveMineTaskAssignee, type TaskFilterState } from "@/lib/taskFilters";
 
-export { defaultTaskFilters, resolveDefaultCampaignerFilter, type TaskFilterState };
+export { defaultTaskFilters, resolveMineTaskAssignee, type TaskFilterState };
 
 interface TaskFiltersDialogProps {
   open: boolean;
