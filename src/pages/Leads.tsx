@@ -1015,6 +1015,73 @@ export default function Leads() {
     placeholderData: (previousData) => previousData,
   });
 
+  // Chip counts are independent of the active stage filter so "חדש" does not
+  // zero out נקבעה פגישה / נשלחה הצעה / etc.
+  const { data: stageCountMap } = useQuery({
+    queryKey: [
+      "leads-stage-counts",
+      tenantId,
+      selectedAgency,
+      searchQuery,
+      filterSalesPersonIds,
+      filterResponseStatus,
+      filterTagIds,
+      filterFollowUpToday,
+      startDate?.toISOString(),
+      endDate?.toISOString(),
+      PIPELINE_STAGES.map((s) => s.id).join(","),
+      isViewingAs,
+      viewAsSalesPersonId,
+    ],
+    queryFn: async () => {
+      if (!tenantId) return {} as Record<string, number>;
+
+      const agencyIds = selectedAgency && selectedAgency !== "all"
+        ? [selectedAgency]
+        : agencies?.map((a) => a.id) || null;
+
+      let salesPersonFilter: string[] | null = null;
+      if (isViewingAs && viewAsSalesPersonId) {
+        salesPersonFilter = [viewAsSalesPersonId];
+      } else if (filterSalesPersonIds.length > 0 && !filterSalesPersonIds.includes("none")) {
+        salesPersonFilter = filterSalesPersonIds;
+      }
+
+      const { data, error } = await supabase.rpc("get_leads_by_stages", {
+        p_tenant_id: tenantId,
+        p_agency_ids: agencyIds,
+        p_stages: PIPELINE_STAGES.map((s) => s.id),
+        p_limit_per_stage: 0,
+        p_search_query: searchQuery.trim() || null,
+        p_sales_person_ids: salesPersonFilter,
+        p_response_statuses:
+          filterResponseStatus.length > 0 && !filterResponseStatus.includes("none")
+            ? filterResponseStatus
+            : null,
+        p_follow_up_today: filterFollowUpToday,
+        p_start_date: startDate?.toISOString() || null,
+        p_end_date: endDate ? endOfDayIso(endDate) : null,
+        p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null,
+      });
+      if (error) throw error;
+
+      const counts: Record<string, number> = {};
+      if (Array.isArray(data)) {
+        for (const stageData of data as any[]) {
+          counts[stageData.stage] = stageData.total_count || 0;
+        }
+      } else if (data && typeof data === "object") {
+        for (const [stageKey, stageData] of Object.entries(data as Record<string, any>)) {
+          counts[stageKey] = stageData.total_count || 0;
+        }
+      }
+      return counts;
+    },
+    enabled: !!tenantId && PIPELINE_STAGES.length > 0,
+    staleTime: 1000 * 60 * 3,
+    placeholderData: (previousData) => previousData,
+  });
+
   // NOTE: Previously this effect re-fetched all accumulated leads whenever
   // kanbanStageData changed, causing extra network round-trips on every drag.
   // Optimistic updates in the mutations now keep accumulatedLeads in sync,
@@ -1546,6 +1613,7 @@ export default function Leads() {
       });
       // Re-fetch to restore correct state
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       toast({
         title: "שגיאה בעדכון סטטוס",
@@ -1656,6 +1724,7 @@ export default function Leads() {
     onError: (error: any) => {
       // Re-fetch to restore correct state on error
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       toast({
         title: "שגיאה בעדכון סטטוס תגובה",
@@ -1666,6 +1735,7 @@ export default function Leads() {
     onSettled: () => {
       // Reconcile all views with backend
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
     },
@@ -2227,10 +2297,33 @@ export default function Leads() {
     setActivePresetId(null);
   };
 
-  const stagePresetCounts = {
-    all: displayTotalCount,
-    ...Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage.id, getLeadsCountByStage(stage.id)])),
-  };
+  const stagePresetCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const stage of PIPELINE_STAGES) {
+      counts[stage.id] = stageCountMap?.[stage.id] ?? 0;
+    }
+
+    for (const [leadId, newStatus] of Object.entries(optimisticStatusByLeadId)) {
+      let oldStatus: string | undefined;
+      if (kanbanStageData) {
+        for (const [stageId, stageData] of Object.entries(kanbanStageData)) {
+          if (stageData.leads?.some((l: any) => l.id === leadId)) {
+            oldStatus = stageId;
+            break;
+          }
+        }
+      }
+      if (!oldStatus) {
+        oldStatus = leads?.find((l: any) => l.id === leadId)?.status;
+      }
+      if (!oldStatus || oldStatus === newStatus) continue;
+      if (counts[oldStatus] != null) counts[oldStatus] = Math.max(0, counts[oldStatus] - 1);
+      counts[newStatus] = (counts[newStatus] || 0) + 1;
+    }
+
+    counts.all = PIPELINE_STAGES.reduce((sum, stage) => sum + (counts[stage.id] || 0), 0);
+    return counts;
+  }, [PIPELINE_STAGES, stageCountMap, optimisticStatusByLeadId, kanbanStageData, leads]);
 
   const activeLead = filteredLeads?.find((lead: any) => lead.id === activeId);
 
@@ -3204,6 +3297,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       toast({
@@ -3230,6 +3324,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       setSelectedLeads([]);
@@ -3257,6 +3352,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       setSelectedLeads([]);
@@ -3318,6 +3414,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-sales-people", tenantId] });
