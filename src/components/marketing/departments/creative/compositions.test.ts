@@ -5,6 +5,9 @@ import {
   CREATIVE_COMPOSITIONS,
   buildCompositionLock,
   pickCompositionId,
+  pickVariationComposition,
+  compositionById,
+  DEFAULT_COMPOSITION_ID,
 } from "./compositions.ts";
 
 test("seven graphic architectures are available and structurally different", () => {
@@ -32,6 +35,30 @@ test("pickCompositionId prefers an unused structure", () => {
   const first = pickCompositionId("a");
   const second = pickCompositionId("b", [first]);
   assert.notEqual(second, first);
+});
+
+test("auto generation never picks the Promo lead-gen offer board", () => {
+  for (const seed of ["a", "b", "copy-1", "וריאציה 3", "seo / geo"]) {
+    assert.notEqual(pickVariationComposition({ seed }), "offer");
+    assert.notEqual(pickCompositionId(seed, [], { exclude: ["offer"] }), "offer");
+  }
+  assert.equal(pickVariationComposition({ seed: "x", lockedId: "offer" }), "offer");
+});
+
+test("auto generation rotates poster layouts across a grid", () => {
+  const used: Array<"offer" | "flush" | "rail" | "slash" | "badge" | "flag" | "split"> = [];
+  const picked = ["1", "2", "3", "4"].map((seed) => {
+    const id = pickVariationComposition({ seed, used });
+    used.push(id);
+    return id;
+  });
+  assert.equal(new Set(picked).size, 4);
+  assert.equal(picked.includes("offer"), false);
+});
+
+test("missing composition falls back to flush, not the offer board", () => {
+  assert.equal(DEFAULT_COMPOSITION_ID, "flush");
+  assert.equal(compositionById(undefined).id, "flush");
 });
 
 test("image generation lock no longer reserves the old caption template", () => {

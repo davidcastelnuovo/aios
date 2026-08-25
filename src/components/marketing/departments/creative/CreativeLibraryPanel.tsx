@@ -54,7 +54,9 @@ export function CreativeLibraryPanel({
             </button>
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">מחליף רק שכבות — התמונה נשארת.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          ג׳נרציה חדשה מגוונת בין הטמפלייטים. «לוח הצעה» נשאר לבחירה ידנית לליד־ג׳ן.
+        </p>
       </div>
 
       <div>

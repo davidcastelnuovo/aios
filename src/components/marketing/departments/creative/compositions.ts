@@ -107,17 +107,42 @@ export const isCompositionId = (value: unknown): value is CompositionId =>
   typeof value === "string" && value in BY_ID;
 
 export const compositionById = (id?: CompositionId | null): CompositionLayout =>
-  (id && BY_ID[id]) || CREATIVE_COMPOSITIONS[0];
+  (id && BY_ID[id]) || BY_ID.flush;
 
-export const pickCompositionId = (seed: string, used: CompositionId[] = []): CompositionId => {
-  const unused = CREATIVE_COMPOSITIONS.filter((item) => !used.includes(item.id));
-  const pool = unused.length > 0 ? unused : CREATIVE_COMPOSITIONS;
+export const pickCompositionId = (
+  seed: string,
+  used: Iterable<CompositionId> = [],
+  options?: { exclude?: Iterable<CompositionId> },
+): CompositionId => {
+  const usedSet = new Set(used);
+  const excluded = new Set(options?.exclude ?? []);
+  const available = CREATIVE_COMPOSITIONS.filter((item) => !excluded.has(item.id));
+  const unused = available.filter((item) => !usedSet.has(item.id));
+  const pool = unused.length > 0 ? unused : available.length > 0 ? available : CREATIVE_COMPOSITIONS;
   let hash = 0;
   for (const char of seed) hash = (hash * 33 + char.charCodeAt(0)) >>> 0;
   return pool[hash % pool.length].id;
 };
 
-export const DEFAULT_COMPOSITION_ID: CompositionId = "offer";
+/** Lead-gen board is opt-in from the editor — auto generation uses poster layouts. */
+export const AUTO_COMPOSITION_EXCLUDE: CompositionId[] = ["offer"];
+
+export const DEFAULT_COMPOSITION_ID: CompositionId = "flush";
+
+export const pickVariationComposition = ({
+  seed,
+  used = [],
+  lockedId,
+}: {
+  seed: string;
+  used?: Iterable<CompositionId | undefined | null>;
+  hasConcept?: boolean;
+  lockedId?: CompositionId | null;
+}): CompositionId => {
+  if (lockedId) return lockedId;
+  const taken = [...used].filter(isCompositionId);
+  return pickCompositionId(seed, taken, { exclude: AUTO_COMPOSITION_EXCLUDE });
+};
 
 export const buildCompositionLock = (id?: CompositionId | null): string => {
   const selected = compositionById(id);

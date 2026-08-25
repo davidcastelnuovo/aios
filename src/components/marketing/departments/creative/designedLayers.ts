@@ -1,5 +1,5 @@
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
-import { compositionById, pickCompositionId, type CompositionId } from "./compositions";
+import { compositionById, pickVariationComposition, type CompositionId } from "./compositions";
 import { buildOfferBoardLayers, parseOfferBullets } from "./offerBoard";
 import { withLayerShadow } from "./layerShadow";
 import {
@@ -641,7 +641,7 @@ export const hydrateVariationLayers = (
   logoUrl?: string,
   brandColors?: string[],
 ): CreativeVariation => {
-  const compositionId = variation.compositionId ?? pickCompositionId(variation.id);
+  const compositionId = variation.compositionId ?? pickVariationComposition({ seed: variation.id });
   const existing = variation.layers ?? [];
   const layers = shouldRebuildDesignedLayers(existing, variation.copyText || copyText)
     ? buildDesignedCopyLayers({

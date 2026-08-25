@@ -42,7 +42,7 @@ import {
 } from "@/components/marketing/departments/creative/utils";
 import { formatUsd, summarizeStoredImageCosts } from "@/components/marketing/departments/creative/imageCost";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
-import { DEFAULT_COMPOSITION_ID } from "@/components/marketing/departments/creative/compositions";
+import { pickVariationComposition } from "@/components/marketing/departments/creative/compositions";
 import { isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
 import { assembleStaticCreativePrompt } from "@/components/marketing/departments/creative/creativeGenerationPrompt";
 import { hydrateVariationLayers, isInternalCopyLine } from "@/components/marketing/departments/creative/designedLayers";
@@ -826,9 +826,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const format = defaultFormat(selected.payload);
     const kit = getBrandKit(selected.payload);
     const live = existing ?? variations;
-    const compositionId = styleSource
-      ? (styleSource.compositionId ?? DEFAULT_COMPOSITION_ID)
-      : DEFAULT_COMPOSITION_ID;
+    const visualPrompt = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
+    const replacing = replaceId ? live.find((variation) => variation.id === replaceId) : undefined;
+    const compositionId = pickVariationComposition({
+      seed: `${copyKey || ""}|${copyLabel || ""}|${live.length}|${copyText.slice(0, 48)}`,
+      used: live
+        .filter((variation) => !variation.rejected && variation.id !== replaceId)
+        .map((variation) => variation.compositionId),
+      lockedId: styleSource?.compositionId ?? replacing?.compositionId,
+    });
     const costume = isOptionalCostume(style.id) ? style : undefined;
     // Named styles already encode the technique in text. Attaching the liked still
     // makes gpt-image-1 reprint the same face/crop. Keep the image only when the
@@ -842,7 +848,6 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       .map((variation) => variation.copyLabel || variation.name)
       .filter(Boolean)
       .slice(-4);
-    const visualPrompt = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
     const creativePrompt = assembleStaticCreativePrompt({
       visualPrompt,
       copyText,
