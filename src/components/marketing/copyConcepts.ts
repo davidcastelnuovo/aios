@@ -79,6 +79,41 @@ export function formatCopyConceptsForCreative(concepts: CopyConcept[]): string {
   ].filter(Boolean).join("\n")).join("\n\n");
 }
 
+/** English image-model prompt. Must stay first in the generation request. */
+export function formatCopyConceptsForImagePrompt(concepts: CopyConcept[]): string {
+  if (concepts.length === 0) return "";
+  const primary = concepts[0];
+  const extras = concepts.slice(1);
+  const lines = [
+    "MUST FOLLOW THIS APPROVED VISUAL CONCEPT. Build a cinematic advertising photograph around this idea — never a generic text-on-background graphic.",
+    primary.name && `Concept name: ${primary.name}`,
+    primary.bigIdea && `Big idea: ${primary.bigIdea}`,
+    primary.visualLanguage && `Visual language, composition, color, typography mood: ${primary.visualLanguage}`,
+    primary.hook && `First-second hook / what we see immediately: ${primary.hook}`,
+    primary.copyAngle && `Copy angle sitting on this visual (do not render as on-image text): ${primary.copyAngle}`,
+    primary.whyItWorks && `Why this makes a stronger graphic: ${primary.whyItWorks}`,
+    primary.reference && `Canonical campaign method to steal (not the slogan): ${primary.reference}`,
+  ];
+  if (extras.length > 0) {
+    lines.push("Additional approved concepts (keep the primary scene; borrow only supporting visual cues):");
+    lines.push(extras.map((concept, index) => {
+      const detail = [concept.bigIdea, concept.visualLanguage, concept.hook].filter(Boolean).join(" — ");
+      return `${index + 2}. ${concept.name}${detail ? `: ${detail}` : ""}`;
+    }).join("\n"));
+  }
+  return lines.filter(Boolean).join("\n");
+}
+
+export function resolveVisualPrompt(
+  payload: Record<string, unknown> | null | undefined,
+  concepts?: CopyConcept[],
+): string {
+  const stored = typeof payload?.visual_prompt === "string" ? payload.visual_prompt.trim() : "";
+  if (stored) return stored;
+  const approved = concepts ?? approvedCopyConcepts(parseCopyConceptsFromPayload(payload));
+  return formatCopyConceptsForImagePrompt(approved);
+}
+
 export function extractConceptsDocument(output: string): string {
   const marker = output.split(/---CONCEPTS---/i);
   const body = (marker.length > 1 ? marker.slice(1).join("---CONCEPTS---") : output).trim();

@@ -21,6 +21,14 @@ const extractAttachmentPath = (url: string): string | null => {
   }
 };
 
+const CONCEPT_LEAD = /MUST FOLLOW THIS APPROVED VISUAL CONCEPT/i;
+
+const wrapSocialImagePrompt = (prompt: string) => {
+  const trimmed = prompt.trim();
+  if (CONCEPT_LEAD.test(trimmed)) return trimmed;
+  return `Professional social media post image: ${trimmed}. Visually appealing, modern, suitable for social media marketing.`;
+};
+
 const uniqueUrls = (urls: unknown[]): string[] => {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -81,7 +89,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           model: "gpt-image-1",
-          prompt: `Professional social media post image: ${prompt}. Visually appealing, modern, suitable for social media marketing.`,
+          prompt: wrapSocialImagePrompt(prompt),
           n: 1,
           size: "1024x1024",
           quality: "medium",

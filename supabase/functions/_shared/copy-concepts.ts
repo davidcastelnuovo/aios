@@ -19,6 +19,9 @@ function asConcepts(value: unknown): ConceptLike[] {
 
 export function formatApprovedConceptsFromPayload(payload: Record<string, unknown> | null | undefined): string {
   if (!payload) return "";
+  if (typeof payload.visual_prompt === "string" && payload.visual_prompt.trim()) {
+    return payload.visual_prompt.trim();
+  }
   if (typeof payload.concept_brief === "string" && payload.concept_brief.trim()) {
     return payload.concept_brief.trim();
   }
