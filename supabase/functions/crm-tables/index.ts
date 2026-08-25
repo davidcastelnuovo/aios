@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { syncClientCardFromReportTable } from '../_shared/client-report-sync.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -84,6 +85,15 @@ function serviceRoleClient() {
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
+}
+
+async function syncClientCardAfterTableChange(tableRow: Record<string, unknown> | null | undefined) {
+  if (!tableRow?.client_id || !tableRow?.integration_type) return;
+  try {
+    await syncClientCardFromReportTable(serviceRoleClient(), tableRow as any);
+  } catch (err) {
+    console.error('[crm-tables] client card sync failed:', err);
+  }
 }
 
 serve(async (req) => {
@@ -330,6 +340,7 @@ serve(async (req) => {
           .single();
 
         if (!error) {
+          await syncClientCardAfterTableChange(table);
           return new Response(JSON.stringify(table), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -369,6 +380,7 @@ serve(async (req) => {
           .single();
         if (campaignerInsertError) throw campaignerInsertError;
 
+        await syncClientCardAfterTableChange(campaignerTable);
         return new Response(JSON.stringify(campaignerTable), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -421,6 +433,7 @@ serve(async (req) => {
         if (error) throw error;
 
         if (table) {
+          await syncClientCardAfterTableChange(table);
           return new Response(JSON.stringify({ table }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -498,6 +511,7 @@ serve(async (req) => {
           .single();
         if (linkErr) throw linkErr;
 
+        await syncClientCardAfterTableChange(linkedTable);
         return new Response(JSON.stringify({ table: linkedTable }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });

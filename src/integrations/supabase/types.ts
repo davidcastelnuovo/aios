@@ -3157,6 +3157,9 @@ export type Database = {
           notes: string | null
           overall_status: string | null
           phone: string | null
+          follow_up_date: string | null
+          follow_up_campaigner_notified_at: string | null
+          follow_up_manager_notified_at: string | null
           retainer: number | null
           services: string[] | null
           start_date: string | null
@@ -3199,6 +3202,9 @@ export type Database = {
           notes?: string | null
           overall_status?: string | null
           phone?: string | null
+          follow_up_date?: string | null
+          follow_up_campaigner_notified_at?: string | null
+          follow_up_manager_notified_at?: string | null
           retainer?: number | null
           services?: string[] | null
           start_date?: string | null
@@ -3241,6 +3247,9 @@ export type Database = {
           notes?: string | null
           overall_status?: string | null
           phone?: string | null
+          follow_up_date?: string | null
+          follow_up_campaigner_notified_at?: string | null
+          follow_up_manager_notified_at?: string | null
           retainer?: number | null
           services?: string[] | null
           start_date?: string | null
@@ -5783,14 +5792,14 @@ export type Database = {
       }
       marketing_work_items: {
         Row: {
-          client_id: string
+          client_id: string | null
           created_at: string
           created_by: string | null
           current_stage_id: string | null
           id: string
           links: Json
           payload: Json
-          pipeline_id: string
+          pipeline_id: string | null
           scheduled_date: string | null
           status: Database["public"]["Enums"]["marketing_item_status"]
           target_channel: string | null
@@ -5799,14 +5808,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          client_id: string
+          client_id?: string | null
           created_at?: string
           created_by?: string | null
           current_stage_id?: string | null
           id?: string
           links?: Json
           payload?: Json
-          pipeline_id: string
+          pipeline_id?: string | null
           scheduled_date?: string | null
           status?: Database["public"]["Enums"]["marketing_item_status"]
           target_channel?: string | null
@@ -5815,14 +5824,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           created_by?: string | null
           current_stage_id?: string | null
           id?: string
           links?: Json
           payload?: Json
-          pipeline_id?: string
+          pipeline_id?: string | null
           scheduled_date?: string | null
           status?: Database["public"]["Enums"]["marketing_item_status"]
           target_channel?: string | null
@@ -8351,6 +8360,7 @@ export type Database = {
           sort_order: number | null
           status: Database["public"]["Enums"]["task_status"]
           task_type: Database["public"]["Enums"]["task_type"] | null
+          target_date: string | null
           tenant_id: string
           title: string
           updated_at: string
@@ -8380,6 +8390,7 @@ export type Database = {
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
+          target_date?: string | null
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id: string
           title: string
@@ -8410,6 +8421,7 @@ export type Database = {
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
+          target_date?: string | null
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id?: string
           title?: string

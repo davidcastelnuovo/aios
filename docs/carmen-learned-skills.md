@@ -32,6 +32,24 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-24 — Copywriter: canonical campaign inspiration library
+- **Skin slug:** `copywriter` (global)
+- **What Carmen can now do:** When writing ads/posts/emails/landing copy, pick 0–2 methods from a built-in library of canonical campaigns (VW Think Small, Steve Jobs keynotes, Durex humor, Nike, Dove Real Beauty, Old Spice, Patagonia, Mastercard Priceless), name the reference in the rationale, and steal the craft — never the original line.
+- **How:** `ai_skills.system_prompt` / `steps` / `output_template` updated; applied on merge via `supabase/ops/apply_copywriter_inspiration_library.sql`. Copy studio addon reminds the isolated thread to cite a reference.
+- **Origin:** David — give the copywriter skin a library of all-time campaigns for inspiration, including VW 1960s, Jobs presentations, Durex humor, plus at least five more niches.
+
+### 2026-08-24 — Pulse: client-call freshness + critical campaign alerts
+- **Skin slug:** `pulse_check` (global + tenant overrides updated)
+- **What Carmen can now do:** (1) Report the latest client-card call — when it happened and who logged it — and flag campaign clients with no documented phone call in the last 14 days. A weekly update that affirmatively says the campaigner spoke by phone with the client is automatically marked `call`; negative notes such as "לא הצלחתי לדבר" are not. (2) Report open critical alerts (stopped campaign, disapproved ad) in a `🔴 דורש טיפול` block, but only for clients whose campaign table is still active. (3) Stop appending the redundant "details are dashboard-only" sign-off to WhatsApp digests. (4) Show the same pulse across tenants that share an agency, instead of "no pulse available" on one side.
+- **How:** New client-card updates use `resolveClientUpdateType`; the SQL migration backfills qualifying existing `weekly_update` rows and `get_latest_client_call_updates` retains the same deterministic fallback. `campaign-pulse-snapshot` reads those calls and open `campaign_alerts`, matching alerts to clients by `ad_account_id` (Meta records no `client_id`). `_shared/campaign-pulse` owns the rules: `classifyCampaignPulseStatus` (14-day call rule, stopped campaign ⇒ critical), `selectPulseCriticalAlerts`, `buildPulseWhatsAppDigest`. `get_latest_campaign_pulse` reads snapshots across `accessibleTenantIds`, keeping the freshest row per client.
+- **Origin:** David — add client-contact freshness, report stopped campaigns, drop the redundant sentence, and close the DMM vs Marketing Captain display gap.
+
+### 2026-08-23 — Client card sync from assigned report tables
+- **Skin slug:** `client_report_table_sync` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Recognize Google/Meta (and other channel) connections from assigned `crm_tables` even when `clients.google_ads_account_id` / `meta_ads_account_id` are empty; explain that tables are source of truth; use `list_google_campaigns` with `client_id` without false "not connected".
+- **How:** DB trigger `crm_tables_sync_client_card` + `_shared/client-report-sync` helper. On create/assign of report tables, client card fields auto-update. `googleResolveClientCustomerId` resolves from assigned `google_ads` table first. Missing account IDs on assigned tables are logged.
+- **Origin:** Carmen → Cursor DEV — Aviali had assigned Google Ads + Facebook tables but empty client card fields; campaign tools falsely reported not connected.
+
 ### 2026-08-23 — Ana: bug-fix escalations to Cursor (tiered dev auth)
 - **Skin slug:** `bugfix_escalation_to_cursor` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When **Ana** (אנה, `d6cd8d62-…`, `972545612156`) reports a reproducible bug, escalate to Cursor via `mcp_Cursor__request_dev_task` only — not features, config, permissions, or DB schema changes. David keeps full tier (all coding agents). Everyone else is refused.

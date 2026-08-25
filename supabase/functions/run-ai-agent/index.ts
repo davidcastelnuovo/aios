@@ -12,7 +12,7 @@ import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, 
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
-import { resolveActiveSkills, buildSkillsBlockBySlug } from '../_shared/skills/registry.ts'
+import { resolveActiveSkills, buildSkillsBlockBySlug, resolveSkillsBySlug } from '../_shared/skills/registry.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 import { asUuidOrNull } from '../_shared/uuid.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
@@ -43,6 +43,11 @@ import {
   selectStaffMatch,
 } from '../_shared/staff-whatsapp.ts'
 import {
+  buildGoogleCustomerClientMap,
+  googleResolveClientCustomerId,
+  syncClientCardFromReportTable,
+} from '../_shared/client-report-sync.ts'
+import {
   OPENAI_BILLING_REFUSAL_HE,
   buildOpenAiBillingStatus,
   formatOpenAiBillingWhatsApp,
@@ -51,10 +56,16 @@ import {
   redactSecretsFromText,
 } from '../_shared/openai-billing.ts'
 import {
+  CAMPAIGN_TABLE_TYPES,
   buildPulseDashboardAbsoluteUrl,
   buildPulseWhatsAppDigest,
+  clientAdAccountIds,
   countPulseStatuses,
+  expandSnapshotsToGoalRows,
+  filterPulseRowsByClientIds,
+  goalLabel,
   pulseSurfacePrefersWhatsAppDigest,
+  selectPulseCriticalAlerts,
 } from '../_shared/campaign-pulse.ts'
 
 function scoreNameMatchSafe(fullName: string, query: string): number {
@@ -534,6 +545,7 @@ const CORE_TOOLS = new Set([
   'list_facebook_ads', 'analyze_facebook_campaign',
   'execute_pending_approval', 'reject_pending_approval', 'list_pending_approvals',
   'join_meeting_for_client', 'get_meeting_bot_status',
+  'get_latest_campaign_pulse',
 ])
 
 // Cheap, stable signature of a tool description so embeddings refresh when the
@@ -609,7 +621,10 @@ async function selectRelevantTools(supabase: any, userText: string, toolDefs: an
       picked.add('list_sales_people')
       picked.add('search_entities')
     }
-    // OpenAI billing / credit / usage (super_admin tool — still must be in schema when asked).
+    // Pulse check — must always reach the cached snapshot tool on WhatsApp.
+    if (/\bדופק\b|\bpulse\s*check\b|בדיקת\s*דוח|מצב\s*קמפיינים|סיכום\s*קמפיינים/i.test(userText)) {
+      picked.add('get_latest_campaign_pulse')
+    }
     if (/(openai|open ai|קרדיט|יתרת|billing|usage|חיוב|כמה.*(נשאר|עולה|הוצא)|api.*(cost|credit|balance))/i.test(userText)) {
       picked.add('get_openai_billing_status')
     }
@@ -755,7 +770,7 @@ const ALL_TOOLS = [
   { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין, wavering=מתלבט, churn_risk=סיכון נטישה' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת לרשומת communication_logs' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } },
   // CLIENTS - full CRUD
   { name: 'create_client', description: 'יצירת לקוח חדש במערכת', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם העסק/לקוח' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, agency_id: { type: 'string', description: 'מזהה סוכנות (אופציונלי)' }, notes: { type: 'string' } }, required: ['name'] } },
-  { name: 'update_client', description: 'עדכון פרטי לקוח קיים', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] }, notes: { type: 'string' } }, required: ['client_id'] } },
+  { name: 'update_client', description: 'עדכון פרטי לקוח קיים', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] }, notes: { type: 'string' }, follow_up_date: { type: 'string', description: 'תאריך לדבר עם הלקוח בפורמט YYYY-MM-DD' } }, required: ['client_id'] } },
   { name: 'update_client_status', description: 'עדכון סטטוס לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] } }, required: ['client_id', 'status'] } },
   { name: 'set_campaign_table_active', description: 'סימון טבלת קמפיין כפעילה/כבויה (crm_tables.campaign_active). השתמשי כשאומרים לך שקמפיין של לקוח הופסק או חזר לפעול — בדיקות דופק ובדיקות חיבורים מדווחות רק על טבלאות שמסומנות פעילות. זיהוי לפי client_id (כל טבלאות הקמפיינים של הלקוח), table_id מדויק, או table_name (חיפוש חלקי).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, table_id: { type: 'string' }, table_name: { type: 'string', description: 'שם או slug של הטבלה (חיפוש חלקי)' }, active: { type: 'boolean', description: 'true=הקמפיין פעיל ומדווחים עליו, false=כבוי ולא מדווחים' } }, required: ['active'] } },
   // LEADS - full CRUD
@@ -925,7 +940,7 @@ const ALL_TOOLS = [
   { name: 'gads_resume', description: 'הדלקת קמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' } }, required: ['customer_id','campaign_id'] } },
   { name: 'gads_update_budget', description: 'שינוי תקציב יומי לקמפיין Google Ads. דורש אישור.', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, campaign_id: { type: 'string' }, daily_budget: { type: 'number' } }, required: ['customer_id','campaign_id','daily_budget'] } },
   { name: 'list_google_ad_accounts', description: 'שליפת כל חשבונות Google Ads המחוברים לטננט. מחזיר customer_id, name, status, client_id (אם משויך ללקוח).', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'סינון לפי לקוח ספציפי (אופציונלי)' } } } },
-  { name: 'list_google_campaigns', description: 'רשימת קמפיינים בחשבון Google Ads (חי מ-API). ספקי customer_id או client_id (ייפתר דרך clients.google_ads_account_id).', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, client_id: { type: 'string' }, name_search: { type: 'string' }, status: { type: 'string', enum: ['ENABLED', 'PAUSED', 'REMOVED', 'ALL'] } }, required: [] } },
+  { name: 'list_google_campaigns', description: 'רשימת קמפיינים בחשבון Google Ads (חי מ-API). ספקי customer_id או client_id (ייפתר מטבלת google_ads משויכת או clients.google_ads_account_id).', parameters: { type: 'object', properties: { customer_id: { type: 'string' }, client_id: { type: 'string' }, name_search: { type: 'string' }, status: { type: 'string', enum: ['ENABLED', 'PAUSED', 'REMOVED', 'ALL'] } }, required: [] } },
   { name: 'create_google_ads_report_table', description: 'יצירת טבלת דוח Google Ads ב-CRM ללקוח (integration_type=google_ads). לא מריץ sync — קראי ל-sync_google_ads_report אחרי.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads' }, account_name: { type: 'string' }, date_range: { type: 'string', description: 'ברירת מחדל last_30_days' } }, required: ['client_id', 'customer_id'] } },
   { name: 'sync_google_ads_report', description: 'סנכרון נתוני Google Ads לטבלת CRM. זהה לפי table_id או client_id (טבלת google_ads של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
   { name: 'sync_facebook_insights', description: 'סנכרון נתוני Facebook Insights לטבלת CRM. זהה לפי table_id או client_id (טבלת facebook_insights של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
@@ -1645,6 +1660,52 @@ async function fbTryConnectClients(
     })
   }
   return { connected, stillNotConnected }
+}
+
+/**
+ * Open critical campaign alerts (stopped campaigns, disapproved ads) for the
+ * clients in a pulse snapshot, limited to clients with an active campaign table.
+ */
+async function loadPulseCriticalIssues(
+  supabase: any,
+  accessibleTenantIds: string[],
+  rows: Array<{ client_id: string; client_name?: string | null }>,
+) {
+  const clientIds = rows.map((row) => row.client_id).filter(Boolean)
+  if (!clientIds.length) return []
+  try {
+    const [tables, alerts] = await Promise.all([
+      supabase.from('crm_tables')
+        .select('client_id, integration_settings, campaign_active, integration_type')
+        .in('client_id', clientIds)
+        .in('integration_type', [...CAMPAIGN_TABLE_TYPES]),
+      supabase.from('campaign_alerts')
+        .select('client_id, ad_account_id, campaign_id, campaign_name, alert_type, severity')
+        .in('tenant_id', accessibleTenantIds)
+        .is('resolved_at', null)
+        .order('created_at', { ascending: false })
+        .limit(500),
+    ])
+    if (tables.error || alerts.error) return []
+
+    const activeTablesByClient = new Map<string, any[]>()
+    for (const table of tables.data || []) {
+      if (table.campaign_active === false) continue
+      activeTablesByClient.set(table.client_id, [...(activeTablesByClient.get(table.client_id) || []), table])
+    }
+    return selectPulseCriticalAlerts(alerts.data || [], rows.map((row) => {
+      const activeTables = activeTablesByClient.get(row.client_id) || []
+      return {
+        clientId: row.client_id,
+        clientName: row.client_name || null,
+        adAccountIds: clientAdAccountIds(activeTables),
+        hasActiveCampaignTable: activeTables.length > 0,
+      }
+    }))
+  } catch (error) {
+    console.warn('[pulse] critical alert lookup failed', error instanceof Error ? error.message : String(error))
+    return []
+  }
 }
 
 async function getAccessibleTenantIds(supabase: any, tenantId: string): Promise<string[]> {
@@ -2735,11 +2796,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return await r.json()
     }
     case 'get_latest_campaign_pulse': {
-      const loadPulse = async () => {
+      const PULSE_BASE_COLUMNS = 'tenant_id, calculated_at, data_fresh_through, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)'
+      const PULSE_CALL_COLUMNS = 'last_client_call_at, last_client_call_by'
+      const loadPulse = async (columns: string) => {
         let query = supabase
           .from('campaign_pulse_snapshots')
-          .select('calculated_at, data_fresh_through, status, is_ecommerce, spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)')
-          .eq('tenant_id', tenantId)
+          .select(columns)
+          // Shared agencies may snapshot under a partner tenant — same scope as the dashboard.
+          .in('tenant_id', accessibleTenantIds)
           .order('calculated_at', { ascending: false })
         if (args.client_id) query = query.eq('client_id', args.client_id)
         if (args.agency_id) query = query.eq('agency_id', args.agency_id)
@@ -2749,7 +2813,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
         return await query
       }
-      let { data, error } = await loadPulse()
+      let { data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}`)
+      if (error && /last_client_call/.test(error.message)) {
+        // Call-freshness columns not deployed yet — still serve the pulse.
+        ({ data, error } = await loadPulse(PULSE_BASE_COLUMNS))
+      }
       if (error) throw error
       let rows = data || []
       if (args.client_name) {
@@ -2760,13 +2828,36 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         const needle = String(args.agency_name).toLocaleLowerCase('he')
         rows = rows.filter((row: any) => String(row.agencies?.name || '').toLocaleLowerCase('he').includes(needle))
       }
-      const normalizedRows = rows.map((row: any) => ({
+      // One row per client: partner tenants can hold a snapshot for the same client.
+      const freshestByClient = new Map<string, any>()
+      for (const row of rows) {
+        const previous = freshestByClient.get(row.client_id)
+        if (!previous || String(row.calculated_at || '') > String(previous.calculated_at || '')) {
+          freshestByClient.set(row.client_id, row)
+        }
+      }
+      let normalizedRows = Array.from(freshestByClient.values()).map((row: any) => ({
         ...row,
         client_name: row.clients?.name || null,
         agency_name: row.agencies?.name || null,
         clients: undefined,
         agencies: undefined,
       }))
+      // Campaigners (WhatsApp / in-app) see only clients assigned via client_team.
+      if (callerCampaignerId && !bypassCampaignerScope) {
+        const { data: links, error: linksError } = await supabase
+          .from('client_team')
+          .select('client_id')
+          .eq('campaigner_id', callerCampaignerId)
+        if (linksError) throw linksError
+        const assignedClientIds = (links || []).map((link: any) => link.client_id).filter(Boolean)
+        normalizedRows = filterPulseRowsByClientIds(normalizedRows, assignedClientIds)
+      }
+      const goalRows = expandSnapshotsToGoalRows(normalizedRows.map((row: any) => ({
+        ...row,
+        client_name: row.client_name,
+        agency_name: row.agency_name,
+      })))
       const pulseClientIds = normalizedRows.map((row: any) => row.client_id).filter(Boolean)
       let manualOverrides: any[] = []
       if (pulseClientIds.length) {
@@ -2804,29 +2895,35 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       const fmtNumber = (value: any) => value === null || value === undefined ? '—' : String(value)
       const fmtDate = (value: any) => value
-        ? new Date(value).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
+        ? new Date(value).toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem', day: 'numeric', month: 'numeric', year: 'numeric' })
         : '—'
       const escapeCell = (value: any) => String(value ?? '—').replace(/\|/g, '\\|').replace(/\n/g, ' ')
       const tableLines = [
-        '| סוכנות | לקוח | סטטוס | הוצאה 7 ימים | לידים/רכישות | CPL/ROAS | שינוי | נתונים עד | שינוי אחרון במטה | מי שינה | הערה |',
+        '| סוכנות | לקוח | יעד | סטטוס | הוצאה 7 ימים | לידים/רכישות | CPL/ROAS | שינוי | שיחת לקוח אחרונה | תועדה ע"י | שינוי במטה | הערה |',
         '|---|---|---|---:|---:|---:|---:|---|---|---|---|',
-        ...normalizedRows.map((row: any) => {
-          const outcomes = row.is_ecommerce ? fmtNumber(row.purchases_7d) : fmtNumber(row.leads_7d)
-          const efficiency = row.is_ecommerce ? fmtNumber(row.roas_7d) : fmtNumber(row.cpl_7d)
-          const efficiencyLabel = row.is_ecommerce ? `ROAS ${efficiency}` : `₪${efficiency}`
-          const change = row.cpl_change_pct === null || row.cpl_change_pct === undefined ? '—' : `${row.cpl_change_pct}%`
+        ...goalRows.map((row: any) => {
+          const outcomes = fmtNumber(row.outcomes_7d)
+          const efficiencyLabel = row.efficiency_kind === 'roas'
+            ? `ROAS ${fmtNumber(row.efficiency)}`
+            : `₪${fmtNumber(row.efficiency)}`
+          const change = row.change_pct === null || row.change_pct === undefined
+            ? '—'
+            : `${row.change_pct > 0 ? '+' : ''}${row.change_pct}%`
           const metaChange = row.last_meta_change_at
-            ? `${fmtDate(row.last_meta_change_at)} — ${row.last_meta_change_type || 'שינוי'}${row.last_meta_change_object ? ` (${row.last_meta_change_object})` : ''}`
+            ? fmtDate(row.last_meta_change_at)
             : row.meta_change_availability === 'no_campaign_change_in_30d' ? 'לא נמצא ב-30 יום' : 'לא זמין'
-          return `| ${escapeCell(row.agency_name)} | ${escapeCell(row.client_name)} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(row.data_fresh_through)} | ${escapeCell(metaChange)} | ${escapeCell(row.last_meta_change_actor)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
+          const snapshotRow = normalizedRows.find((client: any) => client.client_id === row.client_id)
+          const agencyName = snapshotRow?.agency_name
+          return `| ${escapeCell(agencyName)} | ${escapeCell(row.client_name)} | ${escapeCell(goalLabel(row.goal))} | ${escapeCell(statusLabel[row.status] || row.status)} | ₪${escapeCell(fmtNumber(row.spend_7d))} | ${escapeCell(outcomes)} | ${escapeCell(efficiencyLabel)} | ${escapeCell(change)} | ${escapeCell(fmtDate(snapshotRow?.last_client_call_at))} | ${escapeCell(snapshotRow?.last_client_call_by)} | ${escapeCell(metaChange)} | ${escapeCell((row.flags || []).join(', ') || '—')} |`
         }),
       ]
       const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
       const tenantSlug = tenantRow?.slug || tenantId
       const dashboardUrl = buildPulseDashboardAbsoluteUrl(tenantSlug)
-      const statusCounts = countPulseStatuses(normalizedRows)
+      const statusCounts = countPulseStatuses(goalRows)
+      const criticalIssues = await loadPulseCriticalIssues(supabase, accessibleTenantIds, normalizedRows)
       const whatsappDigest = normalizedRows.length
-        ? buildPulseWhatsAppDigest(normalizedRows, dashboardUrl)
+        ? buildPulseWhatsAppDigest(normalizedRows, dashboardUrl, criticalIssues)
         : null
       const preferDigest = pulseSurfacePrefersWhatsAppDigest(surface)
       if (!normalizedRows.length) {
@@ -2853,14 +2950,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           external_api_called: false,
           ai_used_to_calculate: false,
           auto_refreshed: false,
-          count: normalizedRows.length,
+          count: goalRows.length,
           freshness: normalizedRows[0]?.calculated_at || null,
           status_counts: statusCounts,
           dashboard_url: dashboardUrl,
           whatsapp_digest: whatsappDigest,
           formatted_markdown: null,
           instructions_to_agent:
-            'בוואטסאפ החזירי את whatsapp_digest כלשונו בלבד. אסור טבלת Markdown, אסור פירוט לקוח-לקוח, אסור להדביק rows. הפירוט בדשבורד בלבד (dashboard_url). אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק ללקוח ספציפי.',
+            'בוואטסאפ החזירי את whatsapp_digest כלשונו בלבד — כולל בלוק "🔴 דורש טיפול" כשיש ושורת הקישור לדשבורד. אסור טבלת Markdown, אסור פירוט לקוח-לקוח, אסור להדביק rows. אל תריצי כלי חי נוסף אלא אם המשתמש ביקש במפורש נתונים חיים/רענון או ניתוח עמוק ללקוח ספציפי.',
         }
       }
       return {
@@ -3480,6 +3577,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       if (args.email !== undefined) updates.email = args.email
       if (args.status) updates.status = args.status
       if (args.notes !== undefined) updates.notes = args.notes
+      if (args.follow_up_date !== undefined) updates.follow_up_date = args.follow_up_date
       const { data, error } = await supabase.from('clients').update(updates).eq('id', args.client_id).in('tenant_id', accessibleTenantIds).select('id, name, status').single()
       if (error) throw error
       return data
@@ -4527,6 +4625,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         created_by: userId !== 'system' ? userId : null,
       }).select('id, name, slug').single()
       if (error) throw error
+      await syncClientCardFromReportTable(supabase, {
+        id: table.id,
+        client_id,
+        integration_type: 'facebook_insights',
+        integration_settings: { ad_account_id, ad_account_name },
+      })
       return { success: true, table_id: table.id, name: table.name, slug: table.slug, ad_account_id, client_name: client.name }
     }
     case 'check_ad_accounts_health': {
@@ -5220,19 +5324,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
       }))
 
-      // Look up which clients already have a google_ads_account_id set
-      const { data: linkedClients } = await supabase
-        .from('clients')
-        .select('id, name, google_ads_account_id')
-        .in('tenant_id', accessibleTenantIds)
-        .not('google_ads_account_id', 'is', null)
-
-      const clientByAccountId = new Map<string, { id: string; name: string }>()
-      for (const c of (linkedClients || [])) {
-        if (c.google_ads_account_id) {
-          clientByAccountId.set(String(c.google_ads_account_id).replace(/-/g, ''), { id: c.id, name: c.name })
-        }
-      }
+      // Look up which clients are linked via client card or assigned google_ads tables
+      const clientByAccountId = await buildGoogleCustomerClientMap(supabase, accessibleTenantIds)
 
       let result = accounts.map((a: any) => ({
         customer_id: a.customer_id,
@@ -5254,9 +5347,10 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       let customerId = args.customer_id ? String(args.customer_id).replace(/-/g, '') : ''
       if (!customerId && args.client_id) {
         await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
-        const { data: cl } = await supabase.from('clients').select('google_ads_account_id, name').eq('id', args.client_id).in('tenant_id', accessibleTenantIds).maybeSingle()
-        if (!cl?.google_ads_account_id) return { error: 'ללקוח אין google_ads_account_id — חברי עם connect_google_ads_account או ספקי customer_id' }
-        customerId = String(cl.google_ads_account_id).replace(/-/g, '')
+        customerId = await googleResolveClientCustomerId(supabase, args.client_id) || ''
+        if (!customerId) {
+          return { error: 'ללקוח אין חשבון Google Ads — חברי טבלת google_ads או השתמשי ב-connect_google_ads_account / customer_id' }
+        }
       }
       if (!customerId) return { error: 'customer_id או client_id נדרש' }
 
@@ -5365,8 +5459,20 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         created_by: userId !== 'system' ? userId : null,
       }).select('id, name, slug').single()
       if (error) throw error
-      // Also pin google_ads_account_id on client if empty
-      await supabase.from('clients').update({ google_ads_account_id: customer_id }).eq('id', client_id).is('google_ads_account_id', null)
+      await syncClientCardFromReportTable(supabase, {
+        id: table.id,
+        client_id,
+        integration_type: 'google_ads',
+        integration_settings: {
+          customer_id,
+          account_name: accountName,
+          date_range: args.date_range || 'last_30_days',
+          sync_frequency: 'daily',
+          data_source: 'direct_api',
+          campaign_type: 'leads',
+          currency: 'ILS',
+        },
+      })
       return { success: true, table_id: table.id, name: table.name, slug: table.slug, customer_id, client_name: client.name, next: 'קראי ל-sync_google_ads_report עם table_id כדי למשוך נתונים' }
     }
 
@@ -6048,7 +6154,8 @@ type Emit = ((obj: any) => void) | undefined
 async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Promise<Response> {
   try {
     const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history, conversation_id, wa_notify } = bodyJson
-    console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}`)
+    const pinSkillsOnly = bodyJson.pin_skills_only === true && Array.isArray(task_skills) && task_skills.length > 0
+    console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}, pin_skills_only=${pinSkillsOnly}`)
 
     if (!command_text) throw new Error('Missing command_text')
 
@@ -6526,23 +6633,6 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       if (taskSkillPrompts.length > 0) {
         systemPrompt += `\n\n=== סקילז למשימה זו ===\n${taskSkillPrompts.join('\n')}`
       }
-      // Additive (Strangler): any task_skills entry that matches a DB skin slug
-      // (the global skin catalog in ai_skills, e.g. "campaigner"/"seo"/"legal")
-      // is injected explicitly here, independent of trigger-phrase matching.
-      // Legacy hardcoded keys above are ignored by resolveSkillsBySlug, so this
-      // does not change existing behavior — it only adds DB-pinned skins.
-      try {
-        const pinnedTenantId = (agent as any)?.tenant_id || tenant_id || null
-        const disabledForPin = ((agent as any)?.disabled_skins || []) as string[]
-        const pinnableSlugs = (task_skills as string[]).filter((s) => !disabledForPin.includes(s))
-        const pinnedBlock = await buildSkillsBlockBySlug(pinnableSlugs, pinnedTenantId)
-        if (pinnedBlock) {
-          systemPrompt += pinnedBlock
-          console.log(`[AGENT] Pinned skins by slug: ${(task_skills as string[]).join(', ')}`)
-        }
-      } catch (e) {
-        console.error('[AGENT] pinned-skin resolution failed (non-fatal):', e)
-      }
     }
     // Inject active modes
     const activeModes: string[] = (agent as any).active_modes || []
@@ -6779,6 +6869,30 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     }
     } // ─── end V1 PROMPT BUILDING (else branch of shouldUseV2Prompt) ───
 
+    // Pin DB skins from task_skills for BOTH prompt versions. V2 previously only
+    // looked up a hardcoded map (no "copywriter"), so marketing studio chats
+    // never actually loaded the copywriter skin. When pin_skills_only is set the
+    // same slugs are also resolved later as the exclusive matched-skill set
+    // (prompts + tools); this early block still covers the default path.
+    if (task_skills && Array.isArray(task_skills) && task_skills.length > 0 && !pinSkillsOnly) {
+      try {
+        const pinnedTenantId = (agent as any)?.tenant_id || tenant_id || null
+        const disabledForPin = ((agent as any)?.disabled_skins || []) as string[]
+        const pinnableSlugs = (task_skills as string[]).filter((s) => !disabledForPin.includes(s))
+        const pinnedBlock = await buildSkillsBlockBySlug(pinnableSlugs, pinnedTenantId)
+        if (pinnedBlock) {
+          systemPrompt += pinnedBlock
+          console.log(`[AGENT] Pinned skins by slug: ${(task_skills as string[]).join(', ')}`)
+        }
+      } catch (e) {
+        console.error('[AGENT] pinned-skin resolution failed (non-fatal):', e)
+      }
+    }
+    const promptAddon = typeof bodyJson.system_prompt_addon === 'string' ? bodyJson.system_prompt_addon.trim() : ''
+    if (promptAddon) {
+      systemPrompt += `\n\n=== הקשר סטודיו (משימה מבודדת) ===\n${promptAddon}`
+    }
+
     // Hard rule for both V1 and V2: only allowlisted requesters may escalate
     // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
     systemPrompt += buildDevEscalationPromptRule(devEscalationTier)
@@ -6836,9 +6950,10 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // WhatsApp / scheduled tasks: pulse must stay short (counts + dashboard link).
     if (isCarmen && (surface === 'whatsapp' || surface === 'task')) {
       systemPrompt += `\n\n📱 === בדיקת דופק בוואטסאפ (חובה) ===
-• אחרי get_latest_campaign_pulse — החזירי רק את whatsapp_digest כלשונו.
-• אסור טבלת Markdown, אסור "בדיקת דופק אחרונה — חושבה ב־…" + פירוט לקוחות, אסור להמציא שורות מה-rows.
-• הפירוט המלא רק בדשבורד בדיקת דופק (הקישור ב-whatsapp_digest / dashboard_url).`
+• בקשה ל"בדיקת דופק" / "דופק" / "מצב קמפיינים" — חובה get_latest_campaign_pulse בלבד.
+• אחרי הכלי — החזירי את whatsapp_digest כלשונו, כולל בלוק "🔴 דורש טיפול" כשיש ושורת הקישור לדשבורד. בלי הקדמה, בלי סיכום נוסף.
+• "בדיקת תקינות מערכות וקמפיינים" זה דוח אחר (health probe) — לא בדיקת דופק. אל תערבבי ביניהם.
+• אסור טבלת Markdown, אסור "בדיקת דופק אחרונה — חושבה ב־…" + פירוט לקוחות, אסור להמציא שורות מה-rows.`
     }
 
     // 4. Filter tools
@@ -6869,8 +6984,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // "דופק" is intentionally sufficient: speech transcription frequently
     // mangles the word before it ("ביגת דופק", "מדיקת דופק"). A pulse request
     // must never depend on the model deciding whether to call the data tool.
-    const isStoredPulseRequest = /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
-      && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
+    const isStoredPulseRequest = !pinSkillsOnly
+      && (
+        /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
+        || /בדיקת\s*(דוח|דופק)/i.test(cmd)
+        || /מצב\s*קמפיינים|סיכום\s*קמפיינים/i.test(cmd)
+      ) && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
+      && !/תקינות\s*מערכות/i.test(cmd)
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
@@ -6898,7 +7018,14 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // 4a-router. For Carmen's large toolset, keep only the tools relevant to this
     // message (+ the always-on core). Best-effort — falls back to the full set;
     // capToolsForTarget remains the final backstop for OpenAI's 128-tool limit.
-    if (isCarmen) {
+    // Isolated studio (copy thread): text in / copy out. Do not route native
+    // tools, and do not fall back to Carmen's full CRM set. The pinned
+    // copywriter skin still lists operational tools (gmail_send, Meta reads);
+    // those must not be injected later either.
+    if (pinSkillsOnly) {
+      filteredTools = []
+      console.log('[AGENT] pin_skills_only: exposing no tools (isolated copy session)')
+    } else if (isCarmen) {
       filteredTools = await selectRelevantTools(supabase, String(command_text || ''), filteredTools)
     }
 
@@ -6926,6 +7053,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // 4b. Load MCP tools for this tenant + agent (Phase 3)
     let mcpExecutors = new Map<string, (args: any) => Promise<any>>()
     try {
+      if (!pinSkillsOnly) {
       const disabledIntegrations = ((agent as any).disabled_integrations || []) as string[]
       const mcp = await loadMcpTools(supabase, resolvedTenantId, agent_id, disabledIntegrations)
       if (mcp.toolDefs.length > 0) {
@@ -6953,6 +7081,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         }
         console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent}, dev_tier=${devEscalationTier ?? 'none'}, exposed=${[...mcpExecutors.keys()].length})`)
       }
+      }
     } catch (e: any) {
       console.error('[AGENT] MCP load failed:', e?.message)
     }
@@ -6967,7 +7096,10 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // Access control: skins turned OFF in settings are excluded even if their
     // trigger matches. Default (empty) = no change.
     const disabledSkins = ((agent as any).disabled_skins || []) as string[]
-    const _matchedSkills = (await resolveActiveSkills(String(command_text || ''), skillTenantId))
+    const _matchedSkills = pinSkillsOnly
+      ? (await resolveSkillsBySlug(task_skills as string[], skillTenantId))
+        .filter(s => !disabledSkins.includes(s.id))
+      : (await resolveActiveSkills(String(command_text || ''), skillTenantId))
       .filter(s => !disabledSkins.includes(s.id))
       // Unauthorized callers must not get generic cursor/claude escalation skins.
       // Bugfix tier may still load the dedicated bugfix escalation skin.
@@ -6983,7 +7115,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       // guaranteed to be available, even when agent.allowed_tools narrows the
       // set. Explicitly disabled tools stay disabled (denylist wins).
       const skillToolNames = new Set(_matchedSkills.flatMap(s => s.tools || []))
-      if (skillToolNames.size > 0) {
+      if (skillToolNames.size > 0 && !pinSkillsOnly) {
         const present = new Set(filteredTools.map(t => t.name))
         const missing = ALL_TOOLS.filter(t =>
           skillToolNames.has(t.name) && !present.has(t.name) && !disabledTools.includes(t.name) &&
@@ -7012,7 +7144,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     const userSaidApprove = isExplicitApprovalPhrase(String(command_text || ''))
     const userSaidReject = isExplicitRejectionPhrase(String(command_text || ''))
     let pendingForConfirm: any = null
-    if (isCarmen && (userSaidApprove || userSaidReject)) {
+    if (isCarmen && !pinSkillsOnly && (userSaidApprove || userSaidReject)) {
       const { data: pendingRows } = await supabase.from('agent_approval_queue')
         .select('id, action_type, title, description, tool_name, tool_input, context, created_at, status')
         .eq('tenant_id', resolvedTenantId)
@@ -7042,6 +7174,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // Deterministic path: short WhatsApp confirm + open pending → execute now (no LLM loop).
     if (
       isCarmen &&
+      !pinSkillsOnly &&
       userSaidApprove &&
       pendingForConfirm &&
       String(command_text || '').trim().length <= 40
@@ -7114,7 +7247,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
     // Deterministic path: meeting join URL in message → dispatch Recall bot immediately.
     const meetingUrl = extractMeetingUrl(String(command_text || ''))
-    if (isCarmen && meetingUrl) {
+    if (isCarmen && !pinSkillsOnly && meetingUrl) {
       console.log(`[AGENT] Auto-dispatching meeting bot for URL: ${meetingUrl.slice(0, 80)}`)
       const autoStart = Date.now()
       const execResult = await executeTool(
@@ -7160,6 +7293,52 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
+    // Deterministic path: WhatsApp pulse request → return colorful cached digest verbatim.
+    if (isCarmen && isStoredPulseRequest && pulseSurfacePrefersWhatsAppDigest(surface)) {
+      console.log('[AGENT] Auto-returning cached campaign pulse digest for WhatsApp')
+      const autoStart = Date.now()
+      const pulseResult = await executeTool(
+        'get_latest_campaign_pulse',
+        {},
+        supabase,
+        resolvedTenantId,
+        callerUserId || asUuidOrNull(resolvedUserId),
+        callerCampaignerId,
+        agent_id,
+        callerRole,
+        callerManagedAgencyIds,
+        callerPhone,
+        wa_notify,
+        surface,
+      )
+      const digest = typeof pulseResult?.whatsapp_digest === 'string' ? pulseResult.whatsapp_digest.trim() : ''
+      const finalOutput = digest || 'אין בדיקת דופק זמינה כרגע — נסה שוב אחרי הסנכרון הבא.'
+      const executionTime = Date.now() - autoStart
+      if (serverConversationId && callerUserId) {
+        const persistedMessages = [
+          ...serverConversationHistory,
+          { role: 'user', content: String(command_text) },
+          { role: 'assistant', content: finalOutput },
+        ].slice(-60)
+        await supabase.from('ai_conversations')
+          .update({ messages: persistedMessages, updated_at: new Date().toISOString() })
+          .eq('id', serverConversationId)
+          .eq('user_id', callerUserId)
+          .eq('tenant_id', resolvedTenantId)
+      }
+      if (emit && finalOutput) emit({ type: 'token', content: finalOutput })
+      return new Response(JSON.stringify({
+        success: !!digest,
+        output: finalOutput,
+        agent_name: agent.name,
+        model: resolveModel(agent.engine || 'gemini-3-flash'),
+        execution_time_ms: executionTime,
+        tools_used: ['get_latest_campaign_pulse'],
+        tool_log: [{ tool: 'get_latest_campaign_pulse', args: {}, result: pulseResult }],
+        auto_pulse_digest: true,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     // Build messages with conversation history
     let messages: any[] = [{ role: 'system', content: systemPrompt }]
     
@@ -7182,7 +7361,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
     // If the agent's engine is Manus — delegate the entire conversation to Manus AI
     // and return the result directly (no tool loop needed here).
-    if (model === 'manus/manus-1' || model === 'manus-1') {
+    if (!pinSkillsOnly && (model === 'manus/manus-1' || model === 'manus-1')) {
       const manusBody: any = {
         action: 'create_task',
         tenantId: agent.tenant_id,
@@ -7211,7 +7390,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // Route to the org's own LLM provider(s) using the keys stored in the "llm"
     // integration. Build a fallback chain so Carmen automatically continues on the
     // next funded provider if the primary runs out of quota/credit mid-request.
-    const llmChain = await buildLLMChain(supabase, agent.tenant_id, model)
+    const isolatedChatModel = pinSkillsOnly && (model === 'manus/manus-1' || model === 'manus-1')
+      ? 'google/gemini-3-flash-preview'
+      : model
+    if (isolatedChatModel !== model) {
+      console.log(`[AGENT] pin_skills_only: remapping ${model} → ${isolatedChatModel} for isolated chat`)
+    }
+    const llmChain = await buildLLMChain(supabase, agent.tenant_id, isolatedChatModel)
     if (llmChain.length === 0) throw new Error('לא מוגדר אף מפתח מודל AI פעיל באינטגרציית מודלי AI')
     let activeIdx = 0
     let llm = llmChain[activeIdx]
@@ -7290,6 +7475,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
       // Execute tool calls
       const toolResults: any[] = []
+      let pulseDigestShortcut: string | null = null
       for (const tc of msg.tool_calls) {
         const toolName = tc.function.name
         let toolArgs: Record<string, any> = {}
@@ -7302,7 +7488,9 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         try {
           // Defense in depth: even if a tool slipped into the schema, refuse
           // coding-agent escalations outside the caller's tier (full vs bugfix).
-          if (isDevEscalationTool(toolName) && !isDevEscalationToolAllowed(toolName, devEscalationTier)) {
+          if (pinSkillsOnly) {
+            result = { error: 'isolated_session', message: 'סשן מבודד — כלים כבויים.' }
+          } else if (isDevEscalationTool(toolName) && !isDevEscalationToolAllowed(toolName, devEscalationTier)) {
             result = {
               error: 'dev_escalation_forbidden',
               message: devEscalationTier === 'bugfix' ? DEV_ESCALATION_BUGFIX_ONLY_REFUSAL_HE : DEV_ESCALATION_REFUSAL_HE,
@@ -7327,9 +7515,25 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           const subTaskId = (result && typeof result === 'object' && (result as any).sub_task_id) || undefined
           emit({ type: 'tool_result', tool: toolName, sub_task_id: subTaskId, ok: !(result && (result as any).error), error: (result && (result as any).error) || undefined })
         }
+
+        if (
+          round === 0 &&
+          toolName === 'get_latest_campaign_pulse' &&
+          isStoredPulseRequest &&
+          pulseSurfacePrefersWhatsAppDigest(surface) &&
+          typeof result?.whatsapp_digest === 'string' &&
+          result.whatsapp_digest.trim()
+        ) {
+          pulseDigestShortcut = result.whatsapp_digest.trim()
+        }
       }
 
       messages.push(...toolResults)
+      if (pulseDigestShortcut) {
+        finalOutput = pulseDigestShortcut
+        if (emit) emit({ type: 'token', content: finalOutput })
+        break
+      }
     }
 
 
@@ -7421,6 +7625,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       execution_time_ms: executionTime,
       tools_used: toolLog.map(t => t.tool),
       tool_log: toolLog,
+      conversation_id: serverConversationId,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (error: any) {

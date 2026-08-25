@@ -44,7 +44,7 @@ const FALLBACK_PULSE_CHECK: CarmenSkill = {
   id: 'pulse_check',
   triggers: [/בדיקת\s*דופק/, /בדיקת\s*דוח/, /סיכום\s*קמפיינים/, /מצב\s*קמפיינים/, /\bpulse\s*check\b/i],
   tools: ['get_latest_campaign_pulse'],
-  prompt: '=== סקיל: בדיקת דופק ===\nחובה לקרוא ל-get_latest_campaign_pulse. בוואטסאפ החזירי רק whatsapp_digest (סיכום + קישור לדשבורד) — אסור טבלת Markdown או פירוט לקוחות. בדשבורד הפנימי מותר formatted_markdown. אסור לחשב בדיקה חדשה או להשלים נתונים מהזיכרון. אם אין Snapshot — אמרי שאין בדיקת דופק זמינה.',
+  prompt: '=== סקיל: בדיקת דופק ===\nחובה לקרוא ל-get_latest_campaign_pulse. בוואטסאפ החזירי רק whatsapp_digest (סיכום + קישור לדשבורד) — אסור טבלת Markdown או פירוט לקוחות. לקמפיינרים הכלי מסנן אוטומטית ללקוחות משויכים ב-client_team. בדשבורד הפנימי מותר formatted_markdown. אסור לחשב בדיקה חדשה או להשלים נתונים מהזיכרון. אם אין Snapshot — אמרי שאין בדיקת דופק זמינה.',
   source: 'fallback',
 }
 const FALLBACK_ECOMMERCE: CarmenSkill = {

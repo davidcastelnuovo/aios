@@ -1,0 +1,94 @@
+export type CreativeFormat = "9:16" | "1:1" | "4:5" | "16:9";
+
+export type CreativeProjectType = "static" | "video";
+
+export interface StoryboardStyleLock {
+  lock: string;
+  referenceImageUrl?: string;
+}
+
+export interface StoryboardFrame {
+  id: string;
+  order: number;
+  title: string;
+  shot: string;
+  visualPrompt: string;
+  overlayText: string;
+  voiceover: string;
+  duration: number;
+  imageUrl?: string;
+  x: number;
+  y: number;
+}
+
+export interface CreativeComment {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface CreativeLayer {
+  id: string;
+  type: "background" | "text";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  text?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string;
+  color?: string;
+  textAlign?: "right" | "center" | "left";
+  locked?: boolean;
+}
+
+export interface CreativeVariation {
+  id: string;
+  name: string;
+  imageUrl: string;
+  format: CreativeFormat;
+  layers: CreativeLayer[];
+  comments: CreativeComment[];
+  createdAt: string;
+  source?: "ai" | "manual_edit" | "storyboard_import";
+}
+
+export interface CreativeItem {
+  id: string;
+  title: string | null;
+  status: string;
+  client_id: string | null;
+  payload: Record<string, unknown> | null;
+  current_stage_id: string | null;
+  target_channel: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreativeAssetRow {
+  id: string;
+  type: string;
+  url: string | null;
+  content: string | null;
+  meta: {
+    source?: string;
+    variation_id?: string;
+    variation_name?: string;
+    comments?: CreativeComment[];
+    layers?: CreativeLayer[];
+    format?: CreativeFormat;
+  } | null;
+  created_at: string;
+  run_id: string | null;
+}
+
+export interface CreativeProjectDraft {
+  title: string;
+  briefText: string;
+  copyText: string;
+  instructions: string;
+  format: CreativeFormat;
+  projectType: CreativeProjectType;
+}

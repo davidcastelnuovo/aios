@@ -15,6 +15,7 @@ import { CampaignerAssignmentPicker } from "@/components/clients/CampaignerAssig
 import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
 import { ClientsChatView } from "@/components/clients/ClientsChatView";
 import { ClientsMultiSelectToolbar } from "@/components/clients/ClientsMultiSelectToolbar";
+import { ClientFollowUpDatePicker } from "@/components/clients/ClientFollowUpDatePicker";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -1092,6 +1093,10 @@ export default function Clients() {
                   <Badge variant="outline" className={getMoodStatusDisplay(client.mood_status).color}>
                     {getMoodStatusDisplay(client.mood_status).emoji} {getMoodStatusDisplay(client.mood_status).text}
                   </Badge>
+                  <ClientFollowUpDatePicker
+                    clientId={client.id}
+                    currentDate={client.follow_up_date ?? null}
+                  />
                 </div>
               </div>
             </CardHeader>
