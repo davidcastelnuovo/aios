@@ -37,6 +37,14 @@ import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
 import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
+import {
+  findLeadStatus,
+  inferLeadSource,
+  leadSourceDisplay,
+  resolveResponseStatusKey,
+  responseStatusSelectValue,
+  unmatchedResponseStatusValue,
+} from "@/lib/leadFields";
 
 const formSchema = z.object({
   // NOTE: company_name can be hidden by tenant field visibility settings.
@@ -46,6 +54,7 @@ const formSchema = z.object({
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   phone: z.string().optional(),
   source: z.string().optional(),
+  campaign_name: z.string().optional(),
   status: z.string().optional(),
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
@@ -131,6 +140,7 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
       email: lead.email || "",
       phone: lead.phone || "",
       source: lead.source || "other",
+      campaign_name: lead.campaign_name || "",
       status: lead.status || "new",
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
@@ -204,6 +214,7 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
       email: lead.email || "",
       phone: lead.phone || "",
       source: lead.source || "other",
+      campaign_name: lead.campaign_name || "",
       status: lead.status || "new",
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
@@ -299,9 +310,14 @@ const updateMutation = useMutation({
         contact_name: values.contact_name || null,
         email: values.email || null,
         phone: values.phone || null,
-        source: (values.source as any) || 'other',
-        status: (values.status as any) || 'new',
-        response_status: values.response_status && values.response_status !== 'none' ? (values.response_status as any) : null,
+        campaign_name: (values.campaign_name || "").trim() || null,
+        source: (values.campaign_name || "").trim()
+          ? (inferLeadSource(values.campaign_name) as any)
+          : ((values.source as any) || lead.source || "other"),
+        status: (values.status as any) || "new",
+        response_status: values.response_status && values.response_status !== "none"
+          ? (resolveResponseStatusKey(values.response_status, leadStatuses) || values.response_status)
+          : null,
         estimated_deal_value: values.estimated_deal_value 
           ? parseFloat(values.estimated_deal_value) 
           : null,
@@ -650,13 +666,14 @@ const updateMutation = useMutation({
                     control={form.control}
                     name="response_status"
                     render={({ field }) => {
-                      const selectedStatus = leadStatuses.find(s => s.status_key === field.value);
+                      const selectedStatus = findLeadStatus(field.value, leadStatuses);
+                      const unmatched = unmatchedResponseStatusValue(field.value, leadStatuses);
                       return (
                         <FormItem>
                           <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
                           <Select 
                             onValueChange={field.onChange} 
-                            defaultValue={field.value}
+                            value={responseStatusSelectValue(field.value, leadStatuses)}
                             open={responseSelectOpen}
                             onOpenChange={setResponseSelectOpen}
                           >
@@ -665,7 +682,7 @@ const updateMutation = useMutation({
                                 className="text-right rounded-lg border-2 h-11"
                                 style={{ 
                                   backgroundColor: selectedStatus?.color || undefined,
-                                  color: field.value ? '#fff' : undefined 
+                                  color: field.value && field.value !== "none" ? '#fff' : undefined 
                                 }}
                               >
                                 <SelectValue placeholder="בחר סטטוס" />
@@ -673,6 +690,9 @@ const updateMutation = useMutation({
                             </FormControl>
                             <SelectContent className="bg-background z-50 text-right" align="end">
                               <SelectItem value="none">ללא סטטוס</SelectItem>
+                              {unmatched && (
+                                <SelectItem value={unmatched}>{unmatched}</SelectItem>
+                              )}
                               {leadStatuses.map((status) => (
                                 <SelectItem 
                                   key={status.status_key} 
@@ -763,25 +783,24 @@ const updateMutation = useMutation({
 
                   <FormField
                     control={form.control}
-                    name="source"
+                    name="campaign_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-medium">מקור הגעה</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="text-right rounded-lg border-2 h-11">
-                              <SelectValue placeholder="בחר מקור" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-50 text-right" align="end">
-                            <SelectItem value="phone">טלפון</SelectItem>
-                            <SelectItem value="website">אתר</SelectItem>
-                            <SelectItem value="facebook">פייסבוק</SelectItem>
-                            <SelectItem value="google">גוגל</SelectItem>
-                            <SelectItem value="referral">הפניה</SelectItem>
-                            <SelectItem value="other">אחר</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <FormLabel className="text-sm font-medium">
+                          {getFieldLabel("source", "מקור")}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            className="text-right rounded-lg border-2 h-11"
+                            placeholder={
+                              lead.source && lead.source !== "other"
+                                ? leadSourceDisplay({ source: lead.source, campaign_name: null })
+                                : "שם הקמפיין"
+                            }
+                            dir="rtl"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

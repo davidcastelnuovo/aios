@@ -30,6 +30,13 @@ import { ManagePipelineStagesDialog } from "./ManagePipelineStagesDialog";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
+import {
+  findLeadStatus,
+  inferLeadSource,
+  unmatchedResponseStatusValue,
+  resolveResponseStatusKey,
+  responseStatusSelectValue,
+} from "@/lib/leadFields";
 
 const formSchema = z.object({
   company_name: z.string().optional().default(""),
@@ -37,6 +44,7 @@ const formSchema = z.object({
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   phone: z.string().optional(),
   source: z.string().optional(),
+  campaign_name: z.string().optional(),
   status: z.string().optional(),
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
@@ -97,6 +105,7 @@ export function AddLeadForm() {
       email: "",
       phone: "",
       source: "",
+      campaign_name: "",
       status: pipelineStages[0]?.stage_key || "new",
       response_status: "",
       estimated_deal_value: "",
@@ -143,11 +152,14 @@ export function AddLeadForm() {
           contact_name: values.contact_name || null,
           email: values.email || null,
           phone: values.phone || null,
-          // "source" is NOT required in the UI, but the DB column is non-null.
-          // When empty, we store "other" to prevent insert errors.
-          source: (values.source as any) || 'other',
-          status: (values.status as any) || 'new',
-        response_status: values.response_status && values.response_status !== 'none' ? (values.response_status as any) : null,
+          source: (values.campaign_name || "").trim()
+            ? (inferLeadSource(values.campaign_name) as any)
+            : ((values.source as any) || "other"),
+          campaign_name: (values.campaign_name || "").trim() || null,
+          status: (values.status as any) || "new",
+          response_status: values.response_status && values.response_status !== "none"
+            ? (resolveResponseStatusKey(values.response_status, leadStatuses) || values.response_status)
+            : null,
         monthly_budget: values.monthly_budget 
           ? parseFloat(values.monthly_budget) 
           : null,
@@ -395,13 +407,14 @@ export function AddLeadForm() {
                 control={form.control}
                 name="response_status"
                 render={({ field }) => {
-                  const selectedStatus = leadStatuses.find(s => s.status_key === field.value);
+                  const selectedStatus = findLeadStatus(field.value, leadStatuses);
+                  const unmatched = unmatchedResponseStatusValue(field.value, leadStatuses);
                   return (
                     <FormItem>
                       <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
-                        defaultValue={field.value}
+                        value={responseStatusSelectValue(field.value, leadStatuses)}
                         open={responseSelectOpen}
                         onOpenChange={setResponseSelectOpen}
                       >
@@ -410,7 +423,7 @@ export function AddLeadForm() {
                             className="rounded-lg border-2 h-11"
                             style={{ 
                               backgroundColor: selectedStatus?.color || undefined,
-                              color: field.value ? '#fff' : undefined 
+                              color: field.value && field.value !== "none" ? '#fff' : undefined 
                             }}
                           >
                             <SelectValue placeholder="בחר סטטוס" />
@@ -418,6 +431,9 @@ export function AddLeadForm() {
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
                           <SelectItem value="none">ללא סטטוס</SelectItem>
+                          {unmatched && (
+                            <SelectItem value={unmatched}>{unmatched}</SelectItem>
+                          )}
                           {leadStatuses.map((status) => (
                             <SelectItem 
                               key={status.status_key} 
@@ -508,25 +524,20 @@ export function AddLeadForm() {
 
               <FormField
                 control={form.control}
-                name="source"
+                name="campaign_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">מקור הגעה</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="rounded-lg border-2 h-11">
-                          <SelectValue placeholder="בחר מקור" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background z-[100]">
-                        <SelectItem value="phone">טלפון</SelectItem>
-                        <SelectItem value="website">אתר</SelectItem>
-                        <SelectItem value="facebook">פייסבוק</SelectItem>
-                        <SelectItem value="google">גוגל</SelectItem>
-                        <SelectItem value="referral">הפניה</SelectItem>
-                        <SelectItem value="other">אחר</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("source", "מקור הגעה")}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        className="rounded-lg border-2 h-11"
+                        placeholder="שם הקמפיין"
+                        dir="rtl"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

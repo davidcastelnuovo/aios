@@ -76,6 +76,12 @@ import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 import { LeadsChatView } from "@/components/leads/LeadsChatView";
+import {
+  findLeadStatus,
+  leadSourceDisplay,
+  responseStatusSelectValue,
+  unmatchedResponseStatusValue,
+} from "@/lib/leadFields";
 
 
 // Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
@@ -105,14 +111,6 @@ function hexToLightBg(hex: string): string {
   return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 0.15)`;
 }
 
-const SOURCE_LABELS: Record<string, string> = {
-  phone: "טלפון",
-  website: "אתר",
-  facebook: "פייסבוק",
-  google: "גוגל",
-  referral: "הפניה",
-  other: "אחר",
-};
 
 const PRODUCT_LABELS: Record<string, string> = {
   google_ads: "Google Ads",
@@ -135,9 +133,7 @@ function getStatusStyle(statusKey: string | null, statuses: LeadStatus[]) {
 }
 
 function getStatusColor(statusKey: string | null, statuses: LeadStatus[]) {
-  if (!statusKey) return undefined;
-  const status = statuses.find(s => s.status_key === statusKey);
-  return status?.color;
+  return findLeadStatus(statusKey, statuses)?.color || undefined;
 }
 
 function DroppableStage({ stage, children }: { stage: any; children: ReactNode }) {
@@ -276,6 +272,11 @@ function LeadCardContent({
             <span className="text-xs text-muted-foreground truncate">{lead.company_name}</span>
           </div>
         )}
+        {lead.campaign_name && (
+          <div className="text-xs text-muted-foreground truncate mt-1" title={lead.campaign_name}>
+            {lead.campaign_name}
+          </div>
+        )}
         {/* Tag Badges */}
         {leadTagIds.length > 0 && (
           <div className="mt-2">
@@ -354,7 +355,7 @@ function LeadCardContent({
         {/* Response Status */}
         <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
           <Select
-            value={lead.response_status || "none"}
+            value={responseStatusSelectValue(lead.response_status, leadStatuses)}
             onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
             open={responseSelectOpen}
             onOpenChange={setResponseSelectOpen}
@@ -370,6 +371,11 @@ function LeadCardContent({
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
               <SelectItem value="none">ללא סטטוס</SelectItem>
+              {unmatchedResponseStatusValue(lead.response_status, leadStatuses) && (
+                <SelectItem value={lead.response_status}>
+                  {lead.response_status}
+                </SelectItem>
+              )}
               {leadStatuses.map((option) => (
                 <SelectItem 
                   key={option.status_key} 
@@ -866,7 +872,7 @@ export default function Leads() {
       
       if (searchQuery.trim()) {
         const q = searchQuery.trim();
-        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%`);
+        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%,campaign_name.ilike.%${q}%`);
       }
 
       const { count, error } = await query;
@@ -951,6 +957,9 @@ export default function Leads() {
           .from("leads")
           .select(`
             id,
+            campaign_name,
+            source,
+            response_status,
             agencies (name),
             sales_people (full_name)
           `)
@@ -967,6 +976,9 @@ export default function Leads() {
         for (const stageId of Object.keys(stageMap)) {
           stageMap[stageId].leads = stageMap[stageId].leads.map((lead: any) => ({
             ...lead,
+            campaign_name: relationsMap[lead.id]?.campaign_name ?? lead.campaign_name ?? null,
+            source: relationsMap[lead.id]?.source ?? lead.source,
+            response_status: relationsMap[lead.id]?.response_status ?? lead.response_status,
             agencies: relationsMap[lead.id]?.agencies || null,
             sales_people: relationsMap[lead.id]?.sales_people || null
           }));
@@ -1025,6 +1037,7 @@ export default function Leads() {
               status,
               response_status,
               source,
+              campaign_name,
               industry,
               products,
               estimated_deal_value,
@@ -1064,6 +1077,7 @@ export default function Leads() {
           status,
           response_status,
           source,
+          campaign_name,
           industry,
           products,
           estimated_deal_value,
@@ -1135,7 +1149,7 @@ export default function Leads() {
       
       if (searchQuery.trim()) {
         const q = searchQuery.trim();
-        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%`);
+        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%,campaign_name.ilike.%${q}%`);
       }
       
       // Apply pagination
@@ -1864,6 +1878,7 @@ export default function Leads() {
       "שלב",
       "סטטוס תגובה",
       "מקור",
+      "שם קמפיין",
       "תעשייה",
       "ערך עסקה משוער",
       "איש מכירות",
@@ -1874,8 +1889,8 @@ export default function Leads() {
 
     const rows = filteredLeads.map((lead: any) => {
       const stageName = PIPELINE_STAGES.find(s => s.id === lead.status)?.label || lead.status;
-      const statusName = leadStatuses.find(s => s.status_key === lead.response_status)?.label || lead.response_status || "";
-      const sourceName = SOURCE_LABELS[lead.source] || lead.source || "";
+      const statusName = findLeadStatus(lead.response_status, leadStatuses)?.label || lead.response_status || "";
+      const sourceName = leadSourceDisplay(lead);
       
       return [
         lead.contact_name || "",
@@ -1885,6 +1900,7 @@ export default function Leads() {
         stageName || "",
         statusName,
         sourceName,
+        lead.campaign_name || "",
         lead.industry || "",
         lead.estimated_deal_value || "",
         lead.sales_people?.full_name || "",
@@ -1979,6 +1995,9 @@ export default function Leads() {
           .from("leads")
           .select(`
             id,
+            campaign_name,
+            source,
+            response_status,
             agencies (name),
             sales_people (full_name)
           `)
@@ -1993,6 +2012,9 @@ export default function Leads() {
         
         const enrichedLeads = newLeads.map((lead: any) => ({
           ...lead,
+          campaign_name: relationsMap[lead.id]?.campaign_name ?? lead.campaign_name ?? null,
+          source: relationsMap[lead.id]?.source ?? lead.source,
+          response_status: relationsMap[lead.id]?.response_status ?? lead.response_status,
           agencies: relationsMap[lead.id]?.agencies || null,
           sales_people: relationsMap[lead.id]?.sales_people || null
         }));
@@ -3390,6 +3412,16 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 </div>
               )
             }] : []),
+            ...(isFieldVisible('campaign_name') ? [{
+              id: "campaign_name",
+              label: "שם קמפיין",
+              width: 180,
+              render: (lead: any) => (
+                <span className="truncate" title={lead.campaign_name || ""}>
+                  {lead.campaign_name || "—"}
+                </span>
+              )
+            }] : []),
             { 
               id: "status", 
               label: "שלב במשפך", 
@@ -3448,11 +3480,12 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
               label: "סטטוס", 
               width: 150,
               render: (lead: any) => {
-                const status = leadStatuses.find(s => s.status_key === lead.response_status);
+                const status = findLeadStatus(lead.response_status, leadStatuses);
                 const displayLabel = status?.label || (lead.response_status ? lead.response_status : null);
+                const unmatched = unmatchedResponseStatusValue(lead.response_status, leadStatuses);
                 return (
                   <Select
-                    value={lead.response_status || "none"}
+                    value={responseStatusSelectValue(lead.response_status, leadStatuses)}
                     onValueChange={(value) => 
                       updateLeadResponseStatus.mutate({ 
                         leadId: lead.id, 
@@ -3475,6 +3508,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
                       <SelectItem value="none">ללא סטטוס</SelectItem>
+                      {unmatched && (
+                        <SelectItem value={unmatched}>{unmatched}</SelectItem>
+                      )}
                       {leadStatuses.map((s) => (
                         <SelectItem 
                           key={s.status_key} 

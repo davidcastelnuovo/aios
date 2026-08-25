@@ -13,6 +13,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  autoDetectLeadImportField,
+  inferLeadSource,
+  resolveResponseStatusKey,
+} from "@/lib/leadFields";
 
 type Step = "upload" | "mapping" | "preview" | "importing";
 
@@ -69,90 +74,6 @@ const isUpdateColumn = (colName: string): boolean => {
   const hebrewMatch = normalized.match(/^עדכון\s*(\d+)$/);
   const englishMatch = normalized.match(/^update\s*(\d+)$/i);
   return !!(hebrewMatch || englishMatch);
-};
-
-const AUTO_DETECT_MAPPINGS: Record<string, string> = {
-  // עברית
-  'שם העסק': 'company_name',
-  'שם החברה': 'company_name',
-  'חברה': 'company_name',
-  'עסק': 'company_name',
-  'שם עסק': 'company_name',
-  'שם העסק/חברה': 'company_name',
-  'שם איש קשר': 'contact_name',
-  'איש קשר': 'contact_name',
-  'שם': 'contact_name',
-  'טלפון': 'phone',
-  'נייד': 'phone',
-  'מייל': 'email',
-  'אימייל': 'email',
-  'מקור': 'source',
-  'מקור הגעה': 'source',
-  'סטטוס': 'status',
-  'סטטוס תגובה': 'response_status',
-  'תגיות': 'tags',
-  'תג': 'tags',
-  'במה מתעניין': 'tags',
-  'מתעניין ב': 'tags',
-  'קטגוריה': 'tags',
-  'הערות': 'notes',
-  'תקציב': 'monthly_budget',
-  'הצעה חד"פ': 'monthly_budget',
-  'הצעה חד״פ': 'monthly_budget',
-  'הצעה 3 חודשים': 'three_month_budget',
-  'מוצרים': 'products',
-  'תעשייה': 'industry',
-  'פרסום': 'industry',
-  'תחום': 'industry',
-  'קמפיין': 'campaign_name',
-  'שם קמפיין': 'campaign_name',
-  'תאריך לחזרה': 'follow_up_date',
-  'תאריך חזרה': 'follow_up_date',
-  'לחזרה': 'follow_up_date',
-  'פולו אפ': 'follow_up_date',
-  'follow up': 'follow_up_date',
-  'תאריך יצירה': 'created_at',
-  'תאריך הצעה': 'proposal_date',
-  'נסגר': 'won_date',
-  'תאריך סגירה': 'won_date',
-  'שווי הצעות/הסכמים': 'estimated_deal_value',
-  'שווי עסקה': 'estimated_deal_value',
-  'קישור': 'folder_link',
-  'קישור לתיקייה': 'folder_link',
-  // English
-  'company': 'company_name',
-  'company name': 'company_name',
-  'company_name': 'company_name',
-  'business': 'company_name',
-  'contact': 'contact_name',
-  'contact name': 'contact_name',
-  'contact_name': 'contact_name',
-  'name': 'contact_name',
-  'phone': 'phone',
-  'mobile': 'phone',
-  'email': 'email',
-  'source': 'source',
-  'lead source': 'source',
-  'status': 'status',
-  'response_status': 'response_status',
-  'tags': 'tags',
-  'tag': 'tags',
-  'notes': 'notes',
-  'budget': 'monthly_budget',
-  'monthly_budget': 'monthly_budget',
-  'products': 'products',
-  'industry': 'industry',
-  'campaign': 'campaign_name',
-  'campaign_name': 'campaign_name',
-  'created_at': 'created_at',
-  'created': 'created_at',
-  'follow_up_date': 'follow_up_date',
-  'follow_up': 'follow_up_date',
-  'follow up date': 'follow_up_date',
-  'proposal_date': 'proposal_date',
-  'won_date': 'won_date',
-  'deal_value': 'estimated_deal_value',
-  'folder_link': 'folder_link',
 };
 
 export function ImportLeadsWithMapping() {
@@ -345,15 +266,15 @@ export function ImportLeadsWithMapping() {
       
       // Auto-detect mappings
       const autoMappings: FieldMapping[] = columns.map(col => {
-        const normalizedCol = col.trim().toLowerCase();
-        // Check if it's an update column first
         if (isUpdateColumn(col)) {
           return { csvColumn: col, systemField: 'updates' };
         }
-        const detectedField = AUTO_DETECT_MAPPINGS[col] || 
-                             AUTO_DETECT_MAPPINGS[col.trim()] ||
-                             AUTO_DETECT_MAPPINGS[normalizedCol] ||
-                             null;
+        const samples = data
+          .slice(0, 40)
+          .map((row: any) => row[col])
+          .filter((val: any) => val !== undefined && val !== null && String(val).trim() !== "")
+          .map((val: any) => String(val).trim());
+        const detectedField = autoDetectLeadImportField(col, samples);
         return { csvColumn: col, systemField: detectedField };
       });
 
@@ -409,6 +330,7 @@ export function ImportLeadsWithMapping() {
       let statusColorIdx = 0;
       uniqueValues.forEach((val) => {
         const normalizedVal = val.toLowerCase().trim();
+        if (resolveResponseStatusKey(val, existingStatuses)) return;
         if (!existingStatusLabels.includes(normalizedVal) && !existingStatusKeys.includes(normalizedVal)) {
           // Check if already in newItems
           if (!newItems.some(item => item.value.toLowerCase() === normalizedVal && item.type === 'status')) {
@@ -563,18 +485,7 @@ export function ImportLeadsWithMapping() {
     return null;
   };
 
-  const mapSource = (val: string) => {
-    const v = val.toLowerCase().replace(/[\s_\-]/g, '');
-    if (v.includes("אתר") || v.includes("website")) return "website";
-    if (v.includes("שיחה") || v.includes("טלפון") || v.includes("coldcall")) return "cold_call";
-    if (v.includes("המלצה") || v.includes("referral") || v.includes("הפניה")) return "referral";
-    if (v.includes("facebook") || v.includes("פייסבוק") || v.includes("google") || v.includes("גוגל") || v.includes("paidads") || v.includes("ppc")) return "paid_ads";
-    if (v.includes("instagram") || v.includes("אינסטגרם") || v.includes("linkedin") || v.includes("לינקדאין") || v.includes("socialmedia") || v.includes("רשתותחברתיות") || v.includes("tiktok") || v.includes("טיקטוק")) return "social_media";
-    if (v.includes("אימייל") || v.includes("email") || v.includes("מייל") || v.includes("newsletter")) return "email_campaign";
-    if (v.includes("אירוע") || v.includes("event") || v.includes("כנס") || v.includes("תערוכה")) return "event";
-    if (v.includes("whatsapp") || v.includes("ווטסאפ") || v.includes("וואטסאפ")) return "whatsapp";
-    return "other";
-  };
+  const mapSource = (val: string) => inferLeadSource(val);
 
   const mapStatus = (val: string) => {
     const v = val.toLowerCase().replace(/[\s_\-]/g, '');
@@ -652,6 +563,7 @@ export function ImportLeadsWithMapping() {
       // Add existing statuses to the map
       existingStatuses.forEach(s => {
         statusKeyMap[s.label.toLowerCase()] = s.status_key;
+        statusKeyMap[s.status_key.toLowerCase()] = s.status_key;
       });
 
       // Create new tags
@@ -751,10 +663,13 @@ export function ImportLeadsWithMapping() {
             case 'contact_name':
             case 'notes':
             case 'products':
-            case 'campaign_name':
             case 'industry':
             case 'folder_link':
               lead[sysField] = strValue;
+              break;
+            case 'campaign_name':
+              lead.campaign_name = strValue;
+              if (!lead.source) lead.source = mapSource(strValue);
               break;
             case 'email':
               if (strValue.includes('@')) lead.email = strValue;
@@ -764,17 +679,30 @@ export function ImportLeadsWithMapping() {
               break;
             case 'source':
               lead.source = mapSource(strValue);
+              if (!lead.campaign_name) lead.campaign_name = strValue;
               break;
-            case 'status':
-              lead.status = mapStatus(strValue);
+            case 'status': {
+              const asResponse = resolveResponseStatusKey(strValue, existingStatuses);
+              const pipeline = mapStatus(strValue);
+              const hasResponseMapping = Object.values(fieldMap).includes('response_status');
+              if (asResponse && pipeline === 'new' && !hasResponseMapping) {
+                lead.response_status = asResponse;
+                if (!lead.status) lead.status = 'new';
+              } else {
+                lead.status = pipeline;
+              }
               break;
-            case 'response_status':
-              // Map to status_key from lead_statuses
-              const statusKey = statusKeyMap[strValue.toLowerCase()];
+            }
+            case 'response_status': {
+              const statusKey = resolveResponseStatusKey(strValue, [
+                ...existingStatuses,
+                ...Object.entries(statusKeyMap).map(([label, status_key]) => ({ status_key, label })),
+              ]) || statusKeyMap[strValue.toLowerCase()];
               if (statusKey) {
                 lead.response_status = statusKey;
               }
               break;
+            }
             case 'tags':
               // Parse tags and ACCUMULATE from multiple columns
               const newTags = strValue.split(',').map(t => t.trim()).filter(t => t);

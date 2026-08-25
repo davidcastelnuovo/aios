@@ -25,6 +25,12 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import {
+  findLeadStatus,
+  leadSourceDisplay,
+  responseStatusSelectValue,
+  unmatchedResponseStatusValue,
+} from "@/lib/leadFields";
 
 interface LeadsChatViewProps {
   leads: any[];
@@ -41,9 +47,8 @@ interface LeadsChatViewProps {
   initialLeadId?: string;
 }
 
-function getStatusColor(statusKey: string | null, statuses: Array<{ status_key: string; color: string }>) {
-  if (!statusKey) return undefined;
-  return statuses.find(s => s.status_key === statusKey)?.color;
+function getStatusColor(statusKey: string | null, statuses: Array<{ status_key: string; color: string; label?: string }>) {
+  return findLeadStatus(statusKey, statuses)?.color;
 }
 
 export function LeadsChatView({
@@ -89,7 +94,8 @@ export function LeadsChatView({
     return leads.filter(l =>
       (l.contact_name || "").toLowerCase().includes(q) ||
       (l.company_name || "").toLowerCase().includes(q) ||
-      (l.phone || "").includes(q)
+      (l.phone || "").includes(q) ||
+      (l.campaign_name || "").toLowerCase().includes(q)
     );
   }, [leads, listSearch]);
 
@@ -194,7 +200,7 @@ export function LeadsChatView({
   };
 
   const getStageInfo = (statusKey: string) => pipelineStages.find(s => s.id === statusKey);
-  const getLeadStatusInfo = (statusKey: string) => leadStatuses.find(s => s.status_key === statusKey);
+  const getLeadStatusInfo = (statusKey: string) => findLeadStatus(statusKey, leadStatuses);
 
   return (
     <div dir="ltr" className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background w-full max-w-full">
@@ -338,6 +344,9 @@ export function LeadsChatView({
                       {isCompanyNameVisible && lead.company_name && (
                         <p dir="rtl" className="text-xs text-muted-foreground truncate text-right">{lead.company_name}</p>
                       )}
+                      {lead.campaign_name && (
+                        <p dir="rtl" className="text-[11px] text-muted-foreground truncate text-right">{lead.campaign_name}</p>
+                      )}
                       <div className="flex items-center gap-1 mt-1 flex-wrap">
                         {stageInfo && (
                           <Badge
@@ -452,7 +461,7 @@ export function LeadsChatView({
 
                 {/* Response status */}
                 <Select
-                  value={selectedLead.response_status || "none"}
+                  value={responseStatusSelectValue(selectedLead.response_status, leadStatuses)}
                   onValueChange={(value) => onResponseStatusChange(selectedLead.id, value === "none" ? null : value)}
                 >
                   <SelectTrigger
@@ -466,6 +475,11 @@ export function LeadsChatView({
                   </SelectTrigger>
                   <SelectContent className="bg-background z-[100]">
                     <SelectItem value="none">ללא סטטוס</SelectItem>
+                    {unmatchedResponseStatusValue(selectedLead.response_status, leadStatuses) && (
+                      <SelectItem value={selectedLead.response_status}>
+                        {selectedLead.response_status}
+                      </SelectItem>
+                    )}
                     {leadStatuses.map((s) => (
                       <SelectItem key={s.status_key} value={s.status_key} style={{ backgroundColor: s.color, color: "#fff" }}>
                         {s.label}
@@ -683,7 +697,7 @@ export function LeadsChatView({
                           <span className="text-muted-foreground">:תקציב חודשי</span>
                         </div>
                         <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedLead.source || "—"}</span>
+                          <span className="font-medium">{leadSourceDisplay(selectedLead) || "—"}</span>
                           <span className="text-muted-foreground">:מקור</span>
                         </div>
                         <div className="flex items-center justify-end gap-2">
