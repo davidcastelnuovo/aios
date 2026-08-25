@@ -4,6 +4,7 @@ import {
   buildLeadRoutingPayload,
   resolveLeadClient,
 } from "../_shared/lead-routing.ts";
+import { unarchiveExistingLead } from "../_shared/unarchive-lead.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -580,6 +581,10 @@ serve(async (req) => {
                 const existingNotes = existingLead.notes || '';
                 if (!existingNotes.includes(leadgenId)) {
                   updates.notes = existingNotes + newNote;
+                  hasUpdates = true;
+                }
+
+                if (unarchiveExistingLead(existingLead, updates)) {
                   hasUpdates = true;
                 }
                 

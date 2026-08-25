@@ -20,6 +20,7 @@ const MyProfile = lazy(() => import("@/pages/MyProfile"));
 const Users = lazy(() => import("@/pages/Users"));
 const SalesPeople = lazy(() => import("@/pages/SalesPeople"));
 const Leads = lazy(() => import("@/pages/Leads"));
+const LeadsArchive = lazy(() => import("@/pages/LeadsArchive"));
 const SalesDashboard = lazy(() => import("@/pages/SalesDashboard"));
 const LeadIntegrations = lazy(() => import("@/pages/LeadIntegrations"));
 const Tenants = lazy(() => import("@/pages/Tenants"));
@@ -124,6 +125,7 @@ export function tenantRoutes() {
         <Route path="sales-dashboard" element={gate(<SalesDashboard />, "sales_dashboard")} />
         <Route path="sales-people" element={gate(<SalesPeople />, "sales_people")} />
         <Route path="leads" element={gate(<Leads />, "leads")} />
+        <Route path="leads/archive" element={gate(<LeadsArchive />, "leads")} />
         <Route path="lead-integrations" element={gate(<LeadIntegrations />, "lead_integrations")} />
         <Route path="tenants" element={gate(<Tenants />, "tenants")} />
         <Route path="automations" element={gate(<Automations />, "automations")} />

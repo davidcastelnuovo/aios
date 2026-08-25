@@ -18,7 +18,8 @@ export default function SalesDashboard() {
       let query = supabase
         .from("leads")
         .select("status, estimated_deal_value, products")
-        .eq("tenant_id", tenantId);
+        .eq("tenant_id", tenantId)
+        .is("archived_at", null);
 
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
@@ -65,7 +66,8 @@ export default function SalesDashboard() {
       let query = supabase
         .from("leads")
         .select("products, estimated_deal_value, status")
-        .eq("tenant_id", tenantId);
+        .eq("tenant_id", tenantId)
+        .is("archived_at", null);
 
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
@@ -180,7 +182,8 @@ export default function SalesDashboard() {
       let query = supabase
         .from("leads")
         .select("created_at, status, won_date, proposal_sent_date")
-        .eq("tenant_id", tenantId);
+        .eq("tenant_id", tenantId)
+        .is("archived_at", null);
 
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);

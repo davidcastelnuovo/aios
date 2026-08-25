@@ -3,6 +3,7 @@ import {
   buildLeadRoutingPayload,
   resolveLeadClient,
 } from '../_shared/lead-routing.ts'
+import { unarchiveExistingLead } from '../_shared/unarchive-lead.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -473,6 +474,10 @@ Deno.serve(async (req) => {
             : payload.notes.trim();
           hasUpdates = true;
         }
+      }
+
+      if (unarchiveExistingLead(existingLead, updates)) {
+        hasUpdates = true;
       }
       
       if (hasUpdates) {

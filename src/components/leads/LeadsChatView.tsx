@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, FileText, DollarSign, Paperclip, Users, ChevronRight, X, ArrowRight, Pencil } from "lucide-react";
+import { Link } from "react-router-dom";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, FileText, DollarSign, Paperclip, Users, ChevronRight, X, ArrowRight, Pencil, Archive } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
@@ -25,6 +26,8 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { archiveLeads } from "@/lib/leadArchive";
+import { leadMatchesPhoneSearch } from "@/lib/leadPhone";
 import {
   findLeadStatus,
   leadSourceDisplay,
@@ -44,6 +47,7 @@ interface LeadsChatViewProps {
   onFollowUpDateUpdate?: (leadId: string, newDate: string | null) => void;
   isCompanyNameVisible: boolean;
   searchQuery: string;
+  onSearchQueryChange?: (value: string) => void;
   initialLeadId?: string;
   onLoadMore?: () => void;
   hasMore?: boolean;
@@ -68,6 +72,7 @@ export function LeadsChatView({
   onFollowUpDateUpdate,
   isCompanyNameVisible,
   searchQuery,
+  onSearchQueryChange,
   initialLeadId,
   onLoadMore,
   hasMore = false,
@@ -77,7 +82,6 @@ export function LeadsChatView({
 }: LeadsChatViewProps) {
   const isMobile = useIsMobile();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(initialLeadId ?? null);
-  const [listSearch, setListSearch] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<any>(null);
   const [editInitialTab, setEditInitialTab] = useState<string>("details");
@@ -99,15 +103,17 @@ export function LeadsChatView({
   }, [isMobile, leads, selectedLeadId]);
 
   const filteredListLeads = useMemo(() => {
-    if (!listSearch.trim()) return leads;
-    const q = listSearch.toLowerCase();
-    return leads.filter(l =>
-      (l.contact_name || "").toLowerCase().includes(q) ||
-      (l.company_name || "").toLowerCase().includes(q) ||
-      (l.phone || "").includes(q) ||
-      (l.campaign_name || "").toLowerCase().includes(q)
+    if (!searchQuery.trim()) return leads;
+    const q = searchQuery.trim();
+    const qLower = q.toLowerCase();
+    return leads.filter((l) =>
+      (l.contact_name || "").toLowerCase().includes(qLower) ||
+      (l.company_name || "").toLowerCase().includes(qLower) ||
+      (l.campaign_name || "").toLowerCase().includes(qLower) ||
+      (l.email || "").toLowerCase().includes(qLower) ||
+      leadMatchesPhoneSearch(l.phone, q)
     );
-  }, [leads, listSearch]);
+  }, [leads, searchQuery]);
 
   const selectedLead = useMemo(() => {
     return leads.find(l => l.id === selectedLeadId) || null;
@@ -116,15 +122,21 @@ export function LeadsChatView({
   const selectedLeadTagIds = selectedLead ? (leadsTagsMap[selectedLead.id] || []) : [];
 
   const handleDelete = async (id: string) => {
+    if (!window.confirm("להעביר את הליד לארכיון? הוא יישמר ואפשר לשחזר. מחיקה לצמיתות רק מארכיון הלידים.")) {
+      return;
+    }
     try {
-      const { error } = await supabase.from("leads").delete().eq("id", id);
-      if (error) throw error;
-      toast.success("ליד נמחק בהצלחה");
+      await archiveLeads([id]);
+      toast.success("הליד הועבר לארכיון");
       const idx = leads.findIndex(l => l.id === id);
       const next = leads[idx + 1] || leads[idx - 1] || null;
       setSelectedLeadId(next?.id || null);
+      queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-archive", tenantId] });
     } catch (error: any) {
-      toast.error("שגיאה במחיקת ליד: " + error.message);
+      toast.error("שגיאה בהעברה לארכיון: " + error.message);
     }
   };
 
@@ -152,13 +164,14 @@ export function LeadsChatView({
 
   const handleBulkDelete = async () => {
     if (selectedLeadIds.size === 0) return;
-    const confirmed = window.confirm(`האם למחוק ${selectedLeadIds.size} לידים?`);
+    const confirmed = window.confirm(
+      `להעביר ${selectedLeadIds.size} לידים לארכיון? מחיקה לצמיתות רק מארכיון הלידים.`,
+    );
     if (!confirmed) return;
     setBulkActionLoading(true);
     try {
-      const { error } = await supabase.from("leads").delete().in("id", Array.from(selectedLeadIds));
-      if (error) throw error;
-      toast.success(`${selectedLeadIds.size} לידים נמחקו בהצלחה`);
+      await archiveLeads(Array.from(selectedLeadIds));
+      toast.success(`${selectedLeadIds.size} לידים הועברו לארכיון`);
       if (selectedLeadIds.has(selectedLeadId || "")) {
         setSelectedLeadId(null);
       }
@@ -166,8 +179,9 @@ export function LeadsChatView({
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-archive", tenantId] });
     } catch (error: any) {
-      toast.error("שגיאה במחיקה: " + error.message);
+      toast.error("שגיאה בהעברה לארכיון: " + error.message);
     } finally {
       setBulkActionLoading(false);
     }
@@ -223,9 +237,9 @@ export function LeadsChatView({
             <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="חיפוש ליד..."
-                value={listSearch}
-                onChange={(e) => setListSearch(e.target.value)}
+                placeholder="חיפוש לפי שם, טלפון או חברה..."
+                value={searchQuery}
+                onChange={(e) => onSearchQueryChange?.(e.target.value)}
                 className="pr-9 h-9 text-sm text-right"
               />
             </div>
@@ -297,8 +311,8 @@ export function LeadsChatView({
                   onClick={handleBulkDelete}
                   disabled={bulkActionLoading}
                 >
-                  <Trash2 className="h-3 w-3" />
-                  מחק
+                  <Archive className="h-3 w-3" />
+                  לארכיון
                 </Button>
               </div>
             )}
@@ -408,8 +422,13 @@ export function LeadsChatView({
               );
             })}
             {filteredListLeads.length === 0 && (
-              <div className="p-8 text-center text-muted-foreground text-sm">
-                לא נמצאו לידים
+              <div className="p-8 text-center text-muted-foreground text-sm space-y-2">
+                <div>לא נמצאו לידים</div>
+                {searchQuery.trim() && (
+                  <Button variant="link" size="sm" asChild className="h-auto p-0">
+                    <Link to="archive">חפש בארכיון</Link>
+                  </Button>
+                )}
               </div>
             )}
             {hasMore && (
@@ -616,7 +635,7 @@ export function LeadsChatView({
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive"
                   onClick={() => handleDelete(selectedLead.id)}
-                  title="מחק ליד"
+                  title="העבר לארכיון"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

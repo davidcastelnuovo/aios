@@ -5053,6 +5053,8 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id: string | null
+          archived_at: string | null
+          archived_by: string | null
           attachments: Json
           campaign_name: string | null
           client_id: string | null
@@ -5105,6 +5107,8 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           attachments?: Json
           campaign_name?: string | null
           client_id?: string | null
@@ -5157,6 +5161,8 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           attachments?: Json
           campaign_name?: string | null
           client_id?: string | null
@@ -10606,6 +10612,22 @@ export type Database = {
           utm_medium: string
           utm_source: string
         }[]
+      }
+      archive_leads: {
+        Args: { p_lead_ids: string[] }
+        Returns: number
+      }
+      can_manage_lead_archive: {
+        Args: { _tenant_id: string }
+        Returns: boolean
+      }
+      restore_archived_leads: {
+        Args: { p_lead_ids: string[] }
+        Returns: number
+      }
+      permanently_delete_archived_leads: {
+        Args: { p_lead_ids: string[] }
+        Returns: number
       }
       get_leads_by_stages: {
         Args: {

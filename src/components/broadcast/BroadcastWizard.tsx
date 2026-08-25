@@ -165,7 +165,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
         return (data || []).map((c: any) => ({ id: c.id, label: c.contact_name || c.name || c.phone, phone: c.phone, email: c.email }));
       }
       if (source === "leads") {
-        let q = supabase.from("leads").select("id, contact_name, company_name, phone, email").eq("tenant_id", tenantId);
+        let q = supabase.from("leads").select("id, contact_name, company_name, phone, email").eq("tenant_id", tenantId).is("archived_at", null);
         if (leadStatusKeys.length) q = q.in("status", leadStatusKeys);
         const { data } = await q.limit(1000);
         return (data || []).map((l: any) => ({ id: l.id, label: l.contact_name || l.company_name || l.phone, phone: l.phone, email: l.email }));
