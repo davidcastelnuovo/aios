@@ -10,6 +10,10 @@ import {
   updateLeadWithRepeatReopen,
 } from "../_shared/lead-repeat-reopen.ts";
 import { resolveTenantHomeAgencyId } from "../_shared/resolve-tenant-agency.ts";
+import {
+  findExistingFacebookLead,
+  wasFacebookLeadAutomationClaimed,
+} from "../_shared/facebook-lead-dedup.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -205,15 +209,19 @@ serve(async (req) => {
                     continue;
                   }
                   
-                  // Check dedup by leadgen_id
-                  const { data: existingLeads } = await supabase
-                    .from('leads')
-                    .select('id')
-                    .eq('tenant_id', flowTenantId)
-                    .or(`notes.ilike.%${leadgenId}%`)
-                    .limit(1);
-                  
-                  if (existingLeads && existingLeads.length > 0) {
+                  const alreadyClaimed = await wasFacebookLeadAutomationClaimed(supabase, {
+                    tenantId: flowTenantId,
+                    automationId: flowStep.automation_id,
+                    leadgenId,
+                  });
+                  const existingLead = alreadyClaimed
+                    ? { id: 'claimed' }
+                    : await findExistingFacebookLead(supabase, {
+                      tenantId: flowTenantId,
+                      leadgenId,
+                    });
+
+                  if (existingLead) {
                     processedTenants.add(flowTenantId);
                     continue;
                   }
@@ -332,6 +340,16 @@ serve(async (req) => {
                     });
                   } catch (e) {
                     console.error('Error triggering flow automation:', e);
+                  }
+
+                  const { error: processedErr } = await supabase.from('flow_processed_leads').insert({
+                    automation_id: flowStep.automation_id,
+                    tenant_id: flowTenantId,
+                    leadgen_id: leadgenId,
+                    facebook_form_id: formId,
+                  });
+                  if (processedErr && processedErr.code !== '23505') {
+                    console.error('Error recording flow_processed_leads:', processedErr);
                   }
                 }
                 
