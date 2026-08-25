@@ -414,7 +414,7 @@ export function AddLeadForm() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="response_status"
@@ -532,54 +532,6 @@ export function AddLeadForm() {
                     </FormItem>
                   );
                 }}
-              />
-
-              <FormField
-                control={form.control}
-                name="source"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">
-                      {getFieldLabel("source", "מקור הליד")}
-                    </FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "paid_ads"}>
-                      <FormControl>
-                        <SelectTrigger className="rounded-lg border-2 h-11" dir="rtl">
-                          <SelectValue placeholder="FB" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {LEAD_SOURCE_SELECT_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="campaign_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">
-                      {getFieldLabel("campaign_name", "שם הקמפיין")}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        className="rounded-lg border-2 h-11"
-                        placeholder="שם הקמפיין"
-                        dir="rtl"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
               />
             </div>
 
@@ -788,6 +740,56 @@ export function AddLeadForm() {
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="source"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("source", "מקור הליד")}
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "paid_ads"}>
+                      <FormControl>
+                        <SelectTrigger className="rounded-lg border-2 h-11" dir="rtl">
+                          <SelectValue placeholder="FB" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {LEAD_SOURCE_SELECT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="campaign_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("campaign_name", "שם הקמפיין")}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        className="rounded-lg border-2 h-11"
+                        placeholder="שם הקמפיין"
+                        dir="rtl"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}

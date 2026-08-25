@@ -360,11 +360,13 @@ export function LeadsChatView({
                           {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
                         </span>
                       </div>
+                      {(leadSourceDisplay(lead) || lead.campaign_name) && (
+                        <p dir="rtl" className="text-[11px] text-muted-foreground truncate text-right">
+                          {[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
                       {isCompanyNameVisible && lead.company_name && (
                         <p dir="rtl" className="text-xs text-muted-foreground truncate text-right">{lead.company_name}</p>
-                      )}
-                      {lead.campaign_name && (
-                        <p dir="rtl" className="text-[11px] text-muted-foreground truncate text-right">{lead.campaign_name}</p>
                       )}
                       <div className="flex items-center gap-1 mt-1 flex-wrap">
                         {stageInfo && (
@@ -707,14 +709,6 @@ export function LeadsChatView({
                           )}
                           <span className="text-muted-foreground">:אימייל</span>
                         </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedLead.campaign_name || "—"}</span>
-                          <span className="text-muted-foreground">:שם הקמפיין</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{leadSourceDisplay(selectedLead) || "—"}</span>
-                          <span className="text-muted-foreground">:מקור הליד</span>
-                        </div>
                       </div>
                     </div>
 
@@ -732,6 +726,14 @@ export function LeadsChatView({
                               : "—"}
                           </span>
                           <span className="text-muted-foreground">:נוצר</span>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="font-medium">{leadSourceDisplay(selectedLead) || "—"}</span>
+                          <span className="text-muted-foreground">:מקור הליד</span>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="font-medium">{selectedLead.campaign_name || "—"}</span>
+                          <span className="text-muted-foreground">:שם הקמפיין</span>
                         </div>
                         {selectedLead.proposal_date && (
                           <div className="flex items-center justify-end gap-2">

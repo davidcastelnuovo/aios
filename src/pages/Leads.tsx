@@ -278,11 +278,6 @@ function LeadCardContent({
             <span className="text-xs text-muted-foreground truncate">{lead.company_name}</span>
           </div>
         )}
-        {lead.campaign_name && (
-          <div className="text-xs text-muted-foreground truncate mt-1" title={lead.campaign_name}>
-            {lead.campaign_name}
-          </div>
-        )}
         {/* Tag Badges */}
         {leadTagIds.length > 0 && (
           <div className="mt-2">
@@ -311,6 +306,11 @@ function LeadCardContent({
               {' '}
               {new Date(lead.created_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
             </span>
+          </div>
+        )}
+        {(leadSourceDisplay(lead) || lead.campaign_name) && (
+          <div className="text-xs text-muted-foreground truncate" title={[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}>
+            {[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}
           </div>
         )}
 
