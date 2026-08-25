@@ -1,15 +1,11 @@
-import { Navigate, useMatches } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUserPermissions, ModulePermission } from "@/hooks/useUserPermissions";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { resolvePermissionGateView } from "@/lib/permissionGate";
+import { permissionHandleForPathname } from "@/lib/moduleRoutePermissions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-
-export type ModuleRouteHandle = {
-  permission?: ModulePermission;
-  redirectTo?: string;
-};
 
 interface ModulePermissionGateProps {
   children: React.ReactNode;
@@ -91,13 +87,10 @@ export function ModulePermissionGate({
   return <>{children}</>;
 }
 
-/** Persistent gate that reads the matched route's `handle.permission`. */
+/** Persistent gate that reads the module permission from the tenant URL. */
 export function RoutedModulePermissionGate({ children }: { children: React.ReactNode }) {
-  const matches = useMatches();
-  const handle = [...matches]
-    .reverse()
-    .map((match) => match.handle as ModuleRouteHandle | undefined)
-    .find((candidate) => candidate?.permission);
+  const { pathname } = useLocation();
+  const handle = permissionHandleForPathname(pathname);
 
   return (
     <ModulePermissionGate permission={handle?.permission} redirectTo={handle?.redirectTo}>

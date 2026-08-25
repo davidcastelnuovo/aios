@@ -2,8 +2,6 @@ import { Suspense } from "react";
 import { Route, Navigate } from "react-router-dom";
 import { TenantAppShell } from "@/components/layout/TenantAppShell";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import type { ModulePermission } from "@/hooks/useUserPermissions";
-import type { ModuleRouteHandle } from "@/components/ModulePermissionGate";
 import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import DashboardRouter from "@/pages/DashboardRouter";
 
@@ -79,10 +77,6 @@ const UnifiedSettings = lazy(() => import("@/pages/UnifiedSettings"));
 const UnifiedCallback = lazy(() => import("@/pages/UnifiedCallback"));
 const DMMDashboard = lazy(() => import("@/pages/DMMDashboard"));
 
-function perm(permission: ModulePermission, redirectTo?: string): ModuleRouteHandle {
-  return redirectTo ? { permission, redirectTo } : { permission };
-}
-
 /** Unknown subpath under /t/:slug — stay in shell, redirect to home (avoids global 404 flash). */
 function TenantUnknownRoute() {
   return <Navigate to="home" replace />;
@@ -101,69 +95,69 @@ export function tenantRoutes() {
       <Route path="/t/:tenantSlug/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
 
       <Route path="/t/:tenantSlug" element={<TenantAppShell />}>
-        <Route index element={<Home />} handle={perm("dashboard")} />
+        <Route index element={<Home />} />
         <Route path="home" element={<Home />} />
-        <Route path="dashboard" element={<DashboardRouter />} handle={perm("dashboard")} />
-        <Route path="agencies" element={<Agencies />} handle={perm("agencies")} />
-        <Route path="clients" element={<Clients />} handle={perm("clients")} />
-        <Route path="campaigners" element={<Campaigners />} handle={perm("campaigners")} />
-        <Route path="suppliers" element={<Suppliers />} handle={perm("suppliers")} />
-        <Route path="finance" element={<Finance />} handle={perm("finance")} />
-        <Route path="tasks" element={<Tasks />} handle={perm("tasks")} />
-        <Route path="time-tracking" element={<TimeTracking />} handle={perm("time_tracking")} />
+        <Route path="dashboard" element={<DashboardRouter />} />
+        <Route path="agencies" element={<Agencies />} />
+        <Route path="clients" element={<Clients />} />
+        <Route path="campaigners" element={<Campaigners />} />
+        <Route path="suppliers" element={<Suppliers />} />
+        <Route path="finance" element={<Finance />} />
+        <Route path="tasks" element={<Tasks />} />
+        <Route path="time-tracking" element={<TimeTracking />} />
         <Route path="my-profile" element={<MyProfile />} />
-        <Route path="users" element={<Users />} handle={perm("users")} />
-        <Route path="sales-dashboard" element={<SalesDashboard />} handle={perm("sales_dashboard")} />
-        <Route path="sales-people" element={<SalesPeople />} handle={perm("sales_people")} />
-        <Route path="leads" element={<Leads />} handle={perm("leads")} />
-        <Route path="lead-integrations" element={<LeadIntegrations />} handle={perm("lead_integrations")} />
-        <Route path="tenants" element={<Tenants />} handle={perm("tenants")} />
-        <Route path="automations" element={<Automations />} handle={perm("automations")} />
-        <Route path="broadcast" element={<Broadcast />} handle={perm("broadcast")} />
+        <Route path="users" element={<Users />} />
+        <Route path="sales-dashboard" element={<SalesDashboard />} />
+        <Route path="sales-people" element={<SalesPeople />} />
+        <Route path="leads" element={<Leads />} />
+        <Route path="lead-integrations" element={<LeadIntegrations />} />
+        <Route path="tenants" element={<Tenants />} />
+        <Route path="automations" element={<Automations />} />
+        <Route path="broadcast" element={<Broadcast />} />
         <Route path="carmen-insights" element={<Navigate to="../agents?tab=learning" replace />} />
         <Route path="visual-workspace" element={<VisualWorkspace />} />
         <Route path="campaign-alerts" element={<CampaignAlerts />} />
-        <Route path="products" element={<Products />} handle={perm("leads")} />
-        <Route path="branding" element={<Branding />} handle={perm("branding")} />
-        <Route path="accounting-integrations" element={<AccountingIntegrations />} handle={perm("accounting_integrations")} />
-        <Route path="accounting-settings" element={<AccountingSettings />} handle={perm("accounting_integrations")} />
+        <Route path="products" element={<Products />} />
+        <Route path="branding" element={<Branding />} />
+        <Route path="accounting-integrations" element={<AccountingIntegrations />} />
+        <Route path="accounting-settings" element={<AccountingSettings />} />
         <Route path="ai-support" element={<DashboardRouter />} />
-        <Route path="menu-management" element={<MenuManagement />} handle={perm("menu_management")} />
-        <Route path="fields-management" element={<FieldsManagement />} handle={perm("fields_management")} />
-        <Route path="dynamic-tables" element={<DynamicTables />} handle={perm("dynamic_tables")} />
+        <Route path="menu-management" element={<MenuManagement />} />
+        <Route path="fields-management" element={<FieldsManagement />} />
+        <Route path="dynamic-tables" element={<DynamicTables />} />
         <Route path="table/:tableSlug" element={<DynamicTableView />} />
         <Route path="dashboard/:dashboardId" element={<DashboardView />} />
-        <Route path="chat" element={<Chat />} handle={perm("chat")} />
-        <Route path="chat/:clientId" element={<Chat />} handle={perm("chat")} />
-        <Route path="chat-integrations" element={<ChatIntegrations />} handle={perm("chat_integrations")} />
-        <Route path="manychat-settings" element={<ManyChatSettings />} handle={perm("manychat_settings")} />
-        <Route path="green-api-settings" element={<GreenAPISettings />} handle={perm("green_api_settings")} />
-        <Route path="manus-wa-settings" element={<ManusWhatsAppSettings />} handle={perm("manus_wa_settings")} />
-        <Route path="meta-whatsapp-settings" element={<MetaWhatsAppSettings />} handle={perm("chat_integrations")} />
-        <Route path="llm-settings" element={<LLMSettings />} handle={perm("lead_integrations")} />
-        <Route path="telegram-settings" element={<TelegramSettings />} handle={perm("lead_integrations")} />
-        <Route path="integrations" element={<Integrations />} handle={perm("lead_integrations")} />
-        <Route path="integrations/facebook" element={<FacebookSettings />} handle={perm("lead_integrations")} />
-        <Route path="facebook-settings" element={<FacebookSettings />} handle={perm("lead_integrations")} />
+        <Route path="chat" element={<Chat />} />
+        <Route path="chat/:clientId" element={<Chat />} />
+        <Route path="chat-integrations" element={<ChatIntegrations />} />
+        <Route path="manychat-settings" element={<ManyChatSettings />} />
+        <Route path="green-api-settings" element={<GreenAPISettings />} />
+        <Route path="manus-wa-settings" element={<ManusWhatsAppSettings />} />
+        <Route path="meta-whatsapp-settings" element={<MetaWhatsAppSettings />} />
+        <Route path="llm-settings" element={<LLMSettings />} />
+        <Route path="telegram-settings" element={<TelegramSettings />} />
+        <Route path="integrations" element={<Integrations />} />
+        <Route path="integrations/facebook" element={<FacebookSettings />} />
+        <Route path="facebook-settings" element={<FacebookSettings />} />
         <Route path="facebook-callback" element={<FacebookCallback />} />
-        <Route path="google-ads-settings" element={<GoogleAdsSettings />} handle={perm("lead_integrations")} />
-        <Route path="google-analytics-settings" element={<GoogleAnalyticsSettings />} handle={perm("lead_integrations")} />
-        <Route path="google-search-console-settings" element={<GoogleSearchConsoleSettings />} handle={perm("lead_integrations")} />
-        <Route path="ahrefs-settings" element={<AhrefsSettings />} handle={perm("lead_integrations")} />
-        <Route path="tiktok-settings" element={<TikTokSettings />} handle={perm("lead_integrations")} />
-        <Route path="make-settings" element={<MakeSettings />} handle={perm("lead_integrations")} />
-        <Route path="site-analytics" element={<SiteAnalytics />} handle={perm("site_analytics")} />
-        <Route path="rank-tracking" element={<RankTracking />} handle={perm("rank_tracking")} />
-        <Route path="rank-tracking/:projectId" element={<RankTrackingProject />} handle={perm("rank_tracking")} />
-        <Route path="dmm-dashboard" element={<DMMDashboard />} handle={perm("crm_dashboard")} />
-        <Route path="integrations/serpapi" element={<SerpApiSettings />} handle={perm("lead_integrations")} />
-        <Route path="zoom-settings" element={<ZoomSettings />} handle={perm("lead_integrations")} />
-        <Route path="recordings" element={<Recordings />} handle={perm("recordings")} />
-        <Route path="team-chat" element={<TeamChat />} handle={perm("team_chat")} />
+        <Route path="google-ads-settings" element={<GoogleAdsSettings />} />
+        <Route path="google-analytics-settings" element={<GoogleAnalyticsSettings />} />
+        <Route path="google-search-console-settings" element={<GoogleSearchConsoleSettings />} />
+        <Route path="ahrefs-settings" element={<AhrefsSettings />} />
+        <Route path="tiktok-settings" element={<TikTokSettings />} />
+        <Route path="make-settings" element={<MakeSettings />} />
+        <Route path="site-analytics" element={<SiteAnalytics />} />
+        <Route path="rank-tracking" element={<RankTracking />} />
+        <Route path="rank-tracking/:projectId" element={<RankTrackingProject />} />
+        <Route path="dmm-dashboard" element={<DMMDashboard />} />
+        <Route path="integrations/serpapi" element={<SerpApiSettings />} />
+        <Route path="zoom-settings" element={<ZoomSettings />} />
+        <Route path="recordings" element={<Recordings />} />
+        <Route path="team-chat" element={<TeamChat />} />
         <Route path="gmail-settings" element={<GmailSettings />} />
         <Route path="gmail" element={<Gmail />} />
-        <Route path="signatures" element={<Signatures />} handle={perm("signatures")} />
-        <Route path="manus-settings" element={<ManusSettings />} handle={perm("lead_integrations")} />
+        <Route path="signatures" element={<Signatures />} />
+        <Route path="manus-settings" element={<ManusSettings />} />
         <Route path="manus-tasks" element={<ManusTasksPage />} />
         <Route path="agents" element={<AgentHub />} />
         <Route path="agent-tasks" element={<AgentTasksPage />} />
@@ -171,11 +165,11 @@ export function tenantRoutes() {
         <Route path="carmen-access" element={<Navigate to="../agents?tab=access" replace />} />
         <Route path="carmen-studio" element={<Navigate to="../agents" replace />} />
         <Route path="github-agent" element={<GithubAgent />} />
-        <Route path="telephony-settings" element={<TelephonySettings />} handle={perm("lead_integrations")} />
-        <Route path="maskyoo-settings" element={<MaskyooSettings />} handle={perm("lead_integrations")} />
-        <Route path="wordpress-settings" element={<WordPressSettings />} handle={perm("lead_integrations")} />
+        <Route path="telephony-settings" element={<TelephonySettings />} />
+        <Route path="maskyoo-settings" element={<MaskyooSettings />} />
+        <Route path="wordpress-settings" element={<WordPressSettings />} />
         <Route path="landing-page-submissions" element={<LandingPageSubmissions />} />
-        <Route path="unified-settings" element={<UnifiedSettings />} handle={perm("lead_integrations")} />
+        <Route path="unified-settings" element={<UnifiedSettings />} />
         <Route path="*" element={<TenantUnknownRoute />} />
       </Route>
     </>
