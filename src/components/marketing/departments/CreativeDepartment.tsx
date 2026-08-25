@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
-import { buildNoGlyphLock } from "@/components/marketing/lib/creativeImagePrompt";
 import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
 import {
   brandKitPrompt,
@@ -43,12 +42,12 @@ import {
 } from "@/components/marketing/departments/creative/utils";
 import { formatUsd, summarizeStoredImageCosts } from "@/components/marketing/departments/creative/imageCost";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
-import { buildCompositionLock, DEFAULT_COMPOSITION_ID } from "@/components/marketing/departments/creative/compositions";
-import { buildAdaptiveTreatment, isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
-import { buildCopySceneBrief, hydrateVariationLayers, isInternalCopyLine, strongestLine } from "@/components/marketing/departments/creative/designedLayers";
-import { buildStyleContinuityLock, buildStylePlayLock, missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
+import { DEFAULT_COMPOSITION_ID } from "@/components/marketing/departments/creative/compositions";
+import { isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
+import { assembleStaticCreativePrompt } from "@/components/marketing/departments/creative/creativeGenerationPrompt";
+import { hydrateVariationLayers, isInternalCopyLine } from "@/components/marketing/departments/creative/designedLayers";
+import { missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
 import {
-  buildStaticQualityLock,
   buildVisualStyleLock,
   getVisualStyle,
   getVisualStyleId,
@@ -606,13 +605,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         await Promise.all(kit.styleReferences.map((reference) => resolveCreativeImageUrl(reference.url)))
       ).filter((url): url is string => !!url);
       const referenceImageUrls = [...storyboardRefs, ...styleRefs].filter((url, index, list) => list.indexOf(url) === index);
+      const conceptLock = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
       const framePrompt = [
+        conceptLock,
+        conceptLock && "The approved concept is the campaign world. This frame is a beat inside that world — not a new ad invented from the copy.",
         `Use case: ads-marketing. Asset type: storyboard still, ${defaultFormat(selected.payload)}.`,
         referenceImageUrls.length && "Input-image roles: earlier frames = continuity (faces/wardrobe/world). Extra stills = style reference only — match grade/material, do not copy lettering or logo.",
         brandKitPrompt(kit),
         `Next shot in ONE continuous ${visual.label} commercial. Keep the same world, people, wardrobe, lighting and grade.`,
         style.lock,
-        resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected)),
         selected.title && !isInternalCopyLine(selected.title) && `Campaign: ${selected.title}`,
         `Frame ${frame.order}: ${frame.title}`,
         frame.shot && `Shot type: ${frame.shot}`,
@@ -825,13 +826,6 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const format = defaultFormat(selected.payload);
     const kit = getBrandKit(selected.payload);
     const live = existing ?? variations;
-    const sceneBrief = buildCopySceneBrief({
-      copyText,
-      title: selected.title ?? undefined,
-      brief: getBriefText(selected),
-      instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
-      copyLabel,
-    });
     const compositionId = styleSource
       ? (styleSource.compositionId ?? DEFAULT_COMPOSITION_ID)
       : DEFAULT_COMPOSITION_ID;
@@ -849,46 +843,27 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       .filter(Boolean)
       .slice(-4);
     const visualPrompt = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
-    const creativePrompt = [
+    const creativePrompt = assembleStaticCreativePrompt({
       visualPrompt,
-      `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
-      buildNoGlyphLock({ regenerate }),
-      sceneBrief,
-      styleSource
-        ? buildStyleContinuityLock({
-          sourceLabel: styleSource.copyLabel || styleSource.name,
-          sourceIdea: strongestLine(styleSource.copyText || "", selected.title ?? undefined),
-          attachStill: attachStyleStill,
-        })
-        : buildCompositionLock(compositionId),
-      buildStylePlayLock({
-        copyText,
-        copyLabel,
-        copyKey,
-        index: live.length,
-        avoidLabels: priorLabels,
-      }),
-      attachStyleStill && "The attached still is a technique sample, not a layout to trace. New cast, new props, new crop. Type sits flush — no rectangle plates.",
-      costume
-        ? buildVisualStyleLock(selected.payload, { styleId: style.id })
-        : buildAdaptiveTreatment({
-          copyText,
-          copyLabel,
-          title: selected.title ?? undefined,
-          brief: getBriefText(selected),
-          brandColors: kit.brandBook?.colors,
-        }),
-      buildStaticQualityLock({ selectedStyle: !!costume }),
-      brandKitPrompt(kit),
-      directorNote && `Art director REJECT (visual mistakes only — if they mention type/text, the fix is a letter-empty PNG, never new painted words): ${directorNote}`,
-      styleSource
-        ? `Format ${format}. Same TECHNIQUE family (paper, ink, light, color). Completely different picture, people, and props for this copy.`
-        : `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
-      kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
-      "QUIET POCKET: one naturally empty atmospheric region (shadow, wall, sky) so Hebrew type can be composited later. Do not paint a layout, panel, footer, or letter-shaped hole.",
-      "RTL/production: Hebrew is composited as layers after generation — the image API still garbles Hebrew (reversed letters, missing glyphs, gibberish). Do not paint letters.",
-      "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes, reprinting a previous collage.",
-    ].filter(Boolean).join("\n");
+      copyText,
+      copyLabel,
+      copyKey,
+      title: selected.title ?? undefined,
+      brief: getBriefText(selected),
+      instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
+      format,
+      styleId: style.id,
+      costume: !!costume,
+      kit,
+      payload: selected.payload,
+      styleSource,
+      attachStyleStill,
+      compositionId,
+      priorLabels,
+      variationIndex: live.length,
+      directorNote,
+      regenerate,
+    });
     throwIfGenerationAborted(generateAbortRef.current);
     const { imageUrl, cost } = await generateCreativeImage({
       supabase,
@@ -1011,7 +986,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         setSelectedVariationId(created.id);
       }
       setWorkspacePanel(null);
-      toast.success("נוצר קריאייטיב לכל וריאציית קופי לפי הקופי והמותג");
+      toast.success("נוצר קריאייטיב לכל וריאציית קופי לפי הקונספט והמותג");
     } catch (error: unknown) {
       if (isGenerationAborted(error)) toast.message("היצירה נעצרה — מה שכבר נוצר נשמר");
       else toast.error(errorMessage(error, "יצירת הגריד נכשלה"));

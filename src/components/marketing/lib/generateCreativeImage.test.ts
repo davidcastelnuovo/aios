@@ -24,3 +24,9 @@ test("image prompt wraps the no-glyph lock at both ends", () => {
   assert.match(wrapped, /STAGE THIS IDEA/);
   assert.match(wrapped, /REGENERATE[\s\S]*STAGE THIS IDEA[\s\S]*REGENERATE/);
 });
+
+test("concept-led prompts stay first after wrapping", () => {
+  const wrapped = wrapCreativeImagePrompt("MUST FOLLOW THIS APPROVED VISUAL CONCEPT\nBig idea: empty pocket");
+  assert.match(wrapped, /^MUST FOLLOW THIS APPROVED VISUAL CONCEPT/);
+  assert.match(wrapped, /ZERO GLYPHS/);
+});
