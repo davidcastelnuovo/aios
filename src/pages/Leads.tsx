@@ -2415,8 +2415,11 @@ export default function Leads() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="relative flex-1 min-w-[8rem]">
+        <div
+          className="grid w-full min-w-0 items-center gap-2"
+          style={{ gridTemplateColumns: "minmax(8rem, 12rem) minmax(0, 1fr)" }}
+        >
+          <div className="relative min-w-0">
             <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
@@ -2548,9 +2551,12 @@ export default function Leads() {
           </div>
         </div>
         
-        {/* Search + stage chips + presets + filters — one row */}
-        <div className="flex gap-3 items-center min-w-0 flex-nowrap">
-          <div className="relative shrink-0 w-[min(100%,20rem)]">
+        {/* Search + saved filters + stages — one row */}
+        <div
+          className="grid w-full min-w-0 items-center gap-3"
+          style={{ gridTemplateColumns: "18rem minmax(0, 1fr) auto" }}
+        >
+          <div className="relative min-w-0">
             <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               type="text"
@@ -2586,34 +2592,31 @@ export default function Leads() {
             stageCounts={stagePresetCounts}
           />
           
-          {/* Manage Lead Statuses Button */}
-          <ManageLeadStatusesDialog 
-            trigger={
-              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול סטטוסי לידים">
-                <Settings2 className="h-4 w-4" />
-              </Button>
-            }
-          />
-          
-          {/* Manage Tags Button */}
-          <ChatTagsManager 
-            trigger={
-              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול תגיות">
-                <Tag className="h-4 w-4" />
-              </Button>
-            }
-          />
-          
-          {/* Export CSV Button */}
-          <Button 
-            variant="outline" 
-            size="icon"
-            className="h-9 w-9 shrink-0"
-            onClick={handleExportCSV}
-            title="ייצוא לקובץ CSV"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <ManageLeadStatusesDialog 
+              trigger={
+                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול סטטוסי לידים">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              }
+            />
+            <ChatTagsManager 
+              trigger={
+                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול תגיות">
+                  <Tag className="h-4 w-4" />
+                </Button>
+              }
+            />
+            <Button 
+              variant="outline" 
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={handleExportCSV}
+              title="ייצוא לקובץ CSV"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
       

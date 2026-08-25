@@ -118,10 +118,72 @@ export function LeadFilterPresetTabs({
   };
 
   const userOwnsPreset = (preset: FilterPreset) => preset.user_id === userId;
-  const activePreset = presets.find((p) => p.id === activePresetId);
 
   return (
-    <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
+    <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden">
+      {presets.map((preset) => (
+        <div key={preset.id} className="flex shrink-0 items-center">
+          <Button
+            type="button"
+            variant={activePresetId === preset.id ? "default" : "outline"}
+            size="sm"
+            className="h-9 shrink-0 gap-1.5"
+            onClick={() => onPresetSelect(activePresetId === preset.id ? null : preset)}
+          >
+            {preset.name}
+          </Button>
+          {userOwnsPreset(preset) && activePresetId === preset.id && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-7 shrink-0"
+                  title="עריכת פריסט"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-40 bg-popover">
+                <DropdownMenuItem
+                  onClick={() => handleEditFiltersClick(preset)}
+                  className="gap-2"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  ערוך
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleDeleteClick(preset)}
+                  className="gap-2 text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  מחק
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      ))}
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onOpenFiltersDialog}
+        className={cn(
+          "h-9 gap-2 shrink-0",
+          hasActiveFilters && "border-primary text-primary",
+        )}
+      >
+        <Filter className="h-4 w-4" />
+        פילטרים
+        {hasActiveFilters && (
+          <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs">
+            ✓
+          </Badge>
+        )}
+      </Button>
+
       {pipelineStages.length > 0 && onStageSelect && (
         <>
           <Button
@@ -174,89 +236,6 @@ export function LeadFilterPresetTabs({
           })}
         </>
       )}
-
-      {presets.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant={activePresetId ? "default" : "outline"}
-              size="sm"
-              className="h-9 gap-1.5 shrink-0"
-            >
-              {activePreset ? activePreset.name : "פריסטים"}
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                {presets.length}
-              </Badge>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56 bg-popover">
-            {activePresetId && (
-              <DropdownMenuItem onClick={() => onPresetSelect(null)} className="gap-2">
-                נקה פריסט
-              </DropdownMenuItem>
-            )}
-            {presets.map((preset) => (
-              <DropdownMenuItem
-                key={preset.id}
-                onClick={() => onPresetSelect(preset)}
-                className={cn(
-                  "flex items-center justify-between gap-2 group",
-                  activePresetId === preset.id && "bg-accent",
-                )}
-              >
-                <span>{preset.name}</span>
-                {userOwnsPreset(preset) && (
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        handleEditFiltersClick(preset);
-                      }}
-                      title="ערוך פילטרים"
-                    >
-                      <Settings2 className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-destructive hover:text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        handleDeleteClick(preset);
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onOpenFiltersDialog}
-        className={cn(
-          "h-9 gap-2 shrink-0",
-          hasActiveFilters && "border-primary text-primary",
-        )}
-      >
-        <Filter className="h-4 w-4" />
-        פילטרים
-        {hasActiveFilters && (
-          <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs">
-            ✓
-          </Badge>
-        )}
-      </Button>
     </div>
   );
 }
