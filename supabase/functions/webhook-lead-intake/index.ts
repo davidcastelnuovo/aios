@@ -3,6 +3,7 @@ import {
   buildLeadRoutingPayload,
   resolveLeadClient,
 } from '../_shared/lead-routing.ts'
+import { recordRepeatContact } from '../_shared/lead-repeat-contact.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -359,7 +360,8 @@ Deno.serve(async (req) => {
     const leadSource = normalizedSource ? (sourceMap[normalizedSource] || 'other') : 'other'
 
     // ========== DEDUPLICATION LOGIC ==========
-    // Check for existing lead by phone or email
+    // Same phone/email = merge into the existing card (any age), then tag
+    // "פניה חוזרת" and write a dated row in lead_updates.
     const normalizedPhone = normalizePhone(payload.phone);
     const normalizedEmail = payload.email?.trim().toLowerCase() || null;
     
@@ -384,6 +386,7 @@ Deno.serve(async (req) => {
           .select('*')
           .eq('tenant_id', tenantId)
           .in('phone', uniqueVariants)
+          .order('created_at', { ascending: false })
           .limit(1);
         
         existingLead = leadsByPhone?.[0] || null;
@@ -411,6 +414,7 @@ Deno.serve(async (req) => {
           .select('*')
           .eq('tenant_id', tenantId)
           .ilike('email', normalizedEmail)
+          .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
         
@@ -475,19 +479,18 @@ Deno.serve(async (req) => {
         }
       }
       
-      if (hasUpdates) {
-        updates.updated_at = new Date().toISOString();
-        
-        const { error: updateError } = await supabase
-          .from('leads')
-          .update(updates)
-          .eq('id', existingLead.id);
-        
-        if (updateError) {
-          console.error('❌ Error updating existing lead:', updateError);
-        } else {
-        }
-      } else {
+      updates.updated_at = new Date().toISOString();
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update(updates)
+        .eq('id', existingLead.id);
+      
+      if (updateError) {
+        console.error('❌ Error updating existing lead:', updateError);
+      }
+
+      if (tenantId) {
+        await recordRepeatContact(supabase, { tenantId, leadId: existingLead.id });
       }
       
       // Handle tag_name for existing lead
@@ -546,9 +549,10 @@ Deno.serve(async (req) => {
         JSON.stringify({ 
           success: true, 
           lead_id: existingLead.id,
-          message: hasUpdates ? 'Existing lead updated with new information' : 'Lead already exists, no new information',
+          message: 'Existing lead merged (repeat contact)',
           duplicate: true,
-          updated: hasUpdates
+          updated: hasUpdates,
+          repeat_contact: true,
         }),
         { 
           status: 200, 
