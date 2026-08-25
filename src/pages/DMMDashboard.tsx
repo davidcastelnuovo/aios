@@ -56,6 +56,7 @@ import {
   buildPulseDashboardUrl,
   clientHasCampaignService,
   expandPulseSnapshotToGoalRows,
+  applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
   formatGoalChange,
   formatGoalEfficiency,
@@ -875,11 +876,7 @@ export default function DMMDashboard() {
             if (!old) return old;
             return old.map((row) =>
               row.client_id === clientId
-                ? {
-                    ...row,
-                    last_client_call_at: lastClientCallAt,
-                    last_client_call_by: lastClientCallBy,
-                  }
+                ? applyClientCallToPulseSnapshot(row, lastClientCallAt, lastClientCallBy)
                 : row,
             );
           });

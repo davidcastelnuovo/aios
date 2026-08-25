@@ -311,6 +311,91 @@ export function filterPulseCallFlags(flags: string[] | null | undefined): string
   return flags.filter((flag) => !isPulseCallFreshnessFlag(flag));
 }
 
+export const CLIENT_CALL_STALE_MS = 14 * 24 * 60 * 60 * 1000;
+
+export function isClientCallFresh(
+  lastClientCallAt: string | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!lastClientCallAt) return false;
+  const ts = new Date(lastClientCallAt).getTime();
+  if (Number.isNaN(ts)) return false;
+  return nowMs - ts <= CLIENT_CALL_STALE_MS;
+}
+
+function isPulseCriticalFlag(flag: string): boolean {
+  return /קמפיין נעצר|קמפיינים נעצרו|הוצאה ללא רכישות|הוצאה ללא לידים|ROAS נמוך מ-1/.test(flag);
+}
+
+function isPulseNoDataFlag(flag: string): boolean {
+  return flag.includes("אין טבלת קמפיין") || flag.includes("שגיאה בחישוב דופק");
+}
+
+/** Infer pulse status from non-call flags (mirrors campaign-pulse classification). */
+export function inferPulseStatusFromFlags(flags: string[]): PulseStatus | null {
+  if (flags.some(isPulseCriticalFlag)) return "critical";
+  if (flags.some(isPulseNoDataFlag)) return "no_data";
+  if (flags.length > 0) return "warning";
+  return null;
+}
+
+export function worstPulseStatus(a: PulseStatus, b: PulseStatus): PulseStatus {
+  const rank: Record<PulseStatus, number> = { critical: 0, warning: 1, no_data: 2, healthy: 3 };
+  return rank[a] <= rank[b] ? a : b;
+}
+
+function reconcileGoalStatusAfterFreshCall(
+  current: PulseStatus,
+  allFlags: string[] | null | undefined,
+  callApplies: boolean,
+  lastClientCallAt: string,
+): PulseStatus {
+  if (!callApplies || !isClientCallFresh(lastClientCallAt)) return current;
+  const remainingFlags = filterPulseCallFlags(allFlags);
+  const fromFlags = inferPulseStatusFromFlags(remainingFlags);
+  if (fromFlags !== null) return fromFlags;
+  if (current === "warning") return "healthy";
+  return current;
+}
+
+/** Update snapshot row after a fresh client call is logged from the dashboard. */
+export function applyClientCallToPulseSnapshot(
+  snapshot: PulseSnapshotRow,
+  lastClientCallAt: string,
+  lastClientCallBy: string,
+): PulseSnapshotRow {
+  const mode: CampaignGoalMode =
+    snapshot.campaign_goal_mode ?? (snapshot.is_ecommerce ? "ecommerce" : "leads");
+  const leadStatus = reconcileGoalStatusAfterFreshCall(
+    (snapshot.lead_goal_status ?? (mode !== "ecommerce" ? snapshot.status : "healthy")) as PulseStatus,
+    snapshot.flags,
+    mode !== "ecommerce",
+    lastClientCallAt,
+  );
+  const ecommerceStatus = reconcileGoalStatusAfterFreshCall(
+    (snapshot.ecommerce_goal_status ?? (mode !== "leads" ? snapshot.status : "healthy")) as PulseStatus,
+    snapshot.flags,
+    mode === "ecommerce",
+    lastClientCallAt,
+  );
+  const status =
+    mode === "hybrid"
+      ? worstPulseStatus(leadStatus, ecommerceStatus)
+      : mode === "ecommerce"
+        ? ecommerceStatus
+        : leadStatus;
+
+  return {
+    ...snapshot,
+    last_client_call_at: lastClientCallAt,
+    last_client_call_by: lastClientCallBy,
+    flags: filterPulseCallFlags(snapshot.flags),
+    status,
+    lead_goal_status: mode === "ecommerce" ? snapshot.lead_goal_status : leadStatus,
+    ecommerce_goal_status: mode === "leads" ? snapshot.ecommerce_goal_status : ecommerceStatus,
+  };
+}
+
 /** Build shareable authenticated pulse dashboard URL for a tenant + optional agency. */
 export function buildPulseDashboardUrl(origin: string, tenantSlug: string, agencyId?: string | null): string {
   // App routes live under `/t/:tenantSlug/...` — without `/t/` TenantUnknownRoute
