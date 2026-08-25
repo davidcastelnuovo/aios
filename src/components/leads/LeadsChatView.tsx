@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, MessageSquare, FileText, DollarSign, Paperclip, Users, ChevronRight, X, ArrowRight, Pencil } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, FileText, DollarSign, Paperclip, Users, ChevronRight, X, ArrowRight, Pencil } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
@@ -25,6 +25,12 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import {
+  findLeadStatus,
+  leadSourceDisplay,
+  responseStatusSelectValue,
+  unmatchedResponseStatusValue,
+} from "@/lib/leadFields";
 
 interface LeadsChatViewProps {
   leads: any[];
@@ -39,11 +45,15 @@ interface LeadsChatViewProps {
   isCompanyNameVisible: boolean;
   searchQuery: string;
   initialLeadId?: string;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  remainingCount?: number;
+  isLoadingMore?: boolean;
+  loadedCount?: number;
 }
 
-function getStatusColor(statusKey: string | null, statuses: Array<{ status_key: string; color: string }>) {
-  if (!statusKey) return undefined;
-  return statuses.find(s => s.status_key === statusKey)?.color;
+function getStatusColor(statusKey: string | null, statuses: Array<{ status_key: string; color: string; label?: string }>) {
+  return findLeadStatus(statusKey, statuses)?.color;
 }
 
 export function LeadsChatView({
@@ -59,6 +69,11 @@ export function LeadsChatView({
   isCompanyNameVisible,
   searchQuery,
   initialLeadId,
+  onLoadMore,
+  hasMore = false,
+  remainingCount = 0,
+  isLoadingMore = false,
+  loadedCount,
 }: LeadsChatViewProps) {
   const isMobile = useIsMobile();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(initialLeadId ?? null);
@@ -89,7 +104,8 @@ export function LeadsChatView({
     return leads.filter(l =>
       (l.contact_name || "").toLowerCase().includes(q) ||
       (l.company_name || "").toLowerCase().includes(q) ||
-      (l.phone || "").includes(q)
+      (l.phone || "").includes(q) ||
+      (l.campaign_name || "").toLowerCase().includes(q)
     );
   }, [leads, listSearch]);
 
@@ -194,7 +210,7 @@ export function LeadsChatView({
   };
 
   const getStageInfo = (statusKey: string) => pipelineStages.find(s => s.id === statusKey);
-  const getLeadStatusInfo = (statusKey: string) => leadStatuses.find(s => s.status_key === statusKey);
+  const getLeadStatusInfo = (statusKey: string) => findLeadStatus(statusKey, leadStatuses);
 
   return (
     <div dir="ltr" className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background w-full max-w-full">
@@ -290,7 +306,16 @@ export function LeadsChatView({
         )}
 
         {/* Lead list */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div
+          className="flex-1 overflow-y-auto overflow-x-hidden"
+          onScroll={(event) => {
+            if (!hasMore || isLoadingMore || !onLoadMore) return;
+            const el = event.currentTarget;
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+              onLoadMore();
+            }
+          }}
+        >
           <div className="divide-y w-full">
             {filteredListLeads.map((lead) => {
               const isSelected = lead.id === selectedLeadId;
@@ -335,6 +360,11 @@ export function LeadsChatView({
                           {lead.created_at && format(new Date(lead.created_at), "dd/MM", { locale: he })}
                         </span>
                       </div>
+                      {(leadSourceDisplay(lead) || lead.campaign_name) && (
+                        <p dir="rtl" className="text-[11px] text-muted-foreground truncate text-right">
+                          {[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
                       {isCompanyNameVisible && lead.company_name && (
                         <p dir="rtl" className="text-xs text-muted-foreground truncate text-right">{lead.company_name}</p>
                       )}
@@ -380,6 +410,24 @@ export function LeadsChatView({
             {filteredListLeads.length === 0 && (
               <div className="p-8 text-center text-muted-foreground text-sm">
                 לא נמצאו לידים
+              </div>
+            )}
+            {hasMore && (
+              <div className="p-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={onLoadMore}
+                  disabled={isLoadingMore}
+                >
+                  {isLoadingMore ? "טוען..." : `טען עוד לידים${remainingCount > 0 ? ` (${remainingCount.toLocaleString()} נותרו)` : ""}`}
+                </Button>
+                {typeof loadedCount === "number" && loadedCount > 0 && (
+                  <p className="text-[11px] text-muted-foreground text-center mt-2">
+                    מוצגים {loadedCount.toLocaleString()} לידים
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -452,7 +500,7 @@ export function LeadsChatView({
 
                 {/* Response status */}
                 <Select
-                  value={selectedLead.response_status || "none"}
+                  value={responseStatusSelectValue(selectedLead.response_status, leadStatuses)}
                   onValueChange={(value) => onResponseStatusChange(selectedLead.id, value === "none" ? null : value)}
                 >
                   <SelectTrigger
@@ -466,6 +514,11 @@ export function LeadsChatView({
                   </SelectTrigger>
                   <SelectContent className="bg-background z-[100]">
                     <SelectItem value="none">ללא סטטוס</SelectItem>
+                    {unmatchedResponseStatusValue(selectedLead.response_status, leadStatuses) && (
+                      <SelectItem value={selectedLead.response_status}>
+                        {selectedLead.response_status}
+                      </SelectItem>
+                    )}
                     {leadStatuses.map((s) => (
                       <SelectItem key={s.status_key} value={s.status_key} style={{ backgroundColor: s.color, color: "#fff" }}>
                         {s.label}
@@ -583,15 +636,11 @@ export function LeadsChatView({
             )}
 
             {/* Detail tabs content */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-7 w-auto max-w-3xl h-9 bg-muted/50 mr-4 ml-auto">
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value === "updates" ? "details" : value)} className="flex-1 flex flex-col overflow-hidden">
+              <TabsList className="mx-4 mt-3 grid grid-cols-6 w-auto max-w-3xl h-9 bg-muted/50 mr-4 ml-auto">
                 <TabsTrigger value="details" className="text-xs gap-1.5">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי ליד
-                </TabsTrigger>
-                <TabsTrigger value="updates" className="text-xs gap-1.5">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  עדכונים
                 </TabsTrigger>
                 <TabsTrigger value="proposals" className="text-xs gap-1.5">
                   <DollarSign className="h-3.5 w-3.5" />
@@ -618,8 +667,8 @@ export function LeadsChatView({
               <ScrollArea className={cn("flex-1 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
                 <TabsContent value="details" className="mt-0 space-y-6">
                   {/* Info cards grid */}
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    {/* Contact info */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Contact */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         פרטי קשר
@@ -659,40 +708,6 @@ export function LeadsChatView({
                       </div>
                     </div>
 
-                    {/* Deal info */}
-                    <div className="border rounded-lg p-4 space-y-3 text-right">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-                        מידע עסקי
-                        <DollarSign className="h-4 w-4 text-primary" />
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">
-                            {selectedLead.estimated_deal_value
-                              ? `₪${Number(selectedLead.estimated_deal_value).toLocaleString()}`
-                              : "—"}
-                          </span>
-                          <span className="text-muted-foreground">:ערך עסקה</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">
-                            {selectedLead.monthly_budget
-                              ? `₪${Number(selectedLead.monthly_budget).toLocaleString()}`
-                              : "—"}
-                          </span>
-                          <span className="text-muted-foreground">:תקציב חודשי</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedLead.source || "—"}</span>
-                          <span className="text-muted-foreground">:מקור</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedLead.industry || "—"}</span>
-                          <span className="text-muted-foreground">:תעשייה</span>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Dates & timeline */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
@@ -707,6 +722,14 @@ export function LeadsChatView({
                               : "—"}
                           </span>
                           <span className="text-muted-foreground">:נוצר</span>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="font-medium">{leadSourceDisplay(selectedLead) || "—"}</span>
+                          <span className="text-muted-foreground">:מקור הליד</span>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="font-medium">{selectedLead.campaign_name || "—"}</span>
+                          <span className="text-muted-foreground">:שם הקמפיין</span>
                         </div>
                         {selectedLead.proposal_date && (
                           <div className="flex items-center justify-end gap-2">
@@ -737,12 +760,20 @@ export function LeadsChatView({
                   </div>
 
                   {/* Notes */}
-                  {selectedLead.notes && (
-                    <div className="border rounded-lg p-4 text-right">
-                      <h3 className="font-semibold text-sm mb-2">הערות</h3>
+                  <div className="border rounded-lg p-4 text-right">
+                    <h3 className="font-semibold text-sm mb-2">הערות</h3>
+                    {selectedLead.notes ? (
                       <p className="text-sm text-muted-foreground whitespace-pre-wrap text-right" dir="rtl">{selectedLead.notes}</p>
-                    </div>
-                  )}
+                    ) : (
+                      <p className="text-sm text-muted-foreground">אין הערות</p>
+                    )}
+                  </div>
+
+                  {/* Updates + tasks in the same details window */}
+                  <div className="border rounded-lg p-4 text-right" dir="rtl">
+                    <h3 className="font-semibold text-sm mb-3">עדכונים ומשימות</h3>
+                    <LeadUpdatesTab leadId={selectedLead.id} leadName={selectedLead.contact_name || selectedLead.company_name || "ליד"} />
+                  </div>
 
                   {/* Products */}
                   {selectedLead.products && (() => {
@@ -767,10 +798,6 @@ export function LeadsChatView({
                       return null;
                     }
                   })()}
-                </TabsContent>
-
-                <TabsContent value="updates" className="mt-0">
-                  <LeadUpdatesTab leadId={selectedLead.id} leadName={selectedLead.contact_name || selectedLead.company_name || "ליד"} />
                 </TabsContent>
 
                 {(activeTab === "proposals" || activeTab === "files" || activeTab === "meeting") && (

@@ -246,6 +246,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
 
         {!isCompleted && (
           <Button
+            type="button"
             size="sm"
             variant="outline"
             className="w-full mt-2 h-7 text-xs"
@@ -261,6 +262,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
 
         {isCompleted && (
           <Button
+            type="button"
             size="sm"
             variant="outline"
             className="w-full mt-2 h-7 text-xs"
@@ -295,7 +297,8 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
               onChange={(e) => setNewUpdate(e.target.value)}
               className="min-h-[60px] resize-none flex-1"
             />
-            <Button 
+            <Button
+              type="button"
               onClick={handleAddUpdate} 
               disabled={!newUpdate.trim() || addUpdateMutation.isPending}
               className="self-end shrink-0"
@@ -315,7 +318,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
         <AddTaskForm
           leadId={leadId}
           triggerButton={
-            <Button size="sm" variant="outline" className="w-full sm:w-auto">
+            <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               הוסף משימה
             </Button>
@@ -328,16 +331,16 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
           className="flex gap-3 flex-wrap"
         >
           <div className="flex items-center space-x-2 space-x-reverse">
-            <RadioGroupItem value="week" id="lead-week" />
-            <Label htmlFor="lead-week" className="cursor-pointer text-sm">שבוע</Label>
+            <RadioGroupItem value="week" id={`lead-week-${leadId}`} />
+            <Label htmlFor={`lead-week-${leadId}`} className="cursor-pointer text-sm">שבוע</Label>
           </div>
           <div className="flex items-center space-x-2 space-x-reverse">
-            <RadioGroupItem value="month" id="lead-month" />
-            <Label htmlFor="lead-month" className="cursor-pointer text-sm">חודש</Label>
+            <RadioGroupItem value="month" id={`lead-month-${leadId}`} />
+            <Label htmlFor={`lead-month-${leadId}`} className="cursor-pointer text-sm">חודש</Label>
           </div>
           <div className="flex items-center space-x-2 space-x-reverse">
-            <RadioGroupItem value="all" id="lead-all" />
-            <Label htmlFor="lead-all" className="cursor-pointer text-sm">הכל</Label>
+            <RadioGroupItem value="all" id={`lead-all-${leadId}`} />
+            <Label htmlFor={`lead-all-${leadId}`} className="cursor-pointer text-sm">הכל</Label>
           </div>
         </RadioGroup>
       </div>
@@ -349,7 +352,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
             <MessageSquare className="h-4 w-4 text-primary" />
             <h3 className="font-semibold">היסטוריית עדכונים</h3>
           </div>
-          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+          <div className="space-y-2">
             {updates.map((update: any) => {
               const isEditing = editingUpdateId === update.id;
               const isOwner = user?.id === update.user_id;
@@ -366,6 +369,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                         />
                         <div className="flex gap-2 justify-end">
                           <Button
+                            type="button"
                             size="sm"
                             variant="ghost"
                             onClick={() => {
@@ -376,6 +380,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                             <X className="h-4 w-4" />
                           </Button>
                           <Button
+                            type="button"
                             size="sm"
                             onClick={() => editUpdateMutation.mutate({ id: update.id, content: editingUpdateContent })}
                             disabled={!editingUpdateContent.trim() || editUpdateMutation.isPending}
@@ -402,6 +407,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                           {isOwner && (
                             <div className="flex gap-1 shrink-0">
                               <Button
+                                type="button"
                                 size="icon"
                                 variant="ghost"
                                 className="h-6 w-6"
@@ -413,6 +419,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                                 <Pencil className="h-3 w-3" />
                               </Button>
                               <Button
+                                type="button"
                                 size="icon"
                                 variant="ghost"
                                 className="h-6 w-6 text-destructive hover:text-destructive"
@@ -452,7 +459,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
             </h3>
           </div>
           
-          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          <div className="space-y-2">
             {inProgressTasks.length > 0 ? (
               inProgressTasks.map(task => (
                 <TaskCard key={task.id} task={task} isCompleted={false} />
@@ -480,7 +487,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
             </h3>
           </div>
           
-          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          <div className="space-y-2">
             {completedTasks.length > 0 ? (
               completedTasks.map(task => (
                 <TaskCard key={task.id} task={task} isCompleted={true} />

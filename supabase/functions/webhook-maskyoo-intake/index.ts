@@ -229,19 +229,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!agencyId) {
-      console.error('❌ No active agency found for tenant')
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'No active agency found for this tenant',
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
+    // Agency is optional — tenant association is enough to create the lead.
 
     // Check for existing lead by phone (deduplication)
     const { data: existingLeads } = await supabase
@@ -349,7 +337,7 @@ Deno.serve(async (req) => {
         phone: formatPhoneForStorage(phone),
         source: 'cold_call', // Maskyoo calls map to cold_call enum
         notes: notes.trim(),
-        agency_id: agencyId,
+        agency_id: agencyId || null,
         tenant_id: tenantId,
         status: initialStatus,
       })

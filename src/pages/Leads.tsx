@@ -76,6 +76,12 @@ import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 import { LeadsChatView } from "@/components/leads/LeadsChatView";
+import {
+  findLeadStatus,
+  leadSourceDisplay,
+  responseStatusSelectValue,
+  unmatchedResponseStatusValue,
+} from "@/lib/leadFields";
 
 
 // Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
@@ -105,14 +111,12 @@ function hexToLightBg(hex: string): string {
   return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 0.15)`;
 }
 
-const SOURCE_LABELS: Record<string, string> = {
-  phone: "טלפון",
-  website: "אתר",
-  facebook: "פייסבוק",
-  google: "גוגל",
-  referral: "הפניה",
-  other: "אחר",
-};
+function endOfDayIso(date: Date): string {
+  const copy = new Date(date);
+  copy.setHours(23, 59, 59, 999);
+  return copy.toISOString();
+}
+
 
 const PRODUCT_LABELS: Record<string, string> = {
   google_ads: "Google Ads",
@@ -135,9 +139,7 @@ function getStatusStyle(statusKey: string | null, statuses: LeadStatus[]) {
 }
 
 function getStatusColor(statusKey: string | null, statuses: LeadStatus[]) {
-  if (!statusKey) return undefined;
-  const status = statuses.find(s => s.status_key === statusKey);
-  return status?.color;
+  return findLeadStatus(statusKey, statuses)?.color || undefined;
 }
 
 function DroppableStage({ stage, children }: { stage: any; children: ReactNode }) {
@@ -306,6 +308,11 @@ function LeadCardContent({
             </span>
           </div>
         )}
+        {(leadSourceDisplay(lead) || lead.campaign_name) && (
+          <div className="text-xs text-muted-foreground truncate" title={[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}>
+            {[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}
+          </div>
+        )}
 
         {/* Stage/Status Selector */}
         <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
@@ -354,7 +361,7 @@ function LeadCardContent({
         {/* Response Status */}
         <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
           <Select
-            value={lead.response_status || "none"}
+            value={responseStatusSelectValue(lead.response_status, leadStatuses)}
             onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
             open={responseSelectOpen}
             onOpenChange={setResponseSelectOpen}
@@ -370,6 +377,11 @@ function LeadCardContent({
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
               <SelectItem value="none">ללא סטטוס</SelectItem>
+              {unmatchedResponseStatusValue(lead.response_status, leadStatuses) && (
+                <SelectItem value={lead.response_status}>
+                  {lead.response_status}
+                </SelectItem>
+              )}
               {leadStatuses.map((option) => (
                 <SelectItem 
                   key={option.status_key} 
@@ -649,6 +661,7 @@ export default function Leads() {
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [editingPreset, setEditingPreset] = useState<{ id: string; name: string } | null>(null);
+  const skipChatStageDefault = useRef(false);
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -700,7 +713,9 @@ export default function Leads() {
   // Pagination state
   const [page, setPage] = useState(1);
   const TABLE_LEADS_PER_PAGE = 50;
-  const KANBAN_LEADS_PER_STAGE_LIMIT = 50; // How many leads to fetch per stage from DB
+  const KANBAN_LEADS_PER_STAGE_LIMIT = 50;
+  const CHAT_LEADS_PER_STAGE_LIMIT = 100;
+  const leadsPerStageLimit = viewMode === "chat" ? CHAT_LEADS_PER_STAGE_LIMIT : KANBAN_LEADS_PER_STAGE_LIMIT;
 
   const isKanbanView = viewMode === "kanban" || viewMode === "chat";
   const effectivePage = isKanbanView ? 1 : page;
@@ -710,13 +725,24 @@ export default function Leads() {
   useEffect(() => {
     if (isKanbanView) setPage(1);
   }, [isKanbanView]);
+
+  useEffect(() => {
+    if (viewMode !== "chat") {
+      skipChatStageDefault.current = false;
+      return;
+    }
+    if (skipChatStageDefault.current || activePresetId) return;
+    if (filterStage !== "all") return;
+    if (!pipelineStagesData?.length) return;
+    setFilterStage(pipelineStagesData[0].stage_key);
+  }, [viewMode, pipelineStagesData, activePresetId, filterStage]);
   
   // Reset page to 1 and clear accumulated leads when filters change
   useEffect(() => {
     setPage(1);
     setStageOffsets({});
     setAccumulatedLeads({});
-  }, [selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate]);
+  }, [selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate, viewMode]);
   
   // Kanban limiting state - how many leads to SHOW per stage initially (can expand)
   const KANBAN_LEADS_PER_STAGE_DISPLAY = 20;
@@ -866,7 +892,7 @@ export default function Leads() {
       
       if (searchQuery.trim()) {
         const q = searchQuery.trim();
-        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%`);
+        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%,campaign_name.ilike.%${q}%`);
       }
 
       const { count, error } = await query;
@@ -879,7 +905,7 @@ export default function Leads() {
 
   // Kanban view: use RPC that fetches leads per stage
   const { data: kanbanStageData, isLoading: isKanbanLoading, refetch: refetchKanban, isFetching: isKanbanFetching } = useQuery({
-    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(','), isViewingAs, viewAsSalesPersonId],
+    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(','), isViewingAs, viewAsSalesPersonId, leadsPerStageLimit],
     queryFn: async () => {
       if (!tenantId) return null;
       
@@ -887,7 +913,9 @@ export default function Leads() {
         ? [selectedAgency]
         : agencies?.map(a => a.id) || null;
       
-      const stageIds = PIPELINE_STAGES.map(s => s.id);
+      const stageIds = filterStage && filterStage !== "all"
+        ? [filterStage]
+        : PIPELINE_STAGES.map(s => s.id);
       
       // Build sales person filter - support multi-select
       // When viewing as a sales person, override the filter
@@ -903,13 +931,13 @@ export default function Leads() {
         p_tenant_id: tenantId,
         p_agency_ids: agencyIds,
         p_stages: stageIds,
-        p_limit_per_stage: KANBAN_LEADS_PER_STAGE_LIMIT,
+        p_limit_per_stage: leadsPerStageLimit,
         p_search_query: searchQuery.trim() || null,
         p_sales_person_ids: salesPersonFilter,
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
         p_follow_up_today: filterFollowUpToday,
         p_start_date: startDate?.toISOString() || null,
-        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
+        p_end_date: endDate ? endOfDayIso(endDate) : null,
         p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null
       });
       
@@ -951,6 +979,9 @@ export default function Leads() {
           .from("leads")
           .select(`
             id,
+            campaign_name,
+            source,
+            response_status,
             agencies (name),
             sales_people (full_name)
           `)
@@ -967,6 +998,9 @@ export default function Leads() {
         for (const stageId of Object.keys(stageMap)) {
           stageMap[stageId].leads = stageMap[stageId].leads.map((lead: any) => ({
             ...lead,
+            campaign_name: relationsMap[lead.id]?.campaign_name ?? lead.campaign_name ?? null,
+            source: relationsMap[lead.id]?.source ?? lead.source,
+            response_status: relationsMap[lead.id]?.response_status ?? lead.response_status,
             agencies: relationsMap[lead.id]?.agencies || null,
             sales_people: relationsMap[lead.id]?.sales_people || null
           }));
@@ -978,6 +1012,73 @@ export default function Leads() {
     enabled: !!tenantId && isKanbanView && PIPELINE_STAGES.length > 0,
     staleTime: 1000 * 60 * 3,
     gcTime: 1000 * 60 * 10,
+    placeholderData: (previousData) => previousData,
+  });
+
+  // Chip counts are independent of the active stage filter so "חדש" does not
+  // zero out נקבעה פגישה / נשלחה הצעה / etc.
+  const { data: stageCountMap } = useQuery({
+    queryKey: [
+      "leads-stage-counts",
+      tenantId,
+      selectedAgency,
+      searchQuery,
+      filterSalesPersonIds,
+      filterResponseStatus,
+      filterTagIds,
+      filterFollowUpToday,
+      startDate?.toISOString(),
+      endDate?.toISOString(),
+      PIPELINE_STAGES.map((s) => s.id).join(","),
+      isViewingAs,
+      viewAsSalesPersonId,
+    ],
+    queryFn: async () => {
+      if (!tenantId) return {} as Record<string, number>;
+
+      const agencyIds = selectedAgency && selectedAgency !== "all"
+        ? [selectedAgency]
+        : agencies?.map((a) => a.id) || null;
+
+      let salesPersonFilter: string[] | null = null;
+      if (isViewingAs && viewAsSalesPersonId) {
+        salesPersonFilter = [viewAsSalesPersonId];
+      } else if (filterSalesPersonIds.length > 0 && !filterSalesPersonIds.includes("none")) {
+        salesPersonFilter = filterSalesPersonIds;
+      }
+
+      const { data, error } = await supabase.rpc("get_leads_by_stages", {
+        p_tenant_id: tenantId,
+        p_agency_ids: agencyIds,
+        p_stages: PIPELINE_STAGES.map((s) => s.id),
+        p_limit_per_stage: 0,
+        p_search_query: searchQuery.trim() || null,
+        p_sales_person_ids: salesPersonFilter,
+        p_response_statuses:
+          filterResponseStatus.length > 0 && !filterResponseStatus.includes("none")
+            ? filterResponseStatus
+            : null,
+        p_follow_up_today: filterFollowUpToday,
+        p_start_date: startDate?.toISOString() || null,
+        p_end_date: endDate ? endOfDayIso(endDate) : null,
+        p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null,
+      });
+      if (error) throw error;
+
+      const counts: Record<string, number> = {};
+      if (Array.isArray(data)) {
+        for (const stageData of data as any[]) {
+          counts[stageData.stage] = stageData.total_count || 0;
+        }
+      } else if (data && typeof data === "object") {
+        for (const [stageKey, stageData] of Object.entries(data as Record<string, any>)) {
+          counts[stageKey] = stageData.total_count || 0;
+        }
+      }
+      return counts;
+    },
+    enabled: !!tenantId && PIPELINE_STAGES.length > 0,
+    staleTime: 1000 * 60 * 3,
     placeholderData: (previousData) => previousData,
   });
 
@@ -1025,6 +1126,7 @@ export default function Leads() {
               status,
               response_status,
               source,
+              campaign_name,
               industry,
               products,
               estimated_deal_value,
@@ -1064,6 +1166,7 @@ export default function Leads() {
           status,
           response_status,
           source,
+          campaign_name,
           industry,
           products,
           estimated_deal_value,
@@ -1135,7 +1238,7 @@ export default function Leads() {
       
       if (searchQuery.trim()) {
         const q = searchQuery.trim();
-        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%`);
+        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%,campaign_name.ilike.%${q}%`);
       }
       
       // Apply pagination
@@ -1165,11 +1268,20 @@ export default function Leads() {
     if (!kanbanStageData) return [];
     
     const allLeads: any[] = [];
+    const seen = new Set<string>();
     for (const stageId of Object.keys(kanbanStageData)) {
-      allLeads.push(...kanbanStageData[stageId].leads);
+      const combined = [
+        ...(kanbanStageData[stageId].leads || []),
+        ...(accumulatedLeads[stageId] || []),
+      ];
+      for (const lead of combined) {
+        if (seen.has(lead.id)) continue;
+        seen.add(lead.id);
+        allLeads.push(lead);
+      }
     }
     return allLeads;
-  }, [isKanbanView, tableLeads, kanbanStageData]);
+  }, [isKanbanView, tableLeads, kanbanStageData, accumulatedLeads]);
 
   // Calculate total leads count for Kanban view from RPC data
   const kanbanTotalLeadsCount = useMemo(() => {
@@ -1501,6 +1613,7 @@ export default function Leads() {
       });
       // Re-fetch to restore correct state
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       toast({
         title: "שגיאה בעדכון סטטוס",
@@ -1611,6 +1724,7 @@ export default function Leads() {
     onError: (error: any) => {
       // Re-fetch to restore correct state on error
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       toast({
         title: "שגיאה בעדכון סטטוס תגובה",
@@ -1621,6 +1735,7 @@ export default function Leads() {
     onSettled: () => {
       // Reconcile all views with backend
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
     },
@@ -1728,6 +1843,13 @@ export default function Leads() {
 
     let result = secureFilteredLeads;
 
+    if (filterStage && filterStage !== "all") {
+      result = result.filter((lead: any) => {
+        const effectiveStatus = optimisticStatusByLeadId[lead.id] ?? lead.status;
+        return effectiveStatus === filterStage;
+      });
+    }
+
     // Client-side filter for "none" tag filter (leads without any tags)
     if (filterTagIds.includes("none")) {
       result = result.filter((lead: any) => {
@@ -1751,7 +1873,7 @@ export default function Leads() {
     }
 
     return result;
-  }, [secureFilteredLeads, filterTagIds, filterResponseStatus, leadsTagsMap]);
+  }, [secureFilteredLeads, filterTagIds, filterResponseStatus, filterStage, leadsTagsMap, optimisticStatusByLeadId]);
 
   // Helper to check if any filters are active
   const hasActiveFilters = useMemo(() => {
@@ -1803,6 +1925,7 @@ export default function Leads() {
       setSearchQuery("");
       setActivePresetId(null);
     } else {
+      skipChatStageDefault.current = true;
       // Apply preset filters - handle both old (string) and new (array) format
       const f = preset.filters as Record<string, any>;
       // Handle legacy salesPersonId (string) format and new salesPersonIds (array) format
@@ -1864,6 +1987,7 @@ export default function Leads() {
       "שלב",
       "סטטוס תגובה",
       "מקור",
+      "שם קמפיין",
       "תעשייה",
       "ערך עסקה משוער",
       "איש מכירות",
@@ -1874,8 +1998,8 @@ export default function Leads() {
 
     const rows = filteredLeads.map((lead: any) => {
       const stageName = PIPELINE_STAGES.find(s => s.id === lead.status)?.label || lead.status;
-      const statusName = leadStatuses.find(s => s.status_key === lead.response_status)?.label || lead.response_status || "";
-      const sourceName = SOURCE_LABELS[lead.source] || lead.source || "";
+      const statusName = findLeadStatus(lead.response_status, leadStatuses)?.label || lead.response_status || "";
+      const sourceName = leadSourceDisplay(lead);
       
       return [
         lead.contact_name || "",
@@ -1885,6 +2009,7 @@ export default function Leads() {
         stageName || "",
         statusName,
         sourceName,
+        lead.campaign_name || "",
         lead.industry || "",
         lead.estimated_deal_value || "",
         lead.sales_people?.full_name || "",
@@ -1919,14 +2044,15 @@ export default function Leads() {
   };
 
   // Function to load more leads for a specific stage
-  const loadMoreLeads = async (stageId: string) => {
-    if (!tenantId || loadingMoreStage) return;
+  const loadMoreLeads = async (stageId: string, opts?: { skipGuard?: boolean; silent?: boolean }) => {
+    if (!tenantId) return 0;
+    if (!opts?.skipGuard && loadingMoreStage) return 0;
     
-    setLoadingMoreStage(stageId);
+    if (!opts?.skipGuard) setLoadingMoreStage(stageId);
     
     try {
       const currentOffset = stageOffsets[stageId] || 0;
-      const newOffset = currentOffset + KANBAN_LEADS_PER_STAGE_LIMIT;
+      const newOffset = currentOffset + leadsPerStageLimit;
       
       const agencyIds = selectedAgency && selectedAgency !== "all" 
         ? [selectedAgency]
@@ -1944,14 +2070,14 @@ export default function Leads() {
         p_tenant_id: tenantId,
         p_agency_ids: agencyIds,
         p_stages: [stageId],
-        p_limit_per_stage: KANBAN_LEADS_PER_STAGE_LIMIT,
+        p_limit_per_stage: leadsPerStageLimit,
         p_offset_per_stage: newOffset,
         p_search_query: searchQuery.trim() || null,
         p_sales_person_ids: salesPersonFilter,
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
         p_follow_up_today: filterFollowUpToday,
         p_start_date: startDate?.toISOString() || null,
-        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
+        p_end_date: endDate ? endOfDayIso(endDate) : null,
         p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null
       });
       
@@ -1979,6 +2105,9 @@ export default function Leads() {
           .from("leads")
           .select(`
             id,
+            campaign_name,
+            source,
+            response_status,
             agencies (name),
             sales_people (full_name)
           `)
@@ -1993,6 +2122,9 @@ export default function Leads() {
         
         const enrichedLeads = newLeads.map((lead: any) => ({
           ...lead,
+          campaign_name: relationsMap[lead.id]?.campaign_name ?? lead.campaign_name ?? null,
+          source: relationsMap[lead.id]?.source ?? lead.source,
+          response_status: relationsMap[lead.id]?.response_status ?? lead.response_status,
           agencies: relationsMap[lead.id]?.agencies || null,
           sales_people: relationsMap[lead.id]?.sales_people || null
         }));
@@ -2005,13 +2137,19 @@ export default function Leads() {
         
         setStageOffsets(prev => ({ ...prev, [stageId]: newOffset }));
         
-        toast({
-          title: `נטענו ${newLeads.length} לידים נוספים`,
-        });
+        if (!opts?.silent) {
+          toast({
+            title: `נטענו ${newLeads.length} לידים נוספים`,
+          });
+        }
+        return newLeads.length;
       } else {
-        toast({
-          title: "אין עוד לידים לטעון",
-        });
+        if (!opts?.silent) {
+          toast({
+            title: "אין עוד לידים לטעון",
+          });
+        }
+        return 0;
       }
     } catch (error: any) {
       toast({
@@ -2019,8 +2157,9 @@ export default function Leads() {
         description: error.message,
         variant: "destructive",
       });
+      return 0;
     } finally {
-      setLoadingMoreStage(null);
+      if (!opts?.skipGuard) setLoadingMoreStage(null);
     }
   };
 
@@ -2120,6 +2259,72 @@ export default function Leads() {
     })?.length || 0;
   };
 
+  const chatStageIds = filterStage && filterStage !== "all"
+    ? [filterStage]
+    : PIPELINE_STAGES.map((stage) => stage.id);
+
+  const chatRemainingToLoad = chatStageIds.reduce((sum, stageId) => {
+    return sum + Math.max(0, getLeadsCountByStage(stageId) - getLoadedCountByStage(stageId));
+  }, 0);
+
+  const loadMoreChatLeads = async () => {
+    if (!tenantId || loadingMoreStage) return;
+    const toLoad = chatStageIds.filter((stageId) => getLoadedCountByStage(stageId) < getLeadsCountByStage(stageId));
+    if (toLoad.length === 0) return;
+    setLoadingMoreStage(toLoad[0]);
+    try {
+      let added = 0;
+      for (const stageId of toLoad) {
+        added += (await loadMoreLeads(stageId, { skipGuard: true, silent: true })) || 0;
+      }
+      toast({
+        title: added > 0 ? `נטענו ${added} לידים נוספים` : "אין עוד לידים לטעון",
+      });
+    } catch (error: any) {
+      toast({
+        title: "שגיאה בטעינת לידים נוספים",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingMoreStage(null);
+    }
+  };
+
+  const handleStageSelect = (stageId: string) => {
+    skipChatStageDefault.current = true;
+    setFilterStage(stageId);
+    setActivePresetId(null);
+  };
+
+  const stagePresetCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const stage of PIPELINE_STAGES) {
+      counts[stage.id] = stageCountMap?.[stage.id] ?? 0;
+    }
+
+    for (const [leadId, newStatus] of Object.entries(optimisticStatusByLeadId)) {
+      let oldStatus: string | undefined;
+      if (kanbanStageData) {
+        for (const [stageId, stageData] of Object.entries(kanbanStageData)) {
+          if (stageData.leads?.some((l: any) => l.id === leadId)) {
+            oldStatus = stageId;
+            break;
+          }
+        }
+      }
+      if (!oldStatus) {
+        oldStatus = leads?.find((l: any) => l.id === leadId)?.status;
+      }
+      if (!oldStatus || oldStatus === newStatus) continue;
+      if (counts[oldStatus] != null) counts[oldStatus] = Math.max(0, counts[oldStatus] - 1);
+      counts[newStatus] = (counts[newStatus] || 0) + 1;
+    }
+
+    counts.all = PIPELINE_STAGES.reduce((sum, stage) => sum + (counts[stage.id] || 0), 0);
+    return counts;
+  }, [PIPELINE_STAGES, stageCountMap, optimisticStatusByLeadId, kanbanStageData, leads]);
+
   const activeLead = filteredLeads?.find((lead: any) => lead.id === activeId);
 
   return (
@@ -2210,15 +2415,18 @@ export default function Leads() {
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <div className="relative flex-1">
+        <div
+          className="grid w-full min-w-0 items-center gap-2"
+          style={{ gridTemplateColumns: "minmax(8rem, 12rem) minmax(0, 1fr)" }}
+        >
+          <div className="relative min-w-0">
             <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
               placeholder="חיפוש..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
+              className="pr-10 h-8"
             />
           </div>
           <LeadFilterPresetTabs
@@ -2230,6 +2438,10 @@ export default function Leads() {
             }}
             onEditPreset={handleEditPreset}
             hasActiveFilters={hasActiveFilters}
+            pipelineStages={PIPELINE_STAGES}
+            activeStageId={filterStage}
+            onStageSelect={handleStageSelect}
+            stageCounts={stagePresetCounts}
           />
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -2339,16 +2551,19 @@ export default function Leads() {
           </div>
         </div>
         
-        {/* Search + Preset Tabs + Filters Button */}
-        <div className="flex gap-3 items-center">
-          <div className="relative flex-1 max-w-md">
+        {/* Search + saved filters + stages — one row */}
+        <div
+          className="grid w-full min-w-0 items-center gap-3"
+          style={{ gridTemplateColumns: "18rem minmax(0, 1fr) auto" }}
+        >
+          <div className="relative min-w-0">
             <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               type="text"
               placeholder="חיפוש לפי שם, טלפון או חברה..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-12 h-11 text-base font-medium shadow-sm border-2 focus:border-primary"
+              className="pr-12 h-9 text-base font-medium shadow-sm border-2 focus:border-primary"
             />
             {searchQuery && (
               <Button
@@ -2361,48 +2576,47 @@ export default function Leads() {
               </Button>
             )}
           </div>
+
+          <LeadFilterPresetTabs
+            activePresetId={activePresetId}
+            onPresetSelect={handlePresetSelect}
+            onOpenFiltersDialog={() => {
+              setEditingPreset(null);
+              setFiltersDialogOpen(true);
+            }}
+            onEditPreset={handleEditPreset}
+            hasActiveFilters={hasActiveFilters}
+            pipelineStages={PIPELINE_STAGES}
+            activeStageId={filterStage}
+            onStageSelect={handleStageSelect}
+            stageCounts={stagePresetCounts}
+          />
           
-          {/* Preset Tabs + Filters Button */}
-          <div className="flex-1">
-            <LeadFilterPresetTabs
-              activePresetId={activePresetId}
-              onPresetSelect={handlePresetSelect}
-              onOpenFiltersDialog={() => {
-                setEditingPreset(null); // Clear editing mode when opening fresh
-                setFiltersDialogOpen(true);
-              }}
-              onEditPreset={handleEditPreset}
-              hasActiveFilters={hasActiveFilters}
+          <div className="flex shrink-0 items-center gap-2">
+            <ManageLeadStatusesDialog 
+              trigger={
+                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול סטטוסי לידים">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              }
             />
+            <ChatTagsManager 
+              trigger={
+                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול תגיות">
+                  <Tag className="h-4 w-4" />
+                </Button>
+              }
+            />
+            <Button 
+              variant="outline" 
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={handleExportCSV}
+              title="ייצוא לקובץ CSV"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+            </Button>
           </div>
-          
-          {/* Manage Lead Statuses Button */}
-          <ManageLeadStatusesDialog 
-            trigger={
-              <Button variant="outline" size="icon" title="ניהול סטטוסי לידים">
-                <Settings2 className="h-4 w-4" />
-              </Button>
-            }
-          />
-          
-          {/* Manage Tags Button */}
-          <ChatTagsManager 
-            trigger={
-              <Button variant="outline" size="icon" title="ניהול תגיות">
-                <Tag className="h-4 w-4" />
-              </Button>
-            }
-          />
-          
-          {/* Export CSV Button */}
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={handleExportCSV}
-            title="ייצוא לקובץ CSV"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-          </Button>
         </div>
       </div>
       
@@ -2546,7 +2760,7 @@ export default function Leads() {
                         ) : (
                           <>
                             <Download className="h-4 w-4" />
-                            טען עוד 50 (נותרו {remainingToLoad.toLocaleString()})
+                            טען עוד {leadsPerStageLimit} (נותרו {remainingToLoad.toLocaleString()})
                           </>
                         )}
                       </Button>
@@ -2721,7 +2935,7 @@ export default function Leads() {
                             ) : (
                               <>
                                 <Download className="h-4 w-4" />
-                                טען עוד 50 (נותרו {remainingToLoad.toLocaleString()})
+                                טען עוד {leadsPerStageLimit} (נותרו {remainingToLoad.toLocaleString()})
                               </>
                             )}
                           </Button>
@@ -2775,6 +2989,11 @@ export default function Leads() {
           }}
           isCompanyNameVisible={isFieldVisible('company_name')}
           searchQuery={searchQuery}
+          onLoadMore={loadMoreChatLeads}
+          hasMore={chatRemainingToLoad > 0}
+          remainingCount={chatRemainingToLoad}
+          isLoadingMore={!!loadingMoreStage}
+          loadedCount={filteredLeads?.length || 0}
         />
       ) : (
         <div className="space-y-6">
@@ -3081,6 +3300,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       toast({
@@ -3107,6 +3327,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       setSelectedLeads([]);
@@ -3134,6 +3355,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       setSelectedLeads([]);
@@ -3195,6 +3417,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-sales-people", tenantId] });
@@ -3390,6 +3613,24 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 </div>
               )
             }] : []),
+            ...(isFieldVisible('campaign_name') ? [{
+              id: "campaign_name",
+              label: "שם קמפיין",
+              width: 180,
+              render: (lead: any) => (
+                <span className="truncate" title={lead.campaign_name || ""}>
+                  {lead.campaign_name || "—"}
+                </span>
+              )
+            }] : []),
+            {
+              id: "source",
+              label: "מקור הליד",
+              width: 110,
+              render: (lead: any) => (
+                <span className="truncate">{leadSourceDisplay(lead) || "—"}</span>
+              )
+            },
             { 
               id: "status", 
               label: "שלב במשפך", 
@@ -3448,11 +3689,12 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
               label: "סטטוס", 
               width: 150,
               render: (lead: any) => {
-                const status = leadStatuses.find(s => s.status_key === lead.response_status);
+                const status = findLeadStatus(lead.response_status, leadStatuses);
                 const displayLabel = status?.label || (lead.response_status ? lead.response_status : null);
+                const unmatched = unmatchedResponseStatusValue(lead.response_status, leadStatuses);
                 return (
                   <Select
-                    value={lead.response_status || "none"}
+                    value={responseStatusSelectValue(lead.response_status, leadStatuses)}
                     onValueChange={(value) => 
                       updateLeadResponseStatus.mutate({ 
                         leadId: lead.id, 
@@ -3475,6 +3717,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
                       <SelectItem value="none">ללא סטטוס</SelectItem>
+                      {unmatched && (
+                        <SelectItem value={unmatched}>{unmatched}</SelectItem>
+                      )}
                       {leadStatuses.map((s) => (
                         <SelectItem 
                           key={s.status_key} 

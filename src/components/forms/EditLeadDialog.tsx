@@ -16,7 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
-import { Pencil, CalendarIcon, FileText, DollarSign, MessageSquare, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip } from "lucide-react";
+import { Pencil, CalendarIcon, FileText, DollarSign, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
 import { format } from "date-fns";
@@ -37,6 +37,15 @@ import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
 import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
+import {
+  findLeadStatus,
+  inferLeadSource,
+  LEAD_SOURCE_SELECT_OPTIONS,
+  resolveResponseStatusKey,
+  responseStatusSelectValue,
+  unmatchedResponseStatusValue,
+} from "@/lib/leadFields";
+import { ensureLeadOriginTags } from "@/lib/leadOriginTags";
 
 const formSchema = z.object({
   // NOTE: company_name can be hidden by tenant field visibility settings.
@@ -46,6 +55,7 @@ const formSchema = z.object({
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   phone: z.string().optional(),
   source: z.string().optional(),
+  campaign_name: z.string().optional(),
   status: z.string().optional(),
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
@@ -79,10 +89,10 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
   
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen;
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(initialTab === "updates" ? "details" : initialTab);
 
   useEffect(() => {
-    if (open) setActiveTab(initialTab);
+    if (open) setActiveTab(initialTab === "updates" ? "details" : initialTab);
   }, [open, initialTab]);
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
@@ -130,7 +140,8 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
       contact_name: lead.contact_name || "",
       email: lead.email || "",
       phone: lead.phone || "",
-      source: lead.source || "other",
+      source: lead.source ? inferLeadSource(lead.source) : "paid_ads",
+      campaign_name: lead.campaign_name || "",
       status: lead.status || "new",
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
@@ -203,7 +214,8 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
       contact_name: lead.contact_name || "",
       email: lead.email || "",
       phone: lead.phone || "",
-      source: lead.source || "other",
+      source: lead.source ? inferLeadSource(lead.source) : "paid_ads",
+      campaign_name: lead.campaign_name || "",
       status: lead.status || "new",
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
@@ -299,9 +311,12 @@ const updateMutation = useMutation({
         contact_name: values.contact_name || null,
         email: values.email || null,
         phone: values.phone || null,
-        source: (values.source as any) || 'other',
-        status: (values.status as any) || 'new',
-        response_status: values.response_status && values.response_status !== 'none' ? (values.response_status as any) : null,
+        campaign_name: (values.campaign_name || "").trim() || null,
+        source: (inferLeadSource(values.source || lead.source || "paid_ads") as any),
+        status: (values.status as any) || "new",
+        response_status: values.response_status && values.response_status !== "none"
+          ? (resolveResponseStatusKey(values.response_status, leadStatuses) || values.response_status)
+          : null,
         estimated_deal_value: values.estimated_deal_value 
           ? parseFloat(values.estimated_deal_value) 
           : null,
@@ -346,6 +361,16 @@ const updateMutation = useMutation({
 
       if (leadResult.error) throw leadResult.error;
       const data = leadResult.data;
+
+      if (data && tenantId && userId) {
+        await ensureLeadOriginTags({
+          tenantId,
+          userId,
+          leadId: data.id,
+          campaign_name: data.campaign_name,
+          source: data.source,
+        });
+      }
 
       // Fire-and-forget: trigger automation in background (don't await!)
       if (data && lead.status !== data.status) {
@@ -397,6 +422,8 @@ const updateMutation = useMutation({
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-sales-people", tenantId, lead.id] });
       queryClient.invalidateQueries({ queryKey: ["lead-detail", tenantId, lead.id] });
+      queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-tags", lead.id] });
       sonnerToast.success("ליד עודכן בהצלחה");
     },
     onError: (error: any, _values, context) => {
@@ -449,7 +476,7 @@ const updateMutation = useMutation({
 
   const body = (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={cn("grid w-full grid-cols-2 sm:grid-cols-5 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm", inline && "hidden")}>
+          <TabsList className={cn("grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm", inline && "hidden")}>
             <TabsTrigger 
               value="details" 
               className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
@@ -476,19 +503,12 @@ const updateMutation = useMutation({
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger 
+              <TabsTrigger 
               value="meeting" 
               className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
             >
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
               קביעת פגישה
-            </TabsTrigger>
-            <TabsTrigger 
-              value="updates" 
-              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
-            >
-              <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
-              משימות ועדכונים
             </TabsTrigger>
           </TabsList>
 
@@ -645,18 +665,19 @@ const updateMutation = useMutation({
                   </div>
                 )}
                 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="response_status"
                     render={({ field }) => {
-                      const selectedStatus = leadStatuses.find(s => s.status_key === field.value);
+                      const selectedStatus = findLeadStatus(field.value, leadStatuses);
+                      const unmatched = unmatchedResponseStatusValue(field.value, leadStatuses);
                       return (
                         <FormItem>
                           <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
                           <Select 
                             onValueChange={field.onChange} 
-                            defaultValue={field.value}
+                            value={responseStatusSelectValue(field.value, leadStatuses)}
                             open={responseSelectOpen}
                             onOpenChange={setResponseSelectOpen}
                           >
@@ -665,7 +686,7 @@ const updateMutation = useMutation({
                                 className="text-right rounded-lg border-2 h-11"
                                 style={{ 
                                   backgroundColor: selectedStatus?.color || undefined,
-                                  color: field.value ? '#fff' : undefined 
+                                  color: field.value && field.value !== "none" ? '#fff' : undefined 
                                 }}
                               >
                                 <SelectValue placeholder="בחר סטטוס" />
@@ -673,6 +694,9 @@ const updateMutation = useMutation({
                             </FormControl>
                             <SelectContent className="bg-background z-50 text-right" align="end">
                               <SelectItem value="none">ללא סטטוס</SelectItem>
+                              {unmatched && (
+                                <SelectItem value={unmatched}>{unmatched}</SelectItem>
+                              )}
                               {leadStatuses.map((status) => (
                                 <SelectItem 
                                   key={status.status_key} 
@@ -760,32 +784,6 @@ const updateMutation = useMutation({
                       );
                     }}
                   />
-
-                  <FormField
-                    control={form.control}
-                    name="source"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">מקור הגעה</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="text-right rounded-lg border-2 h-11">
-                              <SelectValue placeholder="בחר מקור" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-50 text-right" align="end">
-                            <SelectItem value="phone">טלפון</SelectItem>
-                            <SelectItem value="website">אתר</SelectItem>
-                            <SelectItem value="facebook">פייסבוק</SelectItem>
-                            <SelectItem value="google">גוגל</SelectItem>
-                            <SelectItem value="referral">הפניה</SelectItem>
-                            <SelectItem value="other">אחר</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </div>
 
                 {/* Tags field */}
@@ -841,6 +839,59 @@ const updateMutation = useMutation({
                   )}
                 />
 
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="source"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">
+                          {getFieldLabel("source", "מקור הליד")}
+                        </FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || "paid_ads"}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="text-right rounded-lg border-2 h-11" dir="rtl">
+                              <SelectValue placeholder="FB" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {LEAD_SOURCE_SELECT_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="campaign_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">
+                          {getFieldLabel("campaign_name", "שם הקמפיין")}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            className="text-right rounded-lg border-2 h-11"
+                            placeholder="שם הקמפיין"
+                            dir="rtl"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <FormField
                   control={form.control}
                   name="industry"
@@ -868,6 +919,11 @@ const updateMutation = useMutation({
                     </FormItem>
                   )}
                 />
+
+                <div className="border rounded-lg p-4 text-right space-y-3" dir="rtl">
+                  <h3 className="font-semibold text-sm">עדכונים ומשימות</h3>
+                  <LeadUpdatesTab leadId={lead.id} leadName={lead.company_name || lead.contact_name || ""} />
+                </div>
 
                 <Button type="submit" disabled={updateMutation.isPending} className="w-full">
                   {updateMutation.isPending ? "מעדכן..." : "עדכן ליד"}
@@ -1292,11 +1348,6 @@ const updateMutation = useMutation({
                     </div>
                   </div>
                 </div>
-              </TabsContent>
-
-              {/* Tab 4: Tasks & Updates */}
-              <TabsContent value="updates" className="mt-0">
-                <LeadUpdatesTab leadId={lead.id} leadName={lead.company_name || lead.contact_name || ""} />
               </TabsContent>
             </form>
           </Form>
