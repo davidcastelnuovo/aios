@@ -10,7 +10,8 @@ import { CreativeImage } from "@/components/marketing/departments/creative/Creat
 import { cn } from "@/lib/utils";
 import { ArrowRight, Layers2, Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
 import type { CreativeFormat, CreativeLayer, CreativeVariation, LayerShadowStyle } from "./types";
-import { inferLayerShadow, withLayerShadow } from "./layerShadow";
+import { OfferIconMark, isIconLayer, layerLabel } from "./layerMarks";
+import { OFFER_ICON_NAMES } from "./offerBoard";
 import { aspectRatioClass } from "./utils";
 
 interface Props {
@@ -266,8 +267,8 @@ export function CreativeLayerEditor({
                   top: `${layer.y}%`,
                   width: `${layer.width}%`,
                   height: `${layer.height}%`,
-                  display: layer.type === "text" ? "flex" : undefined,
-                  alignItems: layer.type === "text" ? "center" : undefined,
+                  display: layer.type === "text" || isIconLayer(layer) ? "flex" : undefined,
+                  alignItems: layer.type === "text" || isIconLayer(layer) ? "center" : undefined,
                   justifyContent: layer.textAlign === "center" ? "center" : layer.textAlign === "left" ? "flex-start" : "flex-end",
                   background: layer.type === "shape" ? layer.fill ?? "#0f172acc" : undefined,
                   borderRadius: layer.type === "shape" ? layer.borderRadius : undefined,
@@ -310,6 +311,10 @@ export function CreativeLayerEditor({
                 )}
                 {layer.type === "image" && layer.src ? (
                   <CreativeImage src={layer.src} alt={layer.role === "logo" ? "לוגו" : "שכבת תמונה"} className="h-full w-full object-contain" />
+                ) : isIconLayer(layer) ? (
+                  <span className="flex h-full w-full items-center justify-center rounded-full border-2" style={{ borderColor: layer.color || layer.fill || "#dc2626" }}>
+                    <OfferIconMark name={layer.icon} color={layer.color || layer.fill} className="h-[62%] w-[62%]" />
+                  </span>
                 ) : layer.type === "text" && isEditing && selectedLayerId === layer.id ? (
                   <textarea
                     className="h-full w-full resize-none bg-transparent px-1 outline-none"
@@ -376,7 +381,7 @@ export function CreativeLayerEditor({
                     )}
                   >
                     <div className="font-semibold">
-                      {layer.type === "image" ? "לוגו" : layer.type === "shape" ? `פלטה ${index + 1}` : `טקסט ${index + 1}`}
+                      {layerLabel(layer, index)}
                     </div>
                     <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">
                       {layer.type === "image" ? "מורכב מהקובץ שהועלה" : layer.text || (layer.type === "shape" ? "רקע לקופי" : "ריק")}
@@ -405,6 +410,24 @@ export function CreativeLayerEditor({
               <p className="text-[11px] leading-relaxed text-muted-foreground">
                 השכבות הן העיצוב — פלטה + כותרת + CTA כמו בפוטושופ. טקסט משובש בתוך התמונה עצמה דורש ג׳נרט מחדש.
               </p>
+
+              {selectedLayer && isIconLayer(selectedLayer) && (
+                <div className="space-y-3 border-t pt-4">
+                  <Label>אייקון — אובייקט נפרד, אפשר להחליף</Label>
+                  <Select
+                    value={selectedLayer.icon ?? "badge-check"}
+                    onValueChange={(value) => updateLayer(selectedLayer.id, { icon: value })}
+                  >
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {OFFER_ICON_NAMES.map((name) => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">האייקון לא חלק מהתמונה — מחליפים בלי לג׳נרט מחדש.</p>
+                </div>
+              )}
 
               {selectedLayer?.type === "image" && (
                 <div className="space-y-3 border-t pt-4">

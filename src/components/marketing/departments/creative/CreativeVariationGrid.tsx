@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
+import { OfferIconMark, isIconLayer } from "./layerMarks";
 import { cn } from "@/lib/utils";
 import { Layers2, Loader2, PenLine, RotateCcw, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
 import type { CreativeVariation } from "./types";
@@ -63,8 +64,8 @@ export function CreativeVariationGrid({
                       top: `${layer.y}%`,
                       width: `${layer.width}%`,
                       height: `${layer.height}%`,
-                      display: layer.type === "text" ? "flex" : undefined,
-                      alignItems: layer.type === "text" ? "center" : undefined,
+                      display: layer.type === "text" || isIconLayer(layer) ? "flex" : undefined,
+                      alignItems: layer.type === "text" || isIconLayer(layer) ? "center" : undefined,
                       justifyContent: layer.textAlign === "center" ? "center" : layer.textAlign === "left" ? "flex-start" : "flex-end",
                       background: layer.type === "shape" ? layer.fill : undefined,
                       borderRadius: layer.borderRadius,
@@ -84,6 +85,10 @@ export function CreativeVariationGrid({
                   >
                     {layer.type === "image" && layer.src ? (
                       <CreativeImage src={layer.src} alt="לוגו" className="h-full w-full object-contain" />
+                    ) : isIconLayer(layer) ? (
+                      <span className="flex h-full w-full items-center justify-center rounded-full border-2" style={{ borderColor: layer.color || layer.fill || "#dc2626" }}>
+                        <OfferIconMark name={layer.icon} color={layer.color || layer.fill} className="h-[62%] w-[62%]" />
+                      </span>
                     ) : layer.type === "text" ? (
                       <span className="block w-full overflow-hidden whitespace-pre-wrap break-words px-0.5">{layer.text}</span>
                     ) : null}

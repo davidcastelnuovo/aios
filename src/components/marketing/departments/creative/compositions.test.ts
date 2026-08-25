@@ -7,8 +7,9 @@ import {
   pickCompositionId,
 } from "./compositions.ts";
 
-test("six graphic architectures are available and structurally different", () => {
-  assert.equal(CREATIVE_COMPOSITIONS.length, 6);
+test("seven graphic architectures are available and structurally different", () => {
+  assert.equal(CREATIVE_COMPOSITIONS.length, 7);
+  assert.equal(CREATIVE_COMPOSITIONS[0].id, "offer");
   const signatures = CREATIVE_COMPOSITIONS.map((item) => `${item.type.x}:${item.type.y}:${item.logo.x}`);
   assert.equal(new Set(signatures).size, signatures.length);
 });

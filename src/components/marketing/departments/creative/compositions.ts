@@ -1,4 +1,4 @@
-export type CompositionId = "flush" | "rail" | "slash" | "badge" | "flag" | "split";
+export type CompositionId = "offer" | "flush" | "rail" | "slash" | "badge" | "flag" | "split";
 
 export interface CompositionLayout {
   id: CompositionId;
@@ -26,6 +26,16 @@ export interface CompositionLayout {
 const layout = (item: CompositionLayout): CompositionLayout => item;
 
 export const CREATIVE_COMPOSITIONS: CompositionLayout[] = [
+  layout({
+    id: "offer",
+    label: "לוח הצעה",
+    prompt: "OFFER-BOARD TEMPLATE (lead-gen): photograph THIS copy's subject in the RIGHT ~50% / upper 62%. Leave the LEFT type column and the LOWER 38% simple/dark — a designed white type field, black footer with separate icon objects, and a brand-color CTA pill are composited later. ZERO letters, digits, icons, or buttons in the PNG.",
+    type: { x: 6, y: 12, width: 48, height: 22, align: "right" },
+    field: { x: 0, y: 0, width: 54, height: 68 },
+    accent: { x: 0, y: 68, width: 100, height: 32 },
+    cta: { x: 18, y: 90, width: 64, height: 7, pill: true },
+    logo: { x: 4, y: 3, width: 22, height: 8 },
+  }),
   layout({
     id: "flush",
     label: "טיפוגרפיה חשופה",
@@ -107,8 +117,17 @@ export const pickCompositionId = (seed: string, used: CompositionId[] = []): Com
   return pool[hash % pool.length].id;
 };
 
+export const DEFAULT_COMPOSITION_ID: CompositionId = "offer";
+
 export const buildCompositionLock = (id?: CompositionId | null): string => {
   const selected = compositionById(id);
+  if (selected.id === "offer") {
+    return [
+      "COMPOSITION LOCK — OFFER (לוח הצעה). This is a lead-gen board, not a caption on a stock photo.",
+      selected.prompt,
+      "Do not invent a different layout. The white type column, black footer, icon row, and CTA pill are composited as separate editable layers.",
+    ].join(" ");
+  }
   return [
     `COMPOSITION LOCK — ${selected.id.toUpperCase()} (${selected.label}).`,
     selected.prompt,

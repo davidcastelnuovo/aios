@@ -167,6 +167,27 @@ test("flush lockup is fat type without a full-width headline rectangle", () => {
   assert.equal(layers.some((layer) => layer.type === "shape" && (layer.y ?? 0) >= 80 && (layer.width ?? 0) >= 50), false);
 });
 
+test("offer board is a lead-gen template with footer, icons, and brand CTA", () => {
+  const layers = buildDesignedCopyLayers({
+    copyText: `כותרת: הלקוח מחפש המלצה ב־AI
+- חיפוש חכם
+- בדיקת אתר
+- ליווי
+CTA: השאירו פרטים`,
+    format: "1:1",
+    styleId: "swiss",
+    compositionId: "offer",
+    brandColors: ["#111111", "#e11d48"],
+    logoUrl: "https://example.com/logo.png",
+  });
+  assert.ok(layers.some((layer) => layer.role === "type_field"));
+  assert.ok(layers.some((layer) => layer.role === "footer"));
+  assert.ok(layers.some((layer) => layer.role === "icon" && layer.icon));
+  assert.ok(layers.some((layer) => layer.role === "cta_fill" && layer.fill === "#e11d48"));
+  assert.ok(layers.some((layer) => layer.role === "cta" && layer.text === "השאירו פרטים"));
+  assert.equal(shouldRebuildDesignedLayers(layers, "כותרת: הלקוח מחפש המלצה ב־AI"), false);
+});
+
 test("designed layers never paint AIDA labels or a bottom caption plate", () => {
   const layers = buildDesignedCopyLayers({
     copyText: AIDA_DOC,

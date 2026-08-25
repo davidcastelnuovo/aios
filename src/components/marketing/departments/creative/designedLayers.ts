@@ -1,5 +1,6 @@
 import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
 import { compositionById, pickCompositionId, type CompositionId } from "./compositions";
+import { buildOfferBoardLayers, parseOfferBullets } from "./offerBoard";
 import { withLayerShadow } from "./layerShadow";
 import {
   type CreativeVisualStyle,
@@ -382,12 +383,20 @@ export const buildCopySceneBrief = ({
 };
 
 export const isLegacyCaptionPlate = (layer: CreativeLayer): boolean =>
-  layer.type === "shape" && layer.y >= 58 && layer.height >= 18 && layer.height <= 36 && layer.width >= 70;
+  layer.type === "shape"
+  && !layer.role
+  && layer.y >= 58
+  && layer.height >= 18
+  && layer.height <= 36
+  && layer.width >= 70;
 
 export const isLegacyHeadlineBand = (layer: CreativeLayer): boolean =>
   layer.type === "shape" && layer.y <= 1 && layer.x <= 1 && layer.width >= 90 && layer.height >= 12 && layer.height <= 36;
 
 export const shouldRebuildDesignedLayers = (layers: CreativeLayer[], copyText?: string): boolean => {
+  if (layers.some((layer) => layer.role === "footer" || layer.role === "cta_fill" || layer.role === "type_field")) {
+    return false;
+  }
   if (layers.some((layer) =>
     (typeof layer.text === "string" && isInternalCopyLine(layer.text))
     || isLegacyCaptionPlate(layer)
@@ -421,7 +430,7 @@ const layer = (partial: Omit<CreativeLayer, "id">): CreativeLayer => ({
 });
 
 export const isLogoLayer = (layer: CreativeLayer) =>
-  layer.type === "image" && (layer.role === "logo" || !layer.role);
+  layer.type === "image" && (layer.role === "logo" || (!layer.role && !layer.icon));
 
 export const makeLogoLayer = (
   logoUrl: string,
@@ -472,6 +481,24 @@ export const buildDesignedCopyLayers = ({
   const palette = applyBrandPalette(PALETTES[styleId] ?? PALETTES.swiss, brandColors);
   const typeface = displayType(styleId);
   const story = format === "9:16" || format === "4:5";
+
+  if (composition.id === "offer") {
+    const bullets = parseOfferBullets(copyText ?? "");
+    const extra = bullets.length > 0
+      ? bullets
+      : [parts.body, parts.offer].filter((item): item is string => !!item && item !== parts.headline);
+    return buildOfferBoardLayers({
+      headline: parts.headline || poster,
+      sub: parts.offer && parts.offer !== parts.headline ? parts.offer : undefined,
+      bullets: extra.slice(0, 3),
+      cta: parts.cta,
+      footerTitle: extra[3],
+      palette,
+      logoUrl,
+      format,
+    });
+  }
+
   const layers: CreativeLayer[] = [];
 
   if (poster && composition.field) {

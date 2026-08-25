@@ -40,10 +40,10 @@ import {
 } from "@/components/marketing/departments/creative/utils";
 import { formatUsd, summarizeStoredImageCosts } from "@/components/marketing/departments/creative/imageCost";
 import { VisualStyleSelect } from "@/components/marketing/departments/creative/VisualStyleSelect";
-import { buildCompositionLock, pickCompositionId, type CompositionId } from "@/components/marketing/departments/creative/compositions";
+import { buildCompositionLock, DEFAULT_COMPOSITION_ID } from "@/components/marketing/departments/creative/compositions";
 import { buildAdaptiveTreatment, isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
 import { buildCopySceneBrief, hydrateVariationLayers, isInternalCopyLine, strongestLine } from "@/components/marketing/departments/creative/designedLayers";
-import { buildStyleContinuityLock, buildStylePlayLock, missingCopyBlocks, usesIntegratedType } from "@/components/marketing/departments/creative/styleContinuity";
+import { buildStyleContinuityLock, buildStylePlayLock, missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
 import {
   buildStaticQualityLock,
   buildVisualStyleLock,
@@ -778,12 +778,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       instructions: selected.payload?.instructions ? String(selected.payload.instructions) : undefined,
       copyLabel,
     });
-    const usedCompositions = live
-      .map((variation) => variation.compositionId)
-      .filter((value): value is CompositionId => !!value);
     const compositionId = styleSource
-      ? (usesIntegratedType(styleSource) ? "flush" : styleSource.compositionId ?? "flush")
-      : pickCompositionId(`${copyKey || copyLabel || style.id}-${Date.now()}`, usedCompositions);
+      ? (styleSource.compositionId ?? DEFAULT_COMPOSITION_ID)
+      : DEFAULT_COMPOSITION_ID;
     const costume = isOptionalCostume(style.id) ? style : undefined;
     // Named styles already encode the technique in text. Attaching the liked still
     // makes gpt-image-1 reprint the same face/crop. Keep the image only when the

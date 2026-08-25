@@ -37,6 +37,20 @@ export interface CreativeComment {
 
 export type LayerShadowStyle = "none" | "soft" | "extrude" | "halo";
 
+export type CreativeLayerRole =
+  | "logo"
+  | "hero"
+  | "type_field"
+  | "headline"
+  | "sub"
+  | "bullet"
+  | "icon"
+  | "icon_label"
+  | "footer"
+  | "cta"
+  | "cta_fill"
+  | "divider";
+
 export interface CreativeLayer {
   id: string;
   type: "background" | "text" | "shape" | "image";
@@ -46,7 +60,8 @@ export interface CreativeLayer {
   height: number;
   rotation?: number;
   src?: string;
-  role?: "logo";
+  role?: CreativeLayerRole;
+  icon?: string;
   text?: string;
   fontFamily?: string;
   fontSize?: number;
