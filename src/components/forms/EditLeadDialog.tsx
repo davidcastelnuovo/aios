@@ -16,7 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
-import { Pencil, CalendarIcon, FileText, DollarSign, MessageSquare, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip } from "lucide-react";
+import { Pencil, CalendarIcon, FileText, DollarSign, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
 import { format } from "date-fns";
@@ -89,10 +89,10 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
   
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen;
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(initialTab === "updates" ? "details" : initialTab);
 
   useEffect(() => {
-    if (open) setActiveTab(initialTab);
+    if (open) setActiveTab(initialTab === "updates" ? "details" : initialTab);
   }, [open, initialTab]);
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
@@ -476,7 +476,7 @@ const updateMutation = useMutation({
 
   const body = (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={cn("grid w-full grid-cols-2 sm:grid-cols-5 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm", inline && "hidden")}>
+          <TabsList className={cn("grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm", inline && "hidden")}>
             <TabsTrigger 
               value="details" 
               className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
@@ -503,19 +503,12 @@ const updateMutation = useMutation({
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger 
+              <TabsTrigger 
               value="meeting" 
               className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
             >
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
               קביעת פגישה
-            </TabsTrigger>
-            <TabsTrigger 
-              value="updates" 
-              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
-            >
-              <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
-              משימות ועדכונים
             </TabsTrigger>
           </TabsList>
 
@@ -926,6 +919,11 @@ const updateMutation = useMutation({
                     </FormItem>
                   )}
                 />
+
+                <div className="border rounded-lg p-4 text-right space-y-3" dir="rtl">
+                  <h3 className="font-semibold text-sm">עדכונים ומשימות</h3>
+                  <LeadUpdatesTab leadId={lead.id} leadName={lead.company_name || lead.contact_name || ""} />
+                </div>
 
                 <Button type="submit" disabled={updateMutation.isPending} className="w-full">
                   {updateMutation.isPending ? "מעדכן..." : "עדכן ליד"}
@@ -1350,11 +1348,6 @@ const updateMutation = useMutation({
                     </div>
                   </div>
                 </div>
-              </TabsContent>
-
-              {/* Tab 4: Tasks & Updates */}
-              <TabsContent value="updates" className="mt-0">
-                <LeadUpdatesTab leadId={lead.id} leadName={lead.company_name || lead.contact_name || ""} />
               </TabsContent>
             </form>
           </Form>
