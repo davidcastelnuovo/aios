@@ -128,13 +128,11 @@ export default function Chat() {
   const { data: allContactTags = [] } = useQuery({
     queryKey: ['contact-tags-for-list', tenantId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) return [];
+      if (!tenantId) return [];
 
       const { data, error } = await supabase
         .from('chat_contact_tags')
         .select('*')
-        .eq('user_id', user.id)
         .eq('tenant_id', tenantId);
 
       if (error) {

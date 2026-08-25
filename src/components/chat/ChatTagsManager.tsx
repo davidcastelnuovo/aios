@@ -248,10 +248,11 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
       toast.success('התגית נוצרה בהצלחה');
     },
     onError: (error: any) => {
-      if (error.message?.includes('duplicate')) {
-        toast.error('תגית עם שם זה כבר קיימת');
+      const message = error?.message || "";
+      if (message.includes("duplicate") || error?.code === "23505") {
+        toast.error("תגית עם שם זה כבר קיימת");
       } else {
-        toast.error('שגיאה ביצירת התגית');
+        toast.error(message ? `שגיאה ביצירת התגית: ${message}` : "שגיאה ביצירת התגית");
       }
     },
   });
