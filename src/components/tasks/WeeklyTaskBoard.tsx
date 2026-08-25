@@ -46,7 +46,7 @@ import {
   resolveBoardTaskAgency,
   resolveNewTaskAgency,
   resolveTasksBoardScope,
-  filterTasksBySelectedAgency,
+  filterTasksForBoardView,
   syncLocalTasksForAgencyFilter,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
@@ -211,7 +211,7 @@ export function WeeklyTaskBoard() {
   }, [currentDate, viewMode]);
 
   // Fetch user profile to get campaigner_id / sales_person_id for "mine" filter
-  const { data: userProfile } = useQuery({
+  const { data: userProfile, isSuccess: userProfileReady } = useQuery({
     queryKey: ["user-profile-for-tasks", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -267,7 +267,7 @@ export function WeeklyTaskBoard() {
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching } = useQuery({
     queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
-    enabled: !!tenantId && !!user?.id,
+    enabled: !!tenantId && !!user?.id && (filters.campaignerId !== "mine" || userProfileReady),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
@@ -396,17 +396,18 @@ export function WeeklyTaskBoard() {
       fetchedTasks,
       previousLocal: localTasks,
       selectedAgency,
+      campaignerFilter: filters.campaignerId,
     });
     setLocalTasks(next);
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
     // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFetching, selectedAgency, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+  }, [isFetching, selectedAgency, filters.campaignerId, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
 
-  // Defense in depth (Clients.tsx pattern): never render tasks outside the header agency.
+  // Team board: header agency narrows rows. Personal "mine" queue spans all agencies.
   const tasks = useMemo(
-    () => filterTasksBySelectedAgency(localTasks, selectedAgency),
-    [localTasks, selectedAgency],
+    () => filterTasksForBoardView(localTasks, selectedAgency, filters.campaignerId),
+    [localTasks, selectedAgency, filters.campaignerId],
   );
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates)
