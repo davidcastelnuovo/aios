@@ -111,6 +111,12 @@ function hexToLightBg(hex: string): string {
   return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 0.15)`;
 }
 
+function endOfDayIso(date: Date): string {
+  const copy = new Date(date);
+  copy.setHours(23, 59, 59, 999);
+  return copy.toISOString();
+}
+
 
 const PRODUCT_LABELS: Record<string, string> = {
   google_ads: "Google Ads",
@@ -655,6 +661,7 @@ export default function Leads() {
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [editingPreset, setEditingPreset] = useState<{ id: string; name: string } | null>(null);
+  const skipChatStageDefault = useRef(false);
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -706,7 +713,9 @@ export default function Leads() {
   // Pagination state
   const [page, setPage] = useState(1);
   const TABLE_LEADS_PER_PAGE = 50;
-  const KANBAN_LEADS_PER_STAGE_LIMIT = 50; // How many leads to fetch per stage from DB
+  const KANBAN_LEADS_PER_STAGE_LIMIT = 50;
+  const CHAT_LEADS_PER_STAGE_LIMIT = 100;
+  const leadsPerStageLimit = viewMode === "chat" ? CHAT_LEADS_PER_STAGE_LIMIT : KANBAN_LEADS_PER_STAGE_LIMIT;
 
   const isKanbanView = viewMode === "kanban" || viewMode === "chat";
   const effectivePage = isKanbanView ? 1 : page;
@@ -716,13 +725,24 @@ export default function Leads() {
   useEffect(() => {
     if (isKanbanView) setPage(1);
   }, [isKanbanView]);
+
+  useEffect(() => {
+    if (viewMode !== "chat") {
+      skipChatStageDefault.current = false;
+      return;
+    }
+    if (skipChatStageDefault.current || activePresetId) return;
+    if (filterStage !== "all") return;
+    if (!pipelineStagesData?.length) return;
+    setFilterStage(pipelineStagesData[0].stage_key);
+  }, [viewMode, pipelineStagesData, activePresetId, filterStage]);
   
   // Reset page to 1 and clear accumulated leads when filters change
   useEffect(() => {
     setPage(1);
     setStageOffsets({});
     setAccumulatedLeads({});
-  }, [selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate]);
+  }, [selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate, viewMode]);
   
   // Kanban limiting state - how many leads to SHOW per stage initially (can expand)
   const KANBAN_LEADS_PER_STAGE_DISPLAY = 20;
@@ -885,7 +905,7 @@ export default function Leads() {
 
   // Kanban view: use RPC that fetches leads per stage
   const { data: kanbanStageData, isLoading: isKanbanLoading, refetch: refetchKanban, isFetching: isKanbanFetching } = useQuery({
-    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(','), isViewingAs, viewAsSalesPersonId],
+    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(','), isViewingAs, viewAsSalesPersonId, leadsPerStageLimit],
     queryFn: async () => {
       if (!tenantId) return null;
       
@@ -893,7 +913,9 @@ export default function Leads() {
         ? [selectedAgency]
         : agencies?.map(a => a.id) || null;
       
-      const stageIds = PIPELINE_STAGES.map(s => s.id);
+      const stageIds = filterStage && filterStage !== "all"
+        ? [filterStage]
+        : PIPELINE_STAGES.map(s => s.id);
       
       // Build sales person filter - support multi-select
       // When viewing as a sales person, override the filter
@@ -909,13 +931,13 @@ export default function Leads() {
         p_tenant_id: tenantId,
         p_agency_ids: agencyIds,
         p_stages: stageIds,
-        p_limit_per_stage: KANBAN_LEADS_PER_STAGE_LIMIT,
+        p_limit_per_stage: leadsPerStageLimit,
         p_search_query: searchQuery.trim() || null,
         p_sales_person_ids: salesPersonFilter,
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
         p_follow_up_today: filterFollowUpToday,
         p_start_date: startDate?.toISOString() || null,
-        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
+        p_end_date: endDate ? endOfDayIso(endDate) : null,
         p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null
       });
       
@@ -1179,11 +1201,20 @@ export default function Leads() {
     if (!kanbanStageData) return [];
     
     const allLeads: any[] = [];
+    const seen = new Set<string>();
     for (const stageId of Object.keys(kanbanStageData)) {
-      allLeads.push(...kanbanStageData[stageId].leads);
+      const combined = [
+        ...(kanbanStageData[stageId].leads || []),
+        ...(accumulatedLeads[stageId] || []),
+      ];
+      for (const lead of combined) {
+        if (seen.has(lead.id)) continue;
+        seen.add(lead.id);
+        allLeads.push(lead);
+      }
     }
     return allLeads;
-  }, [isKanbanView, tableLeads, kanbanStageData]);
+  }, [isKanbanView, tableLeads, kanbanStageData, accumulatedLeads]);
 
   // Calculate total leads count for Kanban view from RPC data
   const kanbanTotalLeadsCount = useMemo(() => {
@@ -1742,6 +1773,13 @@ export default function Leads() {
 
     let result = secureFilteredLeads;
 
+    if (filterStage && filterStage !== "all") {
+      result = result.filter((lead: any) => {
+        const effectiveStatus = optimisticStatusByLeadId[lead.id] ?? lead.status;
+        return effectiveStatus === filterStage;
+      });
+    }
+
     // Client-side filter for "none" tag filter (leads without any tags)
     if (filterTagIds.includes("none")) {
       result = result.filter((lead: any) => {
@@ -1765,7 +1803,7 @@ export default function Leads() {
     }
 
     return result;
-  }, [secureFilteredLeads, filterTagIds, filterResponseStatus, leadsTagsMap]);
+  }, [secureFilteredLeads, filterTagIds, filterResponseStatus, filterStage, leadsTagsMap, optimisticStatusByLeadId]);
 
   // Helper to check if any filters are active
   const hasActiveFilters = useMemo(() => {
@@ -1817,6 +1855,7 @@ export default function Leads() {
       setSearchQuery("");
       setActivePresetId(null);
     } else {
+      skipChatStageDefault.current = true;
       // Apply preset filters - handle both old (string) and new (array) format
       const f = preset.filters as Record<string, any>;
       // Handle legacy salesPersonId (string) format and new salesPersonIds (array) format
@@ -1935,14 +1974,15 @@ export default function Leads() {
   };
 
   // Function to load more leads for a specific stage
-  const loadMoreLeads = async (stageId: string) => {
-    if (!tenantId || loadingMoreStage) return;
+  const loadMoreLeads = async (stageId: string, opts?: { skipGuard?: boolean; silent?: boolean }) => {
+    if (!tenantId) return 0;
+    if (!opts?.skipGuard && loadingMoreStage) return 0;
     
-    setLoadingMoreStage(stageId);
+    if (!opts?.skipGuard) setLoadingMoreStage(stageId);
     
     try {
       const currentOffset = stageOffsets[stageId] || 0;
-      const newOffset = currentOffset + KANBAN_LEADS_PER_STAGE_LIMIT;
+      const newOffset = currentOffset + leadsPerStageLimit;
       
       const agencyIds = selectedAgency && selectedAgency !== "all" 
         ? [selectedAgency]
@@ -1960,14 +2000,14 @@ export default function Leads() {
         p_tenant_id: tenantId,
         p_agency_ids: agencyIds,
         p_stages: [stageId],
-        p_limit_per_stage: KANBAN_LEADS_PER_STAGE_LIMIT,
+        p_limit_per_stage: leadsPerStageLimit,
         p_offset_per_stage: newOffset,
         p_search_query: searchQuery.trim() || null,
         p_sales_person_ids: salesPersonFilter,
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
         p_follow_up_today: filterFollowUpToday,
         p_start_date: startDate?.toISOString() || null,
-        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
+        p_end_date: endDate ? endOfDayIso(endDate) : null,
         p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null
       });
       
@@ -2027,13 +2067,19 @@ export default function Leads() {
         
         setStageOffsets(prev => ({ ...prev, [stageId]: newOffset }));
         
-        toast({
-          title: `נטענו ${newLeads.length} לידים נוספים`,
-        });
+        if (!opts?.silent) {
+          toast({
+            title: `נטענו ${newLeads.length} לידים נוספים`,
+          });
+        }
+        return newLeads.length;
       } else {
-        toast({
-          title: "אין עוד לידים לטעון",
-        });
+        if (!opts?.silent) {
+          toast({
+            title: "אין עוד לידים לטעון",
+          });
+        }
+        return 0;
       }
     } catch (error: any) {
       toast({
@@ -2041,8 +2087,9 @@ export default function Leads() {
         description: error.message,
         variant: "destructive",
       });
+      return 0;
     } finally {
-      setLoadingMoreStage(null);
+      if (!opts?.skipGuard) setLoadingMoreStage(null);
     }
   };
 
@@ -2142,6 +2189,49 @@ export default function Leads() {
     })?.length || 0;
   };
 
+  const chatStageIds = filterStage && filterStage !== "all"
+    ? [filterStage]
+    : PIPELINE_STAGES.map((stage) => stage.id);
+
+  const chatRemainingToLoad = chatStageIds.reduce((sum, stageId) => {
+    return sum + Math.max(0, getLeadsCountByStage(stageId) - getLoadedCountByStage(stageId));
+  }, 0);
+
+  const loadMoreChatLeads = async () => {
+    if (!tenantId || loadingMoreStage) return;
+    const toLoad = chatStageIds.filter((stageId) => getLoadedCountByStage(stageId) < getLeadsCountByStage(stageId));
+    if (toLoad.length === 0) return;
+    setLoadingMoreStage(toLoad[0]);
+    try {
+      let added = 0;
+      for (const stageId of toLoad) {
+        added += (await loadMoreLeads(stageId, { skipGuard: true, silent: true })) || 0;
+      }
+      toast({
+        title: added > 0 ? `נטענו ${added} לידים נוספים` : "אין עוד לידים לטעון",
+      });
+    } catch (error: any) {
+      toast({
+        title: "שגיאה בטעינת לידים נוספים",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingMoreStage(null);
+    }
+  };
+
+  const handleStageSelect = (stageId: string) => {
+    skipChatStageDefault.current = true;
+    setFilterStage(stageId);
+    setActivePresetId(null);
+  };
+
+  const stagePresetCounts = {
+    all: displayTotalCount,
+    ...Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage.id, getLeadsCountByStage(stage.id)])),
+  };
+
   const activeLead = filteredLeads?.find((lead: any) => lead.id === activeId);
 
   return (
@@ -2232,7 +2322,7 @@ export default function Leads() {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
           <div className="relative flex-1">
             <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -2252,6 +2342,10 @@ export default function Leads() {
             }}
             onEditPreset={handleEditPreset}
             hasActiveFilters={hasActiveFilters}
+            pipelineStages={PIPELINE_STAGES}
+            activeStageId={filterStage}
+            onStageSelect={handleStageSelect}
+            stageCounts={stagePresetCounts}
           />
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -2362,7 +2456,8 @@ export default function Leads() {
         </div>
         
         {/* Search + Preset Tabs + Filters Button */}
-        <div className="flex gap-3 items-center">
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-3 items-center">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
@@ -2382,20 +2477,6 @@ export default function Leads() {
                 <X className="h-4 w-4" />
               </Button>
             )}
-          </div>
-          
-          {/* Preset Tabs + Filters Button */}
-          <div className="flex-1">
-            <LeadFilterPresetTabs
-              activePresetId={activePresetId}
-              onPresetSelect={handlePresetSelect}
-              onOpenFiltersDialog={() => {
-                setEditingPreset(null); // Clear editing mode when opening fresh
-                setFiltersDialogOpen(true);
-              }}
-              onEditPreset={handleEditPreset}
-              hasActiveFilters={hasActiveFilters}
-            />
           </div>
           
           {/* Manage Lead Statuses Button */}
@@ -2426,6 +2507,21 @@ export default function Leads() {
             <FileSpreadsheet className="h-4 w-4" />
           </Button>
         </div>
+        <LeadFilterPresetTabs
+          activePresetId={activePresetId}
+          onPresetSelect={handlePresetSelect}
+          onOpenFiltersDialog={() => {
+            setEditingPreset(null);
+            setFiltersDialogOpen(true);
+          }}
+          onEditPreset={handleEditPreset}
+          hasActiveFilters={hasActiveFilters}
+          pipelineStages={PIPELINE_STAGES}
+          activeStageId={filterStage}
+          onStageSelect={handleStageSelect}
+          stageCounts={stagePresetCounts}
+        />
+      </div>
       </div>
       
       {/* Filters Dialog */}
@@ -2568,7 +2664,7 @@ export default function Leads() {
                         ) : (
                           <>
                             <Download className="h-4 w-4" />
-                            טען עוד 50 (נותרו {remainingToLoad.toLocaleString()})
+                            טען עוד {leadsPerStageLimit} (נותרו {remainingToLoad.toLocaleString()})
                           </>
                         )}
                       </Button>
@@ -2743,7 +2839,7 @@ export default function Leads() {
                             ) : (
                               <>
                                 <Download className="h-4 w-4" />
-                                טען עוד 50 (נותרו {remainingToLoad.toLocaleString()})
+                                טען עוד {leadsPerStageLimit} (נותרו {remainingToLoad.toLocaleString()})
                               </>
                             )}
                           </Button>
@@ -2797,6 +2893,11 @@ export default function Leads() {
           }}
           isCompanyNameVisible={isFieldVisible('company_name')}
           searchQuery={searchQuery}
+          onLoadMore={loadMoreChatLeads}
+          hasMore={chatRemainingToLoad > 0}
+          remainingCount={chatRemainingToLoad}
+          isLoadingMore={!!loadingMoreStage}
+          loadedCount={filteredLeads?.length || 0}
         />
       ) : (
         <div className="space-y-6">

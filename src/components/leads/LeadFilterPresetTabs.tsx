@@ -34,12 +34,22 @@ export interface FilterPreset {
   sort_order: number;
 }
 
+interface StagePreset {
+  id: string;
+  label: string;
+  hexColor?: string;
+}
+
 interface LeadFilterPresetTabsProps {
   activePresetId: string | null;
   onPresetSelect: (preset: FilterPreset | null) => void;
   onOpenFiltersDialog: () => void;
   onEditPreset: (preset: FilterPreset) => void;
   hasActiveFilters: boolean;
+  pipelineStages?: StagePreset[];
+  activeStageId?: string;
+  onStageSelect?: (stageId: string) => void;
+  stageCounts?: Record<string, number>;
 }
 
 export function LeadFilterPresetTabs({
@@ -48,6 +58,10 @@ export function LeadFilterPresetTabs({
   onOpenFiltersDialog,
   onEditPreset,
   hasActiveFilters,
+  pipelineStages = [],
+  activeStageId = "all",
+  onStageSelect,
+  stageCounts,
 }: LeadFilterPresetTabsProps) {
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
@@ -113,7 +127,59 @@ export function LeadFilterPresetTabs({
   const activePreset = presets.find(p => p.id === activePresetId);
 
   return (
-    <>
+    <div className="flex flex-col gap-2 min-w-0 w-full">
+      {pipelineStages.length > 0 && onStageSelect && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
+          <Button
+            type="button"
+            variant={activeStageId === "all" ? "default" : "outline"}
+            size="sm"
+            className="h-8 shrink-0"
+            onClick={() => onStageSelect("all")}
+          >
+            הכל
+            {typeof stageCounts?.all === "number" && (
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] mr-1">
+                {stageCounts.all.toLocaleString()}
+              </Badge>
+            )}
+          </Button>
+          {pipelineStages.map((stage) => {
+            const count = stageCounts?.[stage.id];
+            const isActive = activeStageId === stage.id;
+            return (
+              <Button
+                key={stage.id}
+                type="button"
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                className="h-8 shrink-0 gap-1.5"
+                style={
+                  isActive && stage.hexColor
+                    ? { backgroundColor: stage.hexColor, borderColor: stage.hexColor, color: "#fff" }
+                    : stage.hexColor
+                      ? { borderColor: stage.hexColor }
+                      : undefined
+                }
+                onClick={() => onStageSelect(stage.id)}
+              >
+                {stage.label}
+                {typeof count === "number" && (
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "h-5 px-1.5 text-[10px]",
+                      isActive && "bg-white/20 text-inherit hover:bg-white/20",
+                    )}
+                  >
+                    {count.toLocaleString()}
+                  </Badge>
+                )}
+              </Button>
+            );
+          })}
+        </div>
+      )}
       <div className="flex items-center gap-2">
         {/* Presets Dropdown */}
         <DropdownMenu>
@@ -212,7 +278,7 @@ export function LeadFilterPresetTabs({
           )}
         </Button>
       </div>
-    </>
+    </div>
   );
 }
 

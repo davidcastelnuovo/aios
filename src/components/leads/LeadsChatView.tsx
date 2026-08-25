@@ -45,6 +45,11 @@ interface LeadsChatViewProps {
   isCompanyNameVisible: boolean;
   searchQuery: string;
   initialLeadId?: string;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  remainingCount?: number;
+  isLoadingMore?: boolean;
+  loadedCount?: number;
 }
 
 function getStatusColor(statusKey: string | null, statuses: Array<{ status_key: string; color: string; label?: string }>) {
@@ -64,6 +69,11 @@ export function LeadsChatView({
   isCompanyNameVisible,
   searchQuery,
   initialLeadId,
+  onLoadMore,
+  hasMore = false,
+  remainingCount = 0,
+  isLoadingMore = false,
+  loadedCount,
 }: LeadsChatViewProps) {
   const isMobile = useIsMobile();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(initialLeadId ?? null);
@@ -296,7 +306,16 @@ export function LeadsChatView({
         )}
 
         {/* Lead list */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div
+          className="flex-1 overflow-y-auto overflow-x-hidden"
+          onScroll={(event) => {
+            if (!hasMore || isLoadingMore || !onLoadMore) return;
+            const el = event.currentTarget;
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
+              onLoadMore();
+            }
+          }}
+        >
           <div className="divide-y w-full">
             {filteredListLeads.map((lead) => {
               const isSelected = lead.id === selectedLeadId;
@@ -389,6 +408,24 @@ export function LeadsChatView({
             {filteredListLeads.length === 0 && (
               <div className="p-8 text-center text-muted-foreground text-sm">
                 לא נמצאו לידים
+              </div>
+            )}
+            {hasMore && (
+              <div className="p-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={onLoadMore}
+                  disabled={isLoadingMore}
+                >
+                  {isLoadingMore ? "טוען..." : `טען עוד לידים${remainingCount > 0 ? ` (${remainingCount.toLocaleString()} נותרו)` : ""}`}
+                </Button>
+                {typeof loadedCount === "number" && loadedCount > 0 && (
+                  <p className="text-[11px] text-muted-foreground text-center mt-2">
+                    מוצגים {loadedCount.toLocaleString()} לידים
+                  </p>
+                )}
               </div>
             )}
           </div>
