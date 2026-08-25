@@ -111,8 +111,20 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
               >
                 🤖 הוסף את Manus (כרמן תוכל להאציל לו משימות מורכבות)
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setName("Grok");
+                  setUrl(`https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/grok-mcp`);
+                }}
+              >
+                🪐 הוסף את Grok Bot (כרמן תוכל להפנות אליו משימות מורכבות ותיקונים)
+              </Button>
               <p className="text-xs text-muted-foreground">
-                ממלא שם + URL אוטומטית. הזן את ה-Bearer המתאים (CURSOR_MCP_BEARER / CLAUDE_MCP_BEARER / MANUS_MCP_BEARER) ולחץ התחבר.
+                ממלא שם + URL אוטומטית. הזן את ה-Bearer המתאים (CURSOR_MCP_BEARER / CLAUDE_MCP_BEARER / MANUS_MCP_BEARER / GROK_MCP_BEARER) ולחץ התחבר.
               </p>
               <div>
                 <Label>שם</Label>
