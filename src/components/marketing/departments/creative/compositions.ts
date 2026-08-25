@@ -29,7 +29,7 @@ export const CREATIVE_COMPOSITIONS: CompositionLayout[] = [
   layout({
     id: "offer",
     label: "לוח הצעה",
-    prompt: "OFFER-BOARD: full-bleed photograph of THIS copy's subject, edge to edge. Fill the frame with a real person/scene. Do NOT paint a layout: no white panel, no diagonal split, no footer bar, no colored band, no icons, no buttons, no letters. Chrome is composited later as layers.",
+    prompt: "OFFER-BOARD: full-bleed photograph of THIS copy's subject, edge to edge. Fill the frame with a real person/scene. Leave one naturally quiet atmospheric pocket (soft shadow, wall, sky) — not a painted panel. Do NOT paint a layout: no white column, no diagonal split, no footer bar, no colored band, no icons, no buttons, no letters. Chrome is composited later as layers.",
     type: { x: 6, y: 12, width: 48, height: 22, align: "right" },
     field: { x: 0, y: 0, width: 54, height: 68 },
     accent: { x: 0, y: 68, width: 100, height: 32 },
@@ -126,6 +126,7 @@ export const buildCompositionLock = (id?: CompositionId | null): string => {
       "COMPOSITION LOCK — OFFER (לוח הצעה). Full-bleed photo only. Do not draw the template.",
       selected.prompt,
       "Forbidden in the PNG: white type column, diagonal cut, maroon/black footer, icon row, CTA pill, letters. Those are separate layers.",
+      "A soft unoccupied pocket in the photo is OK. A drawn silhouette of the template is not.",
     ].join(" ");
   }
   return [

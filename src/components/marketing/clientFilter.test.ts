@@ -6,6 +6,7 @@ import {
   clientFilterToParam,
   entryClientFilter,
   parseClientFilter,
+  resolveCreativeListFilter,
 } from "./clientFilter.ts";
 
 test("entry to creative always uses every client", () => {
@@ -20,6 +21,12 @@ test("parseClientFilter maps all to the all-clients sentinel", () => {
   assert.equal(parseClientFilter("all"), ALL_CLIENTS_FILTER);
   assert.equal(parseClientFilter(null), null);
   assert.equal(parseClientFilter("abc"), "abc");
+});
+
+test("creative list filter never treats a missing client as unassigned-only", () => {
+  assert.equal(resolveCreativeListFilter(null), ALL_CLIENTS_FILTER);
+  assert.equal(resolveCreativeListFilter(ALL_CLIENTS_FILTER), ALL_CLIENTS_FILTER);
+  assert.equal(resolveCreativeListFilter("client-1"), "client-1");
 });
 
 test("applyClientFilter does not constrain the query for all clients", () => {

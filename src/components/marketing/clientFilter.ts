@@ -34,3 +34,8 @@ export function entryClientFilter(department: string | undefined, current: Marke
   if (department === "creative") return ALL_CLIENTS_FILTER;
   return current;
 }
+
+/** Creative has no unassigned-only view — missing filter means every client. */
+export function resolveCreativeListFilter(filter: MarketingClientFilter): MarketingClientFilter {
+  return filter ?? ALL_CLIENTS_FILTER;
+}

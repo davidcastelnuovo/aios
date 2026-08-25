@@ -33,6 +33,19 @@ export function isCreativeDepartmentItem(item: WorkItemLike, creativeStageId?: s
   return false;
 }
 
+export function filterCreativeDepartmentItems<T extends WorkItemLike>(
+  items: T[],
+  creativeStageIds: Iterable<string> = [],
+): T[] {
+  const ids = new Set(creativeStageIds);
+  return items.filter((item) => {
+    const stageId = item.current_stage_id && ids.has(item.current_stage_id)
+      ? item.current_stage_id
+      : undefined;
+    return isCreativeDepartmentItem(item, stageId);
+  });
+}
+
 export function isLinkableCopyItem(item: WorkItemLike, copyStageId?: string | null) {
   return isCopyDepartmentItem(item, copyStageId);
 }

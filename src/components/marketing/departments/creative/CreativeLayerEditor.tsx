@@ -8,13 +8,20 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { cn } from "@/lib/utils";
-import { ArrowRight, Layers2, Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
-import type { CreativeFormat, CreativeLayer, CreativeVariation, LayerShadowStyle } from "./types";
+import { ArrowRight, Layers2, Loader2, Move, Save, ScanSearch, Trash2, Type, WandSparkles } from "lucide-react";
+import { toast } from "sonner";
+import type { CreativeFormat, CreativeLayer, CreativeVariation, CreativeVisualStyleId, LayerShadowStyle } from "./types";
 import { inferLayerShadow, withLayerShadow } from "./layerShadow";
 import { OfferIconMark, isIconLayer, layerLabel } from "./layerMarks";
 import { EDITOR_FONT_WEIGHTS, safeFontWeight, safeHexColor, safeSelectValue } from "./layerEditorGuards";
-import { OFFER_ICON_NAMES } from "./offerBoard";
+import { CREATIVE_ICON_IDS } from "./iconLibrary";
+import { CREATIVE_SHAPES } from "./shapeLibrary";
+import { CreativeLibraryPanel } from "./CreativeLibraryPanel";
+import { buildDesignedCopyLayers } from "./designedLayers";
+import { proposeAndApplySlots } from "./textSlots";
+import { loadImagePixels } from "./textSlotsImage";
 import { aspectRatioClass } from "./utils";
+import type { CompositionId } from "./compositions";
 
 interface Props {
   variation: CreativeVariation;
@@ -28,6 +35,11 @@ interface Props {
   onExpandStyle?: () => void;
   expandStyleCount?: number;
   onBack?: () => void;
+  brandColors?: string[];
+  logoUrl?: string;
+  copyText?: string;
+  projectTitle?: string;
+  styleId?: CreativeVisualStyleId;
 }
 
 const FONT_OPTIONS = ["Suez One", "Heebo", "Rubik", "Assistant", "Arial", "Georgia"];
@@ -46,10 +58,17 @@ export function CreativeLayerEditor({
   onExpandStyle,
   expandStyleCount,
   onBack,
+  brandColors,
+  logoUrl,
+  copyText,
+  projectTitle,
+  styleId,
 }: Props) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [internalEditing, setInternalEditing] = useState(false);
+  const [panelTab, setPanelTab] = useState<"layers" | "library">("library");
+  const [fitting, setFitting] = useState(false);
   const dragRef = useRef<{
     mode: DragMode;
     layerId: string;
@@ -113,6 +132,98 @@ export function CreativeLayerEditor({
     onChange({ ...variation, layers: [...layers, layer] });
     setSelectedLayerId(layer.id);
     setEditing(true);
+    setPanelTab("layers");
+  };
+
+  const addIconLayer = (icon: string, color: string) => {
+    const layer: CreativeLayer = {
+      id: crypto.randomUUID(),
+      type: "shape",
+      role: "icon",
+      icon,
+      x: 42,
+      y: 42,
+      width: 10,
+      height: 10,
+      fill: "transparent",
+      color,
+      borderRadius: 999,
+    };
+    onChange({ ...variation, layers: [...layers, layer] });
+    setSelectedLayerId(layer.id);
+    setPanelTab("layers");
+  };
+
+  const addShapeLayer = (shapeId: string, color: string) => {
+    const preset = CREATIVE_SHAPES.find((item) => item.id === shapeId) ?? CREATIVE_SHAPES[0];
+    const layer: CreativeLayer = {
+      id: crypto.randomUUID(),
+      type: "shape",
+      x: Math.max(4, 50 - preset.width / 2),
+      y: Math.max(4, 42 - preset.height / 2),
+      width: preset.width,
+      height: preset.height,
+      fill: "fill" in preset ? preset.fill : color,
+      borderRadius: preset.borderRadius,
+      color,
+    };
+    onChange({ ...variation, layers: [...layers, layer] });
+    setSelectedLayerId(layer.id);
+    setPanelTab("layers");
+  };
+
+  const addLogoLayer = () => {
+    if (!logoUrl) return;
+    const layer: CreativeLayer = {
+      id: crypto.randomUUID(),
+      type: "image",
+      role: "logo",
+      src: logoUrl,
+      x: 4,
+      y: 4,
+      width: 20,
+      height: 8,
+    };
+    onChange({ ...variation, layers: [...layers, layer] });
+    setSelectedLayerId(layer.id);
+    setPanelTab("layers");
+  };
+
+  const applyTemplate = (compositionId: CompositionId) => {
+    const nextLayers = buildDesignedCopyLayers({
+      copyText: variation.copyText || copyText,
+      format: variation.format,
+      styleId: variation.visualStyle ?? styleId ?? "adaptive",
+      title: projectTitle,
+      logoUrl,
+      compositionId,
+      brandColors,
+    });
+    onChange({ ...variation, compositionId, layers: nextLayers });
+    toast.success("הטמפלייט הוחל על השכבות");
+  };
+
+  const applyColor = (color: string) => {
+    if (!selectedLayer) return;
+    updateLayer(selectedLayer.id, selectedLayer.type === "shape" && !isIconLayer(selectedLayer)
+      ? { fill: color, color }
+      : { color });
+  };
+
+  const fitToImage = async () => {
+    setFitting(true);
+    try {
+      const buffer = await loadImagePixels(variation.imageUrl);
+      const next = proposeAndApplySlots(variation, buffer);
+      onChange(next.variation);
+      toast.success(next.slots[0]?.source === "pixels"
+        ? "הטקסט הוזז לכיס השקט בתמונה"
+        : "לא נמצא כיס ברור — חזרנו לסלוטים של הטמפלייט");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "ההתאמה לתמונה נכשלה");
+    } finally {
+      setFitting(false);
+    }
   };
 
   const removeSelectedLayer = () => {
@@ -228,6 +339,10 @@ export function CreativeLayerEditor({
           )}
           {isEditing && (
             <>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => void fitToImage()} disabled={fitting}>
+                {fitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
+                התאם לתמונה
+              </Button>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={addTextLayer}>
                 <Type className="h-3.5 w-3.5" />שכבת טקסט
               </Button>
@@ -359,13 +474,35 @@ export function CreativeLayerEditor({
       </div>
 
       {isEditing && (
-        <aside className="absolute inset-y-0 left-0 z-20 flex w-[320px] max-w-[90vw] flex-col border-r bg-background shadow-xl" dir="rtl">
+        <aside className="absolute inset-y-0 left-0 z-20 flex w-[360px] max-w-[90vw] flex-col border-r bg-background shadow-xl" dir="rtl">
           <div className="border-b px-4 py-3">
             <div className="text-sm font-semibold">עריכת קריאייטיב</div>
-            <p className="text-[11px] text-muted-foreground">התמונה נשארת במסך — עורכים רק שכבות</p>
+            <p className="text-[11px] text-muted-foreground">ספרייה, טמפלייטים ושכבות — בלי לצייר אותיות בתמונה</p>
+            <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+              <Button size="sm" variant={panelTab === "library" ? "secondary" : "ghost"} className="h-8" onClick={() => setPanelTab("library")}>
+                ספרייה
+              </Button>
+              <Button size="sm" variant={panelTab === "layers" ? "secondary" : "ghost"} className="h-8" onClick={() => setPanelTab("layers")}>
+                שכבות
+              </Button>
+            </div>
           </div>
           <ScrollArea className="flex-1">
             <div className="space-y-4 p-4">
+              {panelTab === "library" && (
+                <CreativeLibraryPanel
+                  brandColors={brandColors}
+                  logoUrl={logoUrl}
+                  currentCompositionId={variation.compositionId}
+                  onAddIcon={addIconLayer}
+                  onAddShape={addShapeLayer}
+                  onAddLogo={logoUrl ? addLogoLayer : undefined}
+                  onApplyColor={applyColor}
+                  onApplyTemplate={applyTemplate}
+                />
+              )}
+              {panelTab === "layers" && (
+                <>
               <Label className="text-[11px] text-muted-foreground">שכבות</Label>
               <button
                 type="button"
@@ -419,12 +556,12 @@ export function CreativeLayerEditor({
                 <div className="space-y-3 border-t pt-4">
                   <Label>אייקון — אובייקט נפרד, אפשר להחליף</Label>
                   <Select
-                    value={safeSelectValue(selectedLayer.icon, OFFER_ICON_NAMES, "badge-check")}
+                    value={safeSelectValue(selectedLayer.icon, CREATIVE_ICON_IDS, "badge-check")}
                     onValueChange={(value) => updateLayer(selectedLayer.id, { icon: value })}
                   >
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {OFFER_ICON_NAMES.map((name) => (
+                      {CREATIVE_ICON_IDS.map((name) => (
                         <SelectItem key={name} value={name}>{name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -573,6 +710,8 @@ export function CreativeLayerEditor({
                     מחק שכבת טקסט
                   </Button>
                 </div>
+              )}
+                </>
               )}
             </div>
           </ScrollArea>

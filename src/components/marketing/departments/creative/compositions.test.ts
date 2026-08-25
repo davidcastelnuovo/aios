@@ -38,6 +38,13 @@ test("image generation lock no longer reserves the old caption template", () => 
   const source = readFileSync(new URL("../../lib/creativeImagePrompt.ts", import.meta.url), "utf8");
   assert.match(source, /Do NOT reserve a top headline strip/);
   assert.match(source, /garbles Hebrew/);
+  assert.match(source, /quiet atmospheric pocket/);
   assert.doesNotMatch(source, /reserved top-right pad/);
   assert.doesNotMatch(source, /lower third/);
+});
+
+test("offer lock allows a soft pocket and forbids a painted silhouette", () => {
+  const lock = buildCompositionLock("offer");
+  assert.match(lock, /quiet atmospheric pocket/i);
+  assert.match(lock, /drawn silhouette/i);
 });
