@@ -136,6 +136,9 @@ export default function LeadIntegrations() {
                   <li><code className="bg-muted px-1 py-0.5 rounded">industry</code> - תעשייה</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">agency_id</code> - ID של סוכנות (אופציונלי; בלי זה הליד נכנס לארגון בלבד)</li>
                 </ul>
+                <p className="text-sm text-muted-foreground mt-3">
+                  אותו טלפון או אימייל ממוזג לליד הקיים: תגית <strong>פניה חוזרת</strong> ועדכון עם תאריך ב«עדכונים ומשימות».
+                </p>
               </div>
 
               <div className="bg-muted/50 p-4 rounded-lg space-y-2">
@@ -215,9 +218,15 @@ export default function LeadIntegrations() {
                     </ul>
                   </li>
                   <li>מפה את השדות מה-Trigger ל-JSON</li>
-                  <li>הפעל ובדוק</li>
+                  <li>הפעל ובדוק — תשובה 200 עם <code>duplicate: true</code> אומרת שהטלפון/אימייל כבר ב-CRM: הליד מוזג, נוספה תגית <strong>פניה חוזרת</strong> ונכתב עדכון עם תאריך</li>
                 </ol>
               </div>
+
+              <Alert>
+                <AlertDescription>
+                  <strong>כפילויות:</strong> אותו טלפון או אימייל ממוזג לליד הקיים. נוספת תגית <strong>פניה חוזרת</strong> ונכתב עדכון עם התאריך.
+                </AlertDescription>
+              </Alert>
 
               <Alert>
                 <AlertDescription>

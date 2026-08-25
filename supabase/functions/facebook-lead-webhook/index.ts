@@ -4,6 +4,7 @@ import {
   buildLeadRoutingPayload,
   resolveLeadClient,
 } from "../_shared/lead-routing.ts";
+import { recordRepeatContact } from "../_shared/lead-repeat-contact.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -596,7 +597,16 @@ serve(async (req) => {
                   } else {
                   }
                 } else {
+                  await supabase
+                    .from('leads')
+                    .update({ updated_at: new Date().toISOString() })
+                    .eq('id', existingLead.id);
                 }
+
+                await recordRepeatContact(supabase, {
+                  tenantId: integration.tenant_id,
+                  leadId: existingLead.id,
+                });
                 
                 // Apply tag to existing lead if configured
                 if (formMappings.tag_id) {
