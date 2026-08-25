@@ -1,9 +1,10 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Route, Navigate } from "react-router-dom";
-import { ModulePermissionGate } from "@/components/ModulePermissionGate";
 import { TenantAppShell } from "@/components/layout/TenantAppShell";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import type { ModulePermission } from "@/hooks/useUserPermissions";
+import type { ModuleRouteHandle } from "@/components/ModulePermissionGate";
+import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import DashboardRouter from "@/pages/DashboardRouter";
 
 const CarmenCommandCenter = lazy(() => import("@/pages/CarmenCommandCenter"));
@@ -78,17 +79,8 @@ const UnifiedSettings = lazy(() => import("@/pages/UnifiedSettings"));
 const UnifiedCallback = lazy(() => import("@/pages/UnifiedCallback"));
 const DMMDashboard = lazy(() => import("@/pages/DMMDashboard"));
 
-function gate(
-  element: React.ReactNode,
-  permission?: ModulePermission,
-  redirectTo = "my-profile",
-) {
-  if (!permission) return element;
-  return (
-    <ModulePermissionGate permission={permission} redirectTo={redirectTo}>
-      {element}
-    </ModulePermissionGate>
-  );
+function perm(permission: ModulePermission, redirectTo?: string): ModuleRouteHandle {
+  return redirectTo ? { permission, redirectTo } : { permission };
 }
 
 /** Unknown subpath under /t/:slug — stay in shell, redirect to home (avoids global 404 flash). */
@@ -109,69 +101,69 @@ export function tenantRoutes() {
       <Route path="/t/:tenantSlug/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
 
       <Route path="/t/:tenantSlug" element={<TenantAppShell />}>
-        <Route index element={gate(<Home />, "dashboard")} />
+        <Route index element={<Home />} handle={perm("dashboard")} />
         <Route path="home" element={<Home />} />
-        <Route path="dashboard" element={gate(<DashboardRouter />, "dashboard")} />
-        <Route path="agencies" element={gate(<Agencies />, "agencies")} />
-        <Route path="clients" element={gate(<Clients />, "clients")} />
-        <Route path="campaigners" element={gate(<Campaigners />, "campaigners")} />
-        <Route path="suppliers" element={gate(<Suppliers />, "suppliers")} />
-        <Route path="finance" element={gate(<Finance />, "finance")} />
-        <Route path="tasks" element={gate(<Tasks />, "tasks")} />
-        <Route path="time-tracking" element={gate(<TimeTracking />, "time_tracking")} />
+        <Route path="dashboard" element={<DashboardRouter />} handle={perm("dashboard")} />
+        <Route path="agencies" element={<Agencies />} handle={perm("agencies")} />
+        <Route path="clients" element={<Clients />} handle={perm("clients")} />
+        <Route path="campaigners" element={<Campaigners />} handle={perm("campaigners")} />
+        <Route path="suppliers" element={<Suppliers />} handle={perm("suppliers")} />
+        <Route path="finance" element={<Finance />} handle={perm("finance")} />
+        <Route path="tasks" element={<Tasks />} handle={perm("tasks")} />
+        <Route path="time-tracking" element={<TimeTracking />} handle={perm("time_tracking")} />
         <Route path="my-profile" element={<MyProfile />} />
-        <Route path="users" element={gate(<Users />, "users")} />
-        <Route path="sales-dashboard" element={gate(<SalesDashboard />, "sales_dashboard")} />
-        <Route path="sales-people" element={gate(<SalesPeople />, "sales_people")} />
-        <Route path="leads" element={gate(<Leads />, "leads")} />
-        <Route path="lead-integrations" element={gate(<LeadIntegrations />, "lead_integrations")} />
-        <Route path="tenants" element={gate(<Tenants />, "tenants")} />
-        <Route path="automations" element={gate(<Automations />, "automations")} />
-        <Route path="broadcast" element={gate(<Broadcast />, "broadcast")} />
+        <Route path="users" element={<Users />} handle={perm("users")} />
+        <Route path="sales-dashboard" element={<SalesDashboard />} handle={perm("sales_dashboard")} />
+        <Route path="sales-people" element={<SalesPeople />} handle={perm("sales_people")} />
+        <Route path="leads" element={<Leads />} handle={perm("leads")} />
+        <Route path="lead-integrations" element={<LeadIntegrations />} handle={perm("lead_integrations")} />
+        <Route path="tenants" element={<Tenants />} handle={perm("tenants")} />
+        <Route path="automations" element={<Automations />} handle={perm("automations")} />
+        <Route path="broadcast" element={<Broadcast />} handle={perm("broadcast")} />
         <Route path="carmen-insights" element={<Navigate to="../agents?tab=learning" replace />} />
         <Route path="visual-workspace" element={<VisualWorkspace />} />
         <Route path="campaign-alerts" element={<CampaignAlerts />} />
-        <Route path="products" element={gate(<Products />, "leads")} />
-        <Route path="branding" element={gate(<Branding />, "branding")} />
-        <Route path="accounting-integrations" element={gate(<AccountingIntegrations />, "accounting_integrations")} />
-        <Route path="accounting-settings" element={gate(<AccountingSettings />, "accounting_integrations")} />
+        <Route path="products" element={<Products />} handle={perm("leads")} />
+        <Route path="branding" element={<Branding />} handle={perm("branding")} />
+        <Route path="accounting-integrations" element={<AccountingIntegrations />} handle={perm("accounting_integrations")} />
+        <Route path="accounting-settings" element={<AccountingSettings />} handle={perm("accounting_integrations")} />
         <Route path="ai-support" element={<DashboardRouter />} />
-        <Route path="menu-management" element={gate(<MenuManagement />, "menu_management")} />
-        <Route path="fields-management" element={gate(<FieldsManagement />, "fields_management")} />
-        <Route path="dynamic-tables" element={gate(<DynamicTables />, "dynamic_tables")} />
+        <Route path="menu-management" element={<MenuManagement />} handle={perm("menu_management")} />
+        <Route path="fields-management" element={<FieldsManagement />} handle={perm("fields_management")} />
+        <Route path="dynamic-tables" element={<DynamicTables />} handle={perm("dynamic_tables")} />
         <Route path="table/:tableSlug" element={<DynamicTableView />} />
         <Route path="dashboard/:dashboardId" element={<DashboardView />} />
-        <Route path="chat" element={gate(<Chat />, "chat")} />
-        <Route path="chat/:clientId" element={gate(<Chat />, "chat")} />
-        <Route path="chat-integrations" element={gate(<ChatIntegrations />, "chat_integrations")} />
-        <Route path="manychat-settings" element={gate(<ManyChatSettings />, "manychat_settings")} />
-        <Route path="green-api-settings" element={gate(<GreenAPISettings />, "green_api_settings")} />
-        <Route path="manus-wa-settings" element={gate(<ManusWhatsAppSettings />, "manus_wa_settings")} />
-        <Route path="meta-whatsapp-settings" element={gate(<MetaWhatsAppSettings />, "chat_integrations")} />
-        <Route path="llm-settings" element={gate(<LLMSettings />, "lead_integrations")} />
-        <Route path="telegram-settings" element={gate(<TelegramSettings />, "lead_integrations")} />
-        <Route path="integrations" element={gate(<Integrations />, "lead_integrations")} />
-        <Route path="integrations/facebook" element={gate(<FacebookSettings />, "lead_integrations")} />
-        <Route path="facebook-settings" element={gate(<FacebookSettings />, "lead_integrations")} />
+        <Route path="chat" element={<Chat />} handle={perm("chat")} />
+        <Route path="chat/:clientId" element={<Chat />} handle={perm("chat")} />
+        <Route path="chat-integrations" element={<ChatIntegrations />} handle={perm("chat_integrations")} />
+        <Route path="manychat-settings" element={<ManyChatSettings />} handle={perm("manychat_settings")} />
+        <Route path="green-api-settings" element={<GreenAPISettings />} handle={perm("green_api_settings")} />
+        <Route path="manus-wa-settings" element={<ManusWhatsAppSettings />} handle={perm("manus_wa_settings")} />
+        <Route path="meta-whatsapp-settings" element={<MetaWhatsAppSettings />} handle={perm("chat_integrations")} />
+        <Route path="llm-settings" element={<LLMSettings />} handle={perm("lead_integrations")} />
+        <Route path="telegram-settings" element={<TelegramSettings />} handle={perm("lead_integrations")} />
+        <Route path="integrations" element={<Integrations />} handle={perm("lead_integrations")} />
+        <Route path="integrations/facebook" element={<FacebookSettings />} handle={perm("lead_integrations")} />
+        <Route path="facebook-settings" element={<FacebookSettings />} handle={perm("lead_integrations")} />
         <Route path="facebook-callback" element={<FacebookCallback />} />
-        <Route path="google-ads-settings" element={gate(<GoogleAdsSettings />, "lead_integrations")} />
-        <Route path="google-analytics-settings" element={gate(<GoogleAnalyticsSettings />, "lead_integrations")} />
-        <Route path="google-search-console-settings" element={gate(<GoogleSearchConsoleSettings />, "lead_integrations")} />
-        <Route path="ahrefs-settings" element={gate(<AhrefsSettings />, "lead_integrations")} />
-        <Route path="tiktok-settings" element={gate(<TikTokSettings />, "lead_integrations")} />
-        <Route path="make-settings" element={gate(<MakeSettings />, "lead_integrations")} />
-        <Route path="site-analytics" element={gate(<SiteAnalytics />, "site_analytics")} />
-        <Route path="rank-tracking" element={gate(<RankTracking />, "rank_tracking")} />
-        <Route path="rank-tracking/:projectId" element={gate(<RankTrackingProject />, "rank_tracking")} />
-        <Route path="dmm-dashboard" element={gate(<DMMDashboard />, "crm_dashboard")} />
-        <Route path="integrations/serpapi" element={gate(<SerpApiSettings />, "lead_integrations")} />
-        <Route path="zoom-settings" element={gate(<ZoomSettings />, "lead_integrations")} />
-        <Route path="recordings" element={gate(<Recordings />, "recordings")} />
-        <Route path="team-chat" element={gate(<TeamChat />, "team_chat")} />
+        <Route path="google-ads-settings" element={<GoogleAdsSettings />} handle={perm("lead_integrations")} />
+        <Route path="google-analytics-settings" element={<GoogleAnalyticsSettings />} handle={perm("lead_integrations")} />
+        <Route path="google-search-console-settings" element={<GoogleSearchConsoleSettings />} handle={perm("lead_integrations")} />
+        <Route path="ahrefs-settings" element={<AhrefsSettings />} handle={perm("lead_integrations")} />
+        <Route path="tiktok-settings" element={<TikTokSettings />} handle={perm("lead_integrations")} />
+        <Route path="make-settings" element={<MakeSettings />} handle={perm("lead_integrations")} />
+        <Route path="site-analytics" element={<SiteAnalytics />} handle={perm("site_analytics")} />
+        <Route path="rank-tracking" element={<RankTracking />} handle={perm("rank_tracking")} />
+        <Route path="rank-tracking/:projectId" element={<RankTrackingProject />} handle={perm("rank_tracking")} />
+        <Route path="dmm-dashboard" element={<DMMDashboard />} handle={perm("crm_dashboard")} />
+        <Route path="integrations/serpapi" element={<SerpApiSettings />} handle={perm("lead_integrations")} />
+        <Route path="zoom-settings" element={<ZoomSettings />} handle={perm("lead_integrations")} />
+        <Route path="recordings" element={<Recordings />} handle={perm("recordings")} />
+        <Route path="team-chat" element={<TeamChat />} handle={perm("team_chat")} />
         <Route path="gmail-settings" element={<GmailSettings />} />
         <Route path="gmail" element={<Gmail />} />
-        <Route path="signatures" element={gate(<Signatures />, "signatures")} />
-        <Route path="manus-settings" element={gate(<ManusSettings />, "lead_integrations")} />
+        <Route path="signatures" element={<Signatures />} handle={perm("signatures")} />
+        <Route path="manus-settings" element={<ManusSettings />} handle={perm("lead_integrations")} />
         <Route path="manus-tasks" element={<ManusTasksPage />} />
         <Route path="agents" element={<AgentHub />} />
         <Route path="agent-tasks" element={<AgentTasksPage />} />
@@ -179,11 +171,11 @@ export function tenantRoutes() {
         <Route path="carmen-access" element={<Navigate to="../agents?tab=access" replace />} />
         <Route path="carmen-studio" element={<Navigate to="../agents" replace />} />
         <Route path="github-agent" element={<GithubAgent />} />
-        <Route path="telephony-settings" element={gate(<TelephonySettings />, "lead_integrations")} />
-        <Route path="maskyoo-settings" element={gate(<MaskyooSettings />, "lead_integrations")} />
-        <Route path="wordpress-settings" element={gate(<WordPressSettings />, "lead_integrations")} />
+        <Route path="telephony-settings" element={<TelephonySettings />} handle={perm("lead_integrations")} />
+        <Route path="maskyoo-settings" element={<MaskyooSettings />} handle={perm("lead_integrations")} />
+        <Route path="wordpress-settings" element={<WordPressSettings />} handle={perm("lead_integrations")} />
         <Route path="landing-page-submissions" element={<LandingPageSubmissions />} />
-        <Route path="unified-settings" element={gate(<UnifiedSettings />, "lead_integrations")} />
+        <Route path="unified-settings" element={<UnifiedSettings />} handle={perm("lead_integrations")} />
         <Route path="*" element={<TenantUnknownRoute />} />
       </Route>
     </>

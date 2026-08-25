@@ -6,6 +6,7 @@ import { AppLayout } from "./AppLayout";
  * Persistent shell for all tenant-scoped pages with the main sidebar.
  * Mounted once per /t/:tenantSlug/* navigation — child routes render via Outlet
  * so AppLayout does not remount on every module switch (fixes error/loading flashes).
+ * Module permission is gated once around the Outlet (see RoutedModulePermissionGate).
  */
 export function TenantAppShell() {
   return (
