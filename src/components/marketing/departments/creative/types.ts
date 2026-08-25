@@ -140,6 +140,7 @@ export interface CreativeProjectDraft {
   format: CreativeFormat;
   projectType: CreativeProjectType;
   visualStyle: CreativeVisualStyleId;
+  liveTextLayers?: boolean;
   clientId?: string | null;
   clientWebsite?: string;
   logoUrl?: string;

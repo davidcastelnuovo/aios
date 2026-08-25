@@ -3,7 +3,7 @@ import { brandKitPrompt, type CreativeBrandKit } from "./brandKit";
 import { buildAdaptiveTreatment } from "./adaptiveTreatment";
 import { buildCompositionLock, type CompositionId } from "./compositions";
 import { buildCursorArtDirectorLock } from "./cursorArtDirector";
-import { buildCopyOverlayLock, buildCopySceneBrief, strongestLine } from "./designedLayers";
+import { buildCopyOverlayLock, buildCopySceneBrief, buildPaintedCopyLock, strongestLine } from "./designedLayers";
 import { buildStyleContinuityLock, buildStylePlayLock } from "./styleContinuity";
 import { buildStaticQualityLock, buildVisualStyleLock, type CreativeVisualStyleId } from "./visualStyles";
 
@@ -28,6 +28,8 @@ export function assembleStaticCreativePrompt({
   directorNote,
   regenerate,
   hasTalentRef,
+  liveTextLayers,
+  revising,
 }: {
   visualPrompt?: string;
   copyText: string;
@@ -49,26 +51,35 @@ export function assembleStaticCreativePrompt({
   directorNote?: string;
   regenerate?: boolean;
   hasTalentRef?: boolean;
+  liveTextLayers?: boolean;
+  revising?: boolean;
 }): string {
   const concept = visualPrompt?.trim() || "";
-  const copyLock = concept
-    ? buildCopyOverlayLock({ copyText, title, copyLabel })
-    : buildCopySceneBrief({ copyText, title, brief, instructions, copyLabel });
+  const copyLock = liveTextLayers
+    ? (concept
+      ? buildCopyOverlayLock({ copyText, title, copyLabel })
+      : buildCopySceneBrief({ copyText, title, brief, instructions, copyLabel }))
+    : [
+      !concept && buildCopySceneBrief({ copyText, title, brief, instructions, copyLabel, paintCopy: true }),
+      buildPaintedCopyLock({ copyText, title, copyLabel }),
+    ].filter(Boolean).join("\n");
   const director = buildCursorArtDirectorLock({
     format,
     instructions,
     kit,
     hasTalentRef,
+    liveTextLayers,
+    revising,
   });
 
   return [
     concept,
     director,
-    concept && "The concept above is the photograph. Later style/copy instructions may change crop, grade, and a quiet type pocket — they may NOT replace the concept's subject, location, props, or hook.",
+    concept && "The concept above is the photograph. Later style/copy instructions may change crop, grade, and type placement — they may NOT replace the concept's subject, location, props, or hook.",
     concept
       ? `Use case: ads-marketing. Asset type: ${format} cinematic advertising still of the approved concept — not a slogan-on-background graphic.`
       : `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
-    buildNoGlyphLock({ regenerate }),
+    liveTextLayers ? buildNoGlyphLock({ regenerate }) : undefined,
     copyLock,
     styleSource
       ? buildStyleContinuityLock({
@@ -86,7 +97,7 @@ export function assembleStaticCreativePrompt({
         index: variationIndex,
         avoidLabels: priorLabels,
       }),
-    attachStyleStill && !hasTalentRef && "The attached still is a technique sample, not a layout to trace. New cast, new props, new crop. Type sits flush — no rectangle plates.",
+    attachStyleStill && !hasTalentRef && "The attached still is a technique sample, not a layout to trace. New cast, new props, new crop.",
     attachStyleStill && hasTalentRef && "A second attached still is technique only (material, ink, light). The first still is the spokesman — keep that face. New scene.",
     costume
       ? [
@@ -104,15 +115,23 @@ export function assembleStaticCreativePrompt({
         }),
     buildStaticQualityLock({ selectedStyle: !!costume }),
     brandKitPrompt(kit, { talentLock: hasTalentRef }),
-    directorNote && `Art director REJECT (visual mistakes only — if they mention type/text, the fix is a letter-empty PNG, never new painted words): ${directorNote}`,
+    directorNote && (liveTextLayers
+      ? `Art director REJECT (visual mistakes only — if they mention type/text, the fix is a letter-empty PNG, never new painted words): ${directorNote}`
+      : `Art director REVISION (apply this fix, keep what still works, output a finished RTL Hebrew ad): ${directorNote}`),
     styleSource
       ? `Format ${format}. Same TECHNIQUE family (paper, ink, light, color). Completely different picture, people, and props for this copy.`
       : concept
-        ? `Format ${format}. Photograph the approved concept. Leave a quiet pocket for type. Do not invent a competing layout from the copy.`
+        ? `Format ${format}. Photograph the approved concept.${liveTextLayers ? " Leave a quiet pocket for type." : " Paint the quoted Hebrew type into a quiet pocket."} Do not invent a competing layout from the copy.`
         : `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
     kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
-    "QUIET POCKET: one naturally empty atmospheric region (shadow, wall, sky) so Hebrew type can be composited later. Do not paint a layout, panel, footer, or letter-shaped hole.",
-    "RTL/production: Hebrew is composited later as isolated RTL layers (dir=rtl, unicode-bidi:isolate). Never paint or reverse letters.",
-    "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes, reprinting a previous collage.",
+    liveTextLayers
+      ? "QUIET POCKET: one naturally empty atmospheric region (shadow, wall, sky) so Hebrew type can be composited later. Do not paint a layout, panel, footer, or letter-shaped hole."
+      : "Paint Hebrew type into one naturally quiet atmospheric region (shadow, wall, sky). Do not add a fake caption plate or Instagram UI chrome.",
+    liveTextLayers
+      ? "RTL/production: Hebrew is composited later as isolated RTL layers (dir=rtl, unicode-bidi:isolate). Never paint or reverse letters."
+      : "RTL/production: Hebrew is painted on this PNG as isolated RTL type (dir=rtl, unicode-bidi:isolate). Logical order. No mirrored glyphs.",
+    liveTextLayers
+      ? "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes, reprinting a previous collage."
+      : "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, Canva caption templates, UI chrome, invented logos, reversed or garbled Hebrew, style-board recipes, reprinting a previous collage.",
   ].filter(Boolean).join("\n");
 }

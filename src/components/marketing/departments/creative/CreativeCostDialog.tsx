@@ -12,7 +12,7 @@ import {
   type ImageGenerationCost,
 } from "@/components/marketing/departments/creative/imageCost";
 import type { CreativeItem } from "@/components/marketing/departments/creative/types";
-import { defaultFormat, getBriefText, getLinkedCopyText, getProjectType, getStoryboard } from "@/components/marketing/departments/creative/utils";
+import { defaultFormat, getBriefText, getLinkedCopyText, getProjectType, getStoryboard, isLiveTextLayers } from "@/components/marketing/departments/creative/utils";
 import { imageSizeForFormat } from "@/components/marketing/departments/creative/visualStyles";
 import { estimateCreativeImageCall } from "@/components/marketing/lib/generateCreativeImage";
 
@@ -52,6 +52,7 @@ export function buildNextGenerateEstimate(item: CreativeItem): { cost: ImageGene
       prompt: sample,
       quality: isVideo ? "medium" : "high",
       size,
+      liveTextLayers: isVideo || isLiveTextLayers(item.payload),
     }),
   };
 }

@@ -11,7 +11,7 @@ import {
 import { wrapCreativeImagePrompt, type CreativeReferenceRole } from "@/components/marketing/lib/creativeImagePrompt";
 
 export type { CreativeReferenceRole } from "@/components/marketing/lib/creativeImagePrompt";
-export { NO_TEXT_ON_IMAGE, buildNoGlyphLock, wrapCreativeImagePrompt } from "@/components/marketing/lib/creativeImagePrompt";
+export { FINISHED_HEBREW_AD, NO_TEXT_ON_IMAGE, buildFinishedAdLock, buildNoGlyphLock, wrapCreativeImagePrompt } from "@/components/marketing/lib/creativeImagePrompt";
 
 interface GenerateCreativeImageArgs {
   supabase: SupabaseClient;
@@ -24,6 +24,7 @@ interface GenerateCreativeImageArgs {
   size?: ImageSize;
   quality?: ImageQuality;
   regenerate?: boolean;
+  liveTextLayers?: boolean;
 }
 
 async function invokeSocialImage(
@@ -36,15 +37,17 @@ async function invokeSocialImage(
   quality?: GenerateCreativeImageArgs["quality"],
   referenceRole?: CreativeReferenceRole,
   regenerate?: boolean,
+  liveTextLayers?: boolean,
 ) {
   return supabase.functions.invoke("ai-generate-social-image", {
     body: {
-      prompt: wrapCreativeImagePrompt(prompt, { regenerate }),
+      prompt: wrapCreativeImagePrompt(prompt, { regenerate, liveTextLayers }),
       tenant_id: tenantId,
       post_id: itemId,
       reference_image_url: referenceImageUrls?.[0],
       reference_image_urls: referenceImageUrls,
       reference_role: referenceRole,
+      live_text_layers: !!liveTextLayers,
       size,
       quality,
     },
@@ -91,14 +94,16 @@ export const estimateCreativeImageCall = ({
   quality = "high",
   size = "1024x1024",
   referenceCount = 0,
+  liveTextLayers,
 }: {
   prompt: string;
   quality?: ImageQuality;
   size?: ImageSize;
   referenceCount?: number;
+  liveTextLayers?: boolean;
 }): ImageGenerationCost =>
   estimateGptImage1({
-    prompt: wrapCreativeImagePrompt(prompt),
+    prompt: wrapCreativeImagePrompt(prompt, { liveTextLayers }),
     quality,
     size,
     referenceCount,
@@ -116,12 +121,14 @@ export async function generateCreativeImage({
   size = "1024x1024",
   quality = "high",
   regenerate,
+  liveTextLayers,
 }: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean; cost: ImageGenerationCost }> {
   const estimate = estimateCreativeImageCall({
     prompt,
     quality,
     size,
     referenceCount: referenceImageUrls?.length ?? 0,
+    liveTextLayers,
   });
   const socialResult = await invokeSocialImage(
     supabase,
@@ -133,6 +140,7 @@ export async function generateCreativeImage({
     quality,
     referenceRole,
     regenerate,
+    liveTextLayers,
   );
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;

@@ -37,7 +37,18 @@ test("without a talent instruction, only the technique still is sent", () => {
   assert.equal(plan.role, "technique");
 });
 
-test("art director lock keeps Hebrew as composited RTL and honors the character note", () => {
+test("revision target is first, then talent, max two refs", () => {
+  const plan = collectStaticReferencePlan({
+    talentUrls: ["https://talent"],
+    techniqueUrl: "https://technique",
+    instructions: "תשתמש בדמות מהרפרנס",
+    editTargetUrl: "https://ad.png",
+  });
+  assert.deepEqual(plan.urls, ["https://ad.png", "https://talent"]);
+  assert.equal(plan.role, "revision");
+});
+
+test("art director lock paints Hebrew RTL unless live text is on", () => {
   const lock = buildCursorArtDirectorLock({
     format: "1:1",
     instructions: "תשתמש בדמות מהרפרנס",
@@ -48,8 +59,20 @@ test("art director lock keeps Hebrew as composited RTL and honors the character 
   assert.match(lock, /SUBJECT FIRST/);
   assert.match(lock, /TALENT LOCK/);
   assert.match(lock, /דמות מהרפרנס/);
+  assert.match(lock, /paint the quoted Hebrew/i);
+  assert.match(lock, /פרומו/);
+  assert.doesNotMatch(lock, /do not paint any letters/i);
+});
+
+test("live-text art director lock leaves type as composited RTL", () => {
+  const lock = buildCursorArtDirectorLock({
+    format: "1:1",
+    instructions: "תשתמש בדמות מהרפרנס",
+    kit,
+    hasTalentRef: true,
+    liveTextLayers: true,
+  });
+  assert.match(lock, /do not paint any letters/i);
   assert.match(lock, /dir=rtl/);
   assert.match(lock, /unicode-bidi:isolate/);
-  assert.match(lock, /do not paint any letters/i);
-  assert.match(lock, /פרומו/);
 });

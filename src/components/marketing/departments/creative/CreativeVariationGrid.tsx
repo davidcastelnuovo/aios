@@ -4,7 +4,7 @@ import { CreativeImage } from "@/components/marketing/departments/creative/Creat
 import { OfferIconMark, isIconLayer } from "./layerMarks";
 import { hebrewTextDir, hebrewTextStyle, overlayBoxDir, overlayBoxStyle } from "./rtlText";
 import { cn } from "@/lib/utils";
-import { Layers2, Loader2, PenLine, RotateCcw, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
+import { Layers, Layers2, Loader2, RotateCcw, Sparkles, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
 import type { CreativeVariation } from "./types";
 import { aspectRatioClass } from "./utils";
 import { styleLabelForId } from "./designedLayers";
@@ -14,7 +14,9 @@ interface Props {
   generatingId?: string | null;
   progressLabel?: string;
   disabled?: boolean;
-  onEdit: (variation: CreativeVariation) => void;
+  liveTextLayers?: boolean;
+  onRevise: (variation: CreativeVariation) => void;
+  onEditLayers?: (variation: CreativeVariation) => void;
   onDelete: (variation: CreativeVariation) => void;
   onRegenerate: (variation: CreativeVariation) => void;
   onReject: (variation: CreativeVariation) => void;
@@ -27,7 +29,9 @@ export function CreativeVariationGrid({
   generatingId,
   progressLabel,
   disabled,
-  onEdit,
+  liveTextLayers,
+  onRevise,
+  onEditLayers,
   onDelete,
   onRegenerate,
   onReject,
@@ -42,6 +46,11 @@ export function CreativeVariationGrid({
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {variations.map((variation) => {
           const busy = generatingId === variation.id;
+          const overlayLayers = (variation.layers ?? []).filter((layer) => {
+            if (layer.type === "background") return false;
+            if (liveTextLayers) return true;
+            return layer.type === "image";
+          });
           return (
             <article
               key={variation.id}
@@ -53,10 +62,10 @@ export function CreativeVariationGrid({
               <button
                 type="button"
                 className={cn("relative block w-full overflow-hidden bg-muted", aspectRatioClass(variation.format))}
-                onClick={() => onEdit(variation)}
+                onClick={() => onRevise(variation)}
               >
                 <CreativeImage src={variation.imageUrl} alt={variation.name} className="absolute inset-0 h-full w-full object-cover" />
-                {(variation.layers ?? []).filter((layer) => layer.type !== "background").map((layer) => (
+                {overlayLayers.map((layer) => (
                   <div
                     key={layer.id}
                     className="pointer-events-none absolute"
@@ -111,9 +120,14 @@ export function CreativeVariationGrid({
                   <p className="line-clamp-2 text-[11px] text-destructive">רג׳קט: {variation.rejectNote}</p>
                 )}
                 <div className="flex flex-wrap gap-1.5">
-                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onEdit(variation)} disabled={disabled}>
-                    <PenLine className="h-3.5 w-3.5" />ערוך
+                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onRevise(variation)} disabled={disabled}>
+                    <Sparkles className="h-3.5 w-3.5" />תקן עם Cursor
                   </Button>
+                  {liveTextLayers && onEditLayers && (
+                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onEditLayers(variation)} disabled={disabled}>
+                      <Layers className="h-3.5 w-3.5" />שכבות
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onRegenerate(variation)} disabled={disabled}>
                     {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                     ג׳נרט

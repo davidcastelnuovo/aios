@@ -72,7 +72,7 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls, reference_role: requestedRole, size: requestedSize, quality: requestedQuality } = await req.json();
+    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls, reference_role: requestedRole, live_text_layers: requestedLiveText, size: requestedSize, quality: requestedQuality } = await req.json();
 
     if (!prompt || !tenant_id) {
       return new Response(
@@ -140,16 +140,26 @@ serve(async (req) => {
     if (files.length > 0) {
       const form = new FormData();
       form.append("model", "gpt-image-1");
+      const liveTextLayers = requestedLiveText === true || (requestedLiveText !== false && requestedRole !== "revision");
       const referenceRole = requestedRole === "technique"
         ? "technique"
         : requestedRole === "talent"
           ? "talent"
-          : "continuity";
-      const referencePrefix = referenceRole === "technique"
-        ? "Use attached image(s) as TECHNIQUE only (material, paper, ink, light, color family). Do not copy faces, pose, crop, lettering, logos, or layout. Output must contain zero letters, digits, or logos. "
-        : referenceRole === "talent"
-          ? "Image 1 is the exact talent/spokesman. Keep this face, glasses, age, hair, and body. Photograph a NEW scene with THIS person. Do not copy the source ad's layout, lettering, logo, or UI chrome. If a second image is attached it is technique only. Output must contain zero letters, digits, or logos. "
-          : "Continue this exact visual world. Match faces, wardrobe, lighting, lens and color grade from the reference. Do not copy or invent lettering or logos. ";
+          : requestedRole === "revision"
+            ? "revision"
+            : "continuity";
+      const letterRule = liveTextLayers
+        ? "Output must contain zero letters, digits, or logos. "
+        : "Output a finished advertising still. Paint quoted Hebrew RTL type exactly (unreversed glyphs). Do not garble type. Do not invent extra slogans. ";
+      const referencePrefix = referenceRole === "revision"
+        ? (liveTextLayers
+          ? "Image 1 is the exact still to revise. Change only the director request. If a second image is talent, keep that face. Output a letter-empty PNG — do not copy baked type. "
+          : "Image 1 is the exact ad to revise. Change only what the director requests. Keep the rest of the photograph, talent, lighting, composition, and finished RTL Hebrew type unless asked to change it. If a second image is talent, keep that face. ")
+        : referenceRole === "technique"
+          ? `Use attached image(s) as TECHNIQUE only (material, paper, ink, light, color family). Do not copy faces, pose, crop, logos, or layout. ${letterRule}`
+          : referenceRole === "talent"
+            ? `Image 1 is the exact talent/spokesman. Keep this face, glasses, age, hair, and body. Photograph a NEW scene with THIS person. Do not copy the source ad's layout, lettering, logo, or UI chrome. If a second image is attached it is technique only. ${letterRule}`
+            : `Continue this exact visual world. Match faces, wardrobe, lighting, lens and color grade from the reference. Do not invent logos. ${letterRule}`;
       form.append(
         "prompt",
         `${referencePrefix}${prompt}`,

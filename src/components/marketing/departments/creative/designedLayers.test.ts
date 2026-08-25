@@ -5,6 +5,7 @@ import {
   buildCopyOverlayLock,
   buildCopySceneBrief,
   buildDesignedCopyLayers,
+  buildPaintedCopyLock,
   ensureLogoLayer,
   extractCopyAngle,
   heroWord,
@@ -94,6 +95,31 @@ test("copy overlay lock keeps the concept in charge of the photograph", () => {
   assert.match(lock, /Do not invent a new subject from the slogan/);
   assert.match(lock, /טיקטוק/);
   assert.doesNotMatch(lock, /STAGE THIS IDEA/);
+});
+
+test("painted copy lock quotes headline and CTA for a finished ad", () => {
+  const lock = buildPaintedCopyLock({
+    title: "פרומו",
+    copyLabel: "וריאציה 1",
+    copyText: `כותרת: המתחרים שלך כבר נכנסים לתשובות של הצ׳אט?
+CTA: השאירו פרטים לבדיקת הנוכחות שלכם בצ׳אט`,
+  });
+  assert.match(lock, /FINISHED AD/);
+  assert.match(lock, /המתחרים שלך/);
+  assert.match(lock, /השאירו פרטים/);
+  assert.match(lock, /right-to-left/i);
+  assert.doesNotMatch(lock, /COPY IS OVERLAY ONLY/);
+});
+
+test("paintCopy scene brief stages the idea and then paints type", () => {
+  const scene = buildCopySceneBrief({
+    title: "פרומו",
+    copyText: "כותרת: המתחרים שלך כבר נכנסים לתשובות של הצ׳אט?",
+    paintCopy: true,
+  });
+  assert.match(scene, /STAGE THIS IDEA/);
+  assert.match(scene, /paint the quoted Hebrew/i);
+  assert.doesNotMatch(scene, /NEVER draw these characters/);
 });
 
 test("copy scene brief stages chat-scroll copy, not a style postcard", () => {
@@ -325,4 +351,26 @@ test("hydrateVariationLayers does not crash when layers are missing", () => {
     "",
   );
   assert.ok(Array.isArray(next.layers));
+});
+
+test("hydrateVariationLayers skips live-text rebuild when live text is off", () => {
+  const next = hydrateVariationLayers(
+    {
+      id: "v1",
+      name: "test",
+      imageUrl: "https://example.com/x.png",
+      format: "1:1",
+      layers: [{ id: "t1", type: "text", x: 0, y: 0, width: 80, height: 20, text: "כותרת ישנה" }],
+      comments: [],
+      createdAt: "",
+    },
+    "כותרת: כותרת חדשה לגמרי\nCTA: השאירו פרטים",
+    undefined,
+    "cinematic",
+    undefined,
+    undefined,
+    false,
+  );
+  assert.equal(next.layers.some((layer) => layer.text === "כותרת ישנה"), true);
+  assert.equal(next.layers.some((layer) => (layer.text ?? "").includes("חדשה")), false);
 });

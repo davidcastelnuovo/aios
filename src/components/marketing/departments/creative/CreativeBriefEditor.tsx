@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -486,8 +487,21 @@ export function CreativeBriefEditor({
               placeholder="טון, דברים שחייבים להופיע, מה אסור"
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              יש דמות ברפרנס? כתבו «תשתמש בדמות מהרפרנס» — Cursor ישמור את הפנים. העברית תמיד מורכבת כשכבת RTL, לא מצוירת בתמונה.
+              יש דמות ברפרנס? כתבו «תשתמש בדמות מהרפרנס» — Cursor ישמור את הפנים. ברירת המחדל: קריאייטיב סופי עם עברית מצוירת על התמונה.
             </p>
+          </div>
+          <div className="flex items-start justify-between gap-3 rounded-xl border bg-muted/20 p-3">
+            <div className="min-w-0">
+              <Label htmlFor="live-text-layers">טקסט חי (שכבות)</Label>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                פיצ׳ר צדדי. כבוי כברירת מחדל. כשדולק — התמונה בלי אותיות והעברית מורכבת כשכבות לעריכה ידנית.
+              </p>
+            </div>
+            <Switch
+              id="live-text-layers"
+              checked={!!draft.liveTextLayers}
+              onCheckedChange={(checked) => setDraft({ ...draft, liveTextLayers: checked })}
+            />
           </div>
         </div>
       </div>

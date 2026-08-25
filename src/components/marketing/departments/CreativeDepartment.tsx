@@ -35,6 +35,7 @@ import {
   getStoryboard,
   getStoryboardStyle,
   getVariations,
+  isLiveTextLayers,
   makeStoryboardFrame,
   makeVariation,
   projectTypeLabel,
@@ -45,7 +46,7 @@ import { VisualStyleSelect } from "@/components/marketing/departments/creative/V
 import { pickVariationComposition } from "@/components/marketing/departments/creative/compositions";
 import { isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
 import { assembleStaticCreativePrompt } from "@/components/marketing/departments/creative/creativeGenerationPrompt";
-import { collectStaticReferencePlan } from "@/components/marketing/departments/creative/cursorArtDirector";
+import { collectStaticReferencePlan, wantsTalentLock } from "@/components/marketing/departments/creative/cursorArtDirector";
 import { hydrateVariationLayers, isInternalCopyLine } from "@/components/marketing/departments/creative/designedLayers";
 import { missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
 import {
@@ -158,6 +159,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<CreativeVariation | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [reviseTarget, setReviseTarget] = useState<CreativeVariation | null>(null);
+  const [reviseNote, setReviseNote] = useState("");
   const [costOpen, setCostOpen] = useState(false);
   const [pendingStyleId, setPendingStyleId] = useState<CreativeVisualStyleId | null>(null);
   const generateAbortRef = useRef(false);
@@ -207,6 +210,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const projectType = getProjectType(selected?.payload ?? null);
+  const liveTextLayers = isLiveTextLayers(selected?.payload);
   const variations = useMemo(() => {
     const raw = getVariations(selected?.payload ?? null);
     const kit = getBrandKit(selected?.payload);
@@ -219,8 +223,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       variation.visualStyle ?? styleId,
       kit.logoUrl,
       kit.brandBook?.colors,
+      liveTextLayers,
     ));
-  }, [selected]);
+  }, [selected, liveTextLayers]);
   const copyBlocks = useMemo(() => splitCopyVariations(getLinkedCopyText(selected)), [selected]);
   const storyboard = useMemo(() => getStoryboard(selected?.payload ?? null), [selected?.payload]);
   const selectedVariation = variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1] ?? null;
@@ -374,8 +379,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       getVisualStyleId(selected?.payload),
       getBrandKit(selected?.payload).logoUrl,
       getBrandKit(selected?.payload).brandBook?.colors,
+      liveTextLayers,
     ));
-  }, [selectedVariation, selected]);
+  }, [selectedVariation, selected, liveTextLayers]);
 
   const { data: assetVersions = [] } = useQuery({
     queryKey: ["creative-department-assets", selectedId, tenantId],
@@ -413,6 +419,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         format: draft.format,
         project_type: draft.projectType,
         visual_style: draft.visualStyle,
+        live_text_layers: !!draft.liveTextLayers,
         logo_url: draft.logoUrl || null,
         brand_book: draft.brandBook || null,
         style_references: draft.styleReferences,
@@ -490,6 +497,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       format: draft.format,
       project_type: draft.projectType,
       visual_style: draft.visualStyle,
+      live_text_layers: !!draft.liveTextLayers,
       logo_url: draft.logoUrl || null,
       brand_book: brandBook,
       style_references: styleReferences,
@@ -634,6 +642,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         referenceRole: referenceImageUrls.length ? "continuity" : undefined,
         size: imageSizeForFormat(defaultFormat(selected.payload)),
         quality: "medium",
+        liveTextLayers: true,
       });
       if (shouldLock) {
         toast.message(referenceImageUrls.length ? "הפריים נוצר מול ייחוס הסגנון" : "פריים ראשון — נשמר כסגנון לייחוס");
@@ -807,6 +816,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     styleSource,
     existing,
     regenerate,
+    editTargetUrl,
   }: {
     copyText: string;
     copyKey?: string;
@@ -819,6 +829,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     styleSource?: CreativeVariation;
     existing?: CreativeVariation[];
     regenerate?: boolean;
+    editTargetUrl?: string;
   }): Promise<CreativeVariation> => {
     if (!selected) throw new Error("לא נבחר פרויקט");
     throwIfGenerationAborted(generateAbortRef.current);
@@ -848,10 +859,14 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const talentUrls = (await Promise.all(
       kit.styleReferences.map((reference) => resolveCreativeImageUrl(reference.url)),
     )).filter((url): url is string => !!url);
+    const resolvedEditTarget = editTargetUrl
+      ? await resolveCreativeImageUrl(editTargetUrl)
+      : undefined;
     const referencePlan = collectStaticReferencePlan({
       talentUrls,
       techniqueUrl: styleRefUrl,
       instructions,
+      editTargetUrl: resolvedEditTarget ?? undefined,
     });
     const priorLabels = live
       .filter((variation) => !variation.rejected && variation.id !== replaceId && variation.id !== styleSource?.id)
@@ -878,7 +893,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       variationIndex: live.length,
       directorNote,
       regenerate,
-      hasTalentRef: referencePlan.role === "talent",
+      hasTalentRef: referencePlan.role === "talent" || (referencePlan.role === "revision" && wantsTalentLock(instructions)),
+      liveTextLayers,
+      revising: !!resolvedEditTarget,
     });
     throwIfGenerationAborted(generateAbortRef.current);
     const { imageUrl, cost } = await generateCreativeImage({
@@ -892,6 +909,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       size: imageSizeForFormat(format),
       quality: "high",
       regenerate,
+      liveTextLayers,
     });
     const created = makeVariation({
       imageUrl,
@@ -910,6 +928,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       compositionId,
       brandColors: kit.brandBook?.colors,
       styleSourceId: styleSource?.id,
+      liveTextLayers,
     });
     return replaceId ? { ...created, id: replaceId } : created;
   };
@@ -1075,6 +1094,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         parentId: rejectTarget.id,
         name: `${rejectTarget.copyLabel || rejectTarget.name} · תיקון`,
         regenerate: true,
+        editTargetUrl: rejectTarget.imageUrl,
       });
       const nextVariations = [
         ...variations.map((variation) => variation.id === rejectTarget.id ? { ...variation, rejected: true, rejectNote: rejectNote.trim() } : variation),
@@ -1088,6 +1108,40 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     } catch (error: unknown) {
       if (isGenerationAborted(error)) toast.message("היצירה נעצרה");
       else toast.error(errorMessage(error, "יצירת וריאציית הרג׳קט נכשלה"));
+    } finally {
+      setGenerating(false);
+      setGeneratingId(null);
+    }
+  };
+
+  const reviseVariation = async () => {
+    if (!selected || !reviseTarget || !reviseNote.trim()) return;
+    generateAbortRef.current = false;
+    setGenerating(true);
+    setGeneratingId(reviseTarget.id);
+    try {
+      await prepareCreativeStage();
+      const style = visualStyleById(reviseTarget.visualStyle || selectedStyleId);
+      const copyBlock = copyBlocks.find((block) => block.key === reviseTarget.copyKey);
+      const created = await buildCreative({
+        copyText: reviseTarget.copyText || copyBlock?.text || getLinkedCopyText(selected),
+        copyKey: reviseTarget.copyKey ?? copyBlock?.key,
+        copyLabel: reviseTarget.copyLabel ?? (copyBlock ? copyBlockLabel(copyBlock) : undefined),
+        styleId: style.id,
+        rejectNote: reviseNote.trim(),
+        parentId: reviseTarget.id,
+        name: `${reviseTarget.copyLabel || reviseTarget.name} · תיקון`,
+        regenerate: true,
+        editTargetUrl: reviseTarget.imageUrl,
+      });
+      await persistVariations([...variations, created], "נוצרה וריאציה לפי התיקון");
+      setSelectedVariationId(created.id);
+      setReviseTarget(null);
+      setReviseNote("");
+      setWorkspacePanel(null);
+    } catch (error: unknown) {
+      if (isGenerationAborted(error)) toast.message("היצירה נעצרה");
+      else toast.error(errorMessage(error, "יצירת וריאציית התיקון נכשלה"));
     } finally {
       setGenerating(false);
       setGeneratingId(null);
@@ -1461,7 +1515,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-bold">{selected.title}</h2>
         <p className="text-[11px] text-muted-foreground">
-          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · ארט דירקטור Cursor · עברית ב־RTL
+          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · ארט דירקטור Cursor · {liveTextLayers ? "טקסט חי (שכבות)" : "קריאייטיב סופי"}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
@@ -1476,11 +1530,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           <Button size="sm" variant={workspacePanel === "scene" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("scene")} disabled={storyboardDraft.length === 0}>
             סצנה
           </Button>
-        ) : (
+        ) : liveTextLayers ? (
           <Button size="sm" variant={workspacePanel === "edit" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("edit")} disabled={!variationDraft}>
-            עריכה
+            שכבות
           </Button>
-        )}
+        ) : null}
         <Button size="sm" variant={workspacePanel === "versions" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("versions")}>
           גרסאות
         </Button>
@@ -1610,7 +1664,13 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               generatingId={generatingId}
               progressLabel={generateProgress ?? undefined}
               disabled={generating}
-              onEdit={(variation) => {
+              liveTextLayers={liveTextLayers}
+              onRevise={(variation) => {
+                setSelectedVariationId(variation.id);
+                setReviseTarget(variation);
+                setReviseNote("");
+              }}
+              onEditLayers={(variation) => {
                 setSelectedVariationId(variation.id);
                 setWorkspacePanel("edit");
               }}
@@ -1632,7 +1692,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
               <h3 className="text-lg font-bold text-foreground">גריד וריאציות</h3>
               <p className="mt-2 max-w-md text-sm">
-                כל וריאציית קופי מקבלת קריאייטיב משלה. אם יש כרטיס שאהבת — «עוד בסגנון הזה» יוצר את שאר הקופי באותו מראה, עם התאמה לנושא של כל וריאציה.
+                כל וריאציית קופי מקבלת קריאייטיב סופי — תמונה עם הכותרת וה־CTA עליה. לחצו על כרטיס, כתבו מה לתקן, ו-Cursor יוצר וריאציה חדשה.
               </p>
               {copyBlocks.length > 0 && (
                 <p className="mt-2 text-xs">נמצאו {copyBlocks.length} וריאציות קופי משויכות</p>
@@ -1772,6 +1832,30 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               })}
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!reviseTarget} onOpenChange={(open) => { if (!open) setReviseTarget(null); }}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>תקן עם Cursor</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            מה לתקן ב־{reviseTarget?.copyLabel || reviseTarget?.name}? ניצור וריאציה חדשה לפי הבקשה ונשאיר את הישנה בגריד.
+          </p>
+          <Textarea
+            className="min-h-28"
+            value={reviseNote}
+            onChange={(event) => setReviseNote(event.target.value)}
+            placeholder="למשל: הכותרת הפוכה, תזיז את ה־CTA למטה, שמור על הדמות ותחליף את הרקע..."
+          />
+          <DialogFooter className="gap-2 sm:justify-start">
+            <Button onClick={() => void reviseVariation()} disabled={generating || !reviseNote.trim()}>
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              צור וריאציה מתוקנת
+            </Button>
+            <Button variant="outline" onClick={() => setReviseTarget(null)}>ביטול</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

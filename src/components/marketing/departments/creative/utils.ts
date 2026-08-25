@@ -1,6 +1,6 @@
 import { getBrandKit } from "./brandKit";
 import type { CreativeFormat, CreativeItem, CreativeLayer, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "./types";
-import { buildDesignedCopyLayers } from "./designedLayers";
+import { buildDesignedCopyLayers, ensureLogoLayer } from "./designedLayers";
 import { buildVisualStyleLock, getVisualStyleId, type CreativeVisualStyleId } from "./visualStyles";
 import {
   approvedCopyConcepts,
@@ -107,6 +107,7 @@ export const itemToProjectDraft = (item: CreativeItem | null): CreativeProjectDr
     format: defaultFormat(item?.payload),
     projectType: getProjectType(item?.payload),
     visualStyle: getVisualStyleId(item?.payload),
+    liveTextLayers: isLiveTextLayers(item?.payload),
     clientId: item?.client_id ?? null,
     clientWebsite: kit.website,
     logoUrl: kit.logoUrl,
@@ -120,6 +121,9 @@ export const defaultFormat = (payload: Record<string, unknown> | null | undefine
   if (value === "9:16" || value === "1:1" || value === "4:5" || value === "16:9") return value;
   return "1:1";
 };
+
+export const isLiveTextLayers = (payload: Record<string, unknown> | null | undefined): boolean =>
+  payload?.live_text_layers === true;
 
 const isVariation = (value: unknown): value is CreativeVariation => {
   if (!value || typeof value !== "object") return false;
@@ -238,6 +242,7 @@ export const makeVariation = ({
   compositionId,
   brandColors,
   styleSourceId,
+  liveTextLayers,
 }: {
   imageUrl: string;
   format: CreativeFormat;
@@ -256,14 +261,15 @@ export const makeVariation = ({
   compositionId?: CreativeVariation["compositionId"];
   brandColors?: string[];
   styleSourceId?: string;
+  liveTextLayers?: boolean;
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
   name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
   imageUrl,
   format,
-  layers: visualStyle
+  layers: liveTextLayers && visualStyle
     ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, logoUrl, compositionId, brandColors })
-    : [],
+    : ensureLogoLayer([], logoUrl),
   comments: [],
   createdAt: new Date().toISOString(),
   source,
