@@ -1,5 +1,5 @@
 /**
- * Authorization for Carmen → coding-agent escalations (Cursor / Claude / Manus MCP
+ * Authorization for Carmen → coding-agent escalations (Cursor / Claude / Manus / Grok MCP
  * + native GitHub-agent delegation).
  *
  * Tiers:
@@ -86,12 +86,12 @@ export function isDevEscalationToolAllowed(toolName, tier) {
 export function isDevEscalationTool(toolName) {
   if (!toolName) return false;
   const n = String(toolName);
-  if (n.startsWith("mcp_Cursor__") || n.startsWith("mcp_Claude__") || n.startsWith("mcp_Manus__")) {
+  if (n.startsWith("mcp_Cursor__") || n.startsWith("mcp_Claude__") || n.startsWith("mcp_Manus__") || n.startsWith("mcp_Grok__")) {
     return true;
   }
   if (n === "delegate_to_github_agent") return true;
   // Defensive: unprefixed remote names if ever executed without mcp_ prefix.
-  if (/^(request_dev_task|ask_cursor|ask_claude|ask_manus)$/i.test(n)) return true;
+  if (/^(request_dev_task|ask_cursor|ask_claude|ask_manus|ask_grok)$/i.test(n)) return true;
   return false;
 }
 
@@ -103,8 +103,10 @@ export function isDevEscalationSkill(slug) {
     s === "cursor_escalation" ||
     s === "claude_escalation" ||
     s === "manus_escalation" ||
+    s === "grok_escalation" ||
     s.includes("cursor_escalation") ||
-    s.includes("claude_escalation")
+    s.includes("claude_escalation") ||
+    s.includes("grok_escalation")
   );
 }
 
@@ -122,7 +124,7 @@ export function buildDevEscalationPromptRule(tier) {
   if (tier === "full") {
     return (
       "\n\n🛠️ **תיקוני מערכת (מורשה — דיוויד):** המשתמש הנוכחי מורשה לבקש תיקוני מערכת / משימות פיתוח. " +
-      "מותר להשתמש ב-mcp_Cursor__* / mcp_Claude__* / mcp_Manus__* / delegate_to_github_agent כשצריך."
+      "מותר להשתמש ב-mcp_Cursor__* / mcp_Claude__* / mcp_Manus__* / mcp_Grok__* / delegate_to_github_agent כשצריך."
     );
   }
   if (tier === "bugfix") {
@@ -130,16 +132,16 @@ export function buildDevEscalationPromptRule(tier) {
       "\n\n🐛 **תיקוני באגים (מורשה — אנה):** המשתמש הנוכחי מורשה לשלוח **תיקוני באגים בלבד** ל-Cursor " +
       "דרך `mcp_Cursor__request_dev_task`. לפני השליחה: ודאי שיש באג ברור, צעדי שחזור, התנהגות צפויה מול בפועל, " +
       "ולקוח/מסך רלוונטי. אסור: פיצ'רים חדשים, שינויי הרשאות/roles, שינויי סכמת DB, שינויי קונפיג רחבים, " +
-      "או ask_cursor / Claude / Manus / delegate_to_github_agent. " +
+      "או ask_cursor / Claude / Manus / Grok / delegate_to_github_agent. " +
       "ב-task/context צייני במפורש: «Requested by Ana — BUG FIX ONLY» + צעדי שחזור. " +
       "אחרי שליחה — עדכני ש-Cursor יפתח PR ודיוויד יאשר לפני מיזוג."
     );
   }
   return (
     "\n\n🛠️ **תיקוני מערכת — חסום (חובה):** המשתמש הנוכחי אינו מורשה לבקש תיקוני מערכת דרכך. " +
-    "אם מבקשים לשלוח תיקון/פיתוח/קונפיג/שינוי קוד או DB ל-Cursor / Claude / Manus / GitHub agent — " +
+    "אם מבקשים לשלוח תיקון/פיתוח/קונפיג/שינוי קוד או DB ל-Cursor / Claude / Manus / Grok / GitHub agent — " +
     "סרבי בנימוס בעברית: רק דיוויד (או אנה לבאגים מוגדרים) יכולים לבקש תיקוני מערכת דרכך. " +
-    "אסור לקרוא ל-mcp_Cursor__* / mcp_Claude__* / mcp_Manus__* / delegate_to_github_agent / request_dev_task. " +
+    "אסור לקרוא ל-mcp_Cursor__* / mcp_Claude__* / mcp_Manus__* / mcp_Grok__* / delegate_to_github_agent / request_dev_task. " +
     "פעולות CRM רגילות (לקוחות, לידים, משימות, קמפיינים) ממשיכות לפי הרשאות התפקיד הקיימות."
   );
 }

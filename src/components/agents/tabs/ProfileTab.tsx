@@ -252,6 +252,7 @@ export function ProfileTab({ agent }: { agent: any }) {
                   <SelectItem value="cursor">🖱️ Cursor בלבד</SelectItem>
                   <SelectItem value="claude">⚡ Claude בלבד</SelectItem>
                   <SelectItem value="manus">🤖 Manus בלבד</SelectItem>
+                  <SelectItem value="grok">🪐 Grok Bot בלבד</SelectItem>
                   <SelectItem value="none">🚫 ללא escalation</SelectItem>
                 </SelectContent>
               </Select>
