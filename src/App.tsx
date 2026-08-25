@@ -2,14 +2,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { AgencyProvider } from "./contexts/AgencyContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { UIModeProvider } from "./contexts/UIModeContext";
 import { AIOSProvider } from "./contexts/AIOSContext";
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { tenantRoutes } from "@/routes/tenantRoutes";
 
@@ -60,10 +62,16 @@ function SessionRefreshInitializer() {
   return null;
 }
 
+function RoutedErrorBoundary({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <SessionRefreshInitializer />
     <BrowserRouter>
+      <RoutedErrorBoundary>
       <TooltipProvider delayDuration={0} skipDelayDuration={0}>
         <Toaster />
         <Sonner />
@@ -98,6 +106,7 @@ const App = () => (
           </ThemeProvider>
         </TenantProvider>
       </TooltipProvider>
+      </RoutedErrorBoundary>
     </BrowserRouter>
   </QueryClientProvider>
 );

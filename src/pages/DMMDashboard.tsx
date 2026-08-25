@@ -56,6 +56,8 @@ import {
   buildPulseDashboardUrl,
   clientHasCampaignService,
   expandPulseSnapshotToGoalRows,
+  applyClientCallToPulseSnapshot,
+  filterPulseCallFlags,
   formatGoalChange,
   formatGoalEfficiency,
   formatGoalOutcomes,
@@ -420,10 +422,10 @@ export default function DMMDashboard() {
             ? "yellow"
             : "green";
         const overall = manualOverride?.override_status ?? algorithmOverall;
-        const flags = [
+        const flags = filterPulseCallFlags([
           ...(goalRow?.flags || pulse?.flags || []),
           ...(!pulse && hasCampaign ? ["ממתין לבדיקת דופק"] : []),
-        ];
+        ]);
         expanded.push({
           id: goalRow?.rowKey || c.id,
           clientId: c.id,
@@ -874,11 +876,7 @@ export default function DMMDashboard() {
             if (!old) return old;
             return old.map((row) =>
               row.client_id === clientId
-                ? {
-                    ...row,
-                    last_client_call_at: lastClientCallAt,
-                    last_client_call_by: lastClientCallBy,
-                  }
+                ? applyClientCallToPulseSnapshot(row, lastClientCallAt, lastClientCallBy)
                 : row,
             );
           });

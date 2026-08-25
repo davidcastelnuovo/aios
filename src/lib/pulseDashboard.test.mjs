@@ -3,9 +3,11 @@ import test from "node:test";
 
 import {
   aggregatePulseMetricsFromRecords,
+  applyClientCallToPulseSnapshot,
   applyPeriodMetricsToSnapshot,
   buildPulseDashboardUrl,
   clientHasCampaignService,
+  filterPulseCallFlags,
   formatPulseChange,
   getPulsePeriodBounds,
   pulseSpendColumnLabel,
@@ -36,6 +38,88 @@ test("formats change and share URLs", () => {
     buildPulseDashboardUrl("https://aios.co.il/", "marketingcaptain", "abc"),
     "https://aios.co.il/t/marketingcaptain/dmm-dashboard?agency=abc",
   );
+});
+
+test("filters call-freshness flags from pulse notes column", () => {
+  assert.deepEqual(
+    filterPulseCallFlags([
+      "CPL עלה ב-30%",
+      "לא תועדה שיחה טלפונית עם הלקוח",
+      "קמפיין נעצר",
+      "לא תועדה שיחה טלפונית עם הלקוח ב-14 הימים האחרונים",
+    ]),
+    ["CPL עלה ב-30%", "קמפיין נעצר"],
+  );
+});
+
+test("recalculates pulse status after a fresh client call is logged", () => {
+  const now = "2026-08-25T12:00:00.000Z";
+  const base = {
+    client_id: "c1",
+    agency_id: null,
+    status: "warning",
+    campaign_goal_mode: "leads",
+    is_ecommerce: false,
+    spend_7d: 100,
+    leads_7d: 5,
+    cpl_7d: 20,
+    cpl_change_pct: 0,
+    purchases_7d: 0,
+    revenue_7d: 0,
+    roas_7d: null,
+    lead_goal_status: "warning",
+    ecommerce_goal_status: null,
+    flags: ["לא תועדה שיחה טלפונית עם הלקוח"],
+    data_fresh_through: "2026-08-24",
+    calculated_at: now,
+    last_meta_change_at: null,
+    last_meta_change_type: null,
+    last_meta_change_actor: null,
+    last_meta_change_object: null,
+    meta_change_availability: "ok",
+    last_client_call_at: null,
+    last_client_call_by: null,
+  };
+
+  const next = applyClientCallToPulseSnapshot(base, now, "דוד");
+  assert.equal(next.status, "healthy");
+  assert.equal(next.lead_goal_status, "healthy");
+  assert.deepEqual(next.flags, []);
+  assert.equal(next.last_client_call_by, "דוד");
+});
+
+test("keeps warning status when other flags remain after call is logged", () => {
+  const now = "2026-08-25T12:00:00.000Z";
+  const base = {
+    client_id: "c1",
+    agency_id: null,
+    status: "warning",
+    campaign_goal_mode: "leads",
+    is_ecommerce: false,
+    spend_7d: 100,
+    leads_7d: 5,
+    cpl_7d: 20,
+    cpl_change_pct: 30,
+    purchases_7d: 0,
+    revenue_7d: 0,
+    roas_7d: null,
+    lead_goal_status: "warning",
+    ecommerce_goal_status: null,
+    flags: ["CPL עלה ב-30%", "לא תועדה שיחה טלפונית עם הלקוח"],
+    data_fresh_through: "2026-08-24",
+    calculated_at: now,
+    last_meta_change_at: null,
+    last_meta_change_type: null,
+    last_meta_change_actor: null,
+    last_meta_change_object: null,
+    meta_change_availability: "ok",
+    last_client_call_at: null,
+    last_client_call_by: null,
+  };
+
+  const next = applyClientCallToPulseSnapshot(base, now, "דוד");
+  assert.equal(next.status, "warning");
+  assert.deepEqual(next.flags, ["CPL עלה ב-30%"]);
 });
 
 test("last_week bounds are previous Sun–Sat (Jerusalem calendar)", () => {

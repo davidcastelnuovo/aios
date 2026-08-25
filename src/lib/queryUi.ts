@@ -17,8 +17,10 @@ export function shouldShowQueryError(
   isFetching: boolean,
   isPending: boolean,
   isLoading = false,
+  isFetchedAfterMount = true,
 ): boolean {
   if (!isError) return false;
   if (isPending || isLoading || isFetching) return false;
+  if (!isFetchedAfterMount) return false;
   return true;
 }

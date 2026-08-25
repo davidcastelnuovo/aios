@@ -19,6 +19,7 @@ export function useUserPermissions() {
     isPending: permissionsPending,
     isFetching: permissionsFetching,
     isError: permissionsError,
+    isFetchedAfterMount: permissionsFetchedAfterMount,
   } = useQuery({
     queryKey: ["user-permissions", userId],
     queryFn: async () => {
@@ -136,5 +137,8 @@ export function useUserPermissions() {
     isFetching: permissionsFetching,
     isError: permissionsError,
     isReady: permissionsData !== undefined,
+    isFetchedAfterMount: permissionsFetchedAfterMount,
+    isSuperAdmin,
+    isOwner,
   };
 }

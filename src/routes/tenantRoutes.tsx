@@ -1,9 +1,8 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Route, Navigate } from "react-router-dom";
-import { ModulePermissionGate } from "@/components/ModulePermissionGate";
 import { TenantAppShell } from "@/components/layout/TenantAppShell";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import type { ModulePermission } from "@/hooks/useUserPermissions";
+import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import DashboardRouter from "@/pages/DashboardRouter";
 
 const CarmenCommandCenter = lazy(() => import("@/pages/CarmenCommandCenter"));
@@ -79,19 +78,6 @@ const UnifiedSettings = lazy(() => import("@/pages/UnifiedSettings"));
 const UnifiedCallback = lazy(() => import("@/pages/UnifiedCallback"));
 const DMMDashboard = lazy(() => import("@/pages/DMMDashboard"));
 
-function gate(
-  element: React.ReactNode,
-  permission?: ModulePermission,
-  redirectTo = "my-profile",
-) {
-  if (!permission) return element;
-  return (
-    <ModulePermissionGate permission={permission} redirectTo={redirectTo}>
-      {element}
-    </ModulePermissionGate>
-  );
-}
-
 /** Unknown subpath under /t/:slug — stay in shell, redirect to home (avoids global 404 flash). */
 function TenantUnknownRoute() {
   return <Navigate to="home" replace />;
@@ -110,70 +96,70 @@ export function tenantRoutes() {
       <Route path="/t/:tenantSlug/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
 
       <Route path="/t/:tenantSlug" element={<TenantAppShell />}>
-        <Route index element={gate(<Home />, "dashboard")} />
+        <Route index element={<Home />} />
         <Route path="home" element={<Home />} />
-        <Route path="dashboard" element={gate(<DashboardRouter />, "dashboard")} />
-        <Route path="agencies" element={gate(<Agencies />, "agencies")} />
-        <Route path="clients" element={gate(<Clients />, "clients")} />
-        <Route path="campaigners" element={gate(<Campaigners />, "campaigners")} />
-        <Route path="suppliers" element={gate(<Suppliers />, "suppliers")} />
-        <Route path="finance" element={gate(<Finance />, "finance")} />
-        <Route path="tasks" element={gate(<Tasks />, "tasks")} />
-        <Route path="time-tracking" element={gate(<TimeTracking />, "time_tracking")} />
+        <Route path="dashboard" element={<DashboardRouter />} />
+        <Route path="agencies" element={<Agencies />} />
+        <Route path="clients" element={<Clients />} />
+        <Route path="campaigners" element={<Campaigners />} />
+        <Route path="suppliers" element={<Suppliers />} />
+        <Route path="finance" element={<Finance />} />
+        <Route path="tasks" element={<Tasks />} />
+        <Route path="time-tracking" element={<TimeTracking />} />
         <Route path="my-profile" element={<MyProfile />} />
-        <Route path="users" element={gate(<Users />, "users")} />
-        <Route path="sales-dashboard" element={gate(<SalesDashboard />, "sales_dashboard")} />
-        <Route path="sales-people" element={gate(<SalesPeople />, "sales_people")} />
-        <Route path="leads" element={gate(<Leads />, "leads")} />
-        <Route path="leads/archive" element={gate(<LeadsArchive />, "leads")} />
-        <Route path="lead-integrations" element={gate(<LeadIntegrations />, "lead_integrations")} />
-        <Route path="tenants" element={gate(<Tenants />, "tenants")} />
-        <Route path="automations" element={gate(<Automations />, "automations")} />
-        <Route path="broadcast" element={gate(<Broadcast />, "broadcast")} />
+        <Route path="users" element={<Users />} />
+        <Route path="sales-dashboard" element={<SalesDashboard />} />
+        <Route path="sales-people" element={<SalesPeople />} />
+        <Route path="leads" element={<Leads />} />
+        <Route path="leads/archive" element={<LeadsArchive />} />
+        <Route path="lead-integrations" element={<LeadIntegrations />} />
+        <Route path="tenants" element={<Tenants />} />
+        <Route path="automations" element={<Automations />} />
+        <Route path="broadcast" element={<Broadcast />} />
         <Route path="carmen-insights" element={<Navigate to="../agents?tab=learning" replace />} />
         <Route path="visual-workspace" element={<VisualWorkspace />} />
         <Route path="campaign-alerts" element={<CampaignAlerts />} />
-        <Route path="products" element={gate(<Products />, "leads")} />
-        <Route path="branding" element={gate(<Branding />, "branding")} />
-        <Route path="accounting-integrations" element={gate(<AccountingIntegrations />, "accounting_integrations")} />
-        <Route path="accounting-settings" element={gate(<AccountingSettings />, "accounting_integrations")} />
+        <Route path="products" element={<Products />} />
+        <Route path="branding" element={<Branding />} />
+        <Route path="accounting-integrations" element={<AccountingIntegrations />} />
+        <Route path="accounting-settings" element={<AccountingSettings />} />
         <Route path="ai-support" element={<DashboardRouter />} />
-        <Route path="menu-management" element={gate(<MenuManagement />, "menu_management")} />
-        <Route path="fields-management" element={gate(<FieldsManagement />, "fields_management")} />
-        <Route path="dynamic-tables" element={gate(<DynamicTables />, "dynamic_tables")} />
+        <Route path="menu-management" element={<MenuManagement />} />
+        <Route path="fields-management" element={<FieldsManagement />} />
+        <Route path="dynamic-tables" element={<DynamicTables />} />
         <Route path="table/:tableSlug" element={<DynamicTableView />} />
         <Route path="dashboard/:dashboardId" element={<DashboardView />} />
-        <Route path="chat" element={gate(<Chat />, "chat")} />
-        <Route path="chat/:clientId" element={gate(<Chat />, "chat")} />
-        <Route path="chat-integrations" element={gate(<ChatIntegrations />, "chat_integrations")} />
-        <Route path="manychat-settings" element={gate(<ManyChatSettings />, "manychat_settings")} />
-        <Route path="green-api-settings" element={gate(<GreenAPISettings />, "green_api_settings")} />
-        <Route path="manus-wa-settings" element={gate(<ManusWhatsAppSettings />, "manus_wa_settings")} />
-        <Route path="meta-whatsapp-settings" element={gate(<MetaWhatsAppSettings />, "chat_integrations")} />
-        <Route path="llm-settings" element={gate(<LLMSettings />, "lead_integrations")} />
-        <Route path="telegram-settings" element={gate(<TelegramSettings />, "lead_integrations")} />
-        <Route path="integrations" element={gate(<Integrations />, "lead_integrations")} />
-        <Route path="integrations/facebook" element={gate(<FacebookSettings />, "lead_integrations")} />
-        <Route path="facebook-settings" element={gate(<FacebookSettings />, "lead_integrations")} />
+        <Route path="chat" element={<Chat />} />
+        <Route path="chat/:clientId" element={<Chat />} />
+        <Route path="chat-integrations" element={<ChatIntegrations />} />
+        <Route path="manychat-settings" element={<ManyChatSettings />} />
+        <Route path="green-api-settings" element={<GreenAPISettings />} />
+        <Route path="manus-wa-settings" element={<ManusWhatsAppSettings />} />
+        <Route path="meta-whatsapp-settings" element={<MetaWhatsAppSettings />} />
+        <Route path="llm-settings" element={<LLMSettings />} />
+        <Route path="telegram-settings" element={<TelegramSettings />} />
+        <Route path="integrations" element={<Integrations />} />
+        <Route path="integrations/facebook" element={<FacebookSettings />} />
+        <Route path="facebook-settings" element={<FacebookSettings />} />
         <Route path="facebook-callback" element={<FacebookCallback />} />
-        <Route path="google-ads-settings" element={gate(<GoogleAdsSettings />, "lead_integrations")} />
-        <Route path="google-analytics-settings" element={gate(<GoogleAnalyticsSettings />, "lead_integrations")} />
-        <Route path="google-search-console-settings" element={gate(<GoogleSearchConsoleSettings />, "lead_integrations")} />
-        <Route path="ahrefs-settings" element={gate(<AhrefsSettings />, "lead_integrations")} />
-        <Route path="tiktok-settings" element={gate(<TikTokSettings />, "lead_integrations")} />
-        <Route path="make-settings" element={gate(<MakeSettings />, "lead_integrations")} />
-        <Route path="site-analytics" element={gate(<SiteAnalytics />, "site_analytics")} />
-        <Route path="rank-tracking" element={gate(<RankTracking />, "rank_tracking")} />
-        <Route path="rank-tracking/:projectId" element={gate(<RankTrackingProject />, "rank_tracking")} />
-        <Route path="dmm-dashboard" element={gate(<DMMDashboard />, "crm_dashboard")} />
-        <Route path="integrations/serpapi" element={gate(<SerpApiSettings />, "lead_integrations")} />
-        <Route path="zoom-settings" element={gate(<ZoomSettings />, "lead_integrations")} />
-        <Route path="recordings" element={gate(<Recordings />, "recordings")} />
-        <Route path="team-chat" element={gate(<TeamChat />, "team_chat")} />
+        <Route path="google-ads-settings" element={<GoogleAdsSettings />} />
+        <Route path="google-analytics-settings" element={<GoogleAnalyticsSettings />} />
+        <Route path="google-search-console-settings" element={<GoogleSearchConsoleSettings />} />
+        <Route path="ahrefs-settings" element={<AhrefsSettings />} />
+        <Route path="tiktok-settings" element={<TikTokSettings />} />
+        <Route path="make-settings" element={<MakeSettings />} />
+        <Route path="site-analytics" element={<SiteAnalytics />} />
+        <Route path="rank-tracking" element={<RankTracking />} />
+        <Route path="rank-tracking/:projectId" element={<RankTrackingProject />} />
+        <Route path="dmm-dashboard" element={<DMMDashboard />} />
+        <Route path="integrations/serpapi" element={<SerpApiSettings />} />
+        <Route path="zoom-settings" element={<ZoomSettings />} />
+        <Route path="recordings" element={<Recordings />} />
+        <Route path="team-chat" element={<TeamChat />} />
         <Route path="gmail-settings" element={<GmailSettings />} />
         <Route path="gmail" element={<Gmail />} />
-        <Route path="signatures" element={gate(<Signatures />, "signatures")} />
-        <Route path="manus-settings" element={gate(<ManusSettings />, "lead_integrations")} />
+        <Route path="signatures" element={<Signatures />} />
+        <Route path="manus-settings" element={<ManusSettings />} />
         <Route path="manus-tasks" element={<ManusTasksPage />} />
         <Route path="agents" element={<AgentHub />} />
         <Route path="agent-tasks" element={<AgentTasksPage />} />
@@ -181,11 +167,11 @@ export function tenantRoutes() {
         <Route path="carmen-access" element={<Navigate to="../agents?tab=access" replace />} />
         <Route path="carmen-studio" element={<Navigate to="../agents" replace />} />
         <Route path="github-agent" element={<GithubAgent />} />
-        <Route path="telephony-settings" element={gate(<TelephonySettings />, "lead_integrations")} />
-        <Route path="maskyoo-settings" element={gate(<MaskyooSettings />, "lead_integrations")} />
-        <Route path="wordpress-settings" element={gate(<WordPressSettings />, "lead_integrations")} />
+        <Route path="telephony-settings" element={<TelephonySettings />} />
+        <Route path="maskyoo-settings" element={<MaskyooSettings />} />
+        <Route path="wordpress-settings" element={<WordPressSettings />} />
         <Route path="landing-page-submissions" element={<LandingPageSubmissions />} />
-        <Route path="unified-settings" element={gate(<UnifiedSettings />, "lead_integrations")} />
+        <Route path="unified-settings" element={<UnifiedSettings />} />
         <Route path="*" element={<TenantUnknownRoute />} />
       </Route>
     </>
