@@ -47,7 +47,7 @@ export default function LeadIntegrations() {
   "three_month_budget": 15000,
   "products": "קמפיין פייסבוק, גוגל",
   "industry": "טכנולוגיה",
-  "agency_id": "uuid-של-סוכנות (אופציונלי)"
+  "agency_id": "uuid-של-סוכנות (אופציונלי — לא חובה)"
 }`;
 
   const curlExample = `curl -X POST ${webhookUrl} \\
@@ -134,7 +134,7 @@ export default function LeadIntegrations() {
                   <li><code className="bg-muted px-1 py-0.5 rounded">three_month_budget</code> - תקציב ל-3 חודשים</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">products</code> - מוצרים מעוניינים</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">industry</code> - תעשייה</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">agency_id</code> - ID של סוכנות ספציפית</li>
+                  <li><code className="bg-muted px-1 py-0.5 rounded">agency_id</code> - ID של סוכנות (אופציונלי; בלי זה הליד נכנס לארגון בלבד)</li>
                 </ul>
               </div>
 

@@ -274,7 +274,6 @@ Deno.serve(async (req) => {
         
         if (firstAgency) {
           agencyId = firstAgency.id
-        } else {
         }
       }
     } else {
@@ -291,20 +290,8 @@ Deno.serve(async (req) => {
         }
       )
     }
-    
 
-    if (!agencyId) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'No active agency found for this tenant. Please create an agency first or mark one as default.' 
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
+    // Agency is optional — tenant_slug / tenant_id is enough to create the lead.
 
     const routedClient = await resolveLeadClient(supabase, tenantId!, payload.client_id)
     const routingPayload = buildLeadRoutingPayload(routedClient, parsedFormData)
@@ -586,7 +573,7 @@ Deno.serve(async (req) => {
         products: payload.products || null,
         industry: payload.industry || null,
         campaign_name: payload.campaign_name?.trim() || null,
-        agency_id: agencyId,
+        agency_id: agencyId || null,
         client_id: routedClient?.client_id || null,
         form_data: parsedFormData,
         form_qa_summary: routingPayload.form_qa_summary,

@@ -13,4 +13,6 @@ test("JSON intake fields include campaign_name and stay aligned with webhook key
   assert.equal(fields.find((f) => f.key === "campaign_name")?.label, "קמפיין");
   assert.equal(fields.find((f) => f.key === "tenant_slug")?.exampleValue, "promo");
   assert.equal(fields.find((f) => f.key === "campaign_name")?.required, undefined);
+  assert.equal(fields.find((f) => f.key === "agency_id")?.required, undefined);
+  assert.equal(fields.find((f) => f.key === "tenant_slug")?.required, true);
 });

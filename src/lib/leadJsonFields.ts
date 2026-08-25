@@ -30,7 +30,7 @@ export function getLeadJsonIntakeFields(tenantSlug: string): LeadJsonIntakeField
     { key: "industry", label: "תעשייה", exampleValue: "טכנולוגיה" },
     {
       key: "agency_id",
-      label: "ID של סוכנות (אם לא תספק - ישתמש בסוכנות ברירת מחדל)",
+      label: "סוכנות (אופציונלי — מספיק שיוך לארגון)",
       exampleValue: "uuid-של-סוכנות",
     },
     { key: "manychat_subscriber_id", label: "ManyChat Subscriber ID", exampleValue: "123456789" },
