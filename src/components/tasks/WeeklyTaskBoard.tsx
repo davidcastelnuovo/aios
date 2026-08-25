@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { markLinkedTaskDoneForCalendarEvent } from "@/lib/taskCalendarSync";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -31,12 +31,13 @@ import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
-import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
+import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters, resolveDefaultCampaignerFilter } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import type { QuickTaskPayload } from "./QuickTaskInput";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
@@ -94,6 +95,7 @@ export function WeeklyTaskBoard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
+  const { isOwner, isSuperAdmin, isReady: rolesReady, isError: rolesError } = useUserRole();
   const { state: sidebarState } = useSidebar();
   const { t } = useTerminology();
 
@@ -130,9 +132,11 @@ export function WeeklyTaskBoard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  // Everyone — including owners and team managers — lands on their own queue.
-  // The campaigner filter switches to the full team board on demand.
+  // Campaigners start on "mine". Owners/admins are switched to the team board
+  // once roles load — see resolveDefaultCampaignerFilter.
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+  const [defaultFilterReady, setDefaultFilterReady] = useState(false);
+  const appliedDefaultFilter = useRef(false);
 
   // Personal queue ("mine"): default header to "all agencies" so cross-agency
   // assignments are visible. User can still narrow by agency afterward.
@@ -220,7 +224,7 @@ export function WeeklyTaskBoard() {
   }, [currentDate, viewMode]);
 
   // Fetch user profile to get campaigner_id / sales_person_id for "mine" filter
-  const { data: userProfile, isSuccess: userProfileReady } = useQuery({
+  const { data: userProfile, isSuccess: userProfileReady, isError: userProfileError } = useQuery({
     queryKey: ["user-profile-for-tasks", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -234,9 +238,20 @@ export function WeeklyTaskBoard() {
     enabled: !!user?.id,
   });
 
-  // Default view = "my tasks only" (campaignerId: "mine"). For users without a
-  // campaigner/sales identity (e.g. owners), "mine" resolves to tasks they created
-  // (see the "mine" branch in the tasks query below), so it stays meaningful.
+  useEffect(() => {
+    if (appliedDefaultFilter.current) return;
+    if (!rolesReady && !rolesError) return;
+    if (!isOwner && !isSuperAdmin && !userProfileReady && !userProfileError) return;
+
+    const next = resolveDefaultCampaignerFilter({
+      isOwner,
+      isSuperAdmin,
+      hasPersonalQueue: !!(userProfile?.campaigner_id || userProfile?.sales_person_id),
+    });
+    setFilters((prev) => (prev.campaignerId === next ? prev : { ...prev, campaignerId: next }));
+    appliedDefaultFilter.current = true;
+    setDefaultFilterReady(true);
+  }, [rolesReady, rolesError, isOwner, isSuperAdmin, userProfileReady, userProfileError, userProfile?.campaigner_id, userProfile?.sales_person_id]);
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
@@ -276,7 +291,7 @@ export function WeeklyTaskBoard() {
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching } = useQuery({
     queryKey: ["tasks", tenantId, crossTenantAgencyIds, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
-    enabled: !!tenantId && !!user?.id && (filters.campaignerId !== "mine" || userProfileReady),
+    enabled: !!tenantId && !!user?.id && defaultFilterReady && (filters.campaignerId !== "mine" || userProfileReady),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
