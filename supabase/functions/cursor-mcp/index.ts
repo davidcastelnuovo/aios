@@ -89,6 +89,23 @@ const TOOLS = [
       required: ["request"],
     },
   },
+  {
+    name: "generate_creative",
+    description:
+      "Send a Creative-department job to the dedicated Cursor Creative Agent " +
+      "(separate from the coding agent). It generates a finished Hebrew advertising still " +
+      "and writes it back onto the marketing work item. Use when David or a user asks " +
+      "Carmen to make / fix a creative in מחלקת קריאייטיב.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        item_id: { type: "string", description: "marketing_work_items.id of the creative project." },
+        director_note: { type: "string", description: "Optional fix request for a revision." },
+        copy_label: { type: "string", description: "Optional copy-variation label to generate." },
+      },
+      required: ["item_id"],
+    },
+  },
 ];
 
 function rpcResult(id: unknown, result: unknown) {
@@ -510,6 +527,59 @@ async function handleToolCall(
       (reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
       `. A Cloud Agent session is now running on it.\n` +
       `Session: ${url}`
+    );
+  }
+
+  if (name === "generate_creative") {
+    const itemId = String(args?.item_id ?? "").trim();
+    if (!itemId) throw new Error("generate_creative requires item_id.");
+    if (!ctx.tenantId) throw new Error("generate_creative needs a tenant on the MCP connection.");
+    const directorNote = String(args?.director_note ?? "").trim();
+    const copyLabel = String(args?.copy_label ?? "").trim();
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/cursor-generate-creative`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "dispatch",
+        tenant_id: ctx.tenantId,
+        item_id: itemId,
+        prompt: [
+          "You are the AIOS Creative Agent. Generate ONE finished Hebrew advertising still with GenerateImage.",
+          "Do not edit the repo. Do not open a PR.",
+          `Load the creative brief from marketing_work_items id=${itemId} (copy, approved concept, brand, talent refs).`,
+          copyLabel && `This card is copy variation «${copyLabel}».`,
+          directorNote && `REVISION REQUEST: ${directorNote}`,
+          "Paint exact RTL Hebrew headline + CTA on the PNG unless the project has live_text_layers=true.",
+        ].filter(Boolean).join("\n"),
+        variation: {
+          name: copyLabel || "וריאציה",
+          copy_label: copyLabel || undefined,
+        },
+      }),
+    });
+    const raw = await resp.text();
+    let data: any = {};
+    try { data = JSON.parse(raw); } catch { /* ignore */ }
+    if (!resp.ok || data?.error) {
+      throw new Error(data?.error || `cursor-generate-creative ${resp.status}: ${raw.slice(0, 200)}`);
+    }
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "ask_cursor",
+      requestText: `${"[CREATIVE AGENT]"} Carmen asked for item ${itemId}`,
+      context: directorNote,
+      branch: "",
+      sessionUrl: String(data.agent_url || ""),
+      cursorAgentId: String(data.cursor_agent_id || ""),
+    });
+    return (
+      `✅ Dispatched to the Cursor Creative Agent` +
+      (data.agent_url ? `\nSession: ${data.agent_url}` : "") +
+      `\nThe still will appear on the creative item when the agent writes it back.`
     );
   }
 

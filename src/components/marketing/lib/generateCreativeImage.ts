@@ -25,6 +25,7 @@ interface GenerateCreativeImageArgs {
   quality?: ImageQuality;
   regenerate?: boolean;
   liveTextLayers?: boolean;
+  signal?: AbortSignal;
 }
 
 async function invokeSocialImage(
@@ -38,6 +39,7 @@ async function invokeSocialImage(
   referenceRole?: CreativeReferenceRole,
   regenerate?: boolean,
   liveTextLayers?: boolean,
+  signal?: AbortSignal,
 ) {
   return supabase.functions.invoke("ai-generate-social-image", {
     body: {
@@ -51,6 +53,7 @@ async function invokeSocialImage(
       size,
       quality,
     },
+    signal,
   });
 }
 
@@ -122,7 +125,9 @@ export async function generateCreativeImage({
   quality = "high",
   regenerate,
   liveTextLayers,
+  signal,
 }: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean; cost: ImageGenerationCost }> {
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   const estimate = estimateCreativeImageCall({
     prompt,
     quality,
@@ -141,6 +146,7 @@ export async function generateCreativeImage({
     referenceRole,
     regenerate,
     liveTextLayers,
+    signal,
   );
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;
@@ -150,6 +156,8 @@ export async function generateCreativeImage({
       return { imageUrl: (await resolveCreativeImageUrl(imageUrl)) ?? imageUrl, usedFallback: true, cost };
     }
   }
+
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
   const socialError = socialResult.error
     ? await invokeErrorMessage(socialResult.error, socialResult.data, "יצירת תמונה נכשלה", socialResult.response)

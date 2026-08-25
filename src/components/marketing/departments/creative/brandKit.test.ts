@@ -87,6 +87,13 @@ test("getBrandKit keeps an uploaded brand-book file", () => {
   assert.equal(kit.brandBook?.source, "upload");
 });
 
+test("isGenerationAborted recognizes abort signals and abort errors", () => {
+  assert.equal(isGenerationAborted(new Error("ABORTED")), true);
+  assert.equal(isGenerationAborted(new DOMException("Aborted", "AbortError")), true);
+  assert.equal(isGenerationAborted(new Error("The user aborted a request.")), true);
+  assert.equal(isGenerationAborted(new Error("network down")), false);
+});
+
 test("throwIfGenerationAborted raises a recognizable abort error", () => {
   throwIfGenerationAborted(false);
   try {

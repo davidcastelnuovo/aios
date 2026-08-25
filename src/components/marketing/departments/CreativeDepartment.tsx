@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
+import { dispatchCursorCreative, isCursorCreativeUnavailable, waitForCursorCreative } from "@/components/marketing/lib/dispatchCursorCreative";
 import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
 import {
   brandKitPrompt,
@@ -47,6 +48,7 @@ import { pickVariationComposition } from "@/components/marketing/departments/cre
 import { isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
 import { assembleStaticCreativePrompt } from "@/components/marketing/departments/creative/creativeGenerationPrompt";
 import { collectStaticReferencePlan, wantsTalentLock } from "@/components/marketing/departments/creative/cursorArtDirector";
+import { buildCreativeAgentPrompt } from "@/components/marketing/departments/creative/cursorCreativeAgent";
 import { hydrateVariationLayers, isInternalCopyLine } from "@/components/marketing/departments/creative/designedLayers";
 import { missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
 import {
@@ -161,9 +163,22 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [rejectNote, setRejectNote] = useState("");
   const [reviseTarget, setReviseTarget] = useState<CreativeVariation | null>(null);
   const [reviseNote, setReviseNote] = useState("");
+  const [creativeAgentUrl, setCreativeAgentUrl] = useState<string | null>(null);
   const [costOpen, setCostOpen] = useState(false);
   const [pendingStyleId, setPendingStyleId] = useState<CreativeVisualStyleId | null>(null);
   const generateAbortRef = useRef(false);
+  const generateAbortControllerRef = useRef<AbortController | null>(null);
+  const creativeJobIdRef = useRef<string | null>(null);
+
+  const beginGeneration = () => {
+    generateAbortRef.current = false;
+    generateAbortControllerRef.current?.abort();
+    generateAbortControllerRef.current = new AbortController();
+    creativeJobIdRef.current = null;
+    setCreativeAgentUrl(null);
+  };
+
+  const generationSignal = () => generateAbortControllerRef.current?.signal;
 
   const listFilter = resolveCreativeListFilter(clientFilter);
   const clientScoped = listFilter !== ALL_CLIENTS_FILTER;
@@ -573,7 +588,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     }
     const shouldLock = options?.lock !== false;
     if (shouldLock) {
-      generateAbortRef.current = false;
+      beginGeneration();
       setGenerating(true);
     }
     try {
@@ -643,6 +658,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         size: imageSizeForFormat(defaultFormat(selected.payload)),
         quality: "medium",
         liveTextLayers: true,
+        signal: generationSignal(),
       });
       if (shouldLock) {
         toast.message(referenceImageUrls.length ? "הפריים נוצר מול ייחוס הסגנון" : "פריים ראשון — נשמר כסגנון לייחוס");
@@ -677,7 +693,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       toast.error("מלא/י הנחיות לפריימים לפני יצירה לפי סדר");
       return;
     }
-    generateAbortRef.current = false;
+    beginGeneration();
     setGenerating(true);
     try {
       let current = [...storyboardDraft].sort((a, b) => a.order - b.order);
@@ -898,6 +914,55 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       revising: !!resolvedEditTarget,
     });
     throwIfGenerationAborted(generateAbortRef.current);
+    const agentVariationId = replaceId ?? crypto.randomUUID();
+    const agentPrompt = buildCreativeAgentPrompt({
+      title: selected.title ?? undefined,
+      format,
+      copyText,
+      copyLabel,
+      brief: getBriefText(selected),
+      instructions,
+      visualPrompt,
+      directorNote,
+      kit,
+      talentUrls: referencePlan.urls.filter((url) => url !== resolvedEditTarget),
+      editTargetUrl: resolvedEditTarget,
+      liveTextLayers,
+    });
+    try {
+      const dispatched = await dispatchCursorCreative({
+        supabase,
+        tenantId,
+        itemId: selected.id,
+        variation: {
+          id: agentVariationId,
+          name: name ?? (copyLabel || "וריאציה"),
+          format,
+          copyKey,
+          copyLabel,
+          copyText,
+          parentId,
+        },
+        prompt: agentPrompt,
+        signal: generationSignal(),
+      });
+      creativeJobIdRef.current = dispatched.jobId;
+      setCreativeAgentUrl(dispatched.agentUrl);
+      setGenerateProgress((current) => current ?? `אייג׳נט קריאייטיב · ${copyLabel || name || "וריאציה"}`);
+      const fromAgent = await waitForCursorCreative({
+        supabase,
+        tenantId,
+        itemId: selected.id,
+        variationId: agentVariationId,
+        signal: generationSignal(),
+      });
+      throwIfGenerationAborted(generateAbortRef.current);
+      return replaceId ? { ...fromAgent, id: replaceId } : fromAgent;
+    } catch (error: unknown) {
+      if (isGenerationAborted(error)) throw error;
+      if (!isCursorCreativeUnavailable(error)) throw error;
+      toast.message("אייג׳נט הקריאייטיב עדיין לא פרוס — נופל חזרה ליצירה המקומית");
+    }
     const { imageUrl, cost } = await generateCreativeImage({
       supabase,
       tenantId,
@@ -910,7 +975,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       quality: "high",
       regenerate,
       liveTextLayers,
+      signal: generationSignal(),
     });
+    throwIfGenerationAborted(generateAbortRef.current);
     const created = makeVariation({
       imageUrl,
       format,
@@ -940,7 +1007,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       toast.error("אין קונספטים מאושרים על הפרויקט. חזרו לקופי, אשרו קונספט ולחצו לקריאייטיב — זה יעדכן את הפרויקט הקיים.");
       return;
     }
-    generateAbortRef.current = false;
+    beginGeneration();
     setGenerating(true);
     try {
       await prepareCreativeStage();
@@ -998,7 +1065,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       toast.error("שייך קופי או מלא בריף לפני יצירה לכל הווריאציות");
       return;
     }
-    generateAbortRef.current = false;
+    beginGeneration();
     setGenerating(true);
     try {
       await prepareCreativeStage();
@@ -1038,7 +1105,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       toast.message("אין וריאציות קופי נוספות — כל הקופי כבר בגריד");
       return;
     }
-    generateAbortRef.current = false;
+    beginGeneration();
     setGenerating(true);
     setSelectedVariationId(source.id);
     setWorkspacePanel(null);
@@ -1071,14 +1138,24 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   };
 
   const stopGeneration = () => {
-    if (!generating) return;
     generateAbortRef.current = true;
-    setGenerateProgress("עוצר אחרי הווריאציה הנוכחית...");
+    generateAbortControllerRef.current?.abort();
+    const jobId = creativeJobIdRef.current;
+    if (jobId && selected) {
+      void supabase.functions.invoke("cursor-generate-creative", {
+        body: { action: "cancel", tenant_id: tenantId, item_id: selected.id, job_id: jobId },
+      });
+    }
+    setGenerating(false);
+    setGeneratingId(null);
+    setGenerateProgress(null);
+    setCreativeAgentUrl(null);
+    toast.message("היצירה נעצרה");
   };
 
   const rejectVariation = async () => {
     if (!selected || !rejectTarget || !rejectNote.trim()) return;
-    generateAbortRef.current = false;
+    beginGeneration();
     setGenerating(true);
     setGeneratingId(rejectTarget.id);
     try {
@@ -1116,7 +1193,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const reviseVariation = async () => {
     if (!selected || !reviseTarget || !reviseNote.trim()) return;
-    generateAbortRef.current = false;
+    beginGeneration();
     setGenerating(true);
     setGeneratingId(reviseTarget.id);
     try {
@@ -1515,7 +1592,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-bold">{selected.title}</h2>
         <p className="text-[11px] text-muted-foreground">
-          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · ארט דירקטור Cursor · {liveTextLayers ? "טקסט חי (שכבות)" : "קריאייטיב סופי"}
+          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · אייג׳נט קריאייטיב Cursor · {liveTextLayers ? "טקסט חי (שכבות)" : "קריאייטיב סופי"}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
@@ -1663,6 +1740,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               variations={variations}
               generatingId={generatingId}
               progressLabel={generateProgress ?? undefined}
+              agentUrl={creativeAgentUrl}
               disabled={generating}
               liveTextLayers={liveTextLayers}
               onRevise={(variation) => {

@@ -217,8 +217,12 @@ export const styleRefsFromClientFiles = (supabase: SupabaseClient, attachments: 
 
 export const GENERATION_ABORTED = "ABORTED";
 
-export const isGenerationAborted = (error: unknown) =>
-  error instanceof Error && error.message === GENERATION_ABORTED;
+export const isGenerationAborted = (error: unknown) => {
+  if (error instanceof Error && error.message === GENERATION_ABORTED) return true;
+  if (typeof error === "object" && error && "name" in error && (error as { name?: string }).name === "AbortError") return true;
+  if (error instanceof Error && /aborted|AbortError/i.test(error.message)) return true;
+  return false;
+};
 
 export const throwIfGenerationAborted = (aborted: boolean) => {
   if (aborted) throw new Error(GENERATION_ABORTED);

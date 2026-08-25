@@ -13,6 +13,7 @@ interface Props {
   variations: CreativeVariation[];
   generatingId?: string | null;
   progressLabel?: string;
+  agentUrl?: string | null;
   disabled?: boolean;
   liveTextLayers?: boolean;
   onRevise: (variation: CreativeVariation) => void;
@@ -28,6 +29,7 @@ export function CreativeVariationGrid({
   variations,
   generatingId,
   progressLabel,
+  agentUrl,
   disabled,
   liveTextLayers,
   onRevise,
@@ -40,8 +42,18 @@ export function CreativeVariationGrid({
 }: Props) {
   return (
     <div className="min-h-0 flex-1 overflow-auto p-4" dir="rtl">
-      {progressLabel && (
-        <p className="mb-3 text-center text-xs text-muted-foreground">{progressLabel}</p>
+      {(progressLabel || agentUrl) && (
+        <p className="mb-3 text-center text-xs text-muted-foreground">
+          {progressLabel}
+          {agentUrl && (
+            <>
+              {progressLabel ? " · " : null}
+              <a href={agentUrl} target="_blank" rel="noreferrer" className="underline">
+                פתח את אייג׳נט הקריאייטיב
+              </a>
+            </>
+          )}
+        </p>
       )}
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {variations.map((variation) => {
