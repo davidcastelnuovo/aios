@@ -38,6 +38,7 @@ import {
   resolveResponseStatusKey,
   responseStatusSelectValue,
 } from "@/lib/leadFields";
+import { ensureLeadOriginTags } from "@/lib/leadOriginTags";
 
 const formSchema = z.object({
   company_name: z.string().optional().default(""),
@@ -204,6 +205,18 @@ export function AddLeadForm() {
             console.error('Error adding tag:', tagError);
           }
         }
+      }
+
+      if (data && userId && tenantId) {
+        await ensureLeadOriginTags({
+          tenantId,
+          userId,
+          leadId: data.id,
+          campaign_name: data.campaign_name,
+          source: data.source,
+        });
+        queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["lead-tags", data.id] });
       }
       
       // Trigger lead_created automation

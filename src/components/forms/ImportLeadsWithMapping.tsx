@@ -17,6 +17,7 @@ import {
   autoDetectLeadImportField,
   classifyLeadImportStatus,
   inferLeadSource,
+  leadOriginTagNames,
   looksLikePipelineStatusLabel,
   resolveResponseStatusKey,
 } from "@/lib/leadFields";
@@ -356,10 +357,12 @@ export function ImportLeadsWithMapping() {
     
     // Check for ALL columns mapped to tags (support multiple columns)
     const tagsMappings = mappings.filter(m => m.systemField === 'tags');
+    const campaignMappings = mappings.filter(m => m.systemField === 'campaign_name');
+    const sourceMappings = mappings.filter(m => m.systemField === 'source');
+    const existingTagNames = existingTags.map(t => t.name.toLowerCase().trim());
+    const uniqueTags = new Set<string>();
+
     if (tagsMappings.length > 0) {
-      const existingTagNames = existingTags.map(t => t.name.toLowerCase().trim());
-      const uniqueTags = new Set<string>();
-      
       rawData.forEach(row => {
         // Loop through ALL columns mapped to tags
         tagsMappings.forEach(tagsMapping => {
@@ -371,22 +374,43 @@ export function ImportLeadsWithMapping() {
           }
         });
       });
-      
-      let colorIdx = 0;
-      uniqueTags.forEach(tag => {
-        const normalizedTag = tag.toLowerCase().trim();
-        if (!existingTagNames.includes(normalizedTag)) {
-          if (!newItems.some(item => item.value.toLowerCase() === normalizedTag && item.type === 'tag')) {
-            newItems.push({
-              value: tag,
-              color: DEFAULT_COLORS[colorIdx % DEFAULT_COLORS.length],
-              type: 'tag'
-            });
-            colorIdx++;
-          }
-        }
+    }
+
+    if (campaignMappings.length > 0 || sourceMappings.length > 0) {
+      rawData.forEach(row => {
+        let campaign = '';
+        campaignMappings.forEach((mapping) => {
+          const val = row[mapping.csvColumn];
+          if (val && String(val).trim()) campaign = String(val).trim();
+        });
+        let sourceRaw = '';
+        sourceMappings.forEach((mapping) => {
+          const val = row[mapping.csvColumn];
+          if (val && String(val).trim()) sourceRaw = String(val).trim();
+        });
+        const source = sourceRaw
+          ? inferLeadSource(sourceRaw)
+          : (campaign ? 'paid_ads' : 'other');
+        leadOriginTagNames({ campaign_name: campaign || null, source }).forEach((tag) => {
+          uniqueTags.add(tag);
+        });
       });
     }
+
+    let colorIdx = 0;
+    uniqueTags.forEach(tag => {
+      const normalizedTag = tag.toLowerCase().trim();
+      if (!existingTagNames.includes(normalizedTag)) {
+        if (!newItems.some(item => item.value.toLowerCase() === normalizedTag && item.type === 'tag')) {
+          newItems.push({
+            value: tag,
+            color: DEFAULT_COLORS[colorIdx % DEFAULT_COLORS.length],
+            type: 'tag'
+          });
+          colorIdx++;
+        }
+      }
+    });
     
     return newItems;
   }, [mappings, rawData, existingStatuses, existingTags]);
@@ -754,7 +778,20 @@ export function ImportLeadsWithMapping() {
         if (!lead.status) lead.status = 'new';
         if (!lead.created_at) lead.created_at = new Date().toISOString();
 
-        return { lead, tags: rowTags, updates: rowUpdates };
+        const originTags = leadOriginTagNames({
+          campaign_name: lead.campaign_name,
+          source: lead.source,
+        });
+        const seenTags = new Set<string>();
+        const mergedTags: string[] = [];
+        for (const tag of [...rowTags, ...originTags]) {
+          const key = tag.toLowerCase();
+          if (seenTags.has(key)) continue;
+          seenTags.add(key);
+          mergedTags.push(tag);
+        }
+
+        return { lead, tags: mergedTags, updates: rowUpdates };
       });
 
       // Filter valid leads - must have company_name (or can generate one)

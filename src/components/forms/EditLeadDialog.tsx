@@ -45,6 +45,7 @@ import {
   responseStatusSelectValue,
   unmatchedResponseStatusValue,
 } from "@/lib/leadFields";
+import { ensureLeadOriginTags } from "@/lib/leadOriginTags";
 
 const formSchema = z.object({
   // NOTE: company_name can be hidden by tenant field visibility settings.
@@ -361,6 +362,16 @@ const updateMutation = useMutation({
       if (leadResult.error) throw leadResult.error;
       const data = leadResult.data;
 
+      if (data && tenantId && userId) {
+        await ensureLeadOriginTags({
+          tenantId,
+          userId,
+          leadId: data.id,
+          campaign_name: data.campaign_name,
+          source: data.source,
+        });
+      }
+
       // Fire-and-forget: trigger automation in background (don't await!)
       if (data && lead.status !== data.status) {
         supabase.functions.invoke('trigger-automation', {
@@ -411,6 +422,8 @@ const updateMutation = useMutation({
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-sales-people", tenantId, lead.id] });
       queryClient.invalidateQueries({ queryKey: ["lead-detail", tenantId, lead.id] });
+      queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-tags", lead.id] });
       sonnerToast.success("ליד עודכן בהצלחה");
     },
     onError: (error: any, _values, context) => {

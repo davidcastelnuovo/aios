@@ -155,6 +155,7 @@ Deno.serve(async (req) => {
           email: lead.email || null,
           phone: lead.phone || null,
           source: source,
+          campaign_name: lead.campaign_name?.trim() || null,
           agency_id: resolvedAgencyId,
           tenant_id: resolvedTenantId,
           notes: buildLeadNotes(lead),

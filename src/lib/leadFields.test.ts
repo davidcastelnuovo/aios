@@ -4,6 +4,7 @@ import {
   autoDetectLeadImportField,
   classifyLeadImportStatus,
   inferLeadSource,
+  leadOriginTagNames,
   leadSourceDisplay,
   looksLikePipelineStatusLabel,
   looksLikeResponseStatusLabel,
@@ -35,6 +36,22 @@ test("leadSourceDisplay shows the channel, not the campaign name", () => {
   assert.equal(leadSourceDisplay({ campaign_name: "Promo Q3", source: "website" }), "אתר");
   assert.equal(leadSourceDisplay({ source: "other" }), "אחר");
   assert.equal(leadSourceDisplay({ source: "facebook" }), "FB");
+});
+
+test("leadOriginTagNames creates campaign and source tags without duplicating אחר", () => {
+  assert.deepEqual(leadOriginTagNames({ campaign_name: "שיווק", source: "paid_ads" }), [
+    "שיווק",
+    "FB",
+  ]);
+  assert.deepEqual(leadOriginTagNames({ campaign_name: "  מכירות  ", source: "website" }), [
+    "מכירות",
+    "אתר",
+  ]);
+  assert.deepEqual(leadOriginTagNames({ campaign_name: "FB", source: "paid_ads" }), ["FB"]);
+  assert.deepEqual(leadOriginTagNames({ campaign_name: "סושיאל", source: "other" }), ["סושיאל"]);
+  assert.deepEqual(leadOriginTagNames({ campaign_name: "   ", source: "other" }), []);
+  assert.deepEqual(leadOriginTagNames({ source: "referral" }), ["הפניה"]);
+  assert.deepEqual(leadOriginTagNames(null), []);
 });
 
 test("ללא מענה and אין מענה resolve to no_answer_1", () => {

@@ -112,6 +112,33 @@ export function leadSourceDisplay(lead: LeadSourceLike | null | undefined): stri
   return LEAD_SOURCE_LABELS[source] || source;
 }
 
+const GENERIC_ORIGIN_TAG_NAMES = new Set(["אחר", "other"]);
+
+/**
+ * Tag names derived from campaign + arrival source so leads can be filtered
+ * by origin. Campaign name is kept as-is; source uses the display label (FB,
+ * אתר, …). Empty / "אחר" sources are skipped, and a source that duplicates
+ * the campaign name is not added twice.
+ */
+export function leadOriginTagNames(lead: LeadSourceLike | null | undefined): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (value: string | null | undefined) => {
+    const name = value?.trim();
+    if (!name) return;
+    const key = name.toLowerCase();
+    if (GENERIC_ORIGIN_TAG_NAMES.has(key) || GENERIC_ORIGIN_TAG_NAMES.has(name)) return;
+    if (seen.has(key)) return;
+    seen.add(key);
+    names.push(name);
+  };
+
+  push(lead?.campaign_name);
+  push(leadSourceDisplay(lead));
+  return names;
+}
+
 export function looksLikeResponseStatusLabel(value: string | null | undefined): boolean {
   if (!value || !value.trim()) return false;
   const n = compactText(value);
