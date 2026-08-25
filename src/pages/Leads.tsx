@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle, Pencil } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle, Pencil, Archive } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -76,12 +76,16 @@ import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 import { LeadsChatView } from "@/components/leads/LeadsChatView";
+import { archiveLeads, excludeArchivedLeads } from "@/lib/leadArchive";
+import { leadSearchOrFilter } from "@/lib/leadPhone";
 import {
   findLeadStatus,
+  leadFirstSourceDisplay,
   leadSourceDisplay,
   responseStatusSelectValue,
   unmatchedResponseStatusValue,
 } from "@/lib/leadFields";
+import { LeadCreatedAtLines, LeadSourceLines } from "@/components/leads/LeadOriginLines";
 
 
 // Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
@@ -226,21 +230,19 @@ function LeadCardContent({
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
 
   const handleDelete = async (id: string) => {
+    if (!window.confirm("להעביר את הליד לארכיון? הוא יישמר ואפשר לשחזר. מחיקה לצמיתות רק מארכיון הלידים.")) {
+      return;
+    }
     try {
-      const { error } = await supabase
-        .from("leads")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
+      await archiveLeads([id]);
 
       toast({
-        title: "ליד נמחק בהצלחה",
+        title: "הליד הועבר לארכיון",
       });
       window.location.reload();
     } catch (error: any) {
       toast({
-        title: "שגיאה במחיקת ליד",
+        title: "שגיאה בהעברה לארכיון",
         description: error.message,
         variant: "destructive",
       });
@@ -298,21 +300,8 @@ function LeadCardContent({
         )}
 
         {/* Created At */}
-        {lead.created_at && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3 shrink-0" />
-            <span>
-              {new Date(lead.created_at).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-              {' '}
-              {new Date(lead.created_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </div>
-        )}
-        {(leadSourceDisplay(lead) || lead.campaign_name) && (
-          <div className="text-xs text-muted-foreground truncate" title={[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}>
-            {[leadSourceDisplay(lead), lead.campaign_name].filter(Boolean).join(" · ")}
-          </div>
-        )}
+        {lead.created_at && <LeadCreatedAtLines lead={lead} compact />}
+        <LeadSourceLines lead={lead} compact />
 
         {/* Stage/Status Selector */}
         <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
@@ -835,9 +824,11 @@ export default function Leads() {
         return data || 0;
       }
       
-      let query = supabase
-        .from("leads")
-        .select("id", { count: 'exact', head: true });
+      let query = excludeArchivedLeads(
+        supabase
+          .from("leads")
+          .select("id", { count: 'exact', head: true })
+      );
 
       // Base tenant/agency filter
       if (selectedAgency && selectedAgency !== "all") {
@@ -892,7 +883,7 @@ export default function Leads() {
       
       if (searchQuery.trim()) {
         const q = searchQuery.trim();
-        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%,campaign_name.ilike.%${q}%`);
+        query = query.or(leadSearchOrFilter(q));
       }
 
       const { count, error } = await query;
@@ -1154,9 +1145,10 @@ export default function Leads() {
       
       const to = from + effectiveLimit - 1;
       
-      let query = supabase
-        .from("leads")
-        .select(`
+      let query = excludeArchivedLeads(
+        supabase
+          .from("leads")
+          .select(`
           id,
           tenant_id,
           contact_name,
@@ -1179,11 +1171,13 @@ export default function Leads() {
           sales_person_id,
           follow_up_date,
           created_at,
+          first_created_at,
+          first_source,
           updated_at,
           agencies (name),
           sales_people (full_name)
         `)
-        .order("created_at", { ascending: false });
+      ).order("created_at", { ascending: false });
 
       // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
       if (selectedAgency && selectedAgency !== "all") {
@@ -1238,7 +1232,7 @@ export default function Leads() {
       
       if (searchQuery.trim()) {
         const q = searchQuery.trim();
-        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%,campaign_name.ilike.%${q}%`);
+        query = query.or(leadSearchOrFilter(q));
       }
       
       // Apply pagination
@@ -1987,6 +1981,7 @@ export default function Leads() {
       "שלב",
       "סטטוס תגובה",
       "מקור",
+      "מקור ראשוני",
       "שם קמפיין",
       "תעשייה",
       "ערך עסקה משוער",
@@ -1994,6 +1989,7 @@ export default function Leads() {
       "סוכנות",
       "הערות",
       "תאריך יצירה",
+      "תאריך יצירה ראשוני",
     ];
 
     const rows = filteredLeads.map((lead: any) => {
@@ -2009,6 +2005,7 @@ export default function Leads() {
         stageName || "",
         statusName,
         sourceName,
+        leadFirstSourceDisplay(lead) || "",
         lead.campaign_name || "",
         lead.industry || "",
         lead.estimated_deal_value || "",
@@ -2016,6 +2013,7 @@ export default function Leads() {
         lead.agencies?.name || "",
         lead.notes || "",
         lead.created_at ? new Date(lead.created_at).toLocaleDateString('he-IL') : "",
+        lead.first_created_at ? new Date(lead.first_created_at).toLocaleDateString('he-IL') : "",
       ];
     });
 
@@ -2352,6 +2350,11 @@ export default function Leads() {
                 `${filteredLeads?.length || 0}${totalPages > 1 ? ` / ${totalLeadsCount}` : ''}`
               )}
             </Badge>
+            <Button variant="outline" size="sm" asChild className="h-8 px-2">
+              <Link to="archive" title="ארכיון לידים">
+                <Archive className="h-4 w-4" />
+              </Link>
+            </Button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -2535,6 +2538,12 @@ export default function Leads() {
               </Button>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" asChild>
+                <Link to="archive" className="gap-2">
+                  <Archive className="h-4 w-4" />
+                  ארכיון
+                </Link>
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => syncFacebookLeadsMutation.mutate()}
@@ -2989,6 +2998,7 @@ export default function Leads() {
           }}
           isCompanyNameVisible={isFieldVisible('company_name')}
           searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
           onLoadMore={loadMoreChatLeads}
           hasMore={chatRemainingToLoad > 0}
           remainingCount={chatRemainingToLoad}
@@ -3346,26 +3356,22 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
 
   const bulkDelete = useMutation({
     mutationFn: async (leadIds: string[]) => {
-      const { error } = await supabase
-        .from("leads")
-        .delete()
-        .in("id", leadIds);
-
-      if (error) throw error;
+      await archiveLeads(leadIds);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-stage-counts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-archive", tenantId] });
       setSelectedLeads([]);
       toast({
-        title: "לידים נמחקו בהצלחה",
+        title: "הלידים הועברו לארכיון",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "שגיאה במחיקת לידים",
+        title: "שגיאה בהעברה לארכיון",
         description: error.message,
         variant: "destructive",
       });
@@ -3463,11 +3469,12 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
     if (!tenantId) return;
     setIsLoadingAllIds(true);
     try {
-      const { data, error } = await supabase
-        .from("leads")
-        .select("id")
-        .eq("tenant_id", tenantId)
-        .order("created_at", { ascending: false });
+      const { data, error } = await excludeArchivedLeads(
+        supabase
+          .from("leads")
+          .select("id")
+          .eq("tenant_id", tenantId)
+      ).order("created_at", { ascending: false });
       
       if (error) throw error;
       
@@ -3545,14 +3552,14 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 variant="destructive"
                 size="sm"
                 onClick={() => {
-                  if (confirm(`האם אתה בטוח שברצונך למחוק ${selectedLeads.length} לידים?`)) {
+                  if (confirm(`להעביר ${selectedLeads.length} לידים לארכיון? מחיקה לצמיתות רק מארכיון הלידים.`)) {
                     bulkDelete.mutate(selectedLeads);
                   }
                 }}
                 className="h-8"
               >
-                <Trash2 className="h-4 w-4 mr-1" />
-                מחק
+                <Archive className="h-4 w-4 mr-1" />
+                לארכיון
               </Button>
             </div>
           </div>
@@ -3626,9 +3633,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
             {
               id: "source",
               label: "מקור הליד",
-              width: 110,
+              width: 140,
               render: (lead: any) => (
-                <span className="truncate">{leadSourceDisplay(lead) || "—"}</span>
+                <LeadSourceLines lead={lead} compact showCampaign={false} />
               )
             },
             { 

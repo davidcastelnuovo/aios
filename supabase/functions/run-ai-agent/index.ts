@@ -775,7 +775,7 @@ const ALL_TOOLS = [
   { name: 'set_campaign_table_active', description: 'סימון טבלת קמפיין כפעילה/כבויה (crm_tables.campaign_active). השתמשי כשאומרים לך שקמפיין של לקוח הופסק או חזר לפעול — בדיקות דופק ובדיקות חיבורים מדווחות רק על טבלאות שמסומנות פעילות. זיהוי לפי client_id (כל טבלאות הקמפיינים של הלקוח), table_id מדויק, או table_name (חיפוש חלקי).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, table_id: { type: 'string' }, table_name: { type: 'string', description: 'שם או slug של הטבלה (חיפוש חלקי)' }, active: { type: 'boolean', description: 'true=הקמפיין פעיל ומדווחים עליו, false=כבוי ולא מדווחים' } }, required: ['active'] } },
   // LEADS - full CRUD
   { name: 'update_lead', description: 'עדכון פרטי ליד קיים (שם, טלפון, אימייל, מקור, הערות)', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, company_name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, source: { type: 'string' }, notes: { type: 'string' }, follow_up_date: { type: 'string', description: 'תאריך מעקב בפורמט YYYY-MM-DD' } }, required: ['lead_id'] } },
-  { name: 'delete_lead', description: 'מחיקת ליד מהמערכת', parameters: { type: 'object', properties: { lead_id: { type: 'string' } }, required: ['lead_id'] } },
+  { name: 'delete_lead', description: 'העברת ליד לארכיון (לא מחיקה לצמיתות). אפשר לשחזר מארכיון הלידים.', parameters: { type: 'object', properties: { lead_id: { type: 'string' } }, required: ['lead_id'] } },
   // TASKS - full CRUD
   { name: 'update_task', description: 'עדכון פרטי משימה (כותרת, תאריך, עדיפות, הערות, סטטוס, שיוך ליד/קמפיינר)', parameters: { type: 'object', properties: { task_id: { type: 'string' }, title: { type: 'string' }, due_date: { type: 'string' }, due_time: { type: 'string' }, priority: { type: 'integer', description: '1-10' }, notes: { type: 'string' }, client_id: { type: 'string' }, lead_id: { type: 'string' }, campaigner_id: { type: 'string' }, duration_minutes: { type: 'integer' }, status: { type: 'string', enum: ['open', 'in_progress', 'done', 'completed'] } }, required: ['task_id'] } },
   { name: 'delete_task', description: 'מחיקת משימה', parameters: { type: 'object', properties: { task_id: { type: 'string' } }, required: ['task_id'] } },
@@ -3615,9 +3615,17 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       return data
     }
     case 'delete_lead': {
-      const { error } = await supabase.from('leads').delete().eq('id', args.lead_id).in('tenant_id', accessibleTenantIds)
+      const { data, error } = await supabase
+        .from('leads')
+        .update({ archived_at: new Date().toISOString(), archived_by: null })
+        .eq('id', args.lead_id)
+        .in('tenant_id', accessibleTenantIds)
+        .is('archived_at', null)
+        .select('id')
+        .maybeSingle()
       if (error) throw error
-      return { success: true, deleted_id: args.lead_id }
+      if (!data) throw new Error('הליד לא נמצא או כבר בארכיון')
+      return { success: true, archived_id: args.lead_id }
     }
     // TASKS - full CRUD
     case 'update_task': {

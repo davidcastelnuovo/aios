@@ -30,6 +30,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { ensureLeadHomeAgency } from "@/lib/resolveTenantAgencyDb";
 
 interface LeadUpdatesTabProps {
   leadId: string;
@@ -115,6 +116,15 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
   const addUpdateMutation = useMutation({
     mutationFn: async (content: string) => {
       if (!user?.id) throw new Error("Missing user");
+      const { data: leadRow, error: leadError } = await supabase
+        .from("leads")
+        .select("id, tenant_id, agency_id")
+        .eq("id", leadId)
+        .maybeSingle();
+      if (leadError) throw leadError;
+      if (leadRow) {
+        await ensureLeadHomeAgency(leadRow);
+      }
       const { error } = await supabase
         .from("lead_updates")
         .insert({
@@ -125,12 +135,12 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates", leadId] });
       setNewUpdate("");
       toast.success("העדכון נוסף בהצלחה");
     },
-    onError: () => {
-      toast.error("שגיאה בהוספת העדכון");
+    onError: (error: Error) => {
+      toast.error(`שגיאה בהוספת העדכון: ${error.message}`);
     },
   });
 
@@ -144,13 +154,13 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates", leadId] });
       setEditingUpdateId(null);
       setEditingUpdateContent("");
       toast.success("העדכון נערך בהצלחה");
     },
-    onError: () => {
-      toast.error("שגיאה בעריכת העדכון");
+    onError: (error: Error) => {
+      toast.error(`שגיאה בעריכת העדכון: ${error.message}`);
     },
   });
 
@@ -164,11 +174,11 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates", leadId] });
       toast.success("העדכון נמחק בהצלחה");
     },
-    onError: () => {
-      toast.error("שגיאה במחיקת העדכון");
+    onError: (error: Error) => {
+      toast.error(`שגיאה במחיקת העדכון: ${error.message}`);
     },
   });
 
@@ -181,12 +191,12 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-tasks", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-tasks", leadId] });
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("סטטוס המשימה עודכן");
     },
-    onError: () => {
-      toast.error("שגיאה בעדכון המשימה");
+    onError: (error: Error) => {
+      toast.error(`שגיאה בעדכון המשימה: ${error.message}`);
     },
   });
 

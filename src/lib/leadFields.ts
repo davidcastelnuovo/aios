@@ -45,6 +45,9 @@ export type LeadStatusLike = {
 export type LeadSourceLike = {
   campaign_name?: string | null;
   source?: string | null;
+  first_source?: string | null;
+  created_at?: string | null;
+  first_created_at?: string | null;
 };
 
 const KNOWN_SOURCE_ENUMS = new Set([
@@ -137,6 +140,24 @@ export function leadOriginTagNames(lead: LeadSourceLike | null | undefined): str
   push(lead?.campaign_name);
   push(leadSourceDisplay(lead));
   return names;
+}
+
+export function leadCreatedAtWasBumped(lead: LeadSourceLike | null | undefined): boolean {
+  if (!lead?.first_created_at || !lead.created_at) return false;
+  return new Date(lead.first_created_at).getTime() + 1000 < new Date(lead.created_at).getTime();
+}
+
+export function leadArrivalSourceChanged(lead: LeadSourceLike | null | undefined): boolean {
+  return !!(lead?.first_source && lead.source && lead.first_source !== lead.source);
+}
+
+export function leadSourceFieldLabel(lead: LeadSourceLike | null | undefined): string {
+  return leadArrivalSourceChanged(lead) ? "מקור הגעה מעודכן" : "מקור הליד";
+}
+
+export function leadFirstSourceDisplay(lead: LeadSourceLike | null | undefined): string {
+  if (!lead?.first_source) return "";
+  return leadSourceDisplay({ source: lead.first_source });
 }
 
 export function looksLikeResponseStatusLabel(value: string | null | undefined): boolean {

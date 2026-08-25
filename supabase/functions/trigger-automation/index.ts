@@ -9,6 +9,7 @@ import {
 } from '../_shared/lead-alert-failure-notify.ts'
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
 import { formatTaskNotificationMessage } from '../_shared/task-notification-message.ts'
+import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
 // clearer error when ManyChat wa_id ghost on deleted contact — 2026-08-09
 
 const corsHeaders = {
@@ -4782,38 +4783,11 @@ async function executeCreateLead(supabase: any, config: any, data: any, tenantId
   const source = data.source || 'website'
   const notes = data.notes || null
   
-  // Find default agency for this tenant
+  // Find default / shared agency for this tenant
   let agencyId = data.agency_id
   
   if (!agencyId) {
-    
-    // First try to find default agency
-    const { data: defaultAgency } = await supabase
-      .from('agencies')
-      .select('id, name')
-      .eq('tenant_id', tenantId)
-      .eq('status', 'active')
-      .eq('is_default', true)
-      .limit(1)
-      .maybeSingle()
-    
-    if (defaultAgency) {
-      agencyId = defaultAgency.id
-    } else {
-      // Fallback to first active agency
-      const { data: firstAgency } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-      
-      if (firstAgency) {
-        agencyId = firstAgency.id
-      }
-    }
+    agencyId = await resolveTenantHomeAgencyId(supabase, tenantId)
   }
   
   if (!agencyId) {

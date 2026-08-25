@@ -1,4 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import {
+  applyRepeatInboundReopen,
+  updateLeadWithRepeatReopen,
+} from '../_shared/lead-repeat-reopen.ts'
+import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -198,36 +203,8 @@ Deno.serve(async (req) => {
     }
 
 
-    // Find default or first agency for this tenant
-    let agencyId: string | null = null
-    
-    // Try to find default agency
-    const { data: defaultAgency } = await supabase
-      .from('agencies')
-      .select('id, name')
-      .eq('tenant_id', tenantId)
-      .eq('status', 'active')
-      .eq('is_default', true)
-      .limit(1)
-      .maybeSingle()
-    
-    if (defaultAgency) {
-      agencyId = defaultAgency.id
-    } else {
-      // Fallback to first active agency
-      const { data: firstAgency } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-      
-      if (firstAgency) {
-        agencyId = firstAgency.id
-      }
-    }
+    // Find default, first owned, or shared-in agency for this tenant
+    const agencyId = await resolveTenantHomeAgencyId(supabase, tenantId)
 
     // Agency is optional — tenant association is enough to create the lead.
 
@@ -258,11 +235,10 @@ Deno.serve(async (req) => {
       if (!existingLead.contact_name && contactName) {
         updates.contact_name = contactName
       }
+
+      Object.assign(updates, applyRepeatInboundReopen(existingLead, { source: 'cold_call' }))
       
-      await supabase
-        .from('leads')
-        .update(updates)
-        .eq('id', existingLead.id)
+      await updateLeadWithRepeatReopen(supabase, existingLead.id, updates)
       
       
       // Trigger automations for existing lead

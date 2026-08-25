@@ -218,7 +218,7 @@ export default function Dashboard() {
         activeClientsQuery = activeClientsQuery.eq("tenant_id", tenantId);
       }
       activeClientsQuery = activeClientsQuery.in("status", ["active", "onboarding"]);
-      let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status").eq("tenant_id", tenantId);
+      let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status").eq("tenant_id", tenantId).is("archived_at", null);
       
       // אם בחרנו ספק, נמצא את הקמפיינר הקשור אליו
       let relatedCampaignerId = null;

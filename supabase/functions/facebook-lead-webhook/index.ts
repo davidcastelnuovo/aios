@@ -4,6 +4,12 @@ import {
   buildLeadRoutingPayload,
   resolveLeadClient,
 } from "../_shared/lead-routing.ts";
+import { unarchiveExistingLead } from "../_shared/unarchive-lead.ts";
+import {
+  applyRepeatInboundReopen,
+  updateLeadWithRepeatReopen,
+} from "../_shared/lead-repeat-reopen.ts";
+import { resolveTenantHomeAgencyId } from "../_shared/resolve-tenant-agency.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -271,6 +277,10 @@ serve(async (req) => {
                     form_qa_summary: flowRoutingPayload.form_qa_summary,
                     notes: notesLines.join('\n'),
                   };
+
+                  if (!flowLeadRecord.agency_id && flowTenantId) {
+                    flowLeadRecord.agency_id = await resolveTenantHomeAgencyId(supabase, flowTenantId);
+                  }
                   
                   // Build fb_ prefixed fields for trigger payload
                   const flowFbFields: Record<string, string> = {};
@@ -422,6 +432,10 @@ serve(async (req) => {
                 form_qa_summary: routingPayload.form_qa_summary,
                 notes: legacyNotesLines.join('\n'),
               };
+
+              if (!leadRecord.agency_id && integration.tenant_id) {
+                leadRecord.agency_id = await resolveTenantHomeAgencyId(supabase, integration.tenant_id);
+              }
 
               // Apply field mappings
               for (const [fbField, dbField] of Object.entries(fieldMappings)) {
@@ -582,14 +596,25 @@ serve(async (req) => {
                   updates.notes = existingNotes + newNote;
                   hasUpdates = true;
                 }
+
+                if (unarchiveExistingLead(existingLead, updates)) {
+                  hasUpdates = true;
+                }
+
+                Object.assign(
+                  updates,
+                  applyRepeatInboundReopen(existingLead, { source: leadRecord.source || "paid_ads" }),
+                );
+                hasUpdates = true;
                 
                 if (hasUpdates) {
                   updates.updated_at = new Date().toISOString();
                   
-                  const { error: updateError } = await supabase
-                    .from('leads')
-                    .update(updates)
-                    .eq('id', existingLead.id);
+                  const { error: updateError } = await updateLeadWithRepeatReopen(
+                    supabase,
+                    existingLead.id,
+                    updates,
+                  );
                   
                   if (updateError) {
                     console.error('❌ Error updating existing lead:', updateError);

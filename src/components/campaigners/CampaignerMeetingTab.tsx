@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
+import { useTeamMembersForMeeting } from "@/hooks/useTeamMembersForMeeting";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,34 +34,7 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
     data: teamMembers = [],
     isLoading: isLoadingTeamMembers,
     error: teamMembersError,
-  } = useQuery({
-    queryKey: ["team-members-for-meeting-tab", tenantId],
-    queryFn: async () => {
-      if (!tenantId) return [];
-
-      const { data: tenantUsersData, error: tenantUsersError } = await supabase
-        .from("tenant_users")
-        .select("user_id")
-        .eq("tenant_id", tenantId);
-
-      if (tenantUsersError) throw tenantUsersError;
-
-      const userIds = (tenantUsersData || []).map((tu) => tu.user_id).filter(Boolean);
-      if (userIds.length === 0) return [];
-
-      const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .in("id", userIds)
-        .not("email", "is", null)
-        .order("full_name");
-
-      if (profilesError) throw profilesError;
-
-      return (profilesData || []).filter((p: any) => p.email && p.email.trim() !== "");
-    },
-    enabled: !!tenantId,
-  });
+  } = useTeamMembersForMeeting(tenantId);
 
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();

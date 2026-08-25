@@ -13,6 +13,8 @@ import { useViewAs } from "@/contexts/ViewAsContext";
 import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
 import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
 import { resolveClientTaskAgency, type TaskClientRow } from "@/lib/taskClientAgency";
+import { pickTenantHomeAgencyId } from "@/lib/resolveTenantAgency";
+import { ensureLeadHomeAgency, fetchTenantHomeAgencyId } from "@/lib/resolveTenantAgencyDb";
 import {
   Form,
   FormControl,
@@ -342,14 +344,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         }
 
         selectedLead = leadRow;
-
-        if (selectedLead.agency_id) {
-          finalAgencyId = selectedLead.agency_id;
-        } else if (agencies && agencies.length > 0) {
-          // Fallback to default agency for current tenant, then first available
-          const defaultAgency = agencies.find(a => a.is_default === true && a.tenant_id === currentTenantId);
-          finalAgencyId = defaultAgency?.id || agencies.find(a => a.tenant_id === currentTenantId)?.id || agencies[0].id;
-        }
+        finalAgencyId = await ensureLeadHomeAgency(selectedLead, agencies);
         entityName = selectedLead.company_name || selectedLead.contact_name || 'ליד';
         if (!finalAgencyId) {
           throw new Error("לא נמצאה סוכנות לשיוך המשימה");
@@ -377,9 +372,11 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
             finalAgencyId = campaignerAgencies[0].agency_id;
           }
         }
-        // Fallback to first available agency if none found
-        if (!finalAgencyId && agencies && agencies.length > 0) {
-          finalAgencyId = agencies[0].id;
+        if (!finalAgencyId) {
+          finalAgencyId = pickTenantHomeAgencyId(currentTenantId, agencies);
+        }
+        if (!finalAgencyId && currentTenantId) {
+          finalAgencyId = await fetchTenantHomeAgencyId(currentTenantId);
         }
         if (!finalAgencyId) {
           throw new Error("לא נמצאה סוכנות לשיוך המשימה");
@@ -432,6 +429,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", currentTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["campaigner-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["client-onboarding", currentTenantId] });

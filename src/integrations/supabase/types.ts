@@ -5053,6 +5053,8 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id: string | null
+          archived_at: string | null
+          archived_by: string | null
           attachments: Json
           campaign_name: string | null
           client_id: string | null
@@ -5064,6 +5066,8 @@ export type Database = {
           estimated_deal_value: number | null
           facebook_form_id: string | null
           facebook_leadgen_id: string | null
+          first_created_at: string | null
+          first_source: Database["public"]["Enums"]["lead_source"] | null
           folder_link: string | null
           folder_links: Json
           follow_up_date: string | null
@@ -5105,6 +5109,8 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           attachments?: Json
           campaign_name?: string | null
           client_id?: string | null
@@ -5116,6 +5122,8 @@ export type Database = {
           estimated_deal_value?: number | null
           facebook_form_id?: string | null
           facebook_leadgen_id?: string | null
+          first_created_at?: string | null
+          first_source?: Database["public"]["Enums"]["lead_source"] | null
           folder_link?: string | null
           folder_links?: Json
           follow_up_date?: string | null
@@ -5157,6 +5165,8 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id?: string | null
+          archived_at?: string | null
+          archived_by?: string | null
           attachments?: Json
           campaign_name?: string | null
           client_id?: string | null
@@ -5168,6 +5178,8 @@ export type Database = {
           estimated_deal_value?: number | null
           facebook_form_id?: string | null
           facebook_leadgen_id?: string | null
+          first_created_at?: string | null
+          first_source?: Database["public"]["Enums"]["lead_source"] | null
           folder_link?: string | null
           folder_links?: Json
           follow_up_date?: string | null
@@ -10607,6 +10619,26 @@ export type Database = {
           utm_source: string
         }[]
       }
+      get_tenant_home_agency_id: {
+        Args: { _tenant_id: string }
+        Returns: string
+      }
+      archive_leads: {
+        Args: { p_lead_ids: string[] }
+        Returns: number
+      }
+      can_manage_lead_archive: {
+        Args: { _tenant_id: string }
+        Returns: boolean
+      }
+      restore_archived_leads: {
+        Args: { p_lead_ids: string[] }
+        Returns: number
+      }
+      permanently_delete_archived_leads: {
+        Args: { p_lead_ids: string[] }
+        Returns: number
+      }
       get_leads_by_stages: {
         Args: {
           p_agency_ids?: string[]
@@ -10940,6 +10972,10 @@ export type Database = {
           _owner_user_id: string
           _required_permission?: string
         }
+        Returns: boolean
+      }
+      user_can_annotate_lead: {
+        Args: { _lead_id: string }
         Returns: boolean
       }
       user_has_cross_tenant_agency_access: {
