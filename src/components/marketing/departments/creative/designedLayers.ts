@@ -395,6 +395,10 @@ export const isLegacyHeadlineBand = (layer: CreativeLayer): boolean =>
 
 export const shouldRebuildDesignedLayers = (layers: CreativeLayer[], copyText?: string): boolean => {
   if (layers.some((layer) => layer.role === "footer" || layer.role === "cta_fill" || layer.role === "type_field")) {
+    const footer = layers.find((layer) => layer.role === "footer");
+    const field = layers.find((layer) => layer.role === "type_field");
+    const footerIcons = layers.filter((layer) => layer.role === "icon" && (layer.y ?? 0) > 60);
+    if ((footer?.fill && footer.fill !== "#111111") || (field?.width ?? 0) > 50 || footerIcons.length < 4) return true;
     return false;
   }
   if (layers.some((layer) =>
@@ -492,7 +496,7 @@ export const buildDesignedCopyLayers = ({
       sub: parts.offer && parts.offer !== parts.headline ? parts.offer : undefined,
       bullets: extra.slice(0, 3),
       cta: parts.cta,
-      footerTitle: extra[3],
+      footerTitle: "מה מקבלים איתנו?",
       palette,
       logoUrl,
       format,

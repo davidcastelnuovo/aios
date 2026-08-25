@@ -29,7 +29,7 @@ export const CREATIVE_COMPOSITIONS: CompositionLayout[] = [
   layout({
     id: "offer",
     label: "לוח הצעה",
-    prompt: "OFFER-BOARD TEMPLATE (lead-gen): photograph THIS copy's subject in the RIGHT ~50% / upper 62%. Leave the LEFT type column and the LOWER 38% simple/dark — a designed white type field, black footer with separate icon objects, and a brand-color CTA pill are composited later. ZERO letters, digits, icons, or buttons in the PNG.",
+    prompt: "OFFER-BOARD: full-bleed photograph of THIS copy's subject, edge to edge. Fill the frame with a real person/scene. Do NOT paint a layout: no white panel, no diagonal split, no footer bar, no colored band, no icons, no buttons, no letters. Chrome is composited later as layers.",
     type: { x: 6, y: 12, width: 48, height: 22, align: "right" },
     field: { x: 0, y: 0, width: 54, height: 68 },
     accent: { x: 0, y: 68, width: 100, height: 32 },
@@ -123,9 +123,9 @@ export const buildCompositionLock = (id?: CompositionId | null): string => {
   const selected = compositionById(id);
   if (selected.id === "offer") {
     return [
-      "COMPOSITION LOCK — OFFER (לוח הצעה). This is a lead-gen board, not a caption on a stock photo.",
+      "COMPOSITION LOCK — OFFER (לוח הצעה). Full-bleed photo only. Do not draw the template.",
       selected.prompt,
-      "Do not invent a different layout. The white type column, black footer, icon row, and CTA pill are composited as separate editable layers.",
+      "Forbidden in the PNG: white type column, diagonal cut, maroon/black footer, icon row, CTA pill, letters. Those are separate layers.",
     ].join(" ");
   }
   return [

@@ -14,6 +14,13 @@ test("seven graphic architectures are available and structurally different", () 
   assert.equal(new Set(signatures).size, signatures.length);
 });
 
+test("offer composition asks for a full-bleed photo and forbids a painted template", () => {
+  const lock = buildCompositionLock("offer");
+  assert.match(lock, /full-bleed/i);
+  assert.match(lock, /diagonal/i);
+  assert.doesNotMatch(lock, /Leave the LEFT/i);
+});
+
 test("composition lock forbids the old caption template and copying the boards", () => {
   const lock = buildCompositionLock("rail");
   assert.match(lock, /RAIL/);
