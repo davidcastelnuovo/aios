@@ -213,6 +213,11 @@ logged.
 - **How:** Call `create-org-for-client` edge function with `{ client_id, clone_carmen: true, share_llm: false }`. Set `share_llm: true` only if user explicitly asks to share the AI key. Parse `owner_status` (existing_user / invited / no_email) and `shared` counts for the summary message.
 - **Origin:** PR #32 — implemented from the agreed plan in `docs/plan-create-org-for-client.md`. Also fixed a correlated-subquery bug in the pre-existing shared-access RLS policies on `social_pages` and `social_media_wordpress_sites`.
 
+### 2026-08-25 — Grok Bot talks to Carmen (`carmen-mcp`)
+- **What Grok Bot can now do:** Ask Carmen operational questions, pull live business data, and request actions via MCP tool `ask_carmen` on `carmen-mcp`.
+- **How:** Grok Bot → Settings → Plugins → custom MCP → URL `…/functions/v1/carmen-mcp`, header `Authorization: Bearer <CARMEN_MCP_BEARER>`. Pass `conversation_id` from replies for continuity.
+- **Origin:** Reverse bridge complementing `grok-mcp` (Carmen → Grok).
+
 ### 2026-08-25 — escalate-to-Grok Bot + teach-back loop
 - **Skin slug:** `grok_escalation` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When stuck on complex tasks, code fixes, DB/GitHub work she cannot do independently, Carmen can escalate to **Grok Bot** via MCP (`mcp_Grok__ask_grok` / `mcp_Grok__request_dev_task`), relay the Cloud Agent URL (`https://cursor.com/agents/<bcId>`) to David, and learn a skin from the solution next time.

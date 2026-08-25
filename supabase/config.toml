@@ -27,6 +27,10 @@ verify_jwt = false
 [functions.grok-mcp]
 verify_jwt = false
 
+# Carmen MCP — Grok Bot (external) talks to Carmen. Custom bearer CARMEN_MCP_BEARER.
+[functions.carmen-mcp]
+verify_jwt = false
+
 # Shared read-only architecture graph MCP. It validates its own bearer token.
 [functions.system-graph-mcp]
 verify_jwt = false

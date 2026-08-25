@@ -45,6 +45,7 @@ We use the org's own connected models. Standardized helper: `supabase/functions/
 - Same teach / keep-David-updated / fix-on-fail loop as Claude. Completion WhatsApp still uses `claude_notify_david`. Dispatches logged in `cursor_dispatches`.
 - Frontend: MCP Connections preset **Cursor**; Profile → Escalation agent can be set to `cursor`.
 - **Grok Bot** is the same pattern (`grok-mcp`): preset **Grok Bot** in MCP Connections, bearer `GROK_MCP_BEARER` (falls back to `CURSOR_MCP_BEARER`). Tools: `mcp_Grok__request_dev_task` / `mcp_Grok__ask_grok`. Profile → Escalation agent can be set to `grok`. Dispatches use the Cursor Cloud Agents API pinned to `GROK_MODEL_ID` (default `cursor-grok-4.6-high-fast`) and are logged in `grok_dispatches`.
+- **Grok Bot → Carmen** is the reverse bridge (`carmen-mcp`): Grok Bot Settings → Plugins → custom MCP → `https://zvoijyneresvkadpprel.supabase.co/functions/v1/carmen-mcp` with bearer `CARMEN_MCP_BEARER`. Tool: `ask_carmen` (sync reply from Carmen's full brain). Dispatches logged in `carmen_mcp_dispatches`. See `supabase/functions/carmen-mcp/README.md`.
 
 ## Carmen → Claude bridge (legacy / alternate)
 - Carmen talks to Claude over MCP via the `claude-mcp` edge function (an MCP server). It exposes `request_dev_task` + `ask_claude`, and each call fires a real Claude Code on the web session via the Routines `/fire` API. See `supabase/functions/claude-mcp/README.md`.
