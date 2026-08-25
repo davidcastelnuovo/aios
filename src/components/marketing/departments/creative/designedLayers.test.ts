@@ -14,6 +14,7 @@ import {
   shouldRebuildDesignedLayers,
   strongestLine,
   wrapPosterLine,
+  hydrateVariationLayers,
 } from "./designedLayers.ts";
 
 const AIDA_DOC = `
@@ -302,4 +303,12 @@ test("slash field is rotated instead of a horizontal caption bar", () => {
   const slash = layers.find((layer) => typeof layer.rotation === "number" && layer.rotation < 0);
   assert.ok(slash);
   assert.ok(!layers.some((layer) => isLegacyHeadlineBand(layer)));
+});
+
+test("hydrateVariationLayers does not crash when layers are missing", () => {
+  const next = hydrateVariationLayers(
+    { id: "v1", name: "test", imageUrl: "https://example.com/x.png", format: "1:1", layers: undefined as never, comments: [], createdAt: "" },
+    "",
+  );
+  assert.ok(Array.isArray(next.layers));
 });

@@ -54,7 +54,12 @@ export const withLayerShadow = (shadow: Partial<LayerShadow>): Pick<CreativeLaye
 
 const hexFromCssColor = (value: string) => {
   const hex = value.match(/#([0-9a-fA-F]{3,8})/);
-  if (hex) return `#${hex[1]}`;
+  if (hex) {
+    const raw = hex[1];
+    if (raw.length === 3) return `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`;
+    if (raw.length === 8) return `#${raw.slice(0, 6)}`;
+    if (raw.length === 6) return `#${raw}`;
+  }
   const rgb = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
   if (!rgb) return DEFAULT_COLOR;
   const toHex = (part: string) => Number(part).toString(16).padStart(2, "0");

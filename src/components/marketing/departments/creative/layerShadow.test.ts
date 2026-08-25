@@ -32,3 +32,26 @@ test("infer restores extrude depth from existing designed layers", () => {
   assert.equal(inferred.shadowDepth, 8);
   assert.equal(inferred.shadowColor, "#1e3a8a");
 });
+
+test("inferred shadow colors are always 6-digit hex", () => {
+  const fromShort = inferLayerShadow({
+    id: "1",
+    type: "text",
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    textShadow: "0 2px 8px #abc",
+  });
+  assert.match(fromShort.shadowColor, /^#[0-9a-fA-F]{6}$/);
+  const fromRgb = inferLayerShadow({
+    id: "2",
+    type: "text",
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    textShadow: "0 2px 8px rgba(15, 23, 42, 0.4)",
+  });
+  assert.equal(fromRgb.shadowColor, "#0f172a");
+});

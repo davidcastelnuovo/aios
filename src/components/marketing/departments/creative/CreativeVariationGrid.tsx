@@ -55,7 +55,7 @@ export function CreativeVariationGrid({
                 onClick={() => onEdit(variation)}
               >
                 <CreativeImage src={variation.imageUrl} alt={variation.name} className="absolute inset-0 h-full w-full object-cover" />
-                {variation.layers.filter((layer) => layer.type !== "background").map((layer) => (
+                {(variation.layers ?? []).filter((layer) => layer.type !== "background").map((layer) => (
                   <div
                     key={layer.id}
                     className="pointer-events-none absolute"

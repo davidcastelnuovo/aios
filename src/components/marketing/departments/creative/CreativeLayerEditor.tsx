@@ -10,7 +10,9 @@ import { CreativeImage } from "@/components/marketing/departments/creative/Creat
 import { cn } from "@/lib/utils";
 import { ArrowRight, Layers2, Loader2, Move, Save, Trash2, Type, WandSparkles } from "lucide-react";
 import type { CreativeFormat, CreativeLayer, CreativeVariation, LayerShadowStyle } from "./types";
+import { inferLayerShadow, withLayerShadow } from "./layerShadow";
 import { OfferIconMark, isIconLayer, layerLabel } from "./layerMarks";
+import { EDITOR_FONT_WEIGHTS, safeFontWeight, safeHexColor, safeSelectValue } from "./layerEditorGuards";
 import { OFFER_ICON_NAMES } from "./offerBoard";
 import { aspectRatioClass } from "./utils";
 
@@ -65,31 +67,33 @@ export function CreativeLayerEditor({
       return;
     }
     setSelectedLayerId((current) => {
-      if (current && variation.layers.some((layer) => layer.id === current)) return current;
-      return variation.layers.find((layer) => layer.type === "text")?.id
-        ?? variation.layers.find((layer) => layer.type !== "background")?.id
+      const layers = variation.layers ?? [];
+      if (current && layers.some((layer) => layer.id === current)) return current;
+      return layers.find((layer) => layer.type === "text")?.id
+        ?? layers.find((layer) => layer.type !== "background")?.id
         ?? null;
     });
   }, [isEditing, variation.id]);
 
-  const selectedLayer = variation.layers.find((layer) => layer.id === selectedLayerId) ?? null;
+  const layers = variation.layers ?? [];
+  const selectedLayer = layers.find((layer) => layer.id === selectedLayerId) ?? null;
   const selectedShadow = selectedLayer?.type === "text" ? inferLayerShadow(selectedLayer) : null;
-  const overlayLayers = variation.layers.filter((layer) => layer.type !== "background");
+  const overlayLayers = layers.filter((layer) => layer.type !== "background");
 
   const updateLayer = useCallback((layerId: string, patch: Partial<CreativeLayer>) => {
     onChange({
       ...variation,
-      layers: variation.layers.map((layer) => layer.id === layerId ? { ...layer, ...patch } : layer),
+      layers: layers.map((layer) => layer.id === layerId ? { ...layer, ...patch } : layer),
     });
-  }, [onChange, variation]);
+  }, [onChange, variation, layers]);
 
   const removeLayer = useCallback((layerId: string) => {
     onChange({
       ...variation,
-      layers: variation.layers.filter((layer) => layer.id !== layerId),
+      layers: layers.filter((layer) => layer.id !== layerId),
     });
     setSelectedLayerId((current) => current === layerId ? null : current);
-  }, [onChange, variation]);
+  }, [onChange, variation, layers]);
 
   const addTextLayer = () => {
     const layer: CreativeLayer = {
@@ -106,7 +110,7 @@ export function CreativeLayerEditor({
       color: "#ffffff",
       textAlign: "right",
     };
-    onChange({ ...variation, layers: [...variation.layers, layer] });
+    onChange({ ...variation, layers: [...layers, layer] });
     setSelectedLayerId(layer.id);
     setEditing(true);
   };
@@ -116,7 +120,7 @@ export function CreativeLayerEditor({
   };
 
   const applyShadow = (layerId: string, patch: Partial<ReturnType<typeof inferLayerShadow>>) => {
-    const layer = variation.layers.find((item) => item.id === layerId);
+    const layer = layers.find((item) => item.id === layerId);
     if (!layer) return;
     updateLayer(layerId, withLayerShadow({ ...inferLayerShadow(layer), ...patch }));
   };
@@ -124,7 +128,7 @@ export function CreativeLayerEditor({
   const removeAllTextLayers = () => {
     onChange({
       ...variation,
-      layers: variation.layers.filter((layer) => layer.type === "background" || layer.type === "image"),
+      layers: layers.filter((layer) => layer.type === "background" || layer.type === "image"),
     });
     setSelectedLayerId(null);
   };
@@ -415,7 +419,7 @@ export function CreativeLayerEditor({
                 <div className="space-y-3 border-t pt-4">
                   <Label>אייקון — אובייקט נפרד, אפשר להחליף</Label>
                   <Select
-                    value={selectedLayer.icon ?? "badge-check"}
+                    value={safeSelectValue(selectedLayer.icon, OFFER_ICON_NAMES, "badge-check")}
                     onValueChange={(value) => updateLayer(selectedLayer.id, { icon: value })}
                   >
                     <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -456,7 +460,7 @@ export function CreativeLayerEditor({
                   <div>
                     <Label>פונט</Label>
                     <Select
-                      value={selectedLayer.fontFamily ?? "Rubik"}
+                      value={safeSelectValue(selectedLayer.fontFamily, FONT_OPTIONS, "Rubik")}
                       onValueChange={(value) => updateLayer(selectedLayer.id, { fontFamily: value })}
                     >
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -477,15 +481,16 @@ export function CreativeLayerEditor({
                   <div>
                     <Label>משקל</Label>
                     <Select
-                      value={selectedLayer.fontWeight ?? "600"}
+                      value={safeFontWeight(selectedLayer.fontWeight)}
                       onValueChange={(value) => updateLayer(selectedLayer.id, { fontWeight: value })}
                     >
                       <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="400">רגיל</SelectItem>
-                        <SelectItem value="600">מודגש</SelectItem>
-                        <SelectItem value="700">כהה</SelectItem>
-                        <SelectItem value="800">תצוגה</SelectItem>
+                        {EDITOR_FONT_WEIGHTS.map((weight) => (
+                          <SelectItem key={weight} value={weight}>
+                            {weight === "400" ? "רגיל" : weight === "600" ? "מודגש" : weight === "700" ? "כהה" : weight === "800" ? "תצוגה" : "שחור"}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -494,7 +499,7 @@ export function CreativeLayerEditor({
                     <Input
                       className="mt-1 h-9"
                       type="color"
-                      value={selectedLayer.color ?? "#ffffff"}
+                      value={safeHexColor(selectedLayer.color, "#ffffff")}
                       onChange={(event) => updateLayer(selectedLayer.id, { color: event.target.value })}
                     />
                   </div>
@@ -556,7 +561,7 @@ export function CreativeLayerEditor({
                             <Input
                               className="mt-1 h-9"
                               type="color"
-                              value={selectedShadow.shadowColor}
+                              value={safeHexColor(selectedShadow.shadowColor, "#0f172a")}
                               onChange={(event) => applyShadow(selectedLayer.id, { shadowColor: event.target.value })}
                             />
                           </div>

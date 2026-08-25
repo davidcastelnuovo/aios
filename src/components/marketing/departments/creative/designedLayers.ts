@@ -621,7 +621,8 @@ export const hydrateVariationLayers = (
   brandColors?: string[],
 ): CreativeVariation => {
   const compositionId = variation.compositionId ?? pickCompositionId(variation.id);
-  const layers = shouldRebuildDesignedLayers(variation.layers, variation.copyText || copyText)
+  const existing = variation.layers ?? [];
+  const layers = shouldRebuildDesignedLayers(existing, variation.copyText || copyText)
     ? buildDesignedCopyLayers({
       copyText: variation.copyText || copyText,
       format: variation.format,
@@ -631,7 +632,7 @@ export const hydrateVariationLayers = (
       compositionId,
       brandColors,
     })
-    : variation.layers;
+    : existing;
   return {
     ...variation,
     compositionId,
