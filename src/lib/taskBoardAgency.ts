@@ -58,6 +58,20 @@ export function filterTasksBySelectedAgency<T extends AgencyScopedTask>(
 }
 
 /**
+ * Board-level filter: header agency narrows the team view, but a campaigner's
+ * personal queue ("mine") spans every agency they have assigned work in.
+ * Otherwise a header stuck on e.g. MarketingCaptain hides all promo/DMM-MC tasks.
+ */
+export function filterTasksForBoardView<T extends AgencyScopedTask>(
+  tasks: T[],
+  selectedAgency: string | null | undefined,
+  campaignerFilter: string,
+): T[] {
+  if (campaignerFilter === "mine") return tasks;
+  return filterTasksBySelectedAgency(tasks, selectedAgency);
+}
+
+/**
  * Tenant scope for the board query.
  *
  * The header agency is deliberately NOT pushed into the query: a task can be
@@ -91,10 +105,11 @@ export function syncLocalTasksForAgencyFilter<T extends AgencyScopedTask>(input:
   fetchedTasks: T[] | undefined | null;
   previousLocal: T[];
   selectedAgency: string | null | undefined;
+  campaignerFilter?: string;
 }): T[] {
-  const { isFetching, fetchedTasks, previousLocal, selectedAgency } = input;
+  const { isFetching, fetchedTasks, previousLocal, selectedAgency, campaignerFilter = "all" } = input;
   if (isFetching) {
-    return filterTasksBySelectedAgency(previousLocal, selectedAgency);
+    return filterTasksForBoardView(previousLocal, selectedAgency, campaignerFilter);
   }
-  return filterTasksBySelectedAgency(fetchedTasks ?? [], selectedAgency);
+  return filterTasksForBoardView(fetchedTasks ?? [], selectedAgency, campaignerFilter);
 }
