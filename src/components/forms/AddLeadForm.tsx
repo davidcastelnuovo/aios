@@ -33,6 +33,7 @@ import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
 import {
   findLeadStatus,
   inferLeadSource,
+  LEAD_SOURCE_SELECT_OPTIONS,
   unmatchedResponseStatusValue,
   resolveResponseStatusKey,
   responseStatusSelectValue,
@@ -104,7 +105,7 @@ export function AddLeadForm() {
       contact_name: "",
       email: "",
       phone: "",
-      source: "",
+      source: "paid_ads",
       campaign_name: "",
       status: pipelineStages[0]?.stage_key || "new",
       response_status: "",
@@ -152,9 +153,7 @@ export function AddLeadForm() {
           contact_name: values.contact_name || null,
           email: values.email || null,
           phone: values.phone || null,
-          source: (values.campaign_name || "").trim()
-            ? (inferLeadSource(values.campaign_name) as any)
-            : ((values.source as any) || "other"),
+          source: (inferLeadSource(values.source || "paid_ads") as any),
           campaign_name: (values.campaign_name || "").trim() || null,
           status: (values.status as any) || "new",
           response_status: values.response_status && values.response_status !== "none"
@@ -524,11 +523,38 @@ export function AddLeadForm() {
 
               <FormField
                 control={form.control}
+                name="source"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("source", "מקור הליד")}
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "paid_ads"}>
+                      <FormControl>
+                        <SelectTrigger className="rounded-lg border-2 h-11" dir="rtl">
+                          <SelectValue placeholder="FB" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {LEAD_SOURCE_SELECT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="campaign_name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">
-                      {getFieldLabel("source", "מקור הגעה")}
+                      {getFieldLabel("campaign_name", "שם הקמפיין")}
                     </FormLabel>
                     <FormControl>
                       <Input

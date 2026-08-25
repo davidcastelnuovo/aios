@@ -3523,6 +3523,14 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 </span>
               )
             }] : []),
+            {
+              id: "source",
+              label: "מקור הליד",
+              width: 110,
+              render: (lead: any) => (
+                <span className="truncate">{leadSourceDisplay(lead) || "—"}</span>
+              )
+            },
             { 
               id: "status", 
               label: "שלב במשפך", 

@@ -1,18 +1,18 @@
 /**
  * Shared lead source / campaign / secondary-status helpers.
  *
- * Campaign names live on `leads.campaign_name`. The "מקור" field in the
- * lead dialog shows that name. CSV imports often put the campaign in a
- * "מקור" column, which used to be collapsed into the source enum (`other`)
- * and lost. Secondary statuses like "ללא מענה" belong on `response_status`,
- * not the pipeline `status` column.
+ * `campaign_name` and `source` are separate fields. מקור הליד is the channel
+ * (FB / website / …); שם הקמפיין is the campaign string. A mixed CSV
+ * "סטטוס" column can contain both pipeline stages (נקבעה פגישה) and
+ * secondary statuses (אין מענה) — classify per row, don't dump everything
+ * into one column.
  */
 
 export const LEAD_SOURCE_LABELS: Record<string, string> = {
   website: "אתר",
   referral: "הפניה",
   social_media: "רשתות חברתיות",
-  paid_ads: "פרסום ממומן",
+  paid_ads: "FB",
   cold_call: "שיחה קרה",
   email_campaign: "דיוור",
   event: "אירוע",
@@ -20,9 +20,21 @@ export const LEAD_SOURCE_LABELS: Record<string, string> = {
   other: "אחר",
   // Legacy UI values that are not on the current lead_source enum
   phone: "טלפון",
-  facebook: "פייסבוק",
+  facebook: "FB",
   google: "גוגל",
 };
+
+export const LEAD_SOURCE_SELECT_OPTIONS = [
+  { value: "paid_ads", label: "FB" },
+  { value: "website", label: "אתר" },
+  { value: "referral", label: "הפניה" },
+  { value: "social_media", label: "רשתות חברתיות" },
+  { value: "cold_call", label: "שיחה קרה" },
+  { value: "email_campaign", label: "דיוור" },
+  { value: "event", label: "אירוע" },
+  { value: "whatsapp", label: "וואטסאפ" },
+  { value: "other", label: "אחר" },
+] as const;
 
 export type LeadStatusLike = {
   status_key: string;
@@ -61,6 +73,7 @@ export function inferLeadSource(raw: string | null | undefined): string {
   }
   if (v.includes("המלצה") || v.includes("referral") || v.includes("הפניה")) return "referral";
   if (
+    v === "fb" ||
     v.includes("facebook") ||
     v.includes("פייסבוק") ||
     v.includes("google") ||
@@ -93,10 +106,9 @@ export function inferLeadSource(raw: string | null | undefined): string {
 }
 
 export function leadSourceDisplay(lead: LeadSourceLike | null | undefined): string {
-  const campaign = lead?.campaign_name?.trim();
-  if (campaign) return campaign;
   const source = lead?.source?.trim();
   if (!source) return "";
+  if (source === "paid_ads" || source === "facebook" || compactText(source) === "fb") return "FB";
   return LEAD_SOURCE_LABELS[source] || source;
 }
 
@@ -104,19 +116,62 @@ export function looksLikeResponseStatusLabel(value: string | null | undefined): 
   if (!value || !value.trim()) return false;
   const n = compactText(value);
   return (
-    /איןמענה|ללאמענה|לאענה|noanswer|מכחיש|לארלוונטי|בעבודה|inprogress|deniescontact|notrelevant/.test(
+    /איןמענה|איןעמנה|ללאמענה|לאענה|noanswer|מכחיש|לארלוונטי|לאלרוונטי|לארלווטני|בעבודה|inprogress|deniescontact|notrelevant|תפוס|לאזמין|לאמעוניין|כפול/.test(
       n,
     )
   );
+}
+
+export function looksLikePipelineStatusLabel(value: string | null | undefined): boolean {
+  return matchPipelineStatus(value) != null;
+}
+
+function matchPipelineStatus(value: string | null | undefined): string | null {
+  if (!value || !value.trim()) return null;
+  const n = compactText(value);
+  if (/נקבעה?פגישה|meetingscheduled|^meeting$|בתיאום/.test(n)) return "meeting_scheduled";
+  if (/נשלחההצעה|הצעתמחיר|אחריהצעה|ממתיןלהצעה|proposalsent|^proposal$/.test(n)) {
+    return "proposal_sent";
+  }
+  if (/משאומתן|ממתיןלהחלטה|^negotiation$/.test(n)) return "negotiation";
+  if (/יצרנוקשר|^contacted$|^contact$/.test(n)) return "contacted";
+  if (/^פולואפ$|^followup$|^follow_up$|לתאממחדש/.test(n)) return "follow_up";
+  if (/^נסגר$|^closed$|^won$|^lost$/.test(n)) return "closed";
+  if (/^חדש$|^new$/.test(n)) return "new";
+  return null;
+}
+
+export type ClassifiedLeadStatus = {
+  pipelineStatus: string | null;
+  responseStatus: string | null;
+};
+
+/** Split a mixed CSV "סטטוס" value into pipeline stage vs secondary status. */
+export function classifyLeadImportStatus(
+  value: string | null | undefined,
+  statuses: LeadStatusLike[] = [],
+): ClassifiedLeadStatus {
+  const pipelineStatus = matchPipelineStatus(value);
+  const responseStatus = resolveResponseStatusKey(value, statuses);
+  if (pipelineStatus && pipelineStatus !== "new") {
+    return { pipelineStatus, responseStatus: responseStatus && responseStatus !== pipelineStatus ? responseStatus : null };
+  }
+  if (responseStatus) {
+    return { pipelineStatus: pipelineStatus === "new" ? "new" : null, responseStatus };
+  }
+  if (pipelineStatus === "new") return { pipelineStatus: "new", responseStatus: null };
+  return { pipelineStatus: null, responseStatus: null };
 }
 
 function aliasResponseStatusKey(normalized: string): string | null {
   if (/איןמענה4|noanswer4/.test(normalized)) return "no_answer_4";
   if (/איןמענה3|noanswer3/.test(normalized)) return "no_answer_3";
   if (/איןמענה2|noanswer2/.test(normalized)) return "no_answer_2";
-  if (/איןמענה|ללאמענה|לאענה|noanswer/.test(normalized)) return "no_answer_1";
+  if (/איןמענה|איןעמנה|ללאמענה|לאענה|noanswer/.test(normalized)) return "no_answer_1";
   if (/מכחיש/.test(normalized) || normalized === "deniescontact") return "denies_contact";
-  if (/לארלוונטי/.test(normalized) || normalized === "notrelevant") return "not_relevant";
+  if (/לארלוונטי|לאלרוונטי|לארלווטני/.test(normalized) || normalized === "notrelevant") {
+    return "not_relevant";
+  }
   if (/בעבודה/.test(normalized) || normalized === "inprogress") return "in_progress";
   return null;
 }
@@ -193,12 +248,15 @@ export const LEAD_IMPORT_HEADER_MAP: Record<string, string> = {
   'שם איש קשר': 'contact_name',
   'איש קשר': 'contact_name',
   'שם': 'contact_name',
+  'שם הלקוח': 'company_name',
+  'לקוח': 'company_name',
   'טלפון': 'phone',
   'נייד': 'phone',
   'מייל': 'email',
   'אימייל': 'email',
   'מקור': 'source',
   'מקור הגעה': 'source',
+  'מקור הליד': 'source',
   'סטטוס': 'status',
   'סטטוס תגובה': 'response_status',
   'סטטוס משני': 'response_status',
@@ -220,6 +278,8 @@ export const LEAD_IMPORT_HEADER_MAP: Record<string, string> = {
   'תעשייה': 'industry',
   'פרסום': 'industry',
   'תחום': 'industry',
+  'נסיון בקמפיינים': 'industry',
+  'ניסיון בקמפיינים': 'industry',
   'קמפיין': 'campaign_name',
   'שם קמפיין': 'campaign_name',
   'שם הקמפיין': 'campaign_name',
@@ -230,6 +290,8 @@ export const LEAD_IMPORT_HEADER_MAP: Record<string, string> = {
   'פולו אפ': 'follow_up_date',
   'follow up': 'follow_up_date',
   'תאריך יצירה': 'created_at',
+  'תאריך': 'created_at',
+  'תאריך פגישה': 'meeting_date',
   'תאריך הצעה': 'proposal_date',
   'נסגר': 'won_date',
   'תאריך סגירה': 'won_date',
@@ -267,6 +329,8 @@ export const LEAD_IMPORT_HEADER_MAP: Record<string, string> = {
   'campaign name': 'campaign_name',
   created_at: 'created_at',
   created: 'created_at',
+  meeting_date: 'meeting_date',
+  'meeting date': 'meeting_date',
   follow_up_date: 'follow_up_date',
   follow_up: 'follow_up_date',
   'follow up date': 'follow_up_date',
@@ -280,7 +344,7 @@ export function autoDetectLeadImportField(
   columnName: string,
   sampleValues: string[] = [],
 ): string | null {
-  const trimmed = columnName.trim();
+  const trimmed = columnName.replace(/^\uFEFF/, "").trim();
   const normalized = trimmed.toLowerCase();
   const detected =
     LEAD_IMPORT_HEADER_MAP[columnName] ||
@@ -291,8 +355,10 @@ export function autoDetectLeadImportField(
   if (detected === "status") {
     const samples = sampleValues.map((s) => String(s).trim()).filter(Boolean);
     if (samples.length > 0) {
+      const pipelineHits = samples.filter((s) => looksLikePipelineStatusLabel(s)).length;
       const responseHits = samples.filter((s) => looksLikeResponseStatusLabel(s)).length;
-      if (responseHits > samples.length / 2) return "response_status";
+      // Only remap the whole column when it is purely secondary statuses.
+      if (responseHits > samples.length / 2 && pipelineHits === 0) return "response_status";
     }
   }
 

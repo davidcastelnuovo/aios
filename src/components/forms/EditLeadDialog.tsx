@@ -40,7 +40,7 @@ import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
 import {
   findLeadStatus,
   inferLeadSource,
-  leadSourceDisplay,
+  LEAD_SOURCE_SELECT_OPTIONS,
   resolveResponseStatusKey,
   responseStatusSelectValue,
   unmatchedResponseStatusValue,
@@ -139,7 +139,7 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
       contact_name: lead.contact_name || "",
       email: lead.email || "",
       phone: lead.phone || "",
-      source: lead.source || "other",
+      source: lead.source ? inferLeadSource(lead.source) : "paid_ads",
       campaign_name: lead.campaign_name || "",
       status: lead.status || "new",
       response_status: lead.response_status || "",
@@ -213,7 +213,7 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
       contact_name: lead.contact_name || "",
       email: lead.email || "",
       phone: lead.phone || "",
-      source: lead.source || "other",
+      source: lead.source ? inferLeadSource(lead.source) : "paid_ads",
       campaign_name: lead.campaign_name || "",
       status: lead.status || "new",
       response_status: lead.response_status || "",
@@ -311,9 +311,7 @@ const updateMutation = useMutation({
         email: values.email || null,
         phone: values.phone || null,
         campaign_name: (values.campaign_name || "").trim() || null,
-        source: (values.campaign_name || "").trim()
-          ? (inferLeadSource(values.campaign_name) as any)
-          : ((values.source as any) || lead.source || "other"),
+        source: (inferLeadSource(values.source || lead.source || "paid_ads") as any),
         status: (values.status as any) || "new",
         response_status: values.response_status && values.response_status !== "none"
           ? (resolveResponseStatusKey(values.response_status, leadStatuses) || values.response_status)
@@ -783,21 +781,47 @@ const updateMutation = useMutation({
 
                   <FormField
                     control={form.control}
+                    name="source"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">
+                          {getFieldLabel("source", "מקור הליד")}
+                        </FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || "paid_ads"}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="text-right rounded-lg border-2 h-11" dir="rtl">
+                              <SelectValue placeholder="FB" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {LEAD_SOURCE_SELECT_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
                     name="campaign_name"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-sm font-medium">
-                          {getFieldLabel("source", "מקור")}
+                          {getFieldLabel("campaign_name", "שם הקמפיין")}
                         </FormLabel>
                         <FormControl>
                           <Input
                             {...field}
                             className="text-right rounded-lg border-2 h-11"
-                            placeholder={
-                              lead.source && lead.source !== "other"
-                                ? leadSourceDisplay({ source: lead.source, campaign_name: null })
-                                : "שם הקמפיין"
-                            }
+                            placeholder="שם הקמפיין"
                             dir="rtl"
                           />
                         </FormControl>

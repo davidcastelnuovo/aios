@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -11,10 +10,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Pencil, Trash2, Filter, Settings2 } from "lucide-react";
+import { Trash2, Filter, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { FilterState } from "./LeadFiltersDialog";
 
 export interface FilterPreset {
   id: string;
@@ -68,8 +66,7 @@ export function LeadFilterPresetTabs({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch ALL presets for the tenant (not just user's)
-  const { data: presets = [], isLoading } = useQuery({
+  const { data: presets = [] } = useQuery({
     queryKey: ["lead-filter-presets", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
@@ -120,16 +117,13 @@ export function LeadFilterPresetTabs({
     }
   };
 
-  // Check if current user owns this preset
   const userOwnsPreset = (preset: FilterPreset) => preset.user_id === userId;
-
-  // Get the active preset for display
-  const activePreset = presets.find(p => p.id === activePresetId);
+  const activePreset = presets.find((p) => p.id === activePresetId);
 
   return (
-    <div className="flex flex-col gap-2 min-w-0 w-full">
+    <div className="flex items-center gap-1.5 min-w-0 w-full overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
       {pipelineStages.length > 0 && onStageSelect && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
+        <>
           <Button
             type="button"
             variant={activeStageId === "all" ? "default" : "outline"}
@@ -178,53 +172,39 @@ export function LeadFilterPresetTabs({
               </Button>
             );
           })}
-        </div>
+        </>
       )}
-      <div className="flex items-center gap-2">
-        {/* Presets Dropdown */}
+
+      {presets.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant={activePresetId ? "default" : "outline"}
               size="sm"
-              className="gap-2 min-w-[120px]"
+              className="h-8 gap-1.5 shrink-0"
             >
-              {activePreset ? activePreset.name : "הכל"}
-              {presets.length > 0 && (
-                <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                  {presets.length}
-                </Badge>
-              )}
+              {activePreset ? activePreset.name : "פריסטים"}
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                {presets.length}
+              </Badge>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56 bg-popover">
-            {/* "All" option */}
-            <DropdownMenuItem
-              onClick={() => onPresetSelect(null)}
-              className={cn(
-                "gap-2",
-                !activePresetId && "bg-accent"
-              )}
-            >
-              הכל
-            </DropdownMenuItem>
-            
-            {presets.length > 0 && (
-              <div className="h-px bg-border my-1" />
+            {activePresetId && (
+              <DropdownMenuItem onClick={() => onPresetSelect(null)} className="gap-2">
+                נקה פריסט
+              </DropdownMenuItem>
             )}
-            
-            {/* Preset list */}
             {presets.map((preset) => (
               <DropdownMenuItem
                 key={preset.id}
                 onClick={() => onPresetSelect(preset)}
                 className={cn(
                   "flex items-center justify-between gap-2 group",
-                  activePresetId === preset.id && "bg-accent"
+                  activePresetId === preset.id && "bg-accent",
                 )}
               >
                 <span>{preset.name}</span>
-                {/* Only show edit/delete for presets owned by current user */}
                 {userOwnsPreset(preset) && (
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
@@ -258,28 +238,25 @@ export function LeadFilterPresetTabs({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+      )}
 
-        {/* Filters Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onOpenFiltersDialog}
-          className={cn(
-            "gap-2 shrink-0",
-            hasActiveFilters && "border-primary text-primary"
-          )}
-        >
-          <Filter className="h-4 w-4" />
-          פילטרים
-          {hasActiveFilters && (
-            <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs">
-              ✓
-            </Badge>
-          )}
-        </Button>
-      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onOpenFiltersDialog}
+        className={cn(
+          "h-8 gap-2 shrink-0",
+          hasActiveFilters && "border-primary text-primary",
+        )}
+      >
+        <Filter className="h-4 w-4" />
+        פילטרים
+        {hasActiveFilters && (
+          <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs">
+            ✓
+          </Badge>
+        )}
+      </Button>
     </div>
   );
 }
-
-

@@ -669,8 +669,8 @@ export function LeadsChatView({
               <ScrollArea className={cn("flex-1 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
                 <TabsContent value="details" className="mt-0 space-y-6">
                   {/* Info cards grid */}
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    {/* Contact info */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Contact + source */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         פרטי קשר
@@ -707,39 +707,13 @@ export function LeadsChatView({
                           )}
                           <span className="text-muted-foreground">:אימייל</span>
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Deal info */}
-                    <div className="border rounded-lg p-4 space-y-3 text-right">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
-                        מידע עסקי
-                        <DollarSign className="h-4 w-4 text-primary" />
-                      </h3>
-                      <div className="space-y-2 text-sm">
                         <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">
-                            {selectedLead.estimated_deal_value
-                              ? `₪${Number(selectedLead.estimated_deal_value).toLocaleString()}`
-                              : "—"}
-                          </span>
-                          <span className="text-muted-foreground">:ערך עסקה</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">
-                            {selectedLead.monthly_budget
-                              ? `₪${Number(selectedLead.monthly_budget).toLocaleString()}`
-                              : "—"}
-                          </span>
-                          <span className="text-muted-foreground">:תקציב חודשי</span>
+                          <span className="font-medium">{selectedLead.campaign_name || "—"}</span>
+                          <span className="text-muted-foreground">:שם הקמפיין</span>
                         </div>
                         <div className="flex items-center justify-end gap-2">
                           <span className="font-medium">{leadSourceDisplay(selectedLead) || "—"}</span>
-                          <span className="text-muted-foreground">:מקור</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-medium">{selectedLead.industry || "—"}</span>
-                          <span className="text-muted-foreground">:תעשייה</span>
+                          <span className="text-muted-foreground">:מקור הליד</span>
                         </div>
                       </div>
                     </div>

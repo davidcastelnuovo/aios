@@ -15,7 +15,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
   autoDetectLeadImportField,
+  classifyLeadImportStatus,
   inferLeadSource,
+  looksLikePipelineStatusLabel,
   resolveResponseStatusKey,
 } from "@/lib/leadFields";
 
@@ -60,6 +62,7 @@ const BASE_SYSTEM_FIELDS = [
   { key: "three_month_budget", label: "הצעה 3 חודשים" },
   { key: "estimated_deal_value", label: "שווי עסקה" },
   { key: "proposal_date", label: "תאריך הצעה" },
+  { key: "meeting_date", label: "תאריך פגישה" },
   { key: "won_date", label: "תאריך סגירה" },
   { key: "follow_up_date", label: "תאריך לחזרה" },
   { key: "created_at", label: "תאריך יצירה" },
@@ -313,26 +316,32 @@ export function ImportLeadsWithMapping() {
   const detectNewValues = useMemo(() => {
     const newItems: NewValueItem[] = [];
     
-    // Check for response_status column
-    const statusMapping = mappings.find(m => m.systemField === 'response_status');
-    if (statusMapping) {
+    // Check for response_status and mixed pipeline-status columns
+    const statusMappings = mappings.filter(
+      (m) => m.systemField === "response_status" || m.systemField === "status",
+    );
+    if (statusMappings.length > 0) {
       const existingStatusLabels = existingStatuses.map(s => s.label.toLowerCase().trim());
       const existingStatusKeys = existingStatuses.map(s => s.status_key.toLowerCase().trim());
       const uniqueValues = new Set<string>();
       
       rawData.forEach(row => {
-        const val = row[statusMapping.csvColumn];
-        if (val && String(val).trim()) {
-          uniqueValues.add(String(val).trim());
-        }
+        statusMappings.forEach((statusMapping) => {
+          const val = row[statusMapping.csvColumn];
+          if (val && String(val).trim()) {
+            uniqueValues.add(String(val).trim());
+          }
+        });
       });
       
       let statusColorIdx = 0;
       uniqueValues.forEach((val) => {
-        const normalizedVal = val.toLowerCase().trim();
+        if (looksLikePipelineStatusLabel(val)) return;
         if (resolveResponseStatusKey(val, existingStatuses)) return;
+        const classified = classifyLeadImportStatus(val, existingStatuses);
+        if (classified.pipelineStatus && classified.pipelineStatus !== "new") return;
+        const normalizedVal = val.toLowerCase().trim();
         if (!existingStatusLabels.includes(normalizedVal) && !existingStatusKeys.includes(normalizedVal)) {
-          // Check if already in newItems
           if (!newItems.some(item => item.value.toLowerCase() === normalizedVal && item.type === 'status')) {
             newItems.push({
               value: val,
@@ -487,17 +496,22 @@ export function ImportLeadsWithMapping() {
 
   const mapSource = (val: string) => inferLeadSource(val);
 
-  const mapStatus = (val: string) => {
-    const v = val.toLowerCase().replace(/[\s_\-]/g, '');
-    // lead_status enum values: new/contacted/follow_up/proposal_sent/meeting_scheduled/negotiation/closed/transferred_to_onboarding
-    if (v.includes("closed") || v.includes("נסגר") || v.includes("won") || v.includes("lost") || v.includes("הפסד") || v.includes("לארלוונטי")) return "closed";
-    if (v.includes("proposal") || v.includes("הצעה")) return "proposal_sent";
-    if (v.includes("meeting") || v.includes("פגישה")) return "meeting_scheduled";
-    if (v.includes("negotiation") || v.includes("משאומתן") || v.includes("משא ומתן")) return "negotiation";
-    if (v.includes("contact") || v.includes("פניה")) return "contacted";
-    if (v.includes("follow") || v.includes("פולואפ")) return "follow_up";
-    if (v.includes("qualified")) return "contacted";
-    return "new";
+  const applyImportedStatus = (lead: any, strValue: string, statusKeyMap: Record<string, string>) => {
+    const classified = classifyLeadImportStatus(strValue, [
+      ...existingStatuses,
+      ...Object.entries(statusKeyMap).map(([label, status_key]) => ({ status_key, label })),
+    ]);
+    if (classified.pipelineStatus) {
+      lead.status = classified.pipelineStatus;
+    }
+    if (classified.responseStatus) {
+      lead.response_status = classified.responseStatus;
+      return;
+    }
+    const createdKey = statusKeyMap[strValue.toLowerCase()];
+    if (createdKey && !classified.pipelineStatus) {
+      lead.response_status = createdKey;
+    }
   };
 
   const handleImport = async () => {
@@ -669,7 +683,6 @@ export function ImportLeadsWithMapping() {
               break;
             case 'campaign_name':
               lead.campaign_name = strValue;
-              if (!lead.source) lead.source = mapSource(strValue);
               break;
             case 'email':
               if (strValue.includes('@')) lead.email = strValue;
@@ -681,26 +694,11 @@ export function ImportLeadsWithMapping() {
               lead.source = mapSource(strValue);
               if (!lead.campaign_name) lead.campaign_name = strValue;
               break;
-            case 'status': {
-              const asResponse = resolveResponseStatusKey(strValue, existingStatuses);
-              const pipeline = mapStatus(strValue);
-              const hasResponseMapping = Object.values(fieldMap).includes('response_status');
-              if (asResponse && pipeline === 'new' && !hasResponseMapping) {
-                lead.response_status = asResponse;
-                if (!lead.status) lead.status = 'new';
-              } else {
-                lead.status = pipeline;
-              }
+            case 'status':
+              applyImportedStatus(lead, strValue, statusKeyMap);
               break;
-            }
             case 'response_status': {
-              const statusKey = resolveResponseStatusKey(strValue, [
-                ...existingStatuses,
-                ...Object.entries(statusKeyMap).map(([label, status_key]) => ({ status_key, label })),
-              ]) || statusKeyMap[strValue.toLowerCase()];
-              if (statusKey) {
-                lead.response_status = statusKey;
-              }
+              applyImportedStatus(lead, strValue, statusKeyMap);
               break;
             }
             case 'tags':
@@ -732,6 +730,10 @@ export function ImportLeadsWithMapping() {
               const followUpDate = parseDate(strValue);
               if (followUpDate) lead.follow_up_date = followUpDate;
               break;
+            case 'meeting_date':
+              const meetingDate = parseDate(strValue);
+              if (meetingDate) lead.meeting_date = meetingDate;
+              break;
             case 'won_date':
               const wonDate = parseDate(strValue);
               if (wonDate) {
@@ -748,7 +750,7 @@ export function ImportLeadsWithMapping() {
         if (!lead.company_name && lead.contact_name) {
           lead.company_name = lead.contact_name;
         }
-        if (!lead.source) lead.source = 'other';
+        if (!lead.source) lead.source = lead.campaign_name ? 'paid_ads' : 'other';
         if (!lead.status) lead.status = 'new';
         if (!lead.created_at) lead.created_at = new Date().toISOString();
 
