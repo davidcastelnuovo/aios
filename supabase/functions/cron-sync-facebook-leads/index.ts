@@ -4,6 +4,10 @@ import {
   buildLeadRoutingPayload,
   resolveLeadClient,
 } from "../_shared/lead-routing.ts";
+import {
+  findExistingFacebookLead,
+  wasFacebookLeadAutomationClaimed,
+} from "../_shared/facebook-lead-dedup.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -670,16 +674,21 @@ serve(async (req) => {
               totalSkipped++;
               continue;
             }
-            
-            // Also check CRM leads table (backward compat)
-            const { data: existing } = await supabase
-              .from('leads')
-              .select('id')
-              .eq('tenant_id', info.tenantId)
-              .or(`notes.ilike.%${leadgenId}%,notes.ilike.%Facebook Lead ID: ${leadgenId}%`)
-              .limit(1);
-            
-            if (existing && existing.length > 0) {
+
+            if (await wasFacebookLeadAutomationClaimed(supabase, {
+              tenantId: info.tenantId,
+              automationId: info.automationId,
+              leadgenId,
+            })) {
+              totalSkipped++;
+              continue;
+            }
+
+            const existing = await findExistingFacebookLead(supabase, {
+              tenantId: info.tenantId,
+              leadgenId,
+            });
+            if (existing) {
               totalSkipped++;
               continue;
             }

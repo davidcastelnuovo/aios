@@ -10,6 +10,7 @@ import {
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
 import { formatTaskNotificationMessage } from '../_shared/task-notification-message.ts'
 import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
+import { claimFacebookLeadAutomationRun } from '../_shared/facebook-lead-dedup.ts'
 // clearer error when ManyChat wa_id ghost on deleted contact — 2026-08-09
 
 const corsHeaders = {
@@ -1441,6 +1442,29 @@ Deno.serve(async (req) => {
           }
 
           let response: any
+
+          const facebookLeadgenId = payloadData?.facebook_leadgen_id
+          const isTestRunForDedup = Boolean(requestBody.automationId) && Boolean(payloadData?.test)
+          if (facebookLeadgenId && !isTestRunForDedup) {
+            const claim = await claimFacebookLeadAutomationRun(supabase, {
+              tenantId,
+              automationId: automation.id,
+              leadgenId: facebookLeadgenId,
+              formId: payloadData?.facebook_form_id,
+              clientId: payloadData?.client_id,
+            })
+            if (claim.duplicate) {
+              await supabase.from('automation_logs').insert({
+                automation_id: automation.id,
+                success: true,
+                error_message: 'דולג: duplicate_facebook_leadgen',
+                payload: payloadData,
+                response: { skipped: 'duplicate_facebook_leadgen' },
+                execution_time_ms: Date.now() - startTime,
+              })
+              return { skipped: true, reason: 'duplicate_facebook_leadgen' }
+            }
+          }
 
           // If this is a flow automation, execute flow steps sequentially
           if (automation.is_flow) {
