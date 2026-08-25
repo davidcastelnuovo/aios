@@ -51,6 +51,7 @@ import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachmen
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
 import { useAgencies } from "@/hooks/useEntityLists";
 import { CampaignerAssignmentPicker } from "@/components/clients/CampaignerAssignmentPicker";
+import { resolveClientChildTenantId } from "@/lib/clientContactTenant";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
   contact_name: z.string().optional(),
@@ -152,10 +153,10 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
 
   const addContactMutation = useMutation({
     mutationFn: async (contact: Omit<ClientContact, 'id' | 'is_primary'>) => {
-      if (!tenantId) throw new Error("Missing tenant");
+      const contactTenantId = resolveClientChildTenantId(client, tenantId);
       const { error } = await supabase.from("client_contacts").insert({
         client_id: client.id,
-        tenant_id: tenantId,
+        tenant_id: contactTenantId,
         contact_name: contact.contact_name,
         phone: contact.phone || null,
         email: contact.email || null,
@@ -167,7 +168,7 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
       toast.success("איש קשר נוסף בהצלחה");
       refetchContacts();
     },
-    onError: () => toast.error("שגיאה בהוספת איש קשר"),
+    onError: (error: Error) => toast.error(error.message ? `שגיאה בהוספת איש קשר: ${error.message}` : "שגיאה בהוספת איש קשר"),
   });
 
   const deleteContactMutation = useMutation({
