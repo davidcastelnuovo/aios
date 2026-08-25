@@ -4,8 +4,12 @@
 --
 -- Align SELECT with get_effective_tenant_id() + membership. Keep writes
 -- owner-only (plus super admin) — do not widen who can create/edit statuses.
--- Resolve the tenant with get_effective_tenant_id() so an owner working in
--- the currently selected org can still manage statuses.
+--
+-- Do NOT use has_role(uid, 'owner') here. That helper checks
+-- user_roles.tenant_id = get_user_tenant_id(uid) (home tenant). Combined
+-- with tenant_id = get_effective_tenant_id(), an owner of tenant A who is
+-- only a member of tenant B could manage B's lead_statuses after switching
+-- org. Require an owner row for THIS tenant instead.
 
 DROP POLICY IF EXISTS "Users can view statuses in their tenant" ON public.lead_statuses;
 DROP POLICY IF EXISTS "Owners can manage statuses" ON public.lead_statuses;
@@ -26,13 +30,25 @@ USING (
   public.is_super_admin(auth.uid())
   OR (
     tenant_id = public.get_effective_tenant_id()
-    AND public.has_role(auth.uid(), 'owner'::app_role)
+    AND EXISTS (
+      SELECT 1
+      FROM public.user_roles ur
+      WHERE ur.user_id = auth.uid()
+        AND ur.role = 'owner'::app_role
+        AND ur.tenant_id = lead_statuses.tenant_id
+    )
   )
 )
 WITH CHECK (
   public.is_super_admin(auth.uid())
   OR (
     tenant_id = public.get_effective_tenant_id()
-    AND public.has_role(auth.uid(), 'owner'::app_role)
+    AND EXISTS (
+      SELECT 1
+      FROM public.user_roles ur
+      WHERE ur.user_id = auth.uid()
+        AND ur.role = 'owner'::app_role
+        AND ur.tenant_id = lead_statuses.tenant_id
+    )
   )
 );
