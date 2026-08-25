@@ -62,6 +62,19 @@ test("art director lock paints Hebrew RTL unless live text is on", () => {
   assert.match(lock, /paint the quoted Hebrew/i);
   assert.match(lock, /פרומו/);
   assert.doesNotMatch(lock, /do not paint any letters/i);
+  assert.doesNotMatch(lock, /CONCEPT FIRST/);
+});
+
+test("approved-concept art director lock photographs the concept and types the copy", () => {
+  const lock = buildCursorArtDirectorLock({
+    format: "1:1",
+    instructions: "",
+    kit,
+    hasApprovedConcept: true,
+  });
+  assert.match(lock, /CONCEPT FIRST/);
+  assert.match(lock, /TYPE on the concept photograph/);
+  assert.doesNotMatch(lock, /SUBJECT FIRST/);
 });
 
 test("live-text art director lock leaves type as composited RTL", () => {

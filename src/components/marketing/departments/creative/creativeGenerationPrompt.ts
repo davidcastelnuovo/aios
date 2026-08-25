@@ -1,3 +1,4 @@
+import { isApprovedConceptPrompt } from "@/components/marketing/copyConcepts";
 import { buildNoGlyphLock } from "@/components/marketing/lib/creativeImagePrompt";
 import { brandKitPrompt, type CreativeBrandKit } from "./brandKit";
 import { buildAdaptiveTreatment } from "./adaptiveTreatment";
@@ -55,13 +56,16 @@ export function assembleStaticCreativePrompt({
   revising?: boolean;
 }): string {
   const concept = visualPrompt?.trim() || "";
+  const hasVisualBrief = Boolean(concept);
+  const hasApprovedConcept = isApprovedConceptPrompt(concept);
+  const lockCopyToConcept = hasApprovedConcept || hasVisualBrief;
   const copyLock = liveTextLayers
-    ? (concept
+    ? (lockCopyToConcept
       ? buildCopyOverlayLock({ copyText, title, copyLabel })
       : buildCopySceneBrief({ copyText, title, brief, instructions, copyLabel }))
     : [
-      !concept && buildCopySceneBrief({ copyText, title, brief, instructions, copyLabel, paintCopy: true }),
-      buildPaintedCopyLock({ copyText, title, copyLabel }),
+      !lockCopyToConcept && buildCopySceneBrief({ copyText, title, brief, instructions, copyLabel, paintCopy: true }),
+      buildPaintedCopyLock({ copyText, title, copyLabel, conceptLocked: lockCopyToConcept }),
     ].filter(Boolean).join("\n");
   const director = buildCursorArtDirectorLock({
     format,
@@ -70,14 +74,15 @@ export function assembleStaticCreativePrompt({
     hasTalentRef,
     liveTextLayers,
     revising,
+    hasApprovedConcept,
   });
 
   return [
     concept,
     director,
-    concept && "The concept above is the photograph. Later style/copy instructions may change crop, grade, and type placement — they may NOT replace the concept's subject, location, props, or hook.",
-    concept
-      ? `Use case: ads-marketing. Asset type: ${format} cinematic advertising still of the approved concept — not a slogan-on-background graphic.`
+    lockCopyToConcept && "The concept above is the photograph. Later style/copy instructions may change crop, grade, and type placement — they may NOT replace the concept's subject, location, props, or hook. Copy is TYPE on that photograph, never a new scene.",
+    lockCopyToConcept
+      ? `Use case: ads-marketing. Asset type: ${format} cinematic advertising still of the approved concept — not a slogan-on-background graphic and not a literal illustration of the headline.`
       : `Use case: ads-marketing. Asset type: standalone ${format} finished graphic poster — not a photo with a caption.`,
     liveTextLayers ? buildNoGlyphLock({ regenerate }) : undefined,
     copyLock,
@@ -88,7 +93,7 @@ export function assembleStaticCreativePrompt({
         attachStill: !!attachStyleStill,
       })
       : buildCompositionLock(compositionId),
-    concept
+    lockCopyToConcept
       ? "Stay inside the approved concept's world. Different copy cards may change crop and energy, never the core scene or a new story invented from the headline."
       : buildStylePlayLock({
         copyText,
@@ -102,9 +107,9 @@ export function assembleStaticCreativePrompt({
     costume
       ? [
         buildVisualStyleLock(payload, { styleId }),
-        concept && "Apply this technique TO the approved concept's scene. Do not swap the concept's subject for a style-board cliché.",
+        lockCopyToConcept && "Apply this technique TO the approved concept's scene. Do not swap the concept's subject for a style-board cliché.",
       ].filter(Boolean).join("\n")
-      : concept
+      : lockCopyToConcept
         ? undefined
         : buildAdaptiveTreatment({
           copyText,
@@ -120,8 +125,8 @@ export function assembleStaticCreativePrompt({
       : `Art director REVISION (apply this fix, keep what still works, output a finished RTL Hebrew ad): ${directorNote}`),
     styleSource
       ? `Format ${format}. Same TECHNIQUE family (paper, ink, light, color). Completely different picture, people, and props for this copy.`
-      : concept
-        ? `Format ${format}. Photograph the approved concept.${liveTextLayers ? " Leave a quiet pocket for type." : " Paint the quoted Hebrew type into a quiet pocket."} Do not invent a competing layout from the copy.`
+      : lockCopyToConcept
+        ? `Format ${format}. Photograph the approved concept.${liveTextLayers ? " Leave a quiet pocket for type." : " Paint the quoted Hebrew type into a quiet pocket — type only, do not restage the copy."} Do not invent a competing layout from the copy.`
         : `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
     kit.logoUrl && "Leave a quiet designed pocket for the real logo composite wherever this composition needs it. Do not invent or redraw a logo.",
     liveTextLayers
@@ -132,6 +137,7 @@ export function assembleStaticCreativePrompt({
       : "RTL/production: Hebrew is painted on this PNG as isolated RTL type (dir=rtl, unicode-bidi:isolate). Logical order. No mirrored glyphs.",
     liveTextLayers
       ? "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, caption plates, boring text rectangles, Canva templates, UI chrome, invented logos, baked lettering, style-board recipes, reprinting a previous collage."
-      : "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, Canva caption templates, UI chrome, invented logos, reversed or garbled Hebrew, style-board recipes, reprinting a previous collage.",
+      : "Forbidden: grey or white studio, cyclorama, cutout portrait, thinking-hand pose, Canva caption templates, UI chrome, invented logos, reversed or garbled Hebrew, style-board recipes, reprinting a previous collage, restaging the headline instead of the concept.",
+    hasApprovedConcept && "CLOSER: the photograph is still the approved concept. The headline did not become the subject.",
   ].filter(Boolean).join("\n");
 }

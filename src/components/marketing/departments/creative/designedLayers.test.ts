@@ -109,6 +109,21 @@ CTA: השאירו פרטים לבדיקת הנוכחות שלכם בצ׳אט`,
   assert.match(lock, /השאירו פרטים/);
   assert.match(lock, /right-to-left/i);
   assert.doesNotMatch(lock, /COPY IS OVERLAY ONLY/);
+  assert.doesNotMatch(lock, /TYPE ONLY/);
+});
+
+test("concept-locked painted copy is type on the photograph, not a new scene", () => {
+  const lock = buildPaintedCopyLock({
+    title: "פרומו",
+    copyLabel: "וריאציה 1",
+    conceptLocked: true,
+    copyText: `כותרת: המתחרים שלך כבר נכנסים לתשובות של הצ׳אט?
+CTA: השאירו פרטים לבדיקת הנוכחות שלכם בצ׳אט`,
+  });
+  assert.match(lock, /TYPE ONLY/);
+  assert.match(lock, /not a new scene/);
+  assert.match(lock, /המתחרים שלך/);
+  assert.doesNotMatch(lock, /STAGE THIS IDEA/);
 });
 
 test("paintCopy scene brief stages the idea and then paints type", () => {
@@ -117,6 +132,7 @@ test("paintCopy scene brief stages the idea and then paints type", () => {
     copyText: "כותרת: המתחרים שלך כבר נכנסים לתשובות של הצ׳אט?",
     paintCopy: true,
   });
+  assert.match(scene, /NO APPROVED CONCEPT/);
   assert.match(scene, /STAGE THIS IDEA/);
   assert.match(scene, /paint the quoted Hebrew/i);
   assert.doesNotMatch(scene, /NEVER draw these characters/);

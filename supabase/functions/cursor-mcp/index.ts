@@ -549,8 +549,10 @@ async function handleToolCall(
         prompt: [
           "You are the AIOS Creative Agent. Generate ONE finished Hebrew advertising still with GenerateImage.",
           "Do not edit the repo. Do not open a PR.",
-          `Load the creative brief from marketing_work_items id=${itemId} (copy, approved concept, brand, talent refs).`,
-          copyLabel && `This card is copy variation «${copyLabel}».`,
+          `Load APPROVED CONCEPTS FIRST from marketing_work_items id=${itemId} (payload.approved_concepts, then copy_concepts). The photograph IS that concept (name, big idea, hook, visual language).`,
+          "Copy (headline / CTA) is TYPE only — paint those exact RTL words on the concept photograph. Do not restage the headline as a new scene (no chat UI / Google search unless the concept itself is that).",
+          "Then load brand kit and talent refs. Concept wins if copy disagrees.",
+          copyLabel && `This card is copy variation «${copyLabel}» — same concept world, this line of type.`,
           directorNote && `REVISION REQUEST: ${directorNote}`,
           "Paint exact RTL Hebrew headline + CTA on the PNG unless the project has live_text_layers=true.",
         ].filter(Boolean).join("\n"),

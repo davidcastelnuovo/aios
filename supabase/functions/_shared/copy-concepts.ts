@@ -25,14 +25,15 @@ export function formatApprovedConceptsFromPayload(payload: Record<string, unknow
   if (rows.length > 0) {
     return [
       "MUST FOLLOW THIS APPROVED VISUAL CONCEPT. This block IS the photograph — subject, location, props, lighting, and the first-second hook.",
-      "The slogan and headline do NOT choose the scene.",
+      "The slogan and headline do NOT choose the scene. Never replace this concept with a literal illustration of the copy.",
+      "CONCEPT PHOTOGRAPH — HARD LOCK. Photograph THIS scene. Copy is TYPE only — do not restage the headline as a new situation.",
       ...rows.map((row, index) => [
         `${index + 1}. ${text(row.name) || "קונספט"}`,
-        text(row.bigIdea) && `Big idea: ${text(row.bigIdea)}`,
-        text(row.visualLanguage) && `Visual language: ${text(row.visualLanguage)}`,
-        text(row.hook) && `Hook/scene: ${text(row.hook)}`,
-        text(row.copyAngle) && `Copy on concept: ${text(row.copyAngle)}`,
-        text(row.whyItWorks) && `Why it works: ${text(row.whyItWorks)}`,
+        text(row.bigIdea) && `PHOTOGRAPH THIS SCENE: ${text(row.bigIdea)}`,
+        text(row.visualLanguage) && `Art direction / visual language: ${text(row.visualLanguage)}`,
+        text(row.hook) && `Narrative to stage — people, place, props, action: ${text(row.hook)}`,
+        text(row.copyAngle) && `Copy angle (words only — do not restage): ${text(row.copyAngle)}`,
+        text(row.whyItWorks) && `Why this concept works (keep this tension): ${text(row.whyItWorks)}`,
         text(row.reference) && `Reference: ${text(row.reference)}`,
       ].filter(Boolean).join("\n")),
     ].filter(Boolean).join("\n\n");

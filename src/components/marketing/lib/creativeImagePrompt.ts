@@ -12,7 +12,8 @@ export const NO_TEXT_ON_IMAGE = [
 
 export const FINISHED_HEBREW_AD = [
   "FINISHED HEBREW AD PNG.",
-  "Paint the quoted Hebrew headline and CTA as real advertising type ON this still.",
+  "The photograph is the APPROVED CONCEPT (scene, people, place, props). Paint the quoted Hebrew headline and CTA as real advertising type ON that concept still — type only, not a new subject.",
+  "Do not restage the headline as a new situation. Do not replace the concept with a literal illustration of the copy.",
   "RTL: Hebrew reads right-to-left. Use logical Unicode order. Do not reverse, mirror, or scramble glyphs.",
   "Quote the copy exactly — no invented slogans, no missing letters, no English unless the quoted copy contains it.",
   "This is a finished cinematic advertising still, not a letter-empty plate for later overlay, and not a Canva caption template.",
@@ -38,7 +39,7 @@ export const buildFinishedAdLock = (options?: { regenerate?: boolean }): string 
 export const wrapCreativeImagePrompt = (prompt: string, options?: CreativeImageWrapOptions): string => {
   const lock = options?.liveTextLayers ? buildNoGlyphLock(options) : buildFinishedAdLock(options);
   const trimmed = prompt.trim();
-  if (/MUST FOLLOW THIS APPROVED VISUAL CONCEPT/i.test(trimmed)) {
+  if (/MUST FOLLOW THIS APPROVED VISUAL CONCEPT|CONCEPT PHOTOGRAPH — HARD LOCK/i.test(trimmed)) {
     return `${trimmed}\n\n${lock}`;
   }
   return `${lock}\n\n${trimmed}\n\n${lock}`;

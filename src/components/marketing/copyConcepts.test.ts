@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatCopyConceptsForImagePrompt, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
+import { formatCopyConceptsForImagePrompt, isApprovedConceptPrompt, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
 
 const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
   id: overrides.id ?? "c1",
@@ -19,7 +19,11 @@ test("formatCopyConceptsForImagePrompt forbids restaging the slogan", () => {
   const prompt = formatCopyConceptsForImagePrompt([concept()]);
   assert.equal(prompt.startsWith("MUST FOLLOW THIS APPROVED VISUAL CONCEPT"), true);
   assert.match(prompt, /do NOT choose the scene/i);
+  assert.match(prompt, /CONCEPT PHOTOGRAPH — HARD LOCK/);
+  assert.match(prompt, /PHOTOGRAPH THIS SCENE/);
+  assert.match(prompt, /words only — do not restage/);
   assert.match(prompt, /ארנק פעור/);
+  assert.match(prompt, /literal illustration of the copy/);
 });
 
 test("resolveVisualPrompt prefers live approved concepts over a stale stored prompt", () => {
@@ -37,4 +41,6 @@ test("resolveVisualPrompt falls back to stored visual_prompt when there are no c
     resolveVisualPrompt({ visual_prompt: "KEEP THIS" }, []),
     "KEEP THIS",
   );
+  assert.equal(isApprovedConceptPrompt("KEEP THIS"), false);
+  assert.equal(isApprovedConceptPrompt("MUST FOLLOW THIS APPROVED VISUAL CONCEPT\nPHOTOGRAPH THIS SCENE: locked door"), true);
 });

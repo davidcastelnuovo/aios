@@ -22,6 +22,7 @@ test("default wrap is a finished Hebrew ad, not a letter-empty plate", () => {
   const lock = buildFinishedAdLock();
   assert.match(lock, /FINISHED HEBREW AD/);
   assert.match(lock, /Paint the quoted Hebrew/);
+  assert.match(lock, /APPROVED CONCEPT/);
   assert.match(lock, /right-to-left/i);
   assert.doesNotMatch(lock, /ZERO GLYPHS/);
   const wrapped = wrapCreativeImagePrompt("STAGE THIS IDEA");

@@ -370,17 +370,25 @@ export const buildPaintedCopyLock = ({
   copyText,
   title,
   copyLabel,
+  conceptLocked,
 }: {
   copyText?: string;
   title?: string;
   copyLabel?: string;
+  conceptLocked?: boolean;
 }): string => {
   const parts = parseCreativeCopy(copyText ?? "", title);
   const idea = strongestLine(copyText ?? "", title) || parts.headline || parts.body;
   return [
-    "FINISHED AD — paint the Hebrew type on this PNG. This is not a letter-empty plate.",
-    idea && `Paint this HEADLINE exactly, Hebrew RTL, unreversed glyphs, logical Unicode order: «${idea}»`,
-    parts.cta && parts.cta !== idea && `Paint this CTA exactly as a designed button/pill: «${parts.cta}»`,
+    conceptLocked
+      ? "TYPE ONLY — paint these exact Hebrew words on the CONCEPT photograph. Do not restage the scene from this copy. Do not change people, place, or props to illustrate the headline."
+      : "FINISHED AD — paint the Hebrew type on this PNG. This is not a letter-empty plate.",
+    idea && (conceptLocked
+      ? `HEADLINE (exact words to typeset, RTL — not a new scene): «${idea}»`
+      : `Paint this HEADLINE exactly, Hebrew RTL, unreversed glyphs, logical Unicode order: «${idea}»`),
+    parts.cta && parts.cta !== idea && (conceptLocked
+      ? `CTA (exact words to typeset, RTL — not a new scene): «${parts.cta}»`
+      : `Paint this CTA exactly as a designed button/pill: «${parts.cta}»`),
     copyLabel && `Copy variation «${copyLabel}» — same concept world, this line of type.`,
     "RTL HARD RULES: Hebrew reads right-to-left. Do not reverse, mirror, or scramble letters. Do not insert English unless the quoted copy contains it.",
     "Integrate type into the photograph (flush over a quiet pocket, cinematic poster lockup) — not a Canva caption bar, not a fake Instagram UI.",
@@ -410,6 +418,7 @@ export const buildCopySceneBrief = ({
   const angle = sanitizeCopyAngle(explicitAngle) || extractCopyAngle(copyText, copyLabel);
   const idea = strong || parts.headline || parts.body;
   const lines = [
+    "NO APPROVED CONCEPT — only then may copy suggest the scene.",
     "IRON RULE — SUBJECT FIRST. Style may change light, material and crop. It may NOT change what the ad is about.",
     idea && (paintCopy
       ? `STAGE THIS IDEA as a cinematic photograph (people, objects, light). Then paint the quoted Hebrew type on the still: «${idea}»`

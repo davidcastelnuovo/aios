@@ -632,7 +632,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       const conceptLock = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
       const framePrompt = [
         conceptLock,
-        conceptLock && "The approved concept is the campaign world. This frame is a beat inside that world — not a new ad invented from the copy.",
+        conceptLock && "The approved concept is the campaign world. This frame is a beat inside that world — not a new ad invented from the copy. Overlay text is type only.",
         `Use case: ads-marketing. Asset type: storyboard still, ${defaultFormat(selected.payload)}.`,
         referenceImageUrls.length && "Input-image roles: earlier frames = continuity (faces/wardrobe/world). Extra stills = style reference only — match grade/material, do not copy lettering or logo.",
         brandKitPrompt(kit),

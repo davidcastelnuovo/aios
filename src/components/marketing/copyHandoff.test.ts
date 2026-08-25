@@ -116,6 +116,7 @@ test("overlayCopyHandoffPayload keeps existing variations and writes visual_prom
   assert.deepEqual(payload.variations, [{ id: "v1", imageUrl: "https://example.com/a.png" }]);
   assert.match(String(payload.visual_prompt), /MUST FOLLOW THIS APPROVED VISUAL CONCEPT/);
   assert.match(String(payload.visual_prompt), /ארנק פעור/);
+  assert.match(String(payload.visual_prompt), /PHOTOGRAPH THIS SCENE/);
   assert.equal((payload.approved_concepts as CopyConcept[])[0]?.name, "הכיס הריק");
 });
 
@@ -134,6 +135,7 @@ test("formatCopyConceptsForImagePrompt leads with the approved concept", () => {
   const prompt = formatCopyConceptsForImagePrompt([concept(), concept({ id: "c2", name: "וריאציה שנייה", bigIdea: "זווית אחרת" })]);
   assert.equal(prompt.startsWith("MUST FOLLOW THIS APPROVED VISUAL CONCEPT"), true);
   assert.match(prompt, /Concept name: הכיס הריק/);
+  assert.match(prompt, /PHOTOGRAPH THIS SCENE/);
   assert.match(prompt, /2\. וריאציה שנייה/);
 });
 

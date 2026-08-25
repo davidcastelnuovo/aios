@@ -79,6 +79,13 @@ export function formatCopyConceptsForCreative(concepts: CopyConcept[]): string {
   ].filter(Boolean).join("\n")).join("\n\n");
 }
 
+const CONCEPT_PHOTOGRAPH_CLOSER = [
+  "CONCEPT PHOTOGRAPH — HARD LOCK. Photograph THIS scene (people, place, props, action). The still is the concept, not the slogan.",
+  "Copy (headline / CTA) is TYPE painted on that photograph — words only. It never replaces the scene and never chooses a new metaphor.",
+  "Do NOT restage the headline as a new situation. If the concept is a locked door, empty chair, crowd, or street, photograph THAT — not a person reading the headline, searching Google, or sitting in a chat UI unless that IS the hook.",
+  "Do NOT invent a different metaphor. Do NOT flatten this into a generic lifestyle / product packshot unless the concept itself is a packshot.",
+].join("\n");
+
 /** English image-model prompt. Must stay first in the generation request. */
 export function formatCopyConceptsForImagePrompt(concepts: CopyConcept[]): string {
   if (concepts.length === 0) return "";
@@ -87,13 +94,14 @@ export function formatCopyConceptsForImagePrompt(concepts: CopyConcept[]): strin
   const lines = [
     "MUST FOLLOW THIS APPROVED VISUAL CONCEPT. This block IS the photograph — subject, location, props, lighting, and the first-second hook.",
     "The slogan and headline do NOT choose the scene. Never replace this concept with a literal illustration of the copy.",
+    CONCEPT_PHOTOGRAPH_CLOSER,
     "Build a cinematic advertising still around this idea — never a generic text-on-background graphic.",
     primary.name && `Concept name: ${primary.name}`,
-    primary.bigIdea && `Big idea: ${primary.bigIdea}`,
-    primary.visualLanguage && `Visual language, composition, color, typography mood: ${primary.visualLanguage}`,
-    primary.hook && `First-second hook / what we see immediately: ${primary.hook}`,
-    primary.copyAngle && `Copy angle sitting on this visual (do not render as on-image text): ${primary.copyAngle}`,
-    primary.whyItWorks && `Why this makes a stronger graphic: ${primary.whyItWorks}`,
+    primary.bigIdea && `PHOTOGRAPH THIS SCENE (the entire still is this idea, not a pretty product photo): ${primary.bigIdea}`,
+    primary.visualLanguage && `Art direction / visual language: ${primary.visualLanguage}`,
+    primary.hook && `Narrative to stage — people, place, props, action: ${primary.hook}`,
+    primary.copyAngle && `Copy angle (words only — do not restage this as a new scene): ${primary.copyAngle}`,
+    primary.whyItWorks && `Why this concept works (keep this tension in the frame): ${primary.whyItWorks}`,
     primary.reference && `Canonical campaign method to steal (not the slogan): ${primary.reference}`,
   ];
   if (extras.length > 0) {
@@ -104,6 +112,11 @@ export function formatCopyConceptsForImagePrompt(concepts: CopyConcept[]): strin
     }).join("\n"));
   }
   return lines.filter(Boolean).join("\n");
+}
+
+/** True when the visual prompt is an approved-concept lock, not a freeform copy brief. */
+export function isApprovedConceptPrompt(visualPrompt?: string | null): boolean {
+  return /MUST FOLLOW THIS APPROVED VISUAL CONCEPT|CONCEPT PHOTOGRAPH — HARD LOCK/i.test(String(visualPrompt ?? ""));
 }
 
 export function resolveVisualPrompt(
