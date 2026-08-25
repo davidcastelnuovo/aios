@@ -9,6 +9,7 @@ import {
   applyRepeatInboundReopen,
   updateLeadWithRepeatReopen,
 } from "../_shared/lead-repeat-reopen.ts";
+import { resolveTenantHomeAgencyId } from "../_shared/resolve-tenant-agency.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -276,6 +277,10 @@ serve(async (req) => {
                     form_qa_summary: flowRoutingPayload.form_qa_summary,
                     notes: notesLines.join('\n'),
                   };
+
+                  if (!flowLeadRecord.agency_id && flowTenantId) {
+                    flowLeadRecord.agency_id = await resolveTenantHomeAgencyId(supabase, flowTenantId);
+                  }
                   
                   // Build fb_ prefixed fields for trigger payload
                   const flowFbFields: Record<string, string> = {};
@@ -427,6 +432,10 @@ serve(async (req) => {
                 form_qa_summary: routingPayload.form_qa_summary,
                 notes: legacyNotesLines.join('\n'),
               };
+
+              if (!leadRecord.agency_id && integration.tenant_id) {
+                leadRecord.agency_id = await resolveTenantHomeAgencyId(supabase, integration.tenant_id);
+              }
 
               // Apply field mappings
               for (const [fbField, dbField] of Object.entries(fieldMappings)) {

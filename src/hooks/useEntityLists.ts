@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { agenciesFromJoin, mergeAgencyLists } from "@/lib/resolveTenantAgency";
 
 /**
  * Shared tenant-scoped entity list hooks.
@@ -16,14 +17,34 @@ export function useAgencies(options?: { activeOnly?: boolean; enabled?: boolean 
     queryKey: ["agencies", tenantId, { activeOnly }],
     queryFn: async () => {
       if (!tenantId) return [];
-      let query = supabase
+      let ownedQuery = supabase
         .from("agencies")
         .select("*")
         .eq("tenant_id", tenantId);
-      if (activeOnly) query = query.eq("status", "active");
-      const { data, error } = await query.order("name");
-      if (error) throw error;
-      return data;
+      if (activeOnly) ownedQuery = ownedQuery.eq("status", "active");
+
+      const [
+        { data: owned, error: ownedError },
+        { data: sharedAccess, error: sharedError },
+      ] = await Promise.all([
+        ownedQuery.order("name"),
+        supabase
+          .from("agency_tenant_access")
+          .select("agency_id, agencies(*)")
+          .eq("accessing_tenant_id", tenantId),
+      ]);
+      if (ownedError) throw ownedError;
+      if (sharedError) {
+        console.error("Error fetching shared agencies:", sharedError);
+      }
+
+      const shared = (sharedAccess || [])
+        .flatMap((row) => agenciesFromJoin((row as { agencies?: unknown }).agencies))
+        .filter((agency) => !activeOnly || agency.status === "active" || !agency.status);
+
+      return mergeAgencyLists(owned || [], shared as typeof owned).sort((a, b) =>
+        (a.name || "").localeCompare(b.name || "", "he"),
+      );
     },
     enabled: !!tenantId && (options?.enabled ?? true),
   });

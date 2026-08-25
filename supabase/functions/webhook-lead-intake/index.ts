@@ -8,6 +8,7 @@ import {
   applyRepeatInboundReopen,
   updateLeadWithRepeatReopen,
 } from '../_shared/lead-repeat-reopen.ts'
+import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -244,42 +245,9 @@ Deno.serve(async (req) => {
     } 
     // If no agency_id but we have tenant_id, find the default or first agency
     else if (tenantId) {
-      
-      // First, try to find the default agency for this tenant
-      const { data: defaultAgency, error: defaultError } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .eq('status', 'active')
-        .eq('is_default', true)
-        .limit(1)
-        .maybeSingle()
-      
-      if (defaultError) {
-        console.error('⚠️ Error querying default agency:', defaultError)
-      }
-      
-      if (defaultAgency) {
-        agencyId = defaultAgency.id
-      } else {
-        
-        // Fallback to first active agency in this tenant
-        const { data: firstAgency, error: firstError } = await supabase
-          .from('agencies')
-          .select('id, name')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'active')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle()
-        
-        if (firstError) {
-          console.error('❌ Error querying first agency:', firstError)
-        }
-        
-        if (firstAgency) {
-          agencyId = firstAgency.id
-        }
+      agencyId = await resolveTenantHomeAgencyId(supabase, tenantId)
+      if (!agencyId) {
+        console.warn('⚠️ No owned or shared agency found for tenant; creating lead without agency_id')
       }
     } else {
       // No tenant identification provided

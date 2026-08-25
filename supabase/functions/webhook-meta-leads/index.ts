@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { resolveTenantHomeAgencyId } from "../_shared/resolve-tenant-agency.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -84,26 +85,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get default agency if not specified
+    // Get default / shared agency if not specified
     if (!resolvedAgencyId) {
-      const { data: defaultAgency } = await supabase
-        .from('agencies')
-        .select('id')
-        .eq('tenant_id', resolvedTenantId)
-        .eq('is_default', true)
-        .maybeSingle();
-      
-      if (!defaultAgency) {
-        const { data: anyAgency } = await supabase
-          .from('agencies')
-          .select('id')
-          .eq('tenant_id', resolvedTenantId)
-          .limit(1)
-          .single();
-        resolvedAgencyId = anyAgency?.id;
-      } else {
-        resolvedAgencyId = defaultAgency.id;
-      }
+      resolvedAgencyId = await resolveTenantHomeAgencyId(supabase, resolvedTenantId);
     }
 
     if (!resolvedAgencyId) {

@@ -10619,6 +10619,10 @@ export type Database = {
           utm_source: string
         }[]
       }
+      get_tenant_home_agency_id: {
+        Args: { _tenant_id: string }
+        Returns: string
+      }
       archive_leads: {
         Args: { p_lead_ids: string[] }
         Returns: number
@@ -10968,6 +10972,10 @@ export type Database = {
           _owner_user_id: string
           _required_permission?: string
         }
+        Returns: boolean
+      }
+      user_can_annotate_lead: {
+        Args: { _lead_id: string }
         Returns: boolean
       }
       user_has_cross_tenant_agency_access: {

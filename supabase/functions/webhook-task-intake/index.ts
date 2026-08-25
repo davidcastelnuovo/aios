@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -260,36 +261,9 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Find agency if not provided
+    // Find agency if not provided: owned default → first owned → shared-in
     if (!agencyId) {
-      
-      // Try to find the default agency
-      const { data: defaultAgency } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .eq('status', 'active')
-        .eq('is_default', true)
-        .limit(1)
-        .maybeSingle()
-      
-      if (defaultAgency) {
-        agencyId = defaultAgency.id
-      } else {
-        // Fallback to first active agency
-        const { data: firstAgency } = await supabase
-          .from('agencies')
-          .select('id, name')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'active')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle()
-        
-        if (firstAgency) {
-          agencyId = firstAgency.id
-        }
-      }
+      agencyId = await resolveTenantHomeAgencyId(supabase, tenantId)
     }
 
     // Resolve campaigner by name if provided

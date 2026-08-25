@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -39,6 +39,8 @@ import {
   responseStatusSelectValue,
 } from "@/lib/leadFields";
 import { ensureLeadOriginTags } from "@/lib/leadOriginTags";
+import { pickTenantHomeAgencyId } from "@/lib/resolveTenantAgency";
+import { fetchTenantHomeAgencyId } from "@/lib/resolveTenantAgencyDb";
 
 const formSchema = z.object({
   company_name: z.string().optional().default(""),
@@ -124,6 +126,13 @@ export function AddLeadForm() {
 
   const { data: agencies } = useAgencies();
 
+  useEffect(() => {
+    if (form.getValues("agency_id")) return;
+    const fromHeader = selectedAgency && selectedAgency !== "all" ? selectedAgency : "";
+    const homeAgencyId = fromHeader || pickTenantHomeAgencyId(tenantId, agencies);
+    if (homeAgencyId) form.setValue("agency_id", homeAgencyId);
+  }, [agencies, form, selectedAgency, tenantId]);
+
   const { data: salesPeople } = useSalesPeople({ activeOnly: true });
 
   const { data: products } = useQuery({
@@ -148,6 +157,10 @@ export function AddLeadForm() {
       
       // Use contact_name as company_name if company_name is empty
       const companyName = values.company_name?.trim() || values.contact_name?.trim() || "ליד חדש";
+      const resolvedAgencyId =
+        (values.agency_id && values.agency_id !== "none" ? values.agency_id : null)
+        || pickTenantHomeAgencyId(tenantId, agencies)
+        || await fetchTenantHomeAgencyId(tenantId);
       
         const submitData: any = {
           company_name: companyName,
@@ -167,7 +180,7 @@ export function AddLeadForm() {
         products: values.products || null,
         notes: values.notes || null,
         sales_person_id: values.sales_person_id && values.sales_person_id !== 'none' ? values.sales_person_id : null,
-        agency_id: values.agency_id && values.agency_id !== 'none' ? values.agency_id : null,
+        agency_id: resolvedAgencyId,
         folder_link: values.folder_link || null,
         created_at: values.created_at || new Date(),
         tenant_id: tenantId,

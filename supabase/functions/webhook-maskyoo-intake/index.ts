@@ -3,6 +3,7 @@ import {
   applyRepeatInboundReopen,
   updateLeadWithRepeatReopen,
 } from '../_shared/lead-repeat-reopen.ts'
+import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -202,36 +203,8 @@ Deno.serve(async (req) => {
     }
 
 
-    // Find default or first agency for this tenant
-    let agencyId: string | null = null
-    
-    // Try to find default agency
-    const { data: defaultAgency } = await supabase
-      .from('agencies')
-      .select('id, name')
-      .eq('tenant_id', tenantId)
-      .eq('status', 'active')
-      .eq('is_default', true)
-      .limit(1)
-      .maybeSingle()
-    
-    if (defaultAgency) {
-      agencyId = defaultAgency.id
-    } else {
-      // Fallback to first active agency
-      const { data: firstAgency } = await supabase
-        .from('agencies')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-      
-      if (firstAgency) {
-        agencyId = firstAgency.id
-      }
-    }
+    // Find default, first owned, or shared-in agency for this tenant
+    const agencyId = await resolveTenantHomeAgencyId(supabase, tenantId)
 
     // Agency is optional — tenant association is enough to create the lead.
 
