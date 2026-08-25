@@ -10,7 +10,7 @@ import {
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
 import { formatTaskNotificationMessage } from '../_shared/task-notification-message.ts'
 import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
-import { claimFacebookLeadAutomationRun } from '../_shared/facebook-lead-dedup.ts'
+import { claimFacebookLeadAutomationRun, releaseFacebookLeadAutomationRun } from '../_shared/facebook-lead-dedup.ts'
 // clearer error when ManyChat wa_id ghost on deleted contact — 2026-08-09
 
 const corsHeaders = {
@@ -1431,6 +1431,17 @@ Deno.serve(async (req) => {
     const results = await Promise.allSettled(
       (automations || []).map(async (automation) => {
         const startTime = Date.now()
+        let claimInserted = false
+        const facebookLeadgenId = payloadData?.facebook_leadgen_id
+        const releaseOwnedClaim = async () => {
+          if (!claimInserted || !facebookLeadgenId) return
+          await releaseFacebookLeadAutomationRun(supabase, {
+            tenantId,
+            automationId: automation.id,
+            leadgenId: facebookLeadgenId,
+          })
+          claimInserted = false
+        }
         
         try {
           // Check conditions if any (pass trigger_type to skip irrelevant conditions)
@@ -1443,7 +1454,6 @@ Deno.serve(async (req) => {
 
           let response: any
 
-          const facebookLeadgenId = payloadData?.facebook_leadgen_id
           const isTestRunForDedup = Boolean(requestBody.automationId) && Boolean(payloadData?.test)
           if (facebookLeadgenId && !isTestRunForDedup) {
             const claim = await claimFacebookLeadAutomationRun(supabase, {
@@ -1464,6 +1474,7 @@ Deno.serve(async (req) => {
               })
               return { skipped: true, reason: 'duplicate_facebook_leadgen' }
             }
+            claimInserted = claim.inserted
           }
 
           // If this is a flow automation, execute flow steps sequentially
@@ -1502,6 +1513,7 @@ Deno.serve(async (req) => {
                 (triggerActionType === 'carmen_whatsapp_session' && incomingTriggerType === 'whatsapp_message_received')
 
               if (!triggerTypesMatch) {
+                await releaseOwnedClaim()
                 // Log skipped run so it appears in history
                 await supabase.from('automation_logs').insert({
                   automation_id: automation.id,
@@ -1520,6 +1532,7 @@ Deno.serve(async (req) => {
                 Boolean(payloadData?._carmen_session_id && !payloadData?._carmen_session_ended)
               )
               if (!validation.matches) {
+                await releaseOwnedClaim()
                 // Log skipped run so it appears in history
                 await supabase.from('automation_logs').insert({
                   automation_id: automation.id,
@@ -2362,6 +2375,7 @@ Deno.serve(async (req) => {
             ? flowStepResults.filter((step) => step?.success === false)
             : []
           const succeeded = failedSteps.length === 0
+          if (!succeeded) await releaseOwnedClaim()
 
           await supabase.from('automation_logs').insert({
             automation_id: automation.id,
@@ -2393,6 +2407,7 @@ Deno.serve(async (req) => {
 
           return { success: succeeded, automation_id: automation.id, response }
         } catch (error) {
+          await releaseOwnedClaim()
           const executionTime = Date.now() - startTime
           console.error(`Error executing automation ${automation.id}:`, error)
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';

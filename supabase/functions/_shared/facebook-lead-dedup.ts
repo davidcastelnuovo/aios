@@ -18,10 +18,10 @@ export async function claimFacebookLeadAutomationRun(
     formId?: unknown
     clientId?: unknown
   },
-): Promise<{ duplicate: boolean }> {
+): Promise<{ duplicate: boolean; inserted: boolean }> {
   const leadgenId = asId(params.leadgenId)
   if (!leadgenId || !params.tenantId || !params.automationId) {
-    return { duplicate: false }
+    return { duplicate: false, inserted: false }
   }
 
   const { error } = await supabase.from("lead_notification_events").insert({
@@ -32,11 +32,31 @@ export async function claimFacebookLeadAutomationRun(
     client_id: asUuid(params.clientId),
   })
 
-  if (error?.code === "23505") return { duplicate: true }
+  if (error?.code === "23505") return { duplicate: true, inserted: false }
   if (error) {
     console.error("[facebook-lead-dedup] claim insert failed (continuing):", error.message)
+    return { duplicate: false, inserted: false }
   }
-  return { duplicate: false }
+  return { duplicate: false, inserted: true }
+}
+
+export async function releaseFacebookLeadAutomationRun(
+  supabase: { from: (table: string) => any },
+  params: { tenantId: string; automationId: string; leadgenId: unknown },
+): Promise<void> {
+  const leadgenId = asId(params.leadgenId)
+  if (!leadgenId || !params.tenantId || !params.automationId) return
+
+  const { error } = await supabase
+    .from("lead_notification_events")
+    .delete()
+    .eq("tenant_id", params.tenantId)
+    .eq("source", facebookFlowEventSource(params.automationId))
+    .eq("external_id", leadgenId)
+
+  if (error) {
+    console.error("[facebook-lead-dedup] claim release failed:", error.message)
+  }
 }
 
 export async function wasFacebookLeadAutomationClaimed(
@@ -55,6 +75,15 @@ export async function wasFacebookLeadAutomationClaimed(
     .maybeSingle()
 
   return Boolean(data?.id)
+}
+
+export function facebookTriggerAutomationSucceeded(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false
+  const results = (body as { results?: unknown }).results
+  if (!Array.isArray(results)) return false
+  return results.some((row) =>
+    Boolean(row && typeof row === "object" && (row as { success?: boolean }).success === true),
+  )
 }
 
 export async function findExistingFacebookLead(
