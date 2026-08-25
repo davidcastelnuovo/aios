@@ -672,7 +672,7 @@ export function LeadsChatView({
                 <TabsContent value="details" className="mt-0 space-y-6">
                   {/* Info cards grid */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Contact + source */}
+                    {/* Contact */}
                     <div className="border rounded-lg p-4 space-y-3 text-right">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         פרטי קשר
