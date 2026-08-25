@@ -73,7 +73,7 @@ DECLARE
   source_label text;
   tag_color text;
 BEGIN
-  SELECT id, tenant_id, campaign_name, source
+  SELECT id, tenant_id, campaign_name, source::text
   INTO rec
   FROM public.leads
   WHERE id = p_lead_id;
@@ -163,12 +163,12 @@ ON CONFLICT (tenant_id, name) DO NOTHING;
 INSERT INTO public.chat_tags (tenant_id, name, color, sort_order)
 SELECT DISTINCT
   l.tenant_id,
-  public.lead_source_tag_name(l.source),
+  public.lead_source_tag_name(l.source::text),
   '#3B82F6',
   0
 FROM public.leads l
 WHERE l.tenant_id IS NOT NULL
-  AND public.lead_source_tag_name(l.source) IS NOT NULL
+  AND public.lead_source_tag_name(l.source::text) IS NOT NULL
 ON CONFLICT (tenant_id, name) DO NOTHING;
 
 INSERT INTO public.chat_contact_tags (tag_id, lead_id, tenant_id, user_id)
@@ -186,7 +186,7 @@ SELECT t.id, l.id, l.tenant_id, '00000000-0000-0000-0000-000000000000'::uuid
 FROM public.leads l
 JOIN public.chat_tags t
   ON t.tenant_id = l.tenant_id
- AND lower(t.name) = lower(public.lead_source_tag_name(l.source))
+ AND lower(t.name) = lower(public.lead_source_tag_name(l.source::text))
 WHERE l.tenant_id IS NOT NULL
-  AND public.lead_source_tag_name(l.source) IS NOT NULL
+  AND public.lead_source_tag_name(l.source::text) IS NOT NULL
 ON CONFLICT (tag_id, lead_id) DO NOTHING;
