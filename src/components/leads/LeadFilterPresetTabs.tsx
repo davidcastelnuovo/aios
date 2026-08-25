@@ -121,14 +121,14 @@ export function LeadFilterPresetTabs({
   const activePreset = presets.find((p) => p.id === activePresetId);
 
   return (
-    <div className="flex items-center gap-1.5 min-w-0 w-full overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
+    <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
       {pipelineStages.length > 0 && onStageSelect && (
         <>
           <Button
             type="button"
             variant={activeStageId === "all" ? "default" : "outline"}
             size="sm"
-            className="h-8 shrink-0"
+            className="h-9 shrink-0"
             onClick={() => onStageSelect("all")}
           >
             הכל
@@ -147,7 +147,7 @@ export function LeadFilterPresetTabs({
                 type="button"
                 variant={isActive ? "default" : "outline"}
                 size="sm"
-                className="h-8 shrink-0 gap-1.5"
+                className="h-9 shrink-0 gap-1.5"
                 style={
                   isActive && stage.hexColor
                     ? { backgroundColor: stage.hexColor, borderColor: stage.hexColor, color: "#fff" }
@@ -181,7 +181,7 @@ export function LeadFilterPresetTabs({
             <Button
               variant={activePresetId ? "default" : "outline"}
               size="sm"
-              className="h-8 gap-1.5 shrink-0"
+              className="h-9 gap-1.5 shrink-0"
             >
               {activePreset ? activePreset.name : "פריסטים"}
               <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
@@ -245,7 +245,7 @@ export function LeadFilterPresetTabs({
         size="sm"
         onClick={onOpenFiltersDialog}
         className={cn(
-          "h-8 gap-2 shrink-0",
+          "h-9 gap-2 shrink-0",
           hasActiveFilters && "border-primary text-primary",
         )}
       >

@@ -2415,15 +2415,15 @@ export default function Leads() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <div className="relative flex-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="relative flex-1 min-w-[8rem]">
             <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
               placeholder="חיפוש..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
+              className="pr-10 h-8"
             />
           </div>
           <LeadFilterPresetTabs
@@ -2548,17 +2548,16 @@ export default function Leads() {
           </div>
         </div>
         
-        {/* Search + Preset Tabs + Filters Button */}
-        <div className="flex flex-col gap-3">
-          <div className="flex gap-3 items-center">
-          <div className="relative flex-1 max-w-md">
+        {/* Search + stage chips + presets + filters — one row */}
+        <div className="flex gap-3 items-center min-w-0 flex-nowrap">
+          <div className="relative shrink-0 w-[min(100%,20rem)]">
             <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               type="text"
               placeholder="חיפוש לפי שם, טלפון או חברה..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-12 h-11 text-base font-medium shadow-sm border-2 focus:border-primary"
+              className="pr-12 h-9 text-base font-medium shadow-sm border-2 focus:border-primary"
             />
             {searchQuery && (
               <Button
@@ -2571,11 +2570,26 @@ export default function Leads() {
               </Button>
             )}
           </div>
+
+          <LeadFilterPresetTabs
+            activePresetId={activePresetId}
+            onPresetSelect={handlePresetSelect}
+            onOpenFiltersDialog={() => {
+              setEditingPreset(null);
+              setFiltersDialogOpen(true);
+            }}
+            onEditPreset={handleEditPreset}
+            hasActiveFilters={hasActiveFilters}
+            pipelineStages={PIPELINE_STAGES}
+            activeStageId={filterStage}
+            onStageSelect={handleStageSelect}
+            stageCounts={stagePresetCounts}
+          />
           
           {/* Manage Lead Statuses Button */}
           <ManageLeadStatusesDialog 
             trigger={
-              <Button variant="outline" size="icon" title="ניהול סטטוסי לידים">
+              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול סטטוסי לידים">
                 <Settings2 className="h-4 w-4" />
               </Button>
             }
@@ -2584,7 +2598,7 @@ export default function Leads() {
           {/* Manage Tags Button */}
           <ChatTagsManager 
             trigger={
-              <Button variant="outline" size="icon" title="ניהול תגיות">
+              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול תגיות">
                 <Tag className="h-4 w-4" />
               </Button>
             }
@@ -2593,28 +2607,14 @@ export default function Leads() {
           {/* Export CSV Button */}
           <Button 
             variant="outline" 
-            size="icon" 
+            size="icon"
+            className="h-9 w-9 shrink-0"
             onClick={handleExportCSV}
             title="ייצוא לקובץ CSV"
           >
             <FileSpreadsheet className="h-4 w-4" />
           </Button>
         </div>
-        <LeadFilterPresetTabs
-          activePresetId={activePresetId}
-          onPresetSelect={handlePresetSelect}
-          onOpenFiltersDialog={() => {
-            setEditingPreset(null);
-            setFiltersDialogOpen(true);
-          }}
-          onEditPreset={handleEditPreset}
-          hasActiveFilters={hasActiveFilters}
-          pipelineStages={PIPELINE_STAGES}
-          activeStageId={filterStage}
-          onStageSelect={handleStageSelect}
-          stageCounts={stagePresetCounts}
-        />
-      </div>
       </div>
       
       {/* Filters Dialog */}
