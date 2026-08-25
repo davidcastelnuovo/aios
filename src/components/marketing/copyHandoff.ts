@@ -3,12 +3,14 @@ import {
   formatCopyConceptsForImagePrompt,
   type CopyConcept,
 } from "./copyConcepts.ts";
+import { isCreativeDepartmentItem } from "./departmentFilters.ts";
 
 export type HandoffWorkItem = {
   id: string;
   title: string | null;
   payload: Record<string, unknown> | null;
   client_id: string | null;
+  status?: string | null;
   current_stage_id?: string | null;
   updated_at?: string;
   created_at?: string;
@@ -56,6 +58,35 @@ export function findExistingCreativeSibling(
     .filter(isCopyLinkedCreative)
     .sort(byUpdatedDesc);
   return sameTitle[0] ?? null;
+}
+
+/** Open creative projects for the same client — used when the user chooses existing vs new. */
+export function listOpenCreativeProjects(
+  copyItem: HandoffWorkItem,
+  candidates: HandoffWorkItem[],
+  creativeStageIds: Iterable<string> = [],
+): HandoffWorkItem[] {
+  const stageIds = new Set(creativeStageIds);
+  return candidates
+    .filter((item) => item.id !== copyItem.id)
+    .filter((item) => !copyItem.client_id || item.client_id === copyItem.client_id)
+    .filter((item) => (item.status ?? "draft") !== "archived")
+    .filter((item) => {
+      const stageId = item.current_stage_id && stageIds.has(item.current_stage_id)
+        ? item.current_stage_id
+        : undefined;
+      return isCreativeDepartmentItem(item, stageId);
+    })
+    .sort(byUpdatedDesc);
+}
+
+export function suggestedCreativeTarget(
+  copyItem: HandoffWorkItem,
+  openProjects: HandoffWorkItem[],
+): HandoffWorkItem | null {
+  const sibling = findExistingCreativeSibling(copyItem, openProjects);
+  if (sibling && openProjects.some((item) => item.id === sibling.id)) return sibling;
+  return openProjects[0] ?? null;
 }
 
 export function overlayCopyHandoffPayload({

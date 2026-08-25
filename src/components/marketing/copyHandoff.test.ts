@@ -5,6 +5,8 @@ import {
   findExistingCreativeSibling,
   overlayCopyHandoffPayload,
   stampCopyPayloadAfterHandoff,
+  listOpenCreativeProjects,
+  suggestedCreativeTarget,
   type HandoffWorkItem,
 } from "./copyHandoff.ts";
 import { isCopyDepartmentItem } from "./departmentFilters.ts";
@@ -132,4 +134,25 @@ test("formatCopyConceptsForImagePrompt leads with the approved concept", () => {
   assert.equal(prompt.startsWith("MUST FOLLOW THIS APPROVED VISUAL CONCEPT"), true);
   assert.match(prompt, /Concept name: הכיס הריק/);
   assert.match(prompt, /2\. וריאציה שנייה/);
+});
+
+test("listOpenCreativeProjects returns every open creative for the client", () => {
+  const copy = item({ id: "copy-1" });
+  const open = listOpenCreativeProjects(copy, [
+    item({ id: "linked", payload: { linked_copy_item_id: "copy-1", department: "creative" } }),
+    item({ id: "manual", title: "באנר קיץ", payload: { department: "creative", intake_source: "manual" } }),
+    item({ id: "archived", payload: { department: "creative" }, status: "archived" }),
+    item({ id: "other-client", client_id: "client-2", payload: { department: "creative" } }),
+    item({ id: "copy-self", payload: { department: "copy" } }),
+  ]);
+  assert.deepEqual(open.map((row) => row.id), ["linked", "manual"]);
+});
+
+test("suggestedCreativeTarget prefers the linked sibling among open projects", () => {
+  const copy = item({ id: "copy-1", payload: { handoff_to_creative_item_id: "pointed" } });
+  const open = [
+    item({ id: "newer-manual", payload: { department: "creative" }, updated_at: "2026-08-25T12:00:00.000Z" }),
+    item({ id: "pointed", payload: { department: "creative" }, updated_at: "2026-08-24T10:00:00.000Z" }),
+  ];
+  assert.equal(suggestedCreativeTarget(copy, open)?.id, "pointed");
 });

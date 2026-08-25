@@ -16,12 +16,14 @@ import {
   parseCopyConceptsFromPayload,
 } from "@/components/marketing/copyConcepts";
 import {
-  findExistingCreativeSibling,
+  listOpenCreativeProjects,
   overlayCopyHandoffPayload,
   stampCopyPayloadAfterHandoff,
+  suggestedCreativeTarget,
   type HandoffWorkItem,
 } from "@/components/marketing/copyHandoff";
 import { CopyConceptsPanel } from "@/components/marketing/departments/CopyConceptsPanel";
+import { COPY_HANDOFF_NEW_TARGET, CopyHandoffDialog } from "@/components/marketing/departments/CopyHandoffDialog";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -207,6 +209,10 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const [deleteTarget, setDeleteTarget] = useState<CopyItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [generatingConcepts, setGeneratingConcepts] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const [handoffProjects, setHandoffProjects] = useState<HandoffWorkItem[]>([]);
+  const [handoffTargetId, setHandoffTargetId] = useState(COPY_HANDOFF_NEW_TARGET);
+  const [loadingHandoffTargets, setLoadingHandoffTargets] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const { data: items = [], isLoading } = useQuery({
@@ -499,7 +505,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   };
 
   const handoff = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (targetId: string | null) => {
       if (!selected?.client_id) throw new Error("שייכו לקוח בהגדרות כדי להעביר לקריאייטיב");
       const pipeline = await ensurePipelineForClient({ clientId: selected.client_id, tenantId, track: "campaigns" });
       if (!pipeline) throw new Error("לא נמצא פייפליין");
@@ -514,34 +520,18 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         throw new Error("אשרו לפחות קונספט אחד לפני ההעברה לקריאייטיב");
       }
       const at = new Date().toISOString();
-      const pointedId = asText(selected.payload?.handoff_to_creative_item_id);
-      const { data: siblings, error: siblingError } = await supabase
-        .from("marketing_work_items")
-        .select("id,title,status,payload,current_stage_id,client_id,pipeline_id,created_at,updated_at")
-        .eq("tenant_id", tenantId)
-        .eq("client_id", selected.client_id)
-        .neq("id", selected.id);
-      if (siblingError) throw siblingError;
-      let candidates = siblings ?? [];
-      if (pointedId && !candidates.some((row) => row.id === pointedId)) {
-        const { data: pointed, error: pointedError } = await supabase
+      let existing: HandoffWorkItem | null = null;
+      if (targetId) {
+        const { data: target, error: targetError } = await supabase
           .from("marketing_work_items")
           .select("id,title,status,payload,current_stage_id,client_id,pipeline_id,created_at,updated_at")
           .eq("tenant_id", tenantId)
-          .eq("id", pointedId)
+          .eq("id", targetId)
           .maybeSingle();
-        if (pointedError) throw pointedError;
-        if (pointed) candidates = [pointed, ...candidates];
+        if (targetError) throw targetError;
+        if (!target) throw new Error("פרויקט הקריאייטיב שנבחר לא נמצא");
+        existing = target as HandoffWorkItem;
       }
-      const existing = findExistingCreativeSibling(
-        {
-          id: selected.id,
-          title: selected.title,
-          payload: (selected.payload ?? {}) as Record<string, unknown>,
-          client_id: selected.client_id,
-        },
-        (candidates ?? []) as HandoffWorkItem[],
-      );
       const nextCreativePayload = overlayCopyHandoffPayload({
         existingPayload: (existing?.payload ?? null) as Record<string, unknown> | null,
         copyPayload: (selected.payload ?? {}) as Record<string, unknown>,
@@ -605,6 +595,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       return { mode: existing ? "updated" as const : "created" as const, title: creativeTitle || selected.title || "קריאייטיב" };
     },
     onSuccess: async (result) => {
+      setHandoffOpen(false);
       toast.success(
         result.mode === "updated"
           ? `עודכן הפרויקט «${result.title}» בקריאייטיב`
@@ -614,6 +605,61 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     },
     onError: (error: unknown) => toast.error(errorMessage(error, "ההעברה נכשלה")),
   });
+
+  const startHandoff = async () => {
+    if (!selected?.client_id) {
+      toast.error("שייכו לקוח בהגדרות כדי להעביר לקריאייטיב");
+      return;
+    }
+    if (approvedConcepts.length === 0) {
+      toast.error("אשרו לפחות קונספט אחד לפני ההעברה לקריאייטיב");
+      return;
+    }
+    setLoadingHandoffTargets(true);
+    try {
+      const copyItem: HandoffWorkItem = {
+        id: selected.id,
+        title: selected.title,
+        payload: (selected.payload ?? {}) as Record<string, unknown>,
+        client_id: selected.client_id,
+        status: selected.status,
+        current_stage_id: selected.current_stage_id,
+      };
+      const [{ data: siblings, error: siblingError }, { data: creativeStages, error: stageError }] = await Promise.all([
+        supabase
+          .from("marketing_work_items")
+          .select("id,title,status,payload,current_stage_id,client_id,created_at,updated_at")
+          .eq("tenant_id", tenantId)
+          .eq("client_id", selected.client_id)
+          .neq("id", selected.id)
+          .neq("status", "archived"),
+        supabase
+          .from("marketing_pipeline_stages")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("stage_type", "creative"),
+      ]);
+      if (siblingError) throw siblingError;
+      if (stageError) throw stageError;
+      const open = listOpenCreativeProjects(
+        copyItem,
+        (siblings ?? []) as HandoffWorkItem[],
+        (creativeStages ?? []).map((stage) => stage.id),
+      );
+      if (open.length === 0) {
+        handoff.mutate(null);
+        return;
+      }
+      const suggested = suggestedCreativeTarget(copyItem, open);
+      setHandoffProjects(open);
+      setHandoffTargetId(suggested?.id ?? COPY_HANDOFF_NEW_TARGET);
+      setHandoffOpen(true);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "לא הצלחתי לטעון פרויקטי קריאייטיב"));
+    } finally {
+      setLoadingHandoffTargets(false);
+    }
+  };
 
   const startRename = (item: CopyItem) => {
     setRenamingId(item.id);
@@ -784,11 +830,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                 variant="outline"
                 size="sm"
                 className="gap-1.5"
-                onClick={() => handoff.mutate()}
-                disabled={handoff.isPending}
-                title={approvedConcepts.length === 0 ? "אשרו לפחות קונספט אחד" : "עדכן את פרויקט הקריאייטיב הקיים, או צור אחד אם אין"}
+                onClick={() => void startHandoff()}
+                disabled={handoff.isPending || loadingHandoffTargets}
+                title={approvedConcepts.length === 0 ? "אשרו לפחות קונספט אחד" : "שייך קונספטים לפרויקט קריאייטיב קיים או חדש"}
               >
-                <Send className="h-3.5 w-3.5" />לקריאייטיב
+                {(handoff.isPending || loadingHandoffTargets) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}לקריאייטיב
                 {approvedConcepts.length > 0 && (
                   <Badge variant="secondary" className="h-4 px-1 text-[9px]">{approvedConcepts.length}</Badge>
                 )}
@@ -913,7 +959,18 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         />
       )}
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
+      <CopyHandoffDialog
+        open={handoffOpen}
+        copyId={selected?.id ?? ""}
+        copyTitle={selected?.title ?? null}
+        projects={handoffProjects}
+        selectedId={handoffTargetId}
+        pending={handoff.isPending}
+        onSelectedIdChange={setHandoffTargetId}
+        onClose={() => setHandoffOpen(false)}
+        onConfirm={() => handoff.mutate(handoffTargetId === COPY_HANDOFF_NEW_TARGET ? null : handoffTargetId)}
+      />
+      <AlertDialog open={!!deleteTarget} onOpenChange={(value) => !value && !deleting && setDeleteTarget(null)}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>למחוק את הפרויקט?</AlertDialogTitle>
