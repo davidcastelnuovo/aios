@@ -6,6 +6,7 @@ import {
   applyPeriodMetricsToSnapshot,
   buildPulseDashboardUrl,
   clientHasCampaignService,
+  filterPulseCallFlags,
   formatPulseChange,
   getPulsePeriodBounds,
   pulseSpendColumnLabel,
@@ -35,6 +36,18 @@ test("formats change and share URLs", () => {
   assert.equal(
     buildPulseDashboardUrl("https://aios.co.il/", "marketingcaptain", "abc"),
     "https://aios.co.il/t/marketingcaptain/dmm-dashboard?agency=abc",
+  );
+});
+
+test("filters call-freshness flags from pulse notes column", () => {
+  assert.deepEqual(
+    filterPulseCallFlags([
+      "CPL עלה ב-30%",
+      "לא תועדה שיחה טלפונית עם הלקוח",
+      "קמפיין נעצר",
+      "לא תועדה שיחה טלפונית עם הלקוח ב-14 הימים האחרונים",
+    ]),
+    ["CPL עלה ב-30%", "קמפיין נעצר"],
   );
 });
 
