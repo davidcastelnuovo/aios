@@ -388,9 +388,7 @@ export function ImportLeadsWithMapping() {
           const val = row[mapping.csvColumn];
           if (val && String(val).trim()) sourceRaw = String(val).trim();
         });
-        const source = sourceRaw
-          ? inferLeadSource(sourceRaw)
-          : (campaign ? 'paid_ads' : 'other');
+        const source = sourceRaw ? inferLeadSource(sourceRaw) : 'paid_ads';
         leadOriginTagNames({ campaign_name: campaign || null, source }).forEach((tag) => {
           uniqueTags.add(tag);
         });
@@ -774,7 +772,7 @@ export function ImportLeadsWithMapping() {
         if (!lead.company_name && lead.contact_name) {
           lead.company_name = lead.contact_name;
         }
-        if (!lead.source) lead.source = lead.campaign_name ? 'paid_ads' : 'other';
+        if (!lead.source) lead.source = 'paid_ads';
         if (!lead.status) lead.status = 'new';
         if (!lead.created_at) lead.created_at = new Date().toISOString();
 
