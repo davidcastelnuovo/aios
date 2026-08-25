@@ -5,6 +5,7 @@ import {
   resolveNewTaskAgency,
   resolveTaskEffectiveAgency,
   filterTasksBySelectedAgency,
+  filterTasksForBoardView,
   resolveTasksBoardScope,
   syncLocalTasksForAgencyFilter,
 } from "./taskBoardAgency.ts";
@@ -88,6 +89,35 @@ test("the board query stays tenant-scoped so client-owned tasks are not dropped"
     resolveTasksBoardScope({ tenantId: "t1", crossTenantAgencyIds: [] }),
     { type: "tenant", tenantId: "t1" },
   );
+});
+
+test("filterTasksForBoardView keeps all rows for personal mine queue", () => {
+  const all = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
+  assert.deepEqual(
+    filterTasksForBoardView(all, PROMO, "mine").map((task) => task.id),
+    ["1", "2", "3"],
+    "mine must not hide cross-agency assignments when header picks one agency",
+  );
+});
+
+test("filterTasksForBoardView still narrows team board views", () => {
+  const filtered = filterTasksForBoardView(
+    [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient],
+    PROMO,
+    "all",
+  );
+  assert.deepEqual(filtered.map((task) => task.id), ["2", "3"]);
+});
+
+test("syncLocalTasksForAgencyFilter keeps mine rows during agency switch", () => {
+  const duringFetch = syncLocalTasksForAgencyFilter({
+    isFetching: true,
+    fetchedTasks: [],
+    previousLocal: [misstampedDmmTask, promoTaskNoClient],
+    selectedAgency: PROMO,
+    campaignerFilter: "mine",
+  });
+  assert.deepEqual(duringFetch.map((task) => task.id), ["1", "3"]);
 });
 
 test("syncLocalTasksForAgencyFilter narrows during an in-flight agency switch", () => {
