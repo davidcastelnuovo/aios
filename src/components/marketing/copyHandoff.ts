@@ -1,6 +1,8 @@
 import {
+  approvedCopyConcepts,
   formatCopyConceptsForCreative,
   formatCopyConceptsForImagePrompt,
+  parseCopyConceptsFromPayload,
   type CopyConcept,
 } from "./copyConcepts.ts";
 import { isCreativeDepartmentItem } from "./departmentFilters.ts";
@@ -116,8 +118,8 @@ export function overlayCopyHandoffPayload({
     format: existing.format ?? copy.format ?? "1:1",
     copy_text: copy.copy_text ?? existing.copy_text ?? "",
     brief_text: copy.brief_text ?? existing.brief_text ?? "",
-    copy_concepts: cloneJson(concepts),
-    approved_concepts: cloneJson(approved),
+    copy_concepts: concepts.length > 0 ? cloneJson(concepts) : cloneJson(existing.copy_concepts ?? []),
+    approved_concepts: concepts.length > 0 ? cloneJson(approved) : cloneJson(existing.approved_concepts ?? []),
     creative_concept: primary
       ? {
         name: primary.name,
@@ -127,8 +129,8 @@ export function overlayCopyHandoffPayload({
         hook: primary.hook,
       }
       : existing.creative_concept,
-    concept_brief: conceptBrief,
-    visual_prompt: visualPrompt,
+    concept_brief: conceptBrief || existing.concept_brief || "",
+    visual_prompt: visualPrompt || asText(existing.visual_prompt),
     linked_copy_item_id: copyItem.id,
     linked_copy_title: copyItem.title,
     handoff_from: "copy",
@@ -137,7 +139,27 @@ export function overlayCopyHandoffPayload({
     content_type: copy.content_type ?? existing.content_type,
     channel: copy.channel ?? existing.channel,
     instructions: copy.instructions ?? existing.instructions,
-    notes: [`קונספטים מאושרים:\n${conceptBrief}`, asText(copy.notes)].filter(Boolean).join("\n\n"),
+    notes: [
+      conceptBrief && `קונספטים מאושרים:\n${conceptBrief}`,
+      asText(copy.notes) || asText(existing.notes),
+    ].filter(Boolean).join("\n\n"),
+  };
+}
+
+/** Copy items that still have text or concepts worth attaching to a creative project. */
+export function copyPullSummary(payload: Record<string, unknown> | null | undefined) {
+  const concepts = parseCopyConceptsFromPayload(payload);
+  const approved = approvedCopyConcepts(concepts);
+  const copyText = asText(payload?.copy_text);
+  const briefText = asText(payload?.brief_text);
+  return {
+    concepts,
+    approved,
+    conceptCount: concepts.length,
+    approvedCount: approved.length,
+    copyText,
+    briefText,
+    pullable: copyText.length > 0 || briefText.length > 0 || concepts.length > 0,
   };
 }
 

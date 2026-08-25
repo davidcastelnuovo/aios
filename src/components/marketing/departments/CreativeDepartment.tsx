@@ -59,6 +59,7 @@ import {
 } from "@/components/marketing/departments/creative/visualStyles";
 import { filterCreativeDepartmentItems, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
 import { resolveVisualPrompt } from "@/components/marketing/copyConcepts";
+import { copyPullSummary, overlayCopyHandoffPayload, stampCopyPayloadAfterHandoff } from "@/components/marketing/copyHandoff";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -90,6 +91,7 @@ import {
   PenLine,
   Plus,
   Send,
+  Settings,
   Sparkles,
   Square,
   ThumbsDown,
@@ -145,6 +147,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [variationDraft, setVariationDraft] = useState<CreativeVariation | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [linkCopyOpen, setLinkCopyOpen] = useState(false);
+  const [linkingCopy, setLinkingCopy] = useState(false);
+  const [refreshingLinkedCopy, setRefreshingLinkedCopy] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
@@ -318,7 +322,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const { data: copyItems = [] } = useQuery({
     queryKey: ["creative-linkable-copy", linkCopyClientFilter, tenantId],
-    enabled: linkCopyOpen && !!linkCopyClientFilter,
+    enabled: (linkCopyOpen || workspacePanel === "project") && !!linkCopyClientFilter,
     queryFn: async () => {
       let query = supabase
         .from("marketing_work_items")
@@ -331,6 +335,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       return ((data ?? []) as CreativeItem[]).filter((item) => isLinkableCopyItem(item));
     },
   });
+
+  const pullableCopyItems = useMemo(
+    () => copyItems.filter((item) => copyPullSummary(item.payload).pullable),
+    [copyItems],
+  );
 
   useEffect(() => {
     if (!selectedId && items[0]?.id) setSelectedId(items[0].id);
@@ -1143,35 +1152,86 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const linkCopyFromItem = async (copyItem: CreativeItem) => {
     if (!selected) return;
-    const copyText = String(copyItem.payload?.copy_text ?? "");
-    const briefText = String(copyItem.payload?.brief_text ?? "");
-    const approved = getApprovedCopyConcepts(copyItem);
-    const nextPayload = {
-      ...(selected.payload ?? {}),
-      copy_text: copyText,
-      brief_text: briefText || selected.payload?.brief_text,
-      copy_concepts: copyItem.payload?.copy_concepts,
-      approved_concepts: copyItem.payload?.approved_concepts ?? approved,
-      creative_concept: copyItem.payload?.creative_concept,
-      concept_brief: getConceptBrief(copyItem) || undefined,
-      visual_prompt: resolveVisualPrompt(copyItem.payload, approved),
-      linked_copy_item_id: copyItem.id,
-      linked_copy_title: copyItem.title,
-      content_type: copyItem.payload?.content_type ?? selected.payload?.content_type,
-      channel: copyItem.payload?.channel ?? selected.payload?.channel,
-      department: "creative",
-      handoff_from: "copy",
-      intake_source: selected.payload?.intake_source ?? "copy_link",
-    };
+    const summary = copyPullSummary(copyItem.payload);
+    const at = new Date().toISOString();
+    const nextPayload = overlayCopyHandoffPayload({
+      existingPayload: selected.payload,
+      copyPayload: copyItem.payload,
+      copyItem: { id: copyItem.id, title: copyItem.title },
+      concepts: summary.concepts,
+      approved: summary.approved,
+      at,
+    });
     const { error } = await supabase
       .from("marketing_work_items")
       .update({ payload: nextPayload })
       .eq("id", selected.id)
       .eq("tenant_id", tenantId);
     if (error) throw error;
-    toast.success("הקופי שויך לפרויקט");
+    const { error: stampError } = await supabase
+      .from("marketing_work_items")
+      .update({
+        payload: stampCopyPayloadAfterHandoff(copyItem.payload, selected.id, at),
+      })
+      .eq("id", copyItem.id)
+      .eq("tenant_id", tenantId);
+    if (stampError) throw stampError;
+    toast.success(
+      summary.approvedCount > 0
+        ? `הקופי והקונספטים שויכו (${summary.approvedCount} מאושרים)`
+        : summary.conceptCount > 0
+          ? "הקופי והקונספטים שויכו — אף קונספט לא מאושר עדיין"
+          : "הקופי שויך לפרויקט",
+    );
     setLinkCopyOpen(false);
     await refresh();
+  };
+
+  const pullCopyFromPicker = async (copyItem: CreativeItem) => {
+    setLinkingCopy(true);
+    try {
+      await linkCopyFromItem(copyItem);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "משיכת הקופי נכשלה"));
+    } finally {
+      setLinkingCopy(false);
+    }
+  };
+
+  const refreshFromLinkedCopy = async () => {
+    if (!selected) return;
+    const linkedId = typeof selected.payload?.linked_copy_item_id === "string"
+      ? selected.payload.linked_copy_item_id
+      : "";
+    if (!linkedId) {
+      setLinkCopyOpen(true);
+      return;
+    }
+    setRefreshingLinkedCopy(true);
+    try {
+      const cached = copyItems.find((item) => item.id === linkedId);
+      let copyItem = cached ?? null;
+      if (!copyItem) {
+        const { data, error } = await supabase
+          .from("marketing_work_items")
+          .select("id,title,payload,updated_at")
+          .eq("id", linkedId)
+          .eq("tenant_id", tenantId)
+          .maybeSingle();
+        if (error) throw error;
+        copyItem = (data as CreativeItem | null) ?? null;
+      }
+      if (!copyItem) {
+        toast.error("פרויקט הקופי המשויך לא נמצא");
+        setLinkCopyOpen(true);
+        return;
+      }
+      await linkCopyFromItem(copyItem);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "רענון הקונספטים נכשל"));
+    } finally {
+      setRefreshingLinkedCopy(false);
+    }
   };
 
   const handoff = useMutation({
@@ -1417,8 +1477,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         <Button size="sm" variant={workspacePanel === "projects" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("projects")}>
           פרויקטים
         </Button>
-        <Button size="sm" variant={workspacePanel === "project" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("project")}>
-          עריכת פרויקט
+        <Button size="sm" variant={workspacePanel === "project" ? "secondary" : "ghost"} className="h-8 gap-1.5" onClick={() => toggleWorkspacePanel("project")}>
+          <Settings className="h-3.5 w-3.5" />
+          הגדרות פרויקט
         </Button>
         {isVideoWorkspace ? (
           <Button size="sm" variant={workspacePanel === "scene" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("scene")} disabled={storyboardDraft.length === 0}>
@@ -1443,7 +1504,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         onChange={(style) => void persistVisualStyle(style)}
       />
       <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkCopyOpen(true)}>
-        <Link2 className="h-3.5 w-3.5" />שייך קופi
+        <Link2 className="h-3.5 w-3.5" />משוך מקופי
       </Button>
       {!isVideoWorkspace && (
         <>
@@ -1623,7 +1684,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <Sheet open={workspacePanel === "project"} onOpenChange={(open) => setWorkspacePanel(open ? "project" : null)}>
         <SheetContent side="right" className="flex w-[min(560px,92vw)] max-w-none flex-col gap-0 p-0 sm:max-w-[560px]" dir="rtl">
           <SheetHeader className="border-b px-6 py-4 text-right">
-            <SheetTitle>עריכת פרויקט</SheetTitle>
+            <SheetTitle className="flex items-center gap-1.5">
+              <Settings className="h-4 w-4" />הגדרות פרויקט
+            </SheetTitle>
           </SheetHeader>
           {selected ? (
             <CreativeBriefEditor
@@ -1633,6 +1696,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               onSave={saveProject}
               onAssignClient={assignCreativeClient}
               saving={saving}
+              pullingCopy={linkingCopy}
+              refreshingLinkedCopy={refreshingLinkedCopy}
+              onPullCopy={() => setLinkCopyOpen(true)}
+              onRefreshLinkedCopy={() => void refreshFromLinkedCopy()}
             />
           ) : null}
         </SheetContent>
@@ -1669,26 +1736,49 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         }}
       />
 
-      <Dialog open={linkCopyOpen} onOpenChange={(value) => !value && setLinkCopyOpen(false)}>
+      <Dialog open={linkCopyOpen} onOpenChange={(value) => !value && !linkingCopy && setLinkCopyOpen(false)}>
         <DialogContent className="max-w-lg" dir="rtl">
-          <DialogHeader><DialogTitle>שיוך קופי ממחלקת הקופי</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>משיכת קופי וקונספטים</DialogTitle>
+            <p className="pt-1 text-sm text-muted-foreground">
+              בחרו פרויקט ממחלקת הקופי. הקופי והקונספטים יצורפו לפרויקט הקריאייטיב הנוכחי בלי ליצור פרויקט חדש.
+            </p>
+          </DialogHeader>
           <ScrollArea className="max-h-80">
             <div className="space-y-2 py-2">
-              {copyItems.length === 0 ? (
+              {pullableCopyItems.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  {linkCopyClientFilter ? "אין פריטי קופי זמינים ללקוח הזה" : "בחר פרויקט עם לקוח משויך כדי לשייך קופi"}
+                  {linkCopyClientFilter ? "אין פריטי קופי עם טקסט או קונספטים ללקוח הזה" : "שייכו לקוח לפרויקט כדי למשוך קופי"}
                 </p>
-              ) : copyItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => void linkCopyFromItem(item)}
-                  className="w-full rounded-xl border p-3 text-right hover:bg-muted/50"
-                >
-                  <div className="text-sm font-semibold">{item.title || "ללא כותרת"}</div>
-                  <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{String(item.payload?.copy_text ?? "")}</p>
-                </button>
-              ))}
+              ) : pullableCopyItems.map((item) => {
+                const summary = copyPullSummary(item.payload);
+                const alreadyLinked = String(selected?.payload?.linked_copy_item_id ?? "") === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={linkingCopy}
+                    onClick={() => void pullCopyFromPicker(item)}
+                    className="w-full rounded-xl border p-3 text-right hover:bg-muted/50 disabled:opacity-60"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-sm font-semibold">{item.title || "ללא כותרת"}</div>
+                      {alreadyLinked && <Badge variant="outline" className="h-5 font-normal">משויך כרגע</Badge>}
+                    </div>
+                    {summary.copyText && (
+                      <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{summary.copyText}</p>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {summary.conceptCount > 0 && (
+                        <Badge variant="secondary" className="h-5 font-normal">{summary.conceptCount} קונספטים</Badge>
+                      )}
+                      {summary.approvedCount > 0 && (
+                        <Badge className="h-5 bg-emerald-600 hover:bg-emerald-600">{summary.approvedCount} מאושרים</Badge>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </ScrollArea>
         </DialogContent>
@@ -1771,6 +1861,10 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
   });
 
   const selectedCopyItem = copyItems.find((item) => item.id === selectedCopyId) ?? null;
+  const pullableCopyItems = useMemo(
+    () => copyItems.filter((item) => copyPullSummary(item.payload).pullable),
+    [copyItems],
+  );
 
   useEffect(() => {
     if (open) {
@@ -1830,27 +1924,37 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
         if (!stageId) throw new Error("שלב הקריאייטיב לא נמצא");
       }
       const linkedCopy = mode === "from_copy" ? selectedCopyItem : null;
-      const linkedApproved = linkedCopy ? getApprovedCopyConcepts(linkedCopy) : [];
-      const payload: Record<string, unknown> = {
-        brief_text: brief.trim() || String(linkedCopy?.payload?.brief_text ?? "") || undefined,
+      const at = new Date().toISOString();
+      let payload: Record<string, unknown> = {
+        brief_text: brief.trim() || undefined,
         copy_text: copyText.trim() || undefined,
         format,
         project_type: projectType,
         visual_style: visualStyle,
         department: "creative",
-        intake_source: mode === "from_copy" ? "copy_link" : "manual",
-        handoff_from: mode === "from_copy" ? "copy" : undefined,
-        linked_copy_item_id: linkedCopy?.id,
-        linked_copy_title: linkedCopy?.title,
-        copy_concepts: linkedCopy?.payload?.copy_concepts,
-        approved_concepts: linkedCopy?.payload?.approved_concepts ?? (linkedApproved.length > 0 ? linkedApproved : undefined),
-        creative_concept: linkedCopy?.payload?.creative_concept,
-        concept_brief: linkedCopy ? getConceptBrief(linkedCopy) || undefined : undefined,
-        visual_prompt: linkedCopy ? resolveVisualPrompt(linkedCopy.payload, linkedApproved) || undefined : undefined,
-        content_type: linkedCopy?.payload?.content_type,
-        channel: linkedCopy?.payload?.channel,
-        instructions: linkedCopy?.payload?.instructions,
+        intake_source: "manual",
       };
+      if (linkedCopy) {
+        const summary = copyPullSummary(linkedCopy.payload);
+        payload = overlayCopyHandoffPayload({
+          existingPayload: {
+            department: "creative",
+            project_type: projectType,
+            format,
+            visual_style: visualStyle,
+            intake_source: "copy_link",
+          },
+          copyPayload: {
+            ...(linkedCopy.payload ?? {}),
+            copy_text: copyText.trim() || summary.copyText,
+            brief_text: brief.trim() || summary.briefText,
+          },
+          copyItem: { id: linkedCopy.id, title: linkedCopy.title },
+          concepts: summary.concepts,
+          approved: summary.approved,
+          at,
+        });
+      }
       if (projectType === "video") payload.storyboard = [makeStoryboardFrame(1)];
 
       const { data, error } = await supabase.from("marketing_work_items").insert({
@@ -1864,6 +1968,16 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
         payload,
       }).select("id").single();
       if (error) throw error;
+      if (linkedCopy) {
+        const { error: stampError } = await supabase
+          .from("marketing_work_items")
+          .update({
+            payload: stampCopyPayloadAfterHandoff(linkedCopy.payload, data.id, at),
+          })
+          .eq("id", linkedCopy.id)
+          .eq("tenant_id", tenantId);
+        if (stampError) throw stampError;
+      }
       toast.success(mode === "from_copy" ? "פרויקט קריאייטיב נוצר ושויך לקופי הקיים" : "הפרויקט נכנס למחלקת הקריאייטיב");
       onCreated(data.id, assignedClientId);
     } catch (error: unknown) {
@@ -1916,9 +2030,11 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
                 <div className="space-y-2 p-2">
                   {!assignedClientId ? (
                     <p className="py-6 text-center text-sm text-muted-foreground">בחר לקוח קודם</p>
-                  ) : copyItems.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-muted-foreground">אין פרויקטי קופי ללקוח הזה</p>
-                  ) : copyItems.map((item) => (
+                  ) : pullableCopyItems.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">אין פרויקטי קופי עם טקסט או קונספטים ללקוח הזה</p>
+                  ) : pullableCopyItems.map((item) => {
+                    const summary = copyPullSummary(item.payload);
+                    return (
                     <button
                       key={item.id}
                       type="button"
@@ -1929,9 +2045,20 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
                       )}
                     >
                       <div className="text-sm font-semibold">{item.title || "ללא כותרת"}</div>
-                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{String(item.payload?.copy_text ?? item.payload?.brief_text ?? "")}</p>
+                      {summary.copyText && (
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{summary.copyText}</p>
+                      )}
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        {summary.conceptCount > 0 && (
+                          <Badge variant="secondary" className="h-5 font-normal">{summary.conceptCount} קונספטים</Badge>
+                        )}
+                        {summary.approvedCount > 0 && (
+                          <Badge className="h-5 bg-emerald-600 hover:bg-emerald-600">{summary.approvedCount} מאושרים</Badge>
+                        )}
+                      </div>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </div>
@@ -1963,12 +2090,12 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
           {mode === "manual" ? (
             <>
               <div><Label>בריף / חומר גלם (אופציונלי)</Label><Textarea className="mt-1 min-h-24" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, סגנון, רפרנסים, מגבלות" /></div>
-              <div><Label>קופי משויך (אופציונלי)</Label><Textarea className="mt-1 min-h-20" value={copyText} onChange={(event) => setCopyText(event.target.value)} placeholder="אפשר להדביק קופi ידנית או לשייך אחר כך ממחלקת הקופi" /></div>
+              <div><Label>קופי משויך (אופציונלי)</Label><Textarea className="mt-1 min-h-20" value={copyText} onChange={(event) => setCopyText(event.target.value)} placeholder="אפשר להדביק קופי ידנית או לשייך אחר כך ממחלקת הקופי" /></div>
             </>
           ) : selectedCopyItem ? (
             <div className="max-h-32 overflow-y-auto rounded-xl border bg-muted/20 p-3 text-sm">
-              <div className="font-semibold">קופi שיושב לפרויקט</div>
-              <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{copyText || "אין טקסט קופi"}</p>
+              <div className="font-semibold">קופי שיושב לפרויקט</div>
+              <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{copyText || "אין טקסט קופי"}</p>
               {brief ? <p className="mt-3 whitespace-pre-wrap text-xs text-muted-foreground">{brief}</p> : null}
             </div>
           ) : null}
@@ -1978,7 +2105,7 @@ function ManualCreativeDialog({ open, onClose, tenantId, clientFilter, defaultCl
           {createHint ? <p className="mb-2 text-xs text-amber-600">{createHint}</p> : null}
           <Button onClick={create} disabled={saving || !canCreate} className="w-full gap-1.5 bg-pink-600 hover:bg-pink-700">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {mode === "from_copy" ? "צור קריאייטיב מקופi קיים" : "הכנס למחלקת קריאייטיב"}
+            {mode === "from_copy" ? "צור קריאייטיב מקופי קיים" : "הכנס למחלקת קריאייטיב"}
           </Button>
         </div>
       </DialogContent>
