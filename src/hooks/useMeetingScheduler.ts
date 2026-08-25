@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { he } from "date-fns/locale";
 import { getCalendarEvents, addCalendarEvent } from "@/lib/calendarApi";
-import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import {
+  formatMeetingLeadUpdate,
+  formatMeetingWhatsappMessage,
+} from "@/lib/meetingLeadUpdate";
+import { sendCrmWhatsappToLead } from "@/lib/sendCrmWhatsapp";
 
 /**
  * Hook לניהול קביעת פגישות עם יומן Google (דרך Unified)
@@ -200,9 +203,18 @@ export function useMeetingScheduler(tenantId?: string) {
     contactId: string;
     contactType: 'lead' | 'client' | 'campaigner';
     additionalEmails?: string[];
+    inviteeLabels?: string[];
     onSuccess?: () => void;
   }) => {
-    const { contactName, contactEmail, contactId, contactType, additionalEmails, onSuccess } = params;
+    const {
+      contactName,
+      contactEmail,
+      contactId,
+      contactType,
+      additionalEmails,
+      inviteeLabels,
+      onSuccess,
+    } = params;
 
     if (!meetingDate || !meetingTime || !meetingEndTime) {
       toast.error("נא לבחור תאריך ושעה");
@@ -265,6 +277,44 @@ export function useMeetingScheduler(tenantId?: string) {
 
         if (updateError) {
           console.error('Error saving meeting details:', updateError);
+        }
+
+        const dateLabel = format(meetingDate, "dd/MM/yyyy");
+        const { data: sessionData } = await supabase.auth.getSession();
+        const updaterId = sessionData?.session?.user?.id;
+        if (updaterId) {
+          const { error: noteError } = await supabase.from("lead_updates").insert({
+            lead_id: contactId,
+            user_id: updaterId,
+            content: formatMeetingLeadUpdate({
+              dateLabel,
+              startTime: meetingTime,
+              endTime: meetingEndTime,
+              location: meetingLocation,
+              subject,
+              inviteeLabels,
+            }),
+          });
+          if (noteError) {
+            console.error("Error writing meeting lead update:", noteError);
+          }
+        }
+
+        const wa = await sendCrmWhatsappToLead({
+          leadId: contactId,
+          tenantId,
+          message: formatMeetingWhatsappMessage({
+            contactName,
+            dateLabel,
+            startTime: meetingTime,
+            endTime: meetingEndTime,
+            location: meetingLocation,
+            kind: "confirmation",
+          }),
+        });
+        if (!wa.ok && !wa.skipped) {
+          console.error("Meeting WhatsApp confirmation failed:", wa.error);
+          toast.error("הפגישה נקבעה, אבל תזכורת הוואטסאפ לא נשלחה");
         }
       }
 

@@ -1,12 +1,124 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { sendCrmWhatsappToLeadAdmin } from '../_shared/crm-whatsapp-send.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+type ReminderLead = {
+  id: string;
+  company_name: string | null;
+  contact_name: string | null;
+  phone: string | null;
+  tenant_id: string | null;
+  meeting_date: string | null;
+  meeting_time: string | null;
+  meeting_location: string | null;
+};
+
+function sameDayMessage(lead: ReminderLead): string {
+  const name = lead.contact_name || lead.company_name || '';
+  const hello = name ? `היי ${name}, ` : '';
+  const time = lead.meeting_time || '';
+  const where = lead.meeting_location ? ` (${lead.meeting_location})` : '';
+  return `${hello}תזכורת: היום יש לך פגישה בשעה ${time}${where}.`.trim();
+}
+
+function dayAfterMessage(lead: ReminderLead): string {
+  const name = lead.contact_name || lead.company_name || '';
+  const hello = name ? `היי ${name}, ` : '';
+  const when = [lead.meeting_date, lead.meeting_time].filter(Boolean).join(' ');
+  const where = lead.meeting_location ? ` (${lead.meeting_location})` : '';
+  return `${hello}תזכורת: נקבעה לך פגישה ל-${when}${where}.`.trim();
+}
+
+async function processTenantReminders(opts: {
+  supabase: ReturnType<typeof createClient>;
+  supabaseUrl: string;
+  serviceKey: string;
+  tenantId: string;
+  leads: ReminderLead[];
+  triggerType: 'meeting_same_day' | 'meeting_day_after';
+  sentColumn: 'meeting_reminder_same_day_sent_at' | 'meeting_reminder_day_after_sent_at';
+  messageFor: (lead: ReminderLead) => string;
+  results: { lead_id: string; company_name: string | null; via: string }[];
+  errors: string[];
+}) {
+  const fallbackLeads: ReminderLead[] = [];
+
+  for (const lead of opts.leads) {
+    const wa = await sendCrmWhatsappToLeadAdmin({
+      admin: opts.supabase,
+      supabaseUrl: opts.supabaseUrl,
+      serviceKey: opts.serviceKey,
+      leadId: lead.id,
+      message: opts.messageFor(lead),
+    });
+    if (wa.ok) {
+      const { error: updateError } = await opts.supabase
+        .from('leads')
+        .update({ [opts.sentColumn]: new Date().toISOString() })
+        .eq('id', lead.id);
+      if (updateError) {
+        opts.errors.push(`Update error for lead ${lead.id}: ${updateError.message}`);
+      } else {
+        opts.results.push({
+          lead_id: lead.id,
+          company_name: lead.company_name,
+          via: 'crm_whatsapp',
+        });
+      }
+    } else {
+      if (wa.error) opts.errors.push(`CRM WA ${lead.id}: ${wa.error}`);
+      fallbackLeads.push(lead);
+    }
+  }
+
+  if (fallbackLeads.length === 0) return;
+
+  const payload = {
+    trigger_type: opts.triggerType,
+    tenant_id: opts.tenantId,
+    leads: fallbackLeads.map((lead) => ({
+      lead_id: lead.id,
+      company_name: lead.company_name,
+      contact_name: lead.contact_name,
+      phone: lead.phone,
+      meeting_date: lead.meeting_date,
+      meeting_time: lead.meeting_time,
+      meeting_location: lead.meeting_location,
+    })),
+  };
+
+  const triggerResponse = await fetch(`${opts.supabaseUrl}/functions/v1/trigger-automation`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${opts.serviceKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  await triggerResponse.json().catch(() => ({}));
+
+  for (const lead of fallbackLeads) {
+    const { error: updateError } = await opts.supabase
+      .from('leads')
+      .update({ [opts.sentColumn]: new Date().toISOString() })
+      .eq('id', lead.id);
+    if (updateError) {
+      opts.errors.push(`Update error for lead ${lead.id}: ${updateError.message}`);
+    } else {
+      opts.results.push({
+        lead_id: lead.id,
+        company_name: lead.company_name,
+        via: 'automation',
+      });
+    }
+  }
+}
+
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -16,11 +128,9 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    
     const now = new Date();
-    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD format
-    
-    // Calculate yesterday
+    const today = now.toISOString().split('T')[0];
+
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStart = new Date(yesterday);
@@ -29,15 +139,11 @@ Deno.serve(async (req) => {
     yesterdayEnd.setHours(23, 59, 59, 999);
 
     const results = {
-      dayAfterReminders: [] as any[],
-      sameDayReminders: [] as any[],
+      dayAfterReminders: [] as { lead_id: string; company_name: string | null; via: string }[],
+      sameDayReminders: [] as { lead_id: string; company_name: string | null; via: string }[],
       errors: [] as string[],
     };
 
-    // Part 1: Day after meeting set reminders
-    // Find leads where meeting was set yesterday and reminder not sent
-    // IMPORTANT: Don't send day-after reminder if meeting is today (to avoid double reminders)
-    
     const { data: dayAfterLeads, error: dayAfterError } = await supabase
       .from('leads')
       .select('id, company_name, contact_name, phone, tenant_id, meeting_date, meeting_time, meeting_location')
@@ -47,78 +153,34 @@ Deno.serve(async (req) => {
       .neq('meeting_date', today);
 
     if (dayAfterError) {
-      console.error('Error fetching day-after leads:', dayAfterError);
       results.errors.push(`Day-after query error: ${dayAfterError.message}`);
     } else if (dayAfterLeads && dayAfterLeads.length > 0) {
-      
-      // Group by tenant
-      const leadsByTenant: Record<string, typeof dayAfterLeads> = {};
-      for (const lead of dayAfterLeads) {
-        if (lead.tenant_id) {
-          if (!leadsByTenant[lead.tenant_id]) {
-            leadsByTenant[lead.tenant_id] = [];
-          }
-          leadsByTenant[lead.tenant_id].push(lead);
-        }
+      const leadsByTenant: Record<string, ReminderLead[]> = {};
+      for (const lead of dayAfterLeads as ReminderLead[]) {
+        if (!lead.tenant_id) continue;
+        if (!leadsByTenant[lead.tenant_id]) leadsByTenant[lead.tenant_id] = [];
+        leadsByTenant[lead.tenant_id].push(lead);
       }
-
-      // Trigger automations for each tenant
       for (const [tenantId, tenantLeads] of Object.entries(leadsByTenant)) {
         try {
-          const payload = {
-            trigger_type: 'meeting_day_after',
-            tenant_id: tenantId,
-            leads: tenantLeads.map(lead => ({
-              lead_id: lead.id,
-              company_name: lead.company_name,
-              contact_name: lead.contact_name,
-              phone: lead.phone,
-              meeting_date: lead.meeting_date,
-              meeting_time: lead.meeting_time,
-              meeting_location: lead.meeting_location,
-            })),
-          };
-
-
-          const triggerResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify(payload),
+          await processTenantReminders({
+            supabase,
+            supabaseUrl,
+            serviceKey: supabaseServiceKey,
+            tenantId,
+            leads: tenantLeads,
+            triggerType: 'meeting_day_after',
+            sentColumn: 'meeting_reminder_day_after_sent_at',
+            messageFor: dayAfterMessage,
+            results: results.dayAfterReminders,
+            errors: results.errors,
           });
-
-          const triggerResult = await triggerResponse.json();
-
-          // Mark as sent
-          for (const lead of tenantLeads) {
-            const { error: updateError } = await supabase
-              .from('leads')
-              .update({ meeting_reminder_day_after_sent_at: new Date().toISOString() })
-              .eq('id', lead.id);
-
-            if (updateError) {
-              console.error(`Error updating lead ${lead.id}:`, updateError);
-              results.errors.push(`Update error for lead ${lead.id}: ${updateError.message}`);
-            } else {
-              results.dayAfterReminders.push({
-                lead_id: lead.id,
-                company_name: lead.company_name,
-              });
-            }
-          }
         } catch (err: unknown) {
-          console.error(`Error processing tenant ${tenantId}:`, err);
           results.errors.push(`Tenant ${tenantId} error: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
       }
-    } else {
     }
 
-    // Part 2: Same day meeting reminders
-    // Find leads where meeting is today and reminder not sent
-    
     const { data: sameDayLeads, error: sameDayError } = await supabase
       .from('leads')
       .select('id, company_name, contact_name, phone, tenant_id, meeting_date, meeting_time, meeting_location')
@@ -126,75 +188,33 @@ Deno.serve(async (req) => {
       .is('meeting_reminder_same_day_sent_at', null);
 
     if (sameDayError) {
-      console.error('Error fetching same-day leads:', sameDayError);
       results.errors.push(`Same-day query error: ${sameDayError.message}`);
     } else if (sameDayLeads && sameDayLeads.length > 0) {
-      
-      // Group by tenant
-      const leadsByTenant: Record<string, typeof sameDayLeads> = {};
-      for (const lead of sameDayLeads) {
-        if (lead.tenant_id) {
-          if (!leadsByTenant[lead.tenant_id]) {
-            leadsByTenant[lead.tenant_id] = [];
-          }
-          leadsByTenant[lead.tenant_id].push(lead);
-        }
+      const leadsByTenant: Record<string, ReminderLead[]> = {};
+      for (const lead of sameDayLeads as ReminderLead[]) {
+        if (!lead.tenant_id) continue;
+        if (!leadsByTenant[lead.tenant_id]) leadsByTenant[lead.tenant_id] = [];
+        leadsByTenant[lead.tenant_id].push(lead);
       }
-
-      // Trigger automations for each tenant
       for (const [tenantId, tenantLeads] of Object.entries(leadsByTenant)) {
         try {
-          const payload = {
-            trigger_type: 'meeting_same_day',
-            tenant_id: tenantId,
-            leads: tenantLeads.map(lead => ({
-              lead_id: lead.id,
-              company_name: lead.company_name,
-              contact_name: lead.contact_name,
-              phone: lead.phone,
-              meeting_date: lead.meeting_date,
-              meeting_time: lead.meeting_time,
-              meeting_location: lead.meeting_location,
-            })),
-          };
-
-
-          const triggerResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify(payload),
+          await processTenantReminders({
+            supabase,
+            supabaseUrl,
+            serviceKey: supabaseServiceKey,
+            tenantId,
+            leads: tenantLeads,
+            triggerType: 'meeting_same_day',
+            sentColumn: 'meeting_reminder_same_day_sent_at',
+            messageFor: sameDayMessage,
+            results: results.sameDayReminders,
+            errors: results.errors,
           });
-
-          const triggerResult = await triggerResponse.json();
-
-          // Mark as sent
-          for (const lead of tenantLeads) {
-            const { error: updateError } = await supabase
-              .from('leads')
-              .update({ meeting_reminder_same_day_sent_at: new Date().toISOString() })
-              .eq('id', lead.id);
-
-            if (updateError) {
-              console.error(`Error updating lead ${lead.id}:`, updateError);
-              results.errors.push(`Update error for lead ${lead.id}: ${updateError.message}`);
-            } else {
-              results.sameDayReminders.push({
-                lead_id: lead.id,
-                company_name: lead.company_name,
-              });
-            }
-          }
         } catch (err: unknown) {
-          console.error(`Error processing tenant ${tenantId}:`, err);
           results.errors.push(`Tenant ${tenantId} error: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
       }
-    } else {
     }
-
 
     return new Response(
       JSON.stringify({
@@ -203,13 +223,13 @@ Deno.serve(async (req) => {
         results,
         timestamp: new Date().toISOString(),
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (error: unknown) {
     console.error('Error in check-meeting-reminders:', error);
     return new Response(
       JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
 });

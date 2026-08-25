@@ -16,7 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
-import { Pencil, CalendarIcon, FileText, DollarSign, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip } from "lucide-react";
+import { Pencil, CalendarIcon, FileText, DollarSign, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip, UserPlus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
 import { format } from "date-fns";
@@ -36,6 +36,7 @@ import { AttachmentsField } from "./AttachmentsField";
 import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
+import { useTeamMembersForMeeting } from "@/hooks/useTeamMembersForMeeting";
 import { useAgencies, useSalesPeople } from "@/hooks/useEntityLists";
 import {
   findLeadStatus,
@@ -133,6 +134,12 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
   const { tenantId } = useCurrentTenant();
 
   const meetingScheduler = useMeetingScheduler(tenantId);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+  const {
+    data: teamMembers = [],
+    isLoading: isLoadingTeamMembers,
+    error: teamMembersError,
+  } = useTeamMembersForMeeting(tenantId);
 
 // State for multi-select sales people
   const [selectedSalesPeople, setSelectedSalesPeople] = useState<string[]>([]);
@@ -445,13 +452,20 @@ const updateMutation = useMutation({
 
   // Wrapper for scheduling meeting with lead details
   const handleScheduleMeeting = async () => {
+    const inviteeLabels = teamMembers
+      .filter((member) => selectedTeamMembers.includes(member.email))
+      .map((member) => member.full_name || member.email);
     await meetingScheduler.scheduleMeeting({
       contactName: lead.contact_name || lead.company_name,
       contactEmail: lead.email,
       contactId: lead.id,
       contactType: 'lead',
+      additionalEmails: selectedTeamMembers,
+      inviteeLabels,
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["leads", tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["lead-updates", lead.id] });
+        setSelectedTeamMembers([]);
       },
     });
   };
@@ -1306,6 +1320,46 @@ const updateMutation = useMutation({
                       </div>
 
                       <div className="space-y-2">
+                        <label className="text-sm font-medium flex items-center gap-2">
+                          <UserPlus className="h-4 w-4" />
+                          הזמן משתמשים מהמערכת:
+                        </label>
+                        {isLoadingTeamMembers ? (
+                          <p className="text-sm text-muted-foreground">טוען משתמשי צוות...</p>
+                        ) : teamMembersError ? (
+                          <p className="text-sm text-destructive">
+                            {teamMembersError instanceof Error
+                              ? teamMembersError.message
+                              : "שגיאה בטעינת משתמשי צוות"}
+                          </p>
+                        ) : teamMembers.length > 0 ? (
+                          <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                            {teamMembers.map((member) => (
+                              <label
+                                key={member.id}
+                                className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm"
+                              >
+                                <Checkbox
+                                  checked={selectedTeamMembers.includes(member.email)}
+                                  onCheckedChange={(checked) => {
+                                    setSelectedTeamMembers((prev) =>
+                                      checked
+                                        ? [...prev, member.email]
+                                        : prev.filter((email) => email !== member.email),
+                                    );
+                                  }}
+                                />
+                                <span className="font-medium">{member.full_name || member.email}</span>
+                                <span className="text-muted-foreground mr-auto">{member.email}</span>
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">לא נמצאו משתמשים עם אימייל</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
                         <label className="text-sm font-medium">מיקום הפגישה (אופציונלי)</label>
                         <Input
                           value={meetingScheduler.meetingLocation}
@@ -1347,10 +1401,12 @@ const updateMutation = useMutation({
                       >
                         {meetingScheduler.isSchedulingMeeting ? (
                           "קובע פגישה..."
-                        ) : lead.email ? (
+                        ) : selectedTeamMembers.length > 0 || lead.email ? (
                           <>
                             <Send className="h-4 w-4 ml-2" />
-                            קבע פגישה ושלח זימון
+                            {selectedTeamMembers.length > 0
+                              ? `קבע פגישה ושלח זימון ל-${selectedTeamMembers.length + (lead.email ? 1 : 0)} משתתפים`
+                              : "קבע פגישה ושלח זימון"}
                           </>
                         ) : (
                           <>
