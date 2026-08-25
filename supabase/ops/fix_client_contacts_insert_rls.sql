@@ -1,7 +1,10 @@
--- client_contacts INSERT was never updated for cross-tenant client access (unlike
--- SELECT/UPDATE/DELETE). Users working on shared-agency clients could add contacts
--- only when tenant_id matched get_effective_tenant_id(), which fails when the row
--- must belong to the client's owning tenant.
+-- Applied via .github/workflows/apply-sql-migration.yml (Management API).
+-- Source of truth also lives in:
+--   supabase/migrations/20260825120000_fix_client_contacts_insert_rls.sql
+
+-- INSERT on client_contacts was stricter than SELECT/UPDATE/DELETE and never
+-- allowed anyone who can open the client card (owners, managers, campaigners,
+-- shared-agency viewers) to add additional contacts.
 DROP POLICY IF EXISTS "Users can insert client contacts in their tenant" ON public.client_contacts;
 CREATE POLICY "Users can insert client contacts in their tenant"
 ON public.client_contacts FOR INSERT TO authenticated
@@ -13,7 +16,6 @@ WITH CHECK (
   )
 );
 
--- Same gap on client_credentials INSERT.
 DROP POLICY IF EXISTS "Users can insert credentials in their tenant" ON public.client_credentials;
 CREATE POLICY "Users can insert credentials in their tenant"
 ON public.client_credentials FOR INSERT TO authenticated
