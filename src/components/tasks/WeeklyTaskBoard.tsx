@@ -46,7 +46,7 @@ import {
   resolveBoardTaskAgency,
   resolveNewTaskAgency,
   resolveTasksBoardScope,
-  filterTasksForBoardView,
+  filterTasksBySelectedAgency,
   syncLocalTasksForAgencyFilter,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
@@ -106,7 +106,15 @@ export function WeeklyTaskBoard() {
     queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId,
   });
-  const { selectedAgency } = useAgency();
+  const { selectedAgency, setSelectedAgency } = useAgency();
+
+  // Personal queue ("mine"): default header to "all agencies" so cross-agency
+  // assignments are visible. User can still narrow by agency afterward.
+  useEffect(() => {
+    if (filters.campaignerId === "mine") {
+      setSelectedAgency("all");
+    }
+  }, [filters.campaignerId, setSelectedAgency]);
 
   const { data: clientsList = [] } = useQuery({
     queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
@@ -396,18 +404,16 @@ export function WeeklyTaskBoard() {
       fetchedTasks,
       previousLocal: localTasks,
       selectedAgency,
-      campaignerFilter: filters.campaignerId,
     });
     setLocalTasks(next);
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
     // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFetching, selectedAgency, filters.campaignerId, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+  }, [isFetching, selectedAgency, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
 
-  // Team board: header agency narrows rows. Personal "mine" queue spans all agencies.
   const tasks = useMemo(
-    () => filterTasksForBoardView(localTasks, selectedAgency, filters.campaignerId),
-    [localTasks, selectedAgency, filters.campaignerId],
+    () => filterTasksBySelectedAgency(localTasks, selectedAgency),
+    [localTasks, selectedAgency],
   );
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates)

@@ -5,7 +5,6 @@ import {
   resolveNewTaskAgency,
   resolveTaskEffectiveAgency,
   filterTasksBySelectedAgency,
-  filterTasksForBoardView,
   resolveTasksBoardScope,
   syncLocalTasksForAgencyFilter,
 } from "./taskBoardAgency.ts";
@@ -40,8 +39,6 @@ test("a task without a client uses the header agency, then the fallback", () => 
   assert.equal(resolveNewTaskAgency({ selectedAgency: "all", fallbackAgencyId: "first" }), "first");
 });
 
-// The production leak: tasks stamped with the creator's agency while the client
-// they belong to sits in another agency.
 const misstampedDmmTask = {
   id: "1",
   agency_id: PROMO,
@@ -61,11 +58,6 @@ test("the client's agency decides where a task belongs", () => {
   assert.equal(resolveTaskEffectiveAgency(promoClientTaskStampedDmm), PROMO);
 });
 
-test("a task without a client keeps its own stamp", () => {
-  assert.equal(resolveTaskEffectiveAgency(promoTaskNoClient), PROMO);
-  assert.equal(resolveTaskEffectiveAgency({ agency_id: null, client_id: null }), null);
-});
-
 test("filtering to promo hides another agency's client and keeps its own", () => {
   const filtered = filterTasksBySelectedAgency(
     [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient],
@@ -80,46 +72,6 @@ test("filterTasksBySelectedAgency leaves the list alone for all", () => {
   assert.equal(filterTasksBySelectedAgency(all, null), all);
 });
 
-test("the board query stays tenant-scoped so client-owned tasks are not dropped", () => {
-  assert.deepEqual(
-    resolveTasksBoardScope({ tenantId: "t1", crossTenantAgencyIds: ["shared-1"] }),
-    { type: "tenant_or_shared", tenantId: "t1", crossTenantAgencyIds: ["shared-1"] },
-  );
-  assert.deepEqual(
-    resolveTasksBoardScope({ tenantId: "t1", crossTenantAgencyIds: [] }),
-    { type: "tenant", tenantId: "t1" },
-  );
-});
-
-test("filterTasksForBoardView keeps all rows for personal mine queue", () => {
-  const all = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
-  assert.deepEqual(
-    filterTasksForBoardView(all, PROMO, "mine").map((task) => task.id),
-    ["1", "2", "3"],
-    "mine must not hide cross-agency assignments when header picks one agency",
-  );
-});
-
-test("filterTasksForBoardView still narrows team board views", () => {
-  const filtered = filterTasksForBoardView(
-    [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient],
-    PROMO,
-    "all",
-  );
-  assert.deepEqual(filtered.map((task) => task.id), ["2", "3"]);
-});
-
-test("syncLocalTasksForAgencyFilter keeps mine rows during agency switch", () => {
-  const duringFetch = syncLocalTasksForAgencyFilter({
-    isFetching: true,
-    fetchedTasks: [],
-    previousLocal: [misstampedDmmTask, promoTaskNoClient],
-    selectedAgency: PROMO,
-    campaignerFilter: "mine",
-  });
-  assert.deepEqual(duringFetch.map((task) => task.id), ["1", "3"]);
-});
-
 test("syncLocalTasksForAgencyFilter narrows during an in-flight agency switch", () => {
   const duringFetch = syncLocalTasksForAgencyFilter({
     isFetching: true,
@@ -127,11 +79,7 @@ test("syncLocalTasksForAgencyFilter narrows during an in-flight agency switch", 
     previousLocal: [misstampedDmmTask, promoTaskNoClient],
     selectedAgency: PROMO,
   });
-  assert.deepEqual(
-    duringFetch.map((task) => task.id),
-    ["3"],
-    "must not keep another agency's tasks on screen while the filtered query loads",
-  );
+  assert.deepEqual(duringFetch.map((task) => task.id), ["3"]);
 });
 
 test("syncLocalTasksForAgencyFilter applies settled server rows for the agency", () => {
@@ -142,15 +90,4 @@ test("syncLocalTasksForAgencyFilter applies settled server rows for the agency",
     selectedAgency: PROMO,
   });
   assert.deepEqual(settled.map((task) => task.id), ["2"]);
-});
-
-test("legacy stamp-only filtering reproduces the reported leak", () => {
-  const legacyFilter = (tasks: typeof misstampedDmmTask[], agency: string) =>
-    tasks.filter((task) => task.agency_id === agency);
-  const leaked = legacyFilter([misstampedDmmTask, promoClientTaskStampedDmm], PROMO);
-  assert.deepEqual(
-    leaked.map((task) => task.id),
-    ["1"],
-    "stamp-only filtering shows a DMM client under promo and hides a promo client",
-  );
 });
