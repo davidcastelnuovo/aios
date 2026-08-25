@@ -108,14 +108,6 @@ export function WeeklyTaskBoard() {
   });
   const { selectedAgency, setSelectedAgency } = useAgency();
 
-  // Personal queue ("mine"): default header to "all agencies" so cross-agency
-  // assignments are visible. User can still narrow by agency afterward.
-  useEffect(() => {
-    if (filters.campaignerId === "mine") {
-      setSelectedAgency("all");
-    }
-  }, [filters.campaignerId, setSelectedAgency]);
-
   const { data: clientsList = [] } = useQuery({
     queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
@@ -141,6 +133,15 @@ export function WeeklyTaskBoard() {
   // Everyone — including owners and team managers — lands on their own queue.
   // The campaigner filter switches to the full team board on demand.
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+
+  // Personal queue ("mine"): default header to "all agencies" so cross-agency
+  // assignments are visible. User can still narrow by agency afterward.
+  useEffect(() => {
+    if (filters.campaignerId === "mine") {
+      setSelectedAgency("all");
+    }
+  }, [filters.campaignerId, setSelectedAgency]);
+
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
