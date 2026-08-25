@@ -297,6 +297,20 @@ export function formatLastClientCall(row: PulseSnapshotRow): string {
   });
 }
 
+/** Call-freshness flags are shown in the dedicated call column, not under הערה. */
+export function isPulseCallFreshnessFlag(flag: string): boolean {
+  const normalized = flag.trim();
+  return (
+    normalized.startsWith("לא תועדה שיחה") ||
+    /שיחה טלפונית עם הלקוח/.test(normalized)
+  );
+}
+
+export function filterPulseCallFlags(flags: string[] | null | undefined): string[] {
+  if (!Array.isArray(flags)) return [];
+  return flags.filter((flag) => !isPulseCallFreshnessFlag(flag));
+}
+
 /** Build shareable authenticated pulse dashboard URL for a tenant + optional agency. */
 export function buildPulseDashboardUrl(origin: string, tenantSlug: string, agencyId?: string | null): string {
   // App routes live under `/t/:tenantSlug/...` — without `/t/` TenantUnknownRoute

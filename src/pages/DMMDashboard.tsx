@@ -56,6 +56,7 @@ import {
   buildPulseDashboardUrl,
   clientHasCampaignService,
   expandPulseSnapshotToGoalRows,
+  filterPulseCallFlags,
   formatGoalChange,
   formatGoalEfficiency,
   formatGoalOutcomes,
@@ -420,10 +421,10 @@ export default function DMMDashboard() {
             ? "yellow"
             : "green";
         const overall = manualOverride?.override_status ?? algorithmOverall;
-        const flags = [
+        const flags = filterPulseCallFlags([
           ...(goalRow?.flags || pulse?.flags || []),
           ...(!pulse && hasCampaign ? ["ממתין לבדיקת דופק"] : []),
-        ];
+        ]);
         expanded.push({
           id: goalRow?.rowKey || c.id,
           clientId: c.id,
