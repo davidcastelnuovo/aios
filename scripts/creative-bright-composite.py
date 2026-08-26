@@ -10,15 +10,16 @@ from PIL import Image, ImageFilter
 
 
 def prepare_logo(logo_path: Path, *, upscale_min_width: int = 480) -> Image.Image:
-    """Return RGBA logo at least upscale_min_width wide (2x upsample + sharpen if needed)."""
+    """Return RGBA logo; upsample small brand-kit assets before downscaling onto the ad."""
     logo = Image.open(logo_path).convert("RGBA")
-    if logo.width < upscale_min_width:
-        scale = upscale_min_width / logo.width
-        logo = logo.resize(
-            (int(logo.width * scale), int(logo.height * scale)),
-            Image.Resampling.LANCZOS,
-        )
-        logo = logo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=120, threshold=2))
+    if logo.width >= upscale_min_width:
+        return _clean_logo_alpha(logo)
+    scale = upscale_min_width / logo.width
+    logo = logo.resize(
+        (int(logo.width * scale), int(logo.height * scale)),
+        Image.Resampling.LANCZOS,
+    )
+    logo = logo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=120, threshold=2))
     return _clean_logo_alpha(logo)
 
 
