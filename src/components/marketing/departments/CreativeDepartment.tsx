@@ -29,6 +29,7 @@ import { CreativeImage } from "@/components/marketing/departments/creative/Creat
 import { CreativeLayerEditor } from "@/components/marketing/departments/creative/CreativeLayerEditor";
 import { CreativeStoryboardEditor } from "@/components/marketing/departments/creative/CreativeStoryboardEditor";
 import { CreativeEraseDialog, type EraseJob } from "@/components/marketing/departments/creative/CreativeEraseDialog";
+import { CreativeVariationGrid } from "@/components/marketing/departments/creative/CreativeVariationGrid";
 import { conceptCopyJobsForGeneration, copyBlockLabel, copyBlocksForGeneration } from "@/components/marketing/departments/creative/copyVariations";
 import type { CreativeAssetRow, CreativeComment, CreativeItem, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "@/components/marketing/departments/creative/types";
 import {
