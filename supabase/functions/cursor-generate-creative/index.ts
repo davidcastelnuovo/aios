@@ -352,6 +352,17 @@ async function replaceNonce(variationId: string, itemId: string): Promise<string
     .slice(0, 32);
 }
 
+function resolveVariationRow(
+  list: Array<Record<string, unknown>>,
+  variationId: string,
+): { row: Record<string, unknown>; resolvedId: string } | null {
+  const exact = list.find((row) => String(row.id) === variationId);
+  if (exact) return { row: exact, resolvedId: String(exact.id) };
+  const prefixMatches = list.filter((row) => String(row.id).startsWith(variationId));
+  if (prefixMatches.length === 1) return { row: prefixMatches[0], resolvedId: String(prefixMatches[0].id) };
+  return null;
+}
+
 async function applyVariationImage({
   itemId,
   tenantId,
@@ -376,8 +387,9 @@ async function applyVariationImage({
   if (error || !item) throw new Error("item not found");
   const payload = { ...((item.payload as Record<string, unknown> | null) ?? {}) };
   const list = Array.isArray(payload.variations) ? payload.variations as Array<Record<string, unknown>> : [];
-  const existing = list.find((row) => String(row.id) === variationId);
-  if (!existing) throw new Error("variation not found");
+  const resolved = resolveVariationRow(list, variationId);
+  if (!resolved) throw new Error("variation not found");
+  const { row: existing, resolvedId } = resolved;
 
   const bytes = decodeImageBytes(imageBase64);
   const path = `${tenantId}/creative/${itemId}/${storageKey}`;
@@ -412,7 +424,7 @@ async function applyVariationImage({
 
   await patchPayload(itemId, tenantId, (current) => {
     const variations = Array.isArray(current.variations) ? [...current.variations] as Array<Record<string, unknown>> : [];
-    const index = variations.findIndex((row) => String(row.id) === variationId);
+    const index = variations.findIndex((row) => String(row.id) === resolvedId);
     if (index < 0) throw new Error("variation not found");
     variations[index] = {
       ...variations[index],
@@ -437,7 +449,7 @@ async function applyVariationImage({
     meta: assetMeta,
   });
 
-  return { imageUrl, variationId };
+  return { imageUrl, variationId: resolvedId };
 }
 
 async function patchPayload(
