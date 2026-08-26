@@ -3,6 +3,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { corsHeaders } from "../_shared/cors.ts";
 import { requireAuth } from "../_shared/security.ts";
+import {
+  isInvalidCursorModelError,
+  pickCreativeModelFromCatalog,
+  resolveCreativeCursorModel,
+} from "../_shared/cursorCreativeModel.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -106,34 +111,60 @@ async function followUp(apiKey: string, agentId: string, promptText: string) {
   return { id: agentId, url: `https://cursor.com/agents/${agentId}` };
 }
 
+function parseCursorError(raw: string): string {
+  let detail = raw.slice(0, 240);
+  try {
+    const parsed = JSON.parse(raw) as { error?: { message?: string } | string; message?: string };
+    const nested = typeof parsed.error === "object" ? parsed.error?.message : parsed.error;
+    detail = String(nested || parsed.message || detail);
+  } catch { /* keep */ }
+  return detail;
+}
+
+async function resolveLiveCreativeModel(apiKey: string) {
+  const preferred = resolveCreativeCursorModel(Deno.env.get("CURSOR_CREATIVE_MODEL_ID"));
+  try {
+    const resp = await cursorFetch(apiKey, "https://api.cursor.com/v1/models", { method: "GET" });
+    if (!resp.ok) return preferred;
+    const data = await resp.json() as {
+      items?: Array<{ id?: string; aliases?: string[]; parameters?: Array<{ id?: string; values?: Array<{ value?: string }> }> }>;
+    };
+    return pickCreativeModelFromCatalog(data.items, preferred);
+  } catch {
+    return preferred;
+  }
+}
+
 async function createCreativeAgent(apiKey: string, promptText: string, name: string) {
   const envName = Deno.env.get("CURSOR_CLOUD_ENV_NAME") || "";
-  // First-party Composer draws from the included Cursor Models pool on Pro+,
-  // not the smaller Other Models / API allowance. Do not inherit CURSOR_MODEL_ID
-  // from the coding agent (that is often a frontier model).
-  const modelId = Deno.env.get("CURSOR_CREATIVE_MODEL_ID") || "composer-2.5-fast";
+  // Valid id is composer-2.5 + params.fast — not the alias composer-2.5-fast.
+  // Do not inherit CURSOR_MODEL_ID from the coding agent.
+  const model = await resolveLiveCreativeModel(apiKey);
   const body: Record<string, unknown> = {
     prompt: { text: promptText },
     autoCreatePR: false,
     name: name.slice(0, 100),
-    model: { id: modelId },
+    model,
   };
   if (envName) body.env = { type: "cloud", name: envName };
   else {
     body.repos = [{ url: Deno.env.get("CURSOR_REPO_URL") || DEFAULT_REPO, startingRef: Deno.env.get("CURSOR_STARTING_REF") || "main" }];
   }
-  const resp = await cursorFetch(apiKey, "https://api.cursor.com/v1/agents", {
+
+  const post = () => cursorFetch(apiKey, "https://api.cursor.com/v1/agents", {
     method: "POST",
     body: JSON.stringify(body),
   });
-  const raw = await resp.text();
+
+  let resp = await post();
+  let raw = await resp.text();
+  if (!resp.ok && resp.status === 400 && isInvalidCursorModelError(parseCursorError(raw))) {
+    delete body.model;
+    resp = await post();
+    raw = await resp.text();
+  }
   if (!resp.ok) {
-    let detail = raw.slice(0, 240);
-    try {
-      const parsed = JSON.parse(raw) as { error?: { message?: string } | string; message?: string };
-      const nested = typeof parsed.error === "object" ? parsed.error?.message : parsed.error;
-      detail = String(nested || parsed.message || detail);
-    } catch { /* keep */ }
+    const detail = parseCursorError(raw);
     if (resp.status === 402 || resp.status === 429 || /credit|spend|on-demand|usage limit|insufficient|billing|quota/i.test(detail)) {
       throw new Error(
         `Cursor agent create ${resp.status}: Cloud Agent spend/credits (not Pro+ desktop). Enable on-demand at cursor.com/dashboard/spending. ${detail.slice(0, 160)}`,
