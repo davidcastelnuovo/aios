@@ -364,3 +364,7 @@ verify_jwt = true
 # Mints ephemeral OpenAI Realtime tokens for the Command Center voice chat.
 [functions.carmen-realtime-session]
 verify_jwt = true
+
+# ChatGPT.com visibility worker callback. Authenticates with CHATGPT_WEB_WORKER_SECRET, not a JWT.
+[functions.ai-detection-worker-ingest]
+verify_jwt = false

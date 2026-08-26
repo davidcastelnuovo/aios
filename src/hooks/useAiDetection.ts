@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -52,6 +52,18 @@ export interface AiDetectionScore {
   total_prompts: number;
   mentioned_prompts: number;
   week_start: string;
+  created_at: string;
+}
+
+export interface AiDetectionJob {
+  id: string;
+  scan_id: string;
+  engine: string;
+  status: "queued" | "running" | "done" | "failed" | string;
+  total_prompts: number;
+  completed_prompts: number;
+  mentioned_prompts: number;
+  error: string | null;
   created_at: string;
 }
 
@@ -251,6 +263,38 @@ export function useAiDetectionProject(projectId: string | null) {
     enabled: !!projectId,
   });
 
+  const { data: latestJob = null } = useQuery({
+    queryKey: ["ai-detection-jobs", projectId],
+    queryFn: async () => {
+      if (!projectId) return null;
+      const result = await safeQuery(() =>
+        supabase.from("ai_detection_jobs").select("*").eq("brand_id", projectId).order("created_at", { ascending: false }).limit(1).maybeSingle()
+      );
+      return (result || null) as AiDetectionJob | null;
+    },
+    enabled: !!projectId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running" ? 4000 : false;
+    },
+  });
+
+  const prevJobStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const status = latestJob?.status ?? null;
+    const wasActive = prevJobStatus.current === "queued" || prevJobStatus.current === "running";
+    if (wasActive && status === "done") {
+      toast.success(`סריקת ChatGPT.com הסתיימה (${latestJob?.mentioned_prompts ?? 0}/${latestJob?.total_prompts ?? 0} אזכורים)`);
+      queryClient.invalidateQueries({ queryKey: ["ai-detection-results", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["ai-detection-scores", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["ai-detection-competitors", projectId] });
+    }
+    if (wasActive && status === "failed") {
+      toast.error(latestJob?.error || "סריקת ChatGPT.com נכשלה");
+    }
+    prevJobStatus.current = status;
+  }, [latestJob?.status, latestJob?.scan_id, latestJob?.error, latestJob?.mentioned_prompts, latestJob?.total_prompts, projectId, queryClient]);
+
   // Add prompt
   const addPrompt = useMutation({
     mutationFn: async (data: { prompt: string; category: string }) => {
@@ -391,6 +435,12 @@ export function useAiDetectionProject(projectId: string | null) {
 
       if (error) throw error;
 
+      if (data?.queued) {
+        toast.success("הסריקה רצה על וורקר ChatGPT.com — שיחה חדשה לכל פרומפט, זה לוקח כמה דקות");
+        queryClient.invalidateQueries({ queryKey: ["ai-detection-jobs", projectId] });
+        return;
+      }
+
       toast.success(`סריקה הושלמה! ציון: ${data.score}/100 (${data.mentioned}/${data.scanned} אזכורים)`);
 
       // Refresh all project data
@@ -435,15 +485,18 @@ export function useAiDetectionProject(projectId: string | null) {
   const currentScore = scores.length > 0 ? scores[scores.length - 1] : null;
   const previousScore = scores.length > 1 ? scores[scores.length - 2] : null;
 
+  const jobActive = latestJob?.status === "queued" || latestJob?.status === "running";
+
   return {
     prompts,
     results,
     scores,
     competitorResults,
+    latestJob,
     currentScore,
     previousScore,
     isLoading: promptsLoading || resultsLoading,
-    isScanning,
+    isScanning: isScanning || jobActive,
     addPrompt,
     importPrompts,
     editPrompt,

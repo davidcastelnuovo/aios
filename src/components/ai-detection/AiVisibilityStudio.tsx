@@ -150,7 +150,7 @@ function ProjectDashboard({
   const selectedClientId = clientFilter && clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null;
   const [creatingId, setCreatingId] = useState<string | null>(null);
   const {
-    prompts, results, scores, competitorResults, currentScore, previousScore,
+    prompts, results, scores, competitorResults, currentScore, previousScore, latestJob,
     isScanning, isGenerating,
     addPrompt, importPrompts, editPrompt, deletePrompt, generatePrompts, runScan,
     getCompetitorScores,
@@ -282,7 +282,9 @@ function ProjectDashboard({
           </div>
           <div className="flex items-center gap-2">
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={runScan} disabled={isScanning || prompts.length === 0}>
-              {isScanning ? <><Loader2 className="ml-1 h-4 w-4 animate-spin" />סורק...</> : <><Radar className="ml-1 h-4 w-4" />הפעל סריקה</>}
+              {isScanning
+                ? <><Loader2 className="ml-1 h-4 w-4 animate-spin" />{latestJob?.status === "running" || latestJob?.status === "queued" ? `סורק ChatGPT.com ${latestJob.completed_prompts}/${latestJob.total_prompts}` : "סורק..."}</>
+                : <><Radar className="ml-1 h-4 w-4" />הפעל סריקה</>}
             </Button>
             <CreateProjectDialog
               trigger={<Button variant="outline" size="sm"><Settings className="ml-1 h-4 w-4" />הגדרות</Button>}
@@ -294,7 +296,7 @@ function ProjectDashboard({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          הסריקה רצה דרך ChatGPT Search API (חיפוש חי + רמז מיקום ישראל). זה לא chatgpt.com — Gemini/Perplexity לא נסרקים עד שיהיה מתאם אמיתי.
+          כשהוורקר מחובר, כל פרומפט רץ כשיחה חדשה ב-chatgpt.com (חשבון ברירת מחדל, ישראל). בלי וורקר — ChatGPT Search API. לא על אותה מכונה של WhatsApp.
         </p>
 
         <Tabs defaultValue="overview" dir="rtl">
@@ -345,7 +347,7 @@ function ProjectDashboard({
                       זה לא נפח חיפוש כמו SEO — ב-ChatGPT הזנב ארוך בלי סוף, אז מודדים «האם ה-AI ימליץ עליכם לשאלת קנייה בנישה».
                     </p>
                     <p className="text-muted-foreground">
-                      המנוע הנוכחי הוא ה-API הרשמי עם חיפוש חי ורמז מיקום ישראל. הוא קרוב יותר ל-ChatGPT עם Search מאשר למודל קפוא, אבל הוא לא אותו מוצר כמו chatgpt.com (מודל ברירת מחדל, IP ישראלי, שיחה חדשה בלי זיכרון). ציטוטים עדיין שימושיים לטיפי SEO.
+                      המדידה הטובה ביותר היא וורקר דפדפן על droplet נפרד: שיחה חדשה ב-chatgpt.com לכל שאילתה. עד שהוא חי, הסריקה נופלת ל-Search API. WhatsApp נשאר על המכונה שלו — Chromium לא רץ ליד אינסטנסים של ווטסאפ.
                     </p>
                   </CardContent>
                 </Card>

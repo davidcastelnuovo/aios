@@ -45,9 +45,14 @@ Deno.serve(async (req: Request) => {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const WORKER_URL = Deno.env.get("CHATGPT_WEB_WORKER_URL");
+    const WORKER_SECRET = Deno.env.get("CHATGPT_WEB_WORKER_SECRET");
 
-    if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Missing environment variables");
+    }
+    if (!WORKER_URL && !OPENAI_API_KEY) {
+      throw new Error("Missing OPENAI_API_KEY (and no ChatGPT web worker configured)");
     }
 
     const authHeader = req.headers.get("Authorization");
@@ -88,13 +93,63 @@ Deno.serve(async (req: Request) => {
 
     const typedPrompts = prompts as PromptRow[];
     const scanId = `scan_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    if (WORKER_URL && WORKER_SECRET) {
+      const { error: jobError } = await supabase.from("ai_detection_jobs").insert({
+        tenant_id,
+        brand_id,
+        scan_id: scanId,
+        engine: "chatgpt_web",
+        status: "queued",
+        total_prompts: typedPrompts.length,
+      });
+      if (jobError) throw jobError;
+
+      const dispatch = await fetch(`${WORKER_URL.replace(/\/$/, "")}/v1/scans`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-chatgpt-worker-secret": WORKER_SECRET,
+        },
+        body: JSON.stringify({
+          scan_id: scanId,
+          tenant_id,
+          brand_id,
+          brand_name: brandData.brand_name,
+          keywords: brandData.keywords ?? [],
+          competitors: brandData.competitor_names ?? [],
+          prompts: typedPrompts.map((prompt) => ({ id: prompt.id, prompt: prompt.prompt })),
+        }),
+      });
+      if (!dispatch.ok) {
+        const detail = await dispatch.text();
+        await supabase.from("ai_detection_jobs").update({
+          status: "failed",
+          error: `worker ${dispatch.status}: ${detail.slice(0, 500)}`,
+          finished_at: new Date().toISOString(),
+        }).eq("scan_id", scanId);
+        throw new Error(`ChatGPT web worker rejected the scan (${dispatch.status})`);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          queued: true,
+          engine: "chatgpt_web",
+          scan_id: scanId,
+          scanned: typedPrompts.length,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const results: Record<string, unknown>[] = [];
     const competitorResults: Record<string, unknown>[] = [];
 
     const scanned = await mapPool(typedPrompts, 3, async (prompt) => {
       try {
         const answer = await askChatGPTAsUser({
-          apiKey: OPENAI_API_KEY,
+          apiKey: OPENAI_API_KEY as string,
           prompt: prompt.prompt,
           location: ISRAEL_USER,
         });
@@ -122,7 +177,7 @@ Deno.serve(async (req: Request) => {
       let snippet: string | null = answer.text.substring(0, 500);
 
       if (mentioned) {
-        const analysis = await analyzeMention(OPENAI_API_KEY, answer.text, brandData.brand_name, brandData.keywords ?? []);
+        const analysis = await analyzeMention(OPENAI_API_KEY as string, answer.text, brandData.brand_name, brandData.keywords ?? []);
         sentiment = analysis.sentiment;
         position = analysis.position ?? listPosition(answer.text, brandData.brand_name);
         snippet = analysis.snippet;

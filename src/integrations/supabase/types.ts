@@ -1292,6 +1292,69 @@ export type Database = {
           },
         ]
       }
+      ai_detection_jobs: {
+        Row: {
+          brand_id: string
+          completed_prompts: number
+          created_at: string
+          engine: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          mentioned_prompts: number
+          scan_id: string
+          status: string
+          tenant_id: string
+          total_prompts: number
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          completed_prompts?: number
+          created_at?: string
+          engine?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          mentioned_prompts?: number
+          scan_id: string
+          status?: string
+          tenant_id: string
+          total_prompts?: number
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          completed_prompts?: number
+          created_at?: string
+          engine?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          mentioned_prompts?: number
+          scan_id?: string
+          status?: string
+          tenant_id?: string
+          total_prompts?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_detection_jobs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "ai_detection_brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_detection_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_detection_prompts: {
         Row: {
           brand_id: string

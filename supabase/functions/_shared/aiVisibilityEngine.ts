@@ -1,4 +1,4 @@
-/** ChatGPT measured like a user: live web search + IL location, not frozen API knowledge. */
+/** Official ChatGPT Search API — not a chatgpt.com user session. */
 
 export type UserSearchAnswer = {
   text: string;
