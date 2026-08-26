@@ -339,6 +339,6 @@ export function visibilityCsv(prompts: PromptInsight[]): string {
     prompt.sentiment ?? "",
     prompt.competitors.join("|"),
     prompt.citations.join("|"),
-  ].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","));
+  ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","));
   return [header.join(","), ...rows].join("\n");
 }
