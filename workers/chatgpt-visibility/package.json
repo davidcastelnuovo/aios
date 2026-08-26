@@ -1,0 +1,14 @@
+{
+  "name": "chatgpt-visibility-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "login": "node src/login.mjs",
+    "test": "node --test src/*.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.55.0"
+  }
+}

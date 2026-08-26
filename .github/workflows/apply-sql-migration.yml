@@ -41,6 +41,7 @@ on:
       - 'supabase/ops/apply_copywriter_inspiration_library.sql'
       - 'supabase/ops/fix_client_contacts_insert_rls.sql'
       - 'supabase/ops/fix_client_contacts_select_rls.sql'
+      - 'supabase/ops/create_ai_detection_jobs.sql'
 
 jobs:
   apply:
@@ -76,7 +77,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_lead_archive_and_home_agency.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/create_ai_detection_jobs.sql'; then
+              FILE="supabase/ops/create_ai_detection_jobs.sql"
+              NAME="create_ai_detection_jobs"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_lead_archive_and_home_agency.sql'; then
               FILE="supabase/ops/apply_lead_archive_and_home_agency.sql"
               NAME="apply_lead_archive_and_home_agency"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_client_contacts_select_rls.sql'; then

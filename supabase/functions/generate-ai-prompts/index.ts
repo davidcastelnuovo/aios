@@ -16,34 +16,30 @@ serve(async (req) => {
     const competitorList = (competitors || []).filter(Boolean).join(", ");
     const keywordList = (keywords || []).filter(Boolean).join(", ");
 
-    const systemPrompt = `אתה מומחה לשיווק דיגיטלי ו-AI SEO. תפקידך ליצור פרומפטים (שאלות) שמשתמשים אמיתיים שואלים מודלי AI כמו ChatGPT, Gemini ו-Perplexity.
+    const systemPrompt = `אתה מומחה ל-AI search / GEO. תפקידך ליצור שאילתות שמשתמש אמיתי שואל את ChatGPT כשיש כוונת רכישה — לא סקרנות כללית.
 
-כלל קריטי: הפרומפטים חייבים להיות שאלות כלליות בתחום בלי לציין את שם המותג "${brand_name}" בשאלה עצמה!
-המטרה היא לבדוק אם כששואלים שאלה כללית, ה-AI ממליץ על המותג מעצמו.
+כלל קריטי: הפרומפטים חייבים להיות שאלות כלליות בתחום בלי לציין את שם המותג "${brand_name}" בשאלה עצמה.
+הציון ימדוד אם ChatGPT ממליץ על המותג מעצמו לשאלות high-intent.
 
-דוגמאות נכונות:
+דוגמאות נכונות (כוונת רכישה):
 - "מה סוכנות השיווק הכי טובה לעסקים קטנים בישראל?"
 - "איזה כלי CRM מומלץ לניהול לקוחות?"
-- "איך בוחרים חברת קידום אתרים?"
+- "מה החלופות הכי טובות לכלי ניהול פרויקטים לעסק קטן?"
 
-דוגמאות שגויות (לא ליצור כאלה!):
-- "מה דעתך על פרומו?" ← מזכיר את שם המותג
-- "האם כדאי לעבוד עם פרומו?" ← מזכיר את שם המותג`;
+דוגמאות שגויות:
+- "מה דעתך על ${brand_name}?" ← מזכיר את שם המותג
+- "מה זה שיווק דיגיטלי?" ← אין כוונת רכישה`;
 
-    const userPrompt = `צור 8 פרומפטים (שאלות כלליות) שמשתמשים אמיתיים ישאלו מודלי AI בתחום של:
-${description ? `- תיאור העסק: ${description}` : `- תחום: ${brand_name}`}
-${keywordList ? `- מילות מפתח בתחום: ${keywordList}` : ""}
-${competitorList ? `- מתחרים בשוק: ${competitorList}` : ""}
+    const userPrompt = `צור 12 פרומפטים שמשתמשים אמיתיים בישראל ישאלו את ChatGPT בתחום של:
+${description ? `- הצעת ערך / כאב / שימושים: ${description}` : `- תחום: ${brand_name}`}
+${keywordList ? `- מילות מפתח / שימושים: ${keywordList}` : ""}
+${competitorList ? `- מתחרים בשוק (לא לציין בשאלות): ${competitorList}` : ""}
 
-חשוב מאוד: אל תציין את "${brand_name}" או את שמות המתחרים בתוך השאלות! השאלות חייבות להיות גנריות לחלוטין.
+אל תציין את "${brand_name}" או שמות מתחרים בתוך השאלות.
 
-הקטגוריות הנדרשות:
-- recommendation (שאלות המלצה כמו "מה הכלי הכי טוב ל...")
-- comparison (שאלות השוואת קטגוריה כמו "מה ההבדלים בין סוגי X ל-Y")
-- review (שאלות על בחירה בתחום כמו "איך בוחרים את ה... הנכון?")
-- general (שאלות כלליות בתחום)
+מיקס חובה: לפחות 10 מתוך 12 חייבים להיות high-intent (recommendation / comparison / pricing / alternatives / review / local). לכל היותר 2 how_to או general.
 
-החזר בדיוק 8 פרומפטים מגוונים וטבעיים.`;
+החזר בדיוק 12 פרומפטים בעברית מדוברת, מגוונים, בלי חזרות.`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -72,7 +68,7 @@ ${competitorList ? `- מתחרים בשוק: ${competitorList}` : ""}
                       type: "object",
                       properties: {
                         prompt: { type: "string", description: "The prompt text in Hebrew" },
-                        category: { type: "string", enum: ["recommendation", "comparison", "review", "general"] },
+                        category: { type: "string", enum: ["recommendation", "comparison", "review", "how_to", "pricing", "alternatives", "local", "general"] },
                       },
                       required: ["prompt", "category"],
                       additionalProperties: false,

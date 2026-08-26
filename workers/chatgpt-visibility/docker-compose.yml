@@ -1,0 +1,17 @@
+services:
+  chatgpt-visibility:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787"
+    env_file: .env
+    environment:
+      CHATGPT_STORAGE_STATE: /app/storage-state.json
+    volumes:
+      - ./storage-state.json:/app/storage-state.json:ro
+      - ./screenshots:/app/screenshots
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8787/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

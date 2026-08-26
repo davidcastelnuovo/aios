@@ -14,9 +14,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { BookOpen, Brain, FilePlus2, Gauge, Loader2, Plus, Search, Sparkles, WandSparkles } from "lucide-react";
+import { BookOpen, Brain, Eye, FilePlus2, Gauge, Loader2, Plus, Search, Sparkles, WandSparkles } from "lucide-react";
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
+import { PublishingStudio } from "@/components/marketing/publishing/PublishingStudio";
+import { AiVisibilityStudio } from "@/components/ai-detection/AiVisibilityStudio";
 
 interface Props { clientFilter: MarketingClientFilter; tenantId: string; }
 interface SeoItem { id: string; title: string | null; status: string; payload: Record<string, unknown> | null; current_stage_id: string | null; updated_at: string }
@@ -33,7 +35,7 @@ export function SeoGeoDepartment({ clientFilter, tenantId }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
-  const [workspace, setWorkspace] = useState<"strategy" | "publishing">("strategy");
+  const [workspace, setWorkspace] = useState<"strategy" | "publishing" | "visibility">("strategy");
 
   const { data: context, isLoading: loadingContext } = useQuery({
     queryKey: ["seo-department-context", clientFilter, tenantId],
@@ -59,14 +61,20 @@ export function SeoGeoDepartment({ clientFilter, tenantId }: Props) {
   const { data: signals } = useQuery({
     queryKey: ["seo-department-signals", clientFilter, tenantId],
     queryFn: async () => {
-      if (!clientFilter || clientFilter === ALL_CLIENTS_FILTER) return { reports: 0, keywords: 0, projects: 0 };
-      const [{ count: reports }, { data: projects }] = await Promise.all([
+      if (!clientFilter || clientFilter === ALL_CLIENTS_FILTER) return { reports: 0, keywords: 0, projects: 0, visibility: 0 };
+      const [{ count: reports }, { data: projects }, visibilityCount] = await Promise.all([
         supabase.from("ahrefs_reports").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("client_id", clientFilter),
         supabase.from("rank_tracking_projects").select("id").eq("tenant_id", tenantId).eq("client_id", clientFilter).eq("is_active", true),
+        (async () => {
+          const scoped = await supabase.from("ai_detection_brands").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("client_id", clientFilter);
+          if (!scoped.error) return scoped.count ?? 0;
+          const fallback = await supabase.from("ai_detection_brands").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId);
+          return fallback.count ?? 0;
+        })(),
       ]);
       const ids = (projects ?? []).map((project) => project.id);
       const { count: keywords } = ids.length ? await supabase.from("rank_tracking_keywords").select("id", { count: "exact", head: true }).in("project_id", ids).eq("is_active", true) : { count: 0 };
-      return { reports: reports ?? 0, keywords: keywords ?? 0, projects: ids.length };
+      return { reports: reports ?? 0, keywords: keywords ?? 0, projects: ids.length, visibility: visibilityCount };
     }, enabled: !!clientFilter && clientFilter !== ALL_CLIENTS_FILTER,
   });
   useEffect(() => { if (!selectedId && items[0]?.id) setSelectedId(items[0].id); if (selectedId && !items.some((item) => item.id === selectedId)) setSelectedId(items[0]?.id ?? null); }, [items, selectedId]);
@@ -76,12 +84,13 @@ export function SeoGeoDepartment({ clientFilter, tenantId }: Props) {
 
   if (loadingContext && clientFilter && clientFilter !== ALL_CLIENTS_FILTER) return <div className="flex flex-1 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-emerald-500" /></div>;
   const publishingClientId = clientFilter !== ALL_CLIENTS_FILTER ? clientFilter ?? undefined : undefined;
-  const sectionHeader = <Tabs value={workspace} onValueChange={(value) => setWorkspace(value as typeof workspace)}><TabsList><TabsTrigger value="strategy">SEO / GEO</TabsTrigger><TabsTrigger value="publishing">ניהול PBN ומאמרים</TabsTrigger></TabsList></Tabs>;
+  const sectionHeader = <Tabs value={workspace} onValueChange={(value) => setWorkspace(value as typeof workspace)}><TabsList><TabsTrigger value="strategy">SEO / GEO</TabsTrigger><TabsTrigger value="visibility">נראות AI</TabsTrigger><TabsTrigger value="publishing">ניהול PBN ומאמרים</TabsTrigger></TabsList></Tabs>;
   if (workspace === "publishing") return <div className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-4 py-2">{sectionHeader}</div><PublishingStudio tenantId={tenantId} clientId={publishingClientId} /></div>;
+  if (workspace === "visibility") return <div className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-4 py-2">{sectionHeader}</div><AiVisibilityStudio tenantId={tenantId} clientFilter={clientFilter} /></div>;
   return <div className="flex min-h-0 flex-1 flex-col"><div className="border-b bg-background px-4 py-2">{sectionHeader}</div><div className="grid min-h-0 flex-1 grid-cols-[270px_minmax(0,1fr)_290px] bg-muted/10">
     <aside className="flex min-h-0 flex-col border-l bg-card/70"><div className="flex items-center justify-between border-b p-3"><div><h2 className="text-sm font-bold">תוכניות SEO / GEO</h2><p className="text-[11px] text-muted-foreground">בריף, מחקר ותוכנית ביצוע</p></div><Button size="icon" className="h-8 w-8 bg-emerald-600 hover:bg-emerald-700" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /></Button></div><ScrollArea className="flex-1"><div className="space-y-2 p-2">{isLoading ? <Loader2 className="mx-auto mt-8 h-5 w-5 animate-spin" /> : items.length === 0 ? <div className="px-4 py-10 text-center text-xs text-muted-foreground"><FilePlus2 className="mx-auto mb-2 h-8 w-8 opacity-30" />אין תוכניות עדיין</div> : items.map((item) => <button key={item.id} onClick={() => setSelectedId(item.id)} className={cn("w-full rounded-xl border p-3 text-right", selectedId === item.id ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20" : "bg-background hover:bg-muted/50")}><div className="truncate text-xs font-semibold">{item.title || "ללא כותרת"}</div><div className="mt-1 text-[10px] text-muted-foreground">{asPlan(item.payload?.seo_plan)?.contentPlan?.length ?? 0} פריטי תוכן</div></button>)}</div></ScrollArea></aside>
     <main className="flex min-h-0 min-w-0 flex-col">{selected ? <><div className="flex items-center gap-3 border-b bg-card/60 px-4 py-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white"><Search className="h-4 w-4" /></div><div className="min-w-0 flex-1"><h2 className="truncate text-sm font-bold">{selected.title}</h2><p className="text-[11px] text-muted-foreground">SEO / GEO Strategy Studio</p></div><Badge variant="outline">Skin: seo</Badge><Button size="sm" className="gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600" onClick={() => setAiOpen(true)}><WandSparkles className="h-3.5 w-3.5" />כרמן תבנה הכול</Button></div>{plan ? <SeoPlanView plan={plan} /> : <div className="flex flex-1 items-center justify-center p-8 text-center"><div><Brain className="mx-auto mb-4 h-14 w-14 text-emerald-400/40" /><h3 className="text-xl font-black">מנתונים לתוכנית עבודה</h3><p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">כרמן תחבר את הבריף, נתוני Ahrefs ומעקב המיקומים לאשכולות, תוכנית תוכן ו-GEO.</p><Button className="mt-5 gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => setAiOpen(true)}><Sparkles className="h-4 w-4" />בני תוכנית מלאה</Button></div></div>}</> : <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">בחר תוכנית או פתח חדשה</div>}</main>
-    <aside className="flex min-h-0 flex-col border-r bg-card/80"><div className="border-b p-4"><h3 className="text-sm font-bold">מקורות מידע חיים</h3><p className="text-[11px] text-muted-foreground">כרמן מסמנת כשאין נתון ולא ממציאה</p></div><div className="space-y-3 p-4"><Signal icon={Gauge} label="דוחות Ahrefs" value={signals?.reports ?? 0} /><Signal icon={Search} label="ביטויים במעקב" value={signals?.keywords ?? 0} /><Signal icon={BookOpen} label="פרויקטי דירוג" value={signals?.projects ?? 0} /><Card className="mt-4 p-3 text-[11px] leading-relaxed text-muted-foreground">GEO הוא חלק מהתוכנית: שאלות שמנועי AI צריכים לענות עליהן, ישויות מותג, מקורות סמכות ו-Schema מומלץ.</Card></div></aside>
+    <aside className="flex min-h-0 flex-col border-r bg-card/80"><div className="border-b p-4"><h3 className="text-sm font-bold">מקורות מידע חיים</h3><p className="text-[11px] text-muted-foreground">כרמן מסמנת כשאין נתון ולא ממציאה</p></div><div className="space-y-3 p-4"><Signal icon={Gauge} label="דוחות Ahrefs" value={signals?.reports ?? 0} /><Signal icon={Search} label="ביטויים במעקב" value={signals?.keywords ?? 0} /><Signal icon={BookOpen} label="פרויקטי דירוג" value={signals?.projects ?? 0} /><Signal icon={Eye} label="פרויקטי נראות AI" value={signals?.visibility ?? 0} /><Card className="mt-4 p-3 text-[11px] leading-relaxed text-muted-foreground">GEO הוא חלק מהתוכנית: שאלות שמנועי AI צריכים לענות עליהן, ישויות מותג, מקורות סמכות ו-Schema מומלץ. המדידה עצמה חיה בטאב נראות AI.</Card></div></aside>
     <ManualSeoDialog open={createOpen} onClose={() => setCreateOpen(false)} tenantId={tenantId} defaultClientId={clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null} onCreated={async (id) => { setSelectedId(id); setCreateOpen(false); await refresh(); }} />
     {selected && <SeoAIDialog open={aiOpen} onClose={() => setAiOpen(false)} item={selected} hasPlan={!!plan} onCompleted={async () => { setAiOpen(false); await refresh(); }} />}
   </div></div>;

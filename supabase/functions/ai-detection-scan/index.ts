@@ -1,17 +1,23 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAiUsage } from "../_shared/ai.ts";
+import {
+  ISRAEL_USER,
+  askChatGPTAsUser,
+  brandIsMentioned,
+  listPosition,
+  mentionRateScore,
+} from "../_shared/aiVisibilityEngine.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-const AI_GATEWAY_URL = "https://api.openai.com/v1/chat/completions";
 
 interface ScanRequest {
   brand_id: string;
   tenant_id: string;
-  prompt_ids?: string[]; // optional - scan specific prompts only
+  prompt_ids?: string[];
 }
 
 interface PromptRow {
@@ -28,309 +34,285 @@ interface BrandRow {
   tenant_id: string;
 }
 
+const AI_GATEWAY_URL = "https://api.openai.com/v1/chat/completions";
+
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const WORKER_URL = Deno.env.get("CHATGPT_WEB_WORKER_URL");
+    const WORKER_SECRET = Deno.env.get("CHATGPT_WEB_WORKER_SECRET");
 
-    if (!OPENAI_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing environment variables');
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Missing environment variables");
+    }
+    if (!WORKER_URL && !OPENAI_API_KEY) {
+      throw new Error("Missing OPENAI_API_KEY (and no ChatGPT web worker configured)");
     }
 
-    // Auth check
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Missing authorization header');
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("Missing authorization header");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) throw new Error('Unauthorized');
+    if (authError || !user) throw new Error("Unauthorized");
 
     const { brand_id, tenant_id, prompt_ids } = await req.json() as ScanRequest;
+    if (!brand_id || !tenant_id) throw new Error("Missing brand_id or tenant_id");
 
-    if (!brand_id || !tenant_id) {
-      throw new Error('Missing brand_id or tenant_id');
-    }
-
-    // Get brand config
     const { data: brand, error: brandError } = await supabase
-      .from('ai_detection_brands')
-      .select('*')
-      .eq('id', brand_id)
-      .eq('tenant_id', tenant_id)
+      .from("ai_detection_brands")
+      .select("*")
+      .eq("id", brand_id)
+      .eq("tenant_id", tenant_id)
       .single();
-
-    if (brandError || !brand) throw new Error('Brand not found');
+    if (brandError || !brand) throw new Error("Brand not found");
     const brandData = brand as BrandRow;
 
-    // Get prompts to scan
     let promptQuery = supabase
-      .from('ai_detection_prompts')
-      .select('id, prompt, category')
-      .eq('brand_id', brand_id)
-      .eq('is_active', true);
-
-    if (prompt_ids && prompt_ids.length > 0) {
-      promptQuery = promptQuery.in('id', prompt_ids);
-    }
+      .from("ai_detection_prompts")
+      .select("id, prompt, category")
+      .eq("brand_id", brand_id)
+      .eq("is_active", true);
+    if (prompt_ids && prompt_ids.length > 0) promptQuery = promptQuery.in("id", prompt_ids);
 
     const { data: prompts, error: promptsError } = await promptQuery;
-    if (promptsError) throw new Error('Failed to fetch prompts');
+    if (promptsError) throw new Error("Failed to fetch prompts");
     if (!prompts || prompts.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, message: 'No prompts to scan', scanned: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: true, message: "No prompts to scan", scanned: 0 }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     const typedPrompts = prompts as PromptRow[];
-
-    // Scan each prompt against each platform model
-    const platforms = [
-      { name: 'chatgpt', model: 'gpt-4o-mini' },
-      { name: 'gemini', model: 'gpt-4o-mini' },
-      { name: 'perplexity', model: 'gpt-4o-mini' },
-    ];
-
     const scanId = `scan_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    const results: any[] = [];
-    const competitorResults: any[] = [];
 
-    for (const prompt of typedPrompts) {
-      for (const platform of platforms) {
-        try {
-          // Send prompt to AI
-          const aiResponse = await fetch(AI_GATEWAY_URL, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${OPENAI_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: platform.model,
-              messages: [
-                {
-                  role: 'system',
-                  content: 'You are a helpful assistant. Answer the user question naturally. If you recommend products or services, list them by name. Be specific with brand names.'
-                },
-                { role: 'user', content: prompt.prompt }
-              ],
-            }),
-          });
+    if (WORKER_URL && WORKER_SECRET) {
+      const { error: jobError } = await supabase.from("ai_detection_jobs").insert({
+        tenant_id,
+        brand_id,
+        scan_id: scanId,
+        engine: "chatgpt_web",
+        status: "queued",
+        total_prompts: typedPrompts.length,
+      });
+      if (jobError) throw jobError;
 
-          if (!aiResponse.ok) {
-            if (aiResponse.status === 429) {
-              continue;
-            }
-            console.error(`AI error for ${platform.name}: ${aiResponse.status}`);
-            continue;
-          }
+      const dispatch = await fetch(`${WORKER_URL.replace(/\/$/, "")}/v1/scans`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-chatgpt-worker-secret": WORKER_SECRET,
+        },
+        body: JSON.stringify({
+          scan_id: scanId,
+          tenant_id,
+          brand_id,
+          brand_name: brandData.brand_name,
+          keywords: brandData.keywords ?? [],
+          competitors: brandData.competitor_names ?? [],
+          prompts: typedPrompts.map((prompt) => ({ id: prompt.id, prompt: prompt.prompt })),
+        }),
+      });
+      if (!dispatch.ok) {
+        const detail = await dispatch.text();
+        await supabase.from("ai_detection_jobs").update({
+          status: "failed",
+          error: `worker ${dispatch.status}: ${detail.slice(0, 500)}`,
+          finished_at: new Date().toISOString(),
+        }).eq("scan_id", scanId);
+        throw new Error(`ChatGPT web worker rejected the scan (${dispatch.status})`);
+      }
 
-          const aiData = await aiResponse.json();
-          const responseText = aiData.choices?.[0]?.message?.content || '';
+      return new Response(
+        JSON.stringify({
+          success: true,
+          queued: true,
+          engine: "chatgpt_web",
+          scan_id: scanId,
+          scanned: typedPrompts.length,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
-          // Check if brand is mentioned
-          const brandMentioned = checkBrandMention(responseText, brandData.brand_name, brandData.keywords);
+    const results: Record<string, unknown>[] = [];
+    const competitorResults: Record<string, unknown>[] = [];
 
-          // Analyze sentiment if mentioned
-          let sentiment: string | null = null;
-          let position: number | null = null;
-          let snippet: string | null = null;
+    const scanned = await mapPool(typedPrompts, 3, async (prompt) => {
+      try {
+        const answer = await askChatGPTAsUser({
+          apiKey: OPENAI_API_KEY as string,
+          prompt: prompt.prompt,
+          location: ISRAEL_USER,
+        });
+        logAiUsage({
+          source: "ai-detection-scan",
+          model: answer.model,
+          tokens_in: answer.usage?.input ?? null,
+          tokens_out: answer.usage?.output ?? null,
+          tenant_id,
+          meta: { engine: answer.engine, prompt_id: prompt.id, brand_id },
+        });
+        return { prompt, answer };
+      } catch (error) {
+        console.error(`ChatGPT search failed for prompt ${prompt.id}:`, error);
+        return null;
+      }
+    });
+    const successful = scanned.filter((row): row is NonNullable<typeof row> => row !== null);
+    if (successful.length === 0) throw new Error("ChatGPT web search failed for every prompt");
 
-          if (brandMentioned) {
-            const analysis = await analyzeMention(
-              OPENAI_API_KEY, responseText, brandData.brand_name, brandData.keywords
-            );
-            sentiment = analysis.sentiment;
-            position = analysis.position;
-            snippet = analysis.snippet;
-          }
+    for (const { prompt, answer } of successful) {
+      const mentioned = brandIsMentioned(answer.text, brandData.brand_name, brandData.keywords ?? []);
+      let sentiment: string | null = null;
+      let position: number | null = null;
+      let snippet: string | null = answer.text.substring(0, 500);
 
-          // Extract citations (URLs)
-          const citations = extractUrls(responseText);
+      if (mentioned) {
+        const analysis = await analyzeMention(OPENAI_API_KEY as string, answer.text, brandData.brand_name, brandData.keywords ?? []);
+        sentiment = analysis.sentiment;
+        position = analysis.position ?? listPosition(answer.text, brandData.brand_name);
+        snippet = analysis.snippet;
+      }
 
-          results.push({
-            tenant_id,
-            brand_id,
-            prompt_id: prompt.id,
-            platform: platform.name,
-            is_mentioned: brandMentioned,
-            position,
-            sentiment,
-            response_snippet: snippet || responseText.substring(0, 500),
-            citations,
-            scan_id: scanId,
-            scanned_at: new Date().toISOString(),
-          });
+      results.push({
+        tenant_id,
+        brand_id,
+        prompt_id: prompt.id,
+        platform: "chatgpt",
+        is_mentioned: mentioned,
+        position,
+        sentiment,
+        response_snippet: snippet,
+        citations: answer.citations,
+        scan_id: scanId,
+        scanned_at: new Date().toISOString(),
+      });
 
-          // Check competitors
-          for (const competitor of brandData.competitor_names) {
-            const compMentioned = checkBrandMention(responseText, competitor, [competitor]);
-            competitorResults.push({
-              tenant_id,
-              brand_id,
-              competitor_name: competitor,
-              prompt_id: prompt.id,
-              platform: platform.name,
-              is_mentioned: compMentioned,
-              position: compMentioned ? findPosition(responseText, competitor) : null,
-              scan_id: scanId,
-              scanned_at: new Date().toISOString(),
-            });
-          }
-        } catch (err) {
-          console.error(`Error scanning ${platform.name} for prompt ${prompt.id}:`, err);
-        }
+      for (const competitor of brandData.competitor_names ?? []) {
+        const competitorMentioned = brandIsMentioned(answer.text, competitor, [competitor]);
+        competitorResults.push({
+          tenant_id,
+          brand_id,
+          competitor_name: competitor,
+          prompt_id: prompt.id,
+          platform: "chatgpt",
+          is_mentioned: competitorMentioned,
+          position: competitorMentioned ? listPosition(answer.text, competitor) : null,
+          scan_id: scanId,
+          scanned_at: new Date().toISOString(),
+        });
       }
     }
 
-    // Save results to database
     if (results.length > 0) {
-      const { error: insertError } = await supabase
-        .from('ai_detection_results')
-        .insert(results);
-      if (insertError) console.error('Error saving results:', insertError);
+      const { error: insertError } = await supabase.from("ai_detection_results").insert(results);
+      if (insertError) console.error("Error saving results:", insertError);
     }
-
     if (competitorResults.length > 0) {
-      const { error: insertError } = await supabase
-        .from('ai_detection_competitor_results')
-        .insert(competitorResults);
-      if (insertError) console.error('Error saving competitor results:', insertError);
+      const { error: insertError } = await supabase.from("ai_detection_competitor_results").insert(competitorResults);
+      if (insertError) console.error("Error saving competitor results:", insertError);
     }
 
-    // Calculate and save weekly score
-    const totalScans = results.length;
-    const mentionedScans = results.filter(r => r.is_mentioned).length;
-    const score = totalScans > 0 ? Math.round((mentionedScans / totalScans) * 100) : 0;
-
-    const chatgptResults = results.filter(r => r.platform === 'chatgpt');
-    const geminiResults = results.filter(r => r.platform === 'gemini');
-    const perplexityResults = results.filter(r => r.platform === 'perplexity');
-
-    const calcScore = (arr: any[]) => arr.length > 0
-      ? Math.round((arr.filter(r => r.is_mentioned).length / arr.length) * 100)
-      : 0;
+    const mentionedPromptIds = new Set(results.filter((row) => row.is_mentioned).map((row) => String(row.prompt_id)));
+    const score = mentionRateScore(mentionedPromptIds.size, typedPrompts.length);
 
     const today = new Date();
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay());
-    const weekStartStr = weekStart.toISOString().split('T')[0];
+    const weekStartStr = weekStart.toISOString().split("T")[0];
 
-    // Upsert weekly score
-    const { error: scoreError } = await supabase
-      .from('ai_detection_scores')
-      .upsert({
-        tenant_id,
-        brand_id,
-        score,
-        chatgpt_score: calcScore(chatgptResults),
-        gemini_score: calcScore(geminiResults),
-        perplexity_score: calcScore(perplexityResults),
-        total_prompts: typedPrompts.length,
-        mentioned_prompts: new Set(results.filter(r => r.is_mentioned).map(r => r.prompt_id)).size,
-        week_start: weekStartStr,
-      }, { onConflict: 'brand_id,week_start', ignoreDuplicates: false });
-
-    if (scoreError) console.error('Error saving score:', scoreError);
+    const { error: scoreError } = await supabase.from("ai_detection_scores").upsert({
+      tenant_id,
+      brand_id,
+      score,
+      chatgpt_score: score,
+      gemini_score: null,
+      perplexity_score: null,
+      total_prompts: typedPrompts.length,
+      mentioned_prompts: mentionedPromptIds.size,
+      week_start: weekStartStr,
+    }, { onConflict: "brand_id,week_start", ignoreDuplicates: false });
+    if (scoreError) console.error("Error saving score:", scoreError);
 
     return new Response(
       JSON.stringify({
         success: true,
+        engine: "chatgpt_web_search",
         scanned: results.length,
-        mentioned: mentionedScans,
+        mentioned: mentionedPromptIds.size,
         score,
-        platforms: {
-          chatgpt: calcScore(chatgptResults),
-          gemini: calcScore(geminiResults),
-          perplexity: calcScore(perplexityResults),
-        },
+        platforms: { chatgpt: score },
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
 
-function checkBrandMention(text: string, brandName: string, keywords: string[]): boolean {
-  const lowerText = text.toLowerCase();
-  if (lowerText.includes(brandName.toLowerCase())) return true;
-  return keywords.some(kw => lowerText.includes(kw.toLowerCase()));
-}
-
-function findPosition(text: string, name: string): number | null {
-  const lines = text.split('\n');
-  let listIndex = 0;
-  for (const line of lines) {
-    if (/^\d+[\.\)]/.test(line.trim()) || /^[-•*]/.test(line.trim())) {
-      listIndex++;
-      if (line.toLowerCase().includes(name.toLowerCase())) {
-        return listIndex;
-      }
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      out[index] = await fn(items[index]);
     }
-  }
-  return null;
-}
-
-function extractUrls(text: string): string[] {
-  const urlRegex = /https?:\/\/[^\s\)]+/g;
-  const matches = text.match(urlRegex);
-  return matches ? [...new Set(matches)] : [];
+  });
+  await Promise.all(workers);
+  return out;
 }
 
 async function analyzeMention(
-  apiKey: string, responseText: string, brandName: string, keywords: string[]
+  apiKey: string,
+  responseText: string,
+  brandName: string,
+  keywords: string[],
 ): Promise<{ sentiment: string; position: number | null; snippet: string }> {
   try {
     const analysisResponse = await fetch(AI_GATEWAY_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: "gpt-4o-mini",
         messages: [
           {
-            role: 'system',
-            content: `Analyze how the brand "${brandName}" (keywords: ${keywords.join(', ')}) is mentioned in the following AI response. Return JSON only: {"sentiment": "positive"|"neutral"|"negative", "position": <number or null - position in list if applicable>, "snippet": "<relevant 1-2 sentence excerpt>"}`
+            role: "system",
+            content: `Analyze how the brand "${brandName}" (keywords: ${keywords.join(", ")}) is mentioned in the following AI response. Return JSON only: {"sentiment": "positive"|"neutral"|"negative", "position": <number or null - position in list if applicable>, "snippet": "<relevant 1-2 sentence excerpt>"}`,
           },
-          { role: 'user', content: responseText }
+          { role: "user", content: responseText },
         ],
       }),
     });
-
     if (!analysisResponse.ok) {
-      return { sentiment: 'neutral', position: null, snippet: responseText.substring(0, 200) };
+      return { sentiment: "neutral", position: null, snippet: responseText.substring(0, 200) };
     }
-
     const data = await analysisResponse.json();
-    const content = data.choices?.[0]?.message?.content || '';
-
-    // Extract JSON from response
+    const content = data.choices?.[0]?.message?.content || "";
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       return {
-        sentiment: parsed.sentiment || 'neutral',
+        sentiment: parsed.sentiment || "neutral",
         position: parsed.position || null,
         snippet: parsed.snippet || responseText.substring(0, 200),
       };
     }
-  } catch (e) {
-    console.error('Analysis error:', e);
+  } catch (error) {
+    console.error("Analysis error:", error);
   }
-
-  return { sentiment: 'neutral', position: null, snippet: responseText.substring(0, 200) };
+  return { sentiment: "neutral", position: null, snippet: responseText.substring(0, 200) };
 }
