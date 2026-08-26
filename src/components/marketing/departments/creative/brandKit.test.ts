@@ -37,7 +37,7 @@ test("deriveBrandBook uses client + brief and never invents a logo rule-break", 
   assert.equal(book.source, "auto");
 });
 
-test("brandKitPrompt locks logo colors and refuses style-board layouts", () => {
+test("brandKitPrompt locks logo colors and attaches project style refs", () => {
   const prompt = brandKitPrompt({
     logoUrl: "https://example.com/logo.png",
     website: "https://smartair.co.il",
@@ -45,11 +45,14 @@ test("brandKitPrompt locks logo colors and refuses style-board layouts", () => {
     styleReferences: [{ url: "https://example.com/a.jpg" }],
   });
   assert.doesNotMatch(prompt, /top-right pad/i);
-  assert.match(prompt, /RANGE only/i);
-  assert.match(prompt, /Do not attach, recall, or copy/i);
+  assert.match(prompt, /STYLE REFERENCE/i);
+  assert.match(prompt, /palette dominance/i);
+  assert.doesNotMatch(prompt, /Do not attach, recall, or copy/i);
+  assert.doesNotMatch(prompt, /RANGE only/i);
   assert.match(prompt, /ONLY these logo\/brand colors/i);
   assert.match(prompt, /#111/);
   assert.match(prompt, /smartair\.co\.il/);
+  assert.match(prompt, /never a default bottom-left/i);
 });
 
 test("brandKitPrompt talent lock keeps the spokesman instead of forbidding faces", () => {

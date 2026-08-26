@@ -39,11 +39,11 @@ export const CREATIVE_COMPOSITIONS: CompositionLayout[] = [
   layout({
     id: "flush",
     label: "טיפוגרפיה חשופה",
-    prompt: "GRAPHIC ARCHITECTURE: flush poster type sitting in a designed dark or light pocket that already exists in the picture (shadow, sky, wall, color bloom) — NO rectangle, NO caption bar, NO bottom pill reserved. Multiple designed pieces in frame (object + graphic + light). Logo lands bottom-start.",
-    type: { x: 6, y: 8, width: 88, height: 28, align: "right" },
-    bar: { x: 78, y: 37, width: 16, height: 1.1 },
+    prompt: "GRAPHIC ARCHITECTURE: flush poster type sitting in a designed dark or light pocket that already exists in the picture (shadow, sky, wall, color bloom) — NO rectangle, NO caption bar, NO bottom pill reserved. Multiple designed pieces in frame (object + graphic + light). Logo sits in a quiet top pocket, never under type and never a default bottom-left watermark.",
+    type: { x: 6, y: 14, width: 66, height: 28, align: "right" },
+    bar: { x: 78, y: 43, width: 16, height: 1.1 },
     cta: { x: 52, y: 88, width: 40, height: 7, pill: false },
-    logo: { x: 6, y: 86, width: 20, height: 9 },
+    logo: { x: 76, y: 3, width: 20, height: 8 },
   }),
   layout({
     id: "rail",
@@ -158,7 +158,14 @@ export const buildCompositionLock = (id?: CompositionId | null): string => {
     `COMPOSITION LOCK — ${selected.id.toUpperCase()} (${selected.label}).`,
     selected.prompt,
     "This variation MUST look structurally different from the others. Do not reuse logo-top-right + top headline strip + bottom CTA pill.",
-    "The attached style-board images (if any) were examples of RANGE, not layouts to copy. Invent a new graphic structure.",
+    "Project style references (if attached) lock grade, palette, and material — not layout and not faces.",
+    "Logo must sit in a quiet pocket that does not overlap headline or CTA. Never default to bottom-left under type.",
     "Build the still from several designed elements, not one stock photo with type on top.",
   ].join(" ");
 };
+
+export const layoutRectsOverlap = (
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean =>
+  a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;

@@ -52,7 +52,7 @@ import { VisualStyleSelect } from "@/components/marketing/departments/creative/V
 import { pickVariationComposition } from "@/components/marketing/departments/creative/compositions";
 import { isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
 import { assembleStaticCreativePrompt } from "@/components/marketing/departments/creative/creativeGenerationPrompt";
-import { collectStaticReferencePlan, wantsTalentLock } from "@/components/marketing/departments/creative/cursorArtDirector";
+import { collectStaticReferencePlan } from "@/components/marketing/departments/creative/cursorArtDirector";
 import { buildCreativeAgentPrompt } from "@/components/marketing/departments/creative/cursorCreativeAgent";
 import { hydrateVariationLayers, isInternalCopyLine } from "@/components/marketing/departments/creative/designedLayers";
 import { missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
@@ -900,7 +900,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       ? await resolveCreativeImageUrl(styleSource.imageUrl)
       : undefined;
     const instructions = selected.payload?.instructions ? String(selected.payload.instructions) : undefined;
-    const talentUrls = (await Promise.all(
+    const projectRefUrls = (await Promise.all(
       kit.styleReferences.map((reference) => resolveCreativeImageUrl(reference.url)),
     )).filter((url): url is string => !!url);
     const resolvedEditTarget = editTargetUrl
@@ -910,7 +910,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       directorRefUrls.map((url) => resolveCreativeImageUrl(url)),
     )).filter((url): url is string => !!url);
     const referencePlan = collectStaticReferencePlan({
-      talentUrls,
+      projectRefUrls,
       techniqueUrl: styleRefUrl,
       instructions,
       editTargetUrl: resolvedEditTarget ?? undefined,
@@ -921,6 +921,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       .map((variation) => variation.copyLabel || variation.name)
       .filter(Boolean)
       .slice(-4);
+    const hasTalentRef = referencePlan.refs.some((item) => item.kind === "talent");
     const creativePrompt = assembleStaticCreativePrompt({
       visualPrompt,
       copyText,
@@ -941,7 +942,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       variationIndex: live.length,
       directorNote,
       regenerate,
-      hasTalentRef: referencePlan.role === "talent" || (referencePlan.role === "revision" && wantsTalentLock(instructions)),
+      hasTalentRef,
       liveTextLayers,
       revising: !!resolvedEditTarget,
     });
@@ -957,9 +958,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       visualPrompt,
       directorNote,
       kit,
-      talentUrls: referencePlan.urls.filter((url) => url !== resolvedEditTarget && !resolvedDirectorRefs.includes(url)),
-      editTargetUrl: resolvedEditTarget,
-      directorRefUrls: resolvedDirectorRefs,
+      refs: referencePlan.refs,
       liveTextLayers,
     });
     try {

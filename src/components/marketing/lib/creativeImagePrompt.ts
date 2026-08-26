@@ -16,6 +16,7 @@ export const FINISHED_HEBREW_AD = [
   "Do not restage the headline as a new situation. Do not replace the concept with a literal illustration of the copy.",
   "RTL: Hebrew reads right-to-left. Use logical Unicode order. Do not reverse, mirror, or scramble glyphs.",
   "Quote the copy exactly — no invented slogans, no missing letters, no English unless the quoted copy contains it.",
+  "Place the real brand logo in a visible quiet pocket that does not overlap headline or CTA. Never default to bottom-left. If type would cover it, omit the logo.",
   "This is a finished cinematic advertising still, not a letter-empty plate for later overlay, and not a Canva caption template.",
 ].join(" ");
 

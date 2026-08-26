@@ -23,14 +23,24 @@ Also read [create-premium-hebrew-ads](../create-premium-hebrew-ads/SKILL.md). Al
 - If concept and headline disagree: photograph the concept, type the headline.
 - No chat UI, Google search, or "person reading the slogan" unless that **is** the concept.
 
+## Static still vs storyboard
+
+A default job is a **standalone static ad**, not a storyboard frame.
+
+- Do **not** keep faces, wardrobe, or cast from a storyboard, a previous card, or a style reference.
+- Character continuity is **opt-in** only, when a job labels an image as **Talent** (project instruction like «תשתמש בדמות מהרפרנס»).
+- Storyboard-frame jobs are the only ones that ask for the same people across shots. Do not import that rule into static stills.
+
 ## References on a job
 
-Jobs may attach images. Honor the labels:
+Jobs may attach images. Download each URL and attach it to GenerateImage. Honor the labels:
 
 - **Edit target** — revise this ad; change only the director note.
-- **Talent** — keep this face, new scene.
+- **STYLE REFERENCE** (project settings) — match grade, **palette dominance**, material, lighting, energy. New scene, **new people**. Do not copy layout, lettering, logo, or faces. Do not skip these.
 - **Director / reject reference** — this is the taste they want instead. Match lighting, crop, material, and energy. Do not copy layout, lettering, or logo slavishly.
-- **Logo** — composite or reserve a clean pocket; never redraw or invent a mark.
+- **Talent** — keep this face, new scene. Only when labeled.
+- **Technique sample** — match material/light/grade only. New cast, new crop.
+- **Logo** — place the real mark in a **visible** quiet pocket that does **not** overlap headline or CTA. Never default to bottom-left. Never hide it under type. If no clean pocket, omit the logo rather than covering it.
 
 ## Taste memory
 

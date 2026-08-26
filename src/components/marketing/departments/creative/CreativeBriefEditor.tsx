@@ -487,7 +487,7 @@ export function CreativeBriefEditor({
               placeholder="טון, דברים שחייבים להופיע, מה אסור"
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              יש דמות ברפרנס? כתבו «תשתמש בדמות מהרפרנס» — Cursor ישמור את הפנים. ברירת המחדל: קריאייטיב סופי עם עברית מצוירת על התמונה.
+              יש דמות ברפרנס? כתבו «תשתמש בדמות מהרפרנס» — רק אז נשמרות הפנים. ברירת המחדל: הרפרנסים בהגדרות הם סגנון וצבע, לא עקביות דמויות.
             </p>
           </div>
           <div className="flex items-start justify-between gap-3 rounded-xl border bg-muted/20 p-3">
