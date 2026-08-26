@@ -59,7 +59,7 @@ export const getBrandKit = (payload: Record<string, unknown> | null | undefined)
   };
 };
 
-export const brandKitPrompt = (kit: CreativeBrandKit) => {
+export const brandKitPrompt = (kit: CreativeBrandKit, options?: { talentLock?: boolean }) => {
   const lines = [
     kit.brandBook?.name && `Brand: ${kit.brandBook.name}`,
     kit.brandBook?.colors.length
@@ -67,8 +67,10 @@ export const brandKitPrompt = (kit: CreativeBrandKit) => {
       : undefined,
     kit.brandBook?.voice && `Brand voice: ${kit.brandBook.voice}`,
     kit.website && `Brand website: ${kit.website}. Match that commercial world (color temperature, materials, locations) without copying UI chrome or inventing a logo.`,
-    kit.logoUrl && "A logo asset exists and will be composited later as a layer. Leave a quiet designed pocket for it wherever THIS composition asks — not always top-right. Do not redraw or invent a logo.",
-    kit.styleReferences.length > 0 && `${kit.styleReferences.length} style-range board(s) live on the project as examples of RANGE only. Do not attach, recall, or copy their layout, lettering, faces, logo, or composition. Invent a new graphic structure. Do not let those boards choose the scene.`,
+    kit.logoUrl && "A logo asset exists. Download and ATTACH that file, then paint the real mark into the PNG. The app will not overlay a watermark. Never default to a bottom-corner sticker. If no clean pocket, omit it. Do not redraw or invent a logo.",
+    kit.styleReferences.length > 0 && (options?.talentLock
+      ? "A talent still is attached. Keep that spokesman. Do not copy the source board's layout, lettering, or logo."
+      : `${kit.styleReferences.length} STYLE REFERENCE(s) from project settings are attached. Match the reference ad design system: palette dominance, layout bands (hero + footer/wave), icon row, CTA pill zone, logo zone, lighting, material, and grade. New scene and new people in the hero. Do not photocopy faces or reference lettering. Do not ignore these refs.`),
   ].filter(Boolean);
   return lines.join("\n");
 };
@@ -215,8 +217,12 @@ export const styleRefsFromClientFiles = (supabase: SupabaseClient, attachments: 
 
 export const GENERATION_ABORTED = "ABORTED";
 
-export const isGenerationAborted = (error: unknown) =>
-  error instanceof Error && error.message === GENERATION_ABORTED;
+export const isGenerationAborted = (error: unknown) => {
+  if (error instanceof Error && error.message === GENERATION_ABORTED) return true;
+  if (typeof error === "object" && error && "name" in error && (error as { name?: string }).name === "AbortError") return true;
+  if (error instanceof Error && /aborted|AbortError/i.test(error.message)) return true;
+  return false;
+};
 
 export const throwIfGenerationAborted = (aborted: boolean) => {
   if (aborted) throw new Error(GENERATION_ABORTED);

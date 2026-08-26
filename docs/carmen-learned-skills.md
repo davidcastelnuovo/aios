@@ -32,6 +32,18 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-26 — לוגו — עיצוב בהיר מראש, בלי פלסטר
+- **Skin slug:** `creative_direct` (global + tenant)
+- **What Creative Direct must do:** Promo logo is red-on-transparent; on black heroes it disappears. **No plaster pad.** Design **bright-dominant** comps (paper/white/light ~60%+) with natural light header/wall for logo; composite exact PNG after generation.
+- **How:** `.cursor/skills/creative-direct/SKILL.md` § Logo; `LOGO_PLACEMENT_LOCK` in `cursorArtDirector.ts`.
+- **Origin:** David — brighten background / flip color dominance; reject pasted cream patch on dark image.
+
+### 2026-08-26 — איש קריאייטив + רפרנסים בריג׳קט
+- **Skin slug:** `creative_direct` (global + tenant taste override; tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Act as **איש קריאייטיב**. Image jobs go to קריאייטיב דיירקט (`mcp_Cursor__generate_creative`) without re-explaining the role. Rejects can attach reference images. Taste from rejects is stored in `carmen_memory_pointers` (`creative/direct/lessons/*`) and appended to the tenant skin so it improves over time.
+- **How:** Standing skill `.cursor/skills/creative-direct/SKILL.md`. Follow-ups are JOB-only. `cursor-generate-creative` injects TASTE MEMORY and upserts the skin on first open. Copywriter handoff includes `creative_direct`. Creative pipeline stage uses this skin instead of `social_media`.
+- **Origin:** David — attach refs on reject; stop re-briefing Creative Direct every job; share Carmen's evolving creative-person skin.
+
 ### 2026-08-26 — Tasks board empty: query referenced missing target_date
 - **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** If the tasks board is empty in every agency filter, the fetch likely 400'd because `buildTaskDueDateOrFilter` referenced `tasks.target_date` before migration `20260824120000_add_tasks_target_date` was applied. Filter on `due_date` only; apply the additive column separately.
@@ -44,10 +56,17 @@ logged.
 - **How:** `fetchMineTaskIdentity` ORs profile + RPC + email-matched campaigner ids; `TenantContext.isActiveTenantDbSynced` upserts `user_active_tenant` before tasks query; `buildMineAssignmentOrFilter` + collaborator task ids widen fetch scope.
 - **Origin:** David — tasks board empty in single agency and "כל הסוכנויות"; user identity not recognized for mine view.
 
+### 2026-08-26 — Mine tasks: header auto-resets to all agencies
 - **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When a campaigner/team_manager says they see no tasks in "שלי בלבד", explain that the board auto-resets the header to **"כל הסוכנויות"** on entry; assignments span promo/DMM-MC/etc. They can still narrow the header to one agency afterward. If still empty, check `profiles.campaigner_id` and open assignments in DB.
 - **How:** `WeeklyTaskBoard` uses `useLayoutEffect` to reset header agency on mine entry; person queues ignore header agency in `resolveTasksBoardAgencyFilter`; `AgencyContext` keeps `"all"` even with one agency row; `buildTasksBoardScopeOrFilter` ORs `campaigner_id` into fetch scope.
 - **Origin:** Regression after PR #470 TDZ crash + incomplete agency-filter behavior (#468/#473).
+
+### 2026-08-25 — Cursor is the Creative department art director (RTL type)
+- **Skin slug:** `cursor_creative_director` (code: `src/components/marketing/departments/creative/cursorArtDirector.ts`)
+- **What Carmen can now do:** Explain that מחלקת קריאייטיב is art-directed by Cursor: subject-first stills, talent lock when instructions say «תשתמש בדמות מהרפרנס», and Hebrew is never painted — it is composited as isolated RTL layers (`dir=rtl`, `unicode-bidi:isolate`).
+- **How:** `assembleStaticCreativePrompt` prepends the Cursor director lock; static generate attaches style-reference faces as `reference_role=talent`; overlay text in the grid/editor uses `rtlText.ts` (box stays LTR for geometry). Image API remains `gpt-image-1` via `ai-generate-social-image`.
+- **Origin:** David — connect Cursor as the creative-department brain; pay attention to RTL of the text.
 
 ### 2026-08-25 — Campaigner "mine" tasks hidden by header agency filter
 - **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
@@ -229,6 +248,12 @@ logged.
 - **What Carmen can now do:** In one step, provision a fully-wired new tenant from an existing client record — creates the org, invites the primary contact as owner, shares all integrations (via `shared_from_integration_id` mirror rows), shares social pages + WP sites (via junction tables), and clones Carmen + automations + pipelines.
 - **How:** Call `create-org-for-client` edge function with `{ client_id, clone_carmen: true, share_llm: false }`. Set `share_llm: true` only if user explicitly asks to share the AI key. Parse `owner_status` (existing_user / invited / no_email) and `shared` counts for the summary message.
 - **Origin:** PR #32 — implemented from the agreed plan in `docs/plan-create-org-for-client.md`. Also fixed a correlated-subquery bug in the pre-existing shared-access RLS policies on `social_pages` and `social_media_wordpress_sites`.
+
+### 2026-08-26 — Creative Direct image chat
+- **Skin slug:** `generate_creative` (via Cursor MCP; tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Ask **AIOS Creative Direct** — a dedicated image chat like Carmen Direct — to make / fix Hebrew advertising stills for מחלקת קריאייטיב. Jobs are follow-ups on the same sticky conversation (not a new coding agent). The chat uses GenerateImage and writes the PNG onto `marketing_work_items.payload.variations`.
+- **How:** MCP tool `mcp_Cursor__generate_creative` with `item_id` (required), optional `director_note` / `copy_label`. Routes to `cursor-generate-creative` (does **not** overwrite Carmen's coding sticky). Frontend path: `/t/<tenant>/marketing/department/creative`. Tell David the Creative Direct session URL.
+- **Origin:** David: open a new chat like Carmen Direct that creates images and uploads them to the DB; Carmen and מחלקת קריאייטיב should ask that chat.
 
 ### 2026-08-25 — escalate-to-Grok Bot + teach-back loop
 - **Skin slug:** `grok_escalation` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)

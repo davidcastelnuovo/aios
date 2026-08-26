@@ -20,6 +20,7 @@ import { CreativeLibraryPanel } from "./CreativeLibraryPanel";
 import { buildDesignedCopyLayers } from "./designedLayers";
 import { proposeAndApplySlots } from "./textSlots";
 import { loadImagePixels } from "./textSlotsImage";
+import { hebrewTextDir, hebrewTextStyle, overlayBoxDir, overlayBoxStyle } from "./rtlText";
 import { aspectRatioClass } from "./utils";
 import type { CompositionId } from "./compositions";
 
@@ -388,7 +389,7 @@ export function CreativeLayerEditor({
                   height: `${layer.height}%`,
                   display: layer.type === "text" || isIconLayer(layer) ? "flex" : undefined,
                   alignItems: layer.type === "text" || isIconLayer(layer) ? "center" : undefined,
-                  justifyContent: layer.textAlign === "center" ? "center" : layer.textAlign === "left" ? "flex-start" : "flex-end",
+                  ...overlayBoxStyle(layer.textAlign),
                   background: layer.type === "shape" ? layer.fill ?? "#0f172acc" : undefined,
                   borderRadius: layer.type === "shape" ? layer.borderRadius : undefined,
                   transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
@@ -399,11 +400,11 @@ export function CreativeLayerEditor({
                   fontFamily: layer.fontFamily ?? "Rubik",
                   fontSize: `${layer.fontSize ?? 24}px`,
                   fontWeight: layer.fontWeight ?? "600",
-                  textAlign: layer.textAlign ?? "right",
                   letterSpacing: layer.letterSpacing,
                   lineHeight: layer.lineHeight ?? 1.05,
                   textShadow: layer.type === "text" ? layer.textShadow ?? "0 2px 14px rgba(0,0,0,0.35)" : undefined,
                 }}
+                dir={layer.type === "text" ? overlayBoxDir : undefined}
                 onMouseDown={(event) => {
                   if (!isEditing) return;
                   beginDrag(event, layer, "move");
@@ -437,7 +438,7 @@ export function CreativeLayerEditor({
                 ) : layer.type === "text" && isEditing && selectedLayerId === layer.id ? (
                   <textarea
                     className="h-full w-full resize-none bg-transparent px-1 outline-none"
-                    dir="auto"
+                    dir={hebrewTextDir}
                     value={layer.text ?? ""}
                     onChange={(event) => updateLayer(layer.id, { text: event.target.value })}
                     onMouseDown={(event) => event.stopPropagation()}
@@ -447,14 +448,14 @@ export function CreativeLayerEditor({
                       fontFamily: "inherit",
                       fontSize: "inherit",
                       fontWeight: "inherit",
-                      textAlign: "inherit",
                       letterSpacing: "inherit",
                       lineHeight: "inherit",
                       textShadow: "inherit",
+                      ...hebrewTextStyle(layer.textAlign),
                     }}
                   />
                 ) : layer.type === "text" ? (
-                  <span className="block w-full overflow-hidden whitespace-pre-wrap break-words px-1">{layer.text}</span>
+                  <span dir={hebrewTextDir} className="block w-full overflow-hidden whitespace-pre-wrap break-words px-1" style={hebrewTextStyle(layer.textAlign)}>{layer.text}</span>
                 ) : null}
                 {isEditing && selectedLayerId === layer.id && (
                   <span
@@ -587,10 +588,11 @@ export function CreativeLayerEditor({
                     <Label>הטקסט עצמו</Label>
                     <Textarea
                       className="mt-1 min-h-24 text-sm"
-                      dir="auto"
+                      dir={hebrewTextDir}
                       value={selectedLayer.text ?? ""}
                       onChange={(event) => updateLayer(selectedLayer.id, { text: event.target.value })}
                       placeholder="כתוב כאן את הכותרת, ההצעה או ה-CTA"
+                      style={hebrewTextStyle(selectedLayer.textAlign)}
                     />
                     <p className="mt-1 text-[11px] text-muted-foreground">אפשר גם להקליד ישירות על השכבה בקנבס.</p>
                   </div>

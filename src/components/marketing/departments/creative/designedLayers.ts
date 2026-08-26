@@ -1,12 +1,12 @@
-import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
-import { compositionById, pickVariationComposition, type CompositionId } from "./compositions";
-import { buildOfferBoardLayers, parseOfferBullets } from "./offerBoard";
-import { withLayerShadow } from "./layerShadow";
+import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types.ts";
+import { compositionById, pickVariationComposition, type CompositionId } from "./compositions.ts";
+import { buildOfferBoardLayers, parseOfferBullets } from "./offerBoard.ts";
+import { withLayerShadow } from "./layerShadow.ts";
 import {
   type CreativeVisualStyle,
   type CreativeVisualStyleId,
   visualStyleById,
-} from "./visualStyles";
+} from "./visualStyles.ts";
 
 export interface CopyParts {
   headline?: string;
@@ -161,8 +161,9 @@ const clip = (value: string | undefined, max: number) => {
 export const parseCreativeCopy = (copyText: string, fallbackTitle?: string): CopyParts => {
   const parts: CopyParts = {};
   let pending: keyof CopyParts | "skip" | null = null;
+  const source = typeof copyText === "string" ? copyText : "";
 
-  for (const raw of copyText.split("\n")) {
+  for (const raw of source.split("\n")) {
     const line = cleanLine(raw);
     if (!line) continue;
 
@@ -191,7 +192,7 @@ export const parseCreativeCopy = (copyText: string, fallbackTitle?: string): Cop
   }
 
   if (!parts.headline) {
-    const firstReal = copyText
+    const firstReal = source
       .split("\n")
       .map(cleanLine)
       .find((line) => line && !isInternalCopyLine(line) && !labeledField(line));
@@ -365,6 +366,37 @@ export const buildCopyOverlayLock = ({
   ].filter(Boolean).join("\n");
 };
 
+/** Default path: quote headline + CTA so the model paints a finished Hebrew ad. */
+export const buildPaintedCopyLock = ({
+  copyText,
+  title,
+  copyLabel,
+  conceptLocked,
+}: {
+  copyText?: string;
+  title?: string;
+  copyLabel?: string;
+  conceptLocked?: boolean;
+}): string => {
+  const parts = parseCreativeCopy(copyText ?? "", title);
+  const idea = strongestLine(copyText ?? "", title) || parts.headline || parts.body;
+  return [
+    conceptLocked
+      ? "TYPE ONLY — paint these exact Hebrew words on the CONCEPT photograph. Do not restage the scene from this copy. Do not change people, place, or props to illustrate the headline."
+      : "FINISHED AD — paint the Hebrew type on this PNG. This is not a letter-empty plate.",
+    idea && (conceptLocked
+      ? `HEADLINE (exact words to typeset, RTL — not a new scene): «${idea}»`
+      : `Paint this HEADLINE exactly, Hebrew RTL, unreversed glyphs, logical Unicode order: «${idea}»`),
+    parts.cta && parts.cta !== idea && (conceptLocked
+      ? `CTA (exact words to typeset, RTL — not a new scene): «${parts.cta}»`
+      : `Paint this CTA exactly as a designed button/pill: «${parts.cta}»`),
+    copyLabel && `Copy variation «${copyLabel}» — same concept world, this line of type.`,
+    "RTL HARD RULES: Hebrew reads right-to-left. Do not reverse, mirror, or scramble letters. Do not insert English unless the quoted copy contains it.",
+    "Integrate type into the photograph (flush over a quiet pocket, cinematic poster lockup) — not a Canva caption bar, not a fake Instagram UI.",
+    "Do not invent extra slogans. Quote the copy exactly.",
+  ].filter(Boolean).join("\n");
+};
+
 export const buildCopySceneBrief = ({
   copyText,
   title,
@@ -372,6 +404,7 @@ export const buildCopySceneBrief = ({
   instructions,
   copyLabel,
   angle: explicitAngle,
+  paintCopy,
 }: {
   copyText?: string;
   title?: string;
@@ -379,21 +412,33 @@ export const buildCopySceneBrief = ({
   instructions?: string;
   copyLabel?: string;
   angle?: string;
+  paintCopy?: boolean;
 }): string => {
   const parts = parseCreativeCopy(copyText ?? "", title);
   const strong = strongestLine(copyText ?? "", title);
   const angle = sanitizeCopyAngle(explicitAngle) || extractCopyAngle(copyText, copyLabel);
   const idea = strong || parts.headline || parts.body;
   const lines = [
+    "NO APPROVED CONCEPT — only then may copy suggest the scene.",
     "IRON RULE — SUBJECT FIRST. Style may change light, material and crop. It may NOT change what the ad is about.",
-    idea && `STAGE THIS IDEA as a silent picture (people, objects, light — no letters). COPY CONTEXT — meaning only, NEVER draw these characters: «${idea}»`,
-    angle && `This variation's angle (meaning only, do not paint it): ${angle}. A stranger must see this specific idea — not a prettier default from the style board.`,
-    parts.headline && parts.headline !== idea && `Headline beat (do not paint): ${parts.headline}`,
+    idea && (paintCopy
+      ? `STAGE THIS IDEA as a cinematic photograph (people, objects, light). Then paint the quoted Hebrew type on the still: «${idea}»`
+      : `STAGE THIS IDEA as a silent picture (people, objects, light — no letters). COPY CONTEXT — meaning only, NEVER draw these characters: «${idea}»`),
+    angle && (paintCopy
+      ? `This variation's angle (the photograph must show it): ${angle}. A stranger must see this specific idea — not a prettier default from the style board.`
+      : `This variation's angle (meaning only, do not paint it): ${angle}. A stranger must see this specific idea — not a prettier default from the style board.`),
+    parts.headline && parts.headline !== idea && (paintCopy
+      ? `Headline meaning (do not add as a second slogan): ${parts.headline}`
+      : `Headline beat (do not paint): ${parts.headline}`),
     parts.offer && parts.offer !== idea && `Offer that must be visible as a situation, not as written type: ${parts.offer}`,
-    parts.body && parts.body !== idea && `Story beat (do not paint): ${parts.body}`,
+    parts.body && parts.body !== idea && (paintCopy
+      ? `Story beat for the photograph (do not add as extra slogans): ${parts.body}`
+      : `Story beat (do not paint): ${parts.body}`),
     brief?.trim() && `Campaign brief (supporting only — do not replace the variation idea): ${brief.trim().slice(0, 280)}`,
     instructions?.trim() && `Constraints: ${instructions.trim().slice(0, 180)}`,
-    "Any Hebrew or English in this brief is context for the scene. Drawing it — or a gibberish stand-in — is a fail.",
+    paintCopy
+      ? "Paint only the quoted headline and CTA. Other copy lines are scene meaning, not extra slogans."
+      : "Any Hebrew or English in this brief is context for the scene. Drawing it — or a gibberish stand-in — is a fail.",
     "The still fails if it is a pretty style-board that could belong to any other variation.",
     "Forbidden substitutions: Santorini, generic sea arch, airplane wing, suitcase, jet engine, random phone light-trails — unless the copy is actually about those things.",
   ].filter(Boolean);
@@ -500,7 +545,7 @@ export const buildDesignedCopyLayers = ({
 }): CreativeLayer[] => {
   const parts = parseCreativeCopy(copyText ?? "", title);
   const poster = strongestLine(copyText ?? "", title);
-  if (!poster && !parts.cta && !logoUrl) return [];
+  if (!poster && !parts.cta) return [];
 
   const composition = compositionById(compositionId);
   const palette = applyBrandPalette(PALETTES[styleId] ?? PALETTES.swiss, brandColors);
@@ -519,7 +564,6 @@ export const buildDesignedCopyLayers = ({
       cta: parts.cta,
       footerTitle: "מה מקבלים איתנו?",
       palette,
-      logoUrl,
       format,
     });
   }
@@ -630,7 +674,7 @@ export const buildDesignedCopyLayers = ({
     }));
   }
 
-  return ensureLogoLayer(layers, logoUrl, composition.logo);
+  return layers;
 };
 
 export const hydrateVariationLayers = (
@@ -640,16 +684,27 @@ export const hydrateVariationLayers = (
   styleId?: CreativeVisualStyleId,
   logoUrl?: string,
   brandColors?: string[],
+  liveTextLayers?: boolean,
 ): CreativeVariation => {
   const compositionId = variation.compositionId ?? pickVariationComposition({ seed: variation.id });
   const existing = variation.layers ?? [];
+  const useLiveText = typeof variation.liveTextLayers === "boolean"
+    ? variation.liveTextLayers
+    : (liveTextLayers ?? false);
+  if (!useLiveText) {
+    return {
+      ...variation,
+      compositionId,
+      liveTextLayers: false,
+      layers: ensureLogoLayer(existing),
+    };
+  }
   const layers = shouldRebuildDesignedLayers(existing, variation.copyText || copyText)
     ? buildDesignedCopyLayers({
       copyText: variation.copyText || copyText,
       format: variation.format,
       styleId: variation.visualStyle ?? styleId ?? "swiss",
       title,
-      logoUrl,
       compositionId,
       brandColors,
     })
@@ -657,7 +712,8 @@ export const hydrateVariationLayers = (
   return {
     ...variation,
     compositionId,
-    layers: ensureLogoLayer(layers, logoUrl),
+    liveTextLayers: true,
+    layers: ensureLogoLayer(layers),
   };
 };
 

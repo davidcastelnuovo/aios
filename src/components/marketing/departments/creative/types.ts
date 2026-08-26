@@ -95,12 +95,16 @@ export interface CreativeVariation {
   copyKey?: string;
   copyLabel?: string;
   copyText?: string;
+  conceptId?: string;
+  conceptName?: string;
   rejected?: boolean;
   rejectNote?: string;
   parentId?: string;
   generationCost?: ImageGenerationCost;
   compositionId?: CompositionId;
   styleSourceId?: string;
+  /** When true: letter-empty template + editable RTL layers. When false: finished ad with painted type. */
+  liveTextLayers?: boolean;
 }
 
 export interface CreativeItem {

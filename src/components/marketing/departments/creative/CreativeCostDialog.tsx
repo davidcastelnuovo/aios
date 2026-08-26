@@ -52,6 +52,7 @@ export function buildNextGenerateEstimate(item: CreativeItem): { cost: ImageGene
       prompt: sample,
       quality: isVideo ? "medium" : "high",
       size,
+      liveTextLayers: isVideo,
     }),
   };
 }

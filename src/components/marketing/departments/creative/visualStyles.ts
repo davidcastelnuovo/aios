@@ -207,14 +207,14 @@ const STATIC_QUALITY_CORE = [
   "MILLION-DOLLAR GRAPHIC DESIGN — not a stock photo with a caption. Build the still from several designed pieces (hero acting the copy + 2-4 graphic objects: geometric field, torn paper, 3D object, light, architectural frame, printed texture).",
   "Forbidden template: logo top-right + top headline strip + bottom CTA pill.",
   "Type will be composited into a designed zone that is already part of the art (slash, rail, badge, split field, shadow pocket). Do not leave a white/cream rectangle or caption plate.",
-  "If BRAND COLOR LOCK is present, it OVERRIDES any palette listed in this style. Use only those logo/brand colors plus black, white, or paper.",
+  "If BRAND COLOR LOCK is present, it OVERRIDES any palette listed in this style. Use only those logo/brand colors plus black, white, or paper — match the dominance of attached project style references.",
   "No letters, numbers, logos, watermarks, buttons, or fake UI with words — Hebrew is composited later because the image API still garbles Hebrew glyphs. Never invent or redraw a logo.",
   "Forbidden: grey/white seamless studio headshot, thinking-hand pose, caption plate, Canva template, random portrait unrelated to the copy.",
 ];
 
 const STATIC_QUALITY = [
   ...STATIC_QUALITY_CORE,
-  "The ten style boards were examples of RANGE, not a style system. Do not recall or apply those recipes. Invent a treatment that fits THIS copy, THIS topic, and the logo colors.",
+  "Project STYLE REFERENCES lock grade, palette dominance, and material. Do not copy their layout or faces. Invent a treatment that fits THIS copy and THIS topic.",
 ].join(" ");
 
 const STATIC_QUALITY_SELECTED = [

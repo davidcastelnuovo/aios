@@ -181,7 +181,7 @@ serve(async (req) => {
     const defaultSkinByStage: Record<string, string> = {
       strategy: "campaigner",
       copy: "copywriter",
-      creative: "social_media",
+      creative: "creative_direct",
       target_paid: "campaigner",
       target_seo: "seo",
       target_organic: "social_media",
@@ -208,7 +208,7 @@ serve(async (req) => {
     const userParts: string[] = [];
     const approvedConcepts = formatApprovedConceptsFromPayload((item.payload ?? {}) as Record<string, unknown>);
     if (stageType === "creative" && approvedConcepts) {
-      userParts.push(`MUST FOLLOW THIS APPROVED VISUAL CONCEPT — build the picture around it, not a generic text-on-background graphic:\n${approvedConcepts}`);
+      userParts.push(`MUST FOLLOW THIS APPROVED VISUAL CONCEPT — photograph this scene. Copy is type only, never a new situation invented from the headline:\n${approvedConcepts}`);
     }
     userParts.push(`כותרת הפריט: ${item.title ?? "—"}`);
     const sourceBrief =
@@ -245,7 +245,7 @@ serve(async (req) => {
     } else if (stageType === "copy") {
       userParts.push("\nכתוב את הקופי המלא לפריט. קצר וממוקד.");
     } else if (stageType === "creative") {
-      userParts.push("\nצור תמונה ויזואלית מקצועית לפריט הזה. אם יש קונספטים מאושרים — בנה סצנה סביבם, לא טקסט על רקע.");
+      userParts.push("\nצור תמונה ויזואלית מקצועית לפריט הזה. אם יש קונספטים מאושרים — צלם את סצנת הקונספט (רעיון גדול, הוק, שפה ויזואלית). הקופי הוא טקסט על התמונה, לא סצנה חדשה.");
     } else if (stageType === "measurement") {
       userParts.push("\nהפק סיכום ביצועים והמלצות פעולה לשיפור.");
     }
@@ -272,7 +272,7 @@ serve(async (req) => {
           model: TEXT_MODEL,
           messages: [
             { role: "system", content: systemPrompt || "You are a creative director. Generate concise photorealistic image prompts in English." },
-            { role: "user", content: userPrompt + "\n\nGenerate a concise gpt-image-1 prompt (max 200 words) in English for this marketing creative. Build a striking scene from any approved concept (big idea, visual language, first-second hook). Focus on visual elements, style, composition, and lighting. NEVER request on-image text, letters, digits, captions, or logos — Hebrew type is composited later and the image API garbles it. Do not make a generic text-on-background ad." },
+            { role: "user", content: userPrompt + "\n\nGenerate a concise gpt-image-1 prompt (max 200 words) in English for this marketing creative. Photograph the approved concept (big idea, visual language, first-second hook). Copy/headline is TYPE only — do not restage the slogan as a new scene. Focus on visual elements, style, composition, and lighting. NEVER request on-image text, letters, digits, captions, or logos — Hebrew type is composited later and the image API garbles it. Do not make a generic text-on-background ad." },
           ],
           max_tokens: 300,
         }),
