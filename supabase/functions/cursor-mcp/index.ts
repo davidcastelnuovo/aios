@@ -93,8 +93,8 @@ const TOOLS = [
   {
     name: "generate_creative",
     description:
-      "Send a job to AIOS Creative Direct — the dedicated image chat. " +
-      "Follow-ups go to the same sticky conversation, not a new coding agent. " +
+      "Send a job to קריאייטיב דיירקט, the dedicated image chat (Carmen's איש קריאייטיב skin). " +
+      "Follow-ups go to the same sticky conversation. Do not re-explain the art-director role. " +
       "It generates a finished Hebrew advertising still with GenerateImage and writes the PNG onto the marketing work item. " +
       "Use when David, Carmen, or מחלקת קריאייטיב needs images.",
     inputSchema: {
@@ -548,15 +548,12 @@ async function handleToolCall(
         tenant_id: ctx.tenantId,
         item_id: itemId,
         prompt: [
-          "You are already in AIOS Creative Direct — the dedicated image chat. This is one job.",
-          "Generate ONE finished Hebrew advertising still with GenerateImage. Do not edit the repo. Do not open a PR.",
-          `Load APPROVED CONCEPTS FIRST from marketing_work_items id=${itemId} (payload.approved_concepts, then copy_concepts). The photograph IS that concept (name, big idea, hook, visual language).`,
-          "Copy (headline / CTA) is TYPE only — paint those exact RTL words on the concept photograph. Do not restage the headline as a new scene (no chat UI / Google search unless the concept itself is that).",
-          "Then load brand kit and talent refs. Concept wins if copy disagrees.",
-          copyLabel && `This card is copy variation «${copyLabel}» — same concept world, this line of type.`,
-          directorNote && `REVISION REQUEST: ${directorNote}`,
-          "Paint exact RTL Hebrew headline + CTA on the PNG unless the project has live_text_layers=true.",
+          "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
+          `Load APPROVED CONCEPTS from marketing_work_items id=${itemId}. Photograph the concept. Type the copy.`,
+          copyLabel && `Copy variation «${copyLabel}».`,
+          directorNote && `DIRECTOR / REJECT: ${directorNote}`,
         ].filter(Boolean).join("\n"),
+        lesson: directorNote || undefined,
         variation: {
           name: copyLabel || "וריאציה",
           copy_label: copyLabel || undefined,

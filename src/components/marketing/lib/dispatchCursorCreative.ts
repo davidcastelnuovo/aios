@@ -88,6 +88,7 @@ export async function dispatchCursorCreative({
   itemId,
   variation,
   prompt,
+  lesson,
   signal,
 }: {
   supabase: SupabaseClient;
@@ -95,6 +96,7 @@ export async function dispatchCursorCreative({
   itemId: string;
   variation: Pick<CreativeVariation, "id" | "name" | "format" | "copyKey" | "copyLabel" | "copyText" | "parentId">;
   prompt: string;
+  lesson?: string;
   signal?: AbortSignal;
 }): Promise<{ agentUrl: string; jobId: string }> {
   if (signal?.aborted) throw new Error(GENERATION_ABORTED);
@@ -103,6 +105,7 @@ export async function dispatchCursorCreative({
     tenant_id: tenantId,
     item_id: itemId,
     prompt,
+    lesson: lesson?.trim() || undefined,
     variation: {
       id: variation.id,
       name: variation.name,

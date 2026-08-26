@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
 import { CreativeDirectDock } from "@/components/marketing/departments/creative/CreativeDirectDock";
+import { CreativeJobReferences } from "@/components/marketing/departments/creative/CreativeJobReferences";
 import { CREATIVE_DIRECT_LABEL_HE } from "@/components/marketing/departments/creative/creativeDirect";
 import { dispatchCursorCreative, ensureCreativeDirect, getCreativeDirectStatus, isCursorCreativeUnavailable, waitForCursorCreative } from "@/components/marketing/lib/dispatchCursorCreative";
 import { CURSOR_CREATIVE_SPEND_MESSAGE, isCursorCreativeSpendError } from "@/components/marketing/lib/cursorCreativeUnavailable";
@@ -17,6 +18,7 @@ import {
   mergeStyleReferences,
   styleRefsFromClientFiles,
   throwIfGenerationAborted,
+  type StyleReference,
 } from "@/components/marketing/departments/creative/brandKit";
 import { ALL_CLIENTS_FILTER, applyClientFilter, resolveCreativeListFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
@@ -164,8 +166,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<CreativeVariation | null>(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [rejectRefs, setRejectRefs] = useState<StyleReference[]>([]);
   const [reviseTarget, setReviseTarget] = useState<CreativeVariation | null>(null);
   const [reviseNote, setReviseNote] = useState("");
+  const [reviseRefs, setReviseRefs] = useState<StyleReference[]>([]);
   const [creativeAgentUrl, setCreativeAgentUrl] = useState<string | null>(null);
   const [openingCreativeDirect, setOpeningCreativeDirect] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
@@ -850,6 +854,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     existing,
     regenerate,
     editTargetUrl,
+    directorRefUrls = [],
   }: {
     copyText: string;
     copyKey?: string;
@@ -863,6 +868,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     existing?: CreativeVariation[];
     regenerate?: boolean;
     editTargetUrl?: string;
+    directorRefUrls?: string[];
   }): Promise<CreativeVariation> => {
     if (!selected) throw new Error("לא נבחר פרויקט");
     throwIfGenerationAborted(generateAbortRef.current);
@@ -895,11 +901,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const resolvedEditTarget = editTargetUrl
       ? await resolveCreativeImageUrl(editTargetUrl)
       : undefined;
+    const resolvedDirectorRefs = (await Promise.all(
+      directorRefUrls.map((url) => resolveCreativeImageUrl(url)),
+    )).filter((url): url is string => !!url);
     const referencePlan = collectStaticReferencePlan({
       talentUrls,
       techniqueUrl: styleRefUrl,
       instructions,
       editTargetUrl: resolvedEditTarget ?? undefined,
+      directorUrls: resolvedDirectorRefs,
     });
     const priorLabels = live
       .filter((variation) => !variation.rejected && variation.id !== replaceId && variation.id !== styleSource?.id)
@@ -942,8 +952,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       visualPrompt,
       directorNote,
       kit,
-      talentUrls: referencePlan.urls.filter((url) => url !== resolvedEditTarget),
+      talentUrls: referencePlan.urls.filter((url) => url !== resolvedEditTarget && !resolvedDirectorRefs.includes(url)),
       editTargetUrl: resolvedEditTarget,
+      directorRefUrls: resolvedDirectorRefs,
       liveTextLayers,
     });
     try {
@@ -961,6 +972,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           parentId,
         },
         prompt: agentPrompt,
+        lesson: directorNote,
         signal: generationSignal(),
       });
       creativeJobIdRef.current = dispatched.jobId;
@@ -1210,6 +1222,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         name: `${rejectTarget.copyLabel || rejectTarget.name} · תיקון`,
         regenerate: true,
         editTargetUrl: rejectTarget.imageUrl,
+        directorRefUrls: rejectRefs.map((reference) => reference.url),
       });
       const nextVariations = [
         ...variations.map((variation) => variation.id === rejectTarget.id ? { ...variation, rejected: true, rejectNote: rejectNote.trim() } : variation),
@@ -1219,6 +1232,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       setSelectedVariationId(created.id);
       setRejectTarget(null);
       setRejectNote("");
+      setRejectRefs([]);
       setWorkspacePanel(null);
     } catch (error: unknown) {
       if (isGenerationAborted(error)) toast.message("היצירה נעצרה");
@@ -1248,11 +1262,13 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         name: `${reviseTarget.copyLabel || reviseTarget.name} · תיקון`,
         regenerate: true,
         editTargetUrl: reviseTarget.imageUrl,
+        directorRefUrls: reviseRefs.map((reference) => reference.url),
       });
       await persistVariations([...variations, created], "נוצרה וריאציה לפי התיקון");
       setSelectedVariationId(created.id);
       setReviseTarget(null);
       setReviseNote("");
+      setReviseRefs([]);
       setWorkspacePanel(null);
     } catch (error: unknown) {
       if (isGenerationAborted(error)) toast.message("היצירה נעצרה");
@@ -1957,10 +1973,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!reviseTarget} onOpenChange={(open) => { if (!open) setReviseTarget(null); }}>
+      <Dialog open={!!reviseTarget} onOpenChange={(open) => {
+        if (!open) {
+          setReviseTarget(null);
+          setReviseNote("");
+          setReviseRefs([]);
+        }
+      }}>
         <DialogContent className="sm:max-w-md" dir="rtl">
           <DialogHeader>
-            <DialogTitle>תקן עם Cursor</DialogTitle>
+            <DialogTitle>תקן עם קריאייטיב דיירקט</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             מה לתקן ב־{reviseTarget?.copyLabel || reviseTarget?.name}? ניצור וריאציה חדשה לפי הבקשה ונשאיר את הישנה בגריד.
@@ -1971,6 +1993,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             onChange={(event) => setReviseNote(event.target.value)}
             placeholder="למשל: הכותרת הפוכה, תזיז את ה־CTA למטה, שמור על הדמות ותחליף את הרקע..."
           />
+          {selected && (
+            <CreativeJobReferences
+              tenantId={tenantId}
+              itemId={selected.id}
+              references={reviseRefs}
+              onChange={setReviseRefs}
+              disabled={generating}
+            />
+          )}
           <DialogFooter className="gap-2 sm:justify-start">
             <Button onClick={() => void reviseVariation()} disabled={generating || !reviseNote.trim()}>
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -1981,13 +2012,19 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!rejectTarget} onOpenChange={(open) => { if (!open) setRejectTarget(null); }}>
+      <Dialog open={!!rejectTarget} onOpenChange={(open) => {
+        if (!open) {
+          setRejectTarget(null);
+          setRejectNote("");
+          setRejectRefs([]);
+        }
+      }}>
         <DialogContent className="sm:max-w-md" dir="rtl">
           <DialogHeader>
             <DialogTitle>רג׳קט לוריאציה</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            מה לא עבד ב־{rejectTarget?.copyLabel || rejectTarget?.name}? ניצור וריאציה חדשה לפי ההערה ונשאיר את הישנה מסומנת כנדחתה.
+            מה לא עבד ב־{rejectTarget?.copyLabel || rejectTarget?.name}? ניצור וריאציה חדשה לפי ההערה ונשאיר את הישנה מסומנת כנדחתה. אפשר לצרף רפרנסים לטעם שאתם רוצים.
           </p>
           <Textarea
             className="min-h-28"
@@ -1995,6 +2032,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
             onChange={(event) => setRejectNote(event.target.value)}
             placeholder="למשל: הכותרת על הפנים, נראה כמו סטוק, ה־CTA חתוך, לא קשור לבריף..."
           />
+          {selected && (
+            <CreativeJobReferences
+              tenantId={tenantId}
+              itemId={selected.id}
+              references={rejectRefs}
+              onChange={setRejectRefs}
+              disabled={generating}
+            />
+          )}
           <DialogFooter className="gap-2 sm:justify-start">
             <Button onClick={() => void rejectVariation()} disabled={generating || !rejectNote.trim()}>
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsDown className="h-4 w-4" />}

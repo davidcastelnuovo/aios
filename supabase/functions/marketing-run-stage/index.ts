@@ -181,7 +181,7 @@ serve(async (req) => {
     const defaultSkinByStage: Record<string, string> = {
       strategy: "campaigner",
       copy: "copywriter",
-      creative: "social_media",
+      creative: "creative_direct",
       target_paid: "campaigner",
       target_seo: "seo",
       target_organic: "social_media",

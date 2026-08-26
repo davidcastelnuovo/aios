@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-26 — איש קריאייטיב + רפרנסים בריג׳קט
+- **Skin slug:** `creative_direct` (global + tenant taste override; tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Act as **איש קריאייטיב**. Image jobs go to קריאייטיב דיירקט (`mcp_Cursor__generate_creative`) without re-explaining the role. Rejects can attach reference images. Taste from rejects is stored in `carmen_memory_pointers` (`creative/direct/lessons/*`) and appended to the tenant skin so it improves over time.
+- **How:** Standing skill `.cursor/skills/creative-direct/SKILL.md`. Follow-ups are JOB-only. `cursor-generate-creative` injects TASTE MEMORY and upserts the skin on first open. Copywriter handoff includes `creative_direct`. Creative pipeline stage uses this skin instead of `social_media`.
+- **Origin:** David — attach refs on reject; stop re-briefing Creative Direct every job; share Carmen's evolving creative-person skin.
+
 ### 2026-08-25 — Cursor is the Creative department art director (RTL type)
 - **Skin slug:** `cursor_creative_director` (code: `src/components/marketing/departments/creative/cursorArtDirector.ts`)
 - **What Carmen can now do:** Explain that מחלקת קריאייטיב is art-directed by Cursor: subject-first stills, talent lock when instructions say «תשתמש בדמות מהרפרנס», and Hebrew is never painted — it is composited as isolated RTL layers (`dir=rtl`, `unicode-bidi:isolate`).

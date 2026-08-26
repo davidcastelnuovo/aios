@@ -11,20 +11,23 @@ export const collectStaticReferencePlan = ({
   techniqueUrl,
   instructions,
   editTargetUrl,
+  directorUrls = [],
 }: {
   talentUrls: string[];
   techniqueUrl?: string;
   instructions?: string | null;
   editTargetUrl?: string;
+  directorUrls?: string[];
 }): { urls: string[]; role?: CreativeReferenceRole } => {
   const talent = wantsTalentLock(instructions) ? talentUrls.filter(Boolean) : [];
-  const ordered = [editTargetUrl, ...talent, techniqueUrl].filter(
+  const director = directorUrls.filter(Boolean);
+  const ordered = [editTargetUrl, ...director, ...talent, techniqueUrl].filter(
     (url, index, list): url is string => !!url && list.indexOf(url) === index,
   ).slice(0, 2);
   if (ordered.length === 0) return { urls: [] };
   return {
     urls: ordered,
-    role: editTargetUrl ? "revision" : talent.length > 0 ? "talent" : "technique",
+    role: editTargetUrl ? "revision" : director.length > 0 ? "technique" : talent.length > 0 ? "talent" : "technique",
   };
 };
 

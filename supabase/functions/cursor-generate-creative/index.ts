@@ -8,6 +8,8 @@ import {
   pickCreativeModelFromCatalog,
   resolveCreativeCursorModel,
 } from "../_shared/cursorCreativeModel.ts";
+import { upsertPointer } from "../_shared/carmen-memory.ts";
+import { CREATIVE_DIRECT_SKIN, CREATIVE_DIRECT_SKIN_SLUG } from "../_shared/creativeDirectStanding.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -16,8 +18,8 @@ const CREATIVE_MARKER = "[CREATIVE AGENT]";
 const CREATIVE_DIRECT_NAME = "AIOS Creative Direct";
 const CREATIVE_DIRECT_OPEN_MARKER = "[CREATIVE AGENT] opened Creative Direct";
 const CREATIVE_DIRECT_IDENTITY = [
-  "You are AIOS Creative Direct — a dedicated image chat, like Carmen Direct is a dedicated WhatsApp chat.",
-  "Carmen and מחלקת קריאייטיב send jobs into THIS conversation as follow-ups. Stay in this thread.",
+  "You are קריאייטיב דיירקט (AIOS Creative Direct) — the dedicated image chat of מחלקת קריאייטיב.",
+  "Carmen and the creative department send jobs into THIS conversation as follow-ups. Stay in this thread.",
   "Do NOT edit the repository. Do NOT open a pull request. Do NOT write code.",
   "For each job: GenerateImage ONE finished Hebrew advertising still, POST the PNG back with action=complete, then stop.",
   "The photograph is the approved concept. Headline/CTA are TYPE only — never restage the copy as a new scene.",
@@ -76,6 +78,149 @@ async function getCreativeSticky(tenantId: string): Promise<{ id: string; url: s
   const url = String((data as { session_url?: string } | null)?.session_url || "")
     || `https://cursor.com/agents/${id}`;
   return { id, url };
+}
+
+async function loadCreativeSkinText(tenantId: string): Promise<string> {
+  await ensureCreativeDirectSkin(tenantId);
+  const { data: tenant } = await sb()
+    .from("ai_skills")
+    .select("goal,constraints,system_prompt,steps")
+    .eq("slug", CREATIVE_DIRECT_SKIN_SLUG)
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .maybeSingle();
+  const row = tenant ?? (await sb()
+    .from("ai_skills")
+    .select("goal,constraints,system_prompt,steps")
+    .eq("slug", CREATIVE_DIRECT_SKIN_SLUG)
+    .eq("scope", "global")
+    .eq("is_active", true)
+    .maybeSingle()).data;
+  if (!row) {
+    return [CREATIVE_DIRECT_SKIN.goal, CREATIVE_DIRECT_SKIN.constraints, CREATIVE_DIRECT_SKIN.system_prompt, CREATIVE_DIRECT_SKIN.steps].join("\n");
+  }
+  return [row.goal, row.constraints, row.system_prompt, row.steps].filter(Boolean).join("\n");
+}
+
+async function loadTasteLessons(tenantId: string): Promise<string> {
+  const { data } = await sb()
+    .from("carmen_memory_pointers")
+    .select("summary,title,created_at")
+    .eq("tenant_id", tenantId)
+    .eq("entity_id", CREATIVE_DIRECT_SKIN_SLUG)
+    .eq("category", "creative")
+    .order("created_at", { ascending: false })
+    .limit(12);
+  const lines = (data ?? [])
+    .map((row) => String((row as { summary?: string }).summary || "").trim())
+    .filter(Boolean);
+  return lines.map((line) => `- ${line}`).join("\n");
+}
+
+async function ensureCreativeDirectSkin(tenantId: string) {
+  const { data: tenant } = await sb()
+    .from("ai_skills")
+    .select("id")
+    .eq("slug", CREATIVE_DIRECT_SKIN_SLUG)
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (tenant) return;
+  const { data: global } = await sb()
+    .from("ai_skills")
+    .select("id")
+    .eq("slug", CREATIVE_DIRECT_SKIN_SLUG)
+    .eq("scope", "global")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (global) return;
+  await sb().from("ai_skills").insert({
+    slug: CREATIVE_DIRECT_SKIN.slug,
+    scope: "tenant",
+    tenant_id: tenantId,
+    name: CREATIVE_DIRECT_SKIN.name,
+    description: CREATIVE_DIRECT_SKIN.description,
+    goal: CREATIVE_DIRECT_SKIN.goal,
+    constraints: CREATIVE_DIRECT_SKIN.constraints,
+    system_prompt: CREATIVE_DIRECT_SKIN.system_prompt,
+    steps: CREATIVE_DIRECT_SKIN.steps,
+    allowed_tools: CREATIVE_DIRECT_SKIN.allowed_tools,
+    triggers: CREATIVE_DIRECT_SKIN.triggers,
+    handoff_slugs: CREATIVE_DIRECT_SKIN.handoff_slugs,
+    is_active: true,
+    created_by_agent: true,
+  });
+}
+
+async function rememberCreativeLesson(tenantId: string, itemId: string, lesson: string) {
+  const text = lesson.trim().slice(0, 500);
+  if (!text) return;
+  const id = crypto.randomUUID();
+  await upsertPointer(sb(), {
+    tenant_id: tenantId,
+    category: "creative",
+    subcategory: "direct_taste",
+    path: `creative/direct/lessons/${id}`,
+    entity_type: "skill",
+    entity_id: CREATIVE_DIRECT_SKIN_SLUG,
+    title: "טעם מקריאייטיב דיירקט",
+    summary: text,
+    importance: 72,
+    metadata: { item_id: itemId },
+    withEmbedding: true,
+  });
+  await ensureCreativeDirectSkin(tenantId);
+  const { data: tenant } = await sb()
+    .from("ai_skills")
+    .select("id,steps")
+    .eq("slug", CREATIVE_DIRECT_SKIN_SLUG)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  const stamp = new Date().toISOString().slice(0, 10);
+  const bullet = `- ${stamp}: ${text}`;
+  if (tenant?.id) {
+    const previous = String(tenant.steps || CREATIVE_DIRECT_SKIN.steps);
+    const lines = previous.split("\n").map((line) => line.trim()).filter(Boolean);
+    const kept = [...lines.filter((line) => line !== bullet), bullet].slice(-24);
+    await sb().from("ai_skills").update({ steps: kept.join("\n") }).eq("id", tenant.id);
+    return;
+  }
+  const { data: global } = await sb()
+    .from("ai_skills")
+    .select("goal,constraints,system_prompt,steps,description,name")
+    .eq("slug", CREATIVE_DIRECT_SKIN_SLUG)
+    .eq("scope", "global")
+    .maybeSingle();
+  await sb().from("ai_skills").insert({
+    slug: CREATIVE_DIRECT_SKIN.slug,
+    scope: "tenant",
+    tenant_id: tenantId,
+    name: global?.name || CREATIVE_DIRECT_SKIN.name,
+    description: global?.description || CREATIVE_DIRECT_SKIN.description,
+    goal: global?.goal || CREATIVE_DIRECT_SKIN.goal,
+    constraints: global?.constraints || CREATIVE_DIRECT_SKIN.constraints,
+    system_prompt: global?.system_prompt || CREATIVE_DIRECT_SKIN.system_prompt,
+    steps: [String(global?.steps || CREATIVE_DIRECT_SKIN.steps), "טעם שנצבר מריג׳קטים:", bullet].filter(Boolean).join("\n"),
+    allowed_tools: CREATIVE_DIRECT_SKIN.allowed_tools,
+    triggers: CREATIVE_DIRECT_SKIN.triggers,
+    handoff_slugs: CREATIVE_DIRECT_SKIN.handoff_slugs,
+    is_active: true,
+    created_by_agent: true,
+  });
+}
+
+async function buildOpenPrompt(tenantId: string): Promise<string> {
+  const skin = await loadCreativeSkinText(tenantId);
+  const taste = await loadTasteLessons(tenantId);
+  return [
+    CREATIVE_DIRECT_IDENTITY,
+    "STANDING SKILL — read once, keep forever: .cursor/skills/creative-direct/SKILL.md",
+    "Also read .cursor/skills/create-premium-hebrew-ads/SKILL.md.",
+    "Later messages are JOBS only. Do not ask to be re-briefed.",
+    `CARMEN איש קריאייטיב SKIN (ai_skills.${CREATIVE_DIRECT_SKIN_SLUG}) — this evolves from rejects:\n${skin}`,
+    taste && `TASTE MEMORY:\n${taste}`,
+    "Reply that קריאייטיב דיירקט is open and waiting for jobs, then wait.",
+  ].filter(Boolean).join("\n\n");
 }
 
 async function followUp(apiKey: string, agentId: string, promptText: string) {
@@ -219,7 +364,7 @@ Deno.serve(async (req) => {
   const tenantId = String(body.tenant_id ?? "");
   const itemId = String(body.item_id ?? "");
   if (!tenantId) return json({ error: "tenant_id is required" }, 400);
-  if (action !== "status" && action !== "ensure" && !itemId) {
+  if (action !== "status" && action !== "ensure" && action !== "learn" && !itemId) {
     return json({ error: "tenant_id and item_id are required" }, 400);
   }
 
@@ -239,10 +384,7 @@ Deno.serve(async (req) => {
           reused: Boolean(existing),
         });
       }
-      const openPrompt = [
-        CREATIVE_DIRECT_IDENTITY,
-        "This message opens the Creative Direct chat. Reply that Creative Direct is open and waiting for jobs, then wait.",
-      ].join("\n\n");
+      const openPrompt = await buildOpenPrompt(tenantId);
       const fired = await createCreativeAgent(apiKey, openPrompt, CREATIVE_DIRECT_NAME);
       await sb().from("cursor_dispatches").insert({
         tenant_id: tenantId,
@@ -260,6 +402,15 @@ Deno.serve(async (req) => {
         cursor_agent_id: fired.id,
         reused: false,
       });
+    }
+
+    if (action === "learn") {
+      const auth = await requireAuth(req);
+      if (!auth) return json({ error: "unauthorized" }, 401);
+      const lesson = String(body.lesson ?? "").trim();
+      if (!lesson) return json({ error: "lesson is required" }, 400);
+      await rememberCreativeLesson(tenantId, itemId || "none", lesson);
+      return json({ ok: true });
     }
 
     if (action === "complete") {
@@ -379,6 +530,9 @@ Deno.serve(async (req) => {
       department: "creative",
     }));
 
+    const lesson = String(body.lesson ?? "").trim();
+    if (lesson) await rememberCreativeLesson(tenantId, itemId, lesson);
+
     const callback = [
       `${CREATIVE_MARKER} job ${jobId}`,
       "You are already in the Creative Direct chat. This is one job.",
@@ -388,13 +542,21 @@ Deno.serve(async (req) => {
       `Body JSON: {"action":"complete","tenant_id":"${tenantId}","item_id":"${itemId}","job_id":"${jobId}","job_token":"${jobToken}","image_base64":"<png-base64>","variation":{"id":"${variationId}","name":${JSON.stringify(String(variation.name || "וריאציה"))},"format":${JSON.stringify(String(variation.format || "1:1"))},"copy_key":${JSON.stringify(variation.copy_key ?? null)},"copy_label":${JSON.stringify(variation.copy_label ?? null)},"copy_text":${JSON.stringify(String(variation.copy_text || "").slice(0, 400))},"parent_id":${JSON.stringify(variation.parent_id ?? null)}}}`,
     ].join("\n");
 
-    const fullPrompt = `${CREATIVE_DIRECT_IDENTITY}\n\n${prompt}\n\n--- WRITE BACK ---\n${callback}`;
+    const taste = await loadTasteLessons(tenantId);
     const sticky = await getCreativeSticky(tenantId);
     let reused = false;
-    let fired = sticky ? await followUp(apiKey, sticky.id, fullPrompt) : null;
+    const jobPrompt = [
+      "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
+      taste && `TASTE MEMORY:\n${taste}`,
+      prompt,
+      "--- WRITE BACK ---",
+      callback,
+    ].filter(Boolean).join("\n\n");
+    let fired = sticky ? await followUp(apiKey, sticky.id, jobPrompt) : null;
     if (fired) reused = true;
     if (!fired) {
-      fired = await createCreativeAgent(apiKey, fullPrompt, CREATIVE_DIRECT_NAME);
+      const first = `${await buildOpenPrompt(tenantId)}\n\nThis message also contains the first job.\n\n${jobPrompt}`;
+      fired = await createCreativeAgent(apiKey, first, CREATIVE_DIRECT_NAME);
     }
     const label = String(variation.copy_label || variation.name || itemId).slice(0, 180);
 

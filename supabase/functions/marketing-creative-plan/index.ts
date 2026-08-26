@@ -44,7 +44,7 @@ serve(async (req) => {
       admin.from("tenant_integrations").select("settings,shared_from_integration_id")
         .eq("tenant_id", item.tenant_id).eq("integration_type", "llm").eq("is_active", true)
         .order("updated_at", { ascending: false }).limit(1).maybeSingle(),
-      buildSkillsBlockBySlug(["social_media"], item.tenant_id),
+      buildSkillsBlockBySlug(["creative_direct"], item.tenant_id),
     ]);
 
     let settings = (integration?.settings ?? {}) as Record<string, string>;
@@ -114,7 +114,7 @@ serve(async (req) => {
     }));
     if (frames.length === 0) throw new Error("כרמן לא החזירה סצנות תקינות");
 
-    const nextPayload = { ...payload, storyboard: frames, creative_concept: plan.concept ?? {}, creative_prompt: prompt ?? "", department: "creative", last_skin_slug: "social_media" };
+    const nextPayload = { ...payload, storyboard: frames, creative_concept: plan.concept ?? {}, creative_prompt: prompt ?? "", department: "creative", last_skin_slug: "creative_direct" };
     const { error: updateError } = await admin.from("marketing_work_items").update({ payload: nextPayload, status: "draft" }).eq("id", item.id);
     if (updateError) throw updateError;
 
@@ -124,10 +124,10 @@ serve(async (req) => {
       stage_id: item.current_stage_id,
       type: "storyboard",
       content: JSON.stringify({ concept: plan.concept ?? {}, frames }),
-      meta: { source: `carmen_${mode}`, skin_slug: "social_media", frame_count: frames.length, prompt: prompt ?? "" },
+      meta: { source: `carmen_${mode}`, skin_slug: "creative_direct", frame_count: frames.length, prompt: prompt ?? "" },
     });
 
-    return jsonResponse({ concept: plan.concept ?? {}, frames, skin_slug: "social_media" });
+    return jsonResponse({ concept: plan.concept ?? {}, frames, skin_slug: "creative_direct" });
   } catch (error) {
     console.error("marketing-creative-plan error", error);
     return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 500);

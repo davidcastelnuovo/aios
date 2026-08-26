@@ -48,6 +48,17 @@ test("revision target is first, then talent, max two refs", () => {
   assert.equal(plan.role, "revision");
 });
 
+test("reject director references sit next to the edit target", () => {
+  const plan = collectStaticReferencePlan({
+    talentUrls: ["https://talent"],
+    directorUrls: ["https://want-this.png"],
+    instructions: "",
+    editTargetUrl: "https://ad.png",
+  });
+  assert.deepEqual(plan.urls, ["https://ad.png", "https://want-this.png"]);
+  assert.equal(plan.role, "revision");
+});
+
 test("art director lock paints Hebrew RTL unless live text is on", () => {
   const lock = buildCursorArtDirectorLock({
     format: "1:1",
