@@ -107,7 +107,6 @@ export const itemToProjectDraft = (item: CreativeItem | null): CreativeProjectDr
     format: defaultFormat(item?.payload),
     projectType: getProjectType(item?.payload),
     visualStyle: getVisualStyleId(item?.payload),
-    liveTextLayers: isLiveTextLayers(item?.payload),
     clientId: item?.client_id ?? null,
     clientWebsite: kit.website,
     logoUrl: kit.logoUrl,
@@ -124,6 +123,17 @@ export const defaultFormat = (payload: Record<string, unknown> | null | undefine
 
 export const isLiveTextLayers = (payload: Record<string, unknown> | null | undefined): boolean =>
   payload?.live_text_layers === true;
+
+/** Per-ad mode: explicit flag, or infer from designed layer chrome on legacy rows. */
+export const isVariationLiveText = (
+  variation?: Pick<CreativeVariation, "liveTextLayers" | "layers"> | null,
+): boolean => {
+  if (!variation) return false;
+  if (typeof variation.liveTextLayers === "boolean") return variation.liveTextLayers;
+  return (variation.layers ?? []).some((layer) =>
+    layer.role === "footer" || layer.role === "cta_fill" || layer.role === "type_field",
+  );
+};
 
 const isVariation = (value: unknown): value is CreativeVariation => {
   if (!value || typeof value !== "object") return false;
@@ -288,6 +298,7 @@ export const makeVariation = ({
   generationCost,
   compositionId,
   styleSourceId,
+  liveTextLayers,
 });
 
 export const getLinkedCopyText = (item: CreativeItem | null) => {

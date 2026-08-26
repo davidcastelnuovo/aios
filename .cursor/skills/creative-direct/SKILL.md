@@ -27,14 +27,14 @@ Every follow-up includes a **JOB BRIEF** with four hard facts. Honor all of them
 
 If the brief says **STYLE CHANGE**, switch grade/material/composition to the new style. Do not keep the previous card's look.
 
-## Output mode (pick before each generation)
+## Output mode (per ad)
 
-The project has two text modes — the user switches in the workspace header or project settings:
+Each variation has its own text mode — toggled on the card in the grid, or set for the next new ad in the workspace header:
 
-| Mode | Switch | What Creative Direct generates |
-|------|--------|--------------------------------|
-| **קריאייטיב סופי** | OFF | Finished ad — paint quoted RTL Hebrew on the concept photograph |
-| **טמפלייט + שכבות** | ON | Letter-empty template — no painted letters. RTL type is composited as editable layers after `action=complete`. Open «שכבות» to edit. |
+| Mode | What Creative Direct generates |
+|------|--------------------------------|
+| **סופי** | Finished ad — paint quoted RTL Hebrew on the concept photograph |
+| **שכבות** | Letter-empty template — no painted letters. RTL type is composited as editable layers after `action=complete`. Open «שכבות» on that card to edit. |
 
 Honor whichever mode the job footer states (`LIVE TEXT` vs `FINISHED AD`). Do not mix them.
 

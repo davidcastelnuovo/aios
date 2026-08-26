@@ -460,7 +460,7 @@ Deno.serve(async (req) => {
       const visualStyle = jobMeta.visual_style ?? visualStyleFromPayload(payload) ?? "swiss";
       const compositionId = jobMeta.composition_id;
       const brandColors = jobMeta.brand_colors ?? brandColorsFromPayload(payload);
-      const liveTextLayers = jobMeta.live_text_layers ?? payload.live_text_layers === true;
+      const liveTextLayers = jobMeta.live_text_layers ?? false;
       const title = jobMeta.title ?? (typeof payload.title === "string" ? payload.title : undefined);
       const logoUrl = jobMeta.logo_url ?? logoUrlFromPayload(payload);
       const { layers, compositionId: resolvedCompositionId } = buildLayersForComplete({
@@ -495,6 +495,7 @@ Deno.serve(async (req) => {
           parentId: variationMeta.parent_id ?? job.parent_id,
           conceptId: variationMeta.concept_id ?? job.concept_id,
           conceptName: variationMeta.concept_name ?? job.concept_name,
+          liveTextLayers,
         };
         const index = list.findIndex((row) => String(row.id) === variationId);
         if (index >= 0) list[index] = { ...list[index], ...nextVariation, imageUrl };

@@ -1,12 +1,13 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { OfferIconMark, isIconLayer } from "./layerMarks";
 import { hebrewTextDir, hebrewTextStyle, overlayBoxDir, overlayBoxStyle } from "./rtlText";
 import { cn } from "@/lib/utils";
 import { Eraser, Layers, Layers2, Loader2, RotateCcw, Sparkles, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
 import type { CreativeVariation } from "./types";
-import { aspectRatioClass } from "./utils";
+import { aspectRatioClass, isVariationLiveText } from "./utils";
 import { isLogoLayer, styleLabelForId } from "./designedLayers";
 
 interface Props {
@@ -14,7 +15,7 @@ interface Props {
   generatingIds?: string[];
   progressLabel?: string;
   agentUrl?: string | null;
-  liveTextLayers?: boolean;
+  onLiveTextChange?: (variation: CreativeVariation, enabled: boolean) => void;
   onRevise: (variation: CreativeVariation) => void;
   onErase?: (variation: CreativeVariation) => void;
   onEditLayers?: (variation: CreativeVariation) => void;
@@ -30,7 +31,7 @@ export function CreativeVariationGrid({
   generatingIds,
   progressLabel,
   agentUrl,
-  liveTextLayers,
+  onLiveTextChange,
   onRevise,
   onErase,
   onEditLayers,
@@ -58,10 +59,11 @@ export function CreativeVariationGrid({
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {variations.map((variation) => {
           const busy = generatingIds?.includes(variation.id) ?? false;
+          const liveText = isVariationLiveText(variation);
           const overlayLayers = (variation.layers ?? []).filter((layer) => {
             if (layer.type === "background") return false;
             if (isLogoLayer(layer) || layer.role === "logo") return false;
-            if (liveTextLayers) return true;
+            if (liveText) return true;
             return layer.type === "image";
           });
           return (
@@ -141,6 +143,18 @@ export function CreativeVariationGrid({
                   </div>
                   {variation.visualStyle && <Badge variant="outline">{styleLabelForId(variation.visualStyle)}</Badge>}
                 </div>
+                <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/20 px-2 py-1.5">
+                  <span className="text-[10px] text-muted-foreground">מצב מודעה</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn("text-[10px] font-medium", !liveText ? "text-foreground" : "text-muted-foreground")}>סופי</span>
+                    <Switch
+                      checked={liveText}
+                      onCheckedChange={(checked) => onLiveTextChange?.(variation, checked)}
+                      aria-label={`מצב טקסט עבור ${variation.copyLabel || variation.name}`}
+                    />
+                    <span className={cn("text-[10px] font-medium", liveText ? "text-foreground" : "text-muted-foreground")}>שכבות</span>
+                  </div>
+                </div>
                 {variation.copyText && (
                   <p className="line-clamp-3 whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
                     {variation.copyText.replace(/^(?:וריאציה|variation)\s*\d+[^\n]*\n/i, "").trim()}
@@ -158,7 +172,7 @@ export function CreativeVariationGrid({
                       <Eraser className="h-3.5 w-3.5" />מחק אזור
                     </Button>
                   )}
-                  {liveTextLayers && onEditLayers && (
+                  {liveText && onEditLayers && (
                     <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onEditLayers(variation)}>
                       <Layers className="h-3.5 w-3.5" />שכבות
                     </Button>

@@ -103,6 +103,8 @@ export interface CreativeVariation {
   generationCost?: ImageGenerationCost;
   compositionId?: CompositionId;
   styleSourceId?: string;
+  /** When true: letter-empty template + editable RTL layers. When false: finished ad with painted type. */
+  liveTextLayers?: boolean;
 }
 
 export interface CreativeItem {
@@ -142,7 +144,6 @@ export interface CreativeProjectDraft {
   format: CreativeFormat;
   projectType: CreativeProjectType;
   visualStyle: CreativeVisualStyleId;
-  liveTextLayers?: boolean;
   clientId?: string | null;
   clientWebsite?: string;
   logoUrl?: string;

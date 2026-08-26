@@ -684,14 +684,18 @@ export const hydrateVariationLayers = (
   styleId?: CreativeVisualStyleId,
   logoUrl?: string,
   brandColors?: string[],
-  liveTextLayers = true,
+  liveTextLayers?: boolean,
 ): CreativeVariation => {
   const compositionId = variation.compositionId ?? pickVariationComposition({ seed: variation.id });
   const existing = variation.layers ?? [];
-  if (!liveTextLayers) {
+  const useLiveText = typeof variation.liveTextLayers === "boolean"
+    ? variation.liveTextLayers
+    : (liveTextLayers ?? false);
+  if (!useLiveText) {
     return {
       ...variation,
       compositionId,
+      liveTextLayers: false,
       layers: ensureLogoLayer(existing),
     };
   }
@@ -708,6 +712,7 @@ export const hydrateVariationLayers = (
   return {
     ...variation,
     compositionId,
+    liveTextLayers: true,
     layers: ensureLogoLayer(layers),
   };
 };

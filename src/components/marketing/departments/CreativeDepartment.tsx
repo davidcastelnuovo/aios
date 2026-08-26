@@ -43,7 +43,7 @@ import {
   getStoryboard,
   getStoryboardStyle,
   getVariations,
-  isLiveTextLayers,
+  isVariationLiveText,
   makeStoryboardFrame,
   makeVariation,
   projectTypeLabel,
@@ -180,6 +180,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [costOpen, setCostOpen] = useState(false);
   const [pendingStyleId, setPendingStyleId] = useState<CreativeVisualStyleId | null>(null);
   const [conceptPickerOpen, setConceptPickerOpen] = useState(false);
+  const [nextLiveTextLayers, setNextLiveTextLayers] = useState(false);
   const generateAbortRef = useRef(false);
   const generateAbortControllerRef = useRef<AbortController | null>(null);
   const abortControllersRef = useRef<AbortController[]>([]);
@@ -267,7 +268,6 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const projectType = getProjectType(selected?.payload ?? null);
-  const liveTextLayers = isLiveTextLayers(selected?.payload);
   const variations = useMemo(() => {
     const raw = getVariations(selected?.payload ?? null);
     const kit = getBrandKit(selected?.payload);
@@ -280,9 +280,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       variation.visualStyle ?? styleId,
       kit.logoUrl,
       kit.brandBook?.colors,
-      liveTextLayers,
     ));
-  }, [selected, liveTextLayers]);
+  }, [selected]);
   const copyBlocks = useMemo(() => {
     try {
       return copyBlocksForGeneration((selected?.payload ?? null) as Record<string, unknown> | null);
@@ -301,6 +300,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const generateAllLabel = generateFromConcepts ? "צור לכל הקונספטים" : "צור לכל הקופי";
   const storyboard = useMemo(() => getStoryboard(selected?.payload ?? null), [selected?.payload]);
   const selectedVariation = variations.find((variation) => variation.id === selectedVariationId) ?? variations[variations.length - 1] ?? null;
+  const selectedVariationLiveText = selectedVariation ? isVariationLiveText(selectedVariation) : false;
   const itemIds = items.map((item) => item.id);
 
   const { data: runCosts = [] } = useQuery({
@@ -465,9 +465,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       getVisualStyleId(selected?.payload),
       getBrandKit(selected?.payload).logoUrl,
       getBrandKit(selected?.payload).brandBook?.colors,
-      liveTextLayers,
     ));
-  }, [selectedVariation, selected, liveTextLayers]);
+  }, [selectedVariation, selected]);
 
   const { data: assetVersions = [] } = useQuery({
     queryKey: ["creative-department-assets", selectedId, tenantId],
@@ -505,7 +504,6 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         format: draft.format,
         project_type: draft.projectType,
         visual_style: draft.visualStyle,
-        live_text_layers: !!draft.liveTextLayers,
         logo_url: draft.logoUrl || null,
         brand_book: draft.brandBook || null,
         style_references: draft.styleReferences,
@@ -583,7 +581,6 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       format: draft.format,
       project_type: draft.projectType,
       visual_style: draft.visualStyle,
-      live_text_layers: !!draft.liveTextLayers,
       logo_url: draft.logoUrl || null,
       brand_book: brandBook,
       style_references: styleReferences,
@@ -871,25 +868,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     setPendingStyleId(null);
   };
 
-  const persistLiveTextLayers = async (enabled: boolean) => {
+  const persistVariationLiveText = async (variation: CreativeVariation, enabled: boolean) => {
     if (!selected) return;
-    const { error } = await supabase
-      .from("marketing_work_items")
-      .update({
-        payload: {
-          ...(selected.payload ?? {}),
-          live_text_layers: enabled,
-          department: "creative",
-        },
-      })
-      .eq("id", selected.id)
-      .eq("tenant_id", tenantId);
-    if (error) {
-      toast.error(errorMessage(error, "שמירת מצב הטקסט נכשלה"));
-      return;
+    const nextVariations = variations.map((row) =>
+      row.id === variation.id ? { ...row, liveTextLayers: enabled } : row,
+    );
+    await persistVariations(nextVariations, enabled ? "מצב שכבות — יופעל בג׳נרט הבא" : "מצב קריאייטיב סופי — יופעל בג׳נרט הבא");
+    if (variation.id === selectedVariationId) {
+      setNextLiveTextLayers(enabled);
     }
-    await refresh();
-    toast.message(enabled ? "מצב טמפלייט + שכבות — התמונה בלי אותיות, עריכה במערכת" : "מצב קריאייטיב סופי — עברית מצוירת על התמונה");
   };
 
   const prepareCreativeStage = async () => {
@@ -941,6 +928,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     editTargetUrl,
     directorRefUrls = [],
     conceptId,
+    liveTextLayers: requestedLiveText,
     signal,
   }: {
     copyText: string;
@@ -957,6 +945,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     editTargetUrl?: string;
     directorRefUrls?: string[];
     conceptId?: string;
+    liveTextLayers?: boolean;
     signal?: AbortSignal;
   }): Promise<CreativeVariation> => {
     if (!selected) throw new Error("לא נבחר פרויקט");
@@ -971,21 +960,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const chosenConcept = findCopyConcept(approved, conceptId) ?? (conceptId ? undefined : approved[0]);
     const visualPrompt = resolveVisualPrompt(selected.payload, approved, { primaryId: chosenConcept?.id });
     const replacing = replaceId ? live.find((variation) => variation.id === replaceId) : undefined;
-    const hasStyleRefs = kit.styleReferences.length > 0
-      || referencePlan.refs.some((item) => item.kind === "style");
-    const compositionId = liveTextLayers && hasStyleRefs
-      ? "offer"
-      : pickVariationComposition({
-        seed: `${copyKey || ""}|${copyLabel || ""}|${live.length}|${copyText.slice(0, 48)}`,
-        used: live
-          .filter((variation) => !variation.rejected && variation.id !== replaceId)
-          .map((variation) => variation.compositionId),
-        lockedId: styleSource?.compositionId ?? replacing?.compositionId,
-      });
+    const liveTextLayers = requestedLiveText
+      ?? replacing?.liveTextLayers
+      ?? styleSource?.liveTextLayers
+      ?? nextLiveTextLayers
+      ?? false;
     const costume = isOptionalCostume(style.id) ? style : undefined;
-    // Named styles already encode the technique in text. Attaching the liked still
-    // makes gpt-image-1 reprint the same face/crop. Keep the image only when the
-    // look was invented (adaptive) and we have no named recipe to follow.
     const attachStyleStill = !!styleSource?.imageUrl && !costume;
     const styleRefUrl = attachStyleStill && styleSource?.imageUrl
       ? await resolveCreativeImageUrl(styleSource.imageUrl)
@@ -1011,6 +991,17 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       directorUrls: resolvedDirectorRefs,
       logoUrl: resolvedLogoUrl ?? kit.logoUrl,
     });
+    const hasStyleRefs = kit.styleReferences.length > 0
+      || referencePlan.refs.some((item) => item.kind === "style");
+    const compositionId = liveTextLayers && hasStyleRefs
+      ? "offer"
+      : pickVariationComposition({
+        seed: `${copyKey || ""}|${copyLabel || ""}|${live.length}|${copyText.slice(0, 48)}`,
+        used: live
+          .filter((variation) => !variation.rejected && variation.id !== replaceId)
+          .map((variation) => variation.compositionId),
+        lockedId: styleSource?.compositionId ?? replacing?.compositionId,
+      });
     const priorLabels = live
       .filter((variation) => !variation.rejected && variation.id !== replaceId && variation.id !== styleSource?.id)
       .map((variation) => variation.copyLabel || variation.name)
@@ -1101,16 +1092,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         });
         throwIfGenerationAborted(!!jobSignal?.aborted);
         const hydrated = hydrateVariationLayers(
-          fromAgent,
+          { ...fromAgent, liveTextLayers },
           fromAgent.copyText || copyText,
           selected.title ?? undefined,
           fromAgent.visualStyle ?? style.id,
           resolvedLogoUrl ?? kit.logoUrl,
           kit.brandBook?.colors,
-          liveTextLayers,
         );
         const stamped = {
           ...hydrated,
+          liveTextLayers,
           visualStyle: hydrated.visualStyle ?? style.id,
           compositionId: hydrated.compositionId ?? compositionId,
           conceptId: chosenConcept?.id ?? hydrated.conceptId,
@@ -1217,6 +1208,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           : undefined,
         regenerate: !!replaceTarget,
         conceptId: chosenConcept?.id ?? replaceTarget?.conceptId,
+        liveTextLayers: replaceTarget ? isVariationLiveText(replaceTarget) : nextLiveTextLayers,
         signal,
       });
       const nextVariations = replaceTarget
@@ -1284,6 +1276,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           styleId: style.id,
           existing: current,
           conceptId: concept?.id,
+          liveTextLayers: nextLiveTextLayers,
           signal,
         });
         current = [...current, created];
@@ -1409,6 +1402,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         editTargetUrl: target.imageUrl,
         directorRefUrls,
         conceptId: target.conceptId,
+        liveTextLayers: isVariationLiveText(target),
         signal,
       });
       await persistVariations([...variations, created], "נוצרה וריאציה לפי הרג׳קט");
@@ -1471,7 +1465,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         compositionId: target.compositionId,
         brandColors: getBrandKit(selected.payload).brandBook?.colors,
         styleSourceId: target.id,
-        liveTextLayers,
+        liveTextLayers: isVariationLiveText(target),
       });
       await persistVariations([...variations, created], "נמחקה האזור המסומן — וריאציה חדשה בגריד");
       setSelectedVariationId(created.id);
@@ -1509,6 +1503,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         editTargetUrl: target.imageUrl,
         directorRefUrls,
         conceptId: target.conceptId,
+        liveTextLayers: isVariationLiveText(target),
         signal,
       });
       await persistVariations([...variations, created], "נוצרה וריאציה לפי התיקון");
@@ -1909,7 +1904,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-bold">{selected.title}</h2>
         <p className="text-[11px] text-muted-foreground">
-          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · {CREATIVE_DIRECT_LABEL_HE} · {liveTextLayers ? "טקסט חי (שכבות)" : "קריאייטיב סופי"}
+          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · {CREATIVE_DIRECT_LABEL_HE}
+          {selectedVariation && (
+            <> · {selectedVariationLiveText ? "שכבות" : "סופי"}</>
+          )}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
@@ -1924,7 +1922,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           <Button size="sm" variant={workspacePanel === "scene" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("scene")} disabled={storyboardDraft.length === 0}>
             סצנה
           </Button>
-        ) : liveTextLayers ? (
+        ) : selectedVariationLiveText ? (
           <Button size="sm" variant={workspacePanel === "edit" ? "secondary" : "ghost"} className="h-8" onClick={() => toggleWorkspacePanel("edit")} disabled={!variationDraft}>
             שכבות
           </Button>
@@ -1937,17 +1935,17 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         <Coins className="h-3.5 w-3.5" />
         {formatUsd(costRows.find((row) => row.item.id === selected.id)?.spent.costUsd ?? 0)}
       </Button>
-      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-2.5 py-1.5" title="בחרו איך הטקסט מגיע — לפני שליחה לקריאייטיב דיירקט">
-        <span className={`text-[10px] font-medium ${!liveTextLayers ? "text-foreground" : "text-muted-foreground"}`}>
-          קריאייטיב סופי
+      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-2.5 py-1.5" title="מצב למודעה חדשה — כל כרטיס בגריד יכול להיות שונה">
+        <span className={`text-[10px] font-medium ${!nextLiveTextLayers ? "text-foreground" : "text-muted-foreground"}`}>
+          מודעה חדשה · סופי
         </span>
         <Switch
-          checked={liveTextLayers}
-          onCheckedChange={(checked) => void persistLiveTextLayers(checked)}
-          aria-label="מצב טקסט: קריאייטיב סופי או טמפלייט עם שכבות"
+          checked={nextLiveTextLayers}
+          onCheckedChange={setNextLiveTextLayers}
+          aria-label="מצב טקסט למודעה חדשה"
         />
-        <span className={`text-[10px] font-medium ${liveTextLayers ? "text-foreground" : "text-muted-foreground"}`}>
-          טמפלייט + שכבות
+        <span className={`text-[10px] font-medium ${nextLiveTextLayers ? "text-foreground" : "text-muted-foreground"}`}>
+          שכבות
         </span>
       </div>
       <VisualStyleSelect
@@ -2076,7 +2074,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               generatingIds={busyIds}
               progressLabel={generateProgress ?? undefined}
               agentUrl={creativeDirectUrl}
-              liveTextLayers={liveTextLayers}
+              onLiveTextChange={(variation, enabled) => void persistVariationLiveText(variation, enabled)}
               onRevise={(variation) => {
                 setSelectedVariationId(variation.id);
                 setReviseTarget(variation);
@@ -2347,7 +2345,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <CreativeEraseDialog
         variation={eraseTarget}
         size={imageSizeForFormat(eraseTarget?.format ?? defaultFormat(selected?.payload))}
-        liveTextLayers={liveTextLayers}
+        liveTextLayers={eraseTarget ? isVariationLiveText(eraseTarget) : false}
         submitting={!!eraseTarget && busyIds.includes(eraseTarget.id)}
         onClose={() => setEraseTarget(null)}
         onSubmit={(job) => void eraseVariation(job)}
