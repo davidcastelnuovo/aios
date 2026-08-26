@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyLeadExportTenantScope,
   buildLeadExportRows,
   collectFormDataKeys,
   formatLeadExportUpdate,
+  leadExportMatchesPageScope,
   leadMatchesTagFilter,
   type LeadExportRecord,
 } from "./exportLeads.ts";
@@ -102,11 +104,50 @@ test("formatLeadExportUpdate joins date, author and content", () => {
   assert.match(text, /חזרתי אליו/);
 });
 
-function makeClient(tables: Record<string, any[]>) {
+test("owner export keeps all current-tenant leads when an agency is selected", () => {
+  const calls: Array<[string, ...unknown[]]> = [];
+  const query = {
+    eq: (...args: unknown[]) => {
+      calls.push(["eq", ...args]);
+      return query;
+    },
+    or: (...args: unknown[]) => {
+      calls.push(["or", ...args]);
+      return query;
+    },
+  };
+  applyLeadExportTenantScope(query, {
+    tenantId: "tenant-1",
+    isOwner: true,
+    selectedAgency: "agency-b",
+  });
+  assert.equal(calls.some((call) => call[0] === "eq" && call[1] === "agency_id"), false);
+  assert.equal(
+    calls.some((call) => call[0] === "or" && String(call[1]).includes("tenant_id.eq.tenant-1")),
+    true,
+  );
+  assert.equal(
+    leadExportMatchesPageScope(
+      { tenant_id: "tenant-1", agency_id: "agency-a" },
+      { tenantId: "tenant-1", isOwner: true },
+    ),
+    true,
+  );
+  assert.equal(
+    leadExportMatchesPageScope(
+      { tenant_id: "other", agency_id: "agency-b" },
+      { tenantId: "tenant-1", isOwner: true },
+    ),
+    false,
+  );
+});
+
+function makeClient(tables: Record<string, any[]>, ordersByTable: Record<string, Array<{ column: string; ascending?: boolean }>> = {}) {
   return {
     from(table: string) {
       const rows = tables[table] || [];
       const state = { from: 0, to: Math.max(rows.length - 1, 0), usedRange: false };
+      ordersByTable[table] = [];
       const api: any = {
         select: () => api,
         eq: () => api,
@@ -115,7 +156,10 @@ function makeClient(tables: Record<string, any[]>) {
         or: () => api,
         gte: () => api,
         lte: () => api,
-        order: () => api,
+        order: (column: string, opts?: { ascending?: boolean }) => {
+          ordersByTable[table].push({ column, ascending: opts?.ascending });
+          return api;
+        },
         range: (from: number, to: number) => {
           state.from = from;
           state.to = to;
@@ -136,18 +180,42 @@ test("fetchAllLeadsForExport pages past the loaded UI window", async () => {
   const { fetchAllLeadsForExport } = await import("./exportLeads.ts");
   const leadRows = Array.from({ length: 1205 }, (_, i) => ({
     id: `lead-${i}`,
+    tenant_id: "tenant-1",
     contact_name: `n${i}`,
     created_at: "2026-08-01T00:00:00.000Z",
     status: "new",
     source: "website",
   }));
+  const ordersByTable: Record<string, Array<{ column: string; ascending?: boolean }>> = {};
   const supabase = makeClient({
     leads: leadRows,
     chat_contact_tags: [],
     lead_updates: [],
     lead_pipeline_stages: [{ stage_key: "new", label: "חדש" }],
     lead_statuses: [],
-  });
+  }, ordersByTable);
   const { leads } = await fetchAllLeadsForExport(supabase, { tenantId: "tenant-1", isOwner: true });
   assert.equal(leads.length, 1205);
+  assert.deepEqual(ordersByTable.leads, [
+    { column: "created_at", ascending: false },
+    { column: "id", ascending: false },
+  ]);
+});
+
+test("paged tag and update queries use a unique id order", async () => {
+  const { fetchAllLeadsForExport } = await import("./exportLeads.ts");
+  const ordersByTable: Record<string, Array<{ column: string; ascending?: boolean }>> = {};
+  const supabase = makeClient({
+    leads: [{ id: "lead-1", tenant_id: "tenant-1", created_at: "2026-08-01T00:00:00.000Z", status: "new" }],
+    chat_contact_tags: [{ id: "tag-row-1", lead_id: "lead-1", tag_id: "t1", chat_tags: { name: "FB" } }],
+    lead_updates: [{ id: "upd-1", lead_id: "lead-1", content: "hi", created_at: "2026-08-01T00:00:00.000Z", user_id: "u1" }],
+    lead_pipeline_stages: [{ stage_key: "new", label: "חדש" }],
+    lead_statuses: [],
+  }, ordersByTable);
+  await fetchAllLeadsForExport(supabase, { tenantId: "tenant-1", isOwner: true });
+  assert.deepEqual(ordersByTable.chat_contact_tags, [{ column: "id", ascending: true }]);
+  assert.deepEqual(ordersByTable.lead_updates, [
+    { column: "created_at", ascending: true },
+    { column: "id", ascending: true },
+  ]);
 });

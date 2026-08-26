@@ -15,6 +15,7 @@ export type LeadExportFilters = {
   isOwner?: boolean;
   selectedAgency?: string | null;
   agencyIds?: string[] | null;
+  userAgencyIds?: string[] | null;
   searchQuery?: string;
   filterSalesPersonIds?: string[];
   filterStage?: string;
@@ -38,6 +39,8 @@ export type LeadExportUpdate = {
 
 export type LeadExportRecord = {
   id: string;
+  tenant_id?: string | null;
+  agency_id?: string | null;
   contact_name?: string | null;
   company_name?: string | null;
   phone?: string | null;
@@ -203,23 +206,34 @@ export function leadMatchesTagFilter(
   return hasMatchingTag;
 }
 
-function applyLeadExportFilters(query: any, filters: LeadExportFilters): any {
+/** Same tenant/agency clause the leads page uses before its security guard. */
+export function applyLeadExportTenantScope(query: any, filters: LeadExportFilters): any {
   const tenantId = filters.tenantId;
   const selectedAgency = filters.selectedAgency;
   const agencyIds = filters.agencyIds || [];
 
-  if (filters.isOwner) {
-    query = query.eq("tenant_id", tenantId);
-    if (selectedAgency && selectedAgency !== "all") {
-      query = query.eq("agency_id", selectedAgency);
-    }
-  } else if (selectedAgency && selectedAgency !== "all") {
-    query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
-  } else if (agencyIds.length > 0) {
-    query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(",")})`);
-  } else {
-    query = query.eq("tenant_id", tenantId);
+  if (selectedAgency && selectedAgency !== "all") {
+    return query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
   }
+  if (agencyIds.length > 0) {
+    return query.or(`tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(",")})`);
+  }
+  return query.eq("tenant_id", tenantId);
+}
+
+/** Same owner/non-owner guard as `secureFilteredLeads` on the leads page. */
+export function leadExportMatchesPageScope(
+  lead: { tenant_id?: string | null; agency_id?: string | null },
+  filters: Pick<LeadExportFilters, "tenantId" | "isOwner" | "userAgencyIds">,
+): boolean {
+  const isTenantMatch = lead.tenant_id === filters.tenantId;
+  if (filters.isOwner) return isTenantMatch;
+  if (isTenantMatch) return true;
+  return !!(lead.agency_id && filters.userAgencyIds?.includes(lead.agency_id));
+}
+
+function applyLeadExportFilters(query: any, filters: LeadExportFilters): any {
+  query = applyLeadExportTenantScope(query, filters);
 
   if (!filters.includeArchived) {
     query = query.is("archived_at", null);
@@ -289,13 +303,14 @@ export async function fetchAllLeadsForExport(
     let query = supabase
       .from("leads")
       .select(LEAD_EXPORT_SELECT)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
     query = applyLeadExportFilters(query, filters);
     query = query.range(from, to);
     const { data, error } = await query;
     if (error) throw error;
     return (data || []) as LeadExportRecord[];
-  });
+  }).then((rows) => rows.filter((lead) => leadExportMatchesPageScope(lead, filters)));
 
   const leadIds = leads.map((lead) => lead.id);
   const tagIdsByLead: Record<string, string[]> = {};
@@ -311,6 +326,7 @@ export async function fetchAllLeadsForExport(
           .select("lead_id, tag_id, chat_tags (name)")
           .eq("tenant_id", tenantId)
           .in("lead_id", idChunk)
+          .order("id", { ascending: true })
           .range(from, to);
         if (error) throw error;
         return data || [];
@@ -345,6 +361,7 @@ export async function fetchAllLeadsForExport(
           .select("lead_id, content, created_at, user_id, profiles:user_id (full_name)")
           .in("lead_id", idChunk)
           .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
           .range(from, to);
         if (error) throw error;
         return data || [];

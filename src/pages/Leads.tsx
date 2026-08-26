@@ -1991,6 +1991,7 @@ export default function Leads() {
         isOwner,
         selectedAgency,
         agencyIds: agencies?.map((agency) => agency.id) || [],
+        userAgencyIds: userAgencyIds || [],
         searchQuery,
         filterSalesPersonIds,
         filterStage,
