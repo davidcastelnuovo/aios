@@ -5,8 +5,12 @@ import {
   copyBlocksForGeneration,
   conceptCopyJobsForGeneration,
   hydrateCopyVariations,
+  joinCopyVariations,
   pairConceptsToCopyVariations,
+  replaceCopyVariationText,
+  applyVariationText,
   splitCopyVariations,
+  stripVariationHeader,
   type StoredCopyVariation,
 } from "./copyVariations.ts";
 import type { CopyConcept } from "../../../copyConcepts.ts";
@@ -153,4 +157,69 @@ test("conceptCopyJobsForGeneration falls back to copy blocks when there are no c
   assert.equal(jobs.length, 2);
   assert.equal(jobs[0].concept, undefined);
   assert.equal(jobs[0].copy.key, "1");
+});
+
+test("applyVariationText edits one variation without swallowing siblings", () => {
+  const item = stored({
+    id: "keep-1",
+    key: "1",
+    approved: true,
+    approvedAt: "2026-08-26T00:00:00.000Z",
+    angle: "פומו",
+    text: "וריאציה 1 — פומו\nכותרת:\nישן\nCTA:\nישן",
+  });
+  const next = applyVariationText(item, "כותרת:\nחדש\nCTA:\nלחצו");
+  assert.equal(next.id, "keep-1");
+  assert.equal(next.key, "1");
+  assert.equal(next.approved, true);
+  assert.equal(next.approvedAt, "2026-08-26T00:00:00.000Z");
+  assert.equal(next.headline, "חדש");
+  assert.equal(next.cta, "לחצו");
+  assert.match(next.text, /^וריאציה 1/);
+  assert.equal(next.text.includes("וריאציה 2"), false);
+  assert.equal(stripVariationHeader(next.text).includes("חדש"), true);
+});
+
+test("applyVariationText ignores a pasted sibling variation header", () => {
+  const item = stored({ id: "b", key: "2", angle: "כאב" });
+  const next = applyVariationText(item, "וריאציה 9 — גנוב\nכותרת:\nרק זה\nCTA:\nכאן");
+  assert.equal(next.id, "b");
+  assert.equal(next.key, "2");
+  assert.match(next.text, /^וריאציה 2/);
+  assert.equal(next.text.includes("וריאציה 9"), false);
+  assert.equal(next.headline, "רק זה");
+});
+
+test("applyVariationText keeps only the first pasted chunk when a full document is dropped in", () => {
+  const item = stored({ id: "a", key: "1", angle: "פומו" });
+  const next = applyVariationText(item, [
+    "כותרת:",
+    "שלי",
+    "CTA:",
+    "כאן",
+    "",
+    "וריאציה 2 — כאב",
+    "כותרת:",
+    "של אחר",
+  ].join("\n"));
+  assert.equal(next.key, "1");
+  assert.equal(next.headline, "שלי");
+  assert.equal(next.text.includes("וריאציה 2"), false);
+  assert.equal(next.text.includes("של אחר"), false);
+});
+
+test("replaceCopyVariationText leaves sibling copy untouched", () => {
+  const variations = [
+    stored({ id: "a", key: "1", text: "וריאציה 1 — A\nכותרת:\nאלפא" }),
+    stored({ id: "b", key: "2", text: "וריאציה 2 — B\nכותרת:\nבטא" }),
+  ];
+  const next = replaceCopyVariationText(variations, "a", "כותרת:\nגמא");
+  assert.match(next[0].text, /גמא/);
+  assert.equal(next[1].text, variations[1].text);
+  assert.equal(next[0].id, "a");
+  assert.equal(next[1].id, "b");
+  const joined = joinCopyVariations(next);
+  assert.match(joined, /גמא/);
+  assert.match(joined, /בטא/);
+  assert.equal(joined.includes("אלפא"), false);
 });

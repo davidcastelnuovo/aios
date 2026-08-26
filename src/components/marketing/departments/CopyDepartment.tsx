@@ -20,8 +20,11 @@ import {
   copyBlockLabel,
   formatCopyVariationsForConcepts,
   hydrateCopyVariations,
+  joinCopyVariations,
   pairConceptsToCopyVariations,
   parseCopyVariationsFromPayload,
+  replaceCopyVariationText,
+  stripVariationHeader,
   type StoredCopyVariation,
 } from "@/components/marketing/departments/creative/copyVariations";
 import {
@@ -40,7 +43,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -225,6 +235,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const [handoffProjects, setHandoffProjects] = useState<HandoffWorkItem[]>([]);
   const [handoffTargetId, setHandoffTargetId] = useState(COPY_HANDOFF_NEW_TARGET);
   const [loadingHandoffTargets, setLoadingHandoffTargets] = useState(false);
+  const [editingCopyId, setEditingCopyId] = useState<string | null>(null);
+  const [editingCopyDraft, setEditingCopyDraft] = useState("");
+  const [savingCopyEdit, setSavingCopyEdit] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const { data: items = [], isLoading } = useQuery({
@@ -283,6 +296,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     if (!selectedId && items[0]?.id) setSelectedId(items[0].id);
     if (selectedId && !items.some((item) => item.id === selectedId)) setSelectedId(items[0]?.id ?? null);
   }, [items, selectedId]);
+
+  useEffect(() => {
+    setEditingCopyId(null);
+    setEditingCopyDraft("");
+  }, [selectedId]);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const chat = useMemo(() => readChat(selected?.payload ?? null), [selected?.payload]);
@@ -457,7 +475,48 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const saveCopyVariations = async (nextVariations: StoredCopyVariation[]) => {
     await persistPayload({
       copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+      copy_text: joinCopyVariations(nextVariations),
     });
+  };
+
+  const openCopyVariationEditor = (id: string) => {
+    const item = copyVariations.find((variation) => variation.id === id);
+    if (!item) return;
+    setEditingCopyId(id);
+    setEditingCopyDraft(stripVariationHeader(item.text));
+  };
+
+  const closeCopyVariationEditor = () => {
+    setEditingCopyId(null);
+    setEditingCopyDraft("");
+  };
+
+  const saveCopyVariationEdit = async () => {
+    if (!selected || !editingCopyId) return;
+    setSavingCopyEdit(true);
+    try {
+      const nextVariations = replaceCopyVariationText(copyVariations, editingCopyId, editingCopyDraft);
+      const nextText = joinCopyVariations(nextVariations);
+      await persistPayload({
+        copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+        copy_text: nextText,
+      });
+      await supabase.from("marketing_assets").insert({
+        tenant_id: tenantId,
+        item_id: selected.id,
+        stage_id: selected.current_stage_id,
+        type: "copy",
+        content: nextText,
+        meta: { source: "variation_edit", variation_id: editingCopyId, skin_slug: "copywriter" },
+      });
+      toast.success("הווריאציה נשמרה");
+      closeCopyVariationEditor();
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "לא הצלחתי לשמור את הווריאציה"));
+    } finally {
+      setSavingCopyEdit(false);
+    }
   };
 
   const generateConcepts = async () => {
@@ -973,6 +1032,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                     <CopyVariationsPanel
                       variations={copyVariations}
                       onToggleApprove={(id) => void toggleCopyApproval(id)}
+                      onEdit={openCopyVariationEditor}
                     />
                     <Collapsible defaultOpen={copyVariations.length <= 1}>
                       <div className="overflow-hidden rounded-2xl border bg-background shadow-sm">
@@ -1120,7 +1180,60 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CopyVariationEditDialog
+        item={copyVariations.find((variation) => variation.id === editingCopyId) ?? null}
+        draft={editingCopyDraft}
+        saving={savingCopyEdit}
+        onDraftChange={setEditingCopyDraft}
+        onClose={closeCopyVariationEditor}
+        onSave={() => void saveCopyVariationEdit()}
+      />
     </div>
+  );
+}
+
+function CopyVariationEditDialog({
+  item,
+  draft,
+  saving,
+  onDraftChange,
+  onClose,
+  onSave,
+}: {
+  item: StoredCopyVariation | null;
+  draft: string;
+  saving: boolean;
+  onDraftChange: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <Dialog open={!!item} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+      <DialogContent className="max-w-lg" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>עריכת {item ? copyBlockLabel(item) : "וריאציה"}</DialogTitle>
+          <DialogDescription>
+            נשמרת רק הווריאציה הזו. שאר הווריאציות במסמך לא משתנות.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          className="min-h-[240px] text-sm leading-relaxed"
+          dir="rtl"
+          placeholder="כותרת, גוף ו-CTA של הווריאציה הזו"
+        />
+        <DialogFooter className="gap-2 sm:flex-row-reverse sm:justify-start sm:space-x-reverse">
+          <Button onClick={onSave} disabled={saving || !draft.trim()} className="gap-1.5">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            שמור וריאציה
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            ביטול
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

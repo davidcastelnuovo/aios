@@ -1,11 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Check, PenLine } from "lucide-react";
+import { Check, Pencil, PenLine } from "lucide-react";
 import { copyBlockLabel, type StoredCopyVariation } from "@/components/marketing/departments/creative/copyVariations";
 
 interface Props {
   variations: StoredCopyVariation[];
   onToggleApprove: (id: string) => void;
+  onEdit: (id: string) => void;
 }
 
 const previewLines = (text: string) => {
@@ -17,7 +18,7 @@ const previewLines = (text: string) => {
     .join("\n");
 };
 
-export function CopyVariationsPanel({ variations, onToggleApprove }: Props) {
+export function CopyVariationsPanel({ variations, onToggleApprove, onEdit }: Props) {
   const approvedCount = variations.filter((item) => item.approved).length;
   if (variations.length === 0) return null;
 
@@ -33,7 +34,7 @@ export function CopyVariationsPanel({ variations, onToggleApprove }: Props) {
             )}
           </div>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            אשרו קופי אחד־אחד, ואז שייכו כל קונספט לוריאציה מאושרת
+            עיפרון = עריכת וריאציה זו בלבד. סימון = אישור לשיוך לקונספט
           </p>
         </div>
       </div>
@@ -41,45 +42,66 @@ export function CopyVariationsPanel({ variations, onToggleApprove }: Props) {
         {variations.map((item) => {
           const preview = previewLines(item.text);
           return (
-            <button
+            <div
               key={item.id}
-              type="button"
-              onClick={() => onToggleApprove(item.id)}
               className={cn(
                 "rounded-xl border p-3 text-right transition-colors",
                 item.approved
                   ? "border-emerald-400 bg-emerald-50/70 ring-1 ring-emerald-300"
-                  : "bg-muted/20 hover:bg-muted/40",
+                  : "bg-muted/20",
               )}
             >
               <div className="mb-2 flex items-start justify-between gap-2">
-                <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-1">
                   <div className="truncate text-sm font-semibold [unicode-bidi:plaintext]" dir="auto">
                     {copyBlockLabel(item)}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(item.id)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                    aria-label={`ערוך וריאציה ${item.key}`}
+                    title="ערוך וריאציה זו בלבד"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <span className={cn(
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
-                  item.approved ? "border-emerald-600 bg-emerald-600 text-white" : "text-muted-foreground",
-                )}>
+                <button
+                  type="button"
+                  onClick={() => onToggleApprove(item.id)}
+                  className={cn(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors",
+                    item.approved
+                      ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                  aria-label={item.approved ? "בטל אישור וריאציה" : "אשר וריאציה"}
+                  title={item.approved ? "מאושר — לחץ לביטול" : "לחץ לאישור"}
+                >
                   <Check className="h-3.5 w-3.5" />
-                </span>
+                </button>
               </div>
-              {item.headline && (
-                <p className="text-xs font-medium leading-relaxed [unicode-bidi:plaintext]" dir="auto">{item.headline}</p>
-              )}
-              {preview && preview !== item.headline && (
-                <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
-                  {preview}
-                </p>
-              )}
-              {item.cta && item.cta !== item.headline && (
-                <p className="mt-1 text-[11px] text-muted-foreground [unicode-bidi:plaintext]" dir="auto">CTA: {item.cta}</p>
-              )}
-              <div className="mt-2 text-[10px] font-medium text-muted-foreground">
-                {item.approved ? "מאושר לשיוך לקונספט" : "לחצו לאישור"}
-              </div>
-            </button>
+              <button
+                type="button"
+                onClick={() => onToggleApprove(item.id)}
+                className="w-full text-right"
+              >
+                {item.headline && (
+                  <p className="text-xs font-medium leading-relaxed [unicode-bidi:plaintext]" dir="auto">{item.headline}</p>
+                )}
+                {preview && preview !== item.headline && (
+                  <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
+                    {preview}
+                  </p>
+                )}
+                {item.cta && item.cta !== item.headline && (
+                  <p className="mt-1 text-[11px] text-muted-foreground [unicode-bidi:plaintext]" dir="auto">CTA: {item.cta}</p>
+                )}
+                <div className="mt-2 text-[10px] font-medium text-muted-foreground">
+                  {item.approved ? "מאושר לשיוך לקונספט" : "לחצו לאישור · עיפרון לעריכה"}
+                </div>
+              </button>
+            </div>
           );
         })}
       </div>

@@ -136,6 +136,41 @@ export const hydrateCopyVariations = (
 export const joinCopyVariations = (variations: StoredCopyVariation[]): string =>
   variations.map((item) => item.text.trim()).filter(Boolean).join("\n\n");
 
+/** Body only — the `וריאציה N` header is rebuilt on save so sibling copy is never parsed in. */
+export const stripVariationHeader = (text: string) => {
+  const lines = text.split("\n");
+  if (/^(?:וריאציה|variation)\s*\d+/i.test(lines[0]?.trim() ?? "")) {
+    return lines.slice(1).join("\n").replace(/^\n+/, "");
+  }
+  return text;
+};
+
+/** Replace one variation's body while keeping its id/key/approval. Sibling copy is ignored. */
+export const applyVariationText = (item: StoredCopyVariation, nextText: string): StoredCopyVariation => {
+  const trimmed = typeof nextText === "string" ? nextText.trim() : "";
+  const firstChunk = trimmed.split(SPLIT_VARIATION).map((chunk) => chunk.trim()).filter(Boolean)[0] ?? "";
+  const header = parseHeader(firstChunk);
+  const angle = header.angle || item.angle;
+  const body = stripVariationHeader(firstChunk);
+  const text = [`וריאציה ${item.key}${angle ? ` — ${angle}` : ""}`, body].filter(Boolean).join("\n").trim();
+  const parts = parseCreativeCopy(text);
+  return {
+    ...item,
+    label: `וריאציה ${item.key}`,
+    angle,
+    text,
+    headline: parts.headline,
+    cta: parts.cta,
+  };
+};
+
+export const replaceCopyVariationText = (
+  variations: StoredCopyVariation[],
+  id: string,
+  nextText: string,
+): StoredCopyVariation[] =>
+  variations.map((item) => item.id === id ? applyVariationText(item, nextText) : item);
+
 export const approvedCopyVariations = (variations: StoredCopyVariation[]): StoredCopyVariation[] =>
   variations.filter((item) => item.approved && item.text.trim());
 
