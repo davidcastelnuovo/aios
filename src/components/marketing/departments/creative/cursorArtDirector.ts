@@ -23,14 +23,23 @@ export const labelStaticRef = (ref: StaticRef, index: number): string => {
   if (ref.kind === "technique") {
     return `Technique sample ${n} (match material / light / grade only. NEW cast, NEW crop. Not storyboard continuity): ${ref.url}`;
   }
-  return `STYLE REFERENCE ${n} from project settings (match grade, palette dominance, material, lighting. NEW scene, NEW people. Do not copy layout, lettering, logo, or faces): ${ref.url}`;
+  return `STYLE REFERENCE ${n} — PRIMARY DESIGN ANCHOR from project settings (download + ATTACH — skipping is a fail). Match this reference's graphic design system: palette dominance, layout architecture (logo zone, hero zone, footer band/wave, icon row, CTA pill), material, lighting grade, and brand energy. NEW scene and NEW people in the hero — do not photocopy faces or exact Hebrew from the reference. The still must feel like the same ad family: ${ref.url}`;
 };
+
+export const STYLE_REFERENCE_DESIGN_LOCK = [
+  "STYLE REFERENCE — DESIGN SYSTEM LOCK.",
+  "Every attached STYLE REFERENCE is the primary design anchor — not optional mood.",
+  "Match palette dominance, split-band layout (hero + footer), wave/divider treatment, icon-row zone, CTA pill styling, logo zone, material, and lighting grade.",
+  "Stage a NEW scene with NEW people in the hero. Do not photocopy faces from the reference.",
+  "Use only the job's quoted Hebrew — never copy lettering from the reference.",
+  "If the result could pass as an unrelated illustration instead of the same brand family as the reference, it failed.",
+].join(" ");
 
 export const STATIC_CAST_LOCK = [
   "STATIC STILL — not a storyboard beat.",
   "Do NOT keep faces, wardrobe, or cast from a storyboard, a previous card, or a style reference.",
   "Talent / spokesman lock is opt-in only (project instruction like «תשתמש בדמות מהרפרנס»).",
-  "Style references lock grade, palette dominance, material, and lighting — new scene, new people.",
+  "Style references lock the ad's design system (palette, layout bands, footer, CTA zone) — new scene and new people in the hero.",
 ].join(" ");
 
 export const LOGO_PLACEMENT_LOCK = [

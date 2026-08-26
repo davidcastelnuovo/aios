@@ -84,6 +84,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -870,6 +871,27 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     setPendingStyleId(null);
   };
 
+  const persistLiveTextLayers = async (enabled: boolean) => {
+    if (!selected) return;
+    const { error } = await supabase
+      .from("marketing_work_items")
+      .update({
+        payload: {
+          ...(selected.payload ?? {}),
+          live_text_layers: enabled,
+          department: "creative",
+        },
+      })
+      .eq("id", selected.id)
+      .eq("tenant_id", tenantId);
+    if (error) {
+      toast.error(errorMessage(error, "שמירת מצב הטקסט נכשלה"));
+      return;
+    }
+    await refresh();
+    toast.message(enabled ? "מצב טמפלייט + שכבות — התמונה בלי אותיות, עריכה במערכת" : "מצב קריאייטיב סופי — עברית מצוירת על התמונה");
+  };
+
   const prepareCreativeStage = async () => {
     if (!selected) throw new Error("לא נבחר פרויקט");
     if (!selected.client_id) throw new Error("יש לשייך לקוח לפרויקט לפני יצירת קריאייטיב");
@@ -949,13 +971,17 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const chosenConcept = findCopyConcept(approved, conceptId) ?? (conceptId ? undefined : approved[0]);
     const visualPrompt = resolveVisualPrompt(selected.payload, approved, { primaryId: chosenConcept?.id });
     const replacing = replaceId ? live.find((variation) => variation.id === replaceId) : undefined;
-    const compositionId = pickVariationComposition({
-      seed: `${copyKey || ""}|${copyLabel || ""}|${live.length}|${copyText.slice(0, 48)}`,
-      used: live
-        .filter((variation) => !variation.rejected && variation.id !== replaceId)
-        .map((variation) => variation.compositionId),
-      lockedId: styleSource?.compositionId ?? replacing?.compositionId,
-    });
+    const hasStyleRefs = kit.styleReferences.length > 0
+      || referencePlan.refs.some((item) => item.kind === "style");
+    const compositionId = liveTextLayers && hasStyleRefs
+      ? "offer"
+      : pickVariationComposition({
+        seed: `${copyKey || ""}|${copyLabel || ""}|${live.length}|${copyText.slice(0, 48)}`,
+        used: live
+          .filter((variation) => !variation.rejected && variation.id !== replaceId)
+          .map((variation) => variation.compositionId),
+        lockedId: styleSource?.compositionId ?? replacing?.compositionId,
+      });
     const costume = isOptionalCostume(style.id) ? style : undefined;
     // Named styles already encode the technique in text. Attaching the liked still
     // makes gpt-image-1 reprint the same face/crop. Keep the image only when the
@@ -1911,6 +1937,19 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         <Coins className="h-3.5 w-3.5" />
         {formatUsd(costRows.find((row) => row.item.id === selected.id)?.spent.costUsd ?? 0)}
       </Button>
+      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-2.5 py-1.5" title="בחרו איך הטקסט מגיע — לפני שליחה לקריאייטיב דיירקט">
+        <span className={`text-[10px] font-medium ${!liveTextLayers ? "text-foreground" : "text-muted-foreground"}`}>
+          קריאייטיב סופי
+        </span>
+        <Switch
+          checked={liveTextLayers}
+          onCheckedChange={(checked) => void persistLiveTextLayers(checked)}
+          aria-label="מצב טקסט: קריאייטיב סופי או טמפלייט עם שכבות"
+        />
+        <span className={`text-[10px] font-medium ${liveTextLayers ? "text-foreground" : "text-muted-foreground"}`}>
+          טמפלייט + שכבות
+        </span>
+      </div>
       <VisualStyleSelect
         compact
         value={selectedStyleId}

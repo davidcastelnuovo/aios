@@ -115,8 +115,8 @@ test("approved-concept art director lock photographs the concept and types the c
 
 test("project style refs are labeled as style, not talent", () => {
   const style = labelStaticRef({ url: "https://example.com/style.jpg", kind: "style" }, 0);
-  assert.match(style, /STYLE REFERENCE 1 from project settings/);
-  assert.match(style, /palette dominance/);
+  assert.match(style, /STYLE REFERENCE 1 — PRIMARY DESIGN ANCHOR/);
+  assert.match(style, /layout architecture/);
   assert.doesNotMatch(style, /keep this face/i);
   const talent = labelStaticRef({ url: "https://example.com/face.jpg", kind: "talent" }, 0);
   assert.match(talent, /Talent \/ spokesman 1/);

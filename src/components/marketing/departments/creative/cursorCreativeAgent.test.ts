@@ -50,6 +50,7 @@ test("formatReferenceJobBrief lists download URLs as a fail-if-skipped block", (
   assert.match(block, /https:\/\/cdn\.example\/ref\.jpg/);
   assert.match(block, /https:\/\/cdn\.example\/logo\.png/);
   assert.match(block, /Skipping these is a fail/);
+  assert.match(block, /DESIGN SYSTEM LOCK/);
   assert.match(formatReferenceJobBrief([]), /none on file/);
 });
 

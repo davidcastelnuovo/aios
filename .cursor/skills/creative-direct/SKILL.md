@@ -27,6 +27,19 @@ Every follow-up includes a **JOB BRIEF** with four hard facts. Honor all of them
 
 If the brief says **STYLE CHANGE**, switch grade/material/composition to the new style. Do not keep the previous card's look.
 
+## Output mode (pick before each generation)
+
+The project has two text modes — the user switches in the workspace header or project settings:
+
+| Mode | Switch | What Creative Direct generates |
+|------|--------|--------------------------------|
+| **קריאייטיב סופי** | OFF | Finished ad — paint quoted RTL Hebrew on the concept photograph |
+| **טמפלייט + שכבות** | ON | Letter-empty template — no painted letters. RTL type is composited as editable layers after `action=complete`. Open «שכבות» to edit. |
+
+Honor whichever mode the job footer states (`LIVE TEXT` vs `FINISHED AD`). Do not mix them.
+
+When **טמפלייט + שכבות** is on and STYLE REFERENCES exist, the app uses the offer-board layer template (footer band, icons, CTA pill) — match the reference design system in the hero photograph.
+
 ## Photograph vs type
 
 - The photograph **is** the approved concept (name, big idea, hook, visual language).
@@ -58,7 +71,7 @@ A default job is a **standalone static ad**, not a storyboard frame.
 Jobs may attach images. Download each URL and attach it to GenerateImage. Honor the labels:
 
 - **Edit target** — revise this ad; change only the director note.
-- **STYLE REFERENCE** (project settings) — match grade, **palette dominance**, material, lighting, energy. New scene, **new people**. Do not copy layout, lettering, logo, or faces. Do not skip these.
+- **STYLE REFERENCE** — primary design anchor. Match palette dominance, layout bands (hero + footer/wave), icon row, CTA pill zone, logo zone, material, and lighting. NEW scene and NEW people in the hero — do not photocopy faces or reference lettering.
 - **Director / reject reference** — this is the taste they want instead. Match lighting, crop, material, and energy. Do not copy layout, lettering, or logo slavishly.
 - **Talent** — keep this face, new scene. Only when labeled.
 - **Technique sample** — match material/light/grade only. New cast, new crop.

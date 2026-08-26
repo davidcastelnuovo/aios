@@ -5,6 +5,7 @@ import type { CreativeBrandKit } from "./brandKit.ts";
 import {
   LOGO_PLACEMENT_LOCK,
   STATIC_CAST_LOCK,
+  STYLE_REFERENCE_DESIGN_LOCK,
   labelStaticRef,
   type StaticRef,
 } from "./cursorArtDirector.ts";
@@ -99,10 +100,12 @@ export const formatReferenceJobBrief = (refs: StaticRef[]): string => {
     return "3. CRITICAL REFERENCE URLS — none on file.";
   }
   const lines = refs.map((item, index) => labelStaticRef(item, index));
+  const hasStyleRef = refs.some((item) => item.kind === "style");
   return [
     "3. CRITICAL REFERENCE URLS — download each URL and ATTACH it to GenerateImage. Skipping these is a fail.",
+    hasStyleRef && STYLE_REFERENCE_DESIGN_LOCK,
     ...lines,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 };
 
 export const formatStyleJobBrief = (
