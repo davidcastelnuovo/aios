@@ -544,7 +544,7 @@ export const buildDesignedCopyLayers = ({
 }): CreativeLayer[] => {
   const parts = parseCreativeCopy(copyText ?? "", title);
   const poster = strongestLine(copyText ?? "", title);
-  if (!poster && !parts.cta && !logoUrl) return [];
+  if (!poster && !parts.cta) return [];
 
   const composition = compositionById(compositionId);
   const palette = applyBrandPalette(PALETTES[styleId] ?? PALETTES.swiss, brandColors);
@@ -563,7 +563,6 @@ export const buildDesignedCopyLayers = ({
       cta: parts.cta,
       footerTitle: "מה מקבלים איתנו?",
       palette,
-      logoUrl,
       format,
     });
   }
@@ -674,7 +673,7 @@ export const buildDesignedCopyLayers = ({
     }));
   }
 
-  return ensureLogoLayer(layers, logoUrl, composition.logo);
+  return layers;
 };
 
 export const hydrateVariationLayers = (
@@ -692,7 +691,7 @@ export const hydrateVariationLayers = (
     return {
       ...variation,
       compositionId,
-      layers: ensureLogoLayer(existing, logoUrl),
+      layers: ensureLogoLayer(existing),
     };
   }
   const layers = shouldRebuildDesignedLayers(existing, variation.copyText || copyText)
@@ -701,7 +700,6 @@ export const hydrateVariationLayers = (
       format: variation.format,
       styleId: variation.visualStyle ?? styleId ?? "swiss",
       title,
-      logoUrl,
       compositionId,
       brandColors,
     })
@@ -709,7 +707,7 @@ export const hydrateVariationLayers = (
   return {
     ...variation,
     compositionId,
-    layers: ensureLogoLayer(layers, logoUrl),
+    layers: ensureLogoLayer(layers),
   };
 };
 

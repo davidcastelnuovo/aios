@@ -159,7 +159,7 @@ export const buildCompositionLock = (id?: CompositionId | null): string => {
     selected.prompt,
     "This variation MUST look structurally different from the others. Do not reuse logo-top-right + top headline strip + bottom CTA pill.",
     "Project style references (if attached) lock grade, palette, and material — not layout and not faces.",
-    "Logo must sit in a quiet pocket that does not overlap headline or CTA. Never default to bottom-left under type.",
+    "Logo must sit in a quiet pocket that does not overlap headline or CTA. Never default to a bottom-corner watermark. The app does not overlay the mark — paint it into the PNG.",
     "Build the still from several designed elements, not one stock photo with type on top.",
   ].join(" ");
 };

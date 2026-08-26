@@ -1,6 +1,6 @@
 import { getBrandKit } from "./brandKit";
 import type { CreativeFormat, CreativeItem, CreativeLayer, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "./types";
-import { buildDesignedCopyLayers, ensureLogoLayer } from "./designedLayers";
+import { buildDesignedCopyLayers } from "./designedLayers";
 import { buildVisualStyleLock, getVisualStyleId, type CreativeVisualStyleId } from "./visualStyles";
 import {
   approvedCopyConcepts,
@@ -239,7 +239,6 @@ export const makeVariation = ({
   rejected,
   rejectNote,
   parentId,
-  logoUrl,
   generationCost,
   compositionId,
   brandColors,
@@ -272,8 +271,8 @@ export const makeVariation = ({
   imageUrl,
   format,
   layers: liveTextLayers && visualStyle
-    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, logoUrl, compositionId, brandColors })
-    : ensureLogoLayer([], logoUrl),
+    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, compositionId, brandColors })
+    : [],
   comments: [],
   createdAt: new Date().toISOString(),
   source,

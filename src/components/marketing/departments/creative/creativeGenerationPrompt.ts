@@ -128,9 +128,7 @@ export function assembleStaticCreativePrompt({
       : lockCopyToConcept
         ? `Format ${format}. Photograph the approved concept.${liveTextLayers ? " Leave a quiet pocket for type." : " Paint the quoted Hebrew type into a quiet pocket — type only, do not restage the copy."} Do not invent a competing layout from the copy.`
         : `Format ${format}. Invent this variation's graphic architecture. Do not reserve a top strip + bottom pill.`,
-    kit.logoUrl && (liveTextLayers
-      ? "Leave a quiet designed pocket for the real logo composite wherever THIS composition asks — not always bottom-left, never under the type pocket. Do not invent or redraw a logo."
-      : LOGO_PLACEMENT_LOCK),
+    kit.logoUrl && LOGO_PLACEMENT_LOCK,
     liveTextLayers
       ? "QUIET POCKET: one naturally empty atmospheric region (shadow, wall, sky) so Hebrew type can be composited later. Do not paint a layout, panel, footer, or letter-shaped hole."
       : "Paint Hebrew type into one naturally quiet atmospheric region (shadow, wall, sky). Do not add a fake caption plate or Instagram UI chrome.",

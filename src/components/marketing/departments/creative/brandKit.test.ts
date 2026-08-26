@@ -52,7 +52,8 @@ test("brandKitPrompt locks logo colors and attaches project style refs", () => {
   assert.match(prompt, /ONLY these logo\/brand colors/i);
   assert.match(prompt, /#111/);
   assert.match(prompt, /smartair\.co\.il/);
-  assert.match(prompt, /never a default bottom-left/i);
+  assert.match(prompt, /will not overlay a watermark/i);
+  assert.match(prompt, /bottom-corner/i);
 });
 
 test("brandKitPrompt talent lock keeps the spokesman instead of forbidding faces", () => {

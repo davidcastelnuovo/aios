@@ -30,7 +30,7 @@ test("composition lock forbids the old caption template and copying faces from b
   assert.match(lock, /RAIL/);
   assert.match(lock, /logo-top-right/i);
   assert.match(lock, /not layout and not faces/i);
-  assert.match(lock, /Never default to bottom-left/i);
+  assert.match(lock, /Never default to a bottom-corner/i);
 });
 
 test("pickCompositionId prefers an unused structure", () => {

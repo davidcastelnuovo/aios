@@ -311,14 +311,5 @@ export const buildOfferBoardLayers = ({
     ...withLayerShadow({ shadowStyle: "none" }),
   }));
 
-  if (logoUrl) {
-    layers.push(layer({
-      type: "image",
-      role: "logo",
-      src: logoUrl,
-      ...OFFER_BOARD_SLOTS.logo,
-    }));
-  }
-
   return layers;
 };

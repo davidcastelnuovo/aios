@@ -67,7 +67,7 @@ export const brandKitPrompt = (kit: CreativeBrandKit, options?: { talentLock?: b
       : undefined,
     kit.brandBook?.voice && `Brand voice: ${kit.brandBook.voice}`,
     kit.website && `Brand website: ${kit.website}. Match that commercial world (color temperature, materials, locations) without copying UI chrome or inventing a logo.`,
-    kit.logoUrl && "A logo asset exists. Place the real mark in a visible quiet pocket that does not collide with headline or CTA — never a default bottom-left watermark. If no clean pocket, omit it. Do not redraw or invent a logo.",
+    kit.logoUrl && "A logo asset exists. Download and ATTACH that file, then paint the real mark into the PNG. The app will not overlay a watermark. Never default to a bottom-corner sticker. If no clean pocket, omit it. Do not redraw or invent a logo.",
     kit.styleReferences.length > 0 && (options?.talentLock
       ? "A talent still is attached. Keep that spokesman. Do not copy the source board's layout, lettering, or logo."
       : `${kit.styleReferences.length} STYLE REFERENCE(s) from project settings are attached. Match palette dominance, lighting, material, and grade. New scene and new people. Do not copy layout, lettering, logo, or faces. Do not ignore these refs.`),

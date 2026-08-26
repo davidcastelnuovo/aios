@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Layers, Layers2, Loader2, RotateCcw, Sparkles, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
 import type { CreativeVariation } from "./types";
 import { aspectRatioClass } from "./utils";
-import { styleLabelForId } from "./designedLayers";
+import { isLogoLayer, styleLabelForId } from "./designedLayers";
 
 interface Props {
   variations: CreativeVariation[];
@@ -58,6 +58,7 @@ export function CreativeVariationGrid({
           const busy = generatingIds?.includes(variation.id) ?? false;
           const overlayLayers = (variation.layers ?? []).filter((layer) => {
             if (layer.type === "background") return false;
+            if (isLogoLayer(layer) || layer.role === "logo") return false;
             if (liveTextLayers) return true;
             return layer.type === "image";
           });

@@ -6,7 +6,7 @@ const TALENT_LOCK = /דמות|פרזנטור|שחקן|מהרפרנס|הדמות|
 export const wantsTalentLock = (instructions?: string | null): boolean =>
   TALENT_LOCK.test(String(instructions ?? "").trim());
 
-export type StaticRefKind = "edit" | "director" | "style" | "talent" | "technique";
+export type StaticRefKind = "edit" | "director" | "style" | "talent" | "technique" | "logo";
 
 export type StaticRef = { url: string; kind: StaticRefKind };
 
@@ -17,6 +17,9 @@ export const labelStaticRef = (ref: StaticRef, index: number): string => {
     return `Director / reject reference ${n} (match taste, lighting, crop, material — new people unless this is also the edit target): ${ref.url}`;
   }
   if (ref.kind === "talent") return `Talent / spokesman ${n} (keep this face, new scene): ${ref.url}`;
+  if (ref.kind === "logo") {
+    return `LOGO ${n} (download and ATTACH this exact mark. Integrate it into the still — the app will NOT overlay a watermark): ${ref.url}`;
+  }
   if (ref.kind === "technique") {
     return `Technique sample ${n} (match material / light / grade only. NEW cast, NEW crop. Not storyboard continuity): ${ref.url}`;
   }
@@ -31,8 +34,10 @@ export const STATIC_CAST_LOCK = [
 ].join(" ");
 
 export const LOGO_PLACEMENT_LOCK = [
-  "LOGO PLACEMENT (hard): place the REAL brand mark in a visible quiet pocket that does NOT overlap headline or CTA.",
-  "Never default to bottom-left. Never park it as a tiny watermark in a busy corner. Never hide it under type.",
+  "LOGO PLACEMENT (hard): download the labeled logo file and paint the REAL brand mark into the PNG.",
+  "The app does NOT overlay a logo watermark. If you skip attaching this file, the ad ships without a brand mark.",
+  "Place it in a visible quiet pocket that does NOT overlap headline or CTA.",
+  "Never default to a bottom-corner watermark (left or right). Never hide it under type.",
   "Put type and logo in different regions: if type is lower-third, logo goes top; if type is a right rail, logo goes the opposite corner.",
   "If the only remaining pocket is smaller than ~8% of the short edge, or type would cover the mark, OMIT the logo. A missing logo is better than a hidden or colliding one.",
   "Never invent, redraw, or smear a fake logo.",
@@ -52,6 +57,7 @@ export const collectStaticReferencePlan = ({
   instructions,
   editTargetUrl,
   directorUrls = [],
+  logoUrl,
 }: {
   projectRefUrls?: string[];
   /** @deprecated alias of projectRefUrls */
@@ -60,6 +66,7 @@ export const collectStaticReferencePlan = ({
   instructions?: string | null;
   editTargetUrl?: string;
   directorUrls?: string[];
+  logoUrl?: string;
 }): { urls: string[]; role?: CreativeReferenceRole; refs: StaticRef[] } => {
   const project = (projectRefUrls.length > 0 ? projectRefUrls : talentUrls ?? []).filter(Boolean);
   const talent = wantsTalentLock(instructions);
@@ -69,13 +76,18 @@ export const collectStaticReferencePlan = ({
   for (const url of project) pushRef(refs, url, talent ? "talent" : "style");
   pushRef(refs, techniqueUrl, "technique");
   const sliced = refs.slice(0, MAX_STATIC_REFS);
+  if (logoUrl && !sliced.some((item) => item.url === logoUrl)) {
+    sliced.push({ url: logoUrl, kind: "logo" });
+  }
   if (sliced.length === 0) return { urls: [], refs: [] };
   const kinds = new Set(sliced.map((item) => item.kind));
   const role: CreativeReferenceRole | undefined = kinds.has("edit")
     ? "revision"
     : kinds.has("talent")
       ? "talent"
-      : "technique";
+      : kinds.has("style") || kinds.has("technique")
+        ? "technique"
+        : undefined;
   return { urls: sliced.map((item) => item.url), role, refs: sliced };
 };
 
@@ -112,11 +124,11 @@ export const buildCursorArtDirectorLock = ({
     kit.brandBook?.name && `Brand: ${kit.brandBook.name}.`,
     `Asset: standalone ${format} advertising still.`,
     liveTextLayers
-      ? "HEBREW / RTL: do not paint any letters. Hebrew type is composited later as isolated RTL layers (dir=rtl, unicode-bidi:isolate, logical order, no mirrored glyphs). Leave one quiet atmospheric pocket (shadow, wall, sky) for that type — not a painted caption bar."
+      ? "HEBREW / RTL: do not paint any letters. Hebrew type is composited later as isolated RTL layers (dir=rtl, unicode-bidi:isolate, logical order, no mirrored glyphs). Leave one quiet atmospheric pocket (shadow, wall, sky) for that type — not a painted caption bar. DO paint the real brand logo into the photograph."
       : hasApprovedConcept
         ? "HEBREW / RTL: paint the quoted Hebrew headline and CTA as TYPE on the concept photograph. Right-to-left, logical Unicode order, unreversed glyphs, exact spelling. No extra slogans. Do not change the scene to match the copy."
         : "HEBREW / RTL: paint the quoted Hebrew headline and CTA on the still as finished advertising type. Right-to-left, logical Unicode order, unreversed glyphs, exact spelling. No extra slogans. Integrate type into a quiet pocket in the photograph — not a Canva caption bar.",
-    !liveTextLayers && kit.logoUrl && LOGO_PLACEMENT_LOCK,
+    kit.logoUrl && LOGO_PLACEMENT_LOCK,
     liveTextLayers
       ? "Forbidden: grey cyclorama, thinking-hand stock pose, caption plates, baked lettering, invented logos, style-board clichés that replace the concept."
       : "Forbidden: grey cyclorama, thinking-hand stock pose, Canva caption templates, invented logos, style-board clichés that replace the concept, reversed or garbled Hebrew, restaging the headline instead of the concept, default bottom-left logo watermarks.",

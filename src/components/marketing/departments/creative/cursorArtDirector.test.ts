@@ -66,6 +66,20 @@ test("reject director references sit next to the edit target", () => {
   assert.equal(plan.role, "revision");
 });
 
+test("logo is always attached even when three other refs already fill the slot", () => {
+  const plan = collectStaticReferencePlan({
+    projectRefUrls: ["https://style"],
+    directorUrls: ["https://want-this.png"],
+    editTargetUrl: "https://ad.png",
+    logoUrl: "https://logo.png",
+  });
+  assert.equal(plan.refs.some((item) => item.kind === "logo" && item.url === "https://logo.png"), true);
+  assert.equal(plan.urls.includes("https://logo.png"), true);
+  const labeled = labelStaticRef({ url: "https://logo.png", kind: "logo" }, 0);
+  assert.match(labeled, /LOGO 1/);
+  assert.match(labeled, /will NOT overlay/i);
+});
+
 test("art director lock paints Hebrew RTL unless live text is on", () => {
   const lock = buildCursorArtDirectorLock({
     format: "1:1",
@@ -107,7 +121,8 @@ test("project style refs are labeled as style, not talent", () => {
   const talent = labelStaticRef({ url: "https://example.com/face.jpg", kind: "talent" }, 0);
   assert.match(talent, /Talent \/ spokesman 1/);
   assert.match(STATIC_CAST_LOCK, /not a storyboard beat/);
-  assert.match(LOGO_PLACEMENT_LOCK, /Never default to bottom-left/);
+  assert.match(LOGO_PLACEMENT_LOCK, /does NOT overlay/i);
+  assert.match(LOGO_PLACEMENT_LOCK, /bottom-corner/i);
 });
 
 test("live-text art director lock leaves type as composited RTL", () => {
@@ -121,5 +136,6 @@ test("live-text art director lock leaves type as composited RTL", () => {
   assert.match(lock, /do not paint any letters/i);
   assert.match(lock, /dir=rtl/);
   assert.match(lock, /unicode-bidi:isolate/);
-  assert.doesNotMatch(lock, /LOGO PLACEMENT/);
+  assert.match(lock, /LOGO PLACEMENT/);
+  assert.match(lock, /paint the real brand logo/i);
 });

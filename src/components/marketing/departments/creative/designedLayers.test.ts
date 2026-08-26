@@ -261,7 +261,7 @@ test("designed layers never paint AIDA labels or a bottom caption plate", () => 
   assert.ok(!layers.some((layer) => layer.type === "shape" && layer.y >= 58 && layer.height >= 18 && layer.height <= 36 && layer.width >= 70));
 });
 
-test("logo is composited as an image layer and shrinks the headline band", () => {
+test("designed layers no longer overlay a logo watermark", () => {
   const layers = buildDesignedCopyLayers({
     copyText: "כותרת:\nרודוס\nCTA:\nלהזמנה",
     format: "1:1",
@@ -269,12 +269,8 @@ test("logo is composited as an image layer and shrinks the headline band", () =>
     logoUrl: "https://example.com/logo.png",
     compositionId: "flag",
   });
-  const logo = layers.find((layer) => layer.type === "image");
-  const headline = layers.find((layer) => layer.text === "רודוס");
-  assert.ok(logo);
-  assert.equal(logo?.src, "https://example.com/logo.png");
-  assert.ok((logo?.x ?? 99) <= 20);
-  assert.ok(headline);
+  assert.equal(layers.some((layer) => layer.type === "image" || layer.role === "logo"), false);
+  assert.ok(layers.some((layer) => layer.text === "רודוס"));
 });
 
 test("ensureLogoLayer updates or removes the logo without touching copy", () => {
@@ -389,4 +385,29 @@ test("hydrateVariationLayers skips live-text rebuild when live text is off", () 
   );
   assert.equal(next.layers.some((layer) => layer.text === "כותרת ישנה"), true);
   assert.equal(next.layers.some((layer) => (layer.text ?? "").includes("חדשה")), false);
+});
+
+test("hydrateVariationLayers strips auto-composited logo watermarks", () => {
+  const next = hydrateVariationLayers(
+    {
+      id: "v1",
+      name: "test",
+      imageUrl: "https://example.com/x.png",
+      format: "1:1",
+      layers: [
+        { id: "t1", type: "text", x: 0, y: 0, width: 80, height: 20, text: "כותרת" },
+        { id: "logo", type: "image", role: "logo", x: 74, y: 86, width: 20, height: 8, src: "https://example.com/logo.png" },
+      ],
+      comments: [],
+      createdAt: "",
+    },
+    "כותרת",
+    undefined,
+    "cinematic",
+    "https://example.com/logo.png",
+    undefined,
+    false,
+  );
+  assert.equal(next.layers.some((layer) => layer.role === "logo" || layer.type === "image"), false);
+  assert.equal(next.layers.some((layer) => layer.text === "כותרת"), true);
 });

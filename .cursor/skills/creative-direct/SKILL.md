@@ -40,7 +40,7 @@ Jobs may attach images. Download each URL and attach it to GenerateImage. Honor 
 - **Director / reject reference** — this is the taste they want instead. Match lighting, crop, material, and energy. Do not copy layout, lettering, or logo slavishly.
 - **Talent** — keep this face, new scene. Only when labeled.
 - **Technique sample** — match material/light/grade only. New cast, new crop.
-- **Logo** — place the real mark in a **visible** quiet pocket that does **not** overlap headline or CTA. Never default to bottom-left. Never hide it under type. If no clean pocket, omit the logo rather than covering it.
+- **Logo** — download and ATTACH this exact mark, then integrate it into the still. The app does **not** overlay a watermark. Never default to a bottom-corner sticker. If no clean pocket, omit rather than covering type.
 
 ## Taste memory
 

@@ -2,10 +2,11 @@ export type CreativeReferenceRole = "continuity" | "technique" | "talent" | "rev
 
 export const NO_TEXT_ON_IMAGE = [
   "ZERO GLYPHS ON THE PNG.",
-  "Do not paint, stamp, carve, neon, collage, or engrave any letters, digits, words, captions, headlines, CTAs, logos, watermarks, buttons, or fake UI.",
+  "Do not paint, stamp, carve, neon, collage, or engrave any letters, digits, words, captions, headlines, CTAs, watermarks, buttons, or fake UI.",
   "Not Hebrew. Not English. Not numbers. Not newspaper headlines. Not street signs with words.",
-  "Hebrew type and the real logo are composited later as layers — the image API garbles Hebrew (reversed letters, missing glyphs, gibberish).",
-  "Do not invent or redraw a logo. Do NOT reserve a top headline strip, a bottom CTA pill, or a top-right logo pad (that is the old caption template).",
+  "Hebrew type is composited later as layers — the image API garbles Hebrew (reversed letters, missing glyphs, gibberish).",
+  "DO paint the real brand logo into the PNG. The app will not overlay a watermark. Never default to a bottom-corner sticker. Do not invent or redraw a logo.",
+  "Do NOT reserve a top headline strip, a bottom CTA pill, or a top-right logo pad (that is the old caption template).",
   "Leave one naturally quiet atmospheric pocket (soft shadow, wall, sky, or out-of-focus area) where type can sit later. No hard geometric cutout, white panel, footer bar, or painted silhouette of a layout.",
   "Build a finished multi-element graphic poster: several designed pieces already in the still (rail, slash, badge, split field, shadow pocket, object, light) so type can sit inside the art later.",
 ].join(" ");
@@ -16,7 +17,7 @@ export const FINISHED_HEBREW_AD = [
   "Do not restage the headline as a new situation. Do not replace the concept with a literal illustration of the copy.",
   "RTL: Hebrew reads right-to-left. Use logical Unicode order. Do not reverse, mirror, or scramble glyphs.",
   "Quote the copy exactly — no invented slogans, no missing letters, no English unless the quoted copy contains it.",
-  "Place the real brand logo in a visible quiet pocket that does not overlap headline or CTA. Never default to bottom-left. If type would cover it, omit the logo.",
+  "Place the real brand logo in a visible quiet pocket that does not overlap headline or CTA. Never default to a bottom-corner watermark. The app does not overlay the mark. If type would cover it, omit the logo.",
   "This is a finished cinematic advertising still, not a letter-empty plate for later overlay, and not a Canva caption template.",
 ].join(" ");
 

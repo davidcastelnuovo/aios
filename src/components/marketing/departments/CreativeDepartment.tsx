@@ -955,12 +955,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const resolvedDirectorRefs = (await Promise.all(
       directorRefUrls.map((url) => resolveCreativeImageUrl(url)),
     )).filter((url): url is string => !!url);
+    const resolvedLogoUrl = kit.logoUrl
+      ? await resolveCreativeImageUrl(kit.logoUrl)
+      : undefined;
     const referencePlan = collectStaticReferencePlan({
       projectRefUrls,
       techniqueUrl: styleRefUrl,
       instructions,
       editTargetUrl: resolvedEditTarget ?? undefined,
       directorUrls: resolvedDirectorRefs,
+      logoUrl: resolvedLogoUrl ?? kit.logoUrl,
     });
     const priorLabels = live
       .filter((variation) => !variation.rejected && variation.id !== replaceId && variation.id !== styleSource?.id)
@@ -1003,7 +1007,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       instructions,
       visualPrompt,
       directorNote,
-      kit,
+      kit: resolvedLogoUrl ? { ...kit, logoUrl: resolvedLogoUrl } : kit,
       refs: referencePlan.refs,
       liveTextLayers,
     });

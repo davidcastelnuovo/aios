@@ -57,7 +57,7 @@ export const buildCreativeAgentPrompt = ({
   const hasTalent = labeled.some((item) => item.kind === "talent");
   const lines = [
     ...labeled.map((item, index) => labelStaticRef(item, index)),
-    kit.logoUrl && `Brand logo asset (download and place the real mark — see LOGO PLACEMENT): ${kit.logoUrl}`,
+    kit.logoUrl && `Brand logo asset (download, ATTACH, and integrate into the PNG — the app will not overlay it): ${kit.logoUrl}`,
   ].filter(Boolean);
 
   const typeLines = [
@@ -82,7 +82,7 @@ export const buildCreativeAgentPrompt = ({
     instructions?.trim() && `Project instruction: ${instructions.trim()}`,
     directorNote?.trim() && `DIRECTOR / REJECT: ${directorNote.trim()}`,
     lines.length > 0 && `References — download each URL, then ATTACH them to GenerateImage with the labels above. Do not skip project style references.\n${lines.join("\n")}`,
-    !liveTextLayers && kit.logoUrl && LOGO_PLACEMENT_LOCK,
-    liveTextLayers ? "LIVE TEXT: letter-empty photograph, no painted letters." : "FINISHED AD: paint the quoted Hebrew on the concept photograph.",
+    kit.logoUrl && LOGO_PLACEMENT_LOCK,
+    liveTextLayers ? "LIVE TEXT: letter-empty photograph, no painted letters. DO paint the real brand logo into the still." : "FINISHED AD: paint the quoted Hebrew on the concept photograph.",
   ].filter(Boolean).join("\n\n");
 };
