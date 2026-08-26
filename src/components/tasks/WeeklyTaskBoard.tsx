@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { markLinkedTaskDoneForCalendarEvent } from "@/lib/taskCalendarSync";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -45,6 +45,7 @@ import confetti from "canvas-confetti";
 import {
   resolveBoardTaskAgency,
   resolveNewTaskAgency,
+  buildTasksBoardScopeOrFilter,
   resolveTasksBoardScope,
   filterTasksForBoardView,
   syncLocalTasksForAgencyFilter,
@@ -106,7 +107,7 @@ export function WeeklyTaskBoard() {
     queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId,
   });
-  const { selectedAgency, agencies } = useAgency();
+  const { selectedAgency, setSelectedAgency, agencies } = useAgency();
 
   const { data: clientsList = [] } = useQuery({
     queryKey: ["clients-for-task-selector", tenantId, crossTenantAgencyIds],
@@ -133,6 +134,14 @@ export function WeeklyTaskBoard() {
   // Everyone lands on their own queue: tasks assigned to the staff member
   // linked on the user (profiles.campaigner_id / sales_person_id).
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+
+  // Personal queue ("mine"): default header to "all agencies" so cross-agency
+  // assignments are visible. User can still narrow by agency afterward.
+  useLayoutEffect(() => {
+    if (filters.campaignerId === "mine") {
+      setSelectedAgency("all");
+    }
+  }, [filters.campaignerId, setSelectedAgency]);
 
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
@@ -289,13 +298,24 @@ export function WeeklyTaskBoard() {
         crossTenantAgencyIds,
         accessibleAgencyIds: (agencies || []).map((agency) => agency.id),
       });
-      if (boardScope.type === "tenant_or_shared") {
-        query = query.or(
-          `tenant_id.eq.${boardScope.tenantId},agency_id.in.(${boardScope.crossTenantAgencyIds.join(",")})`,
-        );
-      } else {
-        query = query.eq("tenant_id", boardScope.tenantId);
+
+      let personScopeCampaignerId: string | null = null;
+      if (filters.campaignerId === "mine") {
+        const mine = resolveMineTaskAssignee({
+          campaignerId: userProfile?.campaigner_id,
+          salesPersonId: userProfile?.sales_person_id,
+          userId: user?.id,
+        });
+        if (mine.kind === "assigned" && mine.campaignerId) {
+          personScopeCampaignerId = mine.campaignerId;
+        }
+      } else if (filters.campaignerId !== "all" && filters.campaignerId !== "none") {
+        personScopeCampaignerId = filters.campaignerId;
       }
+
+      query = query.or(
+        buildTasksBoardScopeOrFilter(boardScope, personScopeCampaignerId),
+      );
 
       // Include: current range OR overdue (past due_date with status != done) OR null due_date
       // Overdue = due_date < today AND status != 'done'

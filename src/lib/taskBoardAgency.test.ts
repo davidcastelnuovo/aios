@@ -7,6 +7,8 @@ import {
   filterTasksBySelectedAgency,
   filterTasksForBoardView,
   headerAgencyAppliesToBoard,
+  resolveTasksBoardAgencyFilter,
+  buildTasksBoardScopeOrFilter,
   resolveTasksBoardScope,
   syncLocalTasksForAgencyFilter,
 } from "./taskBoardAgency.ts";
@@ -74,12 +76,27 @@ test("filterTasksBySelectedAgency leaves the list alone for all", () => {
   assert.equal(filterTasksBySelectedAgency(all, null), all);
 });
 
-test("mine view keeps assigned tasks across agencies", () => {
+test("mine view keeps assigned tasks across agencies by default", () => {
+  const rows = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
+  assert.deepEqual(
+    filterTasksForBoardView(rows, "all", "mine").map((task) => task.id),
+    ["1", "2", "3"],
+  );
+});
+
+test("mine view can narrow when the header picks a specific agency", () => {
   const rows = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
   assert.deepEqual(
     filterTasksForBoardView(rows, PROMO, "mine").map((task) => task.id),
-    ["1", "2", "3"],
+    ["2", "3"],
   );
+});
+
+test("resolveTasksBoardAgencyFilter honors explicit header picks on person queues", () => {
+  assert.equal(resolveTasksBoardAgencyFilter("mine", "all"), "all");
+  assert.equal(resolveTasksBoardAgencyFilter("mine", null), "all");
+  assert.equal(resolveTasksBoardAgencyFilter("mine", PROMO), PROMO);
+  assert.equal(resolveTasksBoardAgencyFilter("all", PROMO), PROMO);
 });
 
 test("team view still honors the header agency", () => {
@@ -90,17 +107,23 @@ test("team view still honors the header agency", () => {
   );
 });
 
-test("header agency applies only on the team board", () => {
-  assert.equal(headerAgencyAppliesToBoard("all"), true);
-  assert.equal(headerAgencyAppliesToBoard("mine"), false);
-  assert.equal(headerAgencyAppliesToBoard("staff-david"), false);
+test("header agency applies on team board and explicit person narrowing", () => {
+  assert.equal(headerAgencyAppliesToBoard("all", PROMO), true);
+  assert.equal(headerAgencyAppliesToBoard("all", "all"), false);
+  assert.equal(headerAgencyAppliesToBoard("mine", "all"), false);
+  assert.equal(headerAgencyAppliesToBoard("mine", PROMO), true);
+  assert.equal(headerAgencyAppliesToBoard("staff-david", PROMO), true);
 });
 
-test("picking a specific campaigner also keeps tasks across agencies", () => {
+test("picking a specific campaigner keeps tasks across agencies until header narrows", () => {
   const rows = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
   assert.deepEqual(
-    filterTasksForBoardView(rows, PROMO, "staff-david").map((task) => task.id),
+    filterTasksForBoardView(rows, "all", "staff-david").map((task) => task.id),
     ["1", "2", "3"],
+  );
+  assert.deepEqual(
+    filterTasksForBoardView(rows, PROMO, "staff-david").map((task) => task.id),
+    ["2", "3"],
   );
 });
 
@@ -109,10 +132,25 @@ test("syncLocalTasksForAgencyFilter keeps mine rows across agencies while fetchi
     isFetching: true,
     fetchedTasks: [],
     previousLocal: [misstampedDmmTask, promoTaskNoClient],
-    selectedAgency: PROMO,
+    selectedAgency: "all",
     campaignerFilter: "mine",
   });
   assert.deepEqual(duringFetch.map((task) => task.id), ["1", "3"]);
+});
+
+test("buildTasksBoardScopeOrFilter ORs campaigner assignment into fetch scope", () => {
+  const scope = resolveTasksBoardScope({
+    tenantId: "tenant-dmm",
+    crossTenantAgencyIds: ["agency-dmm-mc"],
+  });
+  assert.equal(
+    buildTasksBoardScopeOrFilter(scope, "campaigner-ana"),
+    "tenant_id.eq.tenant-dmm,agency_id.in.(agency-dmm-mc),campaigner_id.eq.campaigner-ana",
+  );
+  assert.equal(
+    buildTasksBoardScopeOrFilter(scope),
+    "tenant_id.eq.tenant-dmm,agency_id.in.(agency-dmm-mc)",
+  );
 });
 
 test("syncLocalTasksForAgencyFilter narrows during an in-flight agency switch", () => {

@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-26 — Mine tasks view: agency filter default + cross-agency fetch
+- **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When a campaigner/team_manager says they see no tasks in "שלי בלבד", explain that the board auto-resets the header to **"כל הסוכנויות"** on entry; assignments span promo/DMM-MC/etc. They can still narrow the header to one agency afterward. If still empty, check `profiles.campaigner_id` and open assignments in DB.
+- **How:** `WeeklyTaskBoard` uses `useLayoutEffect` to reset header agency on mine entry; `resolveTasksBoardAgencyFilter` applies header narrowing only on explicit picks for person queues; `buildTasksBoardScopeOrFilter` ORs `campaigner_id` into the fetch so mis-stamped `agency_id` rows are not dropped.
+- **Origin:** Regression after PR #470 TDZ crash + incomplete agency-filter behavior (#468/#473).
+
 ### 2026-08-25 — Campaigner "mine" tasks hidden by header agency filter
 - **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When a campaigner/team_manager says they see no tasks despite open assignments, explain that "שלי בלבד" needs header agency **"כל הסוכנויות"** (not MarketingCaptain alone); agency filter still works to narrow afterward.
