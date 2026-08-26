@@ -15,13 +15,13 @@ export function buildTaskDueDateOrFilter(input: {
 }): string {
   const { rangeStart, rangeEnd, today, customStart, customEnd } = input;
   const datedUntimed = "and(due_time.is.null,due_date.not.is.null)";
-  const overdueByTarget = `and(target_date.lt.${today},status.neq.done)`;
-  const overdueByDue = `and(due_date.lt.${today},status.neq.done,target_date.is.null)`;
+  // Filter only on due_date. `tasks.target_date` is a later column; referencing it
+  // in PostgREST before the migration is applied 400s the whole board query.
+  const overdueByDue = `and(due_date.lt.${today},status.neq.done)`;
 
   if (customStart && customEnd) {
     return (
       `and(due_date.gte.${customStart},due_date.lte.${customEnd}),` +
-      overdueByTarget + "," +
       overdueByDue + "," +
       "due_date.is.null," +
       datedUntimed
@@ -30,7 +30,6 @@ export function buildTaskDueDateOrFilter(input: {
 
   return (
     `and(due_date.gte.${rangeStart},due_date.lte.${rangeEnd}),` +
-    overdueByTarget + "," +
     overdueByDue + "," +
     "due_date.is.null," +
     datedUntimed

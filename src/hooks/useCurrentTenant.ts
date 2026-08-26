@@ -6,12 +6,13 @@ import { useTenant } from "@/contexts/TenantContext";
  * CRITICAL: Uses TenantContext which already handles URL priority
  */
 export function useCurrentTenant() {
-  const { currentTenantId, currentTenant, isLoading, isActiveTenantSynced } = useTenant();
+  const { currentTenantId, currentTenant, isLoading, isActiveTenantSynced, isActiveTenantDbSynced } = useTenant();
   
   return {
     tenantId: currentTenantId,
     tenant: currentTenant,
     isLoading,
     isActiveTenantSynced,
+    isActiveTenantDbSynced,
   };
 }

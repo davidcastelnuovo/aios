@@ -44,6 +44,24 @@ logged.
 - **How:** Standing skill `.cursor/skills/creative-direct/SKILL.md`. Follow-ups are JOB-only. `cursor-generate-creative` injects TASTE MEMORY and upserts the skin on first open. Copywriter handoff includes `creative_direct`. Creative pipeline stage uses this skin instead of `social_media`.
 - **Origin:** David — attach refs on reject; stop re-briefing Creative Direct every job; share Carmen's evolving creative-person skin.
 
+### 2026-08-26 — Tasks board empty: query referenced missing target_date
+- **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** If the tasks board is empty in every agency filter, the fetch likely 400'd because `buildTaskDueDateOrFilter` referenced `tasks.target_date` before migration `20260824120000_add_tasks_target_date` was applied. Filter on `due_date` only; apply the additive column separately.
+- **How:** `buildTaskDueDateOrFilter` no longer mentions `target_date`. WeeklyTaskBoard does not treat a disabled/failed query as an empty list.
+- **Origin:** David — still no tasks in single agency or all agencies; user appeared unrecognized.
+
+### 2026-08-26 — Mine tasks: resolve user identity + tenant RLS sync
+- **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When "שלי בלבד" is empty but DB shows assignments, check `user_active_tenant` matches the URL tenant, then verify every `campaigners` row for the user's email (not only `profiles.campaigner_id`). Owners without a staff link should land on "כל הקמפיינרים", not an empty personal queue.
+- **How:** `fetchMineTaskIdentity` ORs profile + RPC + email-matched campaigner ids; `TenantContext.isActiveTenantDbSynced` upserts `user_active_tenant` before tasks query; `buildMineAssignmentOrFilter` + collaborator task ids widen fetch scope.
+- **Origin:** David — tasks board empty in single agency and "כל הסוכנויות"; user identity not recognized for mine view.
+
+### 2026-08-26 — Mine tasks: header auto-resets to all agencies
+- **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When a campaigner/team_manager says they see no tasks in "שלי בלבד", explain that the board auto-resets the header to **"כל הסוכנויות"** on entry; assignments span promo/DMM-MC/etc. They can still narrow the header to one agency afterward. If still empty, check `profiles.campaigner_id` and open assignments in DB.
+- **How:** `WeeklyTaskBoard` uses `useLayoutEffect` to reset header agency on mine entry; person queues ignore header agency in `resolveTasksBoardAgencyFilter`; `AgencyContext` keeps `"all"` even with one agency row; `buildTasksBoardScopeOrFilter` ORs `campaigner_id` into fetch scope.
+- **Origin:** Regression after PR #470 TDZ crash + incomplete agency-filter behavior (#468/#473).
+
 ### 2026-08-25 — Cursor is the Creative department art director (RTL type)
 - **Skin slug:** `cursor_creative_director` (code: `src/components/marketing/departments/creative/cursorArtDirector.ts`)
 - **What Carmen can now do:** Explain that מחלקת קריאייטיב is art-directed by Cursor: subject-first stills, talent lock when instructions say «תשתמש בדמות מהרפרנס», and Hebrew is never painted — it is composited as isolated RTL layers (`dir=rtl`, `unicode-bidi:isolate`).

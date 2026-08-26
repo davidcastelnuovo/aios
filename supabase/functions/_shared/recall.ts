@@ -2,14 +2,107 @@
 import { detectMeetingPlatform } from "./meeting-url.ts";
 
 const BOT_NAME = "כרמן AI — מסייעת תמלול";
+const CREDIT_PROBE_MEETING_URL = "https://zoom.us/j/99900011122";
+export const RECALL_CANARY_MARKER = "נבדק עכשיו";
+export const RECALL_CREDIT_CANARY_OK_MS = 3 * 60 * 60 * 1000;
+export const RECALL_CREDIT_CANARY_DOWN_MS = 30 * 60 * 1000;
+
+function envGet(name: string): string | undefined {
+  try {
+    return typeof Deno !== "undefined" ? Deno.env.get(name) ?? undefined : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function recallRegion(): string {
+  return envGet("RECALL_REGION") || "us-east-1";
+}
 
 export function recallApiBase(): string {
-  const region = Deno.env.get("RECALL_REGION") || "us-east-1";
-  return `https://${region}.recall.ai/api/v1`;
+  return `https://${recallRegion()}.recall.ai/api/v1`;
 }
 
 export function recallApiKey(): string | null {
-  return Deno.env.get("RECALL_API_KEY") || null;
+  return envGet("RECALL_API_KEY") || null;
+}
+
+export function recallBillingDashboardUrl(region = recallRegion()): string {
+  return `https://${region}.recall.ai/dashboard/billing/usage`;
+}
+
+export function recallCreditErrorMessage(region = recallRegion()): string {
+  return `נגמר הקרדיט ב-Recall — כרמן לא יכולה להצטרף לפגישות עד טעינה: ${recallBillingDashboardUrl(region)}`;
+}
+
+export class RecallApiError extends Error {
+  readonly status: number;
+  readonly body: string;
+  constructor(status: number, body: string, message: string) {
+    super(message);
+    this.name = "RecallApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+export function isRecallCreditHttp(status: number, body = ""): boolean {
+  if (status === 402) return true;
+  return /insufficient credit|insufficient_credit|credit balance|top up your/i.test(body);
+}
+
+export function isRecallCreditError(err: unknown): boolean {
+  if (err instanceof RecallApiError) return isRecallCreditHttp(err.status, err.body);
+  if (err instanceof Error) {
+    return isRecallCreditHttp(0, err.message) || err.message.includes("נגמר הקרדיט ב-Recall") || /\(402\)/.test(err.message);
+  }
+  return false;
+}
+
+export function formatRecallBotHours(seconds: number): string {
+  const hours = seconds / 3600;
+  if (hours < 0.05) return `${Math.max(0, Math.round(seconds / 60))} דק׳`;
+  if (hours < 10) return `${hours.toFixed(1)} שעות`;
+  return `${Math.round(hours)} שעות`;
+}
+
+export function utcMonthRange(now = new Date()): { start: string; end: string } {
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  return { start: start.toISOString(), end: now.toISOString() };
+}
+
+export function recallBudgetThreshold(
+  usageSeconds: number,
+  budgetHours: number,
+): "budget_95" | "budget_80" | null {
+  if (!(budgetHours > 0) || !(usageSeconds >= 0)) return null;
+  const pct = (usageSeconds / 3600 / budgetHours) * 100;
+  if (pct >= 95) return "budget_95";
+  if (pct >= 80) return "budget_80";
+  return null;
+}
+
+export interface RecallQuotaCheckRow {
+  status: string;
+  detail: string;
+  checked_at: string;
+}
+
+export function isRecallCanaryDetail(detail: string): boolean {
+  return detail.includes(RECALL_CANARY_MARKER);
+}
+
+/** Run a credit canary on first check, every 3h while ok, and every 30m while down. */
+export function shouldRunRecallCreditCanary(
+  recent: RecallQuotaCheckRow[],
+  now = Date.now(),
+): boolean {
+  const last = recent.find((row) => isRecallCanaryDetail(row.detail));
+  if (!last) return true;
+  const age = now - Date.parse(last.checked_at);
+  if (!Number.isFinite(age)) return true;
+  if (last.status === "down") return age >= RECALL_CREDIT_CANARY_DOWN_MS;
+  return age >= RECALL_CREDIT_CANARY_OK_MS;
 }
 
 export interface CreateRecallBotOpts {
@@ -62,7 +155,7 @@ export async function createRecallBot(opts: CreateRecallBotOpts): Promise<Recall
   if (opts.join_at) body.join_at = opts.join_at;
 
   // Zoom meetings that require email — any address works; no real Zoom account needed.
-  const zoomEmail = Deno.env.get("RECALL_ZOOM_BOT_EMAIL");
+  const zoomEmail = envGet("RECALL_ZOOM_BOT_EMAIL");
   if (platform === "zoom" && zoomEmail) {
     body.zoom = { user_email: zoomEmail };
   }
@@ -79,17 +172,113 @@ export async function createRecallBot(opts: CreateRecallBotOpts): Promise<Recall
 
   if (!res.ok) {
     const errText = await res.text();
-    const region = Deno.env.get("RECALL_REGION") || "us-east-1";
+    const region = recallRegion();
     console.error("[recall] create bot failed", res.status, "region=", region, errText.slice(0, 500));
+    if (isRecallCreditHttp(res.status, errText)) {
+      throw new RecallApiError(res.status, errText, recallCreditErrorMessage(region));
+    }
     if (res.status === 401 && errText.includes("authentication_failed")) {
-      throw new Error(
+      throw new RecallApiError(
+        res.status,
+        errText,
         `Recall API token rejected (401). בדקו ש-RECALL_API_KEY מהטאב API Keys (לא whsec_) וש-RECALL_REGION תואם לאזור בחשבון Recall (כרגע: ${region}). לאירופה: eu-central-1.`,
       );
     }
-    throw new Error(`Recall create bot failed (${res.status}): ${errText.slice(0, 200)}`);
+    throw new RecallApiError(
+      res.status,
+      errText,
+      `Recall create bot failed (${res.status}): ${errText.slice(0, 200)}`,
+    );
   }
 
   return await res.json();
+}
+
+export async function fetchRecallUsageSeconds(startIso: string, endIso: string): Promise<number | null> {
+  const key = recallApiKey();
+  if (!key) throw new Error("RECALL_API_KEY is not configured");
+
+  const url = `${recallApiBase()}/billing/usage/?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Token ${key}`, Accept: "application/json" },
+  });
+  if (!res.ok) {
+    throw new RecallApiError(res.status, await res.text(), `Recall usage failed (${res.status})`);
+  }
+  const data = await res.json() as { bot_total?: number };
+  return typeof data.bot_total === "number" ? data.bot_total : null;
+}
+
+export async function deleteRecallBot(botId: string): Promise<void> {
+  const key = recallApiKey();
+  if (!key) throw new Error("RECALL_API_KEY is not configured");
+
+  const res = await fetch(`${recallApiBase()}/bot/${botId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Token ${key}`, Accept: "application/json" },
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new RecallApiError(
+      res.status,
+      await res.text(),
+      `Recall delete bot failed (${res.status})`,
+    );
+  }
+}
+
+/**
+ * Cheap credit probe: create a scheduled bot 14 days out, then delete it.
+ * Recall returns 402 when the prepaid balance cannot create new bots.
+ * Scheduled bots that never join are not billed.
+ */
+export async function runRecallCreditCanary(): Promise<{
+  creditEmpty: boolean;
+  httpStatus: number;
+  detail: string;
+}> {
+  const key = recallApiKey();
+  if (!key) throw new Error("RECALL_API_KEY is not configured");
+
+  const joinAt = new Date(Date.now() + 14 * 86400000).toISOString();
+  const res = await fetch(`${recallApiBase()}/bot`, {
+    method: "POST",
+    headers: {
+      Authorization: `Token ${key}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      meeting_url: CREDIT_PROBE_MEETING_URL,
+      bot_name: "AIOS credit-check",
+      join_at: joinAt,
+      metadata: { purpose: "credit_probe" },
+    }),
+  });
+  const body = await res.text();
+  if (isRecallCreditHttp(res.status, body)) {
+    return { creditEmpty: true, httpStatus: res.status, detail: "הקרדיט נגמר" };
+  }
+  if (res.ok) {
+    let botId: string | undefined;
+    try {
+      botId = JSON.parse(body)?.id;
+    } catch {
+      /* ignore */
+    }
+    if (botId) {
+      try {
+        await deleteRecallBot(botId);
+      } catch (e) {
+        console.error("[recall] credit canary delete failed", botId, e);
+      }
+    }
+    return { creditEmpty: false, httpStatus: res.status, detail: "קרדיט פעיל" };
+  }
+  return {
+    creditEmpty: false,
+    httpStatus: res.status,
+    detail: `לא ניתן לאמת קרדיט (HTTP ${res.status})`,
+  };
 }
 
 export async function retrieveRecallBot(botId: string): Promise<Record<string, unknown>> {

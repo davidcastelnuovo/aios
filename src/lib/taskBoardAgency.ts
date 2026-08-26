@@ -58,13 +58,29 @@ export function filterTasksBySelectedAgency<T extends AgencyScopedTask>(
 }
 
 /**
- * Header agency (same control as Clients) only narrows the team board.
- * A person view — "שלי בלבד", a specific campaigner, or unassigned — spans
- * every accessible agency. Clients filters by `client.agency_id`; applying
- * that same header here hid assigned tasks whose client lives on another agency.
+ * Which header agency value the board should honor for the active campaigner filter.
+ *
+ * - Team board ("כל הקמפיינרים"): always honor the header.
+ * - Person queue ("שלי בלבד" / a named campaigner): default to "all" so cross-agency
+ *   assignments stay visible; still honor an explicit header pick afterward.
  */
-export function headerAgencyAppliesToBoard(campaignerFilter: string): boolean {
-  return campaignerFilter === "all";
+export function resolveTasksBoardAgencyFilter(
+  campaignerFilter: string,
+  selectedAgency: string | null | undefined,
+): string | null | undefined {
+  if (campaignerFilter === "all") return selectedAgency;
+  // Person queue ("שלי בלבד" / named campaigner): never narrow by header agency.
+  // AgencyContext may force a single-agency header; assignments still span agencies.
+  return "all";
+}
+
+/** @deprecated Prefer resolveTasksBoardAgencyFilter — kept for tests/docs clarity. */
+export function headerAgencyAppliesToBoard(
+  campaignerFilter: string,
+  selectedAgency?: string | null,
+): boolean {
+  const effective = resolveTasksBoardAgencyFilter(campaignerFilter, selectedAgency ?? "all");
+  return effective !== "all" && effective != null;
 }
 
 export function filterTasksForBoardView<T extends AgencyScopedTask>(
@@ -72,8 +88,40 @@ export function filterTasksForBoardView<T extends AgencyScopedTask>(
   selectedAgency: string | null | undefined,
   campaignerFilter: string,
 ): T[] {
-  if (!headerAgencyAppliesToBoard(campaignerFilter)) return tasks;
-  return filterTasksBySelectedAgency(tasks, selectedAgency);
+  return filterTasksBySelectedAgency(
+    tasks,
+    resolveTasksBoardAgencyFilter(campaignerFilter, selectedAgency),
+  );
+}
+
+/**
+ * PostgREST `.or()` scope for the tasks board fetch.
+ *
+ * Always includes the active tenant. Shared agencies add an `agency_id.in(...)`.
+ * When viewing a person queue, also OR-in `campaigner_id.eq(...)` so assignments
+ * are not dropped when `tasks.agency_id` was stamped on the wrong agency.
+ */
+export function buildTasksBoardScopeOrFilter(
+  scope: TasksBoardScope,
+  assignedCampaignerIds?: string | string[] | null,
+  includeTaskIds?: string[],
+): string {
+  const parts = [`tenant_id.eq.${scope.tenantId}`];
+  if (scope.type === "tenant_or_shared" && scope.crossTenantAgencyIds.length > 0) {
+    parts.push(`agency_id.in.(${scope.crossTenantAgencyIds.join(",")})`);
+  }
+  const ids = Array.isArray(assignedCampaignerIds)
+    ? assignedCampaignerIds
+    : assignedCampaignerIds
+      ? [assignedCampaignerIds]
+      : [];
+  for (const id of ids) {
+    parts.push(`campaigner_id.eq.${id}`);
+  }
+  if (includeTaskIds && includeTaskIds.length > 0) {
+    parts.push(`id.in.(${includeTaskIds.join(",")})`);
+  }
+  return parts.join(",");
 }
 
 /**

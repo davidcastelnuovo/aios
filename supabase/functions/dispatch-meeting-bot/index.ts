@@ -1,8 +1,9 @@
 // Dispatch Carmen meeting bot to Zoom / Google Meet / Teams (Recall.ai).
 // Supports ad-hoc join via pasted meeting URL (no calendar required).
-// deploy: ensure dispatch-meeting-bot is live on prod (2026-08-04)
+// deploy: recall 402 WhatsApp alert (2026-08-26)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createRecallBot, recallApiKey } from "../_shared/recall.ts";
+import { createRecallBot, isRecallCreditError, recallApiKey } from "../_shared/recall.ts";
+import { notifyRecallCreditEmpty } from "../_shared/recall-credit-alert.ts";
 import {
   detectMeetingPlatform,
   isSupportedMeetingUrl,
@@ -179,6 +180,10 @@ Deno.serve(async (req) => {
         status: "failed",
         error: msg,
       }).eq("id", session.id);
+      if (isRecallCreditError(botErr)) {
+        await notifyRecallCreditEmpty(admin);
+        return json({ error: msg }, 402);
+      }
       return json({ error: msg }, 502);
     }
 
