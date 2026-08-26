@@ -81,16 +81,14 @@ export function approvedCopyConcepts(concepts: CopyConcept[]): CopyConcept[] {
 }
 
 /** Visual concepts are built from copy lines. Brief-only is not enough. */
-export type CopyConceptsGenerateBlock = "need_copy" | "need_approval";
+export type CopyConceptsGenerateBlock = "need_copy";
 
 export function copyConceptsGenerateGate(input: {
   copyText: string;
   variationCount: number;
-  approvedCopyCount: number;
 }): { canGenerate: boolean; block?: CopyConceptsGenerateBlock } {
-  if (!input.copyText.trim()) return { canGenerate: false, block: "need_copy" };
-  if (input.variationCount > 1 && input.approvedCopyCount === 0) {
-    return { canGenerate: false, block: "need_approval" };
+  if (!input.copyText.trim() && input.variationCount <= 0) {
+    return { canGenerate: false, block: "need_copy" };
   }
   return { canGenerate: true };
 }

@@ -340,10 +340,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const conceptGate = useMemo(
     () => copyConceptsGenerateGate({
       copyText,
-      variationCount: copyVariations.length,
-      approvedCopyCount: approvedCopies.length,
+      variationCount: copyVariations.filter((item) => item.text.trim()).length,
     }),
-    [approvedCopies.length, copyText, copyVariations.length],
+    [copyText, copyVariations],
   );
   const concepts = useMemo(
     () => parseCopyConceptsFromPayload(selected?.payload as Record<string, unknown> | null),
@@ -552,15 +551,10 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     if (!selected || generatingConcepts) return;
     const gate = copyConceptsGenerateGate({
       copyText,
-      variationCount: copyVariations.length,
-      approvedCopyCount: approvedCopies.length,
+      variationCount: copyVariations.filter((item) => item.text.trim()).length,
     });
     if (!gate.canGenerate) {
-      toast.error(
-        gate.block === "need_approval"
-          ? "אשרו לפחות וריאציית קופי אחת לפני יצירת קונספטים"
-          : "כתבו קופי לפני יצירת קונספטים",
-      );
+      toast.error("כתבו קופי לפני יצירת קונספטים");
       return;
     }
     const controller = new AbortController();

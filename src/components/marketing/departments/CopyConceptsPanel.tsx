@@ -10,7 +10,7 @@ interface Props {
   copies: StoredCopyVariation[];
   generating: boolean;
   canGenerate: boolean;
-  blockReason?: "need_copy" | "need_approval";
+  blockReason?: "need_copy";
   onGenerate: () => void;
   onCancel: () => void;
   onToggleApprove: (id: string) => void;
@@ -65,13 +65,7 @@ export function CopyConceptsPanel({
             className="shrink-0 gap-1.5"
             onClick={onGenerate}
             disabled={!canGenerate}
-            title={
-              blockReason === "need_copy"
-                ? "כתבו קופי לפני יצירת קונספטים"
-                : blockReason === "need_approval"
-                  ? "אשרו לפחות וריאציית קופי אחת"
-                  : undefined
-            }
+            title={blockReason === "need_copy" ? "כתבו קופי לפני יצירת קונספטים" : undefined}
           >
             <Sparkles className="h-3.5 w-3.5" />
             {concepts.length ? "צור קונספטים מחדש" : "צור קונספטים"}
@@ -84,12 +78,10 @@ export function CopyConceptsPanel({
           <Lightbulb className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
             {generating
-              ? "כרמן בונה קונספטים מהקופי המאושר"
+              ? "כרמן בונה קונספטים מהקופי"
               : canGenerate
                 ? "כרמן תציע 3 כיוונים ויזואליים שונים מהקופי"
-                : blockReason === "need_approval"
-                  ? "אשרו לפחות וריאציית קופי אחת, ואז צרו קונספטים"
-                  : "כתבו קופי קודם — הקונספטים נבנים מהשורות, לא מהבריף לבד"}
+                : "כתבו קופי קודם — הקונספטים נבנים מהשורות"}
           </p>
         </div>
       ) : (
