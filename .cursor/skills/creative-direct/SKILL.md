@@ -88,9 +88,10 @@ The Promo mark is **red on transparent PNG**. It **vanishes** on dark/black hero
 
 **Integration:**
 - Generate the scene **bright by default** with a natural quiet pocket (light wall, paper header, sky band) reserved top-left or top-right — **empty**, no fake logo painted by the model.
-- **Composite the exact downloaded logo PNG** onto that light zone after generation (centered, preserve alpha). Never redraw the mark.
+- **Composite the exact downloaded logo PNG** onto that light zone after generation (preserve alpha **and the ribbon gradient** red→black at the O–M fold). **Never AI-redraw** the mark — upscale the brand file if needed.
+- Promo O–M connection: **smooth gradient depth**, not a flat hard red/black cut.
 
-**Fail conditions:** black-dominant hero with logo plaster; logo on dark without bright surround; invented/smeared mark; logo colliding with headline/CTA.
+**Fail conditions:** black-dominant hero with logo plaster; logo on dark without bright surround; invented/smeared mark; **flat hard red→black logo** (must keep ribbon gradient); logo colliding with headline/CTA.
 
 ## Taste memory
 

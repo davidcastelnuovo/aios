@@ -6,30 +6,30 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image
 
 
-def prepare_logo(logo_path: Path, *, upscale_min_width: int = 480) -> Image.Image:
-    """Return RGBA logo; upsample small brand-kit assets before downscaling onto the ad."""
+def prepare_logo(logo_path: Path, *, upscale_min_width: int = 960) -> Image.Image:
+    """Upscale the exact brand PNG — preserves ribbon gradient red→black; never AI-redraw."""
     logo = Image.open(logo_path).convert("RGBA")
     if logo.width >= upscale_min_width:
         return _clean_logo_alpha(logo)
-    scale = upscale_min_width / logo.width
+    # Integer upscale keeps gradient pixels intact (Lanczos); avoid unsharp on folds.
+    factor = max(2, -(-upscale_min_width // logo.width))  # ceil division, min 2x
     logo = logo.resize(
-        (int(logo.width * scale), int(logo.height * scale)),
+        (logo.width * factor, logo.height * factor),
         Image.Resampling.LANCZOS,
     )
-    logo = logo.filter(ImageFilter.UnsharpMask(radius=1.2, percent=120, threshold=2))
     return _clean_logo_alpha(logo)
 
 
 def _clean_logo_alpha(logo: Image.Image) -> Image.Image:
-    """Drop light fringes without binarizing antialiased edges (avoids pixelated/stair-step look)."""
+    """Remove only near-white plate fringes; keep gradient/shadow pixels at red→black fold."""
     arr = np.array(logo, dtype=np.uint8)
     r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
-    light_fringe = (a > 0) & (a < 255) & (r > 225) & (g > 225) & (b > 225)
+    light_fringe = (a > 0) & (a < 255) & (r > 235) & (g > 235) & (b > 235)
     arr[..., 3][light_fringe] = 0
-    fully_light = (a == 255) & (r > 240) & (g > 240) & (b > 240)
+    fully_light = (a == 255) & (r > 248) & (g > 248) & (b > 248)
     arr[..., 3][fully_light] = 0
     return Image.fromarray(arr)
 
