@@ -961,7 +961,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     } catch (error: unknown) {
       if (isGenerationAborted(error)) throw error;
       if (!isCursorCreativeUnavailable(error)) throw error;
-      toast.message("אייג׳נט הקריאייטיב עדיין לא פרוס — נופל חזרה ליצירה המקומית");
+      toast.message("אייג׳נט הקריאייטיב לא זמין — נופל חזרה ליצירה המקומית");
     }
     const { imageUrl, cost } = await generateCreativeImage({
       supabase,

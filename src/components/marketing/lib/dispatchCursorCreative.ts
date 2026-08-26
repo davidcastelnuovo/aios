@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { GENERATION_ABORTED } from "@/components/marketing/departments/creative/brandKit";
 import type { CreativeVariation } from "@/components/marketing/departments/creative/types";
+import { isCursorCreativeUnavailable } from "@/components/marketing/lib/cursorCreativeUnavailable";
 import { invokeErrorMessage } from "@/components/marketing/lib/invokeErrorMessage";
+
+export { isCursorCreativeUnavailable };
 
 const POLL_MS = 4000;
 const TIMEOUT_MS = 8 * 60 * 1000;
@@ -107,8 +110,3 @@ export async function waitForCursorCreative({
   }
   throw new Error("אייג׳נט הקריאייטיב לא סיים בזמן");
 }
-
-export const isCursorCreativeUnavailable = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  return /404|not found|Failed to send|cursor-generate-creative|not configured|CURSOR_API_KEY/i.test(message);
-};
