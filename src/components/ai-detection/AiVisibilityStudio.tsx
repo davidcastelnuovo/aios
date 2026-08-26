@@ -296,7 +296,7 @@ function ProjectDashboard({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          כשהוורקר מחובר, כל פרומפט רץ כשיחה חדשה ב-chatgpt.com (חשבון ברירת מחדל, ישראל). בלי וורקר — ChatGPT Search API. לא על אותה מכונה של WhatsApp.
+          הסריקה רצה עכשיו על ChatGPT Search API (חיפוש חי + רמז מיקום ישראל). זה לא chatgpt.com — וורקר דפדפן נוסיף אחרי שהמסלול הזה יציב.
         </p>
 
         <Tabs defaultValue="overview" dir="rtl">
@@ -347,7 +347,7 @@ function ProjectDashboard({
                       זה לא נפח חיפוש כמו SEO — ב-ChatGPT הזנב ארוך בלי סוף, אז מודדים «האם ה-AI ימליץ עליכם לשאלת קנייה בנישה».
                     </p>
                     <p className="text-muted-foreground">
-                      המדידה הטובה ביותר היא וורקר דפדפן על droplet נפרד: שיחה חדשה ב-chatgpt.com לכל שאילתה. עד שהוא חי, הסריקה נופלת ל-Search API. WhatsApp נשאר על המכונה שלו — Chromium לא רץ ליד אינסטנסים של ווטסאפ.
+                      המנוע הנוכחי: ChatGPT Search API. וורקר chatgpt.com נשאר לשלב הבא, אחרי שסריקת ה-API, הפרומפטים והטיפים יציבים.
                     </p>
                   </CardContent>
                 </Card>
