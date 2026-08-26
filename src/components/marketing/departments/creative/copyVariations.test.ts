@@ -6,7 +6,9 @@ import {
   conceptCopyJobsForGeneration,
   hydrateCopyVariations,
   joinCopyVariations,
+  linkApprovedConceptsToCopy,
   pairConceptsToCopyVariations,
+  remapCopyVariationKeys,
   replaceCopyVariationText,
   applyVariationText,
   splitCopyVariations,
@@ -222,4 +224,35 @@ test("replaceCopyVariationText leaves sibling copy untouched", () => {
   assert.match(joined, /גמא/);
   assert.match(joined, /בטא/);
   assert.equal(joined.includes("אלפא"), false);
+});
+
+test("remapCopyVariationKeys appends after existing keys with new ids", () => {
+  const existing = [stored({ id: "keep", key: "2" })];
+  const remapped = remapCopyVariationKeys(
+    [stored({ id: "old", key: "1", text: "כותרת:\nחדש", angle: "כאב" })],
+    existing,
+  );
+  assert.equal(remapped.length, 1);
+  assert.equal(remapped[0].key, "3");
+  assert.notEqual(remapped[0].id, "old");
+  assert.match(remapped[0].text, /^וריאציה 3/);
+});
+
+test("linkApprovedConceptsToCopy fills only approved concepts that have no copy yet", () => {
+  const copies = [
+    stored({ id: "n1", key: "3", headline: "חדש" }),
+    stored({ id: "n2", key: "4" }),
+  ];
+  const linked = linkApprovedConceptsToCopy(
+    [
+      concept({ id: "has", approved: true, copyId: "keep", copyKey: "1" }),
+      concept({ id: "need", name: "שני", approved: true, copyId: "", copyKey: "" }),
+      concept({ id: "skip", name: "שלוש", approved: false, copyId: "" }),
+    ],
+    copies,
+  );
+  assert.equal(linked[0].copyId, "keep");
+  assert.equal(linked[1].copyId, "n1");
+  assert.equal(linked[1].copyKey, "3");
+  assert.equal(linked[2].copyId, "");
 });

@@ -171,6 +171,44 @@ export const replaceCopyVariationText = (
 ): StoredCopyVariation[] =>
   variations.map((item) => item.id === id ? applyVariationText(item, nextText) : item);
 
+export const remapCopyVariationKeys = (
+  incoming: StoredCopyVariation[],
+  existing: StoredCopyVariation[],
+): StoredCopyVariation[] => {
+  let nextKey = existing.reduce((max, item) => Math.max(max, Number.parseInt(item.key, 10) || 0), 0);
+  return incoming.map((item) => {
+    nextKey += 1;
+    const key = String(nextKey);
+    return applyVariationText({
+      ...item,
+      id: crypto.randomUUID(),
+      key,
+      label: `וריאציה ${key}`,
+      approved: false,
+      approvedAt: null,
+    }, item.text);
+  });
+};
+
+export const linkApprovedConceptsToCopy = (
+  concepts: CopyConcept[],
+  copies: StoredCopyVariation[],
+): CopyConcept[] => {
+  let index = 0;
+  return concepts.map((concept) => {
+    if (!concept.approved || concept.copyId) return concept;
+    const copy = copies[index];
+    if (!copy) return concept;
+    index += 1;
+    return {
+      ...concept,
+      copyId: copy.id,
+      copyKey: copy.key,
+      copyAngle: copyBlockLabel(copy),
+    };
+  });
+};
+
 export const approvedCopyVariations = (variations: StoredCopyVariation[]): StoredCopyVariation[] =>
   variations.filter((item) => item.approved && item.text.trim());
 

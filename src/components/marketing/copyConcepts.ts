@@ -80,17 +80,40 @@ export function approvedCopyConcepts(concepts: CopyConcept[]): CopyConcept[] {
   return concepts.filter((concept) => concept.approved);
 }
 
-/** Visual concepts are built from copy lines. Brief-only is not enough. */
-export type CopyConceptsGenerateBlock = "need_copy";
+/** Concepts come first from a brief/title. Copy is written after approval. */
+export type CopyConceptsGenerateBlock = "need_context";
 
 export function copyConceptsGenerateGate(input: {
-  copyText: string;
-  variationCount: number;
+  title?: string;
+  brief?: string;
+  copyText?: string;
+  variationCount?: number;
 }): { canGenerate: boolean; block?: CopyConceptsGenerateBlock } {
-  if (!input.copyText.trim() && input.variationCount <= 0) {
-    return { canGenerate: false, block: "need_copy" };
-  }
+  const hasContext = [input.title, input.brief, input.copyText].some((value) => (value ?? "").trim().length > 0)
+    || (input.variationCount ?? 0) > 0;
+  if (!hasContext) return { canGenerate: false, block: "need_context" };
   return { canGenerate: true };
+}
+
+export function appendCopyConcepts(existing: CopyConcept[], incoming: CopyConcept[]): CopyConcept[] {
+  const names = new Set(existing.map((concept) => concept.name.trim().toLowerCase()).filter(Boolean));
+  const fresh = incoming.filter((concept) => {
+    const name = concept.name.trim().toLowerCase();
+    if (!name || names.has(name)) return false;
+    names.add(name);
+    return true;
+  });
+  return [...existing, ...fresh];
+}
+
+export function formatApprovedConceptsForCopy(concepts: CopyConcept[]): string {
+  return concepts.map((concept, index) => [
+    `${index + 1}. ${concept.name}`,
+    concept.bigIdea && `רעיון: ${concept.bigIdea}`,
+    concept.hook && `הוק: ${concept.hook}`,
+    concept.visualLanguage && `ויזואל: ${concept.visualLanguage}`,
+    concept.copyAngle && `זווית: ${concept.copyAngle}`,
+  ].filter(Boolean).join("\n")).join("\n\n");
 }
 
 export function formatCopyConceptsForCreative(concepts: CopyConcept[]): string {
@@ -268,7 +291,7 @@ export const CONCEPTS_OUTPUT_HINT = [
   "רעיון: הרעיון הגדול במשפט אחד",
   "ויזואל: שפה ויזואלית, קומפוזיציה, צבע, טיפוגרפיה",
   "הוק: מה רואים בשנייה הראשונה",
-  "קופי: מספר וריאציית הקופי המשויכת (1/2/3) או הכותרת שלה",
+  "קופי: אופציונלי — זווית טקסט בלבד; הקופי עצמו נכתב אחרי אישור הקונספט",
   "למה: למה זה ייצר גרפיקה מעניינת יותר מטקסט על רקע",
   "רפרנס: שם קמפיין קנוני או בלי",
 ].join("\n");

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { copyConceptsGenerateGate, formatCopyConceptsForImagePrompt, findCopyConcept, isApprovedConceptPrompt, parseConceptsFromCarmen, pickConceptForBatchIndex, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
+import { appendCopyConcepts, copyConceptsGenerateGate, formatApprovedConceptsForCopy, formatCopyConceptsForImagePrompt, findCopyConcept, isApprovedConceptPrompt, parseConceptsFromCarmen, pickConceptForBatchIndex, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
 
 const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
   id: overrides.id ?? "c1",
@@ -98,31 +98,34 @@ test("parseConceptsFromCarmen reads copy variation number into copyKey", () => {
   assert.equal(parsed[0]?.copyAngle, "2");
 });
 
-test("copyConceptsGenerateGate requires copy text, not just a brief", () => {
+test("copyConceptsGenerateGate allows concepts from a title or brief without copy", () => {
   assert.deepEqual(
-    copyConceptsGenerateGate({ copyText: "", variationCount: 0 }),
-    { canGenerate: false, block: "need_copy" },
-  );
-  assert.deepEqual(
-    copyConceptsGenerateGate({ copyText: "   ", variationCount: 0 }),
-    { canGenerate: false, block: "need_copy" },
+    copyConceptsGenerateGate({ title: "", brief: "", copyText: "", variationCount: 0 }),
+    { canGenerate: false, block: "need_context" },
   );
   assert.equal(
-    copyConceptsGenerateGate({ copyText: "כותרת:\nאלפא", variationCount: 1 }).canGenerate,
+    copyConceptsGenerateGate({ title: "השקה", brief: "", copyText: "" }).canGenerate,
+    true,
+  );
+  assert.equal(
+    copyConceptsGenerateGate({ title: "", brief: "בריף קצר", copyText: "" }).canGenerate,
     true,
   );
 });
 
-test("copyConceptsGenerateGate treats stored variations as copy even without copy_text", () => {
-  assert.equal(
-    copyConceptsGenerateGate({ copyText: "", variationCount: 2 }).canGenerate,
-    true,
-  );
+test("appendCopyConcepts keeps existing cards and skips duplicate names", () => {
+  const existing = [concept({ id: "keep", name: "הכיס הריק" })];
+  const next = appendCopyConcepts(existing, [
+    concept({ id: "dup", name: "הכיס הריק" }),
+    concept({ id: "new", name: "הכיסא הריק", bigIdea: "כיסא מול דלת" }),
+  ]);
+  assert.equal(next.length, 2);
+  assert.equal(next[0].id, "keep");
+  assert.equal(next[1].id, "new");
 });
 
-test("copyConceptsGenerateGate does not require approval before proposing concepts", () => {
-  assert.equal(
-    copyConceptsGenerateGate({ copyText: "כותרת:\nאלפא", variationCount: 3 }).canGenerate,
-    true,
-  );
+test("formatApprovedConceptsForCopy lists approved ideas for the copywriter", () => {
+  const text = formatApprovedConceptsForCopy([concept()]);
+  assert.match(text, /הכיס הריק/);
+  assert.match(text, /ארנק פעור/);
 });
