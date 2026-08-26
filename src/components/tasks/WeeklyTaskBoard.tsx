@@ -95,7 +95,7 @@ export type ViewMode = "daily" | "weekly" | "monthly";
 export function WeeklyTaskBoard() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { tenantId, isActiveTenantDbSynced } = useCurrentTenant();
+  const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
   const { isOwner, isSuperAdmin } = useUserRole();
   const { state: sidebarState } = useSidebar();
@@ -232,7 +232,7 @@ export function WeeklyTaskBoard() {
         tenantId: tenantId!,
         crossTenantAgencyIds,
       }),
-    enabled: !!user?.id && !!tenantId && isActiveTenantDbSynced,
+    enabled: !!user?.id && !!tenantId,
   });
 
   const primaryCampaignerId =
@@ -290,12 +290,11 @@ export function WeeklyTaskBoard() {
   });
 
   // Fetch tasks for the current view + overdue tasks
-  const { data: fetchedTasks = [], isLoading, isFetching } = useQuery({
+  const { data: fetchedTasks = [], isLoading, isFetching, isSuccess, isError, error: tasksError } = useQuery({
     queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency],
     enabled:
       !!tenantId &&
       !!user?.id &&
-      isActiveTenantDbSynced &&
       (filters.campaignerId !== "mine" || mineIdentityReady),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
@@ -421,6 +420,8 @@ export function WeeklyTaskBoard() {
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
   
   useEffect(() => {
+    if (isError) return;
+    if (!isSuccess && !isFetching) return;
     // Sync with server results (including empty). While a refetch is in flight we keep
     // previous rows to avoid an empty flash — but ALWAYS narrow by selectedAgency so the
     // header agency filter cannot leave other agencies' tasks on the board.
@@ -435,7 +436,13 @@ export function WeeklyTaskBoard() {
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
     // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFetching, selectedAgency, filters.campaignerId, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+  }, [isFetching, isSuccess, isError, selectedAgency, filters.campaignerId, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+
+  useEffect(() => {
+    if (!isError || !tasksError) return;
+    console.error("[tasks] fetch failed", tasksError);
+    toast.error("שגיאה בטעינת משימות");
+  }, [isError, tasksError]);
 
   // Team board: header agency narrows rows. Personal "mine" queue is the linked
   // staff member's assignments across every agency.

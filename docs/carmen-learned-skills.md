@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-26 — Tasks board empty: query referenced missing target_date
+- **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** If the tasks board is empty in every agency filter, the fetch likely 400'd because `buildTaskDueDateOrFilter` referenced `tasks.target_date` before migration `20260824120000_add_tasks_target_date` was applied. Filter on `due_date` only; apply the additive column separately.
+- **How:** `buildTaskDueDateOrFilter` no longer mentions `target_date`. WeeklyTaskBoard does not treat a disabled/failed query as an empty list.
+- **Origin:** David — still no tasks in single agency or all agencies; user appeared unrecognized.
+
 ### 2026-08-26 — Mine tasks: resolve user identity + tenant RLS sync
 - **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When "שלי בלבד" is empty but DB shows assignments, check `user_active_tenant` matches the URL tenant, then verify every `campaigners` row for the user's email (not only `profiles.campaigner_id`). Owners without a staff link should land on "כל הקמפיינרים", not an empty personal queue.

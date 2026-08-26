@@ -147,20 +147,23 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     setIsActiveTenantSynced(true);
   }, [currentTenantId, isActiveTenantSynced, queryClient]);
 
-  // Keep user_active_tenant aligned with the URL tenant BEFORE data queries run.
-  // RLS (get_effective_tenant_id) reads this row; racing it causes empty task boards.
+  // Keep user_active_tenant aligned with the URL tenant. Do not block the
+  // board if auth is not ready yet — retry when the session arrives.
   useEffect(() => {
     if (!currentTenantId) {
       setIsActiveTenantDbSynced(false);
       return;
     }
 
-    setIsActiveTenantDbSynced(false);
     let cancelled = false;
 
-    (async () => {
+    const sync = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user || cancelled) return;
+      if (cancelled) return;
+      if (!user) {
+        setIsActiveTenantDbSynced(true);
+        return;
+      }
 
       const { error } = await (supabase as any)
         .from("user_active_tenant")
@@ -175,13 +178,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
       setIsActiveTenantDbSynced(true);
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-    })().catch((err) => {
+    };
+
+    void sync().catch((err) => {
       console.error("Error syncing tenant:", err);
       if (!cancelled) setIsActiveTenantDbSynced(true);
     });
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      void sync();
+    });
+
     return () => {
       cancelled = true;
+      subscription.unsubscribe();
     };
   }, [currentTenantId, queryClient]);
 
