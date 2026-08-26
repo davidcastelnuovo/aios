@@ -10,8 +10,9 @@ interface Props {
   copies: StoredCopyVariation[];
   generating: boolean;
   canGenerate: boolean;
-  needCopyApproval?: boolean;
+  blockReason?: "need_copy" | "need_approval";
   onGenerate: () => void;
+  onCancel: () => void;
   onToggleApprove: (id: string) => void;
   onAssignCopy: (conceptId: string, copyId: string) => void;
 }
@@ -21,8 +22,9 @@ export function CopyConceptsPanel({
   copies,
   generating,
   canGenerate,
-  needCopyApproval,
+  blockReason,
   onGenerate,
+  onCancel,
   onToggleApprove,
   onAssignCopy,
 }: Props) {
@@ -41,31 +43,53 @@ export function CopyConceptsPanel({
             )}
           </div>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            אשרו קונספט, שייכו קופי מאושר, ואז העבירו לקריאייטיב
+            קודם קופי, אחר כך כיוון ויזואלי לקריאייטיב
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0 gap-1.5"
-          onClick={onGenerate}
-          disabled={generating || !canGenerate}
-        >
-          {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-          {concepts.length ? "צור קונספטים מחדש" : "צור קונספטים"}
-        </Button>
+        {generating ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5"
+            onClick={onCancel}
+          >
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            בטל
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5"
+            onClick={onGenerate}
+            disabled={!canGenerate}
+            title={
+              blockReason === "need_copy"
+                ? "כתבו קופי לפני יצירת קונספטים"
+                : blockReason === "need_approval"
+                  ? "אשרו לפחות וריאציית קופי אחת"
+                  : undefined
+            }
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            {concepts.length ? "צור קונספטים מחדש" : "צור קונספטים"}
+          </Button>
+        )}
       </div>
 
       {concepts.length === 0 ? (
         <div className="px-6 py-10 text-center">
           <Lightbulb className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            {canGenerate
-              ? "כרמן תציע 3 כיוונים ויזואליים שונים מהקופי והבריף"
-              : needCopyApproval
-                ? "אשרו לפחות וריאציית קופי אחת, ואז צרו קונספטים"
-                : "כתבו קופי או בריף, ואז צרו קונספטים"}
+            {generating
+              ? "כרמן בונה קונספטים מהקופי המאושר"
+              : canGenerate
+                ? "כרמן תציע 3 כיוונים ויזואליים שונים מהקופי"
+                : blockReason === "need_approval"
+                  ? "אשרו לפחות וריאציית קופי אחת, ואז צרו קונספטים"
+                  : "כתבו קופי קודם — הקונספטים נבנים מהשורות, לא מהבריף לבד"}
           </p>
         </div>
       ) : (

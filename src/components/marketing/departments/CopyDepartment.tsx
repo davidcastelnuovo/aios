@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -11,6 +11,7 @@ import { isCopyDepartmentItem } from "@/components/marketing/departmentFilters";
 import {
   approvedCopyConcepts,
   CONCEPTS_OUTPUT_HINT,
+  copyConceptsGenerateGate,
   formatCopyConceptsForCreative,
   parseConceptsFromCarmen,
   parseCopyConceptsFromPayload,
@@ -144,6 +145,12 @@ interface RecordingRow {
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const isAbortError = (error: unknown) =>
+  (error instanceof DOMException && error.name === "AbortError")
+  || (error instanceof Error && (error.name === "AbortError" || /aborted|AbortError|timed out/i.test(error.message)));
+
+const CONCEPTS_GENERATE_TIMEOUT_MS = 120_000;
+
 const asText = (value: JsonValue | undefined) => (typeof value === "string" ? value : "");
 
 const CONTENT_TYPES = [
@@ -239,6 +246,19 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const [editingCopyDraft, setEditingCopyDraft] = useState("");
   const [savingCopyEdit, setSavingCopyEdit] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const conceptsAbortRef = useRef<AbortController | null>(null);
+  const conceptsAbortKindRef = useRef<"timeout" | "cancel" | "switch" | null>(null);
+  const conceptsTimeoutRef = useRef<number | null>(null);
+
+  const stopConceptGeneration = useCallback((kind: "timeout" | "cancel" | "switch") => {
+    conceptsAbortKindRef.current = kind;
+    if (conceptsTimeoutRef.current != null) {
+      window.clearTimeout(conceptsTimeoutRef.current);
+      conceptsTimeoutRef.current = null;
+    }
+    conceptsAbortRef.current?.abort();
+    if (kind !== "timeout") setGeneratingConcepts(false);
+  }, []);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["copy-department-items", clientFilter, tenantId],
@@ -300,7 +320,8 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   useEffect(() => {
     setEditingCopyId(null);
     setEditingCopyDraft("");
-  }, [selectedId]);
+    stopConceptGeneration("switch");
+  }, [selectedId, stopConceptGeneration]);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const chat = useMemo(() => readChat(selected?.payload ?? null), [selected?.payload]);
@@ -316,6 +337,14 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     }
   }, [copyText, selected?.payload]);
   const approvedCopies = useMemo(() => approvedCopyVariations(copyVariations), [copyVariations]);
+  const conceptGate = useMemo(
+    () => copyConceptsGenerateGate({
+      copyText,
+      variationCount: copyVariations.length,
+      approvedCopyCount: approvedCopies.length,
+    }),
+    [approvedCopies.length, copyText, copyVariations.length],
+  );
   const concepts = useMemo(
     () => parseCopyConceptsFromPayload(selected?.payload as Record<string, unknown> | null),
     [selected?.payload],
@@ -521,17 +550,29 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
 
   const generateConcepts = async () => {
     if (!selected || generatingConcepts) return;
-    const brief = asText(selected.payload?.brief_text);
-    if (!copyText && !brief) {
-      toast.error("כתבו קופי או בריף לפני יצירת קונספטים");
+    const gate = copyConceptsGenerateGate({
+      copyText,
+      variationCount: copyVariations.length,
+      approvedCopyCount: approvedCopies.length,
+    });
+    if (!gate.canGenerate) {
+      toast.error(
+        gate.block === "need_approval"
+          ? "אשרו לפחות וריאציית קופי אחת לפני יצירת קונספטים"
+          : "כתבו קופי לפני יצירת קונספטים",
+      );
       return;
     }
-    if (copyVariations.length > 1 && approvedCopies.length === 0) {
-      toast.error("אשרו לפחות וריאציית קופי אחת לפני יצירת קונספטים");
-      return;
-    }
+    const controller = new AbortController();
+    conceptsAbortRef.current = controller;
+    conceptsAbortKindRef.current = null;
     setGeneratingConcepts(true);
+    const timeoutId = window.setTimeout(() => {
+      stopConceptGeneration("timeout");
+    }, CONCEPTS_GENERATE_TIMEOUT_MS);
+    conceptsTimeoutRef.current = timeoutId;
     try {
+      const brief = asText(selected.payload?.brief_text);
       const type = typeLabel(asText(selected.payload?.content_type) || "posts");
       const website = asText(selected.payload?.client_website);
       const copiesForConcepts = approvedCopies.length > 0 ? approvedCopies : copyVariations;
@@ -556,7 +597,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         !copiesForConcepts.length && copyText && `קופי מאושר לכיוון:\n${copyText}`,
         "כל קונספט חייב זווית אחרת (כאב / הומור / הוכחה / סקרנות) וחייב להיות משויך לוריאציית קופי אחרת כשאפשר. החזירי רק את בלוק ---CONCEPTS---.",
       ].filter(Boolean).join("\n\n");
-      const { data, error } = await supabase.functions.invoke("run-ai-agent", {
+      const invoke = supabase.functions.invoke("run-ai-agent", {
         body: {
           command_text: commandText,
           tenant_id: tenantId,
@@ -568,7 +609,22 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
           system_prompt_addon: studioAddon,
           user_name: "מחלקת קופי",
         },
+        signal: controller.signal,
       });
+      const aborted = new Promise<never>((_, reject) => {
+        const fail = () => reject(new DOMException(
+          conceptsAbortKindRef.current === "timeout" ? "Timed out" : "Aborted",
+          "AbortError",
+        ));
+        if (controller.signal.aborted) fail();
+        else controller.signal.addEventListener("abort", fail, { once: true });
+      });
+      const { data, error } = await Promise.race([invoke, aborted]);
+      if (conceptsTimeoutRef.current === timeoutId) {
+        window.clearTimeout(timeoutId);
+        conceptsTimeoutRef.current = null;
+      }
+      if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
       if (error) throw new Error(await invokeErrorMessage(error, data, "כרמן לא הצליחה להציע קונספטים"));
       if (data?.error) throw new Error(data.error);
       const output = String(data?.output ?? data?.reply ?? data?.message ?? "").trim();
@@ -593,8 +649,23 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       toast.success("קונספטים מוכנים — אשרו לפחות אחד לפני ההעברה");
       await refresh();
     } catch (error: unknown) {
+      const kind = conceptsAbortKindRef.current;
+      if (kind === "switch") return;
+      if (kind === "cancel") {
+        toast.message("יצירת הקונספטים בוטלה");
+        return;
+      }
+      if (kind === "timeout" || isAbortError(error)) {
+        toast.error("יצירת הקונספטים ארכה יותר מדי. בדקו שיש קופי, ואז נסו שוב");
+        return;
+      }
       toast.error(errorMessage(error, "יצירת הקונספטים נכשלה"));
     } finally {
+      if (conceptsTimeoutRef.current === timeoutId) {
+        window.clearTimeout(timeoutId);
+        conceptsTimeoutRef.current = null;
+      }
+      if (conceptsAbortRef.current === controller) conceptsAbortRef.current = null;
       setGeneratingConcepts(false);
     }
   };
@@ -1065,12 +1136,10 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                   concepts={concepts}
                   copies={copyVariations}
                   generating={generatingConcepts}
-                  canGenerate={
-                    (!!copyText || !!asText(selected.payload?.brief_text))
-                    && (copyVariations.length <= 1 || approvedCopies.length > 0)
-                  }
-                  needCopyApproval={copyVariations.length > 1 && approvedCopies.length === 0}
+                  canGenerate={conceptGate.canGenerate}
+                  blockReason={conceptGate.block}
                   onGenerate={() => void generateConcepts()}
+                  onCancel={() => stopConceptGeneration("cancel")}
                   onToggleApprove={(id) => void toggleConceptApproval(id)}
                   onAssignCopy={(conceptId, copyId) => void assignConceptCopy(conceptId, copyId)}
                 />

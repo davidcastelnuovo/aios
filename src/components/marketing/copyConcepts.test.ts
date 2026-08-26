@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatCopyConceptsForImagePrompt, findCopyConcept, isApprovedConceptPrompt, parseConceptsFromCarmen, pickConceptForBatchIndex, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
+import { copyConceptsGenerateGate, formatCopyConceptsForImagePrompt, findCopyConcept, isApprovedConceptPrompt, parseConceptsFromCarmen, pickConceptForBatchIndex, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
 
 const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
   id: overrides.id ?? "c1",
@@ -96,4 +96,30 @@ test("parseConceptsFromCarmen reads copy variation number into copyKey", () => {
 `);
   assert.equal(parsed[0]?.copyKey, "2");
   assert.equal(parsed[0]?.copyAngle, "2");
+});
+
+test("copyConceptsGenerateGate requires copy text, not just a brief", () => {
+  assert.deepEqual(
+    copyConceptsGenerateGate({ copyText: "", variationCount: 0, approvedCopyCount: 0 }),
+    { canGenerate: false, block: "need_copy" },
+  );
+  assert.deepEqual(
+    copyConceptsGenerateGate({ copyText: "   ", variationCount: 1, approvedCopyCount: 0 }),
+    { canGenerate: false, block: "need_copy" },
+  );
+  assert.equal(
+    copyConceptsGenerateGate({ copyText: "כותרת:\nאלפא", variationCount: 1, approvedCopyCount: 0 }).canGenerate,
+    true,
+  );
+});
+
+test("copyConceptsGenerateGate requires an approved variation when there are several", () => {
+  assert.deepEqual(
+    copyConceptsGenerateGate({ copyText: "כותרת:\nאלפא", variationCount: 3, approvedCopyCount: 0 }),
+    { canGenerate: false, block: "need_approval" },
+  );
+  assert.equal(
+    copyConceptsGenerateGate({ copyText: "כותרת:\nאלפא", variationCount: 3, approvedCopyCount: 1 }).canGenerate,
+    true,
+  );
 });
