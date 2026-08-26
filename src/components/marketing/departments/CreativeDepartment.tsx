@@ -281,14 +281,20 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       liveTextLayers,
     ));
   }, [selected, liveTextLayers]);
-  const copyBlocks = useMemo(
-    () => copyBlocksForGeneration((selected?.payload ?? null) as Record<string, unknown> | null),
-    [selected],
-  );
-  const copyJobs = useMemo(
-    () => conceptCopyJobsForGeneration((selected?.payload ?? null) as Record<string, unknown> | null),
-    [selected],
-  );
+  const copyBlocks = useMemo(() => {
+    try {
+      return copyBlocksForGeneration((selected?.payload ?? null) as Record<string, unknown> | null);
+    } catch {
+      return [];
+    }
+  }, [selected]);
+  const copyJobs = useMemo(() => {
+    try {
+      return conceptCopyJobsForGeneration((selected?.payload ?? null) as Record<string, unknown> | null);
+    } catch {
+      return [];
+    }
+  }, [selected]);
   const generateFromConcepts = copyJobs.some((job) => job.concept);
   const generateAllLabel = generateFromConcepts ? "צור לכל הקונספטים" : "צור לכל הקופי";
   const storyboard = useMemo(() => getStoryboard(selected?.payload ?? null), [selected?.payload]);
@@ -1733,7 +1739,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                     )}
                     {linked && (
                       <p className="mt-1 text-[11px] text-violet-700 [unicode-bidi:plaintext]" dir="auto">
-                        קופי: {copyBlockLabel(linked)}{linked.parts.headline ? ` · ${linked.parts.headline}` : ""}
+                        קופי: {copyBlockLabel(linked)}{linked.parts?.headline ? ` · ${linked.parts.headline}` : ""}
                       </p>
                     )}
                     <Button
@@ -2181,7 +2187,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                     )}
                     {linked && (
                       <p className="mt-1 text-[11px] text-violet-700 [unicode-bidi:plaintext]" dir="auto">
-                        קופי: {copyBlockLabel(linked)}{linked.parts.headline ? ` · ${linked.parts.headline}` : ""}
+                        קופי: {copyBlockLabel(linked)}{linked.parts?.headline ? ` · ${linked.parts.headline}` : ""}
                       </p>
                     )}
                   </button>

@@ -64,7 +64,7 @@ const toBlock = (chunk: string, index: number, fallbackKey?: string): CopyVariat
 };
 
 export const splitCopyVariations = (copyText: string): CopyVariationBlock[] => {
-  const raw = copyText.trim();
+  const raw = typeof copyText === "string" ? copyText.trim() : "";
   if (!raw) return [];
 
   const variationChunks = raw.split(SPLIT_VARIATION).map((chunk) => chunk.trim()).filter(Boolean);

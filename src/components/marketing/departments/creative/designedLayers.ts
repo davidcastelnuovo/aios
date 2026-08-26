@@ -161,8 +161,9 @@ const clip = (value: string | undefined, max: number) => {
 export const parseCreativeCopy = (copyText: string, fallbackTitle?: string): CopyParts => {
   const parts: CopyParts = {};
   let pending: keyof CopyParts | "skip" | null = null;
+  const source = typeof copyText === "string" ? copyText : "";
 
-  for (const raw of copyText.split("\n")) {
+  for (const raw of source.split("\n")) {
     const line = cleanLine(raw);
     if (!line) continue;
 
@@ -191,7 +192,7 @@ export const parseCreativeCopy = (copyText: string, fallbackTitle?: string): Cop
   }
 
   if (!parts.headline) {
-    const firstReal = copyText
+    const firstReal = source
       .split("\n")
       .map(cleanLine)
       .find((line) => line && !isInternalCopyLine(line) && !labeledField(line));

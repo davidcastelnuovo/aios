@@ -17,10 +17,14 @@ test("entry to creative always uses every client", () => {
   assert.equal(clientFilterToParam(entryClientFilter("creative", null)), "all");
 });
 
-test("parseClientFilter maps all to the all-clients sentinel", () => {
+test("parseClientFilter maps a missing param to every client, not unassigned-only", () => {
   assert.equal(parseClientFilter("all"), ALL_CLIENTS_FILTER);
-  assert.equal(parseClientFilter(null), null);
+  assert.equal(parseClientFilter(null), ALL_CLIENTS_FILTER);
+  assert.equal(parseClientFilter(""), ALL_CLIENTS_FILTER);
+  assert.equal(parseClientFilter("general"), null);
   assert.equal(parseClientFilter("abc"), "abc");
+  assert.equal(clientFilterToParam(null), "general");
+  assert.equal(clientFilterToParam(ALL_CLIENTS_FILTER), "all");
 });
 
 test("creative list filter never treats a missing client as unassigned-only", () => {

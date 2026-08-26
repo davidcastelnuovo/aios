@@ -287,13 +287,16 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const chat = useMemo(() => readChat(selected?.payload ?? null), [selected?.payload]);
   const copyText = asText(selected?.payload?.copy_text);
-  const copyVariations = useMemo(
-    () => hydrateCopyVariations(
-      copyText,
-      parseCopyVariationsFromPayload(selected?.payload as Record<string, unknown> | null),
-    ),
-    [copyText, selected?.payload],
-  );
+  const copyVariations = useMemo(() => {
+    try {
+      return hydrateCopyVariations(
+        copyText,
+        parseCopyVariationsFromPayload(selected?.payload as Record<string, unknown> | null),
+      );
+    } catch {
+      return [];
+    }
+  }, [copyText, selected?.payload]);
   const approvedCopies = useMemo(() => approvedCopyVariations(copyVariations), [copyVariations]);
   const concepts = useMemo(
     () => parseCopyConceptsFromPayload(selected?.payload as Record<string, unknown> | null),
