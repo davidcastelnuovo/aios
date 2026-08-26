@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-26 — Campaigner client dashboard redirected to אזור אישי
+- **Skin slug:** `client_dashboard_entity_route_not_org_dashboard` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When a campaigner/team_manager opens a client dashboard from CRM and lands on **אזור אישי**, explain it was a routing bug: `/t/:slug/dashboard/:id` was gated as the org `dashboard` module. The entity route is ungated at module level; RLS still scopes which dashboards they can read.
+- **How:** `permissionForSubpath` / `isEntityDashboardSubpath` in `src/lib/moduleRoutePermissions.ts`. Org `/dashboard` still requires `dashboard`. Do not grant extra roles.
+- **Origin:** Ana via Carmen — CRM client dashboard entry redirected to personal area.
+
 ### 2026-08-26 — Tasks board empty: query referenced missing target_date
 - **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** If the tasks board is empty in every agency filter, the fetch likely 400'd because `buildTaskDueDateOrFilter` referenced `tasks.target_date` before migration `20260824120000_add_tasks_target_date` was applied. Filter on `due_date` only; apply the additive column separately.

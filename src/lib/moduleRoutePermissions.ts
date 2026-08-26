@@ -8,6 +8,8 @@ export type ModuleRouteHandle = {
 /**
  * Static path → module permission for tenant routes under /t/:slug/*.
  * Longest-prefix match covers dynamic segments (chat/:id, rank-tracking/:id).
+ * Exception: `/dashboard/:id` is a client/combined dashboard entity, not the
+ * org overview module (`dashboard`). See `isEntityDashboardSubpath`.
  *
  * This is used instead of react-router `useMatches()` / route `handle`, which
  * throw unless the app is on a data router (createBrowserRouter).
@@ -78,9 +80,23 @@ export function permissionHandleForPathname(pathname: string): ModuleRouteHandle
   return permission ? { permission } : undefined;
 }
 
+/**
+ * `/dashboard` is the org overview module. `/dashboard/:id` is a CRM
+ * client/combined dashboard entity — prefix-matching it to `dashboard`
+ * sent campaigners to אזור אישי even when they already had client access.
+ */
+export function isEntityDashboardSubpath(subpath: string): boolean {
+  const segments = subpath.split("/").filter(Boolean);
+  return segments[0] === "dashboard" && segments.length >= 2;
+}
+
 export function permissionForSubpath(subpath: string): ModulePermission | undefined {
   if (Object.prototype.hasOwnProperty.call(MODULE_ROUTE_PERMISSIONS, subpath)) {
     return MODULE_ROUTE_PERMISSIONS[subpath];
+  }
+
+  if (isEntityDashboardSubpath(subpath)) {
+    return undefined;
   }
 
   const segments = subpath.split("/").filter(Boolean);
