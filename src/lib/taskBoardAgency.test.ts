@@ -134,14 +134,14 @@ test("syncLocalTasksForAgencyFilter keeps mine rows across agencies while fetchi
   assert.deepEqual(duringFetch.map((task) => task.id), ["1", "3"]);
 });
 
-test("buildTasksBoardScopeOrFilter ORs campaigner assignment into fetch scope", () => {
+test("buildTasksBoardScopeOrFilter ORs every campaigner assignment into fetch scope", () => {
   const scope = resolveTasksBoardScope({
     tenantId: "tenant-dmm",
     crossTenantAgencyIds: ["agency-dmm-mc"],
   });
   assert.equal(
-    buildTasksBoardScopeOrFilter(scope, "campaigner-ana"),
-    "tenant_id.eq.tenant-dmm,agency_id.in.(agency-dmm-mc),campaigner_id.eq.campaigner-ana",
+    buildTasksBoardScopeOrFilter(scope, ["campaigner-ana", "campaigner-david"]),
+    "tenant_id.eq.tenant-dmm,agency_id.in.(agency-dmm-mc),campaigner_id.eq.campaigner-ana,campaigner_id.eq.campaigner-david",
   );
   assert.equal(
     buildTasksBoardScopeOrFilter(scope),

@@ -37,6 +37,7 @@ import type { QuickTaskPayload } from "./QuickTaskInput";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
@@ -51,6 +52,7 @@ import {
   syncLocalTasksForAgencyFilter,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
+import { buildMineAssignmentOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
 import { buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 
@@ -93,8 +95,9 @@ export type ViewMode = "daily" | "weekly" | "monthly";
 export function WeeklyTaskBoard() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, isActiveTenantDbSynced } = useCurrentTenant();
   const { user } = useCurrentUser();
+  const { isOwner, isSuperAdmin } = useUserRole();
   const { state: sidebarState } = useSidebar();
   const { t } = useTerminology();
 
@@ -220,20 +223,36 @@ export function WeeklyTaskBoard() {
     }
   }, [currentDate, viewMode]);
 
-  // Fetch user profile to get campaigner_id / sales_person_id for "mine" filter
-  const { data: userProfile, isSuccess: userProfileReady } = useQuery({
-    queryKey: ["user-profile-for-tasks", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("campaigner_id, sales_person_id")
-        .eq("id", user!.id)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id,
+  // Resolve every campaigner row + sales person that represents this user for "mine".
+  const { data: mineIdentity, isSuccess: mineIdentityReady } = useQuery({
+    queryKey: ["mine-task-identity", user?.id, tenantId, crossTenantAgencyIds.join(",")],
+    queryFn: () =>
+      fetchMineTaskIdentity({
+        userId: user!.id,
+        tenantId: tenantId!,
+        crossTenantAgencyIds,
+      }),
+    enabled: !!user?.id && !!tenantId && isActiveTenantDbSynced,
   });
+
+  const primaryCampaignerId =
+    mineIdentity?.campaignerIds[0] ??
+    (mineIdentity?.kind === "assigned" ? mineIdentity.campaignerId : null) ??
+    null;
+  const mySalesPersonId =
+    mineIdentity?.kind === "assigned" ? mineIdentity.salesPersonId ?? null : null;
+
+  // Owners without a linked staff row: "mine" only matches created_by and looks empty.
+  useLayoutEffect(() => {
+    if (!mineIdentityReady || !mineIdentity) return;
+    if (
+      filters.campaignerId === "mine" &&
+      mineIdentity.kind === "created_by" &&
+      (isOwner || isSuperAdmin)
+    ) {
+      setFilters((prev) => ({ ...prev, campaignerId: "all" }));
+    }
+  }, [mineIdentityReady, mineIdentity, isOwner, isSuperAdmin, filters.campaignerId]);
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
@@ -272,8 +291,12 @@ export function WeeklyTaskBoard() {
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id, selectedAgency],
-    enabled: !!tenantId && !!user?.id && (filters.campaignerId !== "mine" || userProfileReady),
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency],
+    enabled:
+      !!tenantId &&
+      !!user?.id &&
+      isActiveTenantDbSynced &&
+      (filters.campaignerId !== "mine" || mineIdentityReady),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
@@ -299,22 +322,23 @@ export function WeeklyTaskBoard() {
         accessibleAgencyIds: (agencies || []).map((agency) => agency.id),
       });
 
-      let personScopeCampaignerId: string | null = null;
+      let personScopeCampaignerIds: string[] = [];
+      let collaboratorTaskIds: string[] = [];
       if (filters.campaignerId === "mine") {
-        const mine = resolveMineTaskAssignee({
-          campaignerId: userProfile?.campaigner_id,
-          salesPersonId: userProfile?.sales_person_id,
-          userId: user?.id,
-        });
-        if (mine.kind === "assigned" && mine.campaignerId) {
-          personScopeCampaignerId = mine.campaignerId;
+        personScopeCampaignerIds = mineIdentity?.campaignerIds ?? [];
+        if (personScopeCampaignerIds.length > 0) {
+          const { data: collabRows } = await supabase
+            .from("task_collaborators")
+            .select("task_id")
+            .in("campaigner_id", personScopeCampaignerIds);
+          collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
         }
       } else if (filters.campaignerId !== "all" && filters.campaignerId !== "none") {
-        personScopeCampaignerId = filters.campaignerId;
+        personScopeCampaignerIds = [filters.campaignerId];
       }
 
       query = query.or(
-        buildTasksBoardScopeOrFilter(boardScope, personScopeCampaignerId),
+        buildTasksBoardScopeOrFilter(boardScope, personScopeCampaignerIds, collaboratorTaskIds),
       );
 
       // Include: current range OR overdue (past due_date with status != done) OR null due_date
@@ -331,24 +355,16 @@ export function WeeklyTaskBoard() {
 
       // "שלי בלבד" = tasks assigned to the staff member this user is linked to.
       if (filters.campaignerId === "mine") {
-        const mine = resolveMineTaskAssignee({
-          campaignerId: userProfile?.campaigner_id,
-          salesPersonId: userProfile?.sales_person_id,
-          userId: user?.id,
-        });
-
-        if (mine.kind === "assigned") {
-          const assignmentConditions: string[] = [];
-          if (mine.campaignerId) assignmentConditions.push(`campaigner_id.eq.${mine.campaignerId}`);
-          if (mine.salesPersonId) assignmentConditions.push(`sales_person_id.eq.${mine.salesPersonId}`);
-          if (assignmentConditions.length === 1 && mine.campaignerId && !mine.salesPersonId) {
-            query = query.eq("campaigner_id", mine.campaignerId);
-          } else {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            query = (query as any).or(assignmentConditions.join(","));
-          }
+        const mine = mineIdentity!;
+        const assignmentOr = buildMineAssignmentOrFilter(mine);
+        if (assignmentOr) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          query = (query as any).or(assignmentOr);
         } else if (mine.kind === "created_by") {
           query = query.eq("created_by", mine.userId);
+        } else {
+          // No staff row linked — "mine" would otherwise return the whole tenant scope.
+          return [];
         }
       } else if (filters.campaignerId === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -437,7 +453,7 @@ export function WeeklyTaskBoard() {
       filters.campaignerId !== "mine" &&
       filters.campaignerId !== "all" &&
       filters.campaignerId !== "none" &&
-      filters.campaignerId !== userProfile?.campaigner_id;
+      filters.campaignerId !== primaryCampaignerId;
     if (viewingOtherCampaigner) {
       return [];
     }
@@ -455,7 +471,7 @@ export function WeeklyTaskBoard() {
         .map((t) => t.google_calendar_event_id as string),
     );
     return calendarEvents.filter((event) => !syncedEventIds.has(event.id));
-  }, [calendarEvents, tasks, filters.campaignerId, dateRange, userProfile?.campaigner_id]);
+  }, [calendarEvents, tasks, filters.campaignerId, dateRange, primaryCampaignerId]);
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
@@ -505,8 +521,8 @@ export function WeeklyTaskBoard() {
       });
       if (!agencyId) throw new Error("NO_AGENCY");
 
-      const myCampaignerId = userProfile?.campaigner_id || null;
-      const mySalesPersonId = userProfile?.sales_person_id || null;
+      const myCampaignerId = primaryCampaignerId;
+      const assignedSalesPersonId = mySalesPersonId;
       const assignedCampaignerId = campaignerId ?? myCampaignerId;
 
       // Validate date is a valid Date object
@@ -520,7 +536,7 @@ export function WeeklyTaskBoard() {
         agency_id: agencyId,
         created_by: user?.id || null,
         campaigner_id: assignedCampaignerId,
-        sales_person_id: assignedCampaignerId ? null : mySalesPersonId,
+        sales_person_id: assignedCampaignerId ? null : assignedSalesPersonId,
         client_id: clientId ?? null,
       };
       if (selfReminderAt) {
@@ -1388,7 +1404,7 @@ export function WeeklyTaskBoard() {
               campaignersList={campaignersList}
               onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
               onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
-              defaultCampaignerId={userProfile?.campaigner_id ?? null}
+              defaultCampaignerId={primaryCampaignerId}
             />
           </div>
 
@@ -1525,7 +1541,7 @@ export function WeeklyTaskBoard() {
                 campaignersList={campaignersList}
                 onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
                 onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
-                defaultCampaignerId={userProfile?.campaigner_id ?? null}
+                defaultCampaignerId={primaryCampaignerId}
               />
             </div>
 
@@ -1655,8 +1671,7 @@ export function WeeklyTaskBoard() {
             return;
           }
           
-          const myCampaignerId = userProfile?.campaigner_id || null;
-          const mySalesPersonId = userProfile?.sales_person_id || null;
+          const myCampaignerId = primaryCampaignerId;
           
           supabase.from("tasks").insert({
             title: data.title,

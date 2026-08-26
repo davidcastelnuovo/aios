@@ -32,7 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
-### 2026-08-26 — Mine tasks view: agency filter default + cross-agency fetch
+### 2026-08-26 — Mine tasks: resolve user identity + tenant RLS sync
+- **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When "שלי בלבד" is empty but DB shows assignments, check `user_active_tenant` matches the URL tenant, then verify every `campaigners` row for the user's email (not only `profiles.campaigner_id`). Owners without a staff link should land on "כל הקמפיינרים", not an empty personal queue.
+- **How:** `fetchMineTaskIdentity` ORs profile + RPC + email-matched campaigner ids; `TenantContext.isActiveTenantDbSynced` upserts `user_active_tenant` before tasks query; `buildMineAssignmentOrFilter` + collaborator task ids widen fetch scope.
+- **Origin:** David — tasks board empty in single agency and "כל הסוכנויות"; user identity not recognized for mine view.
+
 - **Skin slug:** `campaigner_mine_tasks_visibility` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When a campaigner/team_manager says they see no tasks in "שלי בלבד", explain that the board auto-resets the header to **"כל הסוכנויות"** on entry; assignments span promo/DMM-MC/etc. They can still narrow the header to one agency afterward. If still empty, check `profiles.campaigner_id` and open assignments in DB.
 - **How:** `WeeklyTaskBoard` uses `useLayoutEffect` to reset header agency on mine entry; person queues ignore header agency in `resolveTasksBoardAgencyFilter`; `AgencyContext` keeps `"all"` even with one agency row; `buildTasksBoardScopeOrFilter` ORs `campaigner_id` into fetch scope.

@@ -103,14 +103,23 @@ export function filterTasksForBoardView<T extends AgencyScopedTask>(
  */
 export function buildTasksBoardScopeOrFilter(
   scope: TasksBoardScope,
-  assignedCampaignerId?: string | null,
+  assignedCampaignerIds?: string | string[] | null,
+  includeTaskIds?: string[],
 ): string {
   const parts = [`tenant_id.eq.${scope.tenantId}`];
   if (scope.type === "tenant_or_shared" && scope.crossTenantAgencyIds.length > 0) {
     parts.push(`agency_id.in.(${scope.crossTenantAgencyIds.join(",")})`);
   }
-  if (assignedCampaignerId) {
-    parts.push(`campaigner_id.eq.${assignedCampaignerId}`);
+  const ids = Array.isArray(assignedCampaignerIds)
+    ? assignedCampaignerIds
+    : assignedCampaignerIds
+      ? [assignedCampaignerIds]
+      : [];
+  for (const id of ids) {
+    parts.push(`campaigner_id.eq.${id}`);
+  }
+  if (includeTaskIds && includeTaskIds.length > 0) {
+    parts.push(`id.in.(${includeTaskIds.join(",")})`);
   }
   return parts.join(",");
 }
