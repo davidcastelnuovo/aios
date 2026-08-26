@@ -129,14 +129,23 @@ export function CreativeVariationGrid({
               <div className="space-y-2 p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">{variation.copyLabel || variation.name}</div>
-                    <div className="truncate text-[11px] text-muted-foreground">{variation.name}</div>
                     {variation.conceptName && (
-                      <div className="mt-0.5 truncate text-[11px] text-emerald-700">{variation.conceptName}</div>
+                      <div className="truncate text-sm font-semibold">{variation.conceptName}</div>
+                    )}
+                    <div className={cn("truncate", variation.conceptName ? "mt-0.5 text-[11px] text-violet-700" : "text-sm font-semibold")}>
+                      {variation.copyLabel || variation.name}
+                    </div>
+                    {!variation.conceptName && (
+                      <div className="truncate text-[11px] text-muted-foreground">{variation.name}</div>
                     )}
                   </div>
                   {variation.visualStyle && <Badge variant="outline">{styleLabelForId(variation.visualStyle)}</Badge>}
                 </div>
+                {variation.copyText && (
+                  <p className="line-clamp-3 whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
+                    {variation.copyText.replace(/^(?:וריאציה|variation)\s*\d+[^\n]*\n/i, "").trim()}
+                  </p>
+                )}
                 {variation.rejectNote && (
                   <p className="line-clamp-2 text-[11px] text-destructive">רג׳קט: {variation.rejectNote}</p>
                 )}

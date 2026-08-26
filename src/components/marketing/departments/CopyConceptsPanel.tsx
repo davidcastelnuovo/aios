@@ -3,23 +3,31 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, Lightbulb, Loader2, Sparkles } from "lucide-react";
 import type { CopyConcept } from "@/components/marketing/copyConcepts";
+import { copyBlockLabel, type StoredCopyVariation } from "@/components/marketing/departments/creative/copyVariations";
 
 interface Props {
   concepts: CopyConcept[];
+  copies: StoredCopyVariation[];
   generating: boolean;
   canGenerate: boolean;
+  needCopyApproval?: boolean;
   onGenerate: () => void;
   onToggleApprove: (id: string) => void;
+  onAssignCopy: (conceptId: string, copyId: string) => void;
 }
 
 export function CopyConceptsPanel({
   concepts,
+  copies,
   generating,
   canGenerate,
+  needCopyApproval,
   onGenerate,
   onToggleApprove,
+  onAssignCopy,
 }: Props) {
   const approvedCount = concepts.filter((concept) => concept.approved).length;
+  const approvedCopies = copies.filter((item) => item.approved);
 
   return (
     <div className="overflow-hidden rounded-2xl border bg-background shadow-sm" dir="rtl">
@@ -33,7 +41,7 @@ export function CopyConceptsPanel({
             )}
           </div>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            אשרו קונספט ולחצו לקריאייטיב — אפשר לשייך לפרויקט קיים של הלקוח או לפתוח חדש
+            אשרו קונספט, שייכו קופי מאושר, ואז העבירו לקריאייטיב
           </p>
         </div>
         <Button
@@ -55,53 +63,91 @@ export function CopyConceptsPanel({
           <p className="text-sm text-muted-foreground">
             {canGenerate
               ? "כרמן תציע 3 כיוונים ויזואליים שונים מהקופי והבריף"
-              : "כתבו קופי או בריף, ואז צרו קונספטים"}
+              : needCopyApproval
+                ? "אשרו לפחות וריאציית קופי אחת, ואז צרו קונספטים"
+                : "כתבו קופי או בריף, ואז צרו קונספטים"}
           </p>
         </div>
       ) : (
         <div className="grid gap-3 p-4 md:grid-cols-3">
-          {concepts.map((concept) => (
-            <button
-              key={concept.id}
-              type="button"
-              onClick={() => onToggleApprove(concept.id)}
-              className={cn(
-                "rounded-xl border p-3 text-right transition-colors",
-                concept.approved
-                  ? "border-emerald-400 bg-emerald-50/70 ring-1 ring-emerald-300"
-                  : "bg-muted/20 hover:bg-muted/40",
-              )}
-            >
-              <div className="mb-2 flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold [unicode-bidi:plaintext]" dir="auto">{concept.name}</div>
-                  {concept.reference && (
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">רפרנס: {concept.reference}</div>
+          {concepts.map((concept) => {
+            const linked = approvedCopies.find((item) => item.id === concept.copyId)
+              ?? copies.find((item) => item.id === concept.copyId || item.key === concept.copyKey);
+            const options = [
+              ...approvedCopies,
+              ...copies.filter((item) => item.id === linked?.id && !item.approved),
+            ];
+            const uniqueOptions = options.filter((item, index, list) => list.findIndex((row) => row.id === item.id) === index);
+            return (
+              <div
+                key={concept.id}
+                className={cn(
+                  "rounded-xl border p-3 text-right transition-colors",
+                  concept.approved
+                    ? "border-emerald-400 bg-emerald-50/70 ring-1 ring-emerald-300"
+                    : "bg-muted/20",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => onToggleApprove(concept.id)}
+                  className="w-full text-right"
+                >
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold [unicode-bidi:plaintext]" dir="auto">{concept.name}</div>
+                      {concept.reference && (
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">רפרנס: {concept.reference}</div>
+                      )}
+                    </div>
+                    <span className={cn(
+                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
+                      concept.approved ? "border-emerald-600 bg-emerald-600 text-white" : "text-muted-foreground",
+                    )}>
+                      <Check className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                  {concept.bigIdea && <p className="text-xs leading-relaxed [unicode-bidi:plaintext]" dir="auto">{concept.bigIdea}</p>}
+                  {concept.visualLanguage && (
+                    <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
+                      ויזואל: {concept.visualLanguage}
+                    </p>
                   )}
+                  {concept.hook && (
+                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
+                      הוק: {concept.hook}
+                    </p>
+                  )}
+                </button>
+                <label className="mt-3 block text-[10px] font-medium text-muted-foreground" onClick={(event) => event.stopPropagation()}>
+                  קופי משויך
+                  <select
+                    className="mt-1 w-full rounded-md border bg-background px-2 py-1 text-xs"
+                    value={linked?.id ?? ""}
+                    onChange={(event) => onAssignCopy(concept.id, event.target.value)}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <option value="">
+                      {approvedCopies.length === 0 ? "אשרו קופי כדי לשייך" : "בחרו וריאציית קופי"}
+                    </option>
+                    {uniqueOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {copyBlockLabel(item)}{item.headline ? ` · ${item.headline}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {linked?.headline && (
+                  <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
+                    {linked.headline}
+                  </p>
+                )}
+                <div className="mt-2 text-[10px] font-medium text-muted-foreground">
+                  {concept.approved ? "מאושר להעברה" : "לחצו לאישור"}
                 </div>
-                <span className={cn(
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
-                  concept.approved ? "border-emerald-600 bg-emerald-600 text-white" : "text-muted-foreground",
-                )}>
-                  <Check className="h-3.5 w-3.5" />
-                </span>
               </div>
-              {concept.bigIdea && <p className="text-xs leading-relaxed [unicode-bidi:plaintext]" dir="auto">{concept.bigIdea}</p>}
-              {concept.visualLanguage && (
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
-                  ויזואל: {concept.visualLanguage}
-                </p>
-              )}
-              {concept.hook && (
-                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
-                  הוק: {concept.hook}
-                </p>
-              )}
-              <div className="mt-2 text-[10px] font-medium text-muted-foreground">
-                {concept.approved ? "מאושר להעברה" : "לחצו לאישור"}
-              </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

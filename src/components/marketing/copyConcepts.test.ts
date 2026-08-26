@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatCopyConceptsForImagePrompt, findCopyConcept, isApprovedConceptPrompt, pickConceptForBatchIndex, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
+import { formatCopyConceptsForImagePrompt, findCopyConcept, isApprovedConceptPrompt, parseConceptsFromCarmen, pickConceptForBatchIndex, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
 
 const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
   id: overrides.id ?? "c1",
@@ -11,6 +11,8 @@ const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
   copyAngle: overrides.copyAngle ?? "הכסף בורח בזמן שאתם גוללים",
   whyItWorks: overrides.whyItWorks ?? "סצנה במקום טקסט על רקע",
   reference: overrides.reference ?? "VW Think Small",
+  copyId: overrides.copyId ?? "",
+  copyKey: overrides.copyKey ?? "",
   approved: overrides.approved ?? true,
   approvedAt: overrides.approvedAt ?? "2026-08-24T00:00:00.000Z",
 });
@@ -82,4 +84,16 @@ test("pickConceptForBatchIndex prefers unused approved concepts then rotates", (
   assert.equal(pickConceptForBatchIndex(concepts, 0, ["a", "b", "c"])?.id, "a");
   assert.equal(pickConceptForBatchIndex(concepts, 1, ["a", "b", "c"])?.id, "b");
   assert.equal(pickConceptForBatchIndex([], 0)?.id, undefined);
+});
+
+test("parseConceptsFromCarmen reads copy variation number into copyKey", () => {
+  const parsed = parseConceptsFromCarmen(`---CONCEPTS---
+### 1 | המקום שלך בתשובה
+רעיון: צ'אט ממליץ על מישהו אחר
+ויזואל: מסך טלפון
+הוק: תוצאות AI
+קופי: 2
+`);
+  assert.equal(parsed[0]?.copyKey, "2");
+  assert.equal(parsed[0]?.copyAngle, "2");
 });

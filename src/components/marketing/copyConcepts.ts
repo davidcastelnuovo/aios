@@ -7,11 +7,15 @@ export interface CopyConcept {
   copyAngle: string;
   whyItWorks: string;
   reference: string;
+  /** Linked stored copy variation id. */
+  copyId: string;
+  /** Linked וריאציה key (1, 2, …). */
+  copyKey: string;
   approved: boolean;
   approvedAt: string | null;
 }
 
-const FIELD_ALIASES: Record<keyof Omit<CopyConcept, "id" | "approved" | "approvedAt">, string[]> = {
+const FIELD_ALIASES: Record<keyof Omit<CopyConcept, "id" | "approved" | "approvedAt" | "copyId" | "copyKey">, string[]> = {
   name: ["שם", "name", "title"],
   bigIdea: ["רעיון", "רעיון גדול", "big idea", "idea"],
   visualLanguage: ["ויזואל", "שפה ויזואלית", "visual", "visual language"],
@@ -19,6 +23,11 @@ const FIELD_ALIASES: Record<keyof Omit<CopyConcept, "id" | "approved" | "approve
   copyAngle: ["קופי", "זווית קופי", "copy"],
   whyItWorks: ["למה", "למה זה עובד", "why"],
   reference: ["רפרנס", "reference", "ref"],
+};
+
+const extractCopyKey = (value: string) => {
+  const match = value.match(/(?:וריאציה|variation)\s*(\d+)/i) || value.match(/^(\d+)\b/);
+  return match?.[1] ?? "";
 };
 
 const emptyConcept = (): CopyConcept => ({
@@ -30,6 +39,8 @@ const emptyConcept = (): CopyConcept => ({
   copyAngle: "",
   whyItWorks: "",
   reference: "",
+  copyId: "",
+  copyKey: "",
   approved: false,
   approvedAt: null,
 });
@@ -57,6 +68,8 @@ export function parseCopyConceptsFromPayload(payload: Record<string, unknown> | 
       copyAngle: text(rec.copyAngle),
       whyItWorks: text(rec.whyItWorks),
       reference: text(rec.reference),
+      copyId: text(rec.copyId),
+      copyKey: text(rec.copyKey) || extractCopyKey(text(rec.copyAngle) || text(rec.copyKey)),
       approved: rec.approved === true,
       approvedAt: text(rec.approvedAt) || null,
     }];
@@ -74,6 +87,7 @@ export function formatCopyConceptsForCreative(concepts: CopyConcept[]): string {
     concept.visualLanguage && `שפה ויזואלית: ${concept.visualLanguage}`,
     concept.hook && `הוק / סצנה: ${concept.hook}`,
     concept.copyAngle && `קופי על הקונספט: ${concept.copyAngle}`,
+    concept.copyKey && `וריאציית קופי משויכת: ${concept.copyKey}`,
     concept.whyItWorks && `למה זה עובד: ${concept.whyItWorks}`,
     concept.reference && `רפרנס: ${concept.reference}`,
   ].filter(Boolean).join("\n")).join("\n\n");
@@ -227,6 +241,7 @@ export function parseConceptsFromCarmen(output: string): CopyConcept[] {
 
     if (concept.name || concept.bigIdea) {
       concept.name = concept.name || `קונספט ${concepts.length + 1}`;
+      if (!concept.copyKey) concept.copyKey = extractCopyKey(concept.copyAngle);
       concepts.push(concept);
     }
   }
@@ -240,7 +255,7 @@ export const CONCEPTS_OUTPUT_HINT = [
   "רעיון: הרעיון הגדול במשפט אחד",
   "ויזואל: שפה ויזואלית, קומפוזיציה, צבע, טיפוגרפיה",
   "הוק: מה רואים בשנייה הראשונה",
-  "קופי: איזו שורת קופי יושבת על הקונספט הזה",
+  "קופי: מספר וריאציית הקופי המשויכת (1/2/3) או הכותרת שלה",
   "למה: למה זה ייצר גרפיקה מעניינת יותר מטקסט על רקע",
   "רפרנס: שם קמפיין קנוני או בלי",
 ].join("\n");

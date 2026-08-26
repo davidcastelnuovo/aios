@@ -21,6 +21,8 @@ const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
   copyAngle: overrides.copyAngle ?? "הכסף בורח בזמן שאתם גוללים",
   whyItWorks: overrides.whyItWorks ?? "סצנה במקום טקסט על רקע",
   reference: overrides.reference ?? "VW Think Small",
+  copyId: overrides.copyId ?? "",
+  copyKey: overrides.copyKey ?? "",
   approved: overrides.approved ?? true,
   approvedAt: overrides.approvedAt ?? "2026-08-24T00:00:00.000Z",
 });
@@ -204,4 +206,29 @@ test("suggestedCreativeTarget prefers the linked sibling among open projects", (
     item({ id: "pointed", payload: { department: "creative" }, updated_at: "2026-08-24T10:00:00.000Z" }),
   ];
   assert.equal(suggestedCreativeTarget(copy, open)?.id, "pointed");
+});
+
+test("overlayCopyHandoffPayload writes approved copies only and pairs concept copyKey", () => {
+  const approved = [concept({ copyKey: "2" })];
+  const payload = overlayCopyHandoffPayload({
+    existingPayload: { department: "creative" },
+    copyPayload: {
+      copy_text: "וריאציה 1\nכותרת:\nאלפא\n\nוריאציה 2\nכותרת:\nבטא",
+      copy_variations: [
+        { id: "a", key: "1", label: "וריאציה 1", text: "וריאציה 1\nכותרת:\nאלפא", approved: false },
+        { id: "b", key: "2", label: "וריאציה 2", text: "וריאציה 2\nכותרת:\nבטא", approved: true },
+      ],
+    },
+    copyItem: { id: "copy-1", title: "seo / geo" },
+    concepts: approved,
+    approved,
+    at: "2026-08-26T09:00:00.000Z",
+  });
+  assert.match(String(payload.copy_text), /בטא/);
+  assert.doesNotMatch(String(payload.copy_text), /אלפא/);
+  const variations = payload.copy_variations as Array<{ key: string; approved: boolean }>;
+  assert.equal(variations.length, 2);
+  assert.equal(variations.filter((row) => row.approved).length, 1);
+  assert.equal((payload.approved_concepts as CopyConcept[])[0]?.copyKey, "2");
+  assert.equal((payload.approved_concepts as CopyConcept[])[0]?.copyId, "b");
 });
