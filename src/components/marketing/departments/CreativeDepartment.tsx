@@ -180,6 +180,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [costOpen, setCostOpen] = useState(false);
   const [pendingStyleId, setPendingStyleId] = useState<CreativeVisualStyleId | null>(null);
   const [conceptPickerOpen, setConceptPickerOpen] = useState(false);
+  const [conceptPickerLiveText, setConceptPickerLiveText] = useState(false);
   const [nextLiveTextLayers, setNextLiveTextLayers] = useState(false);
   const generateAbortRef = useRef(false);
   const generateAbortControllerRef = useRef<AbortController | null>(null);
@@ -1164,6 +1165,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     mode: "new" | "replace" = "new",
     target?: CreativeVariation,
     conceptId?: string,
+    liveTextLayers?: boolean,
   ) => {
     if (!selected) return;
     const approved = getApprovedCopyConcepts(selected);
@@ -1208,7 +1210,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           : undefined,
         regenerate: !!replaceTarget,
         conceptId: chosenConcept?.id ?? replaceTarget?.conceptId,
-        liveTextLayers: replaceTarget ? isVariationLiveText(replaceTarget) : nextLiveTextLayers,
+        liveTextLayers: replaceTarget ? isVariationLiveText(replaceTarget) : (liveTextLayers ?? nextLiveTextLayers),
         signal,
       });
       const nextVariations = replaceTarget
@@ -1230,18 +1232,20 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     }
   };
 
-  const requestSingleVariation = (conceptId?: string) => {
+  const requestSingleVariation = (conceptId?: string, liveTextLayers?: boolean) => {
     if (!selected) return;
     const approved = getApprovedCopyConcepts(selected);
+    const textMode = liveTextLayers ?? nextLiveTextLayers;
     if (!conceptId && approved.length > 1) {
+      setConceptPickerLiveText(textMode);
       setConceptPickerOpen(true);
       return;
     }
     setConceptPickerOpen(false);
-    void generate("new", undefined, conceptId ?? approved[0]?.id);
+    void generate("new", undefined, conceptId ?? approved[0]?.id, textMode);
   };
 
-  const generateAllFromCopy = async (styleMode: "same" | "mixed") => {
+  const generateAllFromCopy = async (styleMode: "same" | "mixed", liveTextLayers?: boolean) => {
     if (!selected) return;
     const approved = getApprovedCopyConcepts(selected);
     const visualPrompt = resolveVisualPrompt(selected.payload, approved);
@@ -1276,7 +1280,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           styleId: style.id,
           existing: current,
           conceptId: concept?.id,
-          liveTextLayers: nextLiveTextLayers,
+          liveTextLayers: liveTextLayers ?? nextLiveTextLayers,
           signal,
         });
         current = [...current, created];
@@ -1784,16 +1788,28 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                         קופי: {copyBlockLabel(linked)}{linked.parts?.headline ? ` · ${linked.parts.headline}` : ""}
                       </p>
                     )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-2 h-7 w-full gap-1 text-[11px]"
-                      disabled={loadingContext || !selected.client_id}
-                      onClick={() => requestSingleVariation(concept.id)}
-                    >
-                      <WandSparkles className="h-3 w-3" />
-                      צור וריאציה מהקונספט
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 h-7 w-full gap-1 text-[11px]"
+                          disabled={loadingContext || !selected.client_id}
+                        >
+                          <WandSparkles className="h-3 w-3" />
+                          צור וריאציה מהקונספט
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[12rem]">
+                        <DropdownMenuItem onClick={() => requestSingleVariation(concept.id, false)}>
+                          עם טקסט (סופי)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => requestSingleVariation(concept.id, true)}>
+                          בלי טקסט (שכבות)
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </Card>
                   );
                 })}
@@ -1935,14 +1951,14 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         <Coins className="h-3.5 w-3.5" />
         {formatUsd(costRows.find((row) => row.item.id === selected.id)?.spent.costUsd ?? 0)}
       </Button>
-      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-2.5 py-1.5" title="מצב למודעה חדשה — כל כרטיס בגריד יכול להיות שונה">
+      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-2.5 py-1.5" title="ברירת מחדל כשלא בוחרים במפורש בלחיצה">
         <span className={`text-[10px] font-medium ${!nextLiveTextLayers ? "text-foreground" : "text-muted-foreground"}`}>
-          מודעה חדשה · סופי
+          ברירת מחדל · סופי
         </span>
         <Switch
           checked={nextLiveTextLayers}
           onCheckedChange={setNextLiveTextLayers}
-          aria-label="מצב טקסט למודעה חדשה"
+          aria-label="ברירת מחדל למודעה חדשה"
         />
         <span className={`text-[10px] font-medium ${nextLiveTextLayers ? "text-foreground" : "text-muted-foreground"}`}>
           שכבות
@@ -1966,19 +1982,38 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 <ChevronDown className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void generateAllFromCopy("same")}>
-                {generateFromConcepts ? "לכל קונספט מאושר עם הקופי המשויך" : "לכל וריאציות הקופי · מותאם לקופי ולמותג"}
+            <DropdownMenuContent align="end" className="min-w-[17rem]">
+              <DropdownMenuItem onClick={() => void generateAllFromCopy("same", false)}>
+                {generateFromConcepts ? "לכל קונספט · עם טקסט (סופי)" : "לכל הקופי · עם טקסט (סופי)"}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void generateAllFromCopy("mixed")}>
-                {generateFromConcepts ? "לכל קונספט · מבנה גרפי שונה לכל אחד" : "לכל וריאציות הקופי · מבנה גרפי שונה לכל אחת"}
+              <DropdownMenuItem onClick={() => void generateAllFromCopy("same", true)}>
+                {generateFromConcepts ? "לכל קונספט · בלי טקסט (שכבות)" : "לכל הקופי · בלי טקסט (שכבות)"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void generateAllFromCopy("mixed", false)}>
+                {generateFromConcepts ? "מבנה שונה לכל קונספט · עם טקסט" : "מבנה שונה לכל קופי · עם טקסט"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void generateAllFromCopy("mixed", true)}>
+                {generateFromConcepts ? "מבנה שונה לכל קונספט · בלי טקסט" : "מבנה שונה לכל קופי · בלי טקסט"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => requestSingleVariation()} disabled={loadingContext || !selected.client_id}>
-            {workInFlight ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
-            וריאציה אחת
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5" disabled={loadingContext || !selected.client_id}>
+                {workInFlight ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
+                וריאציה אחת
+                <ChevronDown className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[14rem]">
+              <DropdownMenuItem onClick={() => requestSingleVariation(undefined, false)}>
+                עם טקסט (סופי)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => requestSingleVariation(undefined, true)}>
+                בלי טקסט (שכבות)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       )}
       {workInFlight && (
@@ -2107,7 +2142,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               <p className="mt-2 max-w-md text-sm">
                 {generateFromConcepts
                   ? "כל קונספט מאושר מקבל קריאייטיב עם הקופי שמשויך אליו בגריד."
-                  : "כל וריאציית קופי מקבלת קריאייטיב סופי — תמונה עם הכותרת וה־CTA עליה."}
+                  : "כל וריאציית קופי מקבלת קריאייטיב — בוחרים עם טקסט על התמונה (סופי) או בלי (שכבות לעריכה)."}
                 {" "}לחצו על כרטיס, כתבו מה לתקן, ו{CREATIVE_DIRECT_LABEL_HE} יוצר וריאציה חדשה.
               </p>
               {copyJobs.length > 0 && (
@@ -2119,17 +2154,46 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               )}
               <div className="mt-5 flex flex-wrap justify-center gap-2">
                 <Button variant="outline" onClick={() => setWorkspacePanel("project")}>עריכת פרויקט</Button>
-                <Button className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600" onClick={() => void generateAllFromCopy("same")} disabled={loadingContext || !selected.client_id}>
-                  {workInFlight ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                  {generateAllLabel}
-                </Button>
-                <Button variant="outline" className="gap-2" onClick={() => requestSingleVariation()} disabled={loadingContext || !selected.client_id}>
-                  {workInFlight ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                  וריאציה אחת
-                </Button>
-                <Button variant="outline" className="gap-2" onClick={() => void generateAllFromCopy("mixed")} disabled={loadingContext || !selected.client_id}>
-                  {generateFromConcepts ? "מבנה שונה לכל קונספט" : "מבנה שונה לכל קופי"}
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="gap-2 bg-gradient-to-r from-pink-600 to-violet-600" disabled={loadingContext || !selected.client_id}>
+                      {workInFlight ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                      {generateAllLabel}
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="center" className="min-w-[17rem]">
+                    <DropdownMenuItem onClick={() => void generateAllFromCopy("same", false)}>
+                      {generateFromConcepts ? "לכל קונספט · עם טקסט (סופי)" : "לכל הקופי · עם טקסט (סופי)"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void generateAllFromCopy("same", true)}>
+                      {generateFromConcepts ? "לכל קונספט · בלי טקסט (שכבות)" : "לכל הקופי · בלי טקסט (שכבות)"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void generateAllFromCopy("mixed", false)}>
+                      {generateFromConcepts ? "מבנה שונה לכל קונספט · עם טקסט" : "מבנה שונה לכל קופי · עם טקסט"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void generateAllFromCopy("mixed", true)}>
+                      {generateFromConcepts ? "מבנה שונה לכל קונספט · בלי טקסט" : "מבנה שונה לכל קופי · בלי טקסט"}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="gap-2" disabled={loadingContext || !selected.client_id}>
+                      {workInFlight ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                      וריאציה אחת
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="center" className="min-w-[14rem]">
+                    <DropdownMenuItem onClick={() => requestSingleVariation(undefined, false)}>
+                      עם טקסט (סופי)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => requestSingleVariation(undefined, true)}>
+                      בלי טקסט (שכבות)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 {workInFlight && (
                   <Button variant="destructive" className="gap-2" onClick={stopGeneration}>
                     <Square className="h-4 w-4 fill-current" />עצור
@@ -2216,9 +2280,25 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           <DialogHeader>
             <DialogTitle>איזה קונספט לצלם?</DialogTitle>
             <DialogDescription>
-              יש כמה קונספטים מאושרים. בחרו סצנה אחת — בלי זה תמיד יוצא הקונספט הראשון.
+              יש כמה קונספטים מאושרים. בחרו סצנה אחת — ובאיזה מצב טקסט ליצור.
             </DialogDescription>
           </DialogHeader>
+          <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2">
+            <span className="text-xs text-muted-foreground">מצב יצירה</span>
+            <div className="flex items-center gap-2">
+              <span className={`text-[11px] font-medium ${!conceptPickerLiveText ? "text-foreground" : "text-muted-foreground"}`}>
+                עם טקסט (סופי)
+              </span>
+              <Switch
+                checked={conceptPickerLiveText}
+                onCheckedChange={setConceptPickerLiveText}
+                aria-label="מצב טקסט ליצירה מהקונספט"
+              />
+              <span className={`text-[11px] font-medium ${conceptPickerLiveText ? "text-foreground" : "text-muted-foreground"}`}>
+                בלי טקסט (שכבות)
+              </span>
+            </div>
+          </div>
           <ScrollArea className="max-h-80">
             <div className="space-y-2 py-2">
               {getApprovedCopyConcepts(selected).map((concept) => {
@@ -2228,7 +2308,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                   <button
                     key={concept.id}
                     type="button"
-                    onClick={() => requestSingleVariation(concept.id)}
+                    onClick={() => requestSingleVariation(concept.id, conceptPickerLiveText)}
                     className="w-full rounded-xl border p-3 text-right hover:bg-muted/50 disabled:opacity-60"
                   >
                     <div className="flex items-start justify-between gap-2">
