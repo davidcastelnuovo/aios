@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { recallTranscriptToText } from './recall.ts'
+import { recallTranscriptToText, RecallApiError, isRecallCreditError, isRecallCreditHttp, formatRecallBotHours, recallBillingDashboardUrl, recallCreditErrorMessage, recallBudgetThreshold, shouldRunRecallCreditCanary } from './recall.ts'
 
 // Shape of Recall's v1.11 transcript download: a top-level array of
 // per-participant segments, each holding a flat list of words.
@@ -64,4 +64,71 @@ test('still supports the utterances schema', () => {
 
 test('still supports a plain text transcript', () => {
   assert.equal(recallTranscriptToText({ text: 'תמלול פשוט' }), 'תמלול פשוט')
+})
+
+test('detects Recall 402 as a credit error', () => {
+  assert.equal(isRecallCreditHttp(402, ''), true)
+  assert.equal(isRecallCreditHttp(400, 'insufficient credit balance'), true)
+  assert.equal(isRecallCreditHttp(500, 'oops'), false)
+  const err = new RecallApiError(402, '{"code":"payment_required"}', recallCreditErrorMessage('eu-central-1'))
+  assert.equal(isRecallCreditError(err), true)
+  assert.match(err.message, /eu-central-1\.recall\.ai\/dashboard\/billing\/usage/)
+  assert.equal(isRecallCreditError(new Error('Recall create bot failed (502): nope')), false)
+})
+
+test('formats bot hours and billing dashboard URL', () => {
+  assert.equal(formatRecallBotHours(30), '1 דק׳')
+  assert.equal(formatRecallBotHours(3600), '1.0 שעות')
+  assert.equal(formatRecallBotHours(18 * 3600), '18 שעות')
+  assert.equal(
+    recallBillingDashboardUrl('eu-central-1'),
+    'https://eu-central-1.recall.ai/dashboard/billing/usage',
+  )
+})
+
+test('budget thresholds fire at 80% then 95%', () => {
+  assert.equal(recallBudgetThreshold(7.9 * 3600, 10), null)
+  assert.equal(recallBudgetThreshold(8 * 3600, 10), 'budget_80')
+  assert.equal(recallBudgetThreshold(9.5 * 3600, 10), 'budget_95')
+  assert.equal(recallBudgetThreshold(100, 0), null)
+})
+
+test('credit canary runs on first check, every 3h while ok, every 30m while down', () => {
+  const now = Date.parse('2026-08-26T12:00:00Z')
+  assert.equal(shouldRunRecallCreditCanary([], now), true)
+
+  const okRecent = [{
+    status: 'ok',
+    detail: 'קרדיט פעיל · 1.0 שעות החודש · נבדק עכשיו',
+    checked_at: '2026-08-26T10:00:00Z', // 2h ago
+  }]
+  assert.equal(shouldRunRecallCreditCanary(okRecent, now), false)
+
+  const okStale = [{
+    status: 'ok',
+    detail: 'קרדיט פעיל · נבדק עכשיו',
+    checked_at: '2026-08-26T08:59:00Z', // 3h1m ago
+  }]
+  assert.equal(shouldRunRecallCreditCanary(okStale, now), true)
+
+  const downFresh = [{
+    status: 'down',
+    detail: 'הקרדיט נגמר · נבדק עכשיו',
+    checked_at: '2026-08-26T11:45:00Z', // 15m ago
+  }]
+  assert.equal(shouldRunRecallCreditCanary(downFresh, now), false)
+
+  const downStale = [{
+    status: 'down',
+    detail: 'הקרדיט נגמר · נבדק עכשיו',
+    checked_at: '2026-08-26T11:29:00Z', // 31m ago
+  }]
+  assert.equal(shouldRunRecallCreditCanary(downStale, now), true)
+
+  // Cached rows without the marker should not hide the last real canary.
+  const cachedAfterCanary = [
+    { status: 'ok', detail: 'קרדיט פעיל · 1.0 שעות החודש', checked_at: '2026-08-26T11:50:00Z' },
+    { status: 'ok', detail: 'קרדיט פעיל · נבדק עכשיו', checked_at: '2026-08-26T10:00:00Z' },
+  ]
+  assert.equal(shouldRunRecallCreditCanary(cachedAfterCanary, now), false)
 })

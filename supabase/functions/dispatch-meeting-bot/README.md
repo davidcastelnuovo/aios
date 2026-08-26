@@ -39,7 +39,9 @@ curl -X POST "$SUPABASE_URL/functions/v1/match-recordings-calendar" \
 | `RECALL_API_KEY` | כן | API key מ-[Recall.ai](https://www.recall.ai/) |
 | `RECALL_REGION` | **כן (EU)** | `eu-central-1` לאירופה (Frankfurt). ברירת מחדל בקוד: `us-east-1` — בלי הגדרה מקבלים 401 |
 | `RECALL_WORKSPACE_VERIFICATION_SECRET` | מומלץ | `whsec_...` לאימות webhooks |
-| `RECALL_ZOOM_BOT_EMAIL` | לא | רק לפגישות Zoom שדורשות אימייל (למשל `carmen@aios.co.il`) — **לא צריך חשבון Zoom אמיתי** |
+| `RECALL_MONTHLY_HOURS_BUDGET` | לא | תקציב שעות בוט לחודש. כשמוגדר, כרמן מתריעה ב-WhatsApp ב-80%/95% שימוש (לפני שהקרדיט נגמר לגמרי) |
+
+`carmen-health-probe` (cron כל 10 דקות) בודק קרדיט Recall מראש: קריאת שימוש חודשי + canary שיוצר בוט מתוזמן ומחק אותו. אם Recall מחזיר 402, דוד מקבל WhatsApp בלי להזמין את כרמן לזום. `dispatch-meeting-bot` גם מתריע ב-402 כרשת ביטחון.
 
 ## Webhook ב-Recall Dashboard
 
