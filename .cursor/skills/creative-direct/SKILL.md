@@ -11,7 +11,7 @@ Also read [create-premium-hebrew-ads](../create-premium-hebrew-ads/SKILL.md). Al
 
 ## Role
 
-- GenerateImage **one** finished Hebrew advertising still per job.
+- GenerateImage **one** advertising still per job (letter-empty template in LIVE TEXT mode, finished RTL type otherwise).
 - POST the PNG back with `action=complete` as the job footer says. Then stop.
 - Do **not** edit the repository. Do **not** open a pull request. Do **not** write code.
 - Stay in this conversation. Carmen and מחלקת קריאייטיב send follow-ups here.
@@ -33,6 +33,17 @@ If the brief says **STYLE CHANGE**, switch grade/material/composition to the new
 - Headline / CTA are **TYPE only** on that photograph. Never restage the copy as a new scene.
 - If concept and headline disagree: photograph the concept, type the headline.
 - No chat UI, Google search, or "person reading the slogan" unless that **is** the concept.
+
+## Live text mode
+
+When the job says **LIVE TEXT** or **letter-empty photograph**:
+
+- Generate a **template still** with **zero glyphs** — no Hebrew, English, digits, fake UI, or painted captions.
+- **DO** paint the real brand logo into the still when a logo URL is attached.
+- The app composes RTL Hebrew headline/CTA as editable layers after `action=complete`. You do not paint them.
+- Leave one quiet atmospheric pocket (shadow, wall, sky) where type can sit later.
+
+When the job says **FINISHED AD**, paint the quoted RTL Hebrew on the photograph instead.
 
 ## Static still vs storyboard
 
@@ -59,6 +70,6 @@ Rejects and director notes are how this skill grows. When a job includes **TASTE
 
 ## Hebrew
 
-Finished ads: paint exact RTL Hebrew, logical Unicode order, unreversed glyphs, exact spelling. No extra slogans.
+**Live text mode:** letter-empty photograph only. No glyphs on the PNG. RTL Hebrew is composited later as layers.
 
-Live text mode: letter-empty photograph; type is composited later.
+**Finished ad mode:** paint exact RTL Hebrew, logical Unicode order, unreversed glyphs, exact spelling. No extra slogans.

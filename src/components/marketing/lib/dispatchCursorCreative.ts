@@ -89,6 +89,7 @@ export async function dispatchCursorCreative({
   variation,
   prompt,
   lesson,
+  jobMeta,
   signal,
 }: {
   supabase: SupabaseClient;
@@ -97,6 +98,15 @@ export async function dispatchCursorCreative({
   variation: Pick<CreativeVariation, "id" | "name" | "format" | "copyKey" | "copyLabel" | "copyText" | "parentId" | "conceptId" | "conceptName">;
   prompt: string;
   lesson?: string;
+  jobMeta?: {
+    visual_style?: string;
+    composition_id?: string;
+    brand_colors?: string[];
+    live_text_layers?: boolean;
+    title?: string;
+    logo_url?: string;
+    composition_seed?: string;
+  };
   signal?: AbortSignal;
 }): Promise<{ agentUrl: string; jobId: string }> {
   if (signal?.aborted) throw new Error(GENERATION_ABORTED);
@@ -106,6 +116,7 @@ export async function dispatchCursorCreative({
     item_id: itemId,
     prompt,
     lesson: lesson?.trim() || undefined,
+    job_meta: jobMeta,
     variation: {
       id: variation.id,
       name: variation.name,

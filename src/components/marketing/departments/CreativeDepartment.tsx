@@ -1052,6 +1052,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         },
         prompt: agentPrompt,
         lesson: directorNote,
+        jobMeta: {
+          visual_style: style.id,
+          composition_id: compositionId,
+          brand_colors: kit.brandBook?.colors,
+          live_text_layers: liveTextLayers,
+          title: selected.title ?? undefined,
+          logo_url: resolvedLogoUrl ?? kit.logoUrl,
+          composition_seed: `${copyKey || ""}|${copyLabel || ""}|${live.length}|${copyText.slice(0, 48)}`,
+        },
         signal: jobSignal,
       });
       cursorJobIdsRef.current.add(dispatched.jobId);
@@ -1065,10 +1074,21 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           signal: jobSignal,
         });
         throwIfGenerationAborted(!!jobSignal?.aborted);
+        const hydrated = hydrateVariationLayers(
+          fromAgent,
+          fromAgent.copyText || copyText,
+          selected.title ?? undefined,
+          fromAgent.visualStyle ?? style.id,
+          resolvedLogoUrl ?? kit.logoUrl,
+          kit.brandBook?.colors,
+          liveTextLayers,
+        );
         const stamped = {
-          ...fromAgent,
-          conceptId: chosenConcept?.id ?? fromAgent.conceptId,
-          conceptName: chosenConcept?.name ?? fromAgent.conceptName,
+          ...hydrated,
+          visualStyle: hydrated.visualStyle ?? style.id,
+          compositionId: hydrated.compositionId ?? compositionId,
+          conceptId: chosenConcept?.id ?? hydrated.conceptId,
+          conceptName: chosenConcept?.name ?? hydrated.conceptName,
         };
         return replaceId ? { ...stamped, id: replaceId } : stamped;
       } finally {
