@@ -93,7 +93,7 @@ const TOOLS = [
   {
     name: "generate_creative",
     description:
-      "Send a job to AIOS Creative Direct — the dedicated image chat (like Carmen Direct). " +
+      "Send a job to AIOS Creative Direct — the dedicated image chat. " +
       "Follow-ups go to the same sticky conversation, not a new coding agent. " +
       "It generates a finished Hebrew advertising still with GenerateImage and writes the PNG onto the marketing work item. " +
       "Use when David, Carmen, or מחלקת קריאייטיב needs images.",
@@ -580,7 +580,7 @@ async function handleToolCall(
       cursorAgentId: String(data.cursor_agent_id || ""),
     });
     return (
-      `✅ נשלח לצ׳אט Creative Direct (אותו צ׳אט דביק — כמו כרמן ישיר)` +
+      `✅ נשלח לקריאייטיב דיירקט (אותו צ׳אט דביק)` +
       (data.agent_url ? `\nSession: ${data.agent_url}` : "") +
       `\nהתמונה תופיע על פרויקט הקריאייטיב אחרי שהצ׳אט מעלה אותה.`
     );

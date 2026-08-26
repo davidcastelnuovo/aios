@@ -23,5 +23,5 @@ test("Cloud Agent spend is distinct from a missing function", () => {
   assert.equal(isCursorCreativeSpendError(new Error("unauthorized")), false);
   assert.match(CURSOR_CREATIVE_SPEND_MESSAGE, /Pro\+/);
   assert.match(CURSOR_CREATIVE_SPEND_MESSAGE, /dashboard\/spending/);
-  assert.match(CURSOR_CREATIVE_SPEND_MESSAGE, /Creative Direct/);
+  assert.match(CURSOR_CREATIVE_SPEND_MESSAGE, /קריאייטיב דיירקט/);
 });

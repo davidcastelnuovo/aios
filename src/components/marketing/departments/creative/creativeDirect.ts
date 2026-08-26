@@ -2,6 +2,9 @@
 
 export const CREATIVE_DIRECT_NAME = "AIOS Creative Direct";
 
+/** User-facing Hebrew label — no “כמו כרמן ישיר”. */
+export const CREATIVE_DIRECT_LABEL_HE = "קריאייטיב דיירקט";
+
 /** Prefix stored on `cursor_dispatches.request_text` when the sticky image chat is opened. */
 export const CREATIVE_DIRECT_OPEN_MARKER = "[CREATIVE AGENT] opened Creative Direct";
 

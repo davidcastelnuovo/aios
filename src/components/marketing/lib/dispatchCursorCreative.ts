@@ -31,7 +31,7 @@ async function invokeCreativeDirect(
   const result = await supabase.functions.invoke("cursor-generate-creative", { body, signal });
   if (result.error || result.data?.error) {
     const message = result.error
-      ? await invokeErrorMessage(result.error, result.data, "צ׳אט Creative Direct לא זמין", result.response)
+      ? await invokeErrorMessage(result.error, result.data, "קריאייטיב דיירקט לא זמין", result.response)
       : String(result.data.error);
     throw new Error(message);
   }
@@ -78,7 +78,7 @@ export async function ensureCreativeDirect({
 }): Promise<CreativeDirectChat> {
   const data = await invokeCreativeDirect(supabase, { action: "ensure", tenant_id: tenantId });
   const chat = parseChat(data);
-  if (!chat.agentUrl) throw new Error("צ׳אט Creative Direct לא החזיר כתובת סשן");
+  if (!chat.agentUrl) throw new Error("קריאייטיב דיירקט לא החזיר כתובת סשן");
   return chat;
 }
 
@@ -115,7 +115,7 @@ export async function dispatchCursorCreative({
   }, signal);
   const agentUrl = String(data.agent_url ?? "");
   const jobId = String(data.job_id ?? "");
-  if (!agentUrl || !jobId) throw new Error("צ׳אט Creative Direct לא החזיר כתובת סשן");
+  if (!agentUrl || !jobId) throw new Error("קריאייטיב דיירקט לא החזיר כתובת סשן");
   return { agentUrl, jobId };
 }
 
@@ -154,9 +154,9 @@ export async function waitForCursorCreative({
     const job = jobs.find((row) => row && typeof row === "object" && (row as { variation_id?: string }).variation_id === variationId) as
       | { status?: string; error?: string }
       | undefined;
-    if (job?.status === "failed") throw new Error(job.error || "צ׳אט Creative Direct נכשל");
+    if (job?.status === "failed") throw new Error(job.error || "קריאייטיב דיירקט נכשל");
     if (job?.status === "cancelled") throw new Error(GENERATION_ABORTED);
     await sleep(POLL_MS, signal);
   }
-  throw new Error("צ׳אט Creative Direct לא סיים בזמן");
+  throw new Error("קריאייטיב דיירקט לא סיים בזמן");
 }

@@ -1,3 +1,4 @@
+import { CREATIVE_DIRECT_LABEL_HE } from "@/components/marketing/departments/creative/creativeDirect";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Loader2, MessageCircle, Sparkles } from "lucide-react";
 
@@ -18,7 +19,7 @@ export function CreativeDirectDock({ agentUrl, opening, generating, onOpen }: Pr
         <MessageCircle className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-foreground">צ׳אט Creative Direct · כמו כרמן ישיר</p>
+        <p className="text-xs font-semibold text-foreground">{CREATIVE_DIRECT_LABEL_HE}</p>
         <p className="text-[11px] text-muted-foreground">
           כרמן ומחלקת קריאייטיב מבקשות תמונות כאן. הצ׳אט יוצר את הקריאייטיב ומעלה אותו לפרויקט.
           {agentUrl ? " · הצ׳אט פתוח" : " · עדיין לא נפתח"}

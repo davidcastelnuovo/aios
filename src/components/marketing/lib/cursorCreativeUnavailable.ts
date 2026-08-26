@@ -15,7 +15,7 @@ export const isCursorCreativeSpendError = (error: unknown): boolean => {
 
 export const CURSOR_CREATIVE_SPEND_MESSAGE = [
   "מנוי Pro+ ($60) מכסה את Cursor במחשב — Composer/Grok במאגר הכלול.",
-  "צ׳אט Creative Direct מפעיל Cloud Agent דרך API. זה מאגר נפרד, וחייב On-demand usage ב־cursor.com/dashboard/spending",
+  "קריאייטיב דיירקט מפעיל Cloud Agent דרך API. זה מאגר נפרד, וחייב On-demand usage ב־cursor.com/dashboard/spending",
   "(עם לפחות ~$2 מרווח מתחת לתקרת ההוצאה). בלי זה Cursor מחזיר «אין קרדיט» גם כשהמנוי פעיל.",
   "בינתיים ניצור את הקריאייטיב מקומית.",
 ].join(" ");

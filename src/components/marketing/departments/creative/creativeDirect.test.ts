@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CREATIVE_DIRECT_IDENTITY,
+  CREATIVE_DIRECT_LABEL_HE,
   CREATIVE_DIRECT_NAME,
   CREATIVE_DIRECT_OPEN_MARKER,
   CREATIVE_DIRECT_OPEN_PROMPT,
 } from "./creativeDirect.ts";
 
 test("Creative Direct identity is a dedicated image chat, not a coding agent", () => {
+  assert.equal(CREATIVE_DIRECT_LABEL_HE, "קריאייטיב דיירקט");
+  assert.doesNotMatch(CREATIVE_DIRECT_LABEL_HE, /כרמן ישיר/);
   assert.match(CREATIVE_DIRECT_NAME, /Creative Direct/);
   assert.match(CREATIVE_DIRECT_IDENTITY, /Carmen Direct/);
   assert.match(CREATIVE_DIRECT_IDENTITY, /GenerateImage/);

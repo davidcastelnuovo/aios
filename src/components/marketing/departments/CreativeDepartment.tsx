@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
 import { CreativeDirectDock } from "@/components/marketing/departments/creative/CreativeDirectDock";
+import { CREATIVE_DIRECT_LABEL_HE } from "@/components/marketing/departments/creative/creativeDirect";
 import { dispatchCursorCreative, ensureCreativeDirect, getCreativeDirectStatus, isCursorCreativeUnavailable, waitForCursorCreative } from "@/components/marketing/lib/dispatchCursorCreative";
 import { CURSOR_CREATIVE_SPEND_MESSAGE, isCursorCreativeSpendError } from "@/components/marketing/lib/cursorCreativeUnavailable";
 import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
@@ -964,7 +965,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       });
       creativeJobIdRef.current = dispatched.jobId;
       setCreativeAgentUrl(dispatched.agentUrl);
-      setGenerateProgress((current) => current ?? `צ׳אט Creative Direct · ${copyLabel || name || "וריאציה"}`);
+      setGenerateProgress((current) => current ?? `${CREATIVE_DIRECT_LABEL_HE} · ${copyLabel || name || "וריאציה"}`);
       const fromAgent = await waitForCursorCreative({
         supabase,
         tenantId,
@@ -979,7 +980,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       if (isCursorCreativeSpendError(error)) {
         toast.warning(CURSOR_CREATIVE_SPEND_MESSAGE);
       } else if (isCursorCreativeUnavailable(error)) {
-        toast.message("צ׳אט Creative Direct לא זמין — נופל חזרה ליצירה המקומית");
+        toast.message(`${CREATIVE_DIRECT_LABEL_HE} לא זמין — נופל חזרה ליצירה המקומית`);
       } else {
         throw error;
       }
@@ -1180,11 +1181,11 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       setCreativeAgentUrl(chat.agentUrl);
       await queryClient.invalidateQueries({ queryKey: ["creative-direct-chat", tenantId] });
       toast.success(chat.reused
-        ? "צ׳אט Creative Direct כבר פתוח"
-        : "נפתח צ׳אט Creative Direct — כרמן ומחלקת קריאייטיב שולחות לכאן");
+        ? `${CREATIVE_DIRECT_LABEL_HE} כבר פתוח`
+        : `נפתח ${CREATIVE_DIRECT_LABEL_HE} — כרמן ומחלקת קריאייטיב שולחות לכאן`);
     } catch (error: unknown) {
       if (isCursorCreativeSpendError(error)) toast.warning(CURSOR_CREATIVE_SPEND_MESSAGE);
-      else toast.error(errorMessage(error, "פתיחת צ׳אט Creative Direct נכשלה"));
+      else toast.error(errorMessage(error, `פתיחת ${CREATIVE_DIRECT_LABEL_HE} נכשלה`));
     } finally {
       setOpeningCreativeDirect(false);
     }
@@ -1629,7 +1630,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-bold">{selected.title}</h2>
         <p className="text-[11px] text-muted-foreground">
-          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · צ׳אט Creative Direct · {liveTextLayers ? "טקסט חי (שכבות)" : "קריאייטיב סופי"}
+          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · {CREATIVE_DIRECT_LABEL_HE} · {liveTextLayers ? "טקסט חי (שכבות)" : "קריאייטיב סופי"}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
@@ -1813,7 +1814,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
               <h3 className="text-lg font-bold text-foreground">גריד וריאציות</h3>
               <p className="mt-2 max-w-md text-sm">
-                כל וריאציית קופי מקבלת קריאייטיב סופי — תמונה עם הכותרת וה־CTA עליה. לחצו על כרטיס, כתבו מה לתקן, וצ׳אט Creative Direct יוצר וריאציה חדשה.
+                כל וריאציית קופי מקבלת קריאייטיב סופי — תמונה עם הכותרת וה־CTA עליה. לחצו על כרטיס, כתבו מה לתקן, ו{CREATIVE_DIRECT_LABEL_HE} יוצר וריאציה חדשה.
               </p>
               {copyBlocks.length > 0 && (
                 <p className="mt-2 text-xs">נמצאו {copyBlocks.length} וריאציות קופי משויכות</p>
