@@ -57,9 +57,11 @@ export interface AiDetectionScore {
 
 export interface CompetitorResult {
   competitor_name: string;
+  prompt_id?: string | null;
   platform: string;
   is_mentioned: boolean;
   position: number | null;
+  scanned_at?: string | null;
 }
 
 // Helper to safely query tables that might not exist yet
@@ -308,6 +310,43 @@ export function useAiDetectionProject(projectId: string | null) {
     }
   };
 
+  const importPrompts = useMutation({
+    mutationFn: async (items: { prompt: string; category: string }[]) => {
+      if (!projectId || !tenantId) throw new Error("No project");
+      const { data: { user } } = await supabase.auth.getUser();
+      const existing = await safeQuery(() =>
+        supabase.from("ai_detection_prompts").select("prompt").eq("brand_id", projectId).eq("is_active", true)
+      );
+      const seen = new Set(((existing || []) as Array<{ prompt: string }>).map((row) => row.prompt.trim().toLowerCase().replace(/\s+/g, " ")));
+      const inserts = items
+        .map((item) => ({ prompt: item.prompt.trim(), category: item.category || "geo" }))
+        .filter((item) => {
+          const key = item.prompt.toLowerCase().replace(/\s+/g, " ");
+          if (!item.prompt || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .map((item) => ({
+          tenant_id: tenantId,
+          brand_id: projectId,
+          prompt: item.prompt,
+          category: item.category,
+          is_active: true,
+          created_by: user?.id,
+        }));
+      if (inserts.length === 0) return 0;
+      const { error } = await supabase.from("ai_detection_prompts").insert(inserts);
+      if (error) throw error;
+      return inserts.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ["ai-detection-prompts", projectId] });
+      if (count === 0) toast.info("כל השאלות האלה כבר במעקב");
+      else toast.success(`${count} שאלות נוספו למעקב`);
+    },
+    onError: (error) => toast.error("שגיאה: " + error.message),
+  });
+
   const editPrompt = useMutation({
     mutationFn: async ({ promptId, prompt, category }: { promptId: string; prompt: string; category: string }) => {
       const { error } = await supabase.from("ai_detection_prompts").update({ prompt, category }).eq("id", promptId);
@@ -406,6 +445,7 @@ export function useAiDetectionProject(projectId: string | null) {
     isLoading: promptsLoading || resultsLoading,
     isScanning,
     addPrompt,
+    importPrompts,
     editPrompt,
     deletePrompt,
     generatePrompts,

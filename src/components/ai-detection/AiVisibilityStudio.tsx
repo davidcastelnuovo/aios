@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AiVisibilityScore } from "@/components/ai-detection/AiVisibilityScore";
 import { PlatformBreakdown } from "@/components/ai-detection/PlatformBreakdown";
-import { PromptTracker, TrackedPrompt } from "@/components/ai-detection/PromptTracker";
+import { PromptTracker } from "@/components/ai-detection/PromptTracker";
 import { CompetitorAnalysis } from "@/components/ai-detection/CompetitorAnalysis";
 import { CitationSources } from "@/components/ai-detection/CitationSources";
 import { TrendChart } from "@/components/ai-detection/TrendChart";
@@ -17,18 +17,16 @@ import { ScanHistory } from "@/components/ai-detection/ScanHistory";
 import { Eye, Loader2, Radar, Plus, ArrowRight, Globe, Settings } from "lucide-react";
 import { useAiDetection, useAiDetectionProject, AiDetectionBrand } from "@/hooks/useAiDetection";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow } from "date-fns";
-import { he } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
-import { ALL_CLIENTS_FILTER, type MarketingClientFilter } from "@/components/marketing/clientFilter";
-
-const staticRecommendations = [
-  { id: "1", title: "הוסף דף FAQ מקיף לאתר", description: "מודלי AI מעדיפים מקורות עם תשובות מובנות לשאלות נפוצות. הוסף דף FAQ עם 20+ שאלות ותשובות רלוונטיות.", impact: "high" as const, type: "onsite" as const },
-  { id: "2", title: "פרסם מאמרי השוואה", description: "צור מאמרי השוואה בין המוצר שלך למתחרים. תוכן כזה מצוטט לעתים קרובות על ידי AI בתשובות.", impact: "high" as const, type: "content" as const },
-  { id: "3", title: "שפר נוכחות ב-G2 ו-Capterra", description: "הגדל את מספר הביקורות באתרי סקירות. ביקורות חיוביות משפיעות ישירות על המלצות AI.", impact: "medium" as const, type: "offsite" as const },
-  { id: "4", title: "הוסף Schema Markup", description: "הוסף נתונים מובנים (structured data) לאתר שלך כדי לעזור ל-AI להבין טוב יותר את המוצר.", impact: "medium" as const, type: "technical" as const },
-  { id: "5", title: "צור תוכן בבלוג על מגמות בתעשייה", description: "פרסם תוכן עדכני ורלוונטי שממצב אותך כמוביל דעה בתחום.", impact: "low" as const, type: "content" as const },
-];
+import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
+import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
+import {
+  buildVisibilitySummary,
+  collectGeoQuestions,
+  normalizePromptText,
+  type VisibilityTip,
+} from "@/lib/aiVisibilityInsights";
+import { toast } from "sonner";
 
 interface AiVisibilityStudioProps {
   tenantId: string;
@@ -80,6 +78,8 @@ export function AiVisibilityStudio({ tenantId, clientFilter }: AiVisibilityStudi
     return (
       <ProjectDashboard
         project={selectedProject}
+        tenantId={tenantId}
+        clientFilter={clientFilter}
         onBack={() => setSelectedProject(null)}
         onUpdate={(data) => updateProject.mutate({ projectId: selectedProject.id, data })}
       />
@@ -96,7 +96,7 @@ export function AiVisibilityStudio({ tenantId, clientFilter }: AiVisibilityStudi
             </div>
             <div>
               <h2 className="text-2xl font-bold">נראות AI</h2>
-              <p className="text-sm text-muted-foreground">מדידת המותג בתשובות ChatGPT ומנועי AI — חלק ממחלקת SEO</p>
+              <p className="text-sm text-muted-foreground">מדידת המותג בתשובות ChatGPT — טיפים הופכים למשימות במחלקת SEO</p>
             </div>
           </div>
           <CreateProjectDialog
@@ -116,7 +116,7 @@ export function AiVisibilityStudio({ tenantId, clientFilter }: AiVisibilityStudi
               <Radar className="mx-auto h-12 w-12 text-muted-foreground" />
               <h3 className="text-lg font-semibold">צור את פרויקט הנראות הראשון</h3>
               <p className="text-sm text-muted-foreground">
-                הוסף מותג, ביטויי מפתח ומתחרים. אחר כך ייצר פרומפטים והפעל סריקה כדי לראות אם מנועי AI ממליצים עליכם.
+                הוסף מותג, ביטויי מפתח ומתחרים. ייבאו שאלות מתוכנית GEO, ייצרו פרומפטים והפעילו סריקה — כל טיפ יכול להפוך למשימת תוכן ב-SEO.
               </p>
               <CreateProjectDialog
                 trigger={<Button className="bg-emerald-600 hover:bg-emerald-700"><Plus className="ml-1 h-4 w-4" />צור פרויקט</Button>}
@@ -135,79 +135,122 @@ export function AiVisibilityStudio({ tenantId, clientFilter }: AiVisibilityStudi
 
 function ProjectDashboard({
   project,
+  tenantId,
+  clientFilter,
   onBack,
   onUpdate,
 }: {
   project: AiDetectionBrand;
+  tenantId: string;
+  clientFilter: MarketingClientFilter;
   onBack: () => void;
   onUpdate: (data: ProjectFormData) => void;
 }) {
+  const queryClient = useQueryClient();
+  const selectedClientId = clientFilter && clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null;
+  const [creatingId, setCreatingId] = useState<string | null>(null);
   const {
-    prompts, results, scores, currentScore, previousScore,
+    prompts, results, scores, competitorResults, currentScore, previousScore,
     isScanning, isGenerating,
-    addPrompt, editPrompt, deletePrompt, generatePrompts, runScan,
-    getPromptResults, getCompetitorScores,
+    addPrompt, importPrompts, editPrompt, deletePrompt, generatePrompts, runScan,
+    getCompetitorScores,
   } = useAiDetectionProject(project.id);
 
-  const trackedPrompts: TrackedPrompt[] = prompts.map((p) => {
-    const pr = getPromptResults(p.id);
-    const latestScan = Object.values(pr).sort((a, b) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime())[0];
-    const sentiments = Object.values(pr).map((r) => r.sentiment).filter(Boolean);
-    const sentiment = sentiments.includes("positive") ? "positive" : sentiments.includes("negative") ? "negative" : sentiments.length > 0 ? "neutral" : null;
-    return {
-      id: p.id,
-      prompt: p.prompt,
-      category: p.category,
-      lastChecked: latestScan ? formatDistanceToNow(new Date(latestScan.scanned_at), { addSuffix: true, locale: he }) : "טרם נסרק",
-      platforms: {
-        chatgpt: pr["chatgpt"]?.is_mentioned || false,
-        gemini: pr["gemini"]?.is_mentioned || false,
-        perplexity: pr["perplexity"]?.is_mentioned || false,
-      },
-      position: Object.values(pr).find((r) => r.position)?.position || null,
-      sentiment: sentiment as TrackedPrompt["sentiment"],
-    };
+  const summary = useMemo(() => buildVisibilitySummary({
+    prompts: prompts.map((prompt) => ({ id: prompt.id, prompt: prompt.prompt, category: prompt.category })),
+    results,
+    competitorResults,
+    brandUrl: project.url,
+  }), [prompts, results, competitorResults, project.url]);
+
+  const { data: geoQuestions = [] } = useQuery({
+    queryKey: ["ai-visibility-geo-questions", tenantId, clientFilter],
+    queryFn: async () => {
+      let query = supabase.from("marketing_work_items").select("payload").eq("tenant_id", tenantId);
+      query = applyClientFilter(query, clientFilter);
+      const { data, error } = await query;
+      if (error) throw error;
+      return collectGeoQuestions((data ?? []) as Array<{ payload?: Record<string, unknown> | null }>);
+    },
   });
 
-  const platformBreakdown = ["chatgpt", "gemini", "perplexity"].map((p) => {
-    const names: Record<string, string> = { chatgpt: "ChatGPT", gemini: "Gemini", perplexity: "Perplexity" };
-    const icons: Record<string, string> = { chatgpt: "🤖", gemini: "✨", perplexity: "🔍" };
-    const pResults = results.filter((r) => r.platform === p);
-    const latestByPrompt: Record<string, typeof pResults[0]> = {};
-    for (const r of pResults) {
-      if (!latestByPrompt[r.prompt_id] || new Date(r.scanned_at) > new Date(latestByPrompt[r.prompt_id].scanned_at)) latestByPrompt[r.prompt_id] = r;
-    }
-    const latest = Object.values(latestByPrompt);
-    const mentions = latest.filter((r) => r.is_mentioned).length;
-    const total = latest.length || prompts.length || 1;
-    return { name: names[p], score: total > 0 ? Math.round((mentions / total) * 100) : 0, mentions, total, icon: icons[p], color: "" };
-  });
+  const trackedKeys = useMemo(() => new Set(prompts.map((prompt) => normalizePromptText(prompt.prompt))), [prompts]);
+  const importableGeo = useMemo(
+    () => geoQuestions.filter((question) => !trackedKeys.has(normalizePromptText(question))),
+    [geoQuestions, trackedKeys],
+  );
 
-  const trendData = scores.map((s) => ({
-    date: new Date(s.week_start).toLocaleDateString("he-IL", { month: "short", day: "numeric" }),
-    score: s.score, chatgpt: s.chatgpt_score || 0, gemini: s.gemini_score || 0, perplexity: s.perplexity_score || 0,
-  }));
-
-  const citations = (() => {
-    const map: Record<string, number> = {};
-    for (const r of results) {
-      if (r.citations) for (const url of r.citations) {
-        const domain = url.replace(/https?:\/\//, "").split("/")[0];
-        map[domain] = (map[domain] || 0) + 1;
+  const platformBreakdown = ["chatgpt"].map((platform) => {
+    const platformResults = results.filter((result) => result.platform === platform);
+    const latestByPrompt: Record<string, typeof platformResults[0]> = {};
+    for (const result of platformResults) {
+      if (!latestByPrompt[result.prompt_id] || new Date(result.scanned_at) > new Date(latestByPrompt[result.prompt_id].scanned_at)) {
+        latestByPrompt[result.prompt_id] = result;
       }
     }
-    return Object.entries(map).sort(([, a], [, b]) => b - a).slice(0, 10).map(([domain, count], i) => ({
-      id: String(i), source: domain, url: domain, mentions: count,
-      influence: (count > 10 ? "high" : count > 5 ? "medium" : "low") as "high" | "medium" | "low",
-      type: "blog" as const,
-    }));
-  })();
+    const latest = Object.values(latestByPrompt);
+    const mentions = latest.filter((result) => result.is_mentioned).length;
+    const total = latest.length || prompts.length || 1;
+    return { name: "ChatGPT", score: total > 0 ? Math.round((mentions / total) * 100) : 0, mentions, total, icon: "🤖", color: "" };
+  });
 
-  const totalMentions = results.filter((r) => r.is_mentioned).length;
-  const avgPosition = (() => {
-    const positions = results.filter((r) => r.position).map((r) => r.position!);
-    return positions.length > 0 ? Math.round(positions.reduce((a, b) => a + b, 0) / positions.length) : 0;
-  })();
+  const trendData = scores.map((score) => ({
+    date: new Date(score.week_start).toLocaleDateString("he-IL", { month: "short", day: "numeric" }),
+    score: score.score, chatgpt: score.chatgpt_score || 0, gemini: score.gemini_score || 0, perplexity: score.perplexity_score || 0,
+  }));
+
+  const createSeoTask = async (tip: VisibilityTip) => {
+    if (!selectedClientId) {
+      toast.error("בחרו לקוח במסנן כדי ליצור משימת SEO");
+      return;
+    }
+    setCreatingId(tip.id);
+    try {
+      const pipeline = await ensurePipelineForClient({ clientId: selectedClientId, tenantId, track: "seo_geo" });
+      if (!pipeline) throw new Error("לא ניתן לפתוח סביבת SEO/GEO");
+      const { data: stages, error: stageError } = await supabase
+        .from("marketing_pipeline_stages")
+        .select("id,stage_type")
+        .eq("pipeline_id", pipeline.id);
+      if (stageError) throw stageError;
+      const stageId = stages?.find((stage) => stage.stage_type === "target_seo")?.id ?? null;
+      const brief = [
+        tip.description,
+        `ראיה: ${tip.evidence}`,
+        tip.promptText ? `פרומפט שנמדד: ${tip.promptText}` : "",
+        `מותג: ${project.brand_name}`,
+      ].filter(Boolean).join("\n\n");
+      const { error } = await supabase.from("marketing_work_items").insert({
+        tenant_id: tenantId,
+        client_id: selectedClientId,
+        pipeline_id: pipeline.id,
+        current_stage_id: stageId,
+        title: tip.title.slice(0, 120),
+        status: "draft",
+        target_channel: "seo",
+        payload: {
+          brief_text: brief,
+          department: "seo",
+          intake_source: "ai_visibility",
+          geoQuestions: tip.promptText ? [tip.promptText] : [],
+          visibility_tip: {
+            id: tip.id,
+            type: tip.type,
+            impact: tip.impact,
+            promptId: tip.promptId ?? null,
+            brand_id: project.id,
+          },
+        },
+      });
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ["seo-department-items", clientFilter, tenantId] });
+      toast.success("נוצרה משימת תוכן במחלקת SEO");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "יצירת המשימה נכשלה");
+    } finally {
+      setCreatingId(null);
+    }
+  };
 
   return (
     <div className="min-h-0 flex-1 overflow-auto">
@@ -230,7 +273,7 @@ function ProjectDashboard({
                 {project.url && <span className="text-xs text-muted-foreground" dir="ltr">{project.url}</span>}
                 {project.keywords.length > 0 && (
                   <div className="flex gap-1">
-                    {project.keywords.slice(0, 3).map((kw) => <Badge key={kw} variant="outline" className="text-xs">{kw}</Badge>)}
+                    {project.keywords.slice(0, 3).map((keyword) => <Badge key={keyword} variant="outline" className="text-xs">{keyword}</Badge>)}
                     {project.keywords.length > 3 && <Badge variant="outline" className="text-xs">+{project.keywords.length - 3}</Badge>}
                   </div>
                 )}
@@ -250,6 +293,10 @@ function ProjectDashboard({
           </div>
         </div>
 
+        <p className="text-xs text-muted-foreground">
+          הסריקה רצה כרגע דרך ChatGPT. עמודות Gemini ו-Perplexity ישמרו כתוויות עד שיותקנו מתאמים אמיתיים — לא מציגים אותן כמנועים נפרדים ללקוח.
+        </p>
+
         <Tabs defaultValue="overview" dir="rtl">
           <TabsList>
             <TabsTrigger value="overview">סקירה כללית</TabsTrigger>
@@ -257,7 +304,7 @@ function ProjectDashboard({
             <TabsTrigger value="history">היסטוריית סריקות</TabsTrigger>
             <TabsTrigger value="competitors">מתחרים</TabsTrigger>
             <TabsTrigger value="citations">ציטוטים</TabsTrigger>
-            <TabsTrigger value="recommendations">המלצות</TabsTrigger>
+            <TabsTrigger value="recommendations">תוכנית פעולה ({summary.tips.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-6 space-y-6">
@@ -267,32 +314,50 @@ function ProjectDashboard({
                   <Radar className="mx-auto h-10 w-10 text-muted-foreground" />
                   <h3 className="font-semibold">הפרויקט מוכן</h3>
                   <p className="mx-auto max-w-md text-sm text-muted-foreground">
-                    הוסף פרומפטים (או ייצר אותם אוטומטית) והפעל סריקה כדי לראות אם המותג מוזכר במנועי AI.
+                    ייבאו שאלות מתוכנית GEO או ייצרו פרומפטים, ואז הפעילו סריקה. הטיפים שיגיעו מהסריקה יהפכו למשימות SEO — לא יישארו בדשבורד.
                   </p>
                 </CardContent>
               </Card>
             ) : (
               <>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <StatsCards totalPrompts={prompts.length} totalMentions={totalMentions} totalCitations={citations.length} avgPosition={avgPosition} />
+                  <StatsCards
+                    totalPrompts={prompts.length}
+                    owned={summary.owned}
+                    competitorWins={summary.competitorWins}
+                    shareOfVoice={summary.shareOfVoice}
+                  />
                 </div>
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                  <AiVisibilityScore score={currentScore?.score || 0} previousScore={previousScore?.score || 0} totalPrompts={currentScore?.total_prompts || prompts.length} mentionedPrompts={currentScore?.mentioned_prompts || 0} />
+                  <AiVisibilityScore
+                    score={currentScore?.score || 0}
+                    previousScore={previousScore?.score || 0}
+                    totalPrompts={currentScore?.total_prompts || prompts.length}
+                    mentionedPrompts={currentScore?.mentioned_prompts || summary.mentionedPrompts}
+                  />
                   <PlatformBreakdown platforms={platformBreakdown} />
                 </div>
                 {trendData.length > 0 && <TrendChart data={trendData} />}
+                <Recommendations
+                  recommendations={summary.tips.slice(0, 3)}
+                  onCreateTask={createSeoTask}
+                  creatingId={creatingId}
+                />
               </>
             )}
           </TabsContent>
 
           <TabsContent value="prompts" className="mt-6">
             <PromptTracker
-              prompts={trackedPrompts}
+              prompts={summary.prompts}
               onAddPrompt={(prompt, category) => addPrompt.mutate({ prompt, category })}
               onDeletePrompt={(promptId) => deletePrompt.mutate(promptId)}
               onEditPrompt={(promptId, prompt, category) => editPrompt.mutate({ promptId, prompt, category })}
               onAutoGenerate={() => generatePrompts(project)}
               isGenerating={isGenerating}
+              onImportGeo={() => importPrompts.mutate(importableGeo.map((prompt) => ({ prompt, category: "geo" })))}
+              geoCount={importableGeo.length}
+              isImporting={importPrompts.isPending}
             />
           </TabsContent>
 
@@ -314,13 +379,17 @@ function ProjectDashboard({
           </TabsContent>
 
           <TabsContent value="citations" className="mt-6">
-            {citations.length > 0 ? <CitationSources citations={citations} /> : (
+            {summary.citations.length > 0 ? <CitationSources citations={summary.citations} /> : (
               <Card><CardContent className="py-8 pt-6 text-center text-muted-foreground"><p>הפעל סריקה כדי לגלות מקורות ציטוט</p></CardContent></Card>
             )}
           </TabsContent>
 
           <TabsContent value="recommendations" className="mt-6">
-            <Recommendations recommendations={staticRecommendations} />
+            <Recommendations
+              recommendations={summary.tips}
+              onCreateTask={createSeoTask}
+              creatingId={creatingId}
+            />
           </TabsContent>
         </Tabs>
       </div>

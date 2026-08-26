@@ -30,20 +30,24 @@ serve(async (req) => {
 - "מה דעתך על פרומו?" ← מזכיר את שם המותג
 - "האם כדאי לעבוד עם פרומו?" ← מזכיר את שם המותג`;
 
-    const userPrompt = `צור 8 פרומפטים (שאלות כלליות) שמשתמשים אמיתיים ישאלו מודלי AI בתחום של:
+    const userPrompt = `צור 12 פרומפטים (שאלות כלליות) שמשתמשים אמיתיים ישאלו מודלי AI בתחום של:
 ${description ? `- תיאור העסק: ${description}` : `- תחום: ${brand_name}`}
 ${keywordList ? `- מילות מפתח בתחום: ${keywordList}` : ""}
 ${competitorList ? `- מתחרים בשוק: ${competitorList}` : ""}
 
 חשוב מאוד: אל תציין את "${brand_name}" או את שמות המתחרים בתוך השאלות! השאלות חייבות להיות גנריות לחלוטין.
 
-הקטגוריות הנדרשות:
-- recommendation (שאלות המלצה כמו "מה הכלי הכי טוב ל...")
-- comparison (שאלות השוואת קטגוריה כמו "מה ההבדלים בין סוגי X ל-Y")
-- review (שאלות על בחירה בתחום כמו "איך בוחרים את ה... הנכון?")
-- general (שאלות כלליות בתחום)
+הקטגוריות הנדרשות (פזרי ביניהן, בלי לחזור על אותה שאלה):
+- recommendation (המלצה: "מה הכלי/הסוכנות הכי טובה ל...")
+- comparison (השוואת קטגוריה, בלי שמות מותגים)
+- review (איך בוחרים / על מה לשים לב)
+- how_to (מדריך מעשי)
+- pricing (מחיר / תמחור / מה משתלם)
+- alternatives (חלופות בקטגוריה)
+- local (ישראל / אזור, אם רלוונטי)
+- general (שאלה כללית בתחום)
 
-החזר בדיוק 8 פרומפטים מגוונים וטבעיים.`;
+החזר בדיוק 12 פרומפטים מגוונים, טבעיים, בעברית מדוברת.`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -72,7 +76,7 @@ ${competitorList ? `- מתחרים בשוק: ${competitorList}` : ""}
                       type: "object",
                       properties: {
                         prompt: { type: "string", description: "The prompt text in Hebrew" },
-                        category: { type: "string", enum: ["recommendation", "comparison", "review", "general"] },
+                        category: { type: "string", enum: ["recommendation", "comparison", "review", "how_to", "pricing", "alternatives", "local", "general"] },
                       },
                       required: ["prompt", "category"],
                       additionalProperties: false,
