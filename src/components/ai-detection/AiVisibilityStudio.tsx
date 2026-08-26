@@ -294,7 +294,7 @@ function ProjectDashboard({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          הסריקה שואלת את ChatGPT עם חיפוש חי, ממיקום ישראל, בלי לדחוף שמות מותגים. Gemini ו-Perplexity לא נסרקים עד שיהיה מתאם אמיתי.
+          הסריקה רצה דרך ChatGPT Search API (חיפוש חי + רמז מיקום ישראל). זה לא chatgpt.com — Gemini/Perplexity לא נסרקים עד שיהיה מתאם אמיתי.
         </p>
 
         <Tabs defaultValue="overview" dir="rtl">
@@ -345,8 +345,7 @@ function ProjectDashboard({
                       זה לא נפח חיפוש כמו SEO — ב-ChatGPT הזנב ארוך בלי סוף, אז מודדים «האם ה-AI ימליץ עליכם לשאלת קנייה בנישה».
                     </p>
                     <p className="text-muted-foreground">
-                      כל שאילתה רצה כמו משתמש בישראל: ChatGPT עם חיפוש חי (לא ידע קפוא של API), בלי לדחוף שמות מותגים.
-                      הציטוטים בתשובה הם מקורות שאפשר להשפיע עליהם — Reddit, ביקורות, מדריכים — ואז להפוך לטיפ SEO.
+                      המנוע הנוכחי הוא ה-API הרשמי עם חיפוש חי ורמז מיקום ישראל. הוא קרוב יותר ל-ChatGPT עם Search מאשר למודל קפוא, אבל הוא לא אותו מוצר כמו chatgpt.com (מודל ברירת מחדל, IP ישראלי, שיחה חדשה בלי זיכרון). ציטוטים עדיין שימושיים לטיפי SEO.
                     </p>
                   </CardContent>
                 </Card>

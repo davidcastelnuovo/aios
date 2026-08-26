@@ -125,7 +125,7 @@ async function postResponses(
   return { ok: response.ok, status: response.status, json };
 }
 
-/** Official ChatGPT-with-search, located like an Israeli user. Not a chatgpt.com scrape. */
+/** Official ChatGPT Search API (Responses + web_search). Not chatgpt.com. */
 export async function askChatGPTAsUser(opts: {
   apiKey: string;
   prompt: string;
