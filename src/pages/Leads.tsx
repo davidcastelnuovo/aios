@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle, Pencil, Archive } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle, Pencil, Archive, Loader2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -80,12 +80,17 @@ import { archiveLeads, excludeArchivedLeads } from "@/lib/leadArchive";
 import { leadSearchOrFilter } from "@/lib/leadPhone";
 import {
   findLeadStatus,
-  leadFirstSourceDisplay,
-  leadSourceDisplay,
   responseStatusSelectValue,
   unmatchedResponseStatusValue,
 } from "@/lib/leadFields";
 import { LeadCreatedAtLines, LeadSourceLines } from "@/components/leads/LeadOriginLines";
+import {
+  buildLeadExportRows,
+  buildLeadExportWorkbook,
+  defaultLeadExportFilename,
+  fetchAllLeadsForExport,
+  writeLeadExportFile,
+} from "@/lib/exportLeads";
 
 
 // Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
@@ -744,6 +749,7 @@ export default function Leads() {
   const [stageOffsets, setStageOffsets] = useState<Record<string, number>>({});
   const [accumulatedLeads, setAccumulatedLeads] = useState<Record<string, any[]>>({});
   const [loadingMoreStage, setLoadingMoreStage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   
   // Optimistic status map - instantly shows lead in new column before backend confirms
   const [optimisticStatusByLeadId, setOptimisticStatusByLeadId] = useState<Record<string, string>>({});
@@ -1961,84 +1967,67 @@ export default function Leads() {
     setFiltersDialogOpen(true);
   };
 
-  // Export filtered leads to CSV
-  const handleExportCSV = () => {
-    if (!filteredLeads || filteredLeads.length === 0) {
+  // Export all leads matching the current filters (not just the currently loaded page)
+  const handleExportExcel = async () => {
+    if (!tenantId) {
       toast({
         title: "אין נתונים לייצוא",
-        description: "לא נמצאו לידים לייצוא",
+        description: "לא נמצא ארגון פעיל",
         variant: "destructive",
       });
       return;
     }
+    if (isExporting) return;
 
-    // Define CSV headers and mapping
-    const headers = [
-      "שם איש קשר",
-      "שם חברה",
-      "טלפון",
-      "אימייל",
-      "שלב",
-      "סטטוס תגובה",
-      "מקור",
-      "מקור ראשוני",
-      "שם קמפיין",
-      "תעשייה",
-      "ערך עסקה משוער",
-      "איש מכירות",
-      "סוכנות",
-      "הערות",
-      "תאריך יצירה",
-      "תאריך יצירה ראשוני",
-    ];
-
-    const rows = filteredLeads.map((lead: any) => {
-      const stageName = PIPELINE_STAGES.find(s => s.id === lead.status)?.label || lead.status;
-      const statusName = findLeadStatus(lead.response_status, leadStatuses)?.label || lead.response_status || "";
-      const sourceName = leadSourceDisplay(lead);
-      
-      return [
-        lead.contact_name || "",
-        lead.company_name || "",
-        lead.phone || "",
-        lead.email || "",
-        stageName || "",
-        statusName,
-        sourceName,
-        leadFirstSourceDisplay(lead) || "",
-        lead.campaign_name || "",
-        lead.industry || "",
-        lead.estimated_deal_value || "",
-        lead.sales_people?.full_name || "",
-        lead.agencies?.name || "",
-        lead.notes || "",
-        lead.created_at ? new Date(lead.created_at).toLocaleDateString('he-IL') : "",
-        lead.first_created_at ? new Date(lead.first_created_at).toLocaleDateString('he-IL') : "",
-      ];
-    });
-
-    // Create CSV content with BOM for Hebrew support
-    const BOM = "\uFEFF";
-    const csvContent = BOM + [
-      headers.join(","),
-      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-    ].join("\n");
-
-    // Download file
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `leads_export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
+    setIsExporting(true);
     toast({
-      title: "הקובץ יוצא בהצלחה",
-      description: `${filteredLeads.length} לידים יוצאו לקובץ CSV`,
+      title: "מייצא לידים",
+      description: "מושך את כל הלידים לפי הסינון הנוכחי, כולל תגיות ועדכונים…",
     });
+
+    try {
+      const { leads: exportLeads, stages, statuses } = await fetchAllLeadsForExport(supabase, {
+        tenantId,
+        isOwner,
+        selectedAgency,
+        agencyIds: agencies?.map((agency) => agency.id) || [],
+        searchQuery,
+        filterSalesPersonIds,
+        filterStage,
+        filterResponseStatus,
+        filterTagIds,
+        filterFollowUpToday,
+        startDate,
+        endDate,
+        viewAsSalesPersonId: isViewingAs ? viewAsSalesPersonId : null,
+      });
+
+      if (exportLeads.length === 0) {
+        toast({
+          title: "אין נתונים לייצוא",
+          description: "לא נמצאו לידים לייצוא לפי הסינון הנוכחי",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const rows = buildLeadExportRows(exportLeads, stages, statuses);
+      const workbook = buildLeadExportWorkbook(rows);
+      writeLeadExportFile(workbook, defaultLeadExportFilename());
+
+      toast({
+        title: "הקובץ יוצא בהצלחה",
+        description: `${exportLeads.length} לידים יוצאו לקובץ Excel`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "שגיאה בייצוא",
+        description: error?.message || "לא הצלחנו לייצא את הלידים",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Function to load more leads for a specific stage
@@ -2461,11 +2450,12 @@ export default function Leads() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
+            disabled={isExporting}
             className="gap-1"
           >
-            <FileSpreadsheet className="h-4 w-4" />
-            ייצוא CSV
+            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+            {isExporting ? "מייצא…" : "ייצוא Excel"}
           </Button>
           <AddLeadForm />
           <ImportLeadsWithMapping />
@@ -2620,10 +2610,11 @@ export default function Leads() {
               variant="outline" 
               size="icon"
               className="h-9 w-9 shrink-0"
-              onClick={handleExportCSV}
-              title="ייצוא לקובץ CSV"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              title="ייצוא כל הלידים לפי הסינון לקובץ Excel"
             >
-              <FileSpreadsheet className="h-4 w-4" />
+              {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
             </Button>
           </div>
         </div>
