@@ -9,6 +9,7 @@
 // Tools:
 //   - request_dev_task : code/feature/bugfix → Cursor implements + opens a PR
 //   - ask_cursor       : research / analysis / planning / investigation
+//   - generate_creative: send a job to the sticky AIOS Creative Direct image chat
 //
 // Required Supabase secrets:
 //   CURSOR_API_KEY          API key from https://cursor.com/dashboard/api
@@ -92,10 +93,10 @@ const TOOLS = [
   {
     name: "generate_creative",
     description:
-      "Send a Creative-department job to the dedicated Cursor Creative Agent " +
-      "(separate from the coding agent). It generates a finished Hebrew advertising still " +
-      "and writes it back onto the marketing work item. Use when David or a user asks " +
-      "Carmen to make / fix a creative in מחלקת קריאייטיב.",
+      "Send a job to AIOS Creative Direct — the dedicated image chat (like Carmen Direct). " +
+      "Follow-ups go to the same sticky conversation, not a new coding agent. " +
+      "It generates a finished Hebrew advertising still with GenerateImage and writes the PNG onto the marketing work item. " +
+      "Use when David, Carmen, or מחלקת קריאייטיב needs images.",
     inputSchema: {
       type: "object",
       properties: {
@@ -547,8 +548,8 @@ async function handleToolCall(
         tenant_id: ctx.tenantId,
         item_id: itemId,
         prompt: [
-          "You are the AIOS Creative Agent. Generate ONE finished Hebrew advertising still with GenerateImage.",
-          "Do not edit the repo. Do not open a PR.",
+          "You are already in AIOS Creative Direct — the dedicated image chat. This is one job.",
+          "Generate ONE finished Hebrew advertising still with GenerateImage. Do not edit the repo. Do not open a PR.",
           `Load APPROVED CONCEPTS FIRST from marketing_work_items id=${itemId} (payload.approved_concepts, then copy_concepts). The photograph IS that concept (name, big idea, hook, visual language).`,
           "Copy (headline / CTA) is TYPE only — paint those exact RTL words on the concept photograph. Do not restage the headline as a new scene (no chat UI / Google search unless the concept itself is that).",
           "Then load brand kit and talent refs. Concept wins if copy disagrees.",
@@ -579,9 +580,9 @@ async function handleToolCall(
       cursorAgentId: String(data.cursor_agent_id || ""),
     });
     return (
-      `✅ Dispatched to the Cursor Creative Agent` +
+      `✅ נשלח לצ׳אט Creative Direct (אותו צ׳אט דביק — כמו כרמן ישיר)` +
       (data.agent_url ? `\nSession: ${data.agent_url}` : "") +
-      `\nThe still will appear on the creative item when the agent writes it back.`
+      `\nהתמונה תופיע על פרויקט הקריאייטיב אחרי שהצ׳אט מעלה אותה.`
     );
   }
 

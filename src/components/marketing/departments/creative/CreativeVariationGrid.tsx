@@ -49,7 +49,7 @@ export function CreativeVariationGrid({
             <>
               {progressLabel ? " · " : null}
               <a href={agentUrl} target="_blank" rel="noreferrer" className="underline">
-                פתח את אייג׳נט הקריאייטיב
+                פתח את צ׳אט Creative Direct
               </a>
             </>
           )}

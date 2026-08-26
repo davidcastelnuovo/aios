@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { generateCreativeImage } from "@/components/marketing/lib/generateCreativeImage";
-import { dispatchCursorCreative, isCursorCreativeUnavailable, waitForCursorCreative } from "@/components/marketing/lib/dispatchCursorCreative";
+import { CreativeDirectDock } from "@/components/marketing/departments/creative/CreativeDirectDock";
+import { dispatchCursorCreative, ensureCreativeDirect, getCreativeDirectStatus, isCursorCreativeUnavailable, waitForCursorCreative } from "@/components/marketing/lib/dispatchCursorCreative";
+import { CURSOR_CREATIVE_SPEND_MESSAGE, isCursorCreativeSpendError } from "@/components/marketing/lib/cursorCreativeUnavailable";
 import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
 import {
   brandKitPrompt,
@@ -164,6 +166,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [reviseTarget, setReviseTarget] = useState<CreativeVariation | null>(null);
   const [reviseNote, setReviseNote] = useState("");
   const [creativeAgentUrl, setCreativeAgentUrl] = useState<string | null>(null);
+  const [openingCreativeDirect, setOpeningCreativeDirect] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const [pendingStyleId, setPendingStyleId] = useState<CreativeVisualStyleId | null>(null);
   const generateAbortRef = useRef(false);
@@ -175,7 +178,6 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     generateAbortControllerRef.current?.abort();
     generateAbortControllerRef.current = new AbortController();
     creativeJobIdRef.current = null;
-    setCreativeAgentUrl(null);
   };
 
   const generationSignal = () => generateAbortControllerRef.current?.signal;
@@ -360,6 +362,20 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     () => copyItems.filter((item) => copyPullSummary(item.payload).pullable),
     [copyItems],
   );
+
+  const { data: creativeDirect } = useQuery({
+    queryKey: ["creative-direct-chat", tenantId],
+    queryFn: async () => {
+      try {
+        return await getCreativeDirectStatus({ supabase, tenantId });
+      } catch {
+        return { agentUrl: "", agentId: "", reused: false, open: false };
+      }
+    },
+    staleTime: 30_000,
+    retry: false,
+  });
+  const creativeDirectUrl = creativeAgentUrl || creativeDirect?.agentUrl || null;
 
   useEffect(() => {
     if (!selectedId && items[0]?.id) setSelectedId(items[0].id);
@@ -948,7 +964,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       });
       creativeJobIdRef.current = dispatched.jobId;
       setCreativeAgentUrl(dispatched.agentUrl);
-      setGenerateProgress((current) => current ?? `אייג׳נט קריאייטיב · ${copyLabel || name || "וריאציה"}`);
+      setGenerateProgress((current) => current ?? `צ׳אט Creative Direct · ${copyLabel || name || "וריאציה"}`);
       const fromAgent = await waitForCursorCreative({
         supabase,
         tenantId,
@@ -960,8 +976,13 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       return replaceId ? { ...fromAgent, id: replaceId } : fromAgent;
     } catch (error: unknown) {
       if (isGenerationAborted(error)) throw error;
-      if (!isCursorCreativeUnavailable(error)) throw error;
-      toast.message("אייג׳נט הקריאייטיב לא זמין — נופל חזרה ליצירה המקומית");
+      if (isCursorCreativeSpendError(error)) {
+        toast.warning(CURSOR_CREATIVE_SPEND_MESSAGE);
+      } else if (isCursorCreativeUnavailable(error)) {
+        toast.message("צ׳אט Creative Direct לא זמין — נופל חזרה ליצירה המקומית");
+      } else {
+        throw error;
+      }
     }
     const { imageUrl, cost } = await generateCreativeImage({
       supabase,
@@ -1149,8 +1170,24 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     setGenerating(false);
     setGeneratingId(null);
     setGenerateProgress(null);
-    setCreativeAgentUrl(null);
     toast.message("היצירה נעצרה");
+  };
+
+  const openCreativeDirect = async () => {
+    setOpeningCreativeDirect(true);
+    try {
+      const chat = await ensureCreativeDirect({ supabase, tenantId });
+      setCreativeAgentUrl(chat.agentUrl);
+      await queryClient.invalidateQueries({ queryKey: ["creative-direct-chat", tenantId] });
+      toast.success(chat.reused
+        ? "צ׳אט Creative Direct כבר פתוח"
+        : "נפתח צ׳אט Creative Direct — כרמן ומחלקת קריאייטיב שולחות לכאן");
+    } catch (error: unknown) {
+      if (isCursorCreativeSpendError(error)) toast.warning(CURSOR_CREATIVE_SPEND_MESSAGE);
+      else toast.error(errorMessage(error, "פתיחת צ׳אט Creative Direct נכשלה"));
+    } finally {
+      setOpeningCreativeDirect(false);
+    }
   };
 
   const rejectVariation = async () => {
@@ -1592,7 +1629,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-sm font-bold">{selected.title}</h2>
         <p className="text-[11px] text-muted-foreground">
-          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · אייג׳נט קריאייטיב Cursor · {liveTextLayers ? "טקסט חי (שכבות)" : "קריאייטיב סופי"}
+          {projectTypeLabel(projectType)} · {getVisualStyle(selected.payload).label} · צ׳אט Creative Direct · {liveTextLayers ? "טקסט חי (שכבות)" : "קריאייטיב סופי"}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/30 p-1">
@@ -1672,6 +1709,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {workspaceHeader}
+      <CreativeDirectDock
+        agentUrl={creativeDirectUrl}
+        opening={openingCreativeDirect}
+        generating={generating}
+        onOpen={() => void openCreativeDirect()}
+      />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden" dir="rtl">
       <aside
         className={cn(
@@ -1740,7 +1783,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               variations={variations}
               generatingId={generatingId}
               progressLabel={generateProgress ?? undefined}
-              agentUrl={creativeAgentUrl}
+              agentUrl={creativeDirectUrl}
               disabled={generating}
               liveTextLayers={liveTextLayers}
               onRevise={(variation) => {
@@ -1770,7 +1813,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               <ImageIcon className="mb-4 h-14 w-14 opacity-30" />
               <h3 className="text-lg font-bold text-foreground">גריד וריאציות</h3>
               <p className="mt-2 max-w-md text-sm">
-                כל וריאציית קופי מקבלת קריאייטיב סופי — תמונה עם הכותרת וה־CTA עליה. לחצו על כרטיס, כתבו מה לתקן, ו-Cursor יוצר וריאציה חדשה.
+                כל וריאציית קופי מקבלת קריאייטיב סופי — תמונה עם הכותרת וה־CTA עליה. לחצו על כרטיס, כתבו מה לתקן, וצ׳אט Creative Direct יוצר וריאציה חדשה.
               </p>
               {copyBlocks.length > 0 && (
                 <p className="mt-2 text-xs">נמצאו {copyBlocks.length} וריאציות קופי משויכות</p>

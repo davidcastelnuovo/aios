@@ -8,6 +8,15 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
 const CREATIVE_MARKER = "[CREATIVE AGENT]";
+const CREATIVE_DIRECT_NAME = "AIOS Creative Direct";
+const CREATIVE_DIRECT_OPEN_MARKER = "[CREATIVE AGENT] opened Creative Direct";
+const CREATIVE_DIRECT_IDENTITY = [
+  "You are AIOS Creative Direct — a dedicated image chat, like Carmen Direct is a dedicated WhatsApp chat.",
+  "Carmen and מחלקת קריאייטיב send jobs into THIS conversation as follow-ups. Stay in this thread.",
+  "Do NOT edit the repository. Do NOT open a pull request. Do NOT write code.",
+  "For each job: GenerateImage ONE finished Hebrew advertising still, POST the PNG back with action=complete, then stop.",
+  "The photograph is the approved concept. Headline/CTA are TYPE only — never restage the copy as a new scene.",
+].join(" ");
 
 const sb = () => createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
@@ -43,18 +52,25 @@ function parseAgentResponse(raw: string): { url: string; id: string } {
   return { url, id: id || url };
 }
 
-async function getCreativeStickyId(tenantId: string): Promise<string | null> {
+async function getCreativeSticky(tenantId: string): Promise<{ id: string; url: string } | null> {
+  const forced = Deno.env.get("CURSOR_CREATIVE_STICKY_AGENT_ID") || "";
+  if (forced.startsWith("bc-")) {
+    return { id: forced, url: `https://cursor.com/agents/${forced}` };
+  }
   const { data } = await sb()
     .from("cursor_dispatches")
-    .select("cursor_agent_id")
+    .select("cursor_agent_id, session_url")
     .eq("tenant_id", tenantId)
-    .like("request_text", `${CREATIVE_MARKER}%`)
+    .like("request_text", `${CREATIVE_DIRECT_OPEN_MARKER}%`)
     .not("cursor_agent_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   const id = String((data as { cursor_agent_id?: string } | null)?.cursor_agent_id || "");
-  return id.startsWith("bc-") ? id : null;
+  if (!id.startsWith("bc-")) return null;
+  const url = String((data as { session_url?: string } | null)?.session_url || "")
+    || `https://cursor.com/agents/${id}`;
+  return { id, url };
 }
 
 async function followUp(apiKey: string, agentId: string, promptText: string) {
@@ -74,20 +90,34 @@ async function followUp(apiKey: string, agentId: string, promptText: string) {
       continue;
     }
     if (resp.status === 404 || resp.status === 410 || resp.status === 400) return null;
-    throw new Error(`Cursor follow-up ${resp.status}: ${raw.slice(0, 240)}`);
+    let detail = raw.slice(0, 240);
+    try {
+      const parsed = JSON.parse(raw) as { error?: { message?: string } | string; message?: string };
+      const nested = typeof parsed.error === "object" ? parsed.error?.message : parsed.error;
+      detail = String(nested || parsed.message || detail);
+    } catch { /* keep */ }
+    if (resp.status === 402 || resp.status === 429 || /credit|spend|on-demand|usage limit|insufficient|billing|quota/i.test(detail)) {
+      throw new Error(
+        `Cursor follow-up ${resp.status}: Cloud Agent spend/credits (not Pro+ desktop). Enable on-demand at cursor.com/dashboard/spending. ${detail.slice(0, 160)}`,
+      );
+    }
+    throw new Error(`Cursor follow-up ${resp.status}: ${detail}`);
   }
   return { id: agentId, url: `https://cursor.com/agents/${agentId}` };
 }
 
 async function createCreativeAgent(apiKey: string, promptText: string, name: string) {
   const envName = Deno.env.get("CURSOR_CLOUD_ENV_NAME") || "";
-  const modelId = Deno.env.get("CURSOR_MODEL_ID") || "";
+  // First-party Composer draws from the included Cursor Models pool on Pro+,
+  // not the smaller Other Models / API allowance. Do not inherit CURSOR_MODEL_ID
+  // from the coding agent (that is often a frontier model).
+  const modelId = Deno.env.get("CURSOR_CREATIVE_MODEL_ID") || "composer-2.5-fast";
   const body: Record<string, unknown> = {
     prompt: { text: promptText },
     autoCreatePR: false,
     name: name.slice(0, 100),
+    model: { id: modelId },
   };
-  if (modelId) body.model = { id: modelId };
   if (envName) body.env = { type: "cloud", name: envName };
   else {
     body.repos = [{ url: Deno.env.get("CURSOR_REPO_URL") || DEFAULT_REPO, startingRef: Deno.env.get("CURSOR_STARTING_REF") || "main" }];
@@ -97,7 +127,20 @@ async function createCreativeAgent(apiKey: string, promptText: string, name: str
     body: JSON.stringify(body),
   });
   const raw = await resp.text();
-  if (!resp.ok) throw new Error(`Cursor agent create ${resp.status}: ${raw.slice(0, 240)}`);
+  if (!resp.ok) {
+    let detail = raw.slice(0, 240);
+    try {
+      const parsed = JSON.parse(raw) as { error?: { message?: string } | string; message?: string };
+      const nested = typeof parsed.error === "object" ? parsed.error?.message : parsed.error;
+      detail = String(nested || parsed.message || detail);
+    } catch { /* keep */ }
+    if (resp.status === 402 || resp.status === 429 || /credit|spend|on-demand|usage limit|insufficient|billing|quota/i.test(detail)) {
+      throw new Error(
+        `Cursor agent create ${resp.status}: Cloud Agent spend/credits (not Pro+ desktop). Enable on-demand at cursor.com/dashboard/spending. ${detail.slice(0, 160)}`,
+      );
+    }
+    throw new Error(`Cursor agent create ${resp.status}: ${detail}`);
+  }
   return parseAgentResponse(raw);
 }
 
@@ -144,9 +187,50 @@ Deno.serve(async (req) => {
   const action = String(body.action ?? "dispatch");
   const tenantId = String(body.tenant_id ?? "");
   const itemId = String(body.item_id ?? "");
-  if (!tenantId || !itemId) return json({ error: "tenant_id and item_id are required" }, 400);
+  if (!tenantId) return json({ error: "tenant_id is required" }, 400);
+  if (action !== "status" && action !== "ensure" && !itemId) {
+    return json({ error: "tenant_id and item_id are required" }, 400);
+  }
 
   try {
+    if (action === "status" || action === "ensure") {
+      const auth = await requireAuth(req);
+      if (!auth) return json({ error: "unauthorized" }, 401);
+      const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
+      if (!apiKey) return json({ error: "CURSOR_API_KEY is not configured" }, 500);
+      const existing = await getCreativeSticky(tenantId);
+      if (action === "status" || (action === "ensure" && existing)) {
+        return json({
+          ok: true,
+          open: Boolean(existing),
+          agent_url: existing?.url ?? "",
+          cursor_agent_id: existing?.id ?? "",
+          reused: Boolean(existing),
+        });
+      }
+      const openPrompt = [
+        CREATIVE_DIRECT_IDENTITY,
+        "This message opens the Creative Direct chat. Reply that Creative Direct is open and waiting for jobs, then wait.",
+      ].join("\n\n");
+      const fired = await createCreativeAgent(apiKey, openPrompt, CREATIVE_DIRECT_NAME);
+      await sb().from("cursor_dispatches").insert({
+        tenant_id: tenantId,
+        tool: "ask_cursor",
+        request_text: `${CREATIVE_DIRECT_OPEN_MARKER} chat`,
+        context: "ensure",
+        session_url: fired.url,
+        cursor_agent_id: fired.id,
+        status: "dispatched",
+      });
+      return json({
+        ok: true,
+        open: true,
+        agent_url: fired.url,
+        cursor_agent_id: fired.id,
+        reused: false,
+      });
+    }
+
     if (action === "complete") {
       const jobId = String(body.job_id ?? "");
       const token = String(body.job_token ?? "");
@@ -266,23 +350,29 @@ Deno.serve(async (req) => {
 
     const callback = [
       `${CREATIVE_MARKER} job ${jobId}`,
+      "You are already in the Creative Direct chat. This is one job.",
       "When the PNG is ready, POST it back. Do not open a PR. Do not edit the repo.",
       `POST ${SUPABASE_URL}/functions/v1/cursor-generate-creative`,
       "Content-Type: application/json",
       `Body JSON: {"action":"complete","tenant_id":"${tenantId}","item_id":"${itemId}","job_id":"${jobId}","job_token":"${jobToken}","image_base64":"<png-base64>","variation":{"id":"${variationId}","name":${JSON.stringify(String(variation.name || "וריאציה"))},"format":${JSON.stringify(String(variation.format || "1:1"))},"copy_key":${JSON.stringify(variation.copy_key ?? null)},"copy_label":${JSON.stringify(variation.copy_label ?? null)},"copy_text":${JSON.stringify(String(variation.copy_text || "").slice(0, 400))},"parent_id":${JSON.stringify(variation.parent_id ?? null)}}}`,
     ].join("\n");
 
-    const fullPrompt = `${prompt}\n\n--- WRITE BACK ---\n${callback}`;
-    const sticky = await getCreativeStickyId(tenantId);
-    let fired = sticky ? await followUp(apiKey, sticky, fullPrompt) : null;
+    const fullPrompt = `${CREATIVE_DIRECT_IDENTITY}\n\n${prompt}\n\n--- WRITE BACK ---\n${callback}`;
+    const sticky = await getCreativeSticky(tenantId);
+    let reused = false;
+    let fired = sticky ? await followUp(apiKey, sticky.id, fullPrompt) : null;
+    if (fired) reused = true;
     if (!fired) {
-      fired = await createCreativeAgent(apiKey, fullPrompt, `Creative: ${String(variation.copy_label || variation.name || "ad").slice(0, 50)}`);
+      fired = await createCreativeAgent(apiKey, fullPrompt, CREATIVE_DIRECT_NAME);
     }
+    const label = String(variation.copy_label || variation.name || itemId).slice(0, 180);
 
     await sb().from("cursor_dispatches").insert({
       tenant_id: tenantId,
       tool: "ask_cursor",
-      request_text: `${CREATIVE_MARKER} ${String(variation.copy_label || variation.name || itemId).slice(0, 180)}`,
+      request_text: reused
+        ? `${CREATIVE_MARKER} ${label}`
+        : `${CREATIVE_DIRECT_OPEN_MARKER} · ${label}`,
       context: `item_id=${itemId} job_id=${jobId} variation_id=${variationId}`,
       session_url: fired.url,
       cursor_agent_id: fired.id,

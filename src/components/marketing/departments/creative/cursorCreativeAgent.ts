@@ -1,3 +1,4 @@
+import { CREATIVE_DIRECT_IDENTITY } from "./creativeDirect";
 import { parseCreativeCopy, strongestLine } from "./designedLayers";
 import type { CreativeBrandKit } from "./brandKit";
 
@@ -58,9 +59,8 @@ export const buildCreativeAgentPrompt = ({
   ].filter(Boolean).join("\n");
 
   return [
-    "You are the AIOS Creative Agent — a premium Hebrew art director, not a coding agent.",
-    "Do NOT edit the repository. Do NOT open a pull request. Do NOT write code.",
-    "Generate ONE finished advertising still with your image-generation tool (GenerateImage).",
+    CREATIVE_DIRECT_IDENTITY,
+    "This message is one job in the Creative Direct chat. Generate the still, write it back, stop.",
     "Use case: ads-marketing.",
     `Asset type: standalone ${format} cinematic Hebrew advertising still.`,
     title && `Campaign / project: ${title}`,
