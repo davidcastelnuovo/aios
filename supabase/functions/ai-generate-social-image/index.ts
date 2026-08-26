@@ -72,7 +72,19 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, tenant_id, post_id, reference_image_url, reference_image_urls, reference_role: requestedRole, live_text_layers: requestedLiveText, size: requestedSize, quality: requestedQuality } = await req.json();
+    const {
+      prompt,
+      tenant_id,
+      post_id,
+      reference_image_url,
+      reference_image_urls,
+      reference_role: requestedRole,
+      live_text_layers: requestedLiveText,
+      size: requestedSize,
+      quality: requestedQuality,
+      mask_png_base64: maskPngBase64,
+      image_png_base64: imagePngBase64,
+    } = await req.json();
 
     if (!prompt || !tenant_id) {
       return new Response(
@@ -127,12 +139,33 @@ serve(async (req) => {
         }),
       });
 
+    const decodePng = (raw: unknown): Uint8Array | null => {
+      if (typeof raw !== "string" || !raw.trim()) return null;
+      const b64 = raw.replace(/^data:image\/\w+;base64,/, "").replace(/\s/g, "");
+      try {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let index = 0; index < bin.length; index += 1) bytes[index] = bin.charCodeAt(index);
+        return bytes;
+      } catch {
+        return null;
+      }
+    };
+
+    const maskBytes = decodePng(maskPngBase64);
+    const overrideBytes = decodePng(imagePngBase64);
+
     const files: File[] = [];
-    for (const [index, url] of refs.entries()) {
-      const bytes = await loadReferenceBytes(url);
-      if (!bytes) continue;
-      const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      files.push(new File([copy], `reference-${index + 1}.png`, { type: "image/png" }));
+    if (overrideBytes) {
+      const copy = overrideBytes.buffer.slice(overrideBytes.byteOffset, overrideBytes.byteOffset + overrideBytes.byteLength);
+      files.push(new File([copy], "image.png", { type: "image/png" }));
+    } else {
+      for (const [index, url] of refs.entries()) {
+        const bytes = await loadReferenceBytes(url);
+        if (!bytes) continue;
+        const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        files.push(new File([copy], `reference-${index + 1}.png`, { type: "image/png" }));
+      }
     }
 
     let usedReference = false;
@@ -151,7 +184,9 @@ serve(async (req) => {
       const letterRule = liveTextLayers
         ? "Output must contain zero letters, digits, or logos. "
         : "Output a finished advertising still. Paint quoted Hebrew RTL type exactly (unreversed glyphs). Do not garble type. Do not invent extra slogans. ";
-      const referencePrefix = referenceRole === "revision"
+      const referencePrefix = maskBytes
+        ? "Image 1 is the exact still. The attached MASK (transparent pixels) is the region to DELETE. Reconstruct only that region from the surrounding photograph. Do not add letters, logos, or new objects. Keep every unmasked pixel. "
+        : referenceRole === "revision"
         ? (liveTextLayers
           ? "Image 1 is the exact still to revise. Change only the director request. If a second image is talent, keep that face. Output a letter-empty PNG — do not copy baked type. "
           : "Image 1 is the exact ad to revise. Change only what the director requests. Keep the rest of the photograph, talent, lighting, composition, and finished RTL Hebrew type unless asked to change it. If a second image is talent, keep that face. ")
@@ -170,6 +205,10 @@ serve(async (req) => {
       form.append("output_format", "png");
       form.append("input_fidelity", "high");
       for (const file of files) form.append("image", file);
+      if (maskBytes) {
+        const maskCopy = maskBytes.buffer.slice(maskBytes.byteOffset, maskBytes.byteOffset + maskBytes.byteLength);
+        form.append("mask", new File([maskCopy], "mask.png", { type: "image/png" }));
+      }
       aiResponse = await fetch("https://api.openai.com/v1/images/edits", {
         method: "POST",
         headers: { Authorization: `Bearer ${openaiKey}` },
@@ -177,6 +216,9 @@ serve(async (req) => {
       });
       if (!aiResponse.ok) {
         const errText = await aiResponse.text();
+        if (maskBytes) {
+          throw new Error(`AI inpaint error: ${aiResponse.status} - ${errText}`);
+        }
         console.error("image edits failed, falling back to generations", errText);
         aiResponse = await generateFromPrompt();
       } else {

@@ -38,6 +38,13 @@ test("live-text wrap keeps the no-glyph lock at both ends", () => {
   assert.match(wrapped, /REGENERATE[\s\S]*STAGE THIS IDEA[\s\S]*REGENERATE/);
 });
 
+test("inpaint wrap does not add a finished-ad or no-glyph lock", () => {
+  const wrapped = wrapCreativeImagePrompt("INPAINT / ERASE. Delete פרומו", { inpaint: true });
+  assert.equal(wrapped, "INPAINT / ERASE. Delete פרומו");
+  assert.doesNotMatch(wrapped, /FINISHED HEBREW AD/);
+  assert.doesNotMatch(wrapped, /ZERO GLYPHS/);
+});
+
 test("concept-led prompts stay first after wrapping", () => {
   const wrapped = wrapCreativeImagePrompt("MUST FOLLOW THIS APPROVED VISUAL CONCEPT\nBig idea: empty pocket");
   assert.match(wrapped, /^MUST FOLLOW THIS APPROVED VISUAL CONCEPT/);

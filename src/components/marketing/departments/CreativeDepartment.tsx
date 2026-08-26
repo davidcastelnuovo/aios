@@ -11,6 +11,7 @@ import { CURSOR_CREATIVE_SPEND_MESSAGE, isCursorCreativeSpendError } from "@/com
 import { resolveCreativeImageUrl } from "@/components/marketing/lib/resolveCreativeImageUrl";
 import {
   brandKitPrompt,
+  uploadCreativeAsset,
   deriveBrandBook,
   filesFromAttachments,
   getBrandKit,
@@ -27,7 +28,7 @@ import { CreativeBriefEditor } from "@/components/marketing/departments/creative
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { CreativeLayerEditor } from "@/components/marketing/departments/creative/CreativeLayerEditor";
 import { CreativeStoryboardEditor } from "@/components/marketing/departments/creative/CreativeStoryboardEditor";
-import { CreativeVariationGrid } from "@/components/marketing/departments/creative/CreativeVariationGrid";
+import { CreativeEraseDialog, type EraseJob } from "@/components/marketing/departments/creative/CreativeEraseDialog";
 import { copyBlockLabel, splitCopyVariations } from "@/components/marketing/departments/creative/copyVariations";
 import type { CreativeAssetRow, CreativeComment, CreativeItem, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "@/components/marketing/departments/creative/types";
 import {
@@ -55,6 +56,7 @@ import { isOptionalCostume } from "@/components/marketing/departments/creative/a
 import { assembleStaticCreativePrompt } from "@/components/marketing/departments/creative/creativeGenerationPrompt";
 import { collectStaticReferencePlan } from "@/components/marketing/departments/creative/cursorArtDirector";
 import { buildCreativeAgentPrompt, resolvePreviousStyleId } from "@/components/marketing/departments/creative/cursorCreativeAgent";
+import { buildErasePrompt } from "@/components/marketing/departments/creative/eraseMask";
 import { hydrateVariationLayers, isInternalCopyLine } from "@/components/marketing/departments/creative/designedLayers";
 import { missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
 import {
@@ -170,6 +172,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [reviseTarget, setReviseTarget] = useState<CreativeVariation | null>(null);
   const [reviseNote, setReviseNote] = useState("");
   const [reviseRefs, setReviseRefs] = useState<StyleReference[]>([]);
+  const [eraseTarget, setEraseTarget] = useState<CreativeVariation | null>(null);
   const [creativeAgentUrl, setCreativeAgentUrl] = useState<string | null>(null);
   const [openingCreativeDirect, setOpeningCreativeDirect] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
@@ -1348,6 +1351,68 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     }
   };
 
+  const eraseVariation = async (job: EraseJob) => {
+    if (!selected || !eraseTarget) return;
+    const target = eraseTarget;
+    setEraseTarget(null);
+    const signal = startWork(`מחיקה · ${target.copyLabel || target.name}`, target.id);
+    try {
+      const ready = await prepareCreativeStage();
+      const marked = await uploadCreativeAsset({
+        supabase,
+        tenantId,
+        itemId: selected.id,
+        file: job.markedFile,
+        kind: "reference",
+      });
+      const size = imageSizeForFormat(target.format);
+      const { imageUrl, cost } = await generateCreativeImage({
+        supabase,
+        tenantId,
+        itemId: selected.id,
+        stageId: ready.creativeStage.id,
+        prompt: buildErasePrompt(job.hint),
+        referenceImageUrls: [marked.url],
+        referenceRole: "revision",
+        size,
+        quality: "high",
+        liveTextLayers: false,
+        inpaint: true,
+        maskPngBase64: job.maskPngBase64,
+        imagePngBase64: job.imagePngBase64,
+        signal,
+      });
+      throwIfGenerationAborted(!!signal.aborted);
+      const created = makeVariation({
+        imageUrl,
+        format: target.format,
+        copyText: target.copyText,
+        title: selected.title ?? undefined,
+        visualStyle: target.visualStyle,
+        name: `${target.copyLabel || target.name} · מחיקה`,
+        source: "ai",
+        copyKey: target.copyKey,
+        copyLabel: target.copyLabel,
+        conceptId: target.conceptId,
+        conceptName: target.conceptName,
+        rejectNote: job.hint ? `מחיקת אזור: ${job.hint}` : "מחיקת אזור מסומן",
+        parentId: target.id,
+        generationCost: cost,
+        compositionId: target.compositionId,
+        brandColors: getBrandKit(selected.payload).brandBook?.colors,
+        styleSourceId: target.id,
+        liveTextLayers,
+      });
+      await persistVariations([...variations, created], "נמחקה האזור המסומן — וריאציה חדשה בגריד");
+      setSelectedVariationId(created.id);
+    } catch (error: unknown) {
+      if (isGenerationAborted(error)) toast.message("המחיקה נעצרה");
+      else toast.error(errorMessage(error, "מחיקת האזור נכשלה"));
+    } finally {
+      finishWork(signal, target.id);
+    }
+  };
+
   const reviseVariation = async () => {
     if (!selected || !reviseTarget || !reviseNote.trim()) return;
     const target = reviseTarget;
@@ -1926,6 +1991,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                 setReviseTarget(variation);
                 setReviseNote("");
               }}
+              onErase={(variation) => {
+                setSelectedVariationId(variation.id);
+                setEraseTarget(variation);
+              }}
               onEditLayers={(variation) => {
                 setSelectedVariationId(variation.id);
                 setWorkspacePanel("edit");
@@ -2170,6 +2239,15 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CreativeEraseDialog
+        variation={eraseTarget}
+        size={imageSizeForFormat(eraseTarget?.format ?? defaultFormat(selected?.payload))}
+        liveTextLayers={liveTextLayers}
+        submitting={!!eraseTarget && busyIds.includes(eraseTarget.id)}
+        onClose={() => setEraseTarget(null)}
+        onSubmit={(job) => void eraseVariation(job)}
+      />
 
       <Dialog open={!!rejectTarget} onOpenChange={(open) => {
         if (!open) {

@@ -25,6 +25,9 @@ interface GenerateCreativeImageArgs {
   quality?: ImageQuality;
   regenerate?: boolean;
   liveTextLayers?: boolean;
+  maskPngBase64?: string;
+  imagePngBase64?: string;
+  inpaint?: boolean;
   signal?: AbortSignal;
 }
 
@@ -40,10 +43,13 @@ async function invokeSocialImage(
   regenerate?: boolean,
   liveTextLayers?: boolean,
   signal?: AbortSignal,
+  maskPngBase64?: string,
+  imagePngBase64?: string,
+  inpaint?: boolean,
 ) {
   return supabase.functions.invoke("ai-generate-social-image", {
     body: {
-      prompt: wrapCreativeImagePrompt(prompt, { regenerate, liveTextLayers }),
+      prompt: wrapCreativeImagePrompt(prompt, { regenerate, liveTextLayers, inpaint }),
       tenant_id: tenantId,
       post_id: itemId,
       reference_image_url: referenceImageUrls?.[0],
@@ -52,6 +58,8 @@ async function invokeSocialImage(
       live_text_layers: !!liveTextLayers,
       size,
       quality,
+      mask_png_base64: maskPngBase64,
+      image_png_base64: imagePngBase64,
     },
     signal,
   });
@@ -126,6 +134,9 @@ export async function generateCreativeImage({
   regenerate,
   liveTextLayers,
   signal,
+  maskPngBase64,
+  imagePngBase64,
+  inpaint,
 }: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean; cost: ImageGenerationCost }> {
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   const estimate = estimateCreativeImageCall({
@@ -147,6 +158,9 @@ export async function generateCreativeImage({
     regenerate,
     liveTextLayers,
     signal,
+    maskPngBase64,
+    imagePngBase64,
+    inpaint,
   );
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;

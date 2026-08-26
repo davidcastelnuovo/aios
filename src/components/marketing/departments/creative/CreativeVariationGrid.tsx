@@ -4,7 +4,7 @@ import { CreativeImage } from "@/components/marketing/departments/creative/Creat
 import { OfferIconMark, isIconLayer } from "./layerMarks";
 import { hebrewTextDir, hebrewTextStyle, overlayBoxDir, overlayBoxStyle } from "./rtlText";
 import { cn } from "@/lib/utils";
-import { Layers, Layers2, Loader2, RotateCcw, Sparkles, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
+import { Eraser, Layers, Layers2, Loader2, RotateCcw, Sparkles, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
 import type { CreativeVariation } from "./types";
 import { aspectRatioClass } from "./utils";
 import { isLogoLayer, styleLabelForId } from "./designedLayers";
@@ -16,6 +16,7 @@ interface Props {
   agentUrl?: string | null;
   liveTextLayers?: boolean;
   onRevise: (variation: CreativeVariation) => void;
+  onErase?: (variation: CreativeVariation) => void;
   onEditLayers?: (variation: CreativeVariation) => void;
   onDelete: (variation: CreativeVariation) => void;
   onRegenerate: (variation: CreativeVariation) => void;
@@ -31,6 +32,7 @@ export function CreativeVariationGrid({
   agentUrl,
   liveTextLayers,
   onRevise,
+  onErase,
   onEditLayers,
   onDelete,
   onRegenerate,
@@ -142,6 +144,11 @@ export function CreativeVariationGrid({
                   <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onRevise(variation)}>
                     <Sparkles className="h-3.5 w-3.5" />תקן עם Cursor
                   </Button>
+                  {onErase && (
+                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onErase(variation)}>
+                      <Eraser className="h-3.5 w-3.5" />מחק אזור
+                    </Button>
+                  )}
                   {liveTextLayers && onEditLayers && (
                     <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onEditLayers(variation)}>
                       <Layers className="h-3.5 w-3.5" />שכבות

@@ -24,6 +24,7 @@ export const FINISHED_HEBREW_AD = [
 export type CreativeImageWrapOptions = {
   regenerate?: boolean;
   liveTextLayers?: boolean;
+  inpaint?: boolean;
 };
 
 export const buildNoGlyphLock = (options?: { regenerate?: boolean }): string => [
@@ -39,8 +40,9 @@ export const buildFinishedAdLock = (options?: { regenerate?: boolean }): string 
 ].filter(Boolean).join(" ");
 
 export const wrapCreativeImagePrompt = (prompt: string, options?: CreativeImageWrapOptions): string => {
-  const lock = options?.liveTextLayers ? buildNoGlyphLock(options) : buildFinishedAdLock(options);
   const trimmed = prompt.trim();
+  if (options?.inpaint) return trimmed;
+  const lock = options?.liveTextLayers ? buildNoGlyphLock(options) : buildFinishedAdLock(options);
   if (/MUST FOLLOW THIS APPROVED VISUAL CONCEPT|CONCEPT PHOTOGRAPH — HARD LOCK/i.test(trimmed)) {
     return `${trimmed}\n\n${lock}`;
   }
