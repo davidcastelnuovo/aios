@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   CREATIVE_DIRECT_IDENTITY,
@@ -25,6 +26,14 @@ test("standing skill is a file plus Carmen skin, not a per-job lecture", () => {
   assert.match(CREATIVE_DIRECT_JOB_PREAMBLE, /JOB only/);
   assert.match(CREATIVE_DIRECT_JOB_PREAMBLE, /Do not ask to be re-briefed/);
   assert.match(CREATIVE_DIRECT_IDENTITY, /GenerateImage/);
+});
+
+test("standing skill file tells the image chat to honor the four-fact job brief", async () => {
+  const skill = await readFile(new URL("../../../../../.cursor/skills/creative-direct/SKILL.md", import.meta.url), "utf8");
+  assert.match(skill, /JOB BRIEF/);
+  assert.match(skill, /Critical reference URLs/);
+  assert.match(skill, /Project style/);
+  assert.match(skill, /STYLE CHANGE/);
 });
 
 test("sticky lookup marker is distinct from per-job dispatches", () => {

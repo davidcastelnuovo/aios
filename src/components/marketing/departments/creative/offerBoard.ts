@@ -1,5 +1,5 @@
-import type { CreativeFormat, CreativeLayer } from "./types";
-import { withLayerShadow } from "./layerShadow";
+import type { CreativeFormat, CreativeLayer } from "./types.ts";
+import { withLayerShadow } from "./layerShadow.ts";
 
 /** Bannerbear/Polotno-style named slots for the Promo lead-gen board. */
 export const OFFER_BOARD_SLOTS = {

@@ -54,7 +54,7 @@ import { pickVariationComposition } from "@/components/marketing/departments/cre
 import { isOptionalCostume } from "@/components/marketing/departments/creative/adaptiveTreatment";
 import { assembleStaticCreativePrompt } from "@/components/marketing/departments/creative/creativeGenerationPrompt";
 import { collectStaticReferencePlan } from "@/components/marketing/departments/creative/cursorArtDirector";
-import { buildCreativeAgentPrompt } from "@/components/marketing/departments/creative/cursorCreativeAgent";
+import { buildCreativeAgentPrompt, resolvePreviousStyleId } from "@/components/marketing/departments/creative/cursorCreativeAgent";
 import { hydrateVariationLayers, isInternalCopyLine } from "@/components/marketing/departments/creative/designedLayers";
 import { missingCopyBlocks } from "@/components/marketing/departments/creative/styleContinuity";
 import {
@@ -998,6 +998,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     });
     throwIfGenerationAborted(!!jobSignal?.aborted);
     const agentVariationId = replaceId ?? crypto.randomUUID();
+    const previousStyleId = resolvePreviousStyleId(replacing, styleSource, live);
     const agentPrompt = buildCreativeAgentPrompt({
       title: selected.title ?? undefined,
       format,
@@ -1010,6 +1011,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       kit: resolvedLogoUrl ? { ...kit, logoUrl: resolvedLogoUrl } : kit,
       refs: referencePlan.refs,
       liveTextLayers,
+      concept: chosenConcept,
+      styleId: style.id,
+      previousStyleId,
     });
     try {
       const dispatched = await dispatchCursorCreative({

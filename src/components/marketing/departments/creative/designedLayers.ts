@@ -1,12 +1,12 @@
-import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types";
-import { compositionById, pickVariationComposition, type CompositionId } from "./compositions";
-import { buildOfferBoardLayers, parseOfferBullets } from "./offerBoard";
-import { withLayerShadow } from "./layerShadow";
+import type { CreativeFormat, CreativeLayer, CreativeVariation } from "./types.ts";
+import { compositionById, pickVariationComposition, type CompositionId } from "./compositions.ts";
+import { buildOfferBoardLayers, parseOfferBullets } from "./offerBoard.ts";
+import { withLayerShadow } from "./layerShadow.ts";
 import {
   type CreativeVisualStyle,
   type CreativeVisualStyleId,
   visualStyleById,
-} from "./visualStyles";
+} from "./visualStyles.ts";
 
 export interface CopyParts {
   headline?: string;

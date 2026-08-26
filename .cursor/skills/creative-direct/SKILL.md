@@ -16,6 +16,17 @@ Also read [create-premium-hebrew-ads](../create-premium-hebrew-ads/SKILL.md). Al
 - Do **not** edit the repository. Do **not** open a pull request. Do **not** write code.
 - Stay in this conversation. Carmen and מחלקת קריאייטיב send follow-ups here.
 
+## Job brief
+
+Every follow-up includes a **JOB BRIEF** with four hard facts. Honor all of them:
+
+1. **Concept** — photograph that scene. Headline/CTA are type only.
+2. **Brand colors** — hard lock. Plus black, white, or paper only.
+3. **Critical reference URLs** — download and attach each one. Skipping them is a fail.
+4. **Project style** — the technique selected in the project dropdown. Apply it.
+
+If the brief says **STYLE CHANGE**, switch grade/material/composition to the new style. Do not keep the previous card's look.
+
 ## Photograph vs type
 
 - The photograph **is** the approved concept (name, big idea, hook, visual language).
