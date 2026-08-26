@@ -4,11 +4,14 @@ import type { CreativeVariation } from "./types";
 export function mergeCreativeVariations(
   live: CreativeVariation[],
   incoming: CreativeVariation[],
+  options?: { dropIds?: Iterable<string> },
 ): CreativeVariation[] {
+  const drop = new Set(options?.dropIds ?? []);
   const liveById = new Map(live.map((row) => [row.id, row]));
   const seen = new Set<string>();
   const merged: CreativeVariation[] = [];
   for (const row of incoming) {
+    if (drop.has(row.id)) continue;
     seen.add(row.id);
     const existing = liveById.get(row.id);
     if (!existing) {
@@ -23,7 +26,8 @@ export function mergeCreativeVariations(
     });
   }
   for (const row of live) {
-    if (!seen.has(row.id) && row.imageUrl) merged.push(row);
+    if (drop.has(row.id) || seen.has(row.id)) continue;
+    if (row.imageUrl) merged.push(row);
   }
   return merged;
 }

@@ -37,3 +37,13 @@ test("mergeCreativeVariations can un-reject when the incoming write says so", ()
   const incoming = [variation({ rejected: false, imageUrl: "https://img/new.png" })];
   assert.equal(mergeCreativeVariations(live, incoming)[0].rejected, false);
 });
+
+test("mergeCreativeVariations honors dropIds so a deleted still does not come back from live", () => {
+  const live = [
+    variation({ id: "keep", name: "Keep" }),
+    variation({ id: "gone", name: "Gone", imageUrl: "https://img/gone.png" }),
+  ];
+  const incoming = [variation({ id: "keep", name: "Keep" })];
+  const merged = mergeCreativeVariations(live, incoming, { dropIds: ["gone"] });
+  assert.equal(merged.map((row) => row.id).join(","), "keep");
+});

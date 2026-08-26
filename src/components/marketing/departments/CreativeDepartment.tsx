@@ -86,6 +86,16 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -108,6 +118,7 @@ import {
   Sparkles,
   Square,
   ThumbsDown,
+  Trash2,
   WandSparkles,
 } from "lucide-react";
 
@@ -182,6 +193,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [conceptPickerOpen, setConceptPickerOpen] = useState(false);
   const [conceptPickerLiveText, setConceptPickerLiveText] = useState(false);
   const [nextLiveTextLayers, setNextLiveTextLayers] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CreativeItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const generateAbortRef = useRef(false);
   const generateAbortControllerRef = useRef<AbortController | null>(null);
   const abortControllersRef = useRef<AbortController[]>([]);
@@ -794,7 +807,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         .maybeSingle();
       if (readError) throw readError;
       const latestPayload = (latestRow?.payload ?? selected.payload ?? {}) as Record<string, unknown>;
-      const merged = mergeCreativeVariations(getVariations(latestPayload), nextVariations);
+      const nextIds = new Set(nextVariations.map((row) => row.id));
+      const dropIds = variations.map((row) => row.id).filter((id) => !nextIds.has(id));
+      const merged = mergeCreativeVariations(getVariations(latestPayload), nextVariations, { dropIds });
       const active = selectedVariationId
         ? merged.find((variation) => variation.id === selectedVariationId) ?? merged[merged.length - 1]
         : merged[merged.length - 1];
@@ -1522,10 +1537,40 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
 
   const deleteVariation = async (target: CreativeVariation) => {
     const nextVariations = variations.filter((variation) => variation.id !== target.id);
-    await persistVariations(nextVariations, "הוריאציה נמחקה");
-    if (selectedVariationId === target.id) {
-      setSelectedVariationId(nextVariations[nextVariations.length - 1]?.id ?? null);
-      setWorkspacePanel(null);
+    try {
+      await persistVariations(nextVariations, "הוריאציה נמחקה");
+      if (selectedVariationId === target.id) {
+        setSelectedVariationId(nextVariations[nextVariations.length - 1]?.id ?? null);
+        setWorkspacePanel(null);
+      }
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "מחיקת הווריאציה נכשלה"));
+    }
+  };
+
+  const deleteProject = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await supabase.from("marketing_assets").delete().eq("item_id", deleteTarget.id).eq("tenant_id", tenantId);
+      const { error } = await supabase
+        .from("marketing_work_items")
+        .delete()
+        .eq("id", deleteTarget.id)
+        .eq("tenant_id", tenantId);
+      if (error) throw error;
+      if (selectedId === deleteTarget.id) {
+        setSelectedId(null);
+        setSelectedVariationId(null);
+        setWorkspacePanel(null);
+      }
+      toast.success("הפרויקט נמחק");
+      setDeleteTarget(null);
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "מחיקת הפרויקט נכשלה"));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1715,30 +1760,50 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         const owner = clients.find((client) => client.id === item.client_id);
         const type = getProjectType(item.payload);
         return (
-          <button
+          <div
             key={item.id}
-            type="button"
-            onClick={() => { setSelectedId(item.id); setSelectedVariationId(null); setWorkspacePanel(null); }}
             className={cn(
-              "mb-0.5 flex w-full min-w-0 items-start gap-2 rounded-lg px-1 py-2 text-right transition-colors",
+              "mb-0.5 flex w-full min-w-0 items-start gap-1 rounded-lg px-1 py-2 text-right transition-colors",
               projectsPinned ? "px-2" : "group-hover/sidebar:px-2 group-focus-within/sidebar:px-2",
               selectedId === item.id ? "bg-pink-50 dark:bg-pink-950/20" : "hover:bg-muted/60",
             )}
-            title={item.title || "ללא כותרת"}
           >
-            <div className={projectIconClass}>
-              {type === "video" ? <Clapperboard className="h-3.5 w-3.5 text-muted-foreground" /> : <Palette className="h-3.5 w-3.5 text-muted-foreground" />}
-            </div>
-            <div className={cn("min-w-0 flex-1", projectDetailsClass)}>
-              <div className="flex items-center gap-1.5">
-                <StatusDot status={item.status} />
-                <div className="truncate text-[13px] font-medium">{item.title || "ללא כותרת"}</div>
+            <button
+              type="button"
+              onClick={() => { setSelectedId(item.id); setSelectedVariationId(null); setWorkspacePanel(null); }}
+              className="flex min-w-0 flex-1 items-start gap-2 text-right"
+              title={item.title || "ללא כותרת"}
+            >
+              <div className={projectIconClass}>
+                {type === "video" ? <Clapperboard className="h-3.5 w-3.5 text-muted-foreground" /> : <Palette className="h-3.5 w-3.5 text-muted-foreground" />}
               </div>
-              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                {owner?.name || "ללא לקוח"} · {projectTypeLabel(type)} · {type === "video" ? `${getStoryboard(item.payload).length} סצנות` : `${getVariations(item.payload).length} וריאציות`}
+              <div className={cn("min-w-0 flex-1", projectDetailsClass)}>
+                <div className="flex items-center gap-1.5">
+                  <StatusDot status={item.status} />
+                  <div className="truncate text-[13px] font-medium">{item.title || "ללא כותרת"}</div>
+                </div>
+                <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  {owner?.name || "ללא לקוח"} · {projectTypeLabel(type)} · {type === "video" ? `${getStoryboard(item.payload).length} סצנות` : `${getVariations(item.payload).length} וריאציות`}
+                </div>
               </div>
-            </div>
-          </button>
+            </button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive",
+                projectDetailsClass,
+              )}
+              title="מחיקת פרויקט"
+              onClick={(event) => {
+                event.stopPropagation();
+                setDeleteTarget(item);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         );
       })}
     </div>
@@ -1947,6 +2012,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           גרסאות
         </Button>
       </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
+        title="מחיקת פרויקט"
+        onClick={() => setDeleteTarget(selected)}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        מחק
+      </Button>
       <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setCostOpen(true)}>
         <Coins className="h-3.5 w-3.5" />
         {formatUsd(costRows.find((row) => row.item.id === selected.id)?.spent.costUsd ?? 0)}
@@ -2480,6 +2555,29 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           setWorkspacePanel(null);
         }}
       />
+      <AlertDialog open={!!deleteTarget} onOpenChange={(value) => !value && !deleting && setDeleteTarget(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>למחוק את הפרויקט?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`"${deleteTarget?.title || "ללא כותרת"}" יימחק לצמיתות, כולל הווריאציות וההיסטוריה שלו.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteProject();
+              }}
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "מחק"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
