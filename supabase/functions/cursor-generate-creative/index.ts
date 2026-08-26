@@ -18,7 +18,8 @@ import {
   visualStyleFromPayload,
   type CreativeJobMeta,
 } from "../_shared/creative/payloadMeta.ts";
-import type { CreativeFormat } from "../_shared/creative/types.ts";
+import type { CreativeFormat, CreativeVisualStyleId } from "../_shared/creative/types.ts";
+import type { CompositionId } from "../_shared/creative/compositions.ts";
 import { CREATIVE_DIRECT_SKIN, CREATIVE_DIRECT_SKIN_SLUG } from "../_shared/creativeDirectStanding.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -340,6 +341,105 @@ function decodeImageBytes(imageBase64: string): Uint8Array {
   return bytes;
 }
 
+async function replaceNonce(variationId: string, itemId: string): Promise<string> {
+  const hash = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`${variationId}|${itemId}|creative-replace-v1`),
+  );
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
+}
+
+async function applyVariationImage({
+  itemId,
+  tenantId,
+  variationId,
+  imageBase64,
+  storageKey,
+  assetMeta,
+}: {
+  itemId: string;
+  tenantId: string;
+  variationId: string;
+  imageBase64: string;
+  storageKey: string;
+  assetMeta: Record<string, unknown>;
+}): Promise<{ imageUrl: string; variationId: string }> {
+  const { data: item, error } = await sb()
+    .from("marketing_work_items")
+    .select("payload")
+    .eq("id", itemId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (error || !item) throw new Error("item not found");
+  const payload = { ...((item.payload as Record<string, unknown> | null) ?? {}) };
+  const list = Array.isArray(payload.variations) ? payload.variations as Array<Record<string, unknown>> : [];
+  const existing = list.find((row) => String(row.id) === variationId);
+  if (!existing) throw new Error("variation not found");
+
+  const bytes = decodeImageBytes(imageBase64);
+  const path = `${tenantId}/creative/${itemId}/${storageKey}`;
+  const upload = await sb().storage.from("entity-attachments").upload(path, bytes, {
+    contentType: "image/png",
+    upsert: true,
+  });
+  if (upload.error) throw upload.error;
+  const { data: pub } = sb().storage.from("entity-attachments").getPublicUrl(path);
+  const imageUrl = pub.publicUrl;
+
+  const copyText = String(existing.copyText ?? existing.copy_text ?? "");
+  const format = (existing.format ?? payload.format ?? "1:1") as CreativeFormat;
+  const visualStyle = (existing.visualStyle ?? visualStyleFromPayload(payload) ?? "swiss") as CreativeVisualStyleId;
+  const compositionId = existing.compositionId as CompositionId | undefined;
+  const brandColors = brandColorsFromPayload(payload);
+  const liveTextLayers = existing.liveTextLayers === true || existing.live_text_layers === true;
+  const title = typeof payload.title === "string" ? payload.title : undefined;
+  const logoUrl = logoUrlFromPayload(payload);
+  const { layers, compositionId: resolvedCompositionId } = buildLayersForComplete({
+    copyText,
+    title,
+    format,
+    visualStyle,
+    compositionId,
+    brandColors,
+    logoUrl,
+    liveTextLayers,
+    compositionSeed: `${existing.copyKey || existing.copy_key || ""}|${existing.copyLabel || existing.copy_label || ""}|${copyText.slice(0, 48)}`,
+    usedCompositionIds: usedCompositionIdsFromPayload(payload),
+  });
+
+  await patchPayload(itemId, tenantId, (current) => {
+    const variations = Array.isArray(current.variations) ? [...current.variations] as Array<Record<string, unknown>> : [];
+    const index = variations.findIndex((row) => String(row.id) === variationId);
+    if (index < 0) throw new Error("variation not found");
+    variations[index] = {
+      ...variations[index],
+      imageUrl,
+      layers: liveTextLayers ? layers : [],
+      compositionId: compositionId ?? resolvedCompositionId,
+      source: "ai",
+    };
+    return {
+      ...current,
+      variations,
+      image_url: imageUrl,
+      department: "creative",
+    };
+  });
+
+  await sb().from("marketing_assets").insert({
+    tenant_id: tenantId,
+    item_id: itemId,
+    type: "image",
+    url: imageUrl,
+    meta: assetMeta,
+  });
+
+  return { imageUrl, variationId };
+}
+
 async function patchPayload(
   itemId: string,
   tenantId: string,
@@ -376,7 +476,7 @@ Deno.serve(async (req) => {
   const tenantId = String(body.tenant_id ?? "");
   const itemId = String(body.item_id ?? "");
   if (!tenantId) return json({ error: "tenant_id is required" }, 400);
-  if (action !== "status" && action !== "ensure" && action !== "learn" && !itemId) {
+  if (action !== "status" && action !== "ensure" && action !== "learn" && action !== "replace_variation" && !itemId) {
     return json({ error: "tenant_id and item_id are required" }, 400);
   }
 
@@ -423,6 +523,26 @@ Deno.serve(async (req) => {
       if (!lesson) return json({ error: "lesson is required" }, 400);
       await rememberCreativeLesson(tenantId, itemId || "none", lesson);
       return json({ ok: true });
+    }
+
+    if (action === "replace_variation") {
+      const variationId = String(body.variation_id ?? "");
+      const imageBase64 = String(body.image_base64 ?? "");
+      const nonce = String(body.replace_nonce ?? "");
+      if (!variationId || !imageBase64 || !nonce) {
+        return json({ error: "variation_id, image_base64, and replace_nonce are required" }, 400);
+      }
+      const expected = await replaceNonce(variationId, itemId);
+      if (nonce !== expected) return json({ error: "invalid replace_nonce" }, 401);
+      const result = await applyVariationImage({
+        itemId,
+        tenantId,
+        variationId,
+        imageBase64,
+        storageKey: `cursor/replace-${variationId}.png`,
+        assetMeta: { source: "cursor_creative_replace", variation_id: variationId },
+      });
+      return json({ ok: true, ...result });
     }
 
     if (action === "complete") {
