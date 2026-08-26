@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Bot, Loader2 } from "lucide-react";
+import { invokeErrorMessage } from "@/components/marketing/lib/invokeErrorMessage";
 
 interface ClientOption {
   id: string;
@@ -73,8 +73,9 @@ export function JoinMeetingBotDialog({
           meeting_topic: meetingTopic.trim() || null,
         },
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (error || data?.error) {
+        throw new Error(await invokeErrorMessage(error, data, "שליחת כרמן לפגישה נכשלה"));
+      }
       return data;
     },
     onSuccess: (data) => {
