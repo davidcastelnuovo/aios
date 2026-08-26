@@ -98,6 +98,7 @@ export function tenantRoutes() {
       <Route path="/t/:tenantSlug" element={<TenantAppShell />}>
         <Route index element={<Home />} />
         <Route path="home" element={<Home />} />
+        <Route path="ai-detection" element={<Navigate to="../marketing/department/seo" replace />} />
         <Route path="dashboard" element={<DashboardRouter />} />
         <Route path="agencies" element={<Agencies />} />
         <Route path="clients" element={<Clients />} />

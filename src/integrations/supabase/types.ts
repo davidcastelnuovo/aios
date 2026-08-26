@@ -1184,6 +1184,7 @@ export type Database = {
       ai_detection_brands: {
         Row: {
           brand_name: string
+          client_id: string | null
           competitor_names: string[] | null
           created_at: string | null
           created_by: string | null
@@ -1196,6 +1197,7 @@ export type Database = {
         }
         Insert: {
           brand_name: string
+          client_id?: string | null
           competitor_names?: string[] | null
           created_at?: string | null
           created_by?: string | null
@@ -1208,6 +1210,7 @@ export type Database = {
         }
         Update: {
           brand_name?: string
+          client_id?: string | null
           competitor_names?: string[] | null
           created_at?: string | null
           created_by?: string | null
