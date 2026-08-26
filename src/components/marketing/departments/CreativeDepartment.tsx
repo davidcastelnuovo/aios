@@ -66,13 +66,13 @@ import {
   type CreativeVisualStyleId,
 } from "@/components/marketing/departments/creative/visualStyles";
 import { filterCreativeDepartmentItems, isLinkableCopyItem } from "@/components/marketing/departmentFilters";
-import { resolveVisualPrompt } from "@/components/marketing/copyConcepts";
+import { resolveVisualPrompt, findCopyConcept, pickConceptForBatchIndex } from "@/components/marketing/copyConcepts";
 import { copyPullSummary, overlayCopyHandoffPayload, stampCopyPayloadAfterHandoff } from "@/components/marketing/copyHandoff";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -174,6 +174,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
   const [openingCreativeDirect, setOpeningCreativeDirect] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const [pendingStyleId, setPendingStyleId] = useState<CreativeVisualStyleId | null>(null);
+  const [conceptPickerOpen, setConceptPickerOpen] = useState(false);
   const generateAbortRef = useRef(false);
   const generateAbortControllerRef = useRef<AbortController | null>(null);
   const creativeJobIdRef = useRef<string | null>(null);
@@ -855,6 +856,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     regenerate,
     editTargetUrl,
     directorRefUrls = [],
+    conceptId,
   }: {
     copyText: string;
     copyKey?: string;
@@ -869,6 +871,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     regenerate?: boolean;
     editTargetUrl?: string;
     directorRefUrls?: string[];
+    conceptId?: string;
   }): Promise<CreativeVariation> => {
     if (!selected) throw new Error("לא נבחר פרויקט");
     throwIfGenerationAborted(generateAbortRef.current);
@@ -877,7 +880,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     const format = defaultFormat(selected.payload);
     const kit = getBrandKit(selected.payload);
     const live = existing ?? variations;
-    const visualPrompt = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
+    const approved = getApprovedCopyConcepts(selected);
+    const chosenConcept = findCopyConcept(approved, conceptId) ?? (conceptId ? undefined : approved[0]);
+    const visualPrompt = resolveVisualPrompt(selected.payload, approved, { primaryId: chosenConcept?.id });
     const replacing = replaceId ? live.find((variation) => variation.id === replaceId) : undefined;
     const compositionId = pickVariationComposition({
       seed: `${copyKey || ""}|${copyLabel || ""}|${live.length}|${copyText.slice(0, 48)}`,
@@ -970,6 +975,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           copyLabel,
           copyText,
           parentId,
+          conceptId: chosenConcept?.id,
+          conceptName: chosenConcept?.name,
         },
         prompt: agentPrompt,
         lesson: directorNote,
@@ -986,7 +993,12 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         signal: generationSignal(),
       });
       throwIfGenerationAborted(generateAbortRef.current);
-      return replaceId ? { ...fromAgent, id: replaceId } : fromAgent;
+      const stamped = {
+        ...fromAgent,
+        conceptId: chosenConcept?.id ?? fromAgent.conceptId,
+        conceptName: chosenConcept?.name ?? fromAgent.conceptName,
+      };
+      return replaceId ? { ...stamped, id: replaceId } : stamped;
     } catch (error: unknown) {
       if (isGenerationAborted(error)) throw error;
       if (isCursorCreativeSpendError(error)) {
@@ -1022,6 +1034,8 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
       source: "ai",
       copyKey,
       copyLabel,
+      conceptId: chosenConcept?.id,
+      conceptName: chosenConcept?.name,
       rejectNote: directorNote,
       parentId,
       logoUrl: kit.logoUrl,
@@ -1034,9 +1048,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     return replaceId ? { ...created, id: replaceId } : created;
   };
 
-  const generate = async (mode: "new" | "replace" = "new", target?: CreativeVariation) => {
+  const generate = async (
+    mode: "new" | "replace" = "new",
+    target?: CreativeVariation,
+    conceptId?: string,
+  ) => {
     if (!selected) return;
-    const visualPrompt = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
+    const approved = getApprovedCopyConcepts(selected);
+    const chosenConcept = findCopyConcept(approved, conceptId ?? target?.conceptId)
+      ?? (approved.length === 1 ? approved[0] : undefined);
+    const visualPrompt = resolveVisualPrompt(selected.payload, approved, { primaryId: chosenConcept?.id });
     if (cameFromCopy(selected) && !visualPrompt) {
       toast.error("אין קונספטים מאושרים על הפרויקט. חזרו לקופי, אשרו קונספט ולחצו לקריאייטיב — זה יעדכן את הפרויקט הקיים.");
       return;
@@ -1065,6 +1086,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           ? (replaceTarget.name.includes("·") ? replaceTarget.name : `${replaceTarget.name} · ${style.label}`)
           : undefined,
         regenerate: !!replaceTarget,
+        conceptId: chosenConcept?.id ?? replaceTarget?.conceptId,
       });
       const nextVariations = replaceTarget
         ? variations.map((variation) => variation.id === replaceTarget.id ? { ...replaceTarget, ...nextVariation, rejected: false } : variation)
@@ -1073,7 +1095,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         nextVariations,
         replaceTarget
           ? `העיצוב נוצר מחדש בסגנון ${style.label}`
-          : `נוצר קריאייטיב ל${nextVariation.copyLabel || "קופי"} בסגנון ${style.label}`,
+          : `נוצר קריאייטיב ל${nextVariation.copyLabel || "קופי"}${nextVariation.conceptName ? ` · ${nextVariation.conceptName}` : ""} בסגנון ${style.label}`,
       );
       setSelectedVariationId(nextVariation.id);
       if (mode !== "replace") setWorkspacePanel(null);
@@ -1087,9 +1109,21 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     }
   };
 
+  const requestSingleVariation = (conceptId?: string) => {
+    if (!selected) return;
+    const approved = getApprovedCopyConcepts(selected);
+    if (!conceptId && approved.length > 1) {
+      setConceptPickerOpen(true);
+      return;
+    }
+    setConceptPickerOpen(false);
+    void generate("new", undefined, conceptId ?? approved[0]?.id);
+  };
+
   const generateAllFromCopy = async (styleMode: "same" | "mixed") => {
     if (!selected) return;
-    const visualPrompt = resolveVisualPrompt(selected.payload, getApprovedCopyConcepts(selected));
+    const approved = getApprovedCopyConcepts(selected);
+    const visualPrompt = resolveVisualPrompt(selected.payload, approved);
     if (cameFromCopy(selected) && !visualPrompt) {
       toast.error("אין קונספטים מאושרים על הפרויקט. חזרו לקופי, אשרו קונספט ולחצו לקריאייטיב — זה יעדכן את הפרויקט הקיים.");
       return;
@@ -1104,9 +1138,13 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
     try {
       await prepareCreativeStage();
       let current = [...variations];
+      const usedConceptIds = current
+        .filter((variation) => !variation.rejected && variation.conceptId)
+        .map((variation) => variation.conceptId as string);
       for (const [index, block] of blocks.entries()) {
         throwIfGenerationAborted(generateAbortRef.current);
-        setGenerateProgress(`יוצר ${index + 1}/${blocks.length} · ${copyBlockLabel(block)}`);
+        const concept = pickConceptForBatchIndex(approved, index, usedConceptIds);
+        setGenerateProgress(`יוצר ${index + 1}/${blocks.length} · ${copyBlockLabel(block)}${concept?.name ? ` · ${concept.name}` : ""}`);
         const style = visualStyleById(styleMode === "mixed" && !isOptionalCostume(selectedStyleId)
           ? "adaptive"
           : selectedStyleId);
@@ -1116,13 +1154,14 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           copyLabel: copyBlockLabel(block),
           styleId: style.id,
           existing: current,
+          conceptId: concept?.id,
         });
         current = [...current, created];
         await persistVariations(current, `נוצר ${copyBlockLabel(block)}`);
         setSelectedVariationId(created.id);
       }
       setWorkspacePanel(null);
-      toast.success("נוצר קריאייטיב לכל וריאציית קופי לפי הקונספט והמותג");
+      toast.success("נוצר קריאייטיב לכל וריאציית קופי — כל אחת על קונספט מאושר אחר כשאפשר");
     } catch (error: unknown) {
       if (isGenerationAborted(error)) toast.message("היצירה נעצרה — מה שכבר נוצר נשמר");
       else toast.error(errorMessage(error, "יצירת הגריד נכשלה"));
@@ -1156,6 +1195,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           styleId: source.visualStyle || selectedStyleId,
           styleSource: source,
           existing: current,
+          conceptId: source.conceptId,
         });
         current = [...current, created];
         await persistVariations(current, `נוצר ${copyBlockLabel(block)} בסגנון שאישרת`);
@@ -1223,6 +1263,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         regenerate: true,
         editTargetUrl: rejectTarget.imageUrl,
         directorRefUrls: rejectRefs.map((reference) => reference.url),
+        conceptId: rejectTarget.conceptId,
       });
       const nextVariations = [
         ...variations.map((variation) => variation.id === rejectTarget.id ? { ...variation, rejected: true, rejectNote: rejectNote.trim() } : variation),
@@ -1263,6 +1304,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
         regenerate: true,
         editTargetUrl: reviseTarget.imageUrl,
         directorRefUrls: reviseRefs.map((reference) => reference.url),
+        conceptId: reviseTarget.conceptId,
       });
       await persistVariations([...variations, created], "נוצרה וריאציה לפי התיקון");
       setSelectedVariationId(created.id);
@@ -1540,6 +1582,16 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                     {concept.hook && (
                       <p className="mt-1 text-[11px] text-muted-foreground">הוק: {concept.hook}</p>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 h-7 w-full gap-1 text-[11px]"
+                      disabled={generating || loadingContext || !selected.client_id}
+                      onClick={() => requestSingleVariation(concept.id)}
+                    >
+                      <WandSparkles className="h-3 w-3" />
+                      צור וריאציה מהקונספט
+                    </Button>
                   </Card>
                 ))}
               </CollapsibleContent>
@@ -1559,6 +1611,9 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                   </span>
                 </div>
                 <div className="text-xs font-semibold">{selectedVariation.name}</div>
+                {selectedVariation.conceptName && (
+                  <div className="mt-1 text-[11px] text-emerald-700">{selectedVariation.conceptName}</div>
+                )}
                 {selectedVariation.comments.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {selectedVariation.comments.slice(-3).map((comment) => (
@@ -1701,7 +1756,7 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void generate("new")} disabled={generating || loadingContext || !selected.client_id}>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => requestSingleVariation()} disabled={generating || loadingContext || !selected.client_id}>
             {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
             וריאציה אחת
           </Button>
@@ -1841,6 +1896,10 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
                   צור לכל הקופי
                 </Button>
+                <Button variant="outline" className="gap-2" onClick={() => requestSingleVariation()} disabled={generating || loadingContext || !selected.client_id}>
+                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                  וריאציה אחת
+                </Button>
                 <Button variant="outline" className="gap-2" onClick={() => void generateAllFromCopy("mixed")} disabled={generating || loadingContext || !selected.client_id}>
                   מבנה שונה לכל קופי
                 </Button>
@@ -1924,6 +1983,46 @@ export function CreativeDepartment({ clientFilter, tenantId, onClientChange }: P
           await refresh();
         }}
       />
+
+      <Dialog open={conceptPickerOpen} onOpenChange={setConceptPickerOpen}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>איזה קונספט לצלם?</DialogTitle>
+            <DialogDescription>
+              יש כמה קונספטים מאושרים. בחרו סצנה אחת — בלי זה תמיד יוצא הקונספט הראשון.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-80">
+            <div className="space-y-2 py-2">
+              {getApprovedCopyConcepts(selected).map((concept) => {
+                const used = variations.some((variation) => !variation.rejected && variation.conceptId === concept.id);
+                return (
+                  <button
+                    key={concept.id}
+                    type="button"
+                    disabled={generating}
+                    onClick={() => requestSingleVariation(concept.id)}
+                    className="w-full rounded-xl border p-3 text-right hover:bg-muted/50 disabled:opacity-60"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-sm font-semibold">{concept.name}</div>
+                      {used
+                        ? <Badge variant="outline" className="h-5 shrink-0 font-normal">כבר בגריד</Badge>
+                        : <Badge className="h-5 shrink-0 bg-emerald-600 hover:bg-emerald-600 font-normal">מאושר</Badge>}
+                    </div>
+                    {concept.bigIdea && (
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{concept.bigIdea}</p>
+                    )}
+                    {concept.hook && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">הוק: {concept.hook}</p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={linkCopyOpen} onOpenChange={(value) => !value && !linkingCopy && setLinkCopyOpen(false)}>
         <DialogContent className="max-w-lg" dir="rtl">

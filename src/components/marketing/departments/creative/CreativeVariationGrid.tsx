@@ -125,6 +125,9 @@ export function CreativeVariationGrid({
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold">{variation.copyLabel || variation.name}</div>
                     <div className="truncate text-[11px] text-muted-foreground">{variation.name}</div>
+                    {variation.conceptName && (
+                      <div className="mt-0.5 truncate text-[11px] text-emerald-700">{variation.conceptName}</div>
+                    )}
                   </div>
                   {variation.visualStyle && <Badge variant="outline">{styleLabelForId(variation.visualStyle)}</Badge>}
                 </div>

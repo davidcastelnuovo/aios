@@ -234,6 +234,8 @@ export const makeVariation = ({
   title,
   copyKey,
   copyLabel,
+  conceptId,
+  conceptName,
   rejected,
   rejectNote,
   parentId,
@@ -253,6 +255,8 @@ export const makeVariation = ({
   title?: string;
   copyKey?: string;
   copyLabel?: string;
+  conceptId?: string;
+  conceptName?: string;
   rejected?: boolean;
   rejectNote?: string;
   parentId?: string;
@@ -277,6 +281,8 @@ export const makeVariation = ({
   copyKey,
   copyLabel,
   copyText,
+  conceptId,
+  conceptName,
   rejected,
   rejectNote,
   parentId,

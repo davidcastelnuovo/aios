@@ -86,16 +86,44 @@ const CONCEPT_PHOTOGRAPH_CLOSER = [
   "Do NOT invent a different metaphor. Do NOT flatten this into a generic lifestyle / product packshot unless the concept itself is a packshot.",
 ].join("\n");
 
+export function findCopyConcept(concepts: CopyConcept[], id?: string | null): CopyConcept | undefined {
+  if (!id) return undefined;
+  return concepts.find((concept) => concept.id === id);
+}
+
+/** Prefer unused approved concepts, then rotate through the full list. */
+export function pickConceptForBatchIndex(
+  concepts: CopyConcept[],
+  index: number,
+  usedConceptIds: Iterable<string> = [],
+): CopyConcept | undefined {
+  if (concepts.length === 0) return undefined;
+  const used = new Set([...usedConceptIds].filter(Boolean));
+  const unused = concepts.filter((concept) => !used.has(concept.id));
+  const pool = unused.length > 0 ? unused : concepts;
+  return pool[index % pool.length];
+}
+
+export type ConceptPromptOptions = {
+  /** Photograph only this approved concept. Other approved ideas are omitted. */
+  primaryId?: string;
+};
+
 /** English image-model prompt. Must stay first in the generation request. */
-export function formatCopyConceptsForImagePrompt(concepts: CopyConcept[]): string {
+export function formatCopyConceptsForImagePrompt(
+  concepts: CopyConcept[],
+  options?: ConceptPromptOptions,
+): string {
   if (concepts.length === 0) return "";
-  const primary = concepts[0];
-  const extras = concepts.slice(1);
+  const primary = findCopyConcept(concepts, options?.primaryId) ?? concepts[0];
+  const lockToOne = Boolean(options?.primaryId);
+  const extras = lockToOne ? [] : concepts.filter((concept) => concept.id !== primary.id);
   const lines = [
     "MUST FOLLOW THIS APPROVED VISUAL CONCEPT. This block IS the photograph — subject, location, props, lighting, and the first-second hook.",
     "The slogan and headline do NOT choose the scene. Never replace this concept with a literal illustration of the copy.",
     CONCEPT_PHOTOGRAPH_CLOSER,
     "Build a cinematic advertising still around this idea — never a generic text-on-background graphic.",
+    lockToOne && "This is the ONLY concept for this still. Do not blend, swap, or borrow a different approved campaign idea.",
     primary.name && `Concept name: ${primary.name}`,
     primary.bigIdea && `PHOTOGRAPH THIS SCENE (the entire still is this idea, not a pretty product photo): ${primary.bigIdea}`,
     primary.visualLanguage && `Art direction / visual language: ${primary.visualLanguage}`,
@@ -122,6 +150,7 @@ export function isApprovedConceptPrompt(visualPrompt?: string | null): boolean {
 export function resolveVisualPrompt(
   payload: Record<string, unknown> | null | undefined,
   concepts?: CopyConcept[],
+  options?: ConceptPromptOptions,
 ): string {
   const fromCaller = concepts?.length
     ? (approvedCopyConcepts(concepts).length > 0 ? approvedCopyConcepts(concepts) : concepts)
@@ -133,7 +162,7 @@ export function resolveVisualPrompt(
     : storedApproved.length > 0
       ? storedApproved.map((concept) => ({ ...concept, approved: true }))
       : fromPayload;
-  const live = formatCopyConceptsForImagePrompt(approved);
+  const live = formatCopyConceptsForImagePrompt(approved, options);
   if (live) return live;
   return typeof payload?.visual_prompt === "string" ? payload.visual_prompt.trim() : "";
 }

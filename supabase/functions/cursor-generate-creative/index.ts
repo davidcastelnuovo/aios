@@ -458,6 +458,8 @@ Deno.serve(async (req) => {
           copyLabel: variationMeta.copy_label ?? job.copy_label,
           copyText: variationMeta.copy_text ?? job.copy_text,
           parentId: variationMeta.parent_id ?? job.parent_id,
+          conceptId: variationMeta.concept_id ?? job.concept_id,
+          conceptName: variationMeta.concept_name ?? job.concept_name,
         };
         const index = list.findIndex((row) => String(row.id) === variationId);
         if (index >= 0) list[index] = { ...list[index], ...nextVariation, imageUrl };
@@ -524,6 +526,8 @@ Deno.serve(async (req) => {
           copy_label: variation.copy_label,
           copy_text: variation.copy_text,
           parent_id: variation.parent_id,
+          concept_id: variation.concept_id,
+          concept_name: variation.concept_name,
           created_at: new Date().toISOString(),
         },
       ],

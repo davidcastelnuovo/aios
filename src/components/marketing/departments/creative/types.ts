@@ -95,6 +95,8 @@ export interface CreativeVariation {
   copyKey?: string;
   copyLabel?: string;
   copyText?: string;
+  conceptId?: string;
+  conceptName?: string;
   rejected?: boolean;
   rejectNote?: string;
   parentId?: string;

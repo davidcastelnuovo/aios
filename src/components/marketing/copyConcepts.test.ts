@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatCopyConceptsForImagePrompt, isApprovedConceptPrompt, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
+import { formatCopyConceptsForImagePrompt, findCopyConcept, isApprovedConceptPrompt, pickConceptForBatchIndex, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
 
 const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
   id: overrides.id ?? "c1",
@@ -43,4 +43,43 @@ test("resolveVisualPrompt falls back to stored visual_prompt when there are no c
   );
   assert.equal(isApprovedConceptPrompt("KEEP THIS"), false);
   assert.equal(isApprovedConceptPrompt("MUST FOLLOW THIS APPROVED VISUAL CONCEPT\nPHOTOGRAPH THIS SCENE: locked door"), true);
+});
+
+test("formatCopyConceptsForImagePrompt with primaryId locks to that concept only", () => {
+  const second = concept({ id: "c2", name: "הכיסא הריק", bigIdea: "כיסא מול דלת נעולה" });
+  const prompt = formatCopyConceptsForImagePrompt(
+    [concept(), second],
+    { primaryId: "c2" },
+  );
+  assert.match(prompt, /Concept name: הכיסא הריק/);
+  assert.match(prompt, /כיסא מול דלת נעולה/);
+  assert.match(prompt, /ONLY concept for this still/);
+  assert.doesNotMatch(prompt, /הכיס הריק/);
+  assert.doesNotMatch(prompt, /Additional approved concepts/);
+  assert.equal(findCopyConcept([concept(), second], "c2")?.name, "הכיסא הריק");
+});
+
+test("resolveVisualPrompt with primaryId photographs the chosen approved concept", () => {
+  const prompt = resolveVisualPrompt(
+    { visual_prompt: "OLD" },
+    [concept(), concept({ id: "c2", name: "הקהל", bigIdea: "אולם ריק" })],
+    { primaryId: "c2" },
+  );
+  assert.match(prompt, /אולם ריק/);
+  assert.doesNotMatch(prompt, /ארנק פעור/);
+  assert.doesNotMatch(prompt, /Additional approved concepts/);
+});
+
+test("pickConceptForBatchIndex prefers unused approved concepts then rotates", () => {
+  const concepts = [
+    concept({ id: "a", name: "א" }),
+    concept({ id: "b", name: "ב" }),
+    concept({ id: "c", name: "ג" }),
+  ];
+  assert.equal(pickConceptForBatchIndex(concepts, 0, ["a"])?.id, "b");
+  assert.equal(pickConceptForBatchIndex(concepts, 1, ["a"])?.id, "c");
+  assert.equal(pickConceptForBatchIndex(concepts, 2, ["a"])?.id, "b");
+  assert.equal(pickConceptForBatchIndex(concepts, 0, ["a", "b", "c"])?.id, "a");
+  assert.equal(pickConceptForBatchIndex(concepts, 1, ["a", "b", "c"])?.id, "b");
+  assert.equal(pickConceptForBatchIndex([], 0)?.id, undefined);
 });

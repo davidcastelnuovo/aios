@@ -94,7 +94,7 @@ export async function dispatchCursorCreative({
   supabase: SupabaseClient;
   tenantId: string;
   itemId: string;
-  variation: Pick<CreativeVariation, "id" | "name" | "format" | "copyKey" | "copyLabel" | "copyText" | "parentId">;
+  variation: Pick<CreativeVariation, "id" | "name" | "format" | "copyKey" | "copyLabel" | "copyText" | "parentId" | "conceptId" | "conceptName">;
   prompt: string;
   lesson?: string;
   signal?: AbortSignal;
@@ -114,6 +114,8 @@ export async function dispatchCursorCreative({
       copy_label: variation.copyLabel,
       copy_text: variation.copyText,
       parent_id: variation.parentId,
+      concept_id: variation.conceptId,
+      concept_name: variation.conceptName,
     },
   }, signal);
   const agentUrl = String(data.agent_url ?? "");
