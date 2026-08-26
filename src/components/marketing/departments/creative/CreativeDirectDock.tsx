@@ -5,11 +5,10 @@ import { ExternalLink, Loader2, MessageCircle, Sparkles } from "lucide-react";
 interface Props {
   agentUrl: string | null;
   opening?: boolean;
-  generating?: boolean;
   onOpen: () => void;
 }
 
-export function CreativeDirectDock({ agentUrl, opening, generating, onOpen }: Props) {
+export function CreativeDirectDock({ agentUrl, opening, onOpen }: Props) {
   return (
     <div
       className="flex flex-wrap items-center gap-3 border-b bg-gradient-to-l from-pink-50/90 to-violet-50/50 px-4 py-2.5"
@@ -33,7 +32,7 @@ export function CreativeDirectDock({ agentUrl, opening, generating, onOpen }: Pr
           </a>
         </Button>
       ) : (
-        <Button size="sm" className="gap-1.5 bg-pink-600 hover:bg-pink-700" onClick={onOpen} disabled={opening || generating}>
+        <Button size="sm" className="gap-1.5 bg-pink-600 hover:bg-pink-700" onClick={onOpen} disabled={opening}>
           {opening ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
           פתח צ׳אט
         </Button>

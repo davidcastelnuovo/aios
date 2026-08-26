@@ -11,10 +11,9 @@ import { styleLabelForId } from "./designedLayers";
 
 interface Props {
   variations: CreativeVariation[];
-  generatingId?: string | null;
+  generatingIds?: string[];
   progressLabel?: string;
   agentUrl?: string | null;
-  disabled?: boolean;
   liveTextLayers?: boolean;
   onRevise: (variation: CreativeVariation) => void;
   onEditLayers?: (variation: CreativeVariation) => void;
@@ -27,10 +26,9 @@ interface Props {
 
 export function CreativeVariationGrid({
   variations,
-  generatingId,
+  generatingIds,
   progressLabel,
   agentUrl,
-  disabled,
   liveTextLayers,
   onRevise,
   onEditLayers,
@@ -57,7 +55,7 @@ export function CreativeVariationGrid({
       )}
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {variations.map((variation) => {
-          const busy = generatingId === variation.id;
+          const busy = generatingIds?.includes(variation.id) ?? false;
           const overlayLayers = (variation.layers ?? []).filter((layer) => {
             if (layer.type === "background") return false;
             if (liveTextLayers) return true;
@@ -116,6 +114,11 @@ export function CreativeVariationGrid({
                     ) : null}
                   </div>
                 ))}
+                {busy && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/35">
+                    <Loader2 className="h-8 w-8 animate-spin text-white" />
+                  </span>
+                )}
                 {variation.rejected && (
                   <span className="absolute inset-x-3 top-3 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white">נדחה</span>
                 )}
@@ -135,15 +138,15 @@ export function CreativeVariationGrid({
                   <p className="line-clamp-2 text-[11px] text-destructive">רג׳קט: {variation.rejectNote}</p>
                 )}
                 <div className="flex flex-wrap gap-1.5">
-                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onRevise(variation)} disabled={disabled}>
+                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onRevise(variation)}>
                     <Sparkles className="h-3.5 w-3.5" />תקן עם Cursor
                   </Button>
                   {liveTextLayers && onEditLayers && (
-                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onEditLayers(variation)} disabled={disabled}>
+                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onEditLayers(variation)}>
                       <Layers className="h-3.5 w-3.5" />שכבות
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onRegenerate(variation)} disabled={disabled}>
+                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onRegenerate(variation)} disabled={busy}>
                     {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                     ג׳נרט
                   </Button>
@@ -153,7 +156,7 @@ export function CreativeVariationGrid({
                       variant="outline"
                       className="h-8 gap-1"
                       onClick={() => onExpandStyle(variation)}
-                      disabled={disabled || (remainingCopyCount?.(variation) ?? 0) === 0}
+                      disabled={(remainingCopyCount?.(variation) ?? 0) === 0}
                       title={(remainingCopyCount?.(variation) ?? 0) === 0 ? "כל וריאציות הקופי כבר בגריד" : "צור את שאר הקופי באותו סגנון"}
                     >
                       <Layers2 className="h-3.5 w-3.5" />
@@ -163,10 +166,10 @@ export function CreativeVariationGrid({
                       )}
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onReject(variation)} disabled={disabled}>
+                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onReject(variation)}>
                     <ThumbsDown className="h-3.5 w-3.5" />רג׳קט
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-8 gap-1 text-destructive" onClick={() => onDelete(variation)} disabled={disabled}>
+                  <Button size="sm" variant="ghost" className="h-8 gap-1 text-destructive" onClick={() => onDelete(variation)}>
                     <Trash2 className="h-3.5 w-3.5" />מחק
                   </Button>
                 </div>
