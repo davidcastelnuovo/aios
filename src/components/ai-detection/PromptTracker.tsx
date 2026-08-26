@@ -155,8 +155,6 @@ export function PromptTracker({
                 <TableHead className="text-right">פרומפט</TableHead>
                 <TableHead className="text-right">סטטוס</TableHead>
                 <TableHead className="text-center">ChatGPT</TableHead>
-                <TableHead className="text-center">Gemini</TableHead>
-                <TableHead className="text-center">Perplexity</TableHead>
                 <TableHead className="text-right">מתחרים</TableHead>
                 {(onEditPrompt || onDeletePrompt) && <TableHead className="w-[80px] text-center">פעולות</TableHead>}
               </TableRow>
@@ -167,8 +165,6 @@ export function PromptTracker({
                   <TableCell className="max-w-[280px] truncate font-medium">{prompt.prompt}</TableCell>
                   <TableCell><Badge variant="outline" className={cn("text-[10px]", statusClass[prompt.status])}>{STATUS_LABELS[prompt.status]}</Badge></TableCell>
                   <TableCell className="text-center">{prompt.platforms.chatgpt ? <Check className="mx-auto h-4 w-4 text-green-500" /> : <X className="mx-auto h-4 w-4 text-red-500" />}</TableCell>
-                  <TableCell className="text-center">{prompt.platforms.gemini ? <Check className="mx-auto h-4 w-4 text-green-500" /> : <X className="mx-auto h-4 w-4 text-red-500" />}</TableCell>
-                  <TableCell className="text-center">{prompt.platforms.perplexity ? <Check className="mx-auto h-4 w-4 text-green-500" /> : <X className="mx-auto h-4 w-4 text-red-500" />}</TableCell>
                   <TableCell className="max-w-[140px] truncate text-xs text-muted-foreground">{prompt.competitors.join(", ") || "—"}</TableCell>
                   {(onEditPrompt || onDeletePrompt) && (
                     <TableCell className="text-center" onClick={(event) => event.stopPropagation()}>
@@ -190,7 +186,7 @@ export function PromptTracker({
               ))}
               {filteredPrompts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">לא נמצאו פרומפטים</TableCell>
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">לא נמצאו פרומפטים</TableCell>
                 </TableRow>
               )}
             </TableBody>

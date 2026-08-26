@@ -56,14 +56,8 @@ export function ScanHistory({ scores }: ScanHistoryProps) {
               </div>
 
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs gap-1">
-                  <span>🤖</span> {score.chatgpt_score ?? 0}%
-                </Badge>
-                <Badge variant="outline" className="text-xs gap-1">
-                  <span>✨</span> {score.gemini_score ?? 0}%
-                </Badge>
-                <Badge variant="outline" className="text-xs gap-1">
-                  <span>🔍</span> {score.perplexity_score ?? 0}%
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <span>🤖</span> ChatGPT {score.chatgpt_score ?? score.score}%
                 </Badge>
               </div>
 

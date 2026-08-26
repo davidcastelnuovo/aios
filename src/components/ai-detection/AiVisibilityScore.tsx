@@ -51,7 +51,7 @@ export function AiVisibilityScore({ score, previousScore, totalPrompts, mentione
               <Progress value={(mentionedPrompts / totalPrompts) * 100} className="h-2" />
             </div>
             <p className="text-xs text-muted-foreground">
-              הציון מבוסס על אחוז הפרומפטים בהם המותג שלך מוזכר בתשובות AI
+              ציון = פרומפטים שבהם ChatGPT הזכיר את המותג / כל הפרומפטים שנסרקו. הסריקה רצה עם חיפוש חי ממיקום ישראל, כמו משתמש רגיל — לא ידע קפוא של API.
             </p>
           </div>
         </div>

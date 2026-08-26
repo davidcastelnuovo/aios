@@ -37,8 +37,6 @@ export function TrendChart({ data }: TrendChartProps) {
               <Legend />
               <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={3} name="ציון כולל" dot={false} />
               <Line type="monotone" dataKey="chatgpt" stroke="#10a37f" strokeWidth={2} name="ChatGPT" dot={false} strokeDasharray="5 5" />
-              <Line type="monotone" dataKey="gemini" stroke="#4285f4" strokeWidth={2} name="Gemini" dot={false} strokeDasharray="5 5" />
-              <Line type="monotone" dataKey="perplexity" stroke="#7c3aed" strokeWidth={2} name="Perplexity" dot={false} strokeDasharray="5 5" />
             </LineChart>
           </ResponsiveContainer>
         </div>

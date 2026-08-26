@@ -294,7 +294,7 @@ function ProjectDashboard({
         </div>
 
         <p className="text-xs text-muted-foreground">
-          הסריקה רצה כרגע דרך ChatGPT. עמודות Gemini ו-Perplexity ישמרו כתוויות עד שיותקנו מתאמים אמיתיים — לא מציגים אותן כמנועים נפרדים ללקוח.
+          הסריקה שואלת את ChatGPT עם חיפוש חי, ממיקום ישראל, בלי לדחוף שמות מותגים. Gemini ו-Perplexity לא נסרקים עד שיהיה מתאם אמיתי.
         </p>
 
         <Tabs defaultValue="overview" dir="rtl">
@@ -337,6 +337,19 @@ function ProjectDashboard({
                   />
                   <PlatformBreakdown platforms={platformBreakdown} />
                 </div>
+                <Card>
+                  <CardContent className="space-y-2 pt-6 text-sm leading-relaxed">
+                    <h3 className="font-semibold">איך מחושב הציון</h3>
+                    <p>
+                      ציון נראות AI = כמה שאילתות high-intent ChatGPT הזכיר בהן את המותג, חלקי כל השאילתות שרצנו.
+                      זה לא נפח חיפוש כמו SEO — ב-ChatGPT הזנב ארוך בלי סוף, אז מודדים «האם ה-AI ימליץ עליכם לשאלת קנייה בנישה».
+                    </p>
+                    <p className="text-muted-foreground">
+                      כל שאילתה רצה כמו משתמש בישראל: ChatGPT עם חיפוש חי (לא ידע קפוא של API), בלי לדחוף שמות מותגים.
+                      הציטוטים בתשובה הם מקורות שאפשר להשפיע עליהם — Reddit, ביקורות, מדריכים — ואז להפוך לטיפ SEO.
+                    </p>
+                  </CardContent>
+                </Card>
                 {trendData.length > 0 && <TrendChart data={trendData} />}
                 <Recommendations
                   recommendations={summary.tips.slice(0, 3)}
