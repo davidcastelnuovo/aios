@@ -69,8 +69,9 @@ export function resolveTasksBoardAgencyFilter(
   selectedAgency: string | null | undefined,
 ): string | null | undefined {
   if (campaignerFilter === "all") return selectedAgency;
-  if (!selectedAgency || selectedAgency === "all") return "all";
-  return selectedAgency;
+  // Person queue ("שלי בלבד" / named campaigner): never narrow by header agency.
+  // AgencyContext may force a single-agency header; assignments still span agencies.
+  return "all";
 }
 
 /** @deprecated Prefer resolveTasksBoardAgencyFilter — kept for tests/docs clarity. */
