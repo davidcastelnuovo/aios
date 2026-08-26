@@ -77,20 +77,20 @@ Jobs may attach images. Download each URL and attach it to GenerateImage. Honor 
 - **Technique sample** — match material/light/grade only. New cast, new crop.
 - **Logo** — download and ATTACH this exact mark, then integrate it into the still. The app does **not** overlay a watermark. Never default to a bottom-corner sticker. If no clean pocket, omit rather than covering type.
 
-## Logo — contrast and fidelity (hard)
+## Logo — contrast through design (hard)
 
-The Promo mark is **red on transparent PNG**. On dark heroes it **disappears** if you paint it into the image or drop it on black.
+The Promo mark is **red on transparent PNG**. It **vanishes** on dark/black heroes. **Do not fix this with a pasted plaster pad** — design the still so the logo reads naturally.
 
-**Composition (before GenerateImage):**
-- Reserve an **opaque light pad** for the logo — paper/white/cream (`#ffffff` / `#f5f0eb`), **minimum ~14% frame width × 8% height**, rounded corners, subtle drop shadow.
-- Place pad **top-left or top-right** (opposite the headline/CTA rail). Never bottom-corner. Never directly on charcoal, scan grid, or night sky.
-- Keep the pad **empty** in the generation prompt — do not ask the image model to paint the logo.
+**Design first (composition + palette):**
+- **Flip luminance:** paper/white/light blue should **dominate** the frame (~60%+), not charcoal noir. Dark tones are accents only.
+- Build a **light header band or bright wall zone** (part of the layout architecture — hero + footer split, offer-board style) where the logo lives. It must feel designed in, not a floating rectangle patched on later.
+- Match brand lock: Promo reds `#c00000` / `#e00000` / `#a00000` / `#400000` as **accents** on a bright field — chair, CTA, map pin, divider — not a black canvas with red type.
 
-**Integration (after GenerateImage):**
-- **Composite the exact downloaded logo PNG** onto the reserved pad (centered, ~75–85% of pad, preserve alpha). Do not redraw, blur, or recolor the mark.
-- If the model filled the pad or smeared a fake logo, regenerate with a clearer empty pad, then composite.
+**Integration:**
+- Generate the scene **bright by default** with a natural quiet pocket (light wall, paper header, sky band) reserved top-left or top-right — **empty**, no fake logo painted by the model.
+- **Composite the exact downloaded logo PNG** onto that light zone after generation (centered, preserve alpha). Never redraw the mark.
 
-**Fail conditions:** logo missing; logo on black without light backing; invented/smeared mark; logo smaller than ~10% of short edge; logo colliding with headline/CTA.
+**Fail conditions:** black-dominant hero with logo plaster; logo on dark without bright surround; invented/smeared mark; logo colliding with headline/CTA.
 
 ## Taste memory
 

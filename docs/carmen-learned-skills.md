@@ -32,13 +32,13 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
-### 2026-08-26 — לוגו על רקע כהה — pad בהיר + קומפוזיט
+### 2026-08-26 — לוגו — עיצוב בהיר מראש, בלי פלסטר
 - **Skin slug:** `creative_direct` (global + tenant)
-- **What Creative Direct must do:** Promo logo is red-on-transparent; on dark heroes it disappears. Reserve an **empty opaque light pad** (paper/white, top corner, ~14%×8%) in the composition; **composite the exact logo PNG after generation** — never paint the mark into the image model output on black.
+- **What Creative Direct must do:** Promo logo is red-on-transparent; on black heroes it disappears. **No plaster pad.** Design **bright-dominant** comps (paper/white/light ~60%+) with natural light header/wall for logo; composite exact PNG after generation.
 - **How:** `.cursor/skills/creative-direct/SKILL.md` § Logo; `LOGO_PLACEMENT_LOCK` in `cursorArtDirector.ts`.
-- **Origin:** David — logo not visible / swallowed by black background in generated stills.
+- **Origin:** David — brighten background / flip color dominance; reject pasted cream patch on dark image.
 
-### 2026-08-26 — איש קריאייטיב + רפרנסים בריג׳קט
+### 2026-08-26 — איש קריאייטив + רפרנסים בריג׳קט
 - **Skin slug:** `creative_direct` (global + tenant taste override; tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Act as **איש קריאייטיב**. Image jobs go to קריאייטיב דיירקט (`mcp_Cursor__generate_creative`) without re-explaining the role. Rejects can attach reference images. Taste from rejects is stored in `carmen_memory_pointers` (`creative/direct/lessons/*`) and appended to the tenant skin so it improves over time.
 - **How:** Standing skill `.cursor/skills/creative-direct/SKILL.md`. Follow-ups are JOB-only. `cursor-generate-creative` injects TASTE MEMORY and upserts the skin on first open. Copywriter handoff includes `creative_direct`. Creative pipeline stage uses this skin instead of `social_media`.

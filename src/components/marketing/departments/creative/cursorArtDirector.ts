@@ -43,13 +43,13 @@ export const STATIC_CAST_LOCK = [
 ].join(" ");
 
 export const LOGO_PLACEMENT_LOCK = [
-  "LOGO PLACEMENT (hard): download the labeled logo file. The mark is red-on-transparent — it vanishes on dark backgrounds.",
-  "Reserve an EMPTY opaque light pad in the composition (paper/white/cream, ~14%×8% min, rounded, subtle shadow) top-left or top-right — opposite headline/CTA. Never on black/charcoal/night sky.",
-  "Do NOT ask the image model to paint the logo. After generation, composite the exact attached logo PNG onto the pad (centered, ~80% of pad, preserve alpha).",
-  "The app does NOT overlay a logo watermark. If you skip attaching this file, the ad ships without a brand mark.",
-  "Never default to a bottom-corner watermark (left or right). Never hide it under type.",
-  "Put type and logo in different regions: if type is lower-third, logo goes top; if type is a right rail, logo goes the opposite corner.",
-  "If no room for a proper light pad (~8% short edge), OMIT the logo — missing is better than invisible on black.",
+  "LOGO PLACEMENT (hard): download the labeled logo file. Red-on-transparent — it vanishes on black-dominant heroes.",
+  "Do NOT paste a plaster/band-aid pad on a dark image. DESIGN BRIGHT FIRST: paper/white/light should dominate (~60%+); dark is accent only.",
+  "Include a natural light header band or bright wall zone (split-band layout) where the logo belongs — designed in, not floating patch.",
+  "Keep that zone empty in generation; after GenerateImage, composite the exact attached logo PNG there (preserve alpha). Never paint the mark with the image model.",
+  "The app does NOT overlay a logo watermark. Never bottom-corner watermark.",
+  "Type and logo in different regions: lower-third type → logo top on light field.",
+  "If the comp is inherently dark and has no designed light zone, brighten the art direction — do not ship a plaster.",
   "Never invent, redraw, recolor, or smear a fake logo.",
 ].join(" ");
 
