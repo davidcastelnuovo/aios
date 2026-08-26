@@ -43,13 +43,14 @@ export const STATIC_CAST_LOCK = [
 ].join(" ");
 
 export const LOGO_PLACEMENT_LOCK = [
-  "LOGO PLACEMENT (hard): download the labeled logo file and paint the REAL brand mark into the PNG.",
+  "LOGO PLACEMENT (hard): download the labeled logo file. The mark is red-on-transparent — it vanishes on dark backgrounds.",
+  "Reserve an EMPTY opaque light pad in the composition (paper/white/cream, ~14%×8% min, rounded, subtle shadow) top-left or top-right — opposite headline/CTA. Never on black/charcoal/night sky.",
+  "Do NOT ask the image model to paint the logo. After generation, composite the exact attached logo PNG onto the pad (centered, ~80% of pad, preserve alpha).",
   "The app does NOT overlay a logo watermark. If you skip attaching this file, the ad ships without a brand mark.",
-  "Place it in a visible quiet pocket that does NOT overlap headline or CTA.",
   "Never default to a bottom-corner watermark (left or right). Never hide it under type.",
   "Put type and logo in different regions: if type is lower-third, logo goes top; if type is a right rail, logo goes the opposite corner.",
-  "If the only remaining pocket is smaller than ~8% of the short edge, or type would cover the mark, OMIT the logo. A missing logo is better than a hidden or colliding one.",
-  "Never invent, redraw, or smear a fake logo.",
+  "If no room for a proper light pad (~8% short edge), OMIT the logo — missing is better than invisible on black.",
+  "Never invent, redraw, recolor, or smear a fake logo.",
 ].join(" ");
 
 const MAX_STATIC_REFS = 3;

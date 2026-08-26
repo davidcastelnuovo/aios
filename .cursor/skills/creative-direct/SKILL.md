@@ -77,6 +77,21 @@ Jobs may attach images. Download each URL and attach it to GenerateImage. Honor 
 - **Technique sample** — match material/light/grade only. New cast, new crop.
 - **Logo** — download and ATTACH this exact mark, then integrate it into the still. The app does **not** overlay a watermark. Never default to a bottom-corner sticker. If no clean pocket, omit rather than covering type.
 
+## Logo — contrast and fidelity (hard)
+
+The Promo mark is **red on transparent PNG**. On dark heroes it **disappears** if you paint it into the image or drop it on black.
+
+**Composition (before GenerateImage):**
+- Reserve an **opaque light pad** for the logo — paper/white/cream (`#ffffff` / `#f5f0eb`), **minimum ~14% frame width × 8% height**, rounded corners, subtle drop shadow.
+- Place pad **top-left or top-right** (opposite the headline/CTA rail). Never bottom-corner. Never directly on charcoal, scan grid, or night sky.
+- Keep the pad **empty** in the generation prompt — do not ask the image model to paint the logo.
+
+**Integration (after GenerateImage):**
+- **Composite the exact downloaded logo PNG** onto the reserved pad (centered, ~75–85% of pad, preserve alpha). Do not redraw, blur, or recolor the mark.
+- If the model filled the pad or smeared a fake logo, regenerate with a clearer empty pad, then composite.
+
+**Fail conditions:** logo missing; logo on black without light backing; invented/smeared mark; logo smaller than ~10% of short edge; logo colliding with headline/CTA.
+
 ## Taste memory
 
 Rejects and director notes are how this skill grows. When a job includes **TASTE MEMORY**, those lines outrank generic aesthetic defaults. Do not forget them for later jobs in this chat.
