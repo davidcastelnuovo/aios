@@ -9,6 +9,16 @@ import {
   resolveCreativeCursorModel,
 } from "../_shared/cursorCreativeModel.ts";
 import { upsertPointer } from "../_shared/carmen-memory.ts";
+import { buildLayersForComplete } from "../_shared/creative/completeVariation.ts";
+import {
+  brandColorsFromPayload,
+  jobMetaFromRecord,
+  logoUrlFromPayload,
+  usedCompositionIdsFromPayload,
+  visualStyleFromPayload,
+  type CreativeJobMeta,
+} from "../_shared/creative/payloadMeta.ts";
+import type { CreativeFormat } from "../_shared/creative/types.ts";
 import { CREATIVE_DIRECT_SKIN, CREATIVE_DIRECT_SKIN_SLUG } from "../_shared/creativeDirectStanding.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -21,7 +31,9 @@ const CREATIVE_DIRECT_IDENTITY = [
   "You are קריאייטיב דיירקט (AIOS Creative Direct) — the dedicated image chat of מחלקת קריאייטיב.",
   "Carmen and the creative department send jobs into THIS conversation as follow-ups. Stay in this thread.",
   "Do NOT edit the repository. Do NOT open a pull request. Do NOT write code.",
-  "For each job: GenerateImage ONE finished Hebrew advertising still, POST the PNG back with action=complete, then stop.",
+  "For each job: GenerateImage ONE advertising still, POST the PNG back with action=complete, then stop.",
+  "LIVE TEXT jobs: letter-empty photograph only — no painted Hebrew/English/digits. DO paint the real brand logo. Type is composited later as RTL layers.",
+  "FINISHED AD jobs: paint quoted RTL Hebrew on the concept photograph — type only, never restage the copy as a new scene.",
   "The photograph is the approved concept. Headline/CTA are TYPE only — never restage the copy as a new scene.",
 ].join(" ");
 
@@ -442,6 +454,27 @@ Deno.serve(async (req) => {
       const imageUrl = pub.publicUrl;
       const variationMeta = (body.variation && typeof body.variation === "object" ? body.variation : {}) as Record<string, unknown>;
       const variationId = String(job.variation_id || variationMeta.id || crypto.randomUUID());
+      const jobMeta = jobMetaFromRecord(job);
+      const copyText = String(variationMeta.copy_text ?? job.copy_text ?? "");
+      const format = (variationMeta.format ?? payload.format ?? "1:1") as CreativeFormat;
+      const visualStyle = jobMeta.visual_style ?? visualStyleFromPayload(payload) ?? "swiss";
+      const compositionId = jobMeta.composition_id;
+      const brandColors = jobMeta.brand_colors ?? brandColorsFromPayload(payload);
+      const liveTextLayers = jobMeta.live_text_layers ?? payload.live_text_layers === true;
+      const title = jobMeta.title ?? (typeof payload.title === "string" ? payload.title : undefined);
+      const logoUrl = jobMeta.logo_url ?? logoUrlFromPayload(payload);
+      const { layers, compositionId: resolvedCompositionId } = buildLayersForComplete({
+        copyText,
+        title,
+        format,
+        visualStyle,
+        compositionId,
+        brandColors,
+        logoUrl,
+        liveTextLayers,
+        compositionSeed: jobMeta.composition_seed ?? `${job.copy_key || ""}|${job.copy_label || ""}|${copyText.slice(0, 48)}`,
+        usedCompositionIds: usedCompositionIdsFromPayload(payload),
+      });
 
       await patchPayload(itemId, tenantId, (current) => {
         const list = Array.isArray(current.variations) ? [...current.variations] as Array<Record<string, unknown>> : [];
@@ -449,14 +482,16 @@ Deno.serve(async (req) => {
           id: variationId,
           name: String(variationMeta.name || job.variation_name || "וריאציה"),
           imageUrl,
-          format: String(variationMeta.format || current.format || "1:1"),
-          layers: [],
+          format: String(format),
+          layers,
           comments: [],
           createdAt: new Date().toISOString(),
           source: "ai",
+          visualStyle,
+          compositionId: compositionId ?? resolvedCompositionId,
           copyKey: variationMeta.copy_key ?? job.copy_key,
           copyLabel: variationMeta.copy_label ?? job.copy_label,
-          copyText: variationMeta.copy_text ?? job.copy_text,
+          copyText,
           parentId: variationMeta.parent_id ?? job.parent_id,
           conceptId: variationMeta.concept_id ?? job.concept_id,
           conceptName: variationMeta.concept_name ?? job.concept_name,
@@ -511,6 +546,15 @@ Deno.serve(async (req) => {
     const variationId = String(variation.id || crypto.randomUUID());
     const jobId = crypto.randomUUID();
     const jobToken = crypto.randomUUID().replaceAll("-", "");
+    const jobMeta = (body.job_meta && typeof body.job_meta === "object" ? body.job_meta : {}) as CreativeJobMeta;
+    const payloadSnapshot = itemId ? await sb()
+      .from("marketing_work_items")
+      .select("payload,title")
+      .eq("id", itemId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle() : { data: null };
+    const itemPayload = (payloadSnapshot.data?.payload ?? {}) as Record<string, unknown>;
+    const itemTitle = typeof payloadSnapshot.data?.title === "string" ? payloadSnapshot.data.title : undefined;
 
     await patchPayload(itemId, tenantId, (current) => ({
       ...current,
@@ -528,6 +572,13 @@ Deno.serve(async (req) => {
           parent_id: variation.parent_id,
           concept_id: variation.concept_id,
           concept_name: variation.concept_name,
+          visual_style: jobMeta.visual_style ?? visualStyleFromPayload(itemPayload),
+          composition_id: jobMeta.composition_id,
+          brand_colors: jobMeta.brand_colors ?? brandColorsFromPayload(itemPayload),
+          live_text_layers: jobMeta.live_text_layers ?? itemPayload.live_text_layers === true,
+          title: jobMeta.title ?? itemTitle,
+          logo_url: jobMeta.logo_url ?? logoUrlFromPayload(itemPayload),
+          composition_seed: jobMeta.composition_seed,
           created_at: new Date().toISOString(),
         },
       ],
