@@ -19,9 +19,14 @@ export interface StoredCopyVariation {
   text: string;
   headline?: string;
   cta?: string;
+  /** Concept this copy was written to serve. */
+  conceptId?: string;
+  conceptName?: string;
   approved: boolean;
   approvedAt: string | null;
 }
+
+export const COPY_VARIATIONS_PER_CONCEPT = 2;
 
 export type ConceptCopyJob = {
   copy: CopyVariationBlock;
@@ -103,6 +108,8 @@ export const parseCopyVariationsFromPayload = (
       text,
       headline: asText(rec.headline) || parts.headline,
       cta: asText(rec.cta) || parts.cta,
+      conceptId: asText(rec.conceptId) || undefined,
+      conceptName: asText(rec.conceptName) || undefined,
       approved: rec.approved === true,
       approvedAt: asText(rec.approvedAt) || null,
     }];
@@ -127,6 +134,8 @@ export const hydrateCopyVariations = (
       text: block.text,
       headline: block.parts.headline,
       cta: block.parts.cta,
+      conceptId: prev?.conceptId,
+      conceptName: prev?.conceptName,
       approved: prev?.approved === true,
       approvedAt: prev?.approved ? prev.approvedAt : null,
     };
@@ -187,6 +196,41 @@ export const remapCopyVariationKeys = (
       approved: false,
       approvedAt: null,
     }, item.text);
+  });
+};
+
+export const copiesForConcept = (
+  copies: StoredCopyVariation[],
+  conceptId: string,
+): StoredCopyVariation[] =>
+  copies.filter((item) => item.conceptId === conceptId);
+
+export const stampCopiesWithConcept = (
+  copies: StoredCopyVariation[],
+  concept: Pick<CopyConcept, "id" | "name">,
+): StoredCopyVariation[] =>
+  copies.map((item) => applyVariationText({
+    ...item,
+    conceptId: concept.id,
+    conceptName: concept.name,
+    angle: concept.name,
+  }, stripVariationHeader(item.text)));
+
+export const linkConceptToGeneratedCopy = (
+  concepts: CopyConcept[],
+  conceptId: string,
+  copies: StoredCopyVariation[],
+): CopyConcept[] => {
+  const first = copies[0];
+  if (!first) return concepts;
+  return concepts.map((concept) => {
+    if (concept.id !== conceptId || concept.copyId) return concept;
+    return {
+      ...concept,
+      copyId: first.id,
+      copyKey: first.key,
+      copyAngle: copyBlockLabel(first),
+    };
   });
 };
 

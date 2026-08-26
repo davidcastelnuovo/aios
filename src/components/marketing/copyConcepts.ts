@@ -112,6 +112,8 @@ export function formatApprovedConceptsForCopy(concepts: CopyConcept[]): string {
     concept.bigIdea && `רעיון: ${concept.bigIdea}`,
     concept.hook && `הוק: ${concept.hook}`,
     concept.visualLanguage && `ויזואל: ${concept.visualLanguage}`,
+    concept.whyItWorks && `למה זה עובד: ${concept.whyItWorks}`,
+    concept.reference && `רפרנס: ${concept.reference}`,
     concept.copyAngle && `זווית: ${concept.copyAngle}`,
   ].filter(Boolean).join("\n")).join("\n\n");
 }

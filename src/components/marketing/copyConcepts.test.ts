@@ -128,4 +128,5 @@ test("formatApprovedConceptsForCopy lists approved ideas for the copywriter", ()
   const text = formatApprovedConceptsForCopy([concept()]);
   assert.match(text, /הכיס הריק/);
   assert.match(text, /ארנק פעור/);
+  assert.match(text, /סצנה במקום טקסט על רקע/);
 });

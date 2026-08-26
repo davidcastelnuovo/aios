@@ -1,19 +1,15 @@
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Check, Loader2, Pencil, PenLine, Sparkles, Trash2 } from "lucide-react";
+import { Check, PenLine, Pencil, Trash2 } from "lucide-react";
 import { copyBlockLabel, type StoredCopyVariation } from "@/components/marketing/departments/creative/copyVariations";
 
 interface Props {
   variations: StoredCopyVariation[];
   generating?: boolean;
-  canGenerateFromConcepts?: boolean;
-  approvedConceptCount?: number;
+  generatingConceptName?: string | null;
   onToggleApprove: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-  onGenerateFromConcepts?: () => void;
-  onCancelGenerate?: () => void;
 }
 
 const previewLines = (text: string) => {
@@ -28,13 +24,10 @@ const previewLines = (text: string) => {
 export function CopyVariationsPanel({
   variations,
   generating,
-  canGenerateFromConcepts,
-  approvedConceptCount = 0,
+  generatingConceptName,
   onToggleApprove,
   onEdit,
   onDelete,
-  onGenerateFromConcepts,
-  onCancelGenerate,
 }: Props) {
   const approvedCount = variations.filter((item) => item.approved).length;
 
@@ -50,36 +43,9 @@ export function CopyVariationsPanel({
             )}
           </div>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            קופי לפי הקונספטים שאושרו. עיפרון לעריכה, פח למחיקה
+            כל וריאציה נכתבת מקונספט. עיפרון לעריכה, פח למחיקה
           </p>
         </div>
-        {onGenerateFromConcepts && (
-          generating ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-1.5"
-              onClick={onCancelGenerate}
-            >
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              בטל
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-1.5"
-              onClick={onGenerateFromConcepts}
-              disabled={!canGenerateFromConcepts}
-              title={canGenerateFromConcepts ? undefined : "אשרו לפחות קונספט אחד"}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              {variations.length ? "עוד קופי" : "כתבו קופי לקונספטים"}
-            </Button>
-          )
-        )}
       </div>
 
       {variations.length === 0 ? (
@@ -87,10 +53,10 @@ export function CopyVariationsPanel({
           <PenLine className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
             {generating
-              ? "כרמן כותבת קופי לקונספטים שאושרו"
-              : approvedConceptCount > 0
-                ? `אשרו ${approvedConceptCount} קונספטים — כתבו להם קופי`
-                : "אשרו קונספט, ואז כתבו לו קופי"}
+              ? generatingConceptName
+                ? `כרמן כותבת 2 וריאציות ל«${generatingConceptName}»`
+                : "כרמן כותבת קופי לקונספט"
+              : "לחצו צור קופי על קונספט — ייווצרו 2 וריאציות על בסיס הרעיון הוויזואלי"}
           </p>
         </div>
       ) : (
@@ -148,6 +114,9 @@ export function CopyVariationsPanel({
                     </button>
                   </div>
                 </div>
+                {item.conceptName && (
+                  <p className="mb-1 text-[10px] text-muted-foreground">קונספט: {item.conceptName}</p>
+                )}
                 <button
                   type="button"
                   onClick={() => onToggleApprove(item.id)}

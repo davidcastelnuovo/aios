@@ -7,11 +7,15 @@ import {
   hydrateCopyVariations,
   joinCopyVariations,
   linkApprovedConceptsToCopy,
+  linkConceptToGeneratedCopy,
   pairConceptsToCopyVariations,
   remapCopyVariationKeys,
   replaceCopyVariationText,
   applyVariationText,
   splitCopyVariations,
+  stampCopiesWithConcept,
+  copiesForConcept,
+  COPY_VARIATIONS_PER_CONCEPT,
   stripVariationHeader,
   type StoredCopyVariation,
 } from "./copyVariations.ts";
@@ -255,4 +259,38 @@ test("linkApprovedConceptsToCopy fills only approved concepts that have no copy 
   assert.equal(linked[1].copyId, "n1");
   assert.equal(linked[1].copyKey, "3");
   assert.equal(linked[2].copyId, "");
+});
+
+test("stampCopiesWithConcept writes two variations locked to that concept", () => {
+  assert.equal(COPY_VARIATIONS_PER_CONCEPT, 2);
+  const stamped = stampCopiesWithConcept(
+    [
+      stored({ id: "a", key: "3", text: "כותרת:\nאלפא" }),
+      stored({ id: "b", key: "4", text: "כותרת:\nבטא" }),
+    ],
+    concept({ id: "c1", name: "הכיס הריק" }),
+  );
+  assert.equal(stamped.length, 2);
+  assert.equal(stamped[0].conceptId, "c1");
+  assert.equal(stamped[0].conceptName, "הכיס הריק");
+  assert.equal(stamped[0].angle, "הכיס הריק");
+  assert.match(stamped[0].text, /הכיס הריק/);
+  assert.equal(copiesForConcept(stamped, "c1").length, 2);
+});
+
+test("linkConceptToGeneratedCopy sets the primary copy only when empty", () => {
+  const copies = [stored({ id: "n1", key: "3" }), stored({ id: "n2", key: "4" })];
+  const first = linkConceptToGeneratedCopy(
+    [concept({ id: "c1", copyId: "", copyKey: "" })],
+    "c1",
+    copies,
+  );
+  assert.equal(first[0].copyId, "n1");
+  assert.equal(first[0].copyKey, "3");
+  const kept = linkConceptToGeneratedCopy(
+    [concept({ id: "c1", copyId: "keep", copyKey: "1" })],
+    "c1",
+    copies,
+  );
+  assert.equal(kept[0].copyId, "keep");
 });
