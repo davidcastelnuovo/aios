@@ -119,8 +119,11 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     if (!isAgenciesFetched || isLoadingAgencies || isFetchingAgencies) return;
 
     if (agencies.length === 1) {
-      if (selectedAgency !== agencies[0].id) {
-        setSelectedAgency(agencies[0].id);
+      const onlyId = agencies[0].id;
+      // Keep "all" — tasks "שלי בלבד" needs cross-agency visibility even with one agency row.
+      if (selectedAgency === "all") return;
+      if (selectedAgency !== onlyId) {
+        setSelectedAgency(onlyId);
       }
       return;
     }
