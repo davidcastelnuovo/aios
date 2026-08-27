@@ -31,7 +31,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Shield, UserPlus, Trash2, Settings, Lock, Mail, Building2, Eye } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
@@ -136,6 +136,11 @@ export default function Users() {
   const [resetPasswordUserEmail, setResetPasswordUserEmail] = useState<string>("");
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
+
+  const usersQueryKey = useMemo(
+    () => ["users-with-roles", tenantId, crossTenantAgencyIds.join(",")] as const,
+    [tenantId, crossTenantAgencyIds],
+  );
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", tenantId, currentUserId],
@@ -287,7 +292,7 @@ export default function Users() {
   });
 
   const { data: users, isLoading } = useQuery({
-    queryKey: ["users-with-roles", tenantId, crossTenantAgencyIds.join(",")],
+    queryKey: usersQueryKey,
     queryFn: async () => {
       if (!tenantId) return [];
 
@@ -420,8 +425,8 @@ export default function Users() {
       return data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      await queryClient.refetchQueries({ queryKey: usersQueryKey });
       toast.success("התפקיד נוסף בהצלחה");
     },
     onError: (error: Error) => {
@@ -454,8 +459,8 @@ export default function Users() {
       return data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      await queryClient.refetchQueries({ queryKey: usersQueryKey });
       toast.success("התפקיד הוסר בהצלחה");
     },
     onError: (error: Error) => {
@@ -483,8 +488,8 @@ export default function Users() {
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      await queryClient.refetchQueries({ queryKey: usersQueryKey });
       toast.success("קמפיינר עודכן בהצלחה");
     },
     onError: (error: Error) => {
@@ -512,8 +517,8 @@ export default function Users() {
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      await queryClient.refetchQueries({ queryKey: usersQueryKey });
       toast.success("איש מכירות עודכן בהצלחה");
     },
     onError: (error: Error) => {
@@ -663,8 +668,8 @@ export default function Users() {
       return data;
     },
     onSuccess: async (data) => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      await queryClient.refetchQueries({ queryKey: usersQueryKey });
       
       // Show success message with invitation link if available
       if (data.invitationLink) {
@@ -725,20 +730,36 @@ export default function Users() {
           throw error;
         }
         if (!data?.success) throw new Error(data?.error || "Delete failed");
-        return data;
+        return { ...data, deletedUserId: userId, deletedEmail: email };
       },
-      onSuccess: async (data) => {
-        // Force refetch both queries
-        await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-        await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      onMutate: async ({ userId, email }) => {
+        await queryClient.cancelQueries({ queryKey: usersQueryKey });
+        const previousUsers = queryClient.getQueryData<any[]>(usersQueryKey);
+        queryClient.setQueryData<any[]>(usersQueryKey, (old) => {
+          if (!old) return old;
+          return old.filter((user) => {
+            if (userId && user.id === userId) return false;
+            if (email && user.email === email) return false;
+            return true;
+          });
+        });
+        return { previousUsers };
+      },
+      onError: (error: Error, _vars, context) => {
+        if (context?.previousUsers) {
+          queryClient.setQueryData(usersQueryKey, context.previousUsers);
+        }
+        toast.error("שגיאה במחיקת משתמש: " + error.message);
+      },
+      onSuccess: (data) => {
         toast.success(
           data?.removedFromTenantOnly
             ? "המשתמש הוסר מהארגון"
             : "המשתמש נמחק בהצלחה",
         );
       },
-      onError: (error: Error) => {
-        toast.error("שגיאה במחיקת משתמש: " + error.message);
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: usersQueryKey });
       },
     });
 
