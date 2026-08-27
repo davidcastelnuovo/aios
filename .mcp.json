@@ -7,6 +7,14 @@
         "Authorization": "Bearer ${AIOS_GRAPH_MCP_BEARER}"
       },
       "timeout": 60000
+    },
+    "Grok": {
+      "type": "http",
+      "url": "https://zvoijyneresvkadpprel.supabase.co/functions/v1/grok-mcp/mcp",
+      "headers": {
+        "Authorization": "Bearer ${GROK_MCP_BEARER}"
+      },
+      "timeout": 120000
     }
   }
 }

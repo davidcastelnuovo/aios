@@ -28,17 +28,33 @@
 //   CURSOR_CLOUD_ENV_NAME / CURSOR_REPO_URL / CURSOR_STARTING_REF / CURSOR_AUTO_CREATE_PR
 //   CURSOR_DEFAULT_TENANT_ID / CLAUDE_DEFAULT_TENANT_ID  fallback tenant
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  compactToolsForGrok,
+  grokCompatibleInitializeResult,
+  handleStreamableMcpRequest,
+  isStreamableMcpPath,
+  wantsStreamableHttp,
+  type McpRpcMessage,
+} from "../_shared/mcp-streamable-http.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, accept, mcp-session-id, mcp-protocol-version",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "grok-mcp", version: "1.1.0" };
+const SERVER_INFO = { name: "grok-mcp", version: "1.2.0" };
+const GROK_MCP_STREAMABLE_URL =
+  "https://zvoijyneresvkadpprel.supabase.co/functions/v1/grok-mcp/mcp";
+const CURSOR_MCP_STREAMABLE_URL =
+  "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
+const CARMEN_MCP_STREAMABLE_URL =
+  "https://zvoijyneresvkadpprel.supabase.co/functions/v1/carmen-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 100_000;
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
@@ -70,6 +86,11 @@ const TOOLS = [
           type: "string",
           description: "Optional extra context: error logs, file paths, links, constraints, acceptance criteria.",
         },
+        reply_via: {
+          type: "string",
+          enum: ["carmen", "cursor"],
+          description: "Who should receive Grok's reply when done. Use cursor when Cursor Cloud Agent called this tool; default carmen.",
+        },
       },
       required: ["task"],
     },
@@ -90,6 +111,11 @@ const TOOLS = [
         context: {
           type: "string",
           description: "Optional extra context or constraints.",
+        },
+        reply_via: {
+          type: "string",
+          enum: ["carmen", "cursor"],
+          description: "Who should receive Grok's reply when done. Use cursor when Cursor Cloud Agent called this tool; default carmen.",
         },
       },
       required: ["request"],
@@ -165,10 +191,27 @@ function webhookConfig(): { url: string; key: string } | null {
   return { url, key };
 }
 
+function replyViaChannel(raw: unknown): "carmen" | "cursor" {
+  return String(raw || "").trim().toLowerCase() === "cursor" ? "cursor" : "carmen";
+}
+
+function replyInstructions(channel: "carmen" | "cursor"): string {
+  if (channel === "cursor") {
+    return (
+      `Reply to Cursor when finished via cursor-mcp ask_cursor at ${CURSOR_MCP_STREAMABLE_URL} ` +
+      `(Streamable HTTP /mcp, Authorization Bearer CURSOR_MCP_BEARER). Do NOT use ask_carmen for this request.`
+    );
+  }
+  return (
+    `Reply to Carmen when finished via carmen-mcp ask_carmen at ${CARMEN_MCP_STREAMABLE_URL} ` +
+    `(Streamable HTTP /mcp, Authorization Bearer CARMEN_MCP_BEARER).`
+  );
+}
+
 async function fireGrokWebhook(
   task: string,
   context: string,
-  opts?: { tool?: string; tenantId?: string | null },
+  opts?: { tool?: string; tenantId?: string | null; replyVia?: "carmen" | "cursor" },
 ): Promise<FireResult> {
   const cfg = webhookConfig();
   if (!cfg) {
@@ -184,6 +227,7 @@ async function fireGrokWebhook(
   const contextParts: string[] = [];
   if (opts?.tool) contextParts.push(`tool: ${opts.tool}`);
   if (opts?.tenantId) contextParts.push(`tenant_id: ${opts.tenantId}`);
+  contextParts.push(replyInstructions(opts?.replyVia ?? "carmen"));
   if (context.trim()) contextParts.push(context.trim());
   const payload = {
     task: trimmedTask.length > MAX_TEXT ? trimmedTask.slice(0, MAX_TEXT) : trimmedTask,
@@ -215,7 +259,7 @@ async function fireGrokWebhook(
 
   return {
     id,
-    url: "(Grok Bot automation — Grok will reply via ask_carmen when done)",
+    url: `(Grok Bot automation — reply via ${opts?.replyVia === "cursor" ? "ask_cursor" : "ask_carmen"} when done)`,
     reused: false,
     viaWebhook: true,
   };
@@ -397,6 +441,7 @@ async function fireGrokAgent(promptText: string, opts?: {
   task?: string;
   context?: string;
   tool?: string;
+  replyVia?: "carmen" | "cursor";
 }): Promise<FireResult> {
   if (webhookConfig()) {
     const task = String(opts?.task || promptText).trim();
@@ -404,14 +449,12 @@ async function fireGrokAgent(promptText: string, opts?: {
     if (opts?.startingRef) contextParts.push(`branch: ${opts.startingRef}`);
     if (opts?.context) contextParts.push(opts.context);
     if (opts?.name) contextParts.push(`label: ${opts.name}`);
-    contextParts.push(
-      "Reply to Carmen when finished via carmen-mcp ask_carmen (surface grok_bot). " +
-      "Ping without task is ignored on the Grok Bot side.",
-    );
+    contextParts.push(replyInstructions(opts?.replyVia ?? "carmen"));
     contextParts.push(teachingBlock(opts?.tenantId ?? null).trim());
     return fireGrokWebhook(task, contextParts.join("\n\n"), {
       tool: opts?.tool,
       tenantId: opts?.tenantId ?? null,
+      replyVia: opts?.replyVia ?? "carmen",
     });
   }
 
@@ -540,10 +583,11 @@ async function handleToolCall(
     if (!task) throw new Error("request_dev_task requires a non-empty 'task'.");
     const branch = String(args?.branch ?? "").trim();
     const context = String(args?.context ?? "").trim();
+    const replyVia = replyViaChannel(args?.reply_via);
     const recent = await recentDispatchContext(ctx.tenantId);
     const text =
-      `[Carmen → Grok Bot · DEV TASK]\n` +
-      `Requested by Carmen (AIOS agent), on behalf of David.\n\n` +
+      `[${replyVia === "cursor" ? "Cursor" : "Carmen"} → Grok Bot · DEV TASK]\n` +
+      `Requested by ${replyVia === "cursor" ? "Cursor Cloud Agent" : "Carmen (AIOS agent)"}, on behalf of David.\n\n` +
       `Task:\n${task}\n` +
       (branch ? `\nBase/target branch: ${branch}\n` : ``) +
       (context ? `\nContext:\n${context}\n` : ``) +
@@ -562,6 +606,7 @@ async function handleToolCall(
       task,
       context: webhookContext,
       tool: "request_dev_task",
+      replyVia,
     });
     await logDispatch({
       tenantId: ctx.tenantId,
@@ -576,7 +621,7 @@ async function handleToolCall(
     return viaWebhook
       ? (
         `✅ שלחתי את המשימה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יבצע, ` +
-        `ויחזיר לי תשובה דרך ask_carmen כשיגמר.\n` +
+        `ויחזיר תשובה דרך ${replyVia === "cursor" ? "ask_cursor" : "ask_carmen"} כשיגמר.\n` +
         `Dispatch: ${id}`
       )
       : (
@@ -591,10 +636,11 @@ async function handleToolCall(
     const request = String(args?.request ?? "").trim();
     if (!request) throw new Error("ask_grok requires a non-empty 'request'.");
     const context = String(args?.context ?? "").trim();
+    const replyVia = replyViaChannel(args?.reply_via);
     const recent = await recentDispatchContext(ctx.tenantId);
     const text =
-      `[Carmen → Grok Bot · REQUEST]\n` +
-      `Requested by Carmen (AIOS agent), on behalf of David.\n\n` +
+      `[${replyVia === "cursor" ? "Cursor" : "Carmen"} → Grok Bot · REQUEST]\n` +
+      `Requested by ${replyVia === "cursor" ? "Cursor Cloud Agent" : "Carmen (AIOS agent)"}, on behalf of David.\n\n` +
       `${request}\n` +
       (context ? `\nContext:\n${context}\n` : ``) +
       recent +
@@ -606,6 +652,7 @@ async function handleToolCall(
       task: request,
       context: webhookContext,
       tool: "ask_grok",
+      replyVia,
     });
     await logDispatch({
       tenantId: ctx.tenantId,
@@ -620,7 +667,7 @@ async function handleToolCall(
     return viaWebhook
       ? (
         `✅ שלחתי את הבקשה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יעבוד על זה, ` +
-        `ויחזיר לי תשובה דרך ask_carmen כשיגמר.\n` +
+        `ויחזיר תשובה דרך ${replyVia === "cursor" ? "ask_cursor" : "ask_carmen"} כשיגמר.\n` +
         `Dispatch: ${id}`
       )
       : (
@@ -634,55 +681,42 @@ async function handleToolCall(
   throw new Error(`Unknown tool: ${name}`);
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+type RpcCtx = { tenantId: string | null; agentId: string | null; grokMode: boolean };
 
-  if (req.method === "GET") {
-    return new Response(JSON.stringify({ ok: true, server: SERVER_INFO, tools: TOOLS.map((t) => t.name) }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  let msg: any;
-  try {
-    msg = await req.json();
-  } catch {
-    return rpcError(null, -32700, "Parse error");
-  }
-
+async function handleRpcMessage(msg: McpRpcMessage, ctx: RpcCtx, bearer?: string): Promise<Response> {
   const { id, method, params } = msg ?? {};
-
-  const gate = requiredBearer();
-  if (gate && bearerFrom(req) !== gate) {
-    return rpcError(id, -32001, "Unauthorized: invalid or missing bearer token", 401);
-  }
+  const clientProtocol =
+    typeof (params as any)?.protocolVersion === "string" ? (params as any).protocolVersion : undefined;
 
   try {
     switch (method) {
       case "initialize":
-        return rpcResult(id, {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: SERVER_INFO,
-        });
-
+        return rpcResult(
+          id,
+          ctx.grokMode
+            ? grokCompatibleInitializeResult(clientProtocol, SERVER_INFO)
+            : {
+              protocolVersion: PROTOCOL_VERSION,
+              capabilities: { tools: {} },
+              serverInfo: SERVER_INFO,
+            },
+        );
       case "notifications/initialized":
       case "initialized":
         return new Response("", { status: 202, headers: corsHeaders });
-
       case "ping":
         return rpcResult(id, {});
-
       case "tools/list":
-        return rpcResult(id, { tools: TOOLS });
-
+        return rpcResult(id, {
+          tools: ctx.grokMode ? compactToolsForGrok(TOOLS) : TOOLS,
+        });
       case "tools/call": {
         const name = params?.name as string;
         const args = (params?.arguments ?? {}) as Record<string, any>;
+        if (ctx.grokMode && !args.reply_via) args.reply_via = "cursor";
         try {
-          const ctx = await resolveContext(bearerFrom(req));
-          const text = await handleToolCall(name, args, ctx);
+          const callCtx = await resolveContext(bearer);
+          const text = await handleToolCall(name, args, callCtx);
           return rpcResult(id, { content: [{ type: "text", text }] });
         } catch (e: any) {
           return rpcResult(id, {
@@ -691,7 +725,6 @@ Deno.serve(async (req) => {
           });
         }
       }
-
       default:
         return rpcError(id, -32601, `Method not found: ${method}`);
     }
@@ -699,4 +732,49 @@ Deno.serve(async (req) => {
     console.error("[grok-mcp]", e?.message ?? e);
     return rpcError(id, -32603, `Internal error: ${String(e?.message ?? e)}`);
   }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const pathname = new URL(req.url).pathname;
+  const streamable = wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
+
+  if (!streamable && req.method === "GET") {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        server: SERVER_INFO,
+        tools: TOOLS.map((t) => t.name),
+        streamable_http: GROK_MCP_STREAMABLE_URL,
+        setup: "Cursor .mcp.json or Grok Bot Plugins → URL must end with /mcp + GROK_MCP_BEARER",
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const gate = requiredBearer();
+  const bearer = bearerFrom(req);
+  if (gate && bearer !== gate) {
+    if (streamable) {
+      return handleStreamableMcpRequest(req, async (msg) =>
+        rpcError(msg.id, -32001, "Unauthorized: invalid or missing bearer token", 401));
+    }
+    return rpcError(null, -32001, "Unauthorized: invalid or missing bearer token", 401);
+  }
+
+  const ctx: RpcCtx = { tenantId: null, agentId: null, grokMode: streamable };
+
+  if (streamable) {
+    return handleStreamableMcpRequest(req, (msg) => handleRpcMessage(msg, ctx, bearer));
+  }
+
+  let msg: McpRpcMessage;
+  try {
+    msg = await req.json();
+  } catch {
+    return rpcError(null, -32700, "Parse error");
+  }
+
+  return handleRpcMessage(msg, ctx, bearer);
 });

@@ -50,15 +50,30 @@ supabase secrets set \
   CURSOR_DEFAULT_TENANT_ID=2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019
 ```
 
-### 3. Register the MCP connection
+### 3. Register the MCP connection (Carmen)
 
 In the app: **Agent Editor → MCP Connections → חיבור חדש → preset Cursor**, paste the same `CURSOR_MCP_BEARER`, connect.
 
 Carmen then gets `mcp_Cursor__request_dev_task` and `mcp_Cursor__ask_cursor`.
 
-Optional: Profile → Escalation agent → **Cursor בלבד** so she prefers Cursor over Claude/Manus.
+### 4. Grok Bot → Cursor (direct)
 
-### 4. Teach / update / fix-on-fail
+Grok Bot talks to Cursor via **Streamable HTTP MCP**:
+
+| Field | Value |
+| --- | --- |
+| **URL** | `https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp` |
+| **Header** | `Authorization: Bearer <CURSOR_MCP_BEARER>` |
+
+Tools: `ask_cursor`, `request_dev_task`, `generate_creative`.
+
+### 5. Cursor → Grok Bot (direct)
+
+Repo `.mcp.json` includes **Grok** → `grok-mcp/mcp` with `GROK_MCP_BEARER` (must be in Cloud Environment secrets).
+
+Calls default `reply_via: cursor` so Grok Bot replies via `ask_cursor` when done.
+
+### 6. Teach / update / fix-on-fail
 
 Same loop as Claude: every dispatch asks Cursor to teach a reusable `ai_skills` skin, notify David via `claude_notify_david`, and fix broken skins on fail. Dispatches are logged to `public.cursor_dispatches`.
 
