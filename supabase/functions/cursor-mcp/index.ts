@@ -1,10 +1,7 @@
-// cursor-mcp — MCP server that lets Carmen (and any AIOS agent) escalate to
-// Cursor Cloud Agents — the same runtime David uses here (repo + GitHub + DB).
+// cursor-mcp — MCP server that lets Carmen (and Grok Bot) escalate to Cursor Cloud Agents.
 //
-// JSON-RPC 2.0 over HTTP (mcp-connect / _shared/mcp-tools dialect). Each
-// tools/call prefers a sticky Cursor Cloud Agent per tenant (follow-up run via
-// POST /v1/agents/{id}/runs) so conversation history is preserved; creates a
-// new agent only when none exists / sticky is dead. Returns the agent URL.
+// Grok Bot → Cursor: Settings → Plugins → custom MCP → …/cursor-mcp/mcp + CURSOR_MCP_BEARER
+// Carmen (legacy): …/cursor-mcp + CURSOR_MCP_BEARER via mcp-connect
 //
 // Tools:
 //   - request_dev_task : code/feature/bugfix → Cursor implements + opens a PR
@@ -24,17 +21,29 @@
 //   CURSOR_STICKY_AGENT_ID  force one global sticky agent id (bc-…)
 //   CURSOR_STICKY           "false" to disable sticky reuse (default true)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  compactToolsForGrok,
+  grokCompatibleInitializeResult,
+  handleStreamableMcpRequest,
+  isStreamableMcpPath,
+  wantsStreamableHttp,
+  type McpRpcMessage,
+} from "../_shared/mcp-streamable-http.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, accept, mcp-session-id, mcp-protocol-version",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.1.0" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.2.0" };
+const CURSOR_MCP_STREAMABLE_URL =
+  "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 100_000;
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
@@ -586,55 +595,47 @@ async function handleToolCall(
   throw new Error(`Unknown tool: ${name}`);
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+type RpcCtx = { tenantId: string | null; agentId: string | null; grokMode: boolean };
 
-  if (req.method === "GET") {
-    return new Response(JSON.stringify({ ok: true, server: SERVER_INFO, tools: TOOLS.map((t) => t.name) }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  let msg: any;
-  try {
-    msg = await req.json();
-  } catch {
-    return rpcError(null, -32700, "Parse error");
-  }
-
+async function handleRpcMessage(
+  msg: McpRpcMessage,
+  ctx: RpcCtx,
+  bearer: string | undefined,
+): Promise<Response> {
   const { id, method, params } = msg ?? {};
-
-  const requiredBearer = Deno.env.get("CURSOR_MCP_BEARER");
-  if (requiredBearer && bearerFrom(req) !== requiredBearer) {
-    return rpcError(id, -32001, "Unauthorized: invalid or missing bearer token", 401);
-  }
+  const clientProtocol =
+    typeof (params as any)?.protocolVersion === "string" ? (params as any).protocolVersion : undefined;
 
   try {
     switch (method) {
       case "initialize":
-        return rpcResult(id, {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: SERVER_INFO,
-        });
-
+        return rpcResult(
+          id,
+          ctx.grokMode
+            ? grokCompatibleInitializeResult(clientProtocol, SERVER_INFO)
+            : {
+              protocolVersion: PROTOCOL_VERSION,
+              capabilities: { tools: {} },
+              serverInfo: SERVER_INFO,
+            },
+        );
       case "notifications/initialized":
       case "initialized":
         return new Response("", { status: 202, headers: corsHeaders });
-
       case "ping":
         return rpcResult(id, {});
-
       case "tools/list":
-        return rpcResult(id, { tools: TOOLS });
-
+        return rpcResult(id, {
+          tools: ctx.grokMode ? compactToolsForGrok(TOOLS) : TOOLS,
+        });
       case "tools/call": {
         const name = params?.name as string;
         const args = (params?.arguments ?? {}) as Record<string, any>;
         try {
-          const ctx = await resolveContext(bearerFrom(req));
-          const text = await handleToolCall(name, args, ctx);
+          const callCtx = ctx.tenantId || ctx.agentId
+            ? { tenantId: ctx.tenantId, agentId: ctx.agentId }
+            : await resolveContext(bearer);
+          const text = await handleToolCall(name, args, callCtx);
           return rpcResult(id, { content: [{ type: "text", text }] });
         } catch (e: any) {
           return rpcResult(id, {
@@ -643,7 +644,6 @@ Deno.serve(async (req) => {
           });
         }
       }
-
       default:
         return rpcError(id, -32601, `Method not found: ${method}`);
     }
@@ -651,4 +651,53 @@ Deno.serve(async (req) => {
     console.error("[cursor-mcp]", e?.message ?? e);
     return rpcError(id, -32603, `Internal error: ${String(e?.message ?? e)}`);
   }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const pathname = new URL(req.url).pathname;
+  const streamable = wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
+
+  if (!streamable && req.method === "GET") {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        server: SERVER_INFO,
+        tools: TOOLS.map((t) => t.name),
+        streamable_http: CURSOR_MCP_STREAMABLE_URL,
+        setup: "Grok Bot → Plugins → custom MCP → URL must end with /mcp + CURSOR_MCP_BEARER",
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const requiredBearer = Deno.env.get("CURSOR_MCP_BEARER");
+  const bearer = bearerFrom(req);
+  if (requiredBearer && bearer !== requiredBearer) {
+    if (streamable) {
+      return handleStreamableMcpRequest(req, async (msg) =>
+        rpcError(msg.id, -32001, "Unauthorized: invalid or missing bearer token", 401));
+    }
+    return rpcError(null, -32001, "Unauthorized: invalid or missing bearer token", 401);
+  }
+
+  const ctx: RpcCtx = {
+    tenantId: null,
+    agentId: null,
+    grokMode: streamable,
+  };
+
+  if (streamable) {
+    return handleStreamableMcpRequest(req, (msg) => handleRpcMessage(msg, ctx, bearer));
+  }
+
+  let msg: McpRpcMessage;
+  try {
+    msg = await req.json();
+  } catch {
+    return rpcError(null, -32700, "Parse error");
+  }
+
+  return handleRpcMessage(msg, ctx, bearer);
 });

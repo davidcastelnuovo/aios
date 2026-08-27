@@ -16,7 +16,16 @@ curl -X POST "$GROK_BOT_WEBHOOK_URL" \
 - `request_dev_task` → `task` + optional `context` / `branch`
 - `ask_grok` → `request` is mapped to `task` in the webhook body
 - Empty pings without `task` are ignored on the Grok Bot side
-- Grok Bot replies back to Carmen via **`carmen-mcp` / `ask_carmen`** when finished
+- Grok Bot replies back to Carmen via **`carmen-mcp` / `ask_carmen`** when finished (or **`cursor-mcp` / `ask_cursor`** when `reply_via: cursor`)
+
+## Cursor ↔ Grok Bot direct (no Carmen)
+
+| Direction | Setup |
+| --- | --- |
+| **Cursor → Grok** | `.mcp.json` → `grok-mcp/mcp` + `GROK_MCP_BEARER` in Cloud Environment secrets |
+| **Grok → Cursor** | Grok Bot Plugins → `cursor-mcp/mcp` + `CURSOR_MCP_BEARER` |
+
+Both URLs **must end with `/mcp`** (Streamable HTTP).
 
 ## Fallback: Cursor Cloud Agents API
 
