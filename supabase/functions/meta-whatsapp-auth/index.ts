@@ -297,6 +297,93 @@ Deno.serve(async (request) => {
       return reply({ success: true });
     }
 
+    /** One-time Cloud API registration for an already-connected number still ON_PREMISE. */
+    if (action === "register_cloud_api") {
+      if (!appId || !appSecret) return reply({ error: "meta_whatsapp_not_configured" }, 503);
+      const integrationId = typeof body.integration_id === "string" ? body.integration_id : "";
+      const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
+      if (!integrationId) return reply({ error: "integration_id_required" }, 400);
+      if (!/^\d{6}$/.test(pin)) {
+        return reply({ error: "יש להזין PIN בן 6 ספרות מאימות דו-שלבי של WhatsApp Business", code: "pin_required" }, 400);
+      }
+
+      const { data: integration } = await admin
+        .from("tenant_integrations")
+        .select("id,user_id,settings,is_active")
+        .eq("id", integrationId)
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "meta_whatsapp")
+        .maybeSingle();
+      if (!integration?.is_active || (integration.user_id !== authData.user.id && superAdmin !== true)) {
+        return reply({ error: "forbidden" }, 403);
+      }
+
+      const settings = (integration.settings ?? {}) as Record<string, unknown>;
+      const phoneNumberId = String(settings.phone_number_id ?? "");
+      if (!phoneNumberId) return reply({ error: "phone_number_id_missing" }, 400);
+
+      const { data: tokenRow, error: tokenError } = await admin
+        .from("meta_whatsapp_tokens")
+        .select("access_token")
+        .eq("integration_id", integrationId)
+        .maybeSingle();
+      if (tokenError) throw tokenError;
+      if (!tokenRow?.access_token) return reply({ error: "meta_whatsapp_token_missing" }, 400);
+
+      const token = tokenRow.access_token;
+      const fetchPhone = async () =>
+        graphJson(`${phoneNumberId}?fields=${PHONE_FIELDS}`, token, undefined, graphVersion);
+
+      let phone = await fetchPhone();
+      const platformBefore = String(phone.platform_type ?? "").toUpperCase();
+      if (platformBefore !== "CLOUD_API") {
+        try {
+          await graphJson(
+            `${phoneNumberId}/register`,
+            token,
+            {
+              method: "POST",
+              body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+            },
+            graphVersion,
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "registration failed";
+          if (!/already|registered/i.test(message)) {
+            return reply({
+              error: `רישום Cloud API נכשל: ${message}. ודאו שה-PIN הוא מאימות דו-שלבי של WhatsApp Business (לא Facebook).`,
+              code: "cloud_api_registration_failed",
+            }, 400);
+          }
+        }
+        phone = await fetchPhone();
+      }
+
+      const platformAfter = String(phone.platform_type ?? "").toUpperCase();
+      const nextSettings = {
+        ...settings,
+        platform_type: phone.platform_type ?? settings.platform_type ?? null,
+        display_phone_number: phone.display_phone_number ?? settings.display_phone_number ?? null,
+        verified_name: phone.verified_name ?? settings.verified_name ?? null,
+        quality_rating: phone.quality_rating ?? settings.quality_rating ?? null,
+        cloud_api_registered_at: new Date().toISOString(),
+      };
+      const { error: updateError } = await admin
+        .from("tenant_integrations")
+        .update({ settings: nextSettings })
+        .eq("id", integrationId);
+      if (updateError) throw updateError;
+
+      return reply({
+        success: true,
+        platform_type: platformAfter || phone.platform_type,
+        was_on_premise: platformBefore === "ON_PREMISE",
+        message: platformAfter === "CLOUD_API"
+          ? "המספר רשום ל-Cloud API. ניתן ליצור תבניות."
+          : "הרישום הושלם, אך Meta עדיין מדווחת סטטוס שונה מ-CLOUD_API. בדקו אימות מספר ב-WhatsApp Manager.",
+      });
+    }
+
     if (!["complete", "list_assets", "connect_manual"].includes(action)) {
       return reply({ error: "unsupported_action" }, 400);
     }

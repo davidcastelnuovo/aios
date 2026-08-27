@@ -48,16 +48,33 @@ const graphRequest = async (
   return { ok: true as const, data };
 };
 
-const explainTemplateMetaError = (metaError: Record<string, unknown> | undefined, fallback: string) => {
+const placeholderIndexes = (text: string) =>
+  [...text.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1]));
+
+const explainTemplateMetaError = (
+  metaError: Record<string, unknown> | undefined,
+  fallback: string,
+  integrationSettings?: Record<string, unknown>,
+) => {
   const subcode = Number(metaError?.error_subcode ?? 0);
   const userMsg = String(metaError?.error_user_msg ?? "").trim();
   if (subcode === 2494160 || /not allowed to create or update templates/i.test(userMsg)) {
+    const platform = String(integrationSettings?.platform_type ?? "").toUpperCase();
+    if (platform === "ON_PREMISE") {
+      return {
+        error:
+          "המספר עדיין במצב On-Premise — Meta לא מאפשרת יצירת תבניות עד השלמת רישום Cloud API.",
+        code: "waba_template_creation_blocked",
+        guidance:
+          "ב-AIOS: חיבור ידני → בחרו את המספר → הזינו PIN בן 6 ספרות (אימות דו-שלבי של WhatsApp Business). אחרי הצלחה platform_type יהפוך ל-CLOUD_API. אם Billing כבר הוגדר — זה הצעד הבא.",
+      };
+    }
     return {
       error:
-        "חשבון WhatsApp Business זה עדיין לא מאושר ליצירת תבניות ב-Meta. בדרך כלל חסר: אמצעי תשלום על ה-WABA, רישום Cloud API למספר, או אימות מספר.",
+        "חשבון WhatsApp Business זה עדיין לא מאושר ליצירת תבניות ב-Meta.",
       code: "waba_template_creation_blocked",
       guidance:
-        "WhatsApp Manager → הגדרות החשבון → Billing (תשלום) · Phone numbers → ודאו שהמספר על Cloud API (לא On-Premise) · השלימו אימות SMS אם נדרש.",
+        "WhatsApp Manager → Phone numbers → ודאו Cloud API (לא On-Premise) · אימות מספר · Billing על ה-WABA הנכון.",
     };
   }
   return { error: userMsg || fallback, code: "meta_template_error" };
@@ -363,7 +380,7 @@ Deno.serve(async (request) => {
         },
       );
       if (!result.ok) {
-        const explained = explainTemplateMetaError(result.metaError, result.error);
+        const explained = explainTemplateMetaError(result.metaError, result.error, settings);
         return reply({ ...explained, meta_error: result.metaError }, result.status);
       }
       return reply({ success: true, template: result.data });
