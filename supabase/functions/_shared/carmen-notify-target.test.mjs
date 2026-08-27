@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isGroupChatId,
   isManagerStaffRole,
   normalizeNotifyPhone,
+  pickNotifyDelivery,
   resolveCarmenNotifyTarget,
 } from "./carmen-notify-target.ts";
 
@@ -122,4 +124,85 @@ test("manager staff preferred over campaigner when both have sessions", () => {
   });
   assert.equal(result.source, "tenant_staff_session");
   assert.equal(normalizeNotifyPhone(result.chatId), FELIX);
+});
+
+test("isGroupChatId detects WhatsApp group JIDs", () => {
+  assert.equal(isGroupChatId("120363425732219862@g.us"), true);
+  assert.equal(isGroupChatId("972507677613@c.us"), false);
+  assert.equal(isGroupChatId(DAVID), false);
+});
+
+test("newest group session with David's phone does not steal private notify", () => {
+  const group = "120363425732219862@g.us";
+  const result = resolveCarmenNotifyTarget({
+    preferredPhone: DAVID,
+    sessions: [
+      { chat_id: group, phone: DAVID, sender_name: "דוד", updated_at: "2026-08-27T12:23:00Z" },
+      { chat_id: `${DAVID}@c.us`, phone: DAVID, sender_name: "דוד", updated_at: "2026-08-27T11:01:00Z" },
+    ],
+    staff: [{ phone: DAVID, full_name: "דוד", role: "owner" }],
+  });
+  assert.equal(result.source, "preferred_phone");
+  assert.equal(result.chatId, `${DAVID}@c.us`);
+  assert.equal(isGroupChatId(result.chatId), false);
+});
+
+test("group-only sessions fall back to private phone digits, not the group JID", () => {
+  const result = resolveCarmenNotifyTarget({
+    campaignPulsePhone: DAVID,
+    sessions: [
+      { chat_id: "120363425732219862@g.us", phone: DAVID, sender_name: "דוד" },
+    ],
+    staff: [{ phone: DAVID, full_name: "דוד", role: "owner" }],
+  });
+  assert.equal(result.source, "campaign_pulse_phone");
+  assert.equal(result.phone, DAVID);
+  assert.equal(isGroupChatId(result.chatId), false);
+  assert.equal(normalizeNotifyPhone(result.chatId), DAVID);
+});
+
+test("pickNotifyDelivery never sends pulse/notify to a group even if that row is newest", () => {
+  const group = "120363425732219862@g.us";
+  const delivery = pickNotifyDelivery(
+    [
+      {
+        chat_id: group,
+        phone: DAVID,
+        sender_name: "דוד",
+        automation_id: "group-auto",
+        connection_user_id: "u1",
+      },
+      {
+        chat_id: `${DAVID}@c.us`,
+        phone: DAVID,
+        sender_name: "דוד",
+        automation_id: "private-auto",
+        connection_user_id: "u1",
+      },
+    ],
+    { chatId: group, phone: DAVID },
+  );
+  assert.equal(delivery.isGroup, false);
+  assert.equal(delivery.chatId, `${DAVID}@c.us`);
+  assert.equal(delivery.phoneNumber, DAVID);
+  assert.equal(delivery.matchedSession?.automation_id, "private-auto");
+  assert.equal(delivery.bridgeSession?.automation_id, "private-auto");
+});
+
+test("pickNotifyDelivery can use a group row only as automation bridge", () => {
+  const delivery = pickNotifyDelivery(
+    [
+      {
+        chat_id: "120363425732219862@g.us",
+        phone: DAVID,
+        automation_id: "group-auto",
+        connection_user_id: "u1",
+      },
+    ],
+    { chatId: DAVID, phone: DAVID },
+  );
+  assert.equal(delivery.isGroup, false);
+  assert.equal(delivery.chatId, DAVID);
+  assert.equal(delivery.matchedSession, null);
+  assert.equal(delivery.bridgeSession?.automation_id, "group-auto");
 });

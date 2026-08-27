@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-27 — Pulse/notify never follows the live group session
+- **Skin slug:** `wa_notify_never_group_session` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Know that בדיקת דופק, health digest, and coding-agent "עדכון לדוד" always go to David's (or Felix's) **private** WhatsApp — never to the group the team happens to be chatting in. Group replies stay in the group only when someone addressed Carmen there (זימון, שאלה). Sessions are keyed by `chat_id`; mixing them by last-speaker phone is a bug.
+- **How:** `resolveCarmenNotifyTarget` + `pickNotifyDelivery` ignore `@g.us` rows. `claude-notify` / `manus-notify` always send `isGroup=false`. Path: pulse/health → `claude_notify_david` → private `@c.us`.
+- **Origin:** David — "כרמן היום שלחה עדכון בקבוצה בזמן שהתכתבנו שם במקום לשלוח לי בפרטי".
+
 ### 2026-08-27 — Lead-to-WhatsApp-group flood is Make + Green API, not Carmen/Manus
 - **Skin slug:** `lead_groups_are_make_greenapi_not_manus` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** If David says Carmen is sending lots of leads to groups blocked in Manus, explain the sender is **Make.com → Green API** instance `7103954455` (phone `972507677613`). Manus WA Carmen (`972549696673`) has no group traffic. AIOS group automations (מימד נוסף / פבליקו) are idle. Do not pause Make scenarios without David's explicit OK.

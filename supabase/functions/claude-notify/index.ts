@@ -5,8 +5,10 @@
 // "Claude finished your task" update could otherwise go undelivered. This
 // endpoint resolves the correct recipient for the tenant (explicit chat_id /
 // campaign_pulse_phone / tenant campaigner — never a cross-tenant owner who
-// merely has the newest session) and sends through the same automation action
-// step Carmen uses (send-manus-wa-message / send-green-api-message).
+// merely has the newest session, and never a group chat whose session row
+// happens to store the recipient's phone as last speaker) and sends through
+// the same automation action step Carmen uses (send-manus-wa-message /
+// send-green-api-message). Pulse and coding-agent updates are always 1:1.
 //
 // Auth: Authorization: Bearer == CLAUDE_MCP_BEARER (same shared secret as
 // claude-mcp). Typically called from Postgres via the claude_notify_david()
@@ -16,6 +18,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import {
   normalizeNotifyPhone,
+  pickNotifyDelivery,
   resolveCarmenNotifyTarget,
 } from "../_shared/carmen-notify-target.ts";
 
@@ -163,14 +166,12 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Prefer the session matching the resolved phone (for automation + chat_id);
-  // otherwise reuse any tenant session's automation wiring and send to the
-  // resolved phone number.
-  const matchedSession = (sessions || []).find((s: any) =>
-    normalizeNotifyPhone(s.chat_id) === target.phone ||
-    normalizeNotifyPhone(s.phone) === target.phone
-  ) || null;
-  const bridgeSession = matchedSession || (sessions || []).find((s: any) => s.automation_id) || null;
+  // Prefer a PRIVATE session matching the resolved phone. A newer group row
+  // with the same speaker phone (David talking in AfterLead-DMM) must not
+  // steal pulse/notify into the group. Group rows may still provide the
+  // automation_id bridge.
+  const delivery = pickNotifyDelivery(sessions || [], target);
+  const bridgeSession = delivery.bridgeSession;
 
   if (!bridgeSession?.automation_id) {
     return json({
@@ -178,28 +179,25 @@ Deno.serve(async (req) => {
       sent: false,
       reason: "no Carmen WhatsApp automation/session bridge for this tenant",
       source: target.source,
-      chat_id: target.chatId,
+      chat_id: delivery.chatId,
     });
   }
 
-  const chatId = matchedSession?.chat_id || target.chatId;
-  const phoneNumber = normalizeNotifyPhone(matchedSession?.phone) || target.phone;
-  const isGroup = String(chatId).endsWith("@g.us");
   const sent = await sendViaActionStep(sb, {
     automationId: bridgeSession.automation_id,
     tenantId,
     connectionUserId: bridgeSession.connection_user_id || "",
-    chatId,
-    phoneNumber,
-    isGroup,
+    chatId: delivery.chatId,
+    phoneNumber: delivery.phoneNumber,
+    isGroup: false,
     message,
   });
 
   return json({
     ok: sent,
     sent,
-    chat_id: chatId,
-    phone: phoneNumber,
+    chat_id: delivery.chatId,
+    phone: delivery.phoneNumber,
     contact_name: target.contactName,
     source: target.source,
   });

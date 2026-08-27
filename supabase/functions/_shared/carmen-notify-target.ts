@@ -1,9 +1,13 @@
 /**
  * Resolve who should receive Carmen outbound notify / pulse digests.
  *
- * Hard rule: never fall back to a phone that is not an active campaigner on
- * this tenant (blocks MarketingCaptain owner David from receiving DMM digests
- * just because he has the newest carmen_whatsapp_sessions row).
+ * Hard rules:
+ *  - never fall back to a phone that is not an active campaigner on this tenant
+ *    (blocks MarketingCaptain owner David from receiving DMM digests just
+ *    because he has the newest carmen_whatsapp_sessions row).
+ *  - never deliver pulse / coding-agent / health notifies to a WhatsApp group.
+ *    Group session rows store the last speaker's phone, so a live group chat
+ *    would otherwise steal David's private 1:1 destination.
  */
 
 export type NotifySessionCandidate = {
@@ -12,6 +16,12 @@ export type NotifySessionCandidate = {
   contact_name?: string | null;
   sender_name?: string | null;
   updated_at?: string | null;
+};
+
+/** Session row used to wire notify delivery (automation + connection user). */
+export type NotifyBridgeSession = NotifySessionCandidate & {
+  automation_id?: string | null;
+  connection_user_id?: string | null;
 };
 
 export type NotifyStaffCandidate = {
@@ -68,6 +78,11 @@ export function phonesMatch(a: string | null | undefined, b: string | null | und
   return na === nb || na.endsWith(nb) || nb.endsWith(na);
 }
 
+/** WhatsApp group JIDs must never be used as a 1:1 notify / pulse destination. */
+export function isGroupChatId(chatId: string | null | undefined): boolean {
+  return String(chatId || "").toLowerCase().includes("@g.us");
+}
+
 export function isManagerStaffRole(role: string | null | undefined): boolean {
   if (!role) return false;
   const r = String(role).toLowerCase();
@@ -90,7 +105,46 @@ function findSessionForPhone(
   sessions: NotifySessionCandidate[],
   phone: string,
 ): NotifySessionCandidate | null {
-  return sessions.find((s) => phonesMatch(s.chat_id, phone) || phonesMatch(s.phone, phone)) ?? null;
+  // Group rows store the last speaker's phone (David chatting in AfterLead-DMM).
+  // Matching on phone alone would steal private pulse/notify into that group.
+  return (
+    sessions.find((s) => {
+      if (isGroupChatId(s.chat_id)) return false;
+      return phonesMatch(s.chat_id, phone) || phonesMatch(s.phone, phone);
+    }) ?? null
+  );
+}
+
+/**
+ * Pick the 1:1 chat to send a notify/pulse to.
+ * Group sessions may still supply automation wiring, but the destination is
+ * always the private phone — never the freshest @g.us row.
+ */
+export function pickNotifyDelivery(
+  sessions: NotifyBridgeSession[],
+  target: Pick<ResolveCarmenNotifyTargetResult, "chatId" | "phone">,
+): {
+  chatId: string;
+  phoneNumber: string;
+  isGroup: false;
+  matchedSession: NotifyBridgeSession | null;
+  bridgeSession: NotifyBridgeSession | null;
+} {
+  const phone = normalizeNotifyPhone(target.phone) || "";
+  const matchedSession = (findSessionForPhone(sessions, phone) as NotifyBridgeSession | null) ?? null;
+  const bridgeSession =
+    (matchedSession?.automation_id ? matchedSession : null) ||
+    sessions.find((s) => !!s.automation_id) ||
+    null;
+  const fromTarget = isGroupChatId(target.chatId) ? phone : (target.chatId || phone);
+  const chatId = matchedSession?.chat_id || fromTarget;
+  return {
+    chatId: isGroupChatId(chatId) ? phone : chatId,
+    phoneNumber: normalizeNotifyPhone(matchedSession?.phone) || phone,
+    isGroup: false,
+    matchedSession,
+    bridgeSession,
+  };
 }
 
 function contactNameFor(
@@ -129,8 +183,9 @@ export function resolveCarmenNotifyTarget(
     // Never treat a group JID as a private notify target
     if (String(phoneRaw || "").includes("@g.us")) return null;
     const session = findSessionForPhone(sessions, phone);
+    const chatId = isGroupChatId(session?.chat_id) ? phone : (session?.chat_id ?? phone);
     return {
-      chatId: session?.chat_id ?? phone,
+      chatId,
       phone: normalizeNotifyPhone(session?.phone) ?? phone,
       contactName: contactNameFor(session, staff, phone),
       source,
