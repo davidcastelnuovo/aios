@@ -1,23 +1,35 @@
 # grok-mcp — Carmen talks to Grok Bot
 
-MCP server that lets Carmen escalate complex tasks and fixes to **Grok Bot** — the Cursor/xAI cloud teammate. There is no separate public “create Bot” API, so each tool call launches a Cursor Cloud Agent pinned to a Grok model (`GROK_MODEL_ID`, default `cursor-grok-4.6-high-fast`).
+MCP server that lets Carmen escalate complex tasks and fixes to **Grok Bot**.
 
-Carmen already speaks MCP as a client (`agent_mcp_connections`, `mcp-connect`, `_shared/mcp-tools.ts`). This function is the server side.
+## Preferred path: Cursor Automation webhook
+
+When `GROK_BOT_WEBHOOK_URL` + `GROK_BOT_WEBHOOK_KEY` are set, Carmen POSTs to David's Grok Bot automation:
+
+```bash
+curl -X POST "$GROK_BOT_WEBHOOK_URL" \
+  -H "Authorization: Bearer $GROK_BOT_WEBHOOK_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"task":"צור קריאייטיב לינקדאין ללקוח X","context":"עברית, 16:9"}'
+```
+
+- `request_dev_task` → `task` + optional `context` / `branch`
+- `ask_grok` → `request` is mapped to `task` in the webhook body
+- Empty pings without `task` are ignored on the Grok Bot side
+- Grok Bot replies back to Carmen via **`carmen-mcp` / `ask_carmen`** when finished
+
+## Fallback: Cursor Cloud Agents API
+
+If webhook secrets are **not** set, `grok-mcp` falls back to launching a Cursor Cloud Agent pinned to `GROK_MODEL_ID` (sticky per tenant via `grok_sticky_agents`).
 
 ## Tools
 
 | Tool | What it does |
 | --- | --- |
 | `request_dev_task` | Code/feature/bugfix. Grok implements on a branch and opens a PR. |
-| `ask_grok` | Research, analysis, planning, investigation (may still open a PR). |
+| `ask_grok` | Research, analysis, planning, investigation. |
 
-Both are **asynchronous**: the call returns `https://cursor.com/agents/<bcId>` immediately.
-
-### Sticky agent
-
-By default Carmen reuses **one Grok Cloud Agent per tenant** (`grok_sticky_agents`), separate from the Cursor sticky agent so the two conversations do not mix.
-
-Optional secrets: `GROK_STICKY_AGENT_ID` (force a specific `bc-…`), `GROK_STICKY=false` to disable.
+Both are **asynchronous** in webhook mode: Carmen gets an immediate ack; Grok replies later via `ask_carmen`.
 
 ## One-time setup
 
@@ -25,33 +37,46 @@ Optional secrets: `GROK_STICKY_AGENT_ID` (force a specific `bc-…`), `GROK_STIC
 
 | Secret | Required | Value |
 | --- | --- | --- |
-| `CURSOR_API_KEY` | ✅ | same Cursor API key used by `cursor-mcp` |
-| `GROK_MCP_BEARER` | recommended | strong random string; Carmen presents this as the MCP bearer. If unset, `CURSOR_MCP_BEARER` is accepted. |
-| `GROK_MODEL_ID` | optional | default `cursor-grok-4.6-high-fast` |
-| `CURSOR_CLOUD_ENV_NAME` | recommended | `davidcastelnuovo/aios` |
+| `GROK_MCP_BEARER` | ✅ | strong random string; Carmen presents this as the MCP bearer. Falls back to `CURSOR_MCP_BEARER`. |
+| `GROK_BOT_WEBHOOK_URL` | ✅ (webhook mode) | `https://api2.cursor.sh/automations/webhook/…` from the Grok Bot automation panel |
+| `GROK_BOT_WEBHOOK_KEY` | ✅ (webhook mode) | Bearer token from the same panel |
+| `CURSOR_API_KEY` | fallback only | same Cursor API key used by `cursor-mcp` |
+| `GROK_MODEL_ID` | optional | default `cursor-grok-4.6-high-fast` (cloud-agent fallback) |
+| `CURSOR_CLOUD_ENV_NAME` | optional | `davidcastelnuovo/aios` (cloud-agent fallback) |
 
 ```bash
 supabase secrets set \
   GROK_MCP_BEARER="$(openssl rand -hex 32)" \
-  GROK_MODEL_ID='cursor-grok-4.6-high-fast'
+  GROK_BOT_WEBHOOK_URL='https://api2.cursor.sh/automations/webhook/…' \
+  GROK_BOT_WEBHOOK_KEY='…'
 ```
-
-`CURSOR_API_KEY` and `CURSOR_CLOUD_ENV_NAME` should already exist from the Cursor bridge.
 
 ### 2. Register the MCP connection (in the app)
 
-**Agent Editor → MCP Connections → חיבור חדש → preset Grok Bot**, paste `GROK_MCP_BEARER` (or the existing `CURSOR_MCP_BEARER`), connect.
+**Agent Editor → MCP Connections → חיבור חדש → preset Grok Bot**, paste `GROK_MCP_BEARER`, connect.
 
 Carmen then gets `mcp_Grok__request_dev_task` and `mcp_Grok__ask_grok`.
 
 Optional: Profile → Escalation agent → **Grok Bot בלבד**.
 
-### 3. Teach / update / fix-on-fail
+### 3. Full loop (webhook mode)
+
+```
+Carmen (ask_grok / request_dev_task)
+  → grok-mcp POST webhook
+  → Grok Bot automation wakes
+  → Grok does the work
+  → Grok calls carmen-mcp ask_carmen
+  → Carmen tells David / continues the session
+```
+
+### 4. Teach / update / fix-on-fail
 
 Same loop as Cursor/Claude: every dispatch asks Grok to teach a reusable `ai_skills` skin, notify David via `claude_notify_david`, and fix broken skins on fail. Dispatches are logged to `public.grok_dispatches`.
 
 ## Notes
 
-- Needs `CURSOR_API_KEY` in production before Carmen can fire Grok agents.
+- Webhook mode needs `GROK_BOT_WEBHOOK_URL` + `GROK_BOT_WEBHOOK_KEY` before Carmen can reach the real Grok Bot.
+- Reverse direction (Grok → Carmen) uses `carmen-mcp` with `CARMEN_MCP_BEARER`.
 - Tables `grok_dispatches` / `grok_sticky_agents` are created by migration on merge.
 - Completion WhatsApp updates reuse `claude_notify_david`.

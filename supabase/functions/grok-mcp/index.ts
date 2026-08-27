@@ -1,20 +1,26 @@
 // grok-mcp — MCP server that lets Carmen escalate to Grok Bot.
 //
-// Grok Bot is the Cursor/xAI cloud teammate. There is no separate public
-// "create Bot" API, so this function launches a Cursor Cloud Agent pinned to a
-// Grok model (same runtime David uses in Grok Bot / Cursor Agents).
+// Preferred path: POST to David's Grok Bot Cursor Automation webhook
+// (GROK_BOT_WEBHOOK_URL + GROK_BOT_WEBHOOK_KEY). Grok Bot wakes, does the work,
+// and replies to Carmen via carmen-mcp / ask_carmen.
+//
+// Fallback (when webhook secrets are unset): launch a Cursor Cloud Agent pinned
+// to a Grok model (sticky per tenant via grok_sticky_agents).
 //
 // JSON-RPC 2.0 over HTTP (mcp-connect / _shared/mcp-tools dialect).
-// Sticky agent per tenant (grok_sticky_agents) so follow-ups keep history.
 //
 // Tools:
 //   - request_dev_task : code/feature/bugfix → Grok implements + opens a PR
 //   - ask_grok         : research / analysis / planning / investigation
 //
 // Required Supabase secrets:
-//   CURSOR_API_KEY      (reused — Grok Bot rides the Cursor Cloud Agents API)
 //   GROK_MCP_BEARER     shared secret Carmen's MCP client must present
 //                       (falls back to CURSOR_MCP_BEARER if unset)
+// Webhook mode (recommended):
+//   GROK_BOT_WEBHOOK_URL   https://api2.cursor.sh/automations/webhook/…
+//   GROK_BOT_WEBHOOK_KEY   Bearer token from the automation panel
+// Cloud-agent fallback:
+//   CURSOR_API_KEY
 // Optional:
 //   GROK_MODEL_ID       default cursor-grok-4.6-high-fast
 //   GROK_STICKY         "false" to disable sticky reuse (default true)
@@ -32,7 +38,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-const SERVER_INFO = { name: "grok-mcp", version: "1.0.0" };
+const SERVER_INFO = { name: "grok-mcp", version: "1.1.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 100_000;
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
@@ -150,7 +156,70 @@ async function resolveContext(
   }
 }
 
-type FireResult = { url: string; id: string; reused: boolean };
+type FireResult = { url: string; id: string; reused: boolean; viaWebhook?: boolean };
+
+function webhookConfig(): { url: string; key: string } | null {
+  const url = String(Deno.env.get("GROK_BOT_WEBHOOK_URL") || "").trim();
+  const key = String(Deno.env.get("GROK_BOT_WEBHOOK_KEY") || "").trim();
+  if (!url || !key) return null;
+  return { url, key };
+}
+
+async function fireGrokWebhook(
+  task: string,
+  context: string,
+  opts?: { tool?: string; tenantId?: string | null },
+): Promise<FireResult> {
+  const cfg = webhookConfig();
+  if (!cfg) {
+    throw new Error(
+      "Grok Bot webhook is not configured (set GROK_BOT_WEBHOOK_URL and GROK_BOT_WEBHOOK_KEY).",
+    );
+  }
+  const trimmedTask = task.trim();
+  if (!trimmedTask) {
+    throw new Error("Grok Bot webhook requires a non-empty task.");
+  }
+
+  const contextParts: string[] = [];
+  if (opts?.tool) contextParts.push(`tool: ${opts.tool}`);
+  if (opts?.tenantId) contextParts.push(`tenant_id: ${opts.tenantId}`);
+  if (context.trim()) contextParts.push(context.trim());
+  const payload = {
+    task: trimmedTask.length > MAX_TEXT ? trimmedTask.slice(0, MAX_TEXT) : trimmedTask,
+    context: contextParts.join("\n\n"),
+  };
+
+  const resp = await fetch(cfg.url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${cfg.key}`,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "User-Agent": "aios-grok-mcp/1.1",
+    },
+    body: JSON.stringify(payload),
+  });
+  const raw = await resp.text();
+  if (!resp.ok) {
+    let detail = raw.slice(0, 500);
+    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    throw new Error(`Grok Bot webhook ${resp.status}: ${detail}`);
+  }
+
+  let id = `webhook-${Date.now()}`;
+  try {
+    const data = JSON.parse(raw);
+    id = String(data?.id || data?.runId || data?.dispatchId || id);
+  } catch { /* empty body is fine */ }
+
+  return {
+    id,
+    url: "(Grok Bot automation — Grok will reply via ask_carmen when done)",
+    reused: false,
+    viaWebhook: true,
+  };
+}
 
 function cursorAuthHeaders(apiKey: string, basic = false): Record<string, string> {
   return {
@@ -325,10 +394,32 @@ async function fireGrokAgent(promptText: string, opts?: {
   name?: string;
   startingRef?: string;
   tenantId?: string | null;
+  task?: string;
+  context?: string;
+  tool?: string;
 }): Promise<FireResult> {
+  if (webhookConfig()) {
+    const task = String(opts?.task || promptText).trim();
+    const contextParts: string[] = [];
+    if (opts?.startingRef) contextParts.push(`branch: ${opts.startingRef}`);
+    if (opts?.context) contextParts.push(opts.context);
+    if (opts?.name) contextParts.push(`label: ${opts.name}`);
+    contextParts.push(
+      "Reply to Carmen when finished via carmen-mcp ask_carmen (surface grok_bot). " +
+      "Ping without task is ignored on the Grok Bot side.",
+    );
+    contextParts.push(teachingBlock(opts?.tenantId ?? null).trim());
+    return fireGrokWebhook(task, contextParts.join("\n\n"), {
+      tool: opts?.tool,
+      tenantId: opts?.tenantId ?? null,
+    });
+  }
+
   const apiKey = Deno.env.get("CURSOR_API_KEY") || Deno.env.get("GROK_BOT_API_KEY") || "";
   if (!apiKey) {
-    throw new Error("Grok Bot is not configured (set CURSOR_API_KEY or GROK_BOT_API_KEY secret).");
+    throw new Error(
+      "Grok Bot is not configured (set GROK_BOT_WEBHOOK_URL + GROK_BOT_WEBHOOK_KEY, or CURSOR_API_KEY).",
+    );
   }
   const text = promptText.length > MAX_TEXT ? promptText.slice(0, MAX_TEXT) : promptText;
 
@@ -449,6 +540,7 @@ async function handleToolCall(
     if (!task) throw new Error("request_dev_task requires a non-empty 'task'.");
     const branch = String(args?.branch ?? "").trim();
     const context = String(args?.context ?? "").trim();
+    const recent = await recentDispatchContext(ctx.tenantId);
     const text =
       `[Carmen → Grok Bot · DEV TASK]\n` +
       `Requested by Carmen (AIOS agent), on behalf of David.\n\n` +
@@ -456,12 +548,20 @@ async function handleToolCall(
       (branch ? `\nBase/target branch: ${branch}\n` : ``) +
       (context ? `\nContext:\n${context}\n` : ``) +
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
-      (await recentDispatchContext(ctx.tenantId)) +
+      recent +
       teachingBlock(ctx.tenantId);
-    const { url, id, reused } = await fireGrokAgent(text, {
+    const webhookContext = [
+      context,
+      branch ? `branch: ${branch}` : "",
+      recent,
+    ].filter(Boolean).join("\n\n");
+    const { url, id, reused, viaWebhook } = await fireGrokAgent(text, {
       name: `Carmen → Grok DEV: ${task.slice(0, 50)}`,
       startingRef: branch || undefined,
       tenantId: ctx.tenantId,
+      task,
+      context: webhookContext,
+      tool: "request_dev_task",
     });
     await logDispatch({
       tenantId: ctx.tenantId,
@@ -473,28 +573,39 @@ async function handleToolCall(
       sessionUrl: url,
       cursorAgentId: id,
     });
-    return (
-      `✅ Dispatched the dev task to Grok Bot` +
-      (reused ? ` (same sticky agent — history preserved)` : ` (new sticky Grok agent for this tenant)`) +
-      `. Grok is now working on it and will open a pull request when finished.\n` +
-      `Session: ${url}`
-    );
+    return viaWebhook
+      ? (
+        `✅ שלחתי את המשימה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יבצע, ` +
+        `ויחזיר לי תשובה דרך ask_carmen כשיגמר.\n` +
+        `Dispatch: ${id}`
+      )
+      : (
+        `✅ Dispatched the dev task to Grok Bot` +
+        (reused ? ` (same sticky agent — history preserved)` : ` (new sticky Grok agent for this tenant)`) +
+        `. Grok is now working on it and will open a pull request when finished.\n` +
+        `Session: ${url}`
+      );
   }
 
   if (name === "ask_grok") {
     const request = String(args?.request ?? "").trim();
     if (!request) throw new Error("ask_grok requires a non-empty 'request'.");
     const context = String(args?.context ?? "").trim();
+    const recent = await recentDispatchContext(ctx.tenantId);
     const text =
       `[Carmen → Grok Bot · REQUEST]\n` +
       `Requested by Carmen (AIOS agent), on behalf of David.\n\n` +
       `${request}\n` +
       (context ? `\nContext:\n${context}\n` : ``) +
-      (await recentDispatchContext(ctx.tenantId)) +
+      recent +
       teachingBlock(ctx.tenantId);
-    const { url, id, reused } = await fireGrokAgent(text, {
+    const webhookContext = [context, recent].filter(Boolean).join("\n\n");
+    const { url, id, reused, viaWebhook } = await fireGrokAgent(text, {
       name: `Carmen → Grok: ${request.slice(0, 50)}`,
       tenantId: ctx.tenantId,
+      task: request,
+      context: webhookContext,
+      tool: "ask_grok",
     });
     await logDispatch({
       tenantId: ctx.tenantId,
@@ -506,12 +617,18 @@ async function handleToolCall(
       sessionUrl: url,
       cursorAgentId: id,
     });
-    return (
-      `✅ Sent your request to Grok Bot` +
-      (reused ? ` (same sticky agent — history preserved)` : ` (new sticky Grok agent for this tenant)`) +
-      `. A Grok session is now running on it.\n` +
-      `Session: ${url}`
-    );
+    return viaWebhook
+      ? (
+        `✅ שלחתי את הבקשה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יעבוד על זה, ` +
+        `ויחזיר לי תשובה דרך ask_carmen כשיגמר.\n` +
+        `Dispatch: ${id}`
+      )
+      : (
+        `✅ Sent your request to Grok Bot` +
+        (reused ? ` (same sticky agent — history preserved)` : ` (new sticky Grok agent for this tenant)`) +
+        `. A Grok session is now running on it.\n` +
+        `Session: ${url}`
+      );
   }
 
   throw new Error(`Unknown tool: ${name}`);
