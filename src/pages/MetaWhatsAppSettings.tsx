@@ -168,6 +168,8 @@ export default function MetaWhatsAppSettings() {
   const [manualPin, setManualPin] = useState("");
   const [manualWabaId, setManualWabaId] = useState("");
   const [manualBusinessId, setManualBusinessId] = useState("");
+  /** Target Business Portfolio for WhatsApp when org already linked Facebook on another portfolio. */
+  const [signupBusinessId, setSignupBusinessId] = useState("");
   const [assets, setAssets] = useState<MetaAsset[] | null>(null);
   const [metaAppId, setMetaAppId] = useState("");
   const [selectedPhone, setSelectedPhone] = useState("");
@@ -201,6 +203,26 @@ export default function MetaWhatsAppSettings() {
     },
   });
 
+  const { data: hasFacebookIntegration = false } = useQuery({
+    queryKey: ["meta-wa-tenant-has-facebook", tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("tenant_integrations")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId!)
+        .in("integration_type", [
+          "facebook",
+          "facebook_lead_ads",
+          "facebook_insights",
+          "facebook_ecommerce",
+        ])
+        .eq("is_active", true);
+      if (error) throw error;
+      return (count ?? 0) > 0;
+    },
+  });
+
   const finishSignup = async () => {
     if (!tenantId || completingRef.current) return;
     if (!codeRef.current && !tokenRef.current) return;
@@ -210,6 +232,10 @@ export default function MetaWhatsAppSettings() {
     }
     completingRef.current = true;
     try {
+      const sessionBusinessId =
+        typeof sessionRef.current?.data?.business_id === "string"
+          ? sessionRef.current.data.business_id
+          : "";
       const data = await invokeMetaAuth({
         action: "complete",
         tenant_id: tenantId,
@@ -217,6 +243,7 @@ export default function MetaWhatsAppSettings() {
         access_token: tokenRef.current,
         session_info: sessionRef.current?.data ?? {},
         session_event: sessionRef.current?.event ?? "",
+        business_id: signupBusinessId.trim() || sessionBusinessId,
         redirect_uris: [`${window.location.origin}/`, window.location.origin, window.location.href],
         pin,
       });
@@ -312,8 +339,16 @@ export default function MetaWhatsAppSettings() {
       await loadFacebookSdk(config.app_id, config.graph_version);
       // featureType must always be present; Meta treats a missing key differently
       // from an empty one and can drop back to the plain Facebook login dialog.
+      const setup: Record<string, unknown> = {};
+      const portfolioId = signupBusinessId.trim();
+      if (portfolioId) {
+        setup.business = { id: portfolioId };
+      }
       const extras: Record<string, unknown> = {
-        setup: {},
+        setup,
+        // Force Meta to show business/WABA picker instead of "Continue with previous settings"
+        // when the org already linked Facebook on a different Business Portfolio.
+        auth_type: "reauthenticate",
         featureType: mode === "coexistence" ? "whatsapp_business_app_onboarding" : "",
         sessionInfoVersion: "3",
       };
@@ -515,6 +550,42 @@ export default function MetaWhatsAppSettings() {
                 </span>
               </Label>
             </RadioGroup>
+
+            {hasFacebookIntegration && (
+              <Alert className="border-amber-500/40">
+                <AlertTitle>הארגון כבר מחובר ל-Facebook Business אחר</AlertTitle>
+                <AlertDescription className="text-sm space-y-2">
+                  <p>
+                    חיבור Facebook (לידים/דוחות) וחיבור WhatsApp יכולים להיות מ-Business Portfolio
+                    שונה. AIOS מבקשת מ-Meta לבחור מחדש — בחלון לחצו <strong>Edit settings</strong>{" "}
+                    (לא Continue) ובחרו את ה-Business של WhatsApp.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    אם יודעים את ה-Business Portfolio ID של WhatsApp — הזינו למטה כדי לכוון את Meta
+                    ישירות.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="meta-wa-signup-business-id">
+                Business Portfolio ID (WhatsApp)
+                <span className="text-muted-foreground"> — אופציונלי</span>
+              </Label>
+              <Input
+                id="meta-wa-signup-business-id"
+                value={signupBusinessId}
+                onChange={(event) => setSignupBusinessId(event.target.value.replace(/\D/g, ""))}
+                dir="ltr"
+                inputMode="numeric"
+                placeholder="1029384756102938"
+                className="max-w-md font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Business Settings → Business info. השאירו ריק אם Meta צריכה להציג רשימת Businesses.
+              </p>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="meta-wa-pin">
