@@ -116,10 +116,12 @@ function needsCloudRegistration(phone: {
 class MetaAuthError extends Error {
   code?: string;
   details?: unknown;
-  constructor(message: string, code?: string, details?: unknown) {
+  guidance?: string;
+  constructor(message: string, code?: string, details?: unknown, guidance?: string) {
     super(message);
     this.code = code;
     this.details = details;
+    this.guidance = guidance;
   }
 }
 
@@ -131,7 +133,9 @@ class MetaAuthError extends Error {
 async function invokeMetaAuth(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("meta-whatsapp-auth", { body });
   if (!error) {
-    if (data?.error) throw new MetaAuthError(String(data.error), data.code, data.discovery);
+    if (data?.error) {
+      throw new MetaAuthError(String(data.error), data.code, data.discovery, data.guidance);
+    }
     return data;
   }
 
@@ -139,13 +143,15 @@ async function invokeMetaAuth(body: Record<string, unknown>) {
   if (response?.status === 401) {
     throw new MetaAuthError("ההתחברות למערכת פגה. רעננו את הדף, התחברו מחדש ונסו שוב.", "unauthorized");
   }
-  let payload: { error?: string; code?: string; discovery?: unknown } | null = null;
+  let payload: { error?: string; code?: string; discovery?: unknown; guidance?: string } | null = null;
   try {
     payload = await response?.clone().json();
   } catch {
     payload = null;
   }
-  if (payload?.error) throw new MetaAuthError(String(payload.error), payload.code, payload.discovery);
+  if (payload?.error) {
+    throw new MetaAuthError(String(payload.error), payload.code, payload.discovery, payload.guidance);
+  }
   throw error;
 }
 
@@ -503,7 +509,9 @@ export default function MetaWhatsAppSettings() {
         integration_id: integrationId,
         pin,
       });
-      if (!data?.success) throw new MetaAuthError(data?.error || "הרישום נכשל", data?.code);
+      if (!data?.success) {
+        throw new MetaAuthError(data?.error || "הרישום נכשל", data?.code, undefined, data?.guidance);
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -511,7 +519,13 @@ export default function MetaWhatsAppSettings() {
       setCloudRegisterPin("");
       queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
     },
-    onError: (error: Error) => toast.error(error.message, { duration: 12000 }),
+    onError: (error: Error) => {
+      const authError = error as MetaAuthError;
+      toast.error(
+        authError.guidance ? `${authError.message}\n${authError.guidance}` : authError.message,
+        { duration: 15000 },
+      );
+    },
   });
 
   const copyWebhook = async () => {
@@ -1064,54 +1078,85 @@ export default function MetaWhatsAppSettings() {
                   )}
                   {String(settings.platform_type ?? "").toUpperCase() === "ON_PREMISE" && (
                     <Alert className="border-amber-500/40">
-                      <AlertTitle>שלב אחרון: רישום Cloud API</AlertTitle>
+                      <AlertTitle>
+                        {settings.coexistence_enabled
+                          ? "מספר Coexistence — PIN לא זמין"
+                          : "שלב אחרון: רישום Cloud API"}
+                      </AlertTitle>
                       <AlertDescription className="text-sm space-y-3">
-                        <p>
-                          החיבור ל-AIOS וה-Billing ב-Meta נראים תקינים. Meta עדיין מדווחת שהמספר במצב{" "}
-                          <strong>On-Premise</strong> — כלומר פעיל באפליקציית WhatsApp Business, אבל לא
-                          נרשם ל-Cloud API שדרכו נוצרות תבניות.
-                        </p>
-                        <p>
-                          ה-PIN הוא <strong>לא</strong> קוד חיבור חדש — זה הקוד בן 6 ספרות מאימות דו-שלבי
-                          שקבעתם ב-<strong>WhatsApp Business</strong> (הגדרות → חשבון → אימות דו-שלבי).
-                        </p>
-                        {integration.user_id === userId && (
-                          <div className="flex flex-wrap items-end justify-end gap-2 pt-1">
-                            <div className="space-y-1">
-                              <Label htmlFor={`cloud-pin-${integration.id}`} className="text-xs">
-                                PIN מאימות דו-שלבי
-                              </Label>
-                              <Input
-                                id={`cloud-pin-${integration.id}`}
-                                value={cloudRegisterPin}
-                                onChange={(event) =>
-                                  setCloudRegisterPin(event.target.value.replace(/\D/g, "").slice(0, 6))
-                                }
-                                inputMode="numeric"
-                                dir="ltr"
-                                placeholder="123456"
-                                className="max-w-36 font-mono"
-                              />
-                            </div>
-                            <Button
-                              size="sm"
-                              disabled={
-                                !/^\d{6}$/.test(cloudRegisterPin) ||
-                                registerCloudApiMutation.isPending
-                              }
-                              onClick={() =>
-                                registerCloudApiMutation.mutate({
-                                  integrationId: integration.id,
-                                  pin: cloudRegisterPin,
-                                })
-                              }
-                            >
-                              {registerCloudApiMutation.isPending && (
-                                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                              )}
-                              השלם רישום Cloud API
-                            </Button>
-                          </div>
+                        {settings.coexistence_enabled ? (
+                          <>
+                            <p>
+                              המספר פעיל ב-<strong>WhatsApp Business App</strong> (Coexistence). Meta{" "}
+                              <strong>לא מאפשרת</strong> רישום Cloud API עם PIN למספרי SMB — זו לא טעות
+                              בקוד שהזנתם.
+                            </p>
+                            <ol className="list-decimal list-inside space-y-1 text-xs">
+                              <li>
+                                <strong>תבניות עכשיו:</strong> צרו ב-WhatsApp Manager → Message templates
+                                (לא דרך PIN).
+                              </li>
+                              <li>
+                                <strong>Coexistence מלא:</strong> למעלה בחרו &quot;מספר קיים ב-WhatsApp
+                                Business&quot; → Embedded Signup → סריקת QR בטלפון של אלי.
+                              </li>
+                              <li>
+                                <strong>אופציה נוספת:</strong> הפעילו Inbox ב-Meta Business Suite — לפעמים
+                                זה מעדכן את platform_type ל-CLOUD_API.
+                              </li>
+                              <li>
+                                אם נשאר תקוע — פנייה לתמיכת Meta (מצב ON_PREMISE על מספר Coexistence).
+                              </li>
+                            </ol>
+                          </>
+                        ) : (
+                          <>
+                            <p>
+                              Meta מדווחת שהמספר במצב <strong>On-Premise</strong>. ה-PIN הוא מאימות
+                              דו-שלבי של <strong>WhatsApp Business</strong> (הגדרות → חשבון). אם אין —
+                              הפעילו שם קודם, או הזינו 6 ספרות חדשות שיישמרו כ-PIN.
+                            </p>
+                            {integration.user_id === userId && (
+                              <div className="flex flex-wrap items-end justify-end gap-2 pt-1">
+                                <div className="space-y-1">
+                                  <Label htmlFor={`cloud-pin-${integration.id}`} className="text-xs">
+                                    PIN מאימות דו-שלבי
+                                  </Label>
+                                  <Input
+                                    id={`cloud-pin-${integration.id}`}
+                                    value={cloudRegisterPin}
+                                    onChange={(event) =>
+                                      setCloudRegisterPin(
+                                        event.target.value.replace(/\D/g, "").slice(0, 6),
+                                      )
+                                    }
+                                    inputMode="numeric"
+                                    dir="ltr"
+                                    placeholder="123456"
+                                    className="max-w-36 font-mono"
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  disabled={
+                                    !/^\d{6}$/.test(cloudRegisterPin) ||
+                                    registerCloudApiMutation.isPending
+                                  }
+                                  onClick={() =>
+                                    registerCloudApiMutation.mutate({
+                                      integrationId: integration.id,
+                                      pin: cloudRegisterPin,
+                                    })
+                                  }
+                                >
+                                  {registerCloudApiMutation.isPending && (
+                                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                                  )}
+                                  השלם רישום Cloud API
+                                </Button>
+                              </div>
+                            )}
+                          </>
                         )}
                       </AlertDescription>
                     </Alert>
