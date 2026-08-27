@@ -48,6 +48,9 @@ const graphRequest = async (
   return { ok: true as const, data };
 };
 
+const placeholderIndexes = (text: string) =>
+  [...text.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1]));
+
 const explainTemplateMetaError = (metaError: Record<string, unknown> | undefined, fallback: string) => {
   const subcode = Number(metaError?.error_subcode ?? 0);
   const userMsg = String(metaError?.error_user_msg ?? "").trim();
