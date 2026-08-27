@@ -10,7 +10,7 @@ import {
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
 import { formatTaskNotificationMessage } from '../_shared/task-notification-message.ts'
 import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
-import { claimFacebookLeadAutomationRun, releaseFacebookLeadAutomationRun } from '../_shared/facebook-lead-dedup.ts'
+import { claimFacebookLeadAutomationRun, claimFacebookLeadWhatsAppSend, releaseFacebookLeadAutomationRun, releaseFacebookLeadWhatsAppSend } from '../_shared/facebook-lead-dedup.ts'
 // clearer error when ManyChat wa_id ghost on deleted contact — 2026-08-09
 
 const corsHeaders = {
@@ -4037,16 +4037,41 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     const results: any[] = []
     for (const chatId of chatIds) {
       try {
-        const r = await sendWaMessage({
-          providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug,
-        })
-        results.push({ chatId, status: 'sent', result: r })
+        let sendClaimInserted = false
+        if (data?.facebook_leadgen_id) {
+          const sendClaim = await claimFacebookLeadWhatsAppSend(supabase, {
+            tenantId,
+            chatId,
+            leadgenId: data.facebook_leadgen_id,
+          })
+          if (sendClaim.duplicate) {
+            results.push({ chatId, status: 'skipped', result: { skipped: 'duplicate_facebook_whatsapp_send' } })
+            continue
+          }
+          sendClaimInserted = sendClaim.inserted
+        }
+        try {
+          const r = await sendWaMessage({
+            providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug,
+          })
+          results.push({ chatId, status: 'sent', result: r })
+        } catch (sendErr) {
+          if (sendClaimInserted) {
+            await releaseFacebookLeadWhatsAppSend(supabase, {
+              tenantId,
+              chatId,
+              leadgenId: data.facebook_leadgen_id,
+            })
+          }
+          throw sendErr
+        }
       } catch (e) {
         results.push({ chatId, status: 'failed', error: e instanceof Error ? e.message : String(e) })
       }
     }
     const sentCount = results.filter(r => r.status === 'sent').length
-    if (sentCount === 0) {
+    const skippedCount = results.filter(r => r.status === 'skipped').length
+    if (sentCount === 0 && skippedCount === 0) {
       throw new Error(`כל ${chatIds.length} היעדים נכשלו: ${JSON.stringify(results)}`)
     }
     return {
@@ -4054,6 +4079,7 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
       message_sent: message,
       recipients_count: chatIds.length,
       sent_count: sentCount,
+      skipped_count: skippedCount,
       results,
     }
   }
@@ -4227,11 +4253,30 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   }
   
   // Send message via Green API OR Manus WhatsApp
+  let sendClaimInserted = false
+  if (data?.facebook_leadgen_id) {
+    const sendClaim = await claimFacebookLeadWhatsAppSend(supabase, {
+      tenantId,
+      chatId,
+      leadgenId: data.facebook_leadgen_id,
+    })
+    if (sendClaim.duplicate) {
+      return {
+        success: true,
+        skipped: 'duplicate_facebook_whatsapp_send',
+        message_sent: message,
+        chat_id: chatId,
+      }
+    }
+    sendClaimInserted = sendClaim.inserted
+  }
+
   let sendResult: any
   let mediaResult = null
   const mediaType = config.media_type
   const mediaUrl = config.media_url
 
+  try {
   if (providerType === 'manus_wa') {
     const isGroup = chatId.includes('@g.us')
     const manusRecipient = isGroup
@@ -4289,6 +4334,16 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
       })
       mediaResult = await fileResponse.json()
     }
+  }
+  } catch (sendErr) {
+    if (sendClaimInserted) {
+      await releaseFacebookLeadWhatsAppSend(supabase, {
+        tenantId,
+        chatId,
+        leadgenId: data.facebook_leadgen_id,
+      })
+    }
+    throw sendErr
   }
 
   
