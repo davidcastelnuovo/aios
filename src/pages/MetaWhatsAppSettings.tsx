@@ -196,6 +196,7 @@ export default function MetaWhatsAppSettings() {
   const [discovery, setDiscovery] = useState<unknown>(null);
   const [discoveryLimited, setDiscoveryLimited] = useState(false);
   const [sharingIntegration, setSharingIntegration] = useState<Integration | null>(null);
+  const [cloudRegisterPin, setCloudRegisterPin] = useState("");
   const codeRef = useRef<string | null>(null);
   const sessionRef = useRef<{ data: Record<string, unknown>; event: string } | null>(null);
   const completingRef = useRef(false);
@@ -492,6 +493,25 @@ export default function MetaWhatsAppSettings() {
       queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
     },
     onError: (error: Error) => toast.error(error.message),
+  });
+
+  const registerCloudApiMutation = useMutation({
+    mutationFn: async ({ integrationId, pin }: { integrationId: string; pin: string }) => {
+      const data = await invokeMetaAuth({
+        action: "register_cloud_api",
+        tenant_id: tenantId,
+        integration_id: integrationId,
+        pin,
+      });
+      if (!data?.success) throw new MetaAuthError(data?.error || "הרישום נכשל", data?.code);
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(String(data?.message || "המספר רשום ל-Cloud API"));
+      setCloudRegisterPin("");
+      queryClient.invalidateQueries({ queryKey: ["meta-whatsapp-integrations", tenantId] });
+    },
+    onError: (error: Error) => toast.error(error.message, { duration: 12000 }),
   });
 
   const copyWebhook = async () => {
@@ -1044,17 +1064,55 @@ export default function MetaWhatsAppSettings() {
                   )}
                   {String(settings.platform_type ?? "").toUpperCase() === "ON_PREMISE" && (
                     <Alert className="border-amber-500/40">
-                      <AlertTitle>המספר עדיין לא על Cloud API</AlertTitle>
-                      <AlertDescription className="text-sm space-y-2">
+                      <AlertTitle>שלב אחרון: רישום Cloud API</AlertTitle>
+                      <AlertDescription className="text-sm space-y-3">
                         <p>
-                          Meta מדווחת שהמספר במצב <strong>On-Premise</strong>. יצירת תבניות ושליחה דרך Cloud API
-                          לא יעבדו עד רישום Cloud API חד-פעמי — גם אם Billing כבר הוגדר על ה-WABA.
+                          החיבור ל-AIOS וה-Billing ב-Meta נראים תקינים. Meta עדיין מדווחת שהמספר במצב{" "}
+                          <strong>On-Premise</strong> — כלומר פעיל באפליקציית WhatsApp Business, אבל לא
+                          נרשם ל-Cloud API שדרכו נוצרות תבניות.
                         </p>
                         <p>
-                          ב<strong>חיבור ידני</strong> בחרו את המספר שוב והזינו PIN בן 6 ספרות (אימות דו-שלבי
-                          של WhatsApp Business). אחרי הצלחה הסטטוס ישתנה ל-CLOUD_API. אם נדרש — השלימו גם אימות
-                          מספר ב-WhatsApp Manager.
+                          ה-PIN הוא <strong>לא</strong> קוד חיבור חדש — זה הקוד בן 6 ספרות מאימות דו-שלבי
+                          שקבעתם ב-<strong>WhatsApp Business</strong> (הגדרות → חשבון → אימות דו-שלבי).
                         </p>
+                        {integration.user_id === userId && (
+                          <div className="flex flex-wrap items-end justify-end gap-2 pt-1">
+                            <div className="space-y-1">
+                              <Label htmlFor={`cloud-pin-${integration.id}`} className="text-xs">
+                                PIN מאימות דו-שלבי
+                              </Label>
+                              <Input
+                                id={`cloud-pin-${integration.id}`}
+                                value={cloudRegisterPin}
+                                onChange={(event) =>
+                                  setCloudRegisterPin(event.target.value.replace(/\D/g, "").slice(0, 6))
+                                }
+                                inputMode="numeric"
+                                dir="ltr"
+                                placeholder="123456"
+                                className="max-w-36 font-mono"
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              disabled={
+                                !/^\d{6}$/.test(cloudRegisterPin) ||
+                                registerCloudApiMutation.isPending
+                              }
+                              onClick={() =>
+                                registerCloudApiMutation.mutate({
+                                  integrationId: integration.id,
+                                  pin: cloudRegisterPin,
+                                })
+                              }
+                            >
+                              {registerCloudApiMutation.isPending && (
+                                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                              )}
+                              השלם רישום Cloud API
+                            </Button>
+                          </div>
+                        )}
                       </AlertDescription>
                     </Alert>
                   )}
