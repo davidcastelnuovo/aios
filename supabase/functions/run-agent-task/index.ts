@@ -1,7 +1,17 @@
-// redeploy trigger: prior CI bundle hit a transient esm.sh 522 fetching supabase-js;
-// re-run the deploy (batch-aggregated WhatsApp report fix, PR #131).
+// redeploy trigger: WhatsApp subagent/reminder delivery stays on originating chat_id (2026-08-27b)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { advanceDangerLane, getBatchResults } from '../_shared/subagent.ts'
+import { replyDestinationIsConsistent, requireOriginChatId } from '../_shared/carmen-session-identity.ts'
+
+function originatingNotifyIsValid(notify: any): boolean {
+  if (!notify || notify.surface !== 'whatsapp') return false
+  const origin = requireOriginChatId(notify.chat_id)
+  if (!origin.ok) return false
+  return replyDestinationIsConsistent({
+    chatId: origin.chatId,
+    isGroup: !!notify.is_group,
+  })
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -51,6 +61,12 @@ function buildBatchReport(batch: {
 // (PK batch_id), so concurrent finishers can't double-send. Best-effort.
 async function maybeSendBatchReport(supabase: any, task: any, preservedNotify: any): Promise<void> {
   if (!preservedNotify || preservedNotify.surface !== 'whatsapp' || !task?.batch_id) return
+  if (!originatingNotifyIsValid(preservedNotify)) {
+    console.error('[run-agent-task] refusing batch WA report — notify is not pinned to a valid originating chat', {
+      chat_id: preservedNotify?.chat_id, is_group: preservedNotify?.is_group,
+    })
+    return
+  }
   try {
     const batch = await getBatchResults(supabase, preservedNotify.tenant_id, task.batch_id)
     if (!batch.all_done) return // not the finisher — the last subtask sends
@@ -163,6 +179,22 @@ Deno.serve(async (req) => {
     const reminderDelivery = checkpoint?.reminder_delivery
     const reminderNotify = checkpoint?.notify
     if (reminderDelivery?.message && reminderNotify?.surface === 'whatsapp') {
+      if (!originatingNotifyIsValid(reminderNotify)) {
+        const error = 'WhatsApp reminder missing originating chat_id — refusing to send to a live session'
+        await supabase.from('agent_tasks').update({
+          status: 'pending',
+          last_run: null,
+          result: {
+            ...checkpoint,
+            last_error: error,
+            run_count: runCount,
+          },
+        }).eq('id', task_id)
+        return new Response(JSON.stringify({ success: false, error, retrying: true }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
       let automationId: string | null = reminderNotify.automation_id || null
       if (!automationId) {
         const auto = await findCarmenSessionAutomation(
@@ -406,7 +438,11 @@ Deno.serve(async (req) => {
     // was spawned from a WA conversation. Best-effort — failures are logged
     // but never fail the task.
     if (preservedNotify && preservedNotify.surface === 'whatsapp') {
-      if (task.batch_id) {
+      if (!originatingNotifyIsValid(preservedNotify)) {
+        console.error('[run-agent-task] refusing WA notify — not pinned to originating chat', {
+          task_id, chat_id: preservedNotify.chat_id, is_group: preservedNotify.is_group,
+        })
+      } else if (task.batch_id) {
         // delegate_parallel: DON'T fire one (truncated) WA message per subtask.
         // Only the finisher sends ONE aggregated report (see maybeSendBatchReport).
         await maybeSendBatchReport(supabase, task, preservedNotify)

@@ -1,3 +1,4 @@
+// redeploy trigger: Carmen sessions keyed by chat JID only; never speaker-phone fallback (2026-08-27b)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { sendCarmenReplyViaActionStep } from '../_shared/carmen.ts'
 import { buildWaNotifyFromOrigin, requireOriginChatId } from '../_shared/carmen-session-identity.ts'
@@ -1886,13 +1887,19 @@ Deno.serve(async (req) => {
                           continue
                         }
 
-                        // Trigger keyword found — create new session
+                        // Trigger keyword found — create new session keyed by THIS chat JID.
+                        // Never fall back to speaker phone: the same person sits in many groups.
+                        const originForCreate = requireOriginChatId(cId)
+                        if (!originForCreate.ok) {
+                          console.log('[CARMEN] refusing to create session without chat_id')
+                          continue
+                        }
                         const connUserId = payloadData?.connection_user_id || ''
                         const { data: newSession } = await supabase
                           .from('carmen_whatsapp_sessions')
                           .insert({
                             tenant_id: tenantId,
-                            chat_id: cId,
+                            chat_id: originForCreate.chatId,
                             phone: sPhone,
                             sender_name: payloadData?.sender_name || payloadData?.contact_name || '',
                             agent_id: agentId,
@@ -2230,7 +2237,9 @@ Deno.serve(async (req) => {
                   stepResponse = { success: true, message_id: telegramData.result?.message_id }
                   previousStepOutput = stepResponse
                   // WHATSAPP SESSION STEP: save/update conversation history by chat_id
-                  const chatId = payloadData?.chat_id || payloadData?.sender_phone || ''
+                  // Never key this on sender_phone — that would merge every group the same speaker is in.
+                  const originSession = requireOriginChatId(payloadData?.chat_id || payloadData?.group_chat_id)
+                  const chatId = originSession.ok ? originSession.chatId : ''
                   const agentOutput = previousStepOutput?.output || ''
                   const userMsg = payloadData?.message_text || payloadData?.text || ''
                   // Use pre-built history from agent step if available

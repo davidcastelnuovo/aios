@@ -9,6 +9,7 @@
 import {
   originChatsMatch,
   replyDestinationIsConsistent,
+  requireOriginChatId,
 } from './carmen-session-identity.ts';
 
 const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
@@ -878,13 +879,15 @@ export async function findActiveCarmenSession(
   // Key the lookup on chat_id only — see carmen-session-identity.ts.
   // Phone is last-speaker metadata and must never select which conversation
   // to continue (same person sits in many groups).
+  const origin = requireOriginChatId(chatId);
+  if (!origin.ok) return null;
   const { data: rows } = await supabase
     .from('carmen_whatsapp_sessions')
     .select('*')
     .eq('tenant_id', tenantId)
     .eq('status', 'active')
     .eq('connection_user_id', connectionUserId)
-    .eq('chat_id', chatId)
+    .eq('chat_id', origin.chatId)
     .order('created_at', { ascending: false })
     .limit(5);
 
@@ -1146,11 +1149,26 @@ async function resolveCarmenGroupIdentity(
 // Top-level Carmen message handler. Returns whether the message was consumed by Carmen.
 // Callers should NOT trigger other automations for the same message if `handled` is true.
 export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHandleResult> {
+  const origin = requireOriginChatId(ctx.chatId);
+  if (!origin.ok) {
+    console.error('[carmen] refusing turn without chat_id — never route by speaker phone', {
+      tenantId: ctx.tenantId, chatId: ctx.chatId, isGroup: ctx.isGroup,
+    });
+    return { handled: false, reason: 'missing_chat_id' };
+  }
+  if (origin.isGroup !== ctx.isGroup) {
+    console.error('[carmen] refusing turn: isGroup flag does not match chat JID', {
+      tenantId: ctx.tenantId, chatId: origin.chatId, isGroup: ctx.isGroup,
+    });
+    return { handled: true, outcome: 'error' };
+  }
+
   const {
     supabase, tenantId, integrationId, connectionUserId,
-    chatId, phoneNumber, sourcePhoneNumber, senderName, messageText,
+    phoneNumber, sourcePhoneNumber, senderName, messageText,
     isIncoming, isManualOutgoing, isGroup, sourceChannel, sendMessage,
   } = ctx;
+  const chatId = origin.chatId;
 
   const handlerStartedAt = Date.now();
 
