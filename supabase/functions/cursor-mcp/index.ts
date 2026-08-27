@@ -10,7 +10,8 @@
 //
 // Required Supabase secrets:
 //   CURSOR_API_KEY          API key from https://cursor.com/dashboard/api
-//   CURSOR_MCP_BEARER       shared secret Carmen's MCP client must present
+//   CURSOR_MCP_BEARER       Carmen's MCP client (mcp-connect / agent_mcp_connections)
+//   GROK_CURSOR_MCP_BEARER  Grok Bot direct → Cursor only (separate from Carmen)
 // Optional:
 //   CURSOR_REPO_URL         default https://github.com/davidcastelnuovo/aios
 //   CURSOR_STARTING_REF     default main
@@ -130,6 +131,19 @@ function rpcError(id: unknown, code: number, message: string, httpStatus = 200) 
     status: httpStatus,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function acceptedBearers(): string[] {
+  return [
+    Deno.env.get("CURSOR_MCP_BEARER") || "",
+    Deno.env.get("GROK_CURSOR_MCP_BEARER") || "",
+  ].filter(Boolean);
+}
+
+function isAuthorizedBearer(bearer: string | undefined): boolean {
+  const allowed = acceptedBearers();
+  if (!allowed.length) return true;
+  return !!bearer && allowed.includes(bearer);
 }
 
 function bearerFrom(req: Request): string | undefined {
@@ -666,15 +680,14 @@ Deno.serve(async (req) => {
         server: SERVER_INFO,
         tools: TOOLS.map((t) => t.name),
         streamable_http: CURSOR_MCP_STREAMABLE_URL,
-        setup: "Grok Bot → Plugins → custom MCP → URL must end with /mcp + CURSOR_MCP_BEARER",
+        setup: "Grok Bot direct → /mcp + GROK_CURSOR_MCP_BEARER. Carmen → /cursor-mcp + CURSOR_MCP_BEARER.",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 
-  const requiredBearer = Deno.env.get("CURSOR_MCP_BEARER");
   const bearer = bearerFrom(req);
-  if (requiredBearer && bearer !== requiredBearer) {
+  if (!isAuthorizedBearer(bearer)) {
     if (streamable) {
       return handleStreamableMcpRequest(req, async (msg) =>
         rpcError(msg.id, -32001, "Unauthorized: invalid or missing bearer token", 401));

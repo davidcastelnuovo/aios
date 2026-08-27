@@ -23,7 +23,7 @@ curl -X POST "$GROK_BOT_WEBHOOK_URL" \
 | Direction | Setup |
 | --- | --- |
 | **Cursor → Grok** | `.mcp.json` → `grok-mcp/mcp` + `GROK_MCP_BEARER` in Cloud Environment secrets |
-| **Grok → Cursor** | Grok Bot Plugins → `cursor-mcp/mcp` + `CURSOR_MCP_BEARER` |
+| **Grok → Cursor** | Grok Bot Plugins → `cursor-mcp/mcp` + **`GROK_CURSOR_MCP_BEARER`** (not Carmen's `CURSOR_MCP_BEARER`) |
 
 Both URLs **must end with `/mcp`** (Streamable HTTP).
 
