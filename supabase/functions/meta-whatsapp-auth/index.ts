@@ -244,6 +244,8 @@ Deno.serve(async (request) => {
           checks.push({ path, ok: false, error: error instanceof Error ? error.message : "unknown" });
         }
       }
+      const configOk = checks.some((entry) => entry.ok === true);
+      const configData = checks.find((entry) => entry.ok)?.data as { name?: string } | undefined;
       let whatsappProduct: Record<string, unknown> = { ok: false };
       try {
         const subscribed = await graphJson(
@@ -252,22 +254,31 @@ Deno.serve(async (request) => {
           undefined,
           graphVersion,
         );
-        whatsappProduct = {
-          ok: true,
-          objects: (subscribed?.data ?? []).map((entry: any) => ({
-            object: entry?.object,
-            fields: (entry?.fields ?? []).map((field: any) => field?.name),
-          })),
-        };
+        const objects = (subscribed?.data ?? []).map((entry: any) => ({
+          object: entry?.object,
+          fields: (entry?.fields ?? []).map((field: any) => field?.name),
+        }));
+        whatsappProduct = { ok: true, objects };
       } catch (error) {
         whatsappProduct = { ok: false, error: error instanceof Error ? error.message : "unknown" };
       }
+      const hasWhatsappWebhook = Array.isArray((whatsappProduct as any).objects)
+        && (whatsappProduct as any).objects.some((entry: any) => entry?.object === "whatsapp_business_account");
+      const guidance = !configOk
+        ? "Configuration ID לא נגיש ב-Meta Graph API — בדקו META_WHATSAPP_CONFIG_ID ו-META_APP_SECRET."
+        : !hasWhatsappWebhook
+        ? "Webhook של whatsapp_business_account לא רשום על האפליקציה — הוסיפו ב-WhatsApp → Configuration → Webhooks."
+        : "אם בדפדפן מופיע Facebook Login רגיל (לא מסכי WhatsApp/WABA) — ה-Configuration חייב להיות מסוג WhatsApp Embedded Signup, לא Facebook Login for Business רגיל. נדרש Tech Provider / Solution Partner.";
       return reply({
         app_id: appId,
         configuration_id: configurationId,
+        configuration_name: configData?.name ?? null,
         graph_version: graphVersion,
         configuration: checks,
         webhook_subscriptions: whatsappProduct,
+        config_reachable: configOk,
+        whatsapp_webhook_subscribed: hasWhatsappWebhook,
+        guidance,
       });
     }
 

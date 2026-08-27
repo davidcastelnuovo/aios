@@ -163,7 +163,7 @@ export default function MetaWhatsAppSettings() {
   const [mode, setMode] = useState<SignupMode>("coexistence");
   const [pin, setPin] = useState("");
   const [connecting, setConnecting] = useState(false);
-  const [showManual, setShowManual] = useState(false);
+  const [showManual, setShowManual] = useState(true);
   const [manualToken, setManualToken] = useState("");
   const [manualPin, setManualPin] = useState("");
   const [manualWabaId, setManualWabaId] = useState("");
@@ -179,6 +179,8 @@ export default function MetaWhatsAppSettings() {
   const completingRef = useRef(false);
   const sessionTimerRef = useRef<number | null>(null);
   const tokenRef = useRef<string | null>(null);
+  /** Set when Meta posts WA_EMBEDDED_SIGNUP FINISH — without this, signup is plain Facebook Login. */
+  const embeddedSignupReceivedRef = useRef(false);
 
   const { data: config, error: configError } = useQuery({
     queryKey: ["meta-whatsapp-config", tenantId],
@@ -186,6 +188,14 @@ export default function MetaWhatsAppSettings() {
     retry: false,
     queryFn: async () =>
       (await invokeMetaAuth({ action: "config", tenant_id: tenantId })) as MetaConfig,
+  });
+
+  const { data: metaDiagnose } = useQuery({
+    queryKey: ["meta-whatsapp-diagnose", tenantId],
+    enabled: Boolean(tenantId && config),
+    retry: false,
+    queryFn: async () =>
+      (await invokeMetaAuth({ action: "diagnose", tenant_id: tenantId! })) as Record<string, unknown>,
   });
 
   const { data: integrations = [], isLoading } = useQuery({
@@ -226,6 +236,15 @@ export default function MetaWhatsAppSettings() {
   const finishSignup = async () => {
     if (!tenantId || completingRef.current) return;
     if (!codeRef.current && !tokenRef.current) return;
+    if (!embeddedSignupReceivedRef.current) {
+      setConnecting(false);
+      setShowManual(true);
+      toast.error(
+        "Meta לא הפעילה זרימת WhatsApp (Embedded Signup). יש לתקן את ה-Configuration באפליקצiat Meta או להשתמש בחיבור ידני למטה.",
+        { duration: 15000 },
+      );
+      return;
+    }
     if (sessionTimerRef.current) {
       window.clearTimeout(sessionTimerRef.current);
       sessionTimerRef.current = null;
@@ -309,6 +328,7 @@ export default function MetaWhatsAppSettings() {
         return;
       }
       if (String(payload.event ?? "").startsWith("FINISH")) {
+        embeddedSignupReceivedRef.current = true;
         sessionRef.current = { data: payload.data ?? {}, event: payload.event };
         if (codeRef.current || tokenRef.current) void finishSignup();
       }
@@ -331,6 +351,7 @@ export default function MetaWhatsAppSettings() {
     codeRef.current = null;
     tokenRef.current = null;
     sessionRef.current = null;
+    embeddedSignupReceivedRef.current = false;
     if (sessionTimerRef.current) {
       window.clearTimeout(sessionTimerRef.current);
       sessionTimerRef.current = null;
@@ -346,12 +367,13 @@ export default function MetaWhatsAppSettings() {
       }
       const extras: Record<string, unknown> = {
         setup,
-        // Force Meta to show business/WABA picker instead of "Continue with previous settings"
-        // when the org already linked Facebook on a different Business Portfolio.
-        auth_type: "reauthenticate",
         featureType: mode === "coexistence" ? "whatsapp_business_app_onboarding" : "",
         sessionInfoVersion: "3",
       };
+      // Only force re-auth when Facebook is already linked on another Business Portfolio.
+      if (hasFacebookIntegration) {
+        extras.auth_type = "reauthenticate";
+      }
       const sdk = (window as FacebookWindow).FB;
       if (!sdk) throw new Error("Meta SDK לא נטען");
       sdk.login(
@@ -368,16 +390,25 @@ export default function MetaWhatsAppSettings() {
           }
           codeRef.current = returnedCode;
           tokenRef.current = returnedToken;
-          // Meta only emits the WA_EMBEDDED_SIGNUP session message for full
-          // WhatsApp flows. Give it a brief moment, then complete regardless so
-          // the screen can never wait forever for a message that never arrives.
           if (sessionRef.current) {
             void finishSignup();
             return;
           }
+          // Wait for WA_EMBEDDED_SIGNUP FINISH. Do not call complete with a plain Facebook code.
           sessionTimerRef.current = window.setTimeout(() => {
-            void finishSignup();
-          }, 2000);
+            if (embeddedSignupReceivedRef.current) {
+              void finishSignup();
+              return;
+            }
+            setConnecting(false);
+            codeRef.current = null;
+            tokenRef.current = null;
+            setShowManual(true);
+            toast.error(
+              "Meta החזירה Facebook Login רגיל במקום WhatsApp Embedded Signup. בדקו Configuration באפליקצiat Meta (Login variation = WhatsApp) או השתמשו בחיבור ידני.",
+              { duration: 18000 },
+            );
+          }, 10000);
         },
         {
           // Only the parameters Meta documents for Embedded Signup may be sent.
@@ -513,6 +544,26 @@ export default function MetaWhatsAppSettings() {
           <AlertDescription>
             יש להגדיר את הסודות <code>FACEBOOK_APP_ID</code>, <code>META_APP_SECRET</code>,{" "}
             <code>META_WHATSAPP_CONFIG_ID</code> ו־<code>META_WHATSAPP_WEBHOOK_VERIFY_TOKEN</code>.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {config && (
+        <Alert className="mb-6 border-amber-500/40">
+          <AlertTitle>חשוב: Facebook Login ≠ WhatsApp Embedded Signup</AlertTitle>
+          <AlertDescription className="text-sm space-y-2">
+            <p>
+              אם Meta מציגה רק &quot;Continue with NETA&quot; / Facebook Login — ה-Configuration{" "}
+              <code dir="ltr">{config.configuration_id}</code> באפליקצiat Meta{" "}
+              <strong>לא</strong> מסוג WhatsApp Embedded Signup. זה קורה גם בארגון חדש לגמרי.
+            </p>
+            <p>
+              עד שמתקנים ב-Meta Developers (Configuration → Login variation = WhatsApp Embedded Signup,
+              Tech Provider) — השתמשו ב<strong>חיבור ידני עם Access Token</strong> למטה.
+            </p>
+            {typeof metaDiagnose?.guidance === "string" && (
+              <p className="text-xs text-muted-foreground">{metaDiagnose.guidance}</p>
+            )}
           </AlertDescription>
         </Alert>
       )}
