@@ -1,9 +1,10 @@
 // carmen-mcp — MCP server that lets Grok Bot (and other external agents) talk to Carmen.
 //
-// Grok Bot Settings → Plugins → Add custom MCP server → paste this URL + bearer.
-// Each tools/call runs Carmen's full brain (run-ai-agent) synchronously and returns her reply.
+// Grok Bot Settings → Plugins → Add custom MCP server:
+//   URL: …/functions/v1/carmen-mcp/mcp   (Streamable HTTP — required by Grok Bot)
+//   Header: Authorization: Bearer <CARMEN_MCP_BEARER>
 //
-// JSON-RPC 2.0 over HTTP (same dialect as cursor-mcp / grok-mcp / mcp-connect).
+// Legacy JSON-RPC (Carmen mcp-connect): …/functions/v1/carmen-mcp
 //
 // Tools:
 //   - ask_carmen : question, data lookup, or action request → Carmen's text reply
@@ -14,20 +15,32 @@
 //   CARMEN_MCP_TENANT_ID   tenant for Carmen (falls back to CLAUDE_DEFAULT_TENANT_ID)
 //   CARMEN_MCP_USER_ID     acting user for permissions (default David — full owner access)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import {
+  compactToolsForGrok,
+  grokCompatibleInitializeResult,
+  handleStreamableMcpRequest,
+  isStreamableMcpPath,
+  wantsStreamableHttp,
+  type McpRpcMessage,
+} from "../_shared/mcp-streamable-http.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, accept, mcp-session-id, mcp-protocol-version",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "carmen-mcp", version: "1.0.0" };
+const SERVER_INFO = { name: "carmen-mcp", version: "1.1.0" };
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 32_000;
 const DEFAULT_USER_ID = "ac7b2493-dcfa-47d8-80cc-b3900a406c46"; // David — full dev-escalation tier
+const GROK_MCP_URL =
+  "https://zvoijyneresvkadpprel.supabase.co/functions/v1/carmen-mcp/mcp";
 
 const TOOLS = [
   {
@@ -67,6 +80,7 @@ const TOOLS = [
         },
       },
       required: ["message"],
+      additionalProperties: false,
     },
   },
 ];
@@ -264,59 +278,38 @@ async function handleToolCall(
   }
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+type RpcCtx = { tenantId: string; userId: string; grokMode: boolean };
 
-  if (req.method === "GET") {
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        server: SERVER_INFO,
-        tools: TOOLS.map((t) => t.name),
-        setup: "Grok Bot → Settings → Plugins → custom MCP → URL + Authorization Bearer CARMEN_MCP_BEARER",
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  }
-
-  let msg: any;
-  try {
-    msg = await req.json();
-  } catch {
-    return rpcError(null, -32700, "Parse error");
-  }
+async function handleRpcMessage(msg: McpRpcMessage, ctx: RpcCtx): Promise<Response> {
   const { id, method, params } = msg ?? {};
-
-  const bearer = requiredBearer();
-  if (!bearer) {
-    return rpcError(id, -32002, "CARMEN_MCP_BEARER secret is not configured on the server", 503);
-  }
-  if (bearerFrom(req) !== bearer) {
-    return rpcError(id, -32001, "Unauthorized: invalid or missing bearer token", 401);
-  }
-
-  const tenantId = resolveTenantId();
-  if (!tenantId) {
-    return rpcError(id, -32002, "CARMEN_MCP_TENANT_ID (or CLAUDE_DEFAULT_TENANT_ID) is not configured", 503);
-  }
-  const userId = resolveUserId();
-  const ctx = { tenantId, userId };
+  const clientProtocol =
+    typeof (params as any)?.protocolVersion === "string" ? (params as any).protocolVersion : undefined;
 
   try {
     switch (method) {
       case "initialize":
-        return rpcResult(id, {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: SERVER_INFO,
-        });
+        return rpcResult(
+          id,
+          ctx.grokMode
+            ? grokCompatibleInitializeResult(clientProtocol, SERVER_INFO)
+            : {
+              protocolVersion: PROTOCOL_VERSION,
+              capabilities: { tools: {} },
+              serverInfo: SERVER_INFO,
+            },
+        );
       case "notifications/initialized":
       case "initialized":
         return new Response("", { status: 202, headers: corsHeaders });
       case "ping":
         return rpcResult(id, {});
       case "tools/list":
-        return rpcResult(id, { tools: TOOLS });
+        return rpcResult(
+          id,
+          {
+            tools: ctx.grokMode ? compactToolsForGrok(TOOLS) : TOOLS,
+          },
+        );
       case "tools/call": {
         const toolName = params?.name as string;
         const toolArgs = (params?.arguments ?? {}) as Record<string, any>;
@@ -337,4 +330,73 @@ Deno.serve(async (req) => {
     console.error("[carmen-mcp]", e?.message ?? e);
     return rpcError(id, -32603, `Internal error: ${String(e?.message ?? e)}`);
   }
+}
+
+function authFailure(id: unknown, message: string, httpStatus = 401): Response {
+  return rpcError(id, -32001, message, httpStatus);
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const pathname = new URL(req.url).pathname;
+  const streamable = wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
+
+  if (!streamable && req.method === "GET") {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        server: SERVER_INFO,
+        tools: TOOLS.map((t) => t.name),
+        streamable_http: GROK_MCP_URL,
+        setup:
+          "Grok Bot → Settings → Plugins → custom MCP → URL must end with /mcp + Authorization Bearer CARMEN_MCP_BEARER",
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const bearer = requiredBearer();
+  if (!bearer) {
+    if (streamable) {
+      return handleStreamableMcpRequest(req, async (msg) =>
+        authFailure(msg.id, "CARMEN_MCP_BEARER secret is not configured on the server", 503));
+    }
+    return rpcError(null, -32002, "CARMEN_MCP_BEARER secret is not configured on the server", 503);
+  }
+  if (bearerFrom(req) !== bearer) {
+    if (streamable) {
+      return handleStreamableMcpRequest(req, async (msg) =>
+        authFailure(msg.id, "Unauthorized: invalid or missing bearer token", 401));
+    }
+    return rpcError(null, -32001, "Unauthorized: invalid or missing bearer token", 401);
+  }
+
+  const tenantId = resolveTenantId();
+  if (!tenantId) {
+    if (streamable) {
+      return handleStreamableMcpRequest(req, async (msg) =>
+        authFailure(msg.id, "CARMEN_MCP_TENANT_ID (or CLAUDE_DEFAULT_TENANT_ID) is not configured", 503));
+    }
+    return rpcError(null, -32002, "CARMEN_MCP_TENANT_ID (or CLAUDE_DEFAULT_TENANT_ID) is not configured", 503);
+  }
+
+  const ctx: RpcCtx = {
+    tenantId,
+    userId: resolveUserId(),
+    grokMode: streamable,
+  };
+
+  if (streamable) {
+    return handleStreamableMcpRequest(req, (msg) => handleRpcMessage(msg, ctx));
+  }
+
+  let msg: McpRpcMessage;
+  try {
+    msg = await req.json();
+  } catch {
+    return rpcError(null, -32700, "Parse error");
+  }
+
+  return handleRpcMessage(msg, ctx);
 });

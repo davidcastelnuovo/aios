@@ -25,10 +25,17 @@ Grok Bot connects as an MCP **client**; this edge function is the **server**.
 1. Open **Grok Bot → Settings → Plugins**.
 2. Add **custom MCP server** (not from marketplace).
 3. **Name:** `Carmen` (any label).
-4. **URL:** `https://zvoijyneresvkadpprel.supabase.co/functions/v1/carmen-mcp`
-5. **Header:** `Authorization` = `Bearer <CARMEN_MCP_BEARER>` (paste the full value including `Bearer ` prefix if the UI expects the raw token only, use the token without `Bearer` — match what other plugins do).
-
+4. **URL (חשוב!):** `https://zvoijyneresvkadpprel.supabase.co/functions/v1/carmen-mcp/mcp`
+   - חייב להסתיים ב-`/mcp` — Grok Bot דורש **Streamable HTTP**, לא JSON-RPC רגיל.
+5. **Header:** `Authorization` = `Bearer <CARMEN_MCP_BEARER>`
+   - אם יש שדה נפרד ל-token בלי `Bearer`, הדבק רק את ה-token.
 6. Save. Tools should list `ask_carmen`.
+
+**שגיאות נפוצות:**
+- URL בלי `/mcp` בסוף → Grok Bot לא מתחבר
+- `Bearer Bearer …` (כפול) → 401
+- token שגוי → 401 Unauthorized
+
 
 ### 3. Use in a Bot task
 
