@@ -170,16 +170,28 @@ serve(async (req: Request) => {
 
       // Update role if provided
       if (role) {
-        // Delete existing roles
-        await supabaseAdmin
-          .from("user_roles")
-          .delete()
-          .eq("user_id", userId);
+        const tenantIdForRole = tenantIdFinal;
+        // Delete tenant-scoped roles for this org
+        if (tenantIdForRole) {
+          await supabaseAdmin
+            .from("user_roles")
+            .delete()
+            .eq("user_id", userId)
+            .eq("tenant_id", tenantIdForRole);
+        } else {
+          await supabaseAdmin
+            .from("user_roles")
+            .delete()
+            .eq("user_id", userId);
+        }
 
-        // Insert new role
+        // Insert tenant-scoped role (required for RLS)
         await supabaseAdmin
           .from("user_roles")
-          .insert({ user_id: userId, role });
+          .upsert(
+            { user_id: userId, role, tenant_id: tenantIdForRole },
+            { onConflict: "user_id,role,tenant_id" },
+          );
       }
 
       // Update module permissions if provided

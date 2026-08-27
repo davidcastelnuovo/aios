@@ -628,15 +628,27 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
 
   const deleteUser = async () => {
     if (!deleteConfirmUser) return;
+    const deletedId = deleteConfirmUser.id;
+    const membersQueryKey = ["team-members-manage", tenantId] as const;
     try {
-      const { error } = await supabase.functions.invoke("delete-user", {
-        body: { userId: deleteConfirmUser.id },
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No active session");
+      queryClient.setQueryData<any[]>(membersQueryKey, (old) =>
+        old?.filter((member) => member.id !== deletedId) ?? old,
+      );
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId: deletedId, tenantId },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
       if (error) throw error;
-      toast.success("המשתמש נמחק");
+      if (!data?.success) throw new Error(data?.error || "Delete failed");
+      toast.success(data?.removedFromTenantOnly ? "המשתמש הוסר מהארגון" : "המשתמש נמחק");
       setDeleteConfirmUser(null);
-      refetchMembers();
+      queryClient.invalidateQueries({ queryKey: membersQueryKey });
     } catch (err: any) {
+      queryClient.invalidateQueries({ queryKey: membersQueryKey });
       toast.error("שגיאה במחיקה: " + err.message);
     }
   };

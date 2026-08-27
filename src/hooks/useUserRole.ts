@@ -91,17 +91,40 @@ export function useUserRole() {
     refetchOnWindowFocus: false,
   });
 
+  const {
+    data: tenantMembership,
+    isPending: membershipPending,
+  } = useQuery({
+    queryKey: ["tenant-membership-role", effectiveUserId, tenantId],
+    queryFn: async () => {
+      if (!effectiveUserId || !tenantId) return null;
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("role")
+        .eq("user_id", effectiveUserId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.role ?? null;
+    },
+    enabled: !!effectiveUserId && !!tenantId,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  });
+
   const hasRole = (role: UserRole) => roles?.includes(role) || false;
+  const isTenantOwner = tenantMembership === "owner" || tenantMembership === "agency_owner";
 
   return {
     roles: roles || [],
-    isOwner: hasRole("owner"),
+    isOwner: hasRole("owner") || tenantMembership === "owner",
+    isAgencyOwner: hasRole("agency_owner") || tenantMembership === "agency_owner",
     isTeamManager: hasRole("team_manager"),
     isCampaigner: hasRole("campaigner"),
     isSalesPerson: hasRole("sales_person"),
     isSuperAdmin: hasRole("super_admin"),
     isSeo: hasRole("seo"),
-    isLoading: rolesPending,
+    isLoading: rolesPending || membershipPending,
     isFetching: rolesFetching,
     isError: rolesError,
     isReady: roles !== undefined,
