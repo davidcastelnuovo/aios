@@ -159,9 +159,37 @@ const supportsDirectSend = (template: MetaTemplate) => {
   );
 };
 
-const friendlyError = (error: unknown) => {
+const friendlyError = (error: unknown, data?: { error?: string; guidance?: string; meta_error?: { error_user_msg?: string } }) => {
+  if (data?.guidance) return `${data.error ?? "שגיאה"}\n${data.guidance}`;
+  if (data?.meta_error?.error_user_msg) return data.meta_error.error_user_msg;
+  if (data?.error) return data.error;
   if (error instanceof Error) return error.message;
   return "אירעה שגיאה מול Meta";
+};
+
+async function invokeMetaTemplates(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates", { body });
+  if (!error) {
+    if (data?.error) {
+      const err = new Error(String(data.error));
+      (err as Error & { guidance?: string }).guidance = data.guidance;
+      throw err;
+    }
+    return data;
+  }
+  const response = (error as { context?: Response }).context;
+  let payload: { error?: string; guidance?: string; meta_error?: { error_user_msg?: string } } | null = null;
+  try {
+    payload = await response?.clone().json();
+  } catch {
+    payload = null;
+  }
+  if (payload?.error) {
+    const err = new Error(payload.error);
+    (err as Error & { guidance?: string }).guidance = payload.guidance;
+    throw err;
+  }
+  throw error;
 };
 
 export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }: Props) {
@@ -188,11 +216,11 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
   const templatesQuery = useQuery({
     queryKey,
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates", {
-        body: { action: "list", tenant_id: tenantId, integration_id: integrationId },
+      const data = await invokeMetaTemplates({
+        action: "list",
+        tenant_id: tenantId,
+        integration_id: integrationId,
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
       return {
         templates: (data?.templates ?? []) as MetaTemplate[],
         canManage: data?.can_manage === true,
@@ -289,8 +317,23 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
           },
         },
       });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "יצירת התבנית נכשלה");
+      if (error) {
+        const response = (error as { context?: Response }).context;
+        let payload: { error?: string; guidance?: string } | null = null;
+        try {
+          payload = await response?.clone().json();
+        } catch {
+          payload = null;
+        }
+        const message = payload?.guidance
+          ? `${payload.error}\n${payload.guidance}`
+          : payload?.error || error.message;
+        throw new Error(message);
+      }
+      if (!data?.success) {
+        const message = data?.guidance ? `${data.error}\n${data.guidance}` : data?.error || "יצירת התבנית נכשלה";
+        throw new Error(message);
+      }
     },
     onSuccess: () => {
       toast.success("התבנית נשלחה לאישור Meta");

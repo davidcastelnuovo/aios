@@ -48,8 +48,20 @@ const graphRequest = async (
   return { ok: true as const, data };
 };
 
-const placeholderIndexes = (text: string) =>
-  [...text.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1]));
+const explainTemplateMetaError = (metaError: Record<string, unknown> | undefined, fallback: string) => {
+  const subcode = Number(metaError?.error_subcode ?? 0);
+  const userMsg = String(metaError?.error_user_msg ?? "").trim();
+  if (subcode === 2494160 || /not allowed to create or update templates/i.test(userMsg)) {
+    return {
+      error:
+        "חשבון WhatsApp Business זה עדיין לא מאושר ליצירת תבניות ב-Meta. בדרך כלל חסר: אמצעי תשלום על ה-WABA, רישום Cloud API למספר, או אימות מספר.",
+      code: "waba_template_creation_blocked",
+      guidance:
+        "WhatsApp Manager → הגדרות החשבון → Billing (תשלום) · Phone numbers → ודאו שהמספר על Cloud API (לא On-Premise) · השלימו אימות SMS אם נדרש.",
+    };
+  }
+  return { error: userMsg || fallback, code: "meta_template_error" };
+};
 
 const decodeBase64Payload = (value: string): Uint8Array => {
   const normalized = value.includes(",") ? value.split(",").pop() ?? value : value;
@@ -328,9 +340,18 @@ Deno.serve(async (request) => {
           buttons: quickReplies.map((row) => ({
             type: "QUICK_REPLY",
             text: row.text,
-            ...(row.payload ? { payload: row.payload } : {}),
           })),
         });
+      }
+
+      const createPayload: Record<string, unknown> = {
+        name,
+        category,
+        language,
+        components,
+      };
+      if (uniqueIndexes.length > 0 || (headerFormat === "TEXT" && placeholderIndexes(headerText).length > 0)) {
+        createPayload.parameter_format = "positional";
       }
 
       const result = await graphRequest(
@@ -338,16 +359,13 @@ Deno.serve(async (request) => {
         tokenRow.access_token,
         {
           method: "POST",
-          body: JSON.stringify({
-            name,
-            category,
-            language,
-            parameter_format: "positional",
-            components,
-          }),
+          body: JSON.stringify(createPayload),
         },
       );
-      if (!result.ok) return reply({ error: result.error, meta_error: result.metaError }, result.status);
+      if (!result.ok) {
+        const explained = explainTemplateMetaError(result.metaError, result.error);
+        return reply({ ...explained, meta_error: result.metaError }, result.status);
+      }
       return reply({ success: true, template: result.data });
     }
 
