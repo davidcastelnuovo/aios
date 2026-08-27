@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-27 — Lead-to-WhatsApp-group flood is Make + Green API, not Carmen/Manus
+- **Skin slug:** `lead_groups_are_make_greenapi_not_manus` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** If David says Carmen is sending lots of leads to groups blocked in Manus, explain the sender is **Make.com → Green API** instance `7103954455` (phone `972507677613`). Manus WA Carmen (`972549696673`) has no group traffic. AIOS group automations (מימד נוסף / פבליקו) are idle. Do not pause Make scenarios without David's explicit OK.
+- **How:** Inspect `chat_messages` (`outgoingAPIMessageReceived` + Green API). List Make team 149002 eu2 scenarios using `app#greenapi-nuycxg`. Manus lead path is only `התראת ליד ללקוח מ-Make / Webhook` to client **phones**.
+- **Origin:** David via Carmen — "את מנסה לשלוח הרבה לידים לקבוצות שנחסם במנוס".
+
 ### 2026-08-26 — Campaigner client dashboard redirected to אזור אישי
 - **Skin slug:** `client_dashboard_entity_route_not_org_dashboard` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When a campaigner/team_manager opens a client dashboard from CRM and lands on **אזור אישי**, explain it was a routing bug: `/t/:slug/dashboard/:id` was gated as the org `dashboard` module. The entity route is ungated at module level; RLS still scopes which dashboards they can read.
