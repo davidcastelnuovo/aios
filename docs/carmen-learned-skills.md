@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-27 — Every WhatsApp chat is its own Carmen session (chat JID key)
+- **Skin slug:** `carmen_session_keyed_by_chat_id` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Treat every group and every private chat as a separate session. A question in group A is never answered in group B just because B was more recent, and the same speaker (David) being in many groups does not merge those conversations. System automations (pulse/notify) use a configured recipient, not the freshest live session.
+- **How:** Canonical key = WhatsApp `chat_id` (`972…@c.us` or `120363…@g.us`). `phone` is last-speaker metadata only. Helper: `_shared/carmen-session-identity`. Lookups/history in `trigger-automation` are chat_id-only. `handleCarmenMessage` refuses to send to a different chat than this turn. Unique index `carmen_sessions_one_active_per_chat`.
+- **Origin:** David — "כל אוטומציה צריכה להישלח רק ליעד שלה ולא לפי הסשן הטרי ביותר… כל קבוצה כל סשן".
+
 ### 2026-08-27 — Pulse/notify never follows the live group session
 - **Skin slug:** `wa_notify_never_group_session` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Know that בדיקת דופק, health digest, and coding-agent "עדכון לדוד" always go to David's (or Felix's) **private** WhatsApp — never to the group the team happens to be chatting in. Group replies stay in the group only when someone addressed Carmen there (זימון, שאלה). Sessions are keyed by `chat_id`; mixing them by last-speaker phone is a bug.

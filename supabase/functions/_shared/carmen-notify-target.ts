@@ -8,7 +8,13 @@
  *  - never deliver pulse / coding-agent / health notifies to a WhatsApp group.
  *    Group session rows store the last speaker's phone, so a live group chat
  *    would otherwise steal David's private 1:1 destination.
+ *  - conversation identity is the chat JID (see carmen-session-identity.ts);
+ *    notify never follows the freshest live session.
  */
+
+import { isGroupChatId } from "./carmen-session-identity.ts";
+
+export { isGroupChatId } from "./carmen-session-identity.ts";
 
 export type NotifySessionCandidate = {
   chat_id: string;
@@ -76,11 +82,6 @@ export function phonesMatch(a: string | null | undefined, b: string | null | und
   const nb = normalizeNotifyPhone(b);
   if (!na || !nb) return false;
   return na === nb || na.endsWith(nb) || nb.endsWith(na);
-}
-
-/** WhatsApp group JIDs must never be used as a 1:1 notify / pulse destination. */
-export function isGroupChatId(chatId: string | null | undefined): boolean {
-  return String(chatId || "").toLowerCase().includes("@g.us");
 }
 
 export function isManagerStaffRole(role: string | null | undefined): boolean {

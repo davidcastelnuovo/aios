@@ -3,6 +3,13 @@
 // optional filtering by a configured integration (carmen_integration_id).
 //
 // The transport (Green API vs Manus WA) is abstracted via the `sendMessage` callback.
+// Session identity is the WhatsApp chat JID (see carmen-session-identity.ts): one
+// group / one private chat = one session. Phone is last-speaker metadata only.
+
+import {
+  originChatsMatch,
+  replyDestinationIsConsistent,
+} from './carmen-session-identity.ts';
 
 const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
 
@@ -639,6 +646,11 @@ export async function sendCarmenReplyViaActionStep(args: {
 }): Promise<boolean> {
   const { supabase, automationId, tenantId, connectionUserId, chatId, phoneNumber, isGroup, message } = args;
 
+  if (!replyDestinationIsConsistent({ chatId, isGroup })) {
+    console.error('[carmen-route] refusing send: chat_id / isGroup mismatch', { chatId, isGroup, automationId });
+    return false;
+  }
+
   const { data: steps } = await supabase
     .from('automation_flow_steps')
     .select('action_type, configuration, created_at')
@@ -863,12 +875,9 @@ export async function findActiveCarmenSession(
   idleMinutes: number = CARMEN_SESSION_IDLE_MINUTES_DEFAULT,
   integrationId?: string | null,
 ): Promise<any | null> {
-  // Key the lookup on chat_id only — it uniquely identifies the conversation
-  // (a 1:1 "<phone>@c.us" or a group "<id>@g.us"). We must NOT also filter on
-  // `phone`: in groups the session row stores the individual sender's phone
-  // (often empty), while this lookup would derive the GROUP id from chatId.
-  // That mismatch meant a group session was never found, so every inbound
-  // group message spawned a brand-new "active" session (duplicate sessions).
+  // Key the lookup on chat_id only — see carmen-session-identity.ts.
+  // Phone is last-speaker metadata and must never select which conversation
+  // to continue (same person sits in many groups).
   const { data: rows } = await supabase
     .from('carmen_whatsapp_sessions')
     .select('*')
@@ -1272,6 +1281,12 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // sendMessage when no action step exists or the dispatch fails.
   const routingAutomationId = activeSession?.automation_id || earlyAutomation?.id || null;
   const routedSend = async (toChatId: string, message: string): Promise<boolean> => {
+    if (!originChatsMatch(toChatId, chatId)) {
+      console.error('[carmen] refusing to send to a different chat than this turn', {
+        originating: chatId, attempted: toChatId,
+      });
+      return false;
+    }
     let sent = false;
     // Prefer the destination chat's phone so private replies never fan out to a
     // stale/hardcoded operator number (Ana DM must stay in Ana's thread).
