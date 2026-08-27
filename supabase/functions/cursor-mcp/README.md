@@ -34,7 +34,8 @@ Optional secrets: `CURSOR_STICKY_AGENT_ID` (force a specific `bc-…`), `CURSOR_
 | Secret | Required | Value |
 | --- | --- | --- |
 | `CURSOR_API_KEY` | ✅ | Cursor API key |
-| `CURSOR_MCP_BEARER` | ✅ | strong random string; Carmen presents this as the MCP bearer |
+| `CURSOR_MCP_BEARER` | ✅ | Carmen only — Agent Editor → MCP Connections → Cursor |
+| `GROK_CURSOR_MCP_BEARER` | ✅ (Grok direct) | Grok Bot → Cursor direct channel only — **separate from Carmen** |
 | `CURSOR_CLOUD_ENV_NAME` | recommended | named cloud environment (same VM setup as David) |
 | `CURSOR_REPO_URL` | optional | default `https://github.com/davidcastelnuovo/aios` |
 | `CURSOR_STARTING_REF` | optional | default `main` |
@@ -63,9 +64,11 @@ Grok Bot talks to Cursor via **Streamable HTTP MCP**:
 | Field | Value |
 | --- | --- |
 | **URL** | `https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp` |
-| **Header** | `Authorization: Bearer <CURSOR_MCP_BEARER>` |
+| **Header** | `Authorization: Bearer <GROK_CURSOR_MCP_BEARER>` |
 
 Tools: `ask_cursor`, `request_dev_task`, `generate_creative`.
+
+**Do not use `CURSOR_MCP_BEARER` here** — that belongs to Carmen's separate Cursor connection.
 
 ### 5. Cursor → Grok Bot (direct)
 

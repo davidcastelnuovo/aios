@@ -199,7 +199,8 @@ function replyInstructions(channel: "carmen" | "cursor"): string {
   if (channel === "cursor") {
     return (
       `Reply to Cursor when finished via cursor-mcp ask_cursor at ${CURSOR_MCP_STREAMABLE_URL} ` +
-      `(Streamable HTTP /mcp, Authorization Bearer CURSOR_MCP_BEARER). Do NOT use ask_carmen for this request.`
+      `(Streamable HTTP /mcp, Authorization Bearer GROK_CURSOR_MCP_BEARER — direct Grok↔Cursor channel, not Carmen). ` +
+      `Do NOT use ask_carmen for this request.`
     );
   }
   return (
