@@ -241,8 +241,11 @@ export function ClientsChatView({
 
   const performDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from("clients").delete().eq("id", id);
+      const { data, error } = await supabase.from("clients").delete().eq("id", id).select("id");
       if (error) throw error;
+      if (!data?.length) {
+        throw new Error("לא ניתן למחוק לקוח — אין הרשאה או שהלקוח כבר נמחק");
+      }
       toast.success("לקוח נמחק בהצלחה");
       const idx = clients.findIndex(c => c.id === id);
       const next = clients[idx + 1] || clients[idx - 1] || null;
@@ -282,9 +285,17 @@ export function ClientsChatView({
     if (selectedClientIds.size === 0) return;
     setBulkActionLoading(true);
     try {
-      const { error } = await supabase.from("clients").delete().in("id", Array.from(selectedClientIds));
+      const ids = Array.from(selectedClientIds);
+      const { data, error } = await supabase.from("clients").delete().in("id", ids).select("id");
       if (error) throw error;
-      toast.success(`${selectedClientIds.size} לקוחות נמחקו בהצלחה`);
+      if (!data?.length) {
+        throw new Error("לא ניתן למחוק לקוחות — אין הרשאה");
+      }
+      if (data.length < ids.length) {
+        toast.warning(`נמחקו ${data.length} מתוך ${ids.length} לקוחות (חלקם ללא הרשאה מחיקה)`);
+      } else {
+        toast.success(`${data.length} לקוחות נמחקו בהצלחה`);
+      }
       if (selectedClientIds.has(selectedClientId || "")) {
         setSelectedClientId(null);
       }
