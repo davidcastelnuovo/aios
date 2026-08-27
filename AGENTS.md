@@ -12,6 +12,12 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
+## David — tone (standing)
+
+- Reply in **at most 3 short sentences**. No preambles, recaps, or tables unless he asked.
+- If something needs more: **one step at a time**, wait for him. Do not dump the whole explanation.
+- Prefer what to do / what happened. Skip “why the architecture exists” unless he asks.
+
 ## Cursor Cloud specific instructions
 
 Scope note: this environment sets up the **frontend web app** (the core product surface). The backend is the **hosted/remote Supabase project** (`zvoijyneresvkadpprel`), not a local stack — there is no local DB/`supabase start` config, so no local backend is needed to run and use the app.
