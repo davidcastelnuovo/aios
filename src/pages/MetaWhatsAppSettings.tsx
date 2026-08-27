@@ -1047,12 +1047,13 @@ export default function MetaWhatsAppSettings() {
                       <AlertTitle>המספר עדיין לא על Cloud API</AlertTitle>
                       <AlertDescription className="text-sm space-y-2">
                         <p>
-                          Meta מדווחת שהמספר במצב On-Premise. יצירת תבניות ושליחה דרך Cloud API לא יעבדו
-                          עד השלמת רישום Cloud API + אמצעי תשלום על ה-WABA.
+                          Meta מדווחת שהמספר במצב <strong>On-Premise</strong>. יצירת תבניות ושליחה דרך Cloud API
+                          לא יעבדו עד רישום Cloud API חד-פעמי — גם אם Billing כבר הוגדר על ה-WABA.
                         </p>
                         <p>
                           ב<strong>חיבור ידני</strong> בחרו את המספר שוב והזינו PIN בן 6 ספרות (אימות דו-שלבי
-                          של WhatsApp Business), או השלימו ב-WhatsApp Manager: Billing + אימות מספר.
+                          של WhatsApp Business). אחרי הצלחה הסטטוס ישתנה ל-CLOUD_API. אם נדרש — השלימו גם אימות
+                          מספר ב-WhatsApp Manager.
                         </p>
                       </AlertDescription>
                     </Alert>
