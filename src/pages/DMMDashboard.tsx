@@ -250,7 +250,8 @@ export default function DMMDashboard() {
       return rawClients.filter((c: any) => isSeoTaggedClient(c));
     }
     let clients = rawClients;
-    if (needsCampaignerFilter && campaignerId) {
+    if (needsCampaignerFilter) {
+      if (!campaignerId) return [];
       clients = clients.filter((c: any) =>
         c.client_team?.some((ct: any) => ct.campaigner_id === campaignerId),
       );
