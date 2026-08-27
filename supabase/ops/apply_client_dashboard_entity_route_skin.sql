@@ -56,3 +56,4 @@ UPDATE public.ai_skills SET
   updated_at = now()
 WHERE slug = 'client_dashboard_entity_route_not_org_dashboard'
   AND tenant_id = '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019'::uuid;
+-- Applied via apply-sql-migration.yml (Carmen skin for dashboard entity route).
