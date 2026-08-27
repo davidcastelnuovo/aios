@@ -18,6 +18,15 @@ curl -X POST "$GROK_BOT_WEBHOOK_URL" \
 - Empty pings without `task` are ignored on the Grok Bot side
 - Grok Bot replies back to Carmen via **`carmen-mcp` / `ask_carmen`** when finished (or **`cursor-mcp` / `ask_cursor`** when `reply_via: cursor`)
 
+## Grok Bot Direct (same live Cursor chat)
+
+Like Carmen Direct: Cursor sends `{ task, context }` to the automation webhook **and** includes `reply_to_bc_id` / `session_id`. Grok replies with `reply_to_cursor_session` — **not** `ask_cursor` (that opens a new agent).
+
+```
+Cursor chat (bc-…) → webhook → Grok Bot
+Grok Bot → reply_to_cursor_session({ session_id, message }) → same Cursor chat
+```
+
 ## Cursor ↔ Grok Bot direct (no Carmen)
 
 | Direction | Setup |
