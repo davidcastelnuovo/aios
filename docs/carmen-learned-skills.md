@@ -35,7 +35,7 @@ logged.
 ### 2026-08-27 — Cursor↔Grok Bot direct channel ping
 - **Skin slug:** `cursor_grok_direct_channel_ping` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Treat "בדיקת ערוץ ישיר" / "ענה חזרה דרך ask_cursor" as a handshake. Reply `OK ערוץ ישיר עובד` or `OK גרוק מחובר לקרסר ישירות` immediately. Do not open a coding task.
-- **How:** Sticky agent `כרמן - ישיר` = `https://cursor.com/agents/bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c`. Round-trip proof: Carmen → `mcp_Cursor__ask_cursor` → this agent. Escalate only on real MCP/timeout errors.
+- **How:** Answer locally only. Do **not** call `ask_cursor` / `ask_grok` for a ping — that is the loop. Sticky agent `כרמן - ישיר` = `https://cursor.com/agents/bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c`. Escalate only on real MCP/timeout errors.
 - **Origin:** Carmen — "סיימתי. OK ערוץ ישיר עובד" then "OK גרוק מחובר לקרסר ישירות".
 
 ### 2026-08-27 — Every WhatsApp chat is its own Carmen session (chat JID key)
