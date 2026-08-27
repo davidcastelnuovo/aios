@@ -113,3 +113,4 @@ WHERE ur.role IN ('campaigner'::app_role, 'seo'::app_role)
     WHERE up.user_id = ur.user_id
       AND up.module = 'dynamic_tables'
   );
+-- Applied via apply-sql-migration.yml (team member report/dashboard RLS).
