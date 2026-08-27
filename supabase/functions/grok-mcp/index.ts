@@ -91,6 +91,10 @@ const TOOLS = [
           enum: ["carmen", "cursor"],
           description: "Who should receive Grok's reply when done. Use cursor when Cursor Cloud Agent called this tool; default carmen.",
         },
+        session_id: {
+          type: "string",
+          description: "When reply_via=cursor: the live Cursor chat bc-… to reply into (Grok Bot Direct). Do not omit if you want the reply in THIS chat.",
+        },
       },
       required: ["task"],
     },
@@ -116,6 +120,10 @@ const TOOLS = [
           type: "string",
           enum: ["carmen", "cursor"],
           description: "Who should receive Grok's reply when done. Use cursor when Cursor Cloud Agent called this tool; default carmen.",
+        },
+        session_id: {
+          type: "string",
+          description: "When reply_via=cursor: the live Cursor chat bc-… to reply into (Grok Bot Direct). Do not omit if you want the reply in THIS chat.",
         },
       },
       required: ["request"],
@@ -195,12 +203,16 @@ function replyViaChannel(raw: unknown): "carmen" | "cursor" {
   return String(raw || "").trim().toLowerCase() === "cursor" ? "cursor" : "carmen";
 }
 
-function replyInstructions(channel: "carmen" | "cursor"): string {
+function replyInstructions(channel: "carmen" | "cursor", sessionId?: string): string {
   if (channel === "cursor") {
+    const sid = String(sessionId || Deno.env.get("GROK_DIRECT_AGENT_ID") || "").trim();
+    const sessionLine = sid.startsWith("bc-")
+      ? `reply_to_bc_id: ${sid}. Call reply_to_cursor_session({ session_id: "${sid}", message: "<your reply>" }).`
+      : `Call reply_to_cursor_session with the session_id (bc-…) from this webhook.`;
     return (
-      `Reply to Cursor when finished via cursor-mcp ask_cursor at ${CURSOR_MCP_STREAMABLE_URL} ` +
-      `(Streamable HTTP /mcp, Authorization Bearer GROK_CURSOR_MCP_BEARER — direct Grok↔Cursor channel, not Carmen). ` +
-      `Do NOT use ask_carmen for this request.`
+      `Grok Bot Direct (like Carmen Direct): reply IN THE SAME Cursor chat — do NOT call ask_cursor ` +
+      `(that opens a new agent). Use cursor-mcp tool reply_to_cursor_session at ${CURSOR_MCP_STREAMABLE_URL} ` +
+      `(Authorization Bearer GROK_CURSOR_MCP_BEARER). ${sessionLine} Do NOT use ask_carmen.`
     );
   }
   return (
@@ -212,7 +224,7 @@ function replyInstructions(channel: "carmen" | "cursor"): string {
 async function fireGrokWebhook(
   task: string,
   context: string,
-  opts?: { tool?: string; tenantId?: string | null; replyVia?: "carmen" | "cursor" },
+  opts?: { tool?: string; tenantId?: string | null; replyVia?: "carmen" | "cursor"; sessionId?: string },
 ): Promise<FireResult> {
   const cfg = webhookConfig();
   if (!cfg) {
@@ -228,7 +240,7 @@ async function fireGrokWebhook(
   const contextParts: string[] = [];
   if (opts?.tool) contextParts.push(`tool: ${opts.tool}`);
   if (opts?.tenantId) contextParts.push(`tenant_id: ${opts.tenantId}`);
-  contextParts.push(replyInstructions(opts?.replyVia ?? "carmen"));
+  contextParts.push(replyInstructions(opts?.replyVia ?? "carmen", opts?.sessionId));
   if (context.trim()) contextParts.push(context.trim());
   const payload = {
     task: trimmedTask.length > MAX_TEXT ? trimmedTask.slice(0, MAX_TEXT) : trimmedTask,
@@ -260,7 +272,7 @@ async function fireGrokWebhook(
 
   return {
     id,
-    url: `(Grok Bot automation — reply via ${opts?.replyVia === "cursor" ? "ask_cursor" : "ask_carmen"} when done)`,
+    url: `(Grok Bot automation — reply via ${opts?.replyVia === "cursor" ? "reply_to_cursor_session" : "ask_carmen"} when done)`,
     reused: false,
     viaWebhook: true,
   };
@@ -443,6 +455,7 @@ async function fireGrokAgent(promptText: string, opts?: {
   context?: string;
   tool?: string;
   replyVia?: "carmen" | "cursor";
+  sessionId?: string;
 }): Promise<FireResult> {
   if (webhookConfig()) {
     const task = String(opts?.task || promptText).trim();
@@ -450,12 +463,13 @@ async function fireGrokAgent(promptText: string, opts?: {
     if (opts?.startingRef) contextParts.push(`branch: ${opts.startingRef}`);
     if (opts?.context) contextParts.push(opts.context);
     if (opts?.name) contextParts.push(`label: ${opts.name}`);
-    contextParts.push(replyInstructions(opts?.replyVia ?? "carmen"));
+    contextParts.push(replyInstructions(opts?.replyVia ?? "carmen", opts?.sessionId));
     contextParts.push(teachingBlock(opts?.tenantId ?? null).trim());
     return fireGrokWebhook(task, contextParts.join("\n\n"), {
       tool: opts?.tool,
       tenantId: opts?.tenantId ?? null,
       replyVia: opts?.replyVia ?? "carmen",
+      sessionId: opts?.sessionId,
     });
   }
 
@@ -585,6 +599,7 @@ async function handleToolCall(
     const branch = String(args?.branch ?? "").trim();
     const context = String(args?.context ?? "").trim();
     const replyVia = replyViaChannel(args?.reply_via);
+    const sessionId = String(args?.session_id ?? "").trim();
     const recent = await recentDispatchContext(ctx.tenantId);
     const text =
       `[${replyVia === "cursor" ? "Cursor" : "Carmen"} → Grok Bot · DEV TASK]\n` +
@@ -608,6 +623,7 @@ async function handleToolCall(
       context: webhookContext,
       tool: "request_dev_task",
       replyVia,
+      sessionId,
     });
     await logDispatch({
       tenantId: ctx.tenantId,
@@ -622,7 +638,7 @@ async function handleToolCall(
     return viaWebhook
       ? (
         `✅ שלחתי את המשימה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יבצע, ` +
-        `ויחזיר תשובה דרך ${replyVia === "cursor" ? "ask_cursor" : "ask_carmen"} כשיגמר.\n` +
+        `ויחזיר תשובה דרך ${replyVia === "cursor" ? "reply_to_cursor_session" : "ask_carmen"} כשיגמר.\n` +
         `Dispatch: ${id}`
       )
       : (
@@ -638,6 +654,7 @@ async function handleToolCall(
     if (!request) throw new Error("ask_grok requires a non-empty 'request'.");
     const context = String(args?.context ?? "").trim();
     const replyVia = replyViaChannel(args?.reply_via);
+    const sessionId = String(args?.session_id ?? "").trim();
     const recent = await recentDispatchContext(ctx.tenantId);
     const text =
       `[${replyVia === "cursor" ? "Cursor" : "Carmen"} → Grok Bot · REQUEST]\n` +
@@ -654,6 +671,7 @@ async function handleToolCall(
       context: webhookContext,
       tool: "ask_grok",
       replyVia,
+      sessionId,
     });
     await logDispatch({
       tenantId: ctx.tenantId,
@@ -668,7 +686,7 @@ async function handleToolCall(
     return viaWebhook
       ? (
         `✅ שלחתי את הבקשה ל-Grok Bot (אוטומציית webhook). הוא יתעורר, יעבוד על זה, ` +
-        `ויחזיר תשובה דרך ${replyVia === "cursor" ? "ask_cursor" : "ask_carmen"} כשיגמר.\n` +
+        `ויחזיר תשובה דרך ${replyVia === "cursor" ? "reply_to_cursor_session" : "ask_carmen"} כשיגמר.\n` +
         `Dispatch: ${id}`
       )
       : (

@@ -57,7 +57,19 @@ In the app: **Agent Editor → MCP Connections → חיבור חדש → preset 
 
 Carmen then gets `mcp_Cursor__request_dev_task` and `mcp_Cursor__ask_cursor`.
 
-### 4. Grok Bot → Cursor (direct)
+### 4. Grok Bot Direct (same live chat)
+
+`reply_to_cursor_session` posts into a **specific** Cursor Cloud Agent (`session_id` = `bc-…`).
+This is the Grok equivalent of Carmen Direct — not a new agent.
+
+Webhook context from Cursor should include `reply_to_bc_id: bc-…`.
+Grok then calls:
+
+```
+reply_to_cursor_session({ session_id: "bc-…", message: "OK …" })
+```
+
+### 5. Grok Bot → Cursor (direct MCP)
 
 Grok Bot talks to Cursor via **Streamable HTTP MCP**:
 
@@ -66,15 +78,15 @@ Grok Bot talks to Cursor via **Streamable HTTP MCP**:
 | **URL** | `https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp` |
 | **Header** | `Authorization: Bearer <GROK_CURSOR_MCP_BEARER>` |
 
-Tools: `ask_cursor`, `request_dev_task`, `generate_creative`.
+Tools: `ask_cursor`, `request_dev_task`, `generate_creative`, `reply_to_cursor_session` (Grok Bot Direct — reply into a live `bc-…` chat).
 
 **Do not use `CURSOR_MCP_BEARER` here** — that belongs to Carmen's separate Cursor connection.
 
-### 5. Cursor → Grok Bot (direct)
+### 6. Cursor → Grok Bot (direct)
 
 Repo `.mcp.json` includes **Grok** → `grok-mcp/mcp` with `GROK_MCP_BEARER` (must be in Cloud Environment secrets).
 
-Calls default `reply_via: cursor` so Grok Bot replies via `ask_cursor` when done.
+Calls default `reply_via: cursor` + `session_id` so Grok replies via `reply_to_cursor_session` into **this** chat.
 
 ### 6. Teach / update / fix-on-fail
 

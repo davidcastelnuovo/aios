@@ -42,7 +42,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.2.0" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.3.0" };
 const CURSOR_MCP_STREAMABLE_URL =
   "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
@@ -115,6 +115,33 @@ const TOOLS = [
         copy_label: { type: "string", description: "Optional copy-variation label to generate." },
       },
       required: ["item_id"],
+    },
+  },
+  {
+    name: "reply_to_cursor_session",
+    description:
+      "Grok Bot Direct — post a message into a SPECIFIC live Cursor Cloud Agent chat " +
+      "(same pattern as Carmen Direct). Does NOT open a new agent. " +
+      "Use this when Cursor already sent you a webhook with reply_to_bc_id. " +
+      "Required for the Grok↔Cursor direct loop. Never use ask_cursor for replies.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        session_id: {
+          type: "string",
+          description: "Cursor Cloud Agent id (bc-…). From webhook context reply_to_bc_id.",
+        },
+        message: {
+          type: "string",
+          description: "What to say in that Cursor chat — the reply Cursor is waiting for.",
+        },
+        context: {
+          type: "string",
+          description: "Optional extra notes (files, links, what you did).",
+        },
+      },
+      required: ["session_id", "message"],
+      additionalProperties: false,
     },
   },
 ];
@@ -552,6 +579,40 @@ async function handleToolCall(
       `. A Cloud Agent session is now running on it.\n` +
       `Session: ${url}`
     );
+  }
+
+  if (name === "reply_to_cursor_session") {
+    const sessionId = String(args?.session_id ?? args?.bc_id ?? "").trim();
+    if (!sessionId.startsWith("bc-")) {
+      throw new Error("reply_to_cursor_session requires session_id starting with bc-.");
+    }
+    const message = String(args?.message ?? "").trim();
+    if (!message) throw new Error("reply_to_cursor_session requires a non-empty message.");
+    const context = String(args?.context ?? "").trim();
+    const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
+    if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
+
+    const text =
+      `[Grok Bot Direct → Cursor]\n` +
+      `This is a reply in THIS chat — do not open a new session.\n\n` +
+      `${message}\n` +
+      (context ? `\nContext:\n${context}\n` : ``);
+
+    const followed = await followUpStickyAgent(apiKey, sessionId, text);
+    if (!followed) {
+      throw new Error(`Cursor session ${sessionId} is gone (404/410). Give Cursor a new session_id.`);
+    }
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "reply_to_cursor_session",
+      requestText: message,
+      context: `${sessionId}${context ? `\n${context}` : ""}`,
+      branch: "",
+      sessionUrl: followed.url,
+      cursorAgentId: sessionId,
+    });
+    return `✅ נשלח לצ׳אט Cursor הישיר ${followed.url}`;
   }
 
   if (name === "generate_creative") {
