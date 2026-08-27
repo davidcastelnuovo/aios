@@ -79,7 +79,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_client_dashboard_entity_route_skin.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_twice_daily_cadence.sql'; then
+              FILE="supabase/ops/apply_pulse_twice_daily_cadence.sql"
+              NAME="apply_pulse_twice_daily_cadence"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_client_dashboard_entity_route_skin.sql'; then
               FILE="supabase/ops/apply_client_dashboard_entity_route_skin.sql"
               NAME="apply_client_dashboard_entity_route_skin"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_team_member_report_dashboard_access.sql'; then
