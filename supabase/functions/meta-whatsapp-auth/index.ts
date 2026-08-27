@@ -569,7 +569,10 @@ Deno.serve(async (request) => {
         // would reset its two-step PIN and can break the other provider, so any
         // app with WABA access simply sends without re-registering.
         const alreadyOnCloud = String(phone.platform_type ?? "").toUpperCase() === "CLOUD_API";
-        if (!coexistence && !alreadyOnCloud) {
+        const onPremise = String(phone.platform_type ?? "").toUpperCase() === "ON_PREMISE";
+        // Coexistence on Cloud API must not be re-registered, but On-Premise numbers
+        // still need a one-time Cloud API registration before templates/messaging work.
+        if (!alreadyOnCloud && (!coexistence || onPremise)) {
           if (!/^\d{6}$/.test(pin)) {
             return reply({
               error: `המספר ${phone.display_phone_number ?? phone.id} דורש רישום ל-Cloud API. הזינו PIN בן 6 ספרות.`,

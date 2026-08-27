@@ -41,11 +41,48 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
+type HeaderFormatOption = "NONE" | "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT";
+
 type MetaTemplateComponent = {
   type: string;
+  format?: string;
   text?: string;
-  example?: { body_text?: string[][] };
+  example?: { body_text?: string[][]; header_text?: string[]; header_handle?: string[] };
 };
+
+const HEADER_MEDIA_ACCEPT: Record<Exclude<HeaderFormatOption, "NONE" | "TEXT">, string> = {
+  IMAGE: "image/jpeg,image/png,.jpg,.jpeg,.png",
+  VIDEO: "video/mp4,.mp4",
+  DOCUMENT: "application/pdf,.pdf",
+};
+
+const HEADER_MEDIA_HINT: Record<Exclude<HeaderFormatOption, "NONE" | "TEXT">, string> = {
+  IMAGE: "JPEG או PNG, עד 5MB",
+  VIDEO: "MP4, עד 16MB",
+  DOCUMENT: "PDF, עד 16MB",
+};
+
+const templateHeader = (template: MetaTemplate) =>
+  template.components?.find((component) => component.type.toUpperCase() === "HEADER");
+
+const templateHeaderLabel = (template: MetaTemplate) => {
+  const header = templateHeader(template);
+  if (!header) return null;
+  const format = String(header.format ?? "TEXT").toUpperCase();
+  if (format === "TEXT") return header.text ?? "כותרת טקסט";
+  if (format === "DOCUMENT") return "📄 PDF";
+  if (format === "IMAGE") return "🖼️ תמונה";
+  if (format === "VIDEO") return "🎬 וידאו";
+  return format;
+};
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("לא ניתן לקרוא את הקובץ"));
+    reader.readAsDataURL(file);
+  });
 
 type MetaTemplate = {
   id: string;
@@ -94,13 +131,23 @@ const templateBody = (template: MetaTemplate) =>
 
 const supportsDirectSend = (template: MetaTemplate) => {
   if (template.parameter_format === "named") return false;
-  // BODY/FOOTER + optional BUTTONS (quick-reply opt-in templates).
   if (
     !template.components?.every((component) =>
-      ["BODY", "FOOTER", "BUTTONS"].includes(component.type.toUpperCase()),
+      ["HEADER", "BODY", "FOOTER", "BUTTONS"].includes(component.type.toUpperCase()),
     )
   ) {
     return false;
+  }
+  const header = templateHeader(template);
+  if (header) {
+    const format = String(header.format ?? "TEXT").toUpperCase();
+    if (format === "TEXT") {
+      const headerText = header.text ?? "";
+      if (variableIndexes(headerText).length > 0) return false;
+      if (hasInvalidVariableSyntax(headerText)) return false;
+    } else if (!["IMAGE", "VIDEO", "DOCUMENT"].includes(format)) {
+      return false;
+    }
   }
   const body = templateBody(template);
   const tokens = [...body.matchAll(/\{\{([^{}]+)\}\}/g)];
@@ -112,9 +159,37 @@ const supportsDirectSend = (template: MetaTemplate) => {
   );
 };
 
-const friendlyError = (error: unknown) => {
+const friendlyError = (error: unknown, data?: { error?: string; guidance?: string; meta_error?: { error_user_msg?: string } }) => {
+  if (data?.guidance) return `${data.error ?? "שגיאה"}\n${data.guidance}`;
+  if (data?.meta_error?.error_user_msg) return data.meta_error.error_user_msg;
+  if (data?.error) return data.error;
   if (error instanceof Error) return error.message;
   return "אירעה שגיאה מול Meta";
+};
+
+async function invokeMetaTemplates(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates", { body });
+  if (!error) {
+    if (data?.error) {
+      const err = new Error(String(data.error));
+      (err as Error & { guidance?: string }).guidance = data.guidance;
+      throw err;
+    }
+    return data;
+  }
+  const response = (error as { context?: Response }).context;
+  let payload: { error?: string; guidance?: string; meta_error?: { error_user_msg?: string } } | null = null;
+  try {
+    payload = await response?.clone().json();
+  } catch {
+    payload = null;
+  }
+  if (payload?.error) {
+    const err = new Error(payload.error);
+    (err as Error & { guidance?: string }).guidance = payload.guidance;
+    throw err;
+  }
+  throw error;
 };
 
 export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }: Props) {
@@ -125,10 +200,14 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
     name: "",
     category: "UTILITY",
     language: "he",
+    headerType: "NONE" as HeaderFormatOption,
+    headerText: "",
+    headerExample: "",
     body: "",
     footer: "",
     withOptInButton: false,
   });
+  const [headerFile, setHeaderFile] = useState<File | null>(null);
   const [examples, setExamples] = useState<string[]>([]);
   const [recipientPhone, setRecipientPhone] = useState("");
   const [sendValues, setSendValues] = useState<string[]>([]);
@@ -137,11 +216,11 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
   const templatesQuery = useQuery({
     queryKey,
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates", {
-        body: { action: "list", tenant_id: tenantId, integration_id: integrationId },
+      const data = await invokeMetaTemplates({
+        action: "list",
+        tenant_id: tenantId,
+        integration_id: integrationId,
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
       return {
         templates: (data?.templates ?? []) as MetaTemplate[],
         canManage: data?.can_manage === true,
@@ -150,6 +229,7 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
     },
   });
 
+  const formHeaderVariables = useMemo(() => variableIndexes(form.headerText), [form.headerText]);
   const formVariables = useMemo(() => variableIndexes(form.body), [form.body]);
   const sendVariables = useMemo(
     () => (sendTemplate ? variableIndexes(templateBody(sendTemplate)) : []),
@@ -172,15 +252,45 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
       name: "",
       category: "UTILITY",
       language: "he",
+      headerType: "NONE",
+      headerText: "",
+      headerExample: "",
       body: "",
       footer: "",
       withOptInButton: false,
     });
+    setHeaderFile(null);
     setExamples([]);
+  };
+
+  const uploadHeaderMedia = async (file: File, headerType: Exclude<HeaderFormatOption, "NONE" | "TEXT">) => {
+    const dataUrl = await readFileAsDataUrl(file);
+    const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates", {
+      body: {
+        action: "upload_media",
+        tenant_id: tenantId,
+        integration_id: integrationId,
+        mime_type: file.type,
+        file_name: file.name,
+        file_base64: dataUrl,
+      },
+    });
+    if (error) throw error;
+    if (!data?.success || !data?.handle) throw new Error(data?.error || "העלאת הקובץ ל-Meta נכשלה");
+    if (String(data.format) !== headerType) {
+      throw new Error("סוג הקובץ לא תואם לסוג הכותרת שנבחר");
+    }
+    return String(data.handle);
   };
 
   const createMutation = useMutation({
     mutationFn: async () => {
+      let headerHandle = "";
+      if (form.headerType === "IMAGE" || form.headerType === "VIDEO" || form.headerType === "DOCUMENT") {
+        if (!headerFile) throw new Error("יש לבחור קובץ לכותרת");
+        headerHandle = await uploadHeaderMedia(headerFile, form.headerType);
+      }
+
       const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates", {
         body: {
           action: "create",
@@ -190,6 +300,10 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
             name: form.name,
             category: form.category,
             language: form.language,
+            header_format: form.headerType,
+            header_text: form.headerType === "TEXT" ? form.headerText : undefined,
+            header_example: form.headerType === "TEXT" ? form.headerExample : undefined,
+            header_handle: headerHandle || undefined,
             body_text: form.body,
             footer_text: form.footer,
             examples,
@@ -203,8 +317,23 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
           },
         },
       });
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "יצירת התבנית נכשלה");
+      if (error) {
+        const response = (error as { context?: Response }).context;
+        let payload: { error?: string; guidance?: string } | null = null;
+        try {
+          payload = await response?.clone().json();
+        } catch {
+          payload = null;
+        }
+        const message = payload?.guidance
+          ? `${payload.error}\n${payload.guidance}`
+          : payload?.error || error.message;
+        throw new Error(message);
+      }
+      if (!data?.success) {
+        const message = data?.guidance ? `${data.error}\n${data.guidance}` : data?.error || "יצירת התבנית נכשלה";
+        throw new Error(message);
+      }
     },
     onSuccess: () => {
       toast.success("התבנית נשלחה לאישור Meta");
@@ -267,6 +396,17 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
     onError: (error) => toast.error(friendlyError(error)),
   });
 
+  const headerMediaReady =
+    form.headerType === "NONE" ||
+    form.headerType === "TEXT" ||
+    Boolean(headerFile);
+  const headerTextReady =
+    form.headerType !== "TEXT" ||
+    (form.headerText.trim().length > 0 &&
+      !hasInvalidVariableSyntax(form.headerText) &&
+      formHeaderVariables.every((value, index) => value === index + 1) &&
+      formHeaderVariables.length <= 1 &&
+      (formHeaderVariables.length === 0 || Boolean(form.headerExample.trim())));
   const canCreate =
     /^[a-z0-9_]+$/.test(form.name) &&
     form.body.trim().length > 0 &&
@@ -275,7 +415,9 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
     !form.footer.includes("}}") &&
     formVariables.every((value, index) => value === index + 1) &&
     examples.length === formVariables.length &&
-    examples.every(Boolean);
+    examples.every(Boolean) &&
+    headerMediaReady &&
+    headerTextReady;
   const canSend =
     Boolean(recipientPhone.replace(/\D/g, "")) &&
     sendValues.length === sendVariables.length &&
@@ -356,6 +498,11 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
                 <TableRow key={template.id}>
                   <TableCell>
                     <div className="font-mono text-xs" dir="ltr">{template.name}</div>
+                    {templateHeaderLabel(template) && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {templateHeaderLabel(template)}
+                      </div>
+                    )}
                     {template.rejected_reason && (
                       <div className="mt-1 max-w-xs text-xs text-destructive">{template.rejected_reason}</div>
                     )}
@@ -375,7 +522,7 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
                           template.status !== "APPROVED"
                             ? "ניתן לשלוח רק תבנית מאושרת"
                             : !supportsDirectSend(template)
-                              ? "התבנית כוללת header, כפתורים, מדיה או משתנים בעלי שם שעדיין אינם נתמכים בשליחה מהירה"
+                              ? "התבנית כוללת header עם משתנה, כפתורים לא נתמכים, או מדיה דינמית — שליחה מהירה אינה זמינה"
                               : undefined
                         }
                         onClick={() => setSendTemplate(template)}
@@ -456,6 +603,67 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
                   </Select>
                 </div>
               </div>
+            </div>
+            <div className="space-y-3 rounded-lg border p-4">
+              <Label>כותרת (Header) — אופציונלי</Label>
+              <Select
+                value={form.headerType}
+                onValueChange={(headerType) => {
+                  setForm({ ...form, headerType: headerType as HeaderFormatOption, headerText: "", headerExample: "" });
+                  setHeaderFile(null);
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">ללא כותרת</SelectItem>
+                  <SelectItem value="TEXT">טקסט</SelectItem>
+                  <SelectItem value="IMAGE">תמונה</SelectItem>
+                  <SelectItem value="VIDEO">וידאו</SelectItem>
+                  <SelectItem value="DOCUMENT">PDF / מסמך</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {form.headerType === "TEXT" && (
+                <div className="space-y-2">
+                  <Input
+                    value={form.headerText}
+                    onChange={(event) => setForm({ ...form, headerText: event.target.value.slice(0, 60) })}
+                    placeholder="ברוכים הבאים {{1}}"
+                  />
+                  <p className="text-xs text-muted-foreground">עד 60 תווים · משתנה אחד לכל היותר: {"{{1}}"}</p>
+                  {hasInvalidVariableSyntax(form.headerText) && (
+                    <p className="text-xs text-destructive">משתנה בכותרת חייב להיות {"{{1}}"} בלבד.</p>
+                  )}
+                  {formHeaderVariables.length === 1 && (
+                    <div className="space-y-2">
+                      <Label>דוגמה לכותרת {`{{1}}`}</Label>
+                      <Input
+                        value={form.headerExample}
+                        onChange={(event) => setForm({ ...form, headerExample: event.target.value })}
+                        placeholder="אלי"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(form.headerType === "IMAGE" || form.headerType === "VIDEO" || form.headerType === "DOCUMENT") && (
+                <div className="space-y-2">
+                  <Input
+                    type="file"
+                    accept={HEADER_MEDIA_ACCEPT[form.headerType]}
+                    onChange={(event) => setHeaderFile(event.target.files?.[0] ?? null)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {HEADER_MEDIA_HINT[form.headerType]} · הקובץ יועלה ל-Meta כדוגמה לאישור התבנית.
+                  </p>
+                  {headerFile && (
+                    <p className="text-xs text-muted-foreground" dir="ltr">
+                      {headerFile.name} ({Math.ceil(headerFile.size / 1024)} KB)
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>תוכן ההודעה</Label>
@@ -540,6 +748,11 @@ export function MetaWhatsAppTemplates({ tenantId, integrationId, displayPhone }:
           </DialogHeader>
           {sendTemplate && (
             <div className="space-y-4">
+              {templateHeaderLabel(sendTemplate) && (
+                <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  כותרת: {templateHeaderLabel(sendTemplate)}
+                </div>
+              )}
               <div className="rounded-md border bg-muted/40 p-3 text-sm whitespace-pre-wrap">
                 {templateBody(sendTemplate)}
               </div>

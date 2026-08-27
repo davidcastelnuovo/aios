@@ -102,13 +102,15 @@ type Integration = {
 const PROJECT_REF = import.meta.env.VITE_SUPABASE_PROJECT_ID as string;
 const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
 
-/** Numbers not yet on Cloud API (and not Coexistence) need a one-time /register with a PIN. */
+/** Cloud API registration is required when Meta still reports On-Premise. */
 function needsCloudRegistration(phone: {
   platform_type: string | null;
   is_on_biz_app: boolean;
 }) {
+  const platform = String(phone.platform_type ?? "").toUpperCase();
+  if (platform === "ON_PREMISE") return true;
   if (phone.is_on_biz_app) return false;
-  return String(phone.platform_type ?? "").toUpperCase() !== "CLOUD_API";
+  return platform !== "CLOUD_API";
 }
 
 class MetaAuthError extends Error {
@@ -1039,6 +1041,21 @@ export default function MetaWhatsAppSettings() {
                       </div>
                       <Progress value={progress} />
                     </div>
+                  )}
+                  {String(settings.platform_type ?? "").toUpperCase() === "ON_PREMISE" && (
+                    <Alert className="border-amber-500/40">
+                      <AlertTitle>המספר עדיין לא על Cloud API</AlertTitle>
+                      <AlertDescription className="text-sm space-y-2">
+                        <p>
+                          Meta מדווחת שהמספר במצב On-Premise. יצירת תבניות ושליחה דרך Cloud API לא יעבדו
+                          עד השלמת רישום Cloud API + אמצעי תשלום על ה-WABA.
+                        </p>
+                        <p>
+                          ב<strong>חיבור ידני</strong> בחרו את המספר שוב והזינו PIN בן 6 ספרות (אימות דו-שלבי
+                          של WhatsApp Business), או השלימו ב-WhatsApp Manager: Billing + אימות מספר.
+                        </p>
+                      </AlertDescription>
+                    </Alert>
                   )}
                   {settings.history_sync_error && (
                     <Alert>
