@@ -121,6 +121,20 @@ export const defaultFormat = (payload: Record<string, unknown> | null | undefine
   return "1:1";
 };
 
+export const isLiveTextLayers = (payload: Record<string, unknown> | null | undefined): boolean =>
+  payload?.live_text_layers === true;
+
+/** Per-ad mode: explicit flag, or infer from designed layer chrome on legacy rows. */
+export const isVariationLiveText = (
+  variation?: Pick<CreativeVariation, "liveTextLayers" | "layers"> | null,
+): boolean => {
+  if (!variation) return false;
+  if (typeof variation.liveTextLayers === "boolean") return variation.liveTextLayers;
+  return (variation.layers ?? []).some((layer) =>
+    layer.role === "footer" || layer.role === "cta_fill" || layer.role === "type_field",
+  );
+};
+
 const isVariation = (value: unknown): value is CreativeVariation => {
   if (!value || typeof value !== "object") return false;
   const variation = value as CreativeVariation;
@@ -230,14 +244,16 @@ export const makeVariation = ({
   title,
   copyKey,
   copyLabel,
+  conceptId,
+  conceptName,
   rejected,
   rejectNote,
   parentId,
-  logoUrl,
   generationCost,
   compositionId,
   brandColors,
   styleSourceId,
+  liveTextLayers,
 }: {
   imageUrl: string;
   format: CreativeFormat;
@@ -248,6 +264,8 @@ export const makeVariation = ({
   title?: string;
   copyKey?: string;
   copyLabel?: string;
+  conceptId?: string;
+  conceptName?: string;
   rejected?: boolean;
   rejectNote?: string;
   parentId?: string;
@@ -256,13 +274,14 @@ export const makeVariation = ({
   compositionId?: CreativeVariation["compositionId"];
   brandColors?: string[];
   styleSourceId?: string;
+  liveTextLayers?: boolean;
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
   name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
   imageUrl,
   format,
-  layers: visualStyle
-    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, logoUrl, compositionId, brandColors })
+  layers: liveTextLayers && visualStyle
+    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, compositionId, brandColors })
     : [],
   comments: [],
   createdAt: new Date().toISOString(),
@@ -271,12 +290,15 @@ export const makeVariation = ({
   copyKey,
   copyLabel,
   copyText,
+  conceptId,
+  conceptName,
   rejected,
   rejectNote,
   parentId,
   generationCost,
   compositionId,
   styleSourceId,
+  liveTextLayers,
 });
 
 export const getLinkedCopyText = (item: CreativeItem | null) => {

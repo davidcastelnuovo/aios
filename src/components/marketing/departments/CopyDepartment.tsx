@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -9,12 +9,32 @@ import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeli
 import { applyClientFilter, ALL_CLIENTS_FILTER, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { isCopyDepartmentItem } from "@/components/marketing/departmentFilters";
 import {
+  appendCopyConcepts,
   approvedCopyConcepts,
   CONCEPTS_OUTPUT_HINT,
+  copyConceptsGenerateGate,
+  formatApprovedConceptsForCopy,
   formatCopyConceptsForCreative,
   parseConceptsFromCarmen,
   parseCopyConceptsFromPayload,
 } from "@/components/marketing/copyConcepts";
+import {
+  approvedCopyVariations,
+  COPY_VARIATIONS_PER_CONCEPT,
+  copyBlockLabel,
+  copiesForConcept,
+  formatCopyVariationsForConcepts,
+  hydrateCopyVariations,
+  joinCopyVariations,
+  linkApprovedConceptsToCopy,
+  linkConceptToGeneratedCopy,
+  parseCopyVariationsFromPayload,
+  remapCopyVariationKeys,
+  replaceCopyVariationText,
+  stampCopiesWithConcept,
+  stripVariationHeader,
+  type StoredCopyVariation,
+} from "@/components/marketing/departments/creative/copyVariations";
 import {
   listOpenCreativeProjects,
   overlayCopyHandoffPayload,
@@ -23,6 +43,7 @@ import {
   type HandoffWorkItem,
 } from "@/components/marketing/copyHandoff";
 import { CopyConceptsPanel } from "@/components/marketing/departments/CopyConceptsPanel";
+import { CopyVariationsPanel } from "@/components/marketing/departments/CopyVariationsPanel";
 import { COPY_HANDOFF_NEW_TARGET, CopyHandoffDialog } from "@/components/marketing/departments/CopyHandoffDialog";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { Button } from "@/components/ui/button";
@@ -30,7 +51,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +76,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   ArrowUp,
+  ChevronDown,
   FileText,
   Globe,
   Loader2,
@@ -62,6 +91,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Props {
   clientFilter: MarketingClientFilter;
@@ -121,6 +151,13 @@ interface RecordingRow {
 
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
+
+const isAbortError = (error: unknown) =>
+  (error instanceof DOMException && error.name === "AbortError")
+  || (error instanceof Error && (error.name === "AbortError" || /aborted|AbortError|timed out/i.test(error.message)));
+
+const CONCEPTS_GENERATE_TIMEOUT_MS = 120_000;
+const COPY_GENERATE_TIMEOUT_MS = CONCEPTS_GENERATE_TIMEOUT_MS;
 
 const asText = (value: JsonValue | undefined) => (typeof value === "string" ? value : "");
 
@@ -209,11 +246,41 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const [deleteTarget, setDeleteTarget] = useState<CopyItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [generatingConcepts, setGeneratingConcepts] = useState(false);
+  const [generatingCopyFor, setGeneratingCopyFor] = useState<string | null>(null);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [handoffProjects, setHandoffProjects] = useState<HandoffWorkItem[]>([]);
   const [handoffTargetId, setHandoffTargetId] = useState(COPY_HANDOFF_NEW_TARGET);
   const [loadingHandoffTargets, setLoadingHandoffTargets] = useState(false);
+  const [editingCopyId, setEditingCopyId] = useState<string | null>(null);
+  const [editingCopyDraft, setEditingCopyDraft] = useState("");
+  const [savingCopyEdit, setSavingCopyEdit] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const conceptsAbortRef = useRef<AbortController | null>(null);
+  const conceptsAbortKindRef = useRef<"timeout" | "cancel" | "switch" | null>(null);
+  const conceptsTimeoutRef = useRef<number | null>(null);
+  const copyAbortRef = useRef<AbortController | null>(null);
+  const copyAbortKindRef = useRef<"timeout" | "cancel" | "switch" | null>(null);
+  const copyTimeoutRef = useRef<number | null>(null);
+
+  const stopConceptGeneration = useCallback((kind: "timeout" | "cancel" | "switch") => {
+    conceptsAbortKindRef.current = kind;
+    if (conceptsTimeoutRef.current != null) {
+      window.clearTimeout(conceptsTimeoutRef.current);
+      conceptsTimeoutRef.current = null;
+    }
+    conceptsAbortRef.current?.abort();
+    if (kind !== "timeout") setGeneratingConcepts(false);
+  }, []);
+
+  const stopCopyGeneration = useCallback((kind: "timeout" | "cancel" | "switch") => {
+    copyAbortKindRef.current = kind;
+    if (copyTimeoutRef.current != null) {
+      window.clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = null;
+    }
+    copyAbortRef.current?.abort();
+    if (kind !== "timeout") setGeneratingCopyFor(null);
+  }, []);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["copy-department-items", clientFilter, tenantId],
@@ -272,9 +339,36 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     if (selectedId && !items.some((item) => item.id === selectedId)) setSelectedId(items[0]?.id ?? null);
   }, [items, selectedId]);
 
+  useEffect(() => {
+    setEditingCopyId(null);
+    setEditingCopyDraft("");
+    stopConceptGeneration("switch");
+    stopCopyGeneration("switch");
+  }, [selectedId, stopConceptGeneration, stopCopyGeneration]);
+
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const chat = useMemo(() => readChat(selected?.payload ?? null), [selected?.payload]);
   const copyText = asText(selected?.payload?.copy_text);
+  const copyVariations = useMemo(() => {
+    try {
+      return hydrateCopyVariations(
+        copyText,
+        parseCopyVariationsFromPayload(selected?.payload as Record<string, unknown> | null),
+      );
+    } catch {
+      return [];
+    }
+  }, [copyText, selected?.payload]);
+  const approvedCopies = useMemo(() => approvedCopyVariations(copyVariations), [copyVariations]);
+  const conceptGate = useMemo(
+    () => copyConceptsGenerateGate({
+      title: selected?.title ?? "",
+      brief: asText(selected?.payload?.brief_text),
+      copyText,
+      variationCount: copyVariations.filter((item) => item.text.trim()).length,
+    }),
+    [copyText, copyVariations, selected?.payload?.brief_text, selected?.title],
+  );
   const concepts = useMemo(
     () => parseCopyConceptsFromPayload(selected?.payload as Record<string, unknown> | null),
     [selected?.payload],
@@ -325,6 +419,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         website && `אתר הלקוח: ${website}`,
         brief && `בריף:\n${brief}`,
         recordingTitle && `הקלטה משויכת: ${recordingTitle}`,
+        approvedConcepts.length > 0 && "כתבי קופי שמשרת את הקונספטים המאושרים — כל וריאציה לקונספט, לא קמפיין חדש.",
         "פורמט פלט חובה:",
         "---COPY---",
         "וריאציה N — [framework: AIDA/PAS/BAB/4Ps] — [זווית]",
@@ -338,6 +433,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         clientName && `לקוח: ${clientName}.`,
         website && `אתר: ${website}.`,
         brief && `בריף:\n${brief}`,
+        approvedConcepts.length > 0 && `קונספטים מאושרים לכתוב אליהם:\n${formatApprovedConceptsForCopy(approvedConcepts)}`,
         existing && `קופי נוכחי בעורך — שפרי לפי הבקשה והחזירי מסמך מלא:\n${existing}`,
         `בקשת המשתמש:\n${prompt}`,
       ].filter(Boolean).join("\n\n");
@@ -371,10 +467,19 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         { role: "user" as const, content: prompt, at: now },
         { role: "assistant" as const, content: copyDocument, at: now },
       ].slice(-40);
+      const nextVariations = hydrateCopyVariations(
+        copyDocument,
+        parseCopyVariationsFromPayload(selected.payload as Record<string, unknown>),
+      );
+      const nextConcepts = existing
+        ? concepts
+        : linkApprovedConceptsToCopy(concepts, nextVariations);
       const nextPayload = {
         ...(selected.payload ?? {}),
         department: "copy",
         copy_text: copyDocument,
+        copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+        copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
         copy_chat: nextChat,
         copy_prompt: prompt,
         last_skin_slug: "copywriter",
@@ -405,12 +510,12 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     }
   };
 
-  const saveConcepts = async (nextConcepts: ReturnType<typeof parseCopyConceptsFromPayload>) => {
+  const persistPayload = async (patch: Record<string, JsonValue>) => {
     if (!selected) return;
     const nextPayload = {
       ...(selected.payload ?? {}),
       department: "copy",
-      copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
+      ...patch,
     };
     const { error } = await supabase
       .from("marketing_work_items")
@@ -420,17 +525,85 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     if (error) throw error;
   };
 
+  const saveConcepts = async (nextConcepts: ReturnType<typeof parseCopyConceptsFromPayload>) => {
+    await persistPayload({
+      copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
+    });
+  };
+
+  const saveCopyVariations = async (nextVariations: StoredCopyVariation[]) => {
+    await persistPayload({
+      copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+      copy_text: joinCopyVariations(nextVariations),
+    });
+  };
+
+  const openCopyVariationEditor = (id: string) => {
+    const item = copyVariations.find((variation) => variation.id === id);
+    if (!item) return;
+    setEditingCopyId(id);
+    setEditingCopyDraft(stripVariationHeader(item.text));
+  };
+
+  const closeCopyVariationEditor = () => {
+    setEditingCopyId(null);
+    setEditingCopyDraft("");
+  };
+
+  const saveCopyVariationEdit = async () => {
+    if (!selected || !editingCopyId) return;
+    setSavingCopyEdit(true);
+    try {
+      const nextVariations = replaceCopyVariationText(copyVariations, editingCopyId, editingCopyDraft);
+      const nextText = joinCopyVariations(nextVariations);
+      await persistPayload({
+        copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+        copy_text: nextText,
+      });
+      await supabase.from("marketing_assets").insert({
+        tenant_id: tenantId,
+        item_id: selected.id,
+        stage_id: selected.current_stage_id,
+        type: "copy",
+        content: nextText,
+        meta: { source: "variation_edit", variation_id: editingCopyId, skin_slug: "copywriter" },
+      });
+      toast.success("הווריאציה נשמרה");
+      closeCopyVariationEditor();
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "לא הצלחתי לשמור את הווריאציה"));
+    } finally {
+      setSavingCopyEdit(false);
+    }
+  };
+
   const generateConcepts = async () => {
-    if (!selected || generatingConcepts) return;
-    const brief = asText(selected.payload?.brief_text);
-    if (!copyText && !brief) {
-      toast.error("כתבו קופי או בריף לפני יצירת קונספטים");
+    if (!selected || generatingConcepts || generatingCopyFor) return;
+    const gate = copyConceptsGenerateGate({
+      title: selected.title ?? "",
+      brief: asText(selected.payload?.brief_text),
+      copyText,
+      variationCount: copyVariations.filter((item) => item.text.trim()).length,
+    });
+    if (!gate.canGenerate) {
+      toast.error("הוסיפו שם פרויקט או בריף לפני יצירת קונספטים");
       return;
     }
+    const controller = new AbortController();
+    conceptsAbortRef.current = controller;
+    conceptsAbortKindRef.current = null;
     setGeneratingConcepts(true);
+    const timeoutId = window.setTimeout(() => {
+      stopConceptGeneration("timeout");
+    }, CONCEPTS_GENERATE_TIMEOUT_MS);
+    conceptsTimeoutRef.current = timeoutId;
     try {
+      const brief = asText(selected.payload?.brief_text);
       const type = typeLabel(asText(selected.payload?.content_type) || "posts");
       const website = asText(selected.payload?.client_website);
+      const copiesForConcepts = approvedCopies.length > 0 ? approvedCopies : copyVariations;
+      const existingNames = concepts.map((concept) => concept.name).filter(Boolean);
       const studioAddon = [
         "זה שרשור סטודיו קופי נפרד מהצ׳ט הראשי של כרמן.",
         "את מציעה קונספטים קריאייטיביים למחלקת הגרפיקה — לא עוד וריאציות טקסט.",
@@ -448,10 +621,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         clientName && `לקוח: ${clientName}.`,
         website && `אתר: ${website}.`,
         brief && `בריף:\n${brief}`,
-        copyText && `קופי מאושר לכיוון:\n${copyText}`,
-        "כל קונספט חייב זווית אחרת (כאב / הומור / הוכחה / סקרנות). החזירי רק את בלוק ---CONCEPTS---.",
+        copiesForConcepts.length > 0 && `קופי קיים שאפשר להתחשב בו (לא חובה, אל תחליפי קונספטים קיימים):\n${formatCopyVariationsForConcepts(copiesForConcepts)}`,
+        existingNames.length > 0 && `קונספטים שכבר יש — אל תחזרי עליהם, הציעי רק חדשים:\n${existingNames.map((name, index) => `${index + 1}. ${name}`).join("\n")}`,
+        "כל קונספט חייב זווית אחרת (כאב / הומור / הוכחה / סקרנות). אל תשייכי קופי עדיין. החזירי רק את בלוק ---CONCEPTS---.",
       ].filter(Boolean).join("\n\n");
-      const { data, error } = await supabase.functions.invoke("run-ai-agent", {
+      const invoke = supabase.functions.invoke("run-ai-agent", {
         body: {
           command_text: commandText,
           tenant_id: tenantId,
@@ -463,14 +637,34 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
           system_prompt_addon: studioAddon,
           user_name: "מחלקת קופי",
         },
+        signal: controller.signal,
       });
+      const aborted = new Promise<never>((_, reject) => {
+        const fail = () => reject(new DOMException(
+          conceptsAbortKindRef.current === "timeout" ? "Timed out" : "Aborted",
+          "AbortError",
+        ));
+        if (controller.signal.aborted) fail();
+        else controller.signal.addEventListener("abort", fail, { once: true });
+      });
+      const { data, error } = await Promise.race([invoke, aborted]);
+      if (conceptsTimeoutRef.current === timeoutId) {
+        window.clearTimeout(timeoutId);
+        conceptsTimeoutRef.current = null;
+      }
+      if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
       if (error) throw new Error(await invokeErrorMessage(error, data, "כרמן לא הצליחה להציע קונספטים"));
       if (data?.error) throw new Error(data.error);
       const output = String(data?.output ?? data?.reply ?? data?.message ?? "").trim();
       if (!output) throw new Error("כרמן החזירה תשובה ריקה");
-      const nextConcepts = parseConceptsFromCarmen(output);
-      if (nextConcepts.length === 0) throw new Error("לא הצלחתי לפענח קונספטים מהתשובה. נסו שוב.");
-      await saveConcepts(nextConcepts);
+      const parsed = parseConceptsFromCarmen(output);
+      if (parsed.length === 0) throw new Error("לא הצלחתי לפענח קונספטים מהתשובה. נסו שוב.");
+      const nextConcepts = appendCopyConcepts(concepts, parsed);
+      if (nextConcepts.length === concepts.length) throw new Error("כרמן הציעה קונספטים שכבר יש. נסו שוב.");
+      await persistPayload({
+        copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
+        copy_variations: JSON.parse(JSON.stringify(copyVariations)) as JsonValue,
+      });
       await supabase.from("marketing_assets").insert({
         tenant_id: tenantId,
         item_id: selected.id,
@@ -479,12 +673,169 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         content: formatCopyConceptsForCreative(nextConcepts),
         meta: { source: "copy_concepts", skin_slug: "copywriter" },
       });
-      toast.success("קונספטים מוכנים — אשרו לפחות אחד לפני ההעברה");
+      const added = nextConcepts.length - concepts.length;
+      toast.success(concepts.length ? `נוספו ${added} קונספטים — לחצו צור קופי על קונספט` : "קונספטים מוכנים — לחצו צור קופי על קונספט");
       await refresh();
     } catch (error: unknown) {
+      const kind = conceptsAbortKindRef.current;
+      if (kind === "switch") return;
+      if (kind === "cancel") {
+        toast.message("יצירת הקונספטים בוטלה");
+        return;
+      }
+      if (kind === "timeout" || isAbortError(error)) {
+        toast.error("יצירת הקונספטים ארכה יותר מדי. נסו שוב");
+        return;
+      }
       toast.error(errorMessage(error, "יצירת הקונספטים נכשלה"));
     } finally {
+      if (conceptsTimeoutRef.current === timeoutId) {
+        window.clearTimeout(timeoutId);
+        conceptsTimeoutRef.current = null;
+      }
+      if (conceptsAbortRef.current === controller) conceptsAbortRef.current = null;
       setGeneratingConcepts(false);
+    }
+  };
+
+  const generateCopyForConcept = async (conceptId: string) => {
+    if (!selected || generatingCopyFor || generatingConcepts) return;
+    const concept = concepts.find((item) => item.id === conceptId);
+    if (!concept) {
+      toast.error("הקונספט לא נמצא");
+      return;
+    }
+    const controller = new AbortController();
+    copyAbortRef.current = controller;
+    copyAbortKindRef.current = null;
+    setGeneratingCopyFor(conceptId);
+    const timeoutId = window.setTimeout(() => {
+      stopCopyGeneration("timeout");
+    }, COPY_GENERATE_TIMEOUT_MS);
+    copyTimeoutRef.current = timeoutId;
+    try {
+      const brief = asText(selected.payload?.brief_text);
+      const type = typeLabel(asText(selected.payload?.content_type) || "posts");
+      const website = asText(selected.payload?.client_website);
+      const existingForConcept = copiesForConcept(copyVariations, concept.id);
+      const existingTitles = [
+        ...existingForConcept.map((item) => item.headline || item.angle || copyBlockLabel(item)),
+        ...copyVariations.map((item) => item.headline).filter(Boolean),
+      ].filter(Boolean);
+      const studioAddon = [
+        "זה שרשור סטודיו קופי נפרד מהצ׳ט הראשי של כרמן.",
+        "עבדי רק כקופירייטרית (סקין copywriter). כתבי בעברית טבעית, לא תרגום מאנגלית.",
+        "HARD LOCK: you are writing copy FOR ONE visual concept. The headline, body, and CTA must make THIS scene land.",
+        "Do not invent a new campaign, metaphor, product story, or visual idea. Serve the given concept only.",
+        `Write EXACTLY ${COPY_VARIATIONS_PER_CONCEPT} numbered וריאציה blocks. Same concept, two different copy angles (e.g. כאב vs סקרנות).`,
+        `Every header MUST be: וריאציה N — ${concept.name}`,
+        "אל תמציאי מחירים, תוצאות, פיצ'רים או הוכחות חברתיות.",
+        `פרויקט: ${selected.title || "בלי שם"}`,
+        `סוג תוצר: ${type}`,
+        clientName && `לקוח: ${clientName}`,
+        "פורמט פלט חובה:",
+        "---COPY---",
+        `וריאציה 1 — ${concept.name}`,
+        "כותרת:",
+        "גוף:",
+        "CTA:",
+        "רציונל: איך הכותרת מנחיתה את הקונספט הוויזואלי.",
+        `וריאציה 2 — ${concept.name}`,
+        "כותרת:",
+        "גוף:",
+        "CTA:",
+        "רציונל: זווית אחרת לאותו קונספט.",
+      ].filter(Boolean).join("\n");
+      const commandText = [
+        `כתבי בדיוק ${COPY_VARIATIONS_PER_CONCEPT} וריאציות קופי עברי לקונספט הוויזואלי הזה בלבד.`,
+        `הקופי חייב לשרת את הסצנה, ההוק והשפה הוויזואלית של «${concept.name}» — לא קמפיין אחר.`,
+        clientName && `לקוח: ${clientName}.`,
+        website && `אתר: ${website}.`,
+        brief && `בריף:\n${brief}`,
+        `הקונספט (חובה לכתוב לפיו):\n${formatApprovedConceptsForCopy([concept])}`,
+        existingTitles.length > 0 && `כותרות שכבר יש — אל תחזרי עליהן:\n${existingTitles.join(" | ")}`,
+        "החזירי רק את בלוק ---COPY---.",
+      ].filter(Boolean).join("\n\n");
+      const invoke = supabase.functions.invoke("run-ai-agent", {
+        body: {
+          command_text: commandText,
+          tenant_id: tenantId,
+          client_id: selected.client_id,
+          surface: "internal_chat",
+          task_mode: "copywriting",
+          task_skills: ["copywriter"],
+          pin_skills_only: true,
+          system_prompt_addon: studioAddon,
+          user_name: "מחלקת קופי",
+        },
+        signal: controller.signal,
+      });
+      const aborted = new Promise<never>((_, reject) => {
+        const fail = () => reject(new DOMException(
+          copyAbortKindRef.current === "timeout" ? "Timed out" : "Aborted",
+          "AbortError",
+        ));
+        if (controller.signal.aborted) fail();
+        else controller.signal.addEventListener("abort", fail, { once: true });
+      });
+      const { data, error } = await Promise.race([invoke, aborted]);
+      if (copyTimeoutRef.current === timeoutId) {
+        window.clearTimeout(timeoutId);
+        copyTimeoutRef.current = null;
+      }
+      if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+      if (error) throw new Error(await invokeErrorMessage(error, data, "כרמן לא הצליחה לכתוב קופי"));
+      if (data?.error) throw new Error(data.error);
+      const output = String(data?.output ?? data?.reply ?? data?.message ?? "").trim();
+      if (!output) throw new Error("כרמן החזירה תשובה ריקה");
+      const copyDocument = extractCopyDocument(output);
+      const incoming = hydrateCopyVariations(copyDocument, []).slice(0, COPY_VARIATIONS_PER_CONCEPT);
+      if (incoming.length === 0) throw new Error("לא הצלחתי לפענח קופי מהתשובה. נסו שוב.");
+      const remapped = stampCopiesWithConcept(
+        remapCopyVariationKeys(incoming, copyVariations),
+        concept,
+      );
+      const nextVariations = [...copyVariations, ...remapped];
+      const nextConcepts = linkConceptToGeneratedCopy(concepts, concept.id, remapped);
+      const nextText = joinCopyVariations(nextVariations);
+      await persistPayload({
+        copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+        copy_text: nextText,
+        copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
+      });
+      await supabase.from("marketing_assets").insert({
+        tenant_id: tenantId,
+        item_id: selected.id,
+        stage_id: selected.current_stage_id,
+        type: "copy",
+        content: nextText,
+        meta: { source: "copy_from_concept", concept_id: concept.id, skin_slug: "copywriter" },
+      });
+      toast.success(
+        remapped.length === 1
+          ? `נכתבה וריאציה ל«${concept.name}»`
+          : `נכתבו ${remapped.length} וריאציות ל«${concept.name}»`,
+      );
+      await refresh();
+    } catch (error: unknown) {
+      const kind = copyAbortKindRef.current;
+      if (kind === "switch") return;
+      if (kind === "cancel") {
+        toast.message("כתיבת הקופי בוטלה");
+        return;
+      }
+      if (kind === "timeout" || isAbortError(error)) {
+        toast.error("כתיבת הקופי ארכה יותר מדי. נסו שוב");
+        return;
+      }
+      toast.error(errorMessage(error, "כתיבת הקופי נכשלה"));
+    } finally {
+      if (copyTimeoutRef.current === timeoutId) {
+        window.clearTimeout(timeoutId);
+        copyTimeoutRef.current = null;
+      }
+      if (copyAbortRef.current === controller) copyAbortRef.current = null;
+      setGeneratingCopyFor(null);
     }
   };
 
@@ -504,6 +855,76 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     }
   };
 
+  const toggleCopyApproval = async (id: string) => {
+    if (!selected) return;
+    const now = new Date().toISOString();
+    const nextVariations = copyVariations.map((item) =>
+      item.id === id
+        ? { ...item, approved: !item.approved, approvedAt: !item.approved ? now : null }
+        : item,
+    );
+    try {
+      await saveCopyVariations(nextVariations);
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "לא הצלחתי לעדכן אישור קופי"));
+    }
+  };
+
+  const deleteConcept = async (id: string) => {
+    if (!selected) return;
+    const nextConcepts = concepts.filter((concept) => concept.id !== id);
+    try {
+      await saveConcepts(nextConcepts);
+      toast.success("הקונספט נמחק");
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "לא הצלחתי למחוק את הקונספט"));
+    }
+  };
+
+  const deleteCopyVariation = async (id: string) => {
+    if (!selected) return;
+    const nextVariations = copyVariations.filter((item) => item.id !== id);
+    const nextConcepts = concepts.map((concept) =>
+      concept.copyId === id
+        ? { ...concept, copyId: "", copyKey: "", copyAngle: "" }
+        : concept,
+    );
+    try {
+      await persistPayload({
+        copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+        copy_text: joinCopyVariations(nextVariations),
+        copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
+      });
+      toast.success("וריאציית הקופי נמחקה");
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "לא הצלחתי למחוק את הווריאציה"));
+    }
+  };
+
+  const assignConceptCopy = async (conceptId: string, copyId: string) => {
+    if (!selected) return;
+    const copy = copyVariations.find((item) => item.id === copyId);
+    const nextConcepts = concepts.map((concept) =>
+      concept.id === conceptId
+        ? {
+          ...concept,
+          copyId: copy?.id ?? "",
+          copyKey: copy?.key ?? "",
+          copyAngle: copy ? copyBlockLabel(copy) : "",
+        }
+        : concept,
+    );
+    try {
+      await saveConcepts(nextConcepts);
+      await refresh();
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "לא הצלחתי לשייך קופי לקונספט"));
+    }
+  };
+
   const handoff = useMutation({
     mutationFn: async (targetId: string | null) => {
       if (!selected?.client_id) throw new Error("שייכו לקוח בהגדרות כדי להעביר לקריאייטיב");
@@ -518,6 +939,15 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       );
       if (readyConcepts.length === 0) {
         throw new Error("אשרו לפחות קונספט אחד לפני ההעברה לקריאייטיב");
+      }
+      const readyCopies = approvedCopyVariations(
+        hydrateCopyVariations(
+          asText(selected.payload?.copy_text),
+          parseCopyVariationsFromPayload(selected.payload as Record<string, unknown>),
+        ),
+      );
+      if (copyVariations.length > 0 && readyCopies.length === 0) {
+        throw new Error("אשרו לפחות וריאציית קופי אחת לפני ההעברה לקריאייטיב");
       }
       const at = new Date().toISOString();
       let existing: HandoffWorkItem | null = null;
@@ -613,6 +1043,10 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     }
     if (approvedConcepts.length === 0) {
       toast.error("אשרו לפחות קונספט אחד לפני ההעברה לקריאייטיב");
+      return;
+    }
+    if (copyVariations.length > 0 && approvedCopies.length === 0) {
+      toast.error("אשרו לפחות וריאציית קופי אחת לפני ההעברה לקריאייטיב");
       return;
     }
     setLoadingHandoffTargets(true);
@@ -832,7 +1266,13 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                 className="gap-1.5"
                 onClick={() => void startHandoff()}
                 disabled={handoff.isPending || loadingHandoffTargets}
-                title={approvedConcepts.length === 0 ? "אשרו לפחות קונספט אחד" : "שייך קונספטים לפרויקט קריאייטיב קיים או חדש"}
+                title={
+                  approvedConcepts.length === 0
+                    ? "אשרו לפחות קונספט אחד"
+                    : approvedCopies.length === 0 && copyVariations.length > 0
+                      ? "אשרו לפחות וריאציית קופי אחת"
+                      : "שייך קונספטים לפרויקט קריאייטיב קיים או חדש"
+                }
               >
                 {(handoff.isPending || loadingHandoffTargets) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}לקריאייטיב
                 {approvedConcepts.length > 0 && (
@@ -860,33 +1300,46 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                   </div>
                 )}
 
-                {copyText ? (
-                  <div className="overflow-hidden rounded-2xl border bg-background shadow-sm">
-                    <div className="flex items-center justify-between border-b px-4 py-2 text-[11px] text-muted-foreground" dir="rtl">
-                      <span>הקופי — ניתן לערוך ישירות</span>
-                      <Badge variant="outline" className="font-normal">כרמן · קופירייטר</Badge>
-                    </div>
-                    <CopyEditor key={`${selected.id}-${selected.updated_at}`} item={selected} tenantId={tenantId} onSaved={refresh} />
-                  </div>
-                ) : sending ? null : (
-                  <div className="rounded-2xl border border-dashed bg-background/60 px-8 py-16 text-center" dir="rtl">
-                    <PenLine className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-                    <h2 className="text-lg font-semibold">פרויקט מוכן לכתיבה</h2>
-                    <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground [unicode-bidi:plaintext]">
-                      הצ׳ט מחובר לכרמן עם סקין הקופירייטר בשיחה מבודדת
-                    </p>
-                    <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-muted-foreground [unicode-bidi:plaintext]">
-                      פתחו הגדרות לבריף ושיוך, או כתבו למטה מה לכתוב
-                    </p>
-                  </div>
-                )}
                 <CopyConceptsPanel
                   concepts={concepts}
+                  copies={copyVariations}
                   generating={generatingConcepts}
-                  canGenerate={!!copyText || !!asText(selected.payload?.brief_text)}
+                  canGenerate={conceptGate.canGenerate}
+                  lockGenerate={Boolean(generatingCopyFor)}
+                  generatingCopyFor={generatingCopyFor}
+                  blockReason={conceptGate.block}
                   onGenerate={() => void generateConcepts()}
+                  onCancel={() => stopConceptGeneration("cancel")}
                   onToggleApprove={(id) => void toggleConceptApproval(id)}
+                  onDelete={(id) => void deleteConcept(id)}
+                  onAssignCopy={(conceptId, copyId) => void assignConceptCopy(conceptId, copyId)}
+                  onGenerateCopy={(id) => void generateCopyForConcept(id)}
+                  onCancelCopy={() => stopCopyGeneration("cancel")}
                 />
+                <CopyVariationsPanel
+                  variations={copyVariations}
+                  generating={Boolean(generatingCopyFor)}
+                  generatingConceptName={concepts.find((item) => item.id === generatingCopyFor)?.name ?? null}
+                  onToggleApprove={(id) => void toggleCopyApproval(id)}
+                  onEdit={openCopyVariationEditor}
+                  onDelete={(id) => void deleteCopyVariation(id)}
+                />
+                {copyText ? (
+                  <Collapsible defaultOpen={copyVariations.length <= 1}>
+                    <div className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+                      <CollapsibleTrigger className="flex w-full items-center justify-between border-b px-4 py-2 text-[11px] text-muted-foreground hover:bg-muted/30">
+                        <span>מסמך קופי מלא — ניתן לערוך ישירות</span>
+                        <span className="flex items-center gap-2">
+                          <Badge variant="outline" className="font-normal">כרמן · קופירייטר</Badge>
+                          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                        </span>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <CopyEditor key={`${selected.id}-${selected.updated_at}`} item={selected} tenantId={tenantId} onSaved={refresh} />
+                      </CollapsibleContent>
+                    </div>
+                  </Collapsible>
+                ) : null}
                 <div ref={threadEndRef} />
               </div>
             </div>
@@ -911,7 +1364,13 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                       void sendPrompt();
                     }
                   }}
-                  placeholder={copyText ? "מה לשנות בקופי?" : "מה לכתוב? למשל: פוסט השקה לאינסטגרם, טון ישיר, קריאה לשיחה"}
+                  placeholder={
+                    concepts.length === 0
+                      ? "תארו את הכיוון — כרמן תייצר קונספטים ויזואליים"
+                      : copyVariations.length === 0
+                        ? "לחצו צור קופי על קונספט, או בקשו עוד קונספטים"
+                        : "מה לשנות בקופי?"
+                  }
                   className="min-h-[44px] max-h-36 flex-1 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
                   rows={1}
                 />
@@ -928,7 +1387,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
               <PenLine className="h-7 w-7" />
             </div>
             <h2 className="text-xl font-semibold">מחלקת קופי</h2>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">צרו פרויקט, כתבו קופי, אשרו קונספטים, והעבירו לקריאייטיב כדי שהגרפיקה תיבנה מהרעיון.</p>
+            <p className="mt-2 max-w-sm text-sm text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">צרו פרויקט, צרו קונספטים, לחצו צור קופי על קונספט, והעבירו לקריאייטיב.</p>
             <Button className="mt-5 gap-2" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />פרויקט חדש</Button>
           </div>
         )}
@@ -993,7 +1452,60 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CopyVariationEditDialog
+        item={copyVariations.find((variation) => variation.id === editingCopyId) ?? null}
+        draft={editingCopyDraft}
+        saving={savingCopyEdit}
+        onDraftChange={setEditingCopyDraft}
+        onClose={closeCopyVariationEditor}
+        onSave={() => void saveCopyVariationEdit()}
+      />
     </div>
+  );
+}
+
+function CopyVariationEditDialog({
+  item,
+  draft,
+  saving,
+  onDraftChange,
+  onClose,
+  onSave,
+}: {
+  item: StoredCopyVariation | null;
+  draft: string;
+  saving: boolean;
+  onDraftChange: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <Dialog open={!!item} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+      <DialogContent className="max-w-lg" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>עריכת {item ? copyBlockLabel(item) : "וריאציה"}</DialogTitle>
+          <DialogDescription>
+            נשמרת רק הווריאציה הזו. שאר הווריאציות במסמך לא משתנות.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          className="min-h-[240px] text-sm leading-relaxed"
+          dir="rtl"
+          placeholder="כותרת, גוף ו-CTA של הווריאציה הזו"
+        />
+        <DialogFooter className="gap-2 sm:flex-row-reverse sm:justify-start sm:space-x-reverse">
+          <Button onClick={onSave} disabled={saving || !draft.trim()} className="gap-1.5">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            שמור וריאציה
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            ביטול
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1013,7 +1525,16 @@ function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: str
     setSaving(true);
     try {
       const markdown = editor.blocksToMarkdownLossy(editor.document);
-      const nextPayload = { ...(item.payload ?? {}), copy_text: markdown, department: "copy" };
+      const copyVariations = hydrateCopyVariations(
+        markdown,
+        parseCopyVariationsFromPayload(item.payload as Record<string, unknown> | null),
+      );
+      const nextPayload = {
+        ...(item.payload ?? {}),
+        copy_text: markdown,
+        copy_variations: JSON.parse(JSON.stringify(copyVariations)),
+        department: "copy",
+      };
       const { error: itemError } = await supabase
         .from("marketing_work_items")
         .update({ payload: nextPayload })

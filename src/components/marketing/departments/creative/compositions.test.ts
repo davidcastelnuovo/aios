@@ -8,6 +8,7 @@ import {
   pickVariationComposition,
   compositionById,
   DEFAULT_COMPOSITION_ID,
+  layoutRectsOverlap,
 } from "./compositions.ts";
 
 test("seven graphic architectures are available and structurally different", () => {
@@ -24,11 +25,12 @@ test("offer composition asks for a full-bleed photo and forbids a painted templa
   assert.doesNotMatch(lock, /Leave the LEFT/i);
 });
 
-test("composition lock forbids the old caption template and copying the boards", () => {
+test("composition lock forbids the old caption template and copying faces from boards", () => {
   const lock = buildCompositionLock("rail");
   assert.match(lock, /RAIL/);
   assert.match(lock, /logo-top-right/i);
-  assert.match(lock, /RANGE, not layouts/i);
+  assert.match(lock, /not layout and not faces/i);
+  assert.match(lock, /Never default to a bottom-corner/i);
 });
 
 test("pickCompositionId prefers an unused structure", () => {
@@ -59,6 +61,21 @@ test("auto generation rotates poster layouts across a grid", () => {
 test("missing composition falls back to flush, not the offer board", () => {
   assert.equal(DEFAULT_COMPOSITION_ID, "flush");
   assert.equal(compositionById(undefined).id, "flush");
+});
+
+test("flush logo is not bottom-left and does not sit under type or CTA", () => {
+  const flush = compositionById("flush");
+  assert.ok(flush.logo.y < 20, "logo should sit near the top");
+  assert.ok(flush.logo.x > 50, "logo should not default to the left edge");
+  assert.equal(layoutRectsOverlap(flush.logo, flush.type), false);
+  assert.equal(layoutRectsOverlap(flush.logo, flush.cta), false);
+});
+
+test("no composition parks the logo on top of type or CTA", () => {
+  for (const item of CREATIVE_COMPOSITIONS) {
+    assert.equal(layoutRectsOverlap(item.logo, item.type), false, `${item.id} logo vs type`);
+    assert.equal(layoutRectsOverlap(item.logo, item.cta), false, `${item.id} logo vs cta`);
+  }
 });
 
 test("image generation lock no longer reserves the old caption template", () => {

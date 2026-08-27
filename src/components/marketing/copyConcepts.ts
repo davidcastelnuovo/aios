@@ -7,11 +7,15 @@ export interface CopyConcept {
   copyAngle: string;
   whyItWorks: string;
   reference: string;
+  /** Linked stored copy variation id. */
+  copyId: string;
+  /** Linked וריאציה key (1, 2, …). */
+  copyKey: string;
   approved: boolean;
   approvedAt: string | null;
 }
 
-const FIELD_ALIASES: Record<keyof Omit<CopyConcept, "id" | "approved" | "approvedAt">, string[]> = {
+const FIELD_ALIASES: Record<keyof Omit<CopyConcept, "id" | "approved" | "approvedAt" | "copyId" | "copyKey">, string[]> = {
   name: ["שם", "name", "title"],
   bigIdea: ["רעיון", "רעיון גדול", "big idea", "idea"],
   visualLanguage: ["ויזואל", "שפה ויזואלית", "visual", "visual language"],
@@ -19,6 +23,11 @@ const FIELD_ALIASES: Record<keyof Omit<CopyConcept, "id" | "approved" | "approve
   copyAngle: ["קופי", "זווית קופי", "copy"],
   whyItWorks: ["למה", "למה זה עובד", "why"],
   reference: ["רפרנס", "reference", "ref"],
+};
+
+const extractCopyKey = (value: string) => {
+  const match = value.match(/(?:וריאציה|variation)\s*(\d+)/i) || value.match(/^(\d+)\b/);
+  return match?.[1] ?? "";
 };
 
 const emptyConcept = (): CopyConcept => ({
@@ -30,6 +39,8 @@ const emptyConcept = (): CopyConcept => ({
   copyAngle: "",
   whyItWorks: "",
   reference: "",
+  copyId: "",
+  copyKey: "",
   approved: false,
   approvedAt: null,
 });
@@ -57,6 +68,8 @@ export function parseCopyConceptsFromPayload(payload: Record<string, unknown> | 
       copyAngle: text(rec.copyAngle),
       whyItWorks: text(rec.whyItWorks),
       reference: text(rec.reference),
+      copyId: text(rec.copyId),
+      copyKey: text(rec.copyKey) || extractCopyKey(text(rec.copyAngle) || text(rec.copyKey)),
       approved: rec.approved === true,
       approvedAt: text(rec.approvedAt) || null,
     }];
@@ -67,6 +80,44 @@ export function approvedCopyConcepts(concepts: CopyConcept[]): CopyConcept[] {
   return concepts.filter((concept) => concept.approved);
 }
 
+/** Concepts come first from a brief/title. Copy is written after approval. */
+export type CopyConceptsGenerateBlock = "need_context";
+
+export function copyConceptsGenerateGate(input: {
+  title?: string;
+  brief?: string;
+  copyText?: string;
+  variationCount?: number;
+}): { canGenerate: boolean; block?: CopyConceptsGenerateBlock } {
+  const hasContext = [input.title, input.brief, input.copyText].some((value) => (value ?? "").trim().length > 0)
+    || (input.variationCount ?? 0) > 0;
+  if (!hasContext) return { canGenerate: false, block: "need_context" };
+  return { canGenerate: true };
+}
+
+export function appendCopyConcepts(existing: CopyConcept[], incoming: CopyConcept[]): CopyConcept[] {
+  const names = new Set(existing.map((concept) => concept.name.trim().toLowerCase()).filter(Boolean));
+  const fresh = incoming.filter((concept) => {
+    const name = concept.name.trim().toLowerCase();
+    if (!name || names.has(name)) return false;
+    names.add(name);
+    return true;
+  });
+  return [...existing, ...fresh];
+}
+
+export function formatApprovedConceptsForCopy(concepts: CopyConcept[]): string {
+  return concepts.map((concept, index) => [
+    `${index + 1}. ${concept.name}`,
+    concept.bigIdea && `רעיון: ${concept.bigIdea}`,
+    concept.hook && `הוק: ${concept.hook}`,
+    concept.visualLanguage && `ויזואל: ${concept.visualLanguage}`,
+    concept.whyItWorks && `למה זה עובד: ${concept.whyItWorks}`,
+    concept.reference && `רפרנס: ${concept.reference}`,
+    concept.copyAngle && `זווית: ${concept.copyAngle}`,
+  ].filter(Boolean).join("\n")).join("\n\n");
+}
+
 export function formatCopyConceptsForCreative(concepts: CopyConcept[]): string {
   return concepts.map((concept, index) => [
     `${index + 1}. ${concept.name}`,
@@ -74,26 +125,63 @@ export function formatCopyConceptsForCreative(concepts: CopyConcept[]): string {
     concept.visualLanguage && `שפה ויזואלית: ${concept.visualLanguage}`,
     concept.hook && `הוק / סצנה: ${concept.hook}`,
     concept.copyAngle && `קופי על הקונספט: ${concept.copyAngle}`,
+    concept.copyKey && `וריאציית קופי משויכת: ${concept.copyKey}`,
     concept.whyItWorks && `למה זה עובד: ${concept.whyItWorks}`,
     concept.reference && `רפרנס: ${concept.reference}`,
   ].filter(Boolean).join("\n")).join("\n\n");
 }
 
+const CONCEPT_PHOTOGRAPH_CLOSER = [
+  "CONCEPT PHOTOGRAPH — HARD LOCK. Photograph THIS scene (people, place, props, action). The still is the concept, not the slogan.",
+  "Copy (headline / CTA) is TYPE painted on that photograph — words only. It never replaces the scene and never chooses a new metaphor.",
+  "Do NOT restage the headline as a new situation. If the concept is a locked door, empty chair, crowd, or street, photograph THAT — not a person reading the headline, searching Google, or sitting in a chat UI unless that IS the hook.",
+  "Do NOT invent a different metaphor. Do NOT flatten this into a generic lifestyle / product packshot unless the concept itself is a packshot.",
+].join("\n");
+
+export function findCopyConcept(concepts: CopyConcept[], id?: string | null): CopyConcept | undefined {
+  if (!id) return undefined;
+  return concepts.find((concept) => concept.id === id);
+}
+
+/** Prefer unused approved concepts, then rotate through the full list. */
+export function pickConceptForBatchIndex(
+  concepts: CopyConcept[],
+  index: number,
+  usedConceptIds: Iterable<string> = [],
+): CopyConcept | undefined {
+  if (concepts.length === 0) return undefined;
+  const used = new Set([...usedConceptIds].filter(Boolean));
+  const unused = concepts.filter((concept) => !used.has(concept.id));
+  const pool = unused.length > 0 ? unused : concepts;
+  return pool[index % pool.length];
+}
+
+export type ConceptPromptOptions = {
+  /** Photograph only this approved concept. Other approved ideas are omitted. */
+  primaryId?: string;
+};
+
 /** English image-model prompt. Must stay first in the generation request. */
-export function formatCopyConceptsForImagePrompt(concepts: CopyConcept[]): string {
+export function formatCopyConceptsForImagePrompt(
+  concepts: CopyConcept[],
+  options?: ConceptPromptOptions,
+): string {
   if (concepts.length === 0) return "";
-  const primary = concepts[0];
-  const extras = concepts.slice(1);
+  const primary = findCopyConcept(concepts, options?.primaryId) ?? concepts[0];
+  const lockToOne = Boolean(options?.primaryId);
+  const extras = lockToOne ? [] : concepts.filter((concept) => concept.id !== primary.id);
   const lines = [
     "MUST FOLLOW THIS APPROVED VISUAL CONCEPT. This block IS the photograph — subject, location, props, lighting, and the first-second hook.",
     "The slogan and headline do NOT choose the scene. Never replace this concept with a literal illustration of the copy.",
+    CONCEPT_PHOTOGRAPH_CLOSER,
     "Build a cinematic advertising still around this idea — never a generic text-on-background graphic.",
+    lockToOne && "This is the ONLY concept for this still. Do not blend, swap, or borrow a different approved campaign idea.",
     primary.name && `Concept name: ${primary.name}`,
-    primary.bigIdea && `Big idea: ${primary.bigIdea}`,
-    primary.visualLanguage && `Visual language, composition, color, typography mood: ${primary.visualLanguage}`,
-    primary.hook && `First-second hook / what we see immediately: ${primary.hook}`,
-    primary.copyAngle && `Copy angle sitting on this visual (do not render as on-image text): ${primary.copyAngle}`,
-    primary.whyItWorks && `Why this makes a stronger graphic: ${primary.whyItWorks}`,
+    primary.bigIdea && `PHOTOGRAPH THIS SCENE (the entire still is this idea, not a pretty product photo): ${primary.bigIdea}`,
+    primary.visualLanguage && `Art direction / visual language: ${primary.visualLanguage}`,
+    primary.hook && `Narrative to stage — people, place, props, action: ${primary.hook}`,
+    primary.copyAngle && `Copy angle (words only — do not restage this as a new scene): ${primary.copyAngle}`,
+    primary.whyItWorks && `Why this concept works (keep this tension in the frame): ${primary.whyItWorks}`,
     primary.reference && `Canonical campaign method to steal (not the slogan): ${primary.reference}`,
   ];
   if (extras.length > 0) {
@@ -106,9 +194,15 @@ export function formatCopyConceptsForImagePrompt(concepts: CopyConcept[]): strin
   return lines.filter(Boolean).join("\n");
 }
 
+/** True when the visual prompt is an approved-concept lock, not a freeform copy brief. */
+export function isApprovedConceptPrompt(visualPrompt?: string | null): boolean {
+  return /MUST FOLLOW THIS APPROVED VISUAL CONCEPT|CONCEPT PHOTOGRAPH — HARD LOCK/i.test(String(visualPrompt ?? ""));
+}
+
 export function resolveVisualPrompt(
   payload: Record<string, unknown> | null | undefined,
   concepts?: CopyConcept[],
+  options?: ConceptPromptOptions,
 ): string {
   const fromCaller = concepts?.length
     ? (approvedCopyConcepts(concepts).length > 0 ? approvedCopyConcepts(concepts) : concepts)
@@ -120,7 +214,7 @@ export function resolveVisualPrompt(
     : storedApproved.length > 0
       ? storedApproved.map((concept) => ({ ...concept, approved: true }))
       : fromPayload;
-  const live = formatCopyConceptsForImagePrompt(approved);
+  const live = formatCopyConceptsForImagePrompt(approved, options);
   if (live) return live;
   return typeof payload?.visual_prompt === "string" ? payload.visual_prompt.trim() : "";
 }
@@ -185,6 +279,7 @@ export function parseConceptsFromCarmen(output: string): CopyConcept[] {
 
     if (concept.name || concept.bigIdea) {
       concept.name = concept.name || `קונספט ${concepts.length + 1}`;
+      if (!concept.copyKey) concept.copyKey = extractCopyKey(concept.copyAngle);
       concepts.push(concept);
     }
   }
@@ -198,7 +293,7 @@ export const CONCEPTS_OUTPUT_HINT = [
   "רעיון: הרעיון הגדול במשפט אחד",
   "ויזואל: שפה ויזואלית, קומפוזיציה, צבע, טיפוגרפיה",
   "הוק: מה רואים בשנייה הראשונה",
-  "קופי: איזו שורת קופי יושבת על הקונספט הזה",
+  "קופי: אופציונלי — זווית טקסט בלבד; הקופי עצמו נכתב אחרי אישור הקונספט",
   "למה: למה זה ייצר גרפיקה מעניינת יותר מטקסט על רקע",
   "רפרנס: שם קמפיין קנוני או בלי",
 ].join("\n");

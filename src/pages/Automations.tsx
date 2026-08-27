@@ -534,6 +534,87 @@ export default function Automations() {
     },
   });
 
+  // Meta WhatsApp: webhook lead → send approved template to the lead's phone
+  const createMetaWhatsappLeadFlowMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("No tenant");
+      const { data: metaInt } = await supabase
+        .from("tenant_integrations" as any)
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "meta_whatsapp")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      const { data, error } = await supabase
+        .from("automations")
+        .insert({
+          name: "WhatsApp Meta — ברוכים הבאים לליד",
+          description: "Webhook ליד → שליחת תבנית WhatsApp מאושרת לטלפון הליד (Meta Cloud API)",
+          tenant_id: tenantId,
+          trigger_type: "inbound_webhook_lead",
+          action_type: "send_meta_whatsapp_message",
+          configuration: {},
+          is_flow: true,
+          active: false,
+        } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      const mk = (over: any) => ({
+        id: crypto.randomUUID(),
+        automation_id: data.id,
+        tenant_id: tenantId,
+        condition_branch: null,
+        ...over,
+      });
+      const trigger = mk({
+        step_type: "trigger",
+        action_type: "inbound_webhook_lead",
+        label: "Webhook ליד",
+        configuration: {},
+        position_x: 400,
+        position_y: 60,
+        sort_order: 0,
+        parent_step_id: null,
+      });
+      const send = mk({
+        step_type: "action",
+        action_type: "send_meta_whatsapp_message",
+        label: "שלח תבנית WhatsApp",
+        configuration: {
+          send_mode: "template",
+          template_name: "",
+          template_language: "he",
+          template_variables: [],
+          phone_mode: "field",
+          phone_field: "phone",
+          meta_whatsapp_integration_id: metaInt?.id || null,
+        },
+        position_x: 400,
+        position_y: 200,
+        sort_order: 1,
+        parent_step_id: trigger.id,
+      });
+      const { error: stepErr } = await supabase
+        .from("automation_flow_steps" as any)
+        .insert([trigger, send]);
+      if (stepErr) throw stepErr;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
+      toast({
+        title: "התבנית נוצרה (כבויה)",
+        description: "בחרו תבנית מאושרת, הפעילו webhook secret, והפעילו את ה-flow.",
+      });
+      navigate(buildPath(`automations/flow/${data.id}`));
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה ביצירת התבנית", description: err.message, variant: "destructive" });
+    },
+  });
+
   // Create new flow automation
   const createFlowMutation = useMutation({
     mutationFn: async () => {
@@ -680,6 +761,29 @@ export default function Automations() {
         >
           <Plus className="h-4 w-4 ml-2" />
           צור תבנית
+        </Button>
+      </div>
+
+      {/* Meta WhatsApp lead welcome template */}
+      <div className="flex items-center gap-3 p-4 rounded-lg border bg-gradient-to-l from-emerald-500/10 to-transparent">
+        <div className="p-2 rounded-full bg-emerald-500/20">
+          <MessageCircle className="h-5 w-5 text-emerald-600" />
+        </div>
+        <div className="flex-1">
+          <p className="font-semibold text-sm">תבנית: WhatsApp Meta — ברוכים הבאים לליד</p>
+          <p className="text-xs text-muted-foreground">
+            Webhook ליד (Make / Facebook) → שליחת תבנית מאושרת לטלפון הליד. נוצר כבוי — בחרו תבנית והפעילו.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+          onClick={() => createMetaWhatsappLeadFlowMutation.mutate()}
+          disabled={createMetaWhatsappLeadFlowMutation.isPending}
+        >
+          <Plus className="h-4 w-4 ml-2" />
+          {createMetaWhatsappLeadFlowMutation.isPending ? "יוצר..." : "צור תבנית"}
         </Button>
       </div>
 

@@ -10,6 +10,8 @@ interface TenantContextType {
   currentTenant: any;
   isLoading: boolean;
   isActiveTenantSynced: boolean;
+  /** True after user_active_tenant upsert matches currentTenantId (RLS scope). */
+  isActiveTenantDbSynced: boolean;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -63,6 +65,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     const storedId = safeGetLocalStorage("selectedTenantId");
     return !!(cachedId && storedId && cachedId === storedId);
   });
+  const [isActiveTenantDbSynced, setIsActiveTenantDbSynced] = useState(false);
   const [isBootstrapTimedOut, setIsBootstrapTimedOut] = useState(false);
   const previousTenantIdRef = useRef<string | null>(null);
 
@@ -125,7 +128,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [tenantFromSlug?.id, tenantSlug, currentTenantId]);
 
-  // Sync tenant: clear cache on switch, then unblock UI immediately.
+  // Sync tenant: clear cache on switch, then unblock UI for shell rendering.
   useEffect(() => {
     if (!currentTenantId || isActiveTenantSynced) return;
 
@@ -141,33 +144,56 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
     safeSetLocalStorage("selectedTenantId", currentTenantId);
 
-    // Unblock the UI now — don't wait for the DB round-trip.
     setIsActiveTenantSynced(true);
   }, [currentTenantId, isActiveTenantSynced, queryClient]);
 
-  // Re-assert the active tenant in the DB on EVERY load and tenant change —
-  // not only on an explicit switch. user_active_tenant is a single global row
-  // per user consumed by edge functions and RLS (get_user_tenant_id); another
-  // device may have pointed it at a different tenant (e.g. home machine on
-  // one org, office machine on another), which silently scopes edge-function
-  // data to the wrong tenant while the UI shows the current one.
+  // Keep user_active_tenant aligned with the URL tenant. Do not block the
+  // board if auth is not ready yet — retry when the session arrives.
   useEffect(() => {
-    if (!currentTenantId) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      (supabase as any)
+    if (!currentTenantId) {
+      setIsActiveTenantDbSynced(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const sync = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (!user) {
+        setIsActiveTenantDbSynced(true);
+        return;
+      }
+
+      const { error } = await (supabase as any)
         .from("user_active_tenant")
         .upsert(
           { user_id: user.id, tenant_id: currentTenantId, updated_at: new Date().toISOString() },
-          { onConflict: "user_id" }
-        )
-        .then(({ error }: any) => {
-          if (error) console.error("Error updating active tenant in DB:", error);
-        });
-    }).catch((err: any) => {
+          { onConflict: "user_id" },
+        );
+
+      if (cancelled) return;
+      if (error) {
+        console.error("Error updating active tenant in DB:", error);
+      }
+      setIsActiveTenantDbSynced(true);
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    };
+
+    void sync().catch((err) => {
       console.error("Error syncing tenant:", err);
+      if (!cancelled) setIsActiveTenantDbSynced(true);
     });
-  }, [currentTenantId]);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      void sync();
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [currentTenantId, queryClient]);
 
   // Get current user's tenant if not on tenant-scoped route
   const { data: userTenant, isLoading: isLoadingUserTenant } = useQuery({
@@ -292,7 +318,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         setCurrentTenantId, 
         currentTenant: effectiveTenant,
         isLoading,
-        isActiveTenantSynced
+        isActiveTenantSynced,
+        isActiveTenantDbSynced,
       }}
     >
       {children}

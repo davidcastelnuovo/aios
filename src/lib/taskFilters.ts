@@ -37,3 +37,20 @@ export function resolveMineTaskAssignee(input: {
   if (input.userId) return { kind: "created_by", userId: input.userId };
   return { kind: "none" };
 }
+
+export type MineTaskIdentity = MineTaskAssignee & {
+  campaignerIds: string[];
+};
+
+/** PostgREST `.or()` filter for "שלי בלבד" assignment rows. */
+export function buildMineAssignmentOrFilter(identity: MineTaskIdentity): string | null {
+  const parts: string[] = [];
+  for (const id of identity.campaignerIds) {
+    parts.push(`campaigner_id.eq.${id}`);
+  }
+  if (identity.kind === "assigned" && identity.salesPersonId) {
+    parts.push(`sales_person_id.eq.${identity.salesPersonId}`);
+  }
+  if (parts.length === 0) return null;
+  return parts.join(",");
+}

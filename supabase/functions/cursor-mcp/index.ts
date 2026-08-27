@@ -9,6 +9,7 @@
 // Tools:
 //   - request_dev_task : code/feature/bugfix → Cursor implements + opens a PR
 //   - ask_cursor       : research / analysis / planning / investigation
+//   - generate_creative: send a job to the sticky AIOS Creative Direct image chat
 //
 // Required Supabase secrets:
 //   CURSOR_API_KEY          API key from https://cursor.com/dashboard/api
@@ -87,6 +88,23 @@ const TOOLS = [
         },
       },
       required: ["request"],
+    },
+  },
+  {
+    name: "generate_creative",
+    description:
+      "Send a job to קריאייטיב דיירקט, the dedicated image chat (Carmen's איש קריאייטיב skin). " +
+      "Follow-ups go to the same sticky conversation. Do not re-explain the art-director role. " +
+      "It generates a finished Hebrew advertising still with GenerateImage and writes the PNG onto the marketing work item. " +
+      "Use when David, Carmen, or מחלקת קריאייטיב needs images.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        item_id: { type: "string", description: "marketing_work_items.id of the creative project." },
+        director_note: { type: "string", description: "Optional fix request for a revision." },
+        copy_label: { type: "string", description: "Optional copy-variation label to generate." },
+      },
+      required: ["item_id"],
     },
   },
 ];
@@ -510,6 +528,58 @@ async function handleToolCall(
       (reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
       `. A Cloud Agent session is now running on it.\n` +
       `Session: ${url}`
+    );
+  }
+
+  if (name === "generate_creative") {
+    const itemId = String(args?.item_id ?? "").trim();
+    if (!itemId) throw new Error("generate_creative requires item_id.");
+    if (!ctx.tenantId) throw new Error("generate_creative needs a tenant on the MCP connection.");
+    const directorNote = String(args?.director_note ?? "").trim();
+    const copyLabel = String(args?.copy_label ?? "").trim();
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/cursor-generate-creative`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "dispatch",
+        tenant_id: ctx.tenantId,
+        item_id: itemId,
+        prompt: [
+          "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
+          `Load APPROVED CONCEPTS from marketing_work_items id=${itemId}. Photograph the concept. Type the copy.`,
+          copyLabel && `Copy variation «${copyLabel}».`,
+          directorNote && `DIRECTOR / REJECT: ${directorNote}`,
+        ].filter(Boolean).join("\n"),
+        lesson: directorNote || undefined,
+        variation: {
+          name: copyLabel || "וריאציה",
+          copy_label: copyLabel || undefined,
+        },
+      }),
+    });
+    const raw = await resp.text();
+    let data: any = {};
+    try { data = JSON.parse(raw); } catch { /* ignore */ }
+    if (!resp.ok || data?.error) {
+      throw new Error(data?.error || `cursor-generate-creative ${resp.status}: ${raw.slice(0, 200)}`);
+    }
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "ask_cursor",
+      requestText: `${"[CREATIVE AGENT]"} Carmen asked for item ${itemId}`,
+      context: directorNote,
+      branch: "",
+      sessionUrl: String(data.agent_url || ""),
+      cursorAgentId: String(data.cursor_agent_id || ""),
+    });
+    return (
+      `✅ נשלח לקריאייטיב דיירקט (אותו צ׳אט דביק)` +
+      (data.agent_url ? `\nSession: ${data.agent_url}` : "") +
+      `\nהתמונה תופיע על פרויקט הקריאייטיב אחרי שהצ׳אט מעלה אותה.`
     );
   }
 

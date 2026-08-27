@@ -38,10 +38,20 @@ const graphJson = async (
     data = { raw: text };
   }
   if (!response.ok || data?.error) {
-    throw new Error(data?.error?.message || `Meta Graph API error (${response.status})`);
+    const error = data?.error ?? {};
+    const err = new Error(error.error_user_msg || error.message || `Meta Graph API error (${response.status})`);
+    (err as Error & { metaError?: Record<string, unknown> }).metaError = error;
+    throw err;
   }
   return data;
 };
+
+const SMB_COEXISTENCE_REGISTER_GUIDANCE =
+  "מספר SMB/Coexistence (WhatsApp Business App) — Meta לא מאפשרת רישום Cloud API דרך PIN. " +
+  "נסו: (1) חיבור Coexistence דרך Embedded Signup + סריקת QR בטלפון, " +
+  "(2) הפעלת Inbox ב-Meta Business Suite, " +
+  "(3) יצירת תבניות ב-WhatsApp Manager, " +
+  "(4) פנייה לתמיכת Meta אם platform_type נשאר ON_PREMISE.";
 
 const unique = (values: string[]) =>
   values.filter((value, index) => value && values.indexOf(value) === index);
@@ -295,6 +305,117 @@ Deno.serve(async (request) => {
       const { error } = await admin.from("tenant_integrations").delete().eq("id", integrationId);
       if (error) throw error;
       return reply({ success: true });
+    }
+
+    /** One-time Cloud API registration for an already-connected number still ON_PREMISE. */
+    if (action === "register_cloud_api") {
+      if (!appId || !appSecret) return reply({ error: "meta_whatsapp_not_configured" }, 503);
+      const integrationId = typeof body.integration_id === "string" ? body.integration_id : "";
+      const pin = typeof body.pin === "string" ? body.pin.replace(/\D/g, "") : "";
+      if (!integrationId) return reply({ error: "integration_id_required" }, 400);
+      if (!/^\d{6}$/.test(pin)) {
+        return reply({ error: "יש להזין PIN בן 6 ספרות מאימות דו-שלבי של WhatsApp Business", code: "pin_required" }, 400);
+      }
+
+      const { data: integration } = await admin
+        .from("tenant_integrations")
+        .select("id,user_id,settings,is_active")
+        .eq("id", integrationId)
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "meta_whatsapp")
+        .maybeSingle();
+      if (!integration?.is_active || (integration.user_id !== authData.user.id && superAdmin !== true)) {
+        return reply({ error: "forbidden" }, 403);
+      }
+
+      const settings = (integration.settings ?? {}) as Record<string, unknown>;
+      const phoneNumberId = String(settings.phone_number_id ?? "");
+      if (!phoneNumberId) return reply({ error: "phone_number_id_missing" }, 400);
+
+      const { data: tokenRow, error: tokenError } = await admin
+        .from("meta_whatsapp_tokens")
+        .select("access_token")
+        .eq("integration_id", integrationId)
+        .maybeSingle();
+      if (tokenError) throw tokenError;
+      if (!tokenRow?.access_token) return reply({ error: "meta_whatsapp_token_missing" }, 400);
+
+      const token = tokenRow.access_token;
+      const fetchPhone = async () =>
+        graphJson(`${phoneNumberId}?fields=${PHONE_FIELDS}`, token, undefined, graphVersion);
+
+      let phone = await fetchPhone();
+      const platformBefore = String(phone.platform_type ?? "").toUpperCase();
+      const onBizApp = phone.is_on_biz_app === true;
+      if (platformBefore !== "CLOUD_API" && onBizApp) {
+        return reply({
+          error:
+            "Meta לא מאפשרת רישום Cloud API עם PIN למספר SMB/Coexistence (WhatsApp Business App).",
+          code: "smb_coexistence_register_not_available",
+          guidance: SMB_COEXISTENCE_REGISTER_GUIDANCE,
+          platform_type: platformBefore,
+          is_on_biz_app: true,
+        }, 400);
+      }
+      if (platformBefore !== "CLOUD_API") {
+        try {
+          await graphJson(
+            `${phoneNumberId}/register`,
+            token,
+            {
+              method: "POST",
+              body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+            },
+            graphVersion,
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "registration failed";
+          const metaError = (error as Error & { metaError?: Record<string, unknown> }).metaError;
+          if (/not available for SMB/i.test(message)) {
+            return reply({
+              error: "Meta לא מאפשרת רישום Cloud API עם PIN למספר SMB/Coexistence.",
+              code: "smb_coexistence_register_not_available",
+              guidance: SMB_COEXISTENCE_REGISTER_GUIDANCE,
+              meta_error: metaError ?? null,
+            }, 400);
+          }
+          if (!/already|registered/i.test(message)) {
+            const pinHint = Number(metaError?.error_subcode ?? 0) === 133005
+              ? " הקוד לא תואם — בדקו אימות דו-שלבי ב-WhatsApp Business, או הגדירו קוד חדש שם."
+              : " ודאו שה-PIN הוא מאימות דו-שלבי של WhatsApp Business (לא Facebook).";
+            return reply({
+              error: `רישום Cloud API נכשל: ${message}.${pinHint}`,
+              code: "cloud_api_registration_failed",
+              meta_error: metaError ?? null,
+            }, 400);
+          }
+        }
+        phone = await fetchPhone();
+      }
+
+      const platformAfter = String(phone.platform_type ?? "").toUpperCase();
+      const nextSettings = {
+        ...settings,
+        platform_type: phone.platform_type ?? settings.platform_type ?? null,
+        display_phone_number: phone.display_phone_number ?? settings.display_phone_number ?? null,
+        verified_name: phone.verified_name ?? settings.verified_name ?? null,
+        quality_rating: phone.quality_rating ?? settings.quality_rating ?? null,
+        cloud_api_registered_at: new Date().toISOString(),
+      };
+      const { error: updateError } = await admin
+        .from("tenant_integrations")
+        .update({ settings: nextSettings })
+        .eq("id", integrationId);
+      if (updateError) throw updateError;
+
+      return reply({
+        success: true,
+        platform_type: platformAfter || phone.platform_type,
+        was_on_premise: platformBefore === "ON_PREMISE",
+        message: platformAfter === "CLOUD_API"
+          ? "המספר רשום ל-Cloud API. ניתן ליצור תבניות."
+          : "הרישום הושלם, אך Meta עדיין מדווחת סטטוס שונה מ-CLOUD_API. בדקו אימות מספר ב-WhatsApp Manager.",
+      });
     }
 
     if (!["complete", "list_assets", "connect_manual"].includes(action)) {
@@ -569,7 +690,10 @@ Deno.serve(async (request) => {
         // would reset its two-step PIN and can break the other provider, so any
         // app with WABA access simply sends without re-registering.
         const alreadyOnCloud = String(phone.platform_type ?? "").toUpperCase() === "CLOUD_API";
-        if (!coexistence && !alreadyOnCloud) {
+        const onPremise = String(phone.platform_type ?? "").toUpperCase() === "ON_PREMISE";
+        // Coexistence on Cloud API must not be re-registered, but On-Premise numbers
+        // still need a one-time Cloud API registration before templates/messaging work.
+        if (!alreadyOnCloud && (!coexistence || onPremise)) {
           if (!/^\d{6}$/.test(pin)) {
             return reply({
               error: `המספר ${phone.display_phone_number ?? phone.id} דורש רישום ל-Cloud API. הזינו PIN בן 6 ספרות.`,

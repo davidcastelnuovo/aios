@@ -1,12 +1,28 @@
 /** Idempotency for Facebook Instant Form → automation WhatsApp sends. */
 
-export const facebookFlowEventSource = (automationId: string) => `fb-flow:${automationId}`
-
 const asId = (value: unknown): string => String(value ?? "").trim()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const asUuid = (value: unknown): string | null => {
   const id = asId(value)
   return UUID_RE.test(id) ? id : null
+}
+
+export const facebookFlowEventSource = (automationId: string) => `fb-flow:${automationId}`
+
+/** Stable per-destination lock key so 0546… / 972546… / …@c.us share one receipt. */
+export function facebookWhatsAppSendSource(chatId: string): string {
+  const raw = asId(chatId)
+  if (raw.includes("@g.us")) return `fb-wa:${raw}`
+  const digits = raw.replace(/\D/g, "")
+  const last9 = digits.slice(-9)
+  return `fb-wa:${last9 ? `972${last9}@c.us` : raw}`
+}
+
+function isUniqueViolation(error: { code?: unknown; message?: unknown; details?: unknown } | null | undefined): boolean {
+  if (!error) return false
+  const code = String(error.code ?? "")
+  const text = `${error.message ?? ""} ${error.details ?? ""}`
+  return code === "23505" || code === "409" || /duplicate key|unique constraint/i.test(text)
 }
 
 export async function claimFacebookLeadAutomationRun(
@@ -32,12 +48,64 @@ export async function claimFacebookLeadAutomationRun(
     client_id: asUuid(params.clientId),
   })
 
-  if (error?.code === "23505") return { duplicate: true, inserted: false }
+  if (isUniqueViolation(error)) return { duplicate: true, inserted: false }
   if (error) {
-    console.error("[facebook-lead-dedup] claim insert failed (continuing):", error.message)
+    console.error("[facebook-lead-dedup] claim insert failed:", error.message)
+    const already = await wasFacebookLeadAutomationClaimed(supabase, params)
+    if (already) return { duplicate: true, inserted: false }
     return { duplicate: false, inserted: false }
   }
   return { duplicate: false, inserted: true }
+}
+
+export async function claimFacebookLeadWhatsAppSend(
+  supabase: { from: (table: string) => any },
+  params: { tenantId: string; chatId: string; leadgenId: unknown },
+): Promise<{ duplicate: boolean; inserted: boolean }> {
+  const leadgenId = asId(params.leadgenId)
+  const chatId = asId(params.chatId)
+  if (!leadgenId || !chatId || !params.tenantId) return { duplicate: false, inserted: false }
+
+  const { error } = await supabase.from("lead_notification_events").insert({
+    tenant_id: params.tenantId,
+    source: facebookWhatsAppSendSource(chatId),
+    external_id: leadgenId,
+  })
+
+  if (isUniqueViolation(error)) return { duplicate: true, inserted: false }
+  if (error) {
+    console.error("[facebook-lead-dedup] whatsapp send claim failed:", error.message)
+    const { data } = await supabase
+      .from("lead_notification_events")
+      .select("id")
+      .eq("tenant_id", params.tenantId)
+      .eq("source", facebookWhatsAppSendSource(chatId))
+      .eq("external_id", leadgenId)
+      .maybeSingle()
+    if (data?.id) return { duplicate: true, inserted: false }
+    return { duplicate: false, inserted: false }
+  }
+  return { duplicate: false, inserted: true }
+}
+
+export async function releaseFacebookLeadWhatsAppSend(
+  supabase: { from: (table: string) => any },
+  params: { tenantId: string; chatId: string; leadgenId: unknown },
+): Promise<void> {
+  const leadgenId = asId(params.leadgenId)
+  const chatId = asId(params.chatId)
+  if (!leadgenId || !chatId || !params.tenantId) return
+
+  const { error } = await supabase
+    .from("lead_notification_events")
+    .delete()
+    .eq("tenant_id", params.tenantId)
+    .eq("source", facebookWhatsAppSendSource(chatId))
+    .eq("external_id", leadgenId)
+
+  if (error) {
+    console.error("[facebook-lead-dedup] whatsapp send claim release failed:", error.message)
+  }
 }
 
 export async function releaseFacebookLeadAutomationRun(

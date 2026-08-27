@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { callerCanDeleteUsers, detachUserReferences } from "../_shared/user-admin-helpers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +11,7 @@ const corsHeaders = {
 interface DeleteUserRequest {
   userId?: string;
   email?: string;
+  tenantId?: string;
 }
 
 serve(async (req: Request) => {
@@ -28,7 +30,6 @@ serve(async (req: Request) => {
       },
     });
 
-    // Get the authorization header to verify the requesting user is an owner
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       throw new Error("Missing authorization header");
@@ -41,34 +42,34 @@ serve(async (req: Request) => {
       throw new Error("Unauthorized");
     }
 
-    // Check if the user is an owner or agency_owner
-    const { data: roles, error: rolesError } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .in("role", ["owner", "agency_owner"]);
-
-    if (rolesError || !roles || roles.length === 0) {
-      throw new Error("Only owners and agency owners can delete users");
-    }
-
-    const { userId, email }: DeleteUserRequest = await req.json();
+    const { userId, email, tenantId }: DeleteUserRequest = await req.json();
 
     if (!userId && !email) {
       throw new Error("User ID or email is required");
     }
 
+    const canDelete = await callerCanDeleteUsers(supabaseAdmin, user.id, tenantId);
+    if (!canDelete) {
+      throw new Error("Only owners and agency owners can delete users");
+    }
+
     let targetUserId = userId;
 
-    // If email provided, find the user ID from auth
     if (email && !targetUserId) {
-      const { data: users } = await supabaseAdmin.auth.admin.listUsers();
-      const targetUser = users?.users?.find(u => u.email === email);
-      
-      if (targetUser) {
-        targetUserId = targetUser.id;
+      const { data: profileByEmail } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (profileByEmail?.id) {
+        targetUserId = profileByEmail.id;
       } else {
-        throw new Error(`User with email ${email} not found`);
+        const { data: authUser, error: authLookupError } = await supabaseAdmin.auth.admin.getUserByEmail(email);
+        if (authLookupError || !authUser?.user?.id) {
+          throw new Error(`User with email ${email} not found`);
+        }
+        targetUserId = authUser.user.id;
       }
     }
 
@@ -76,91 +77,103 @@ serve(async (req: Request) => {
       throw new Error("Could not determine user ID");
     }
 
-    // Prevent deleting yourself
     if (targetUserId === user.id) {
       throw new Error("Cannot delete yourself");
     }
 
-
-    // First, get the user's profile to check for campaigner_id
-    const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("campaigner_id")
-      .eq("id", targetUserId)
-      .maybeSingle();
-
-    // Delete from user_managed_agencies
-    const { error: managedError } = await supabaseAdmin
-      .from("user_managed_agencies")
-      .delete()
-      .eq("user_id", targetUserId);
-    
-    if (managedError) {
-      console.error("Error deleting managed agencies:", managedError);
-    }
-
-    // Delete from user_roles
-    const { error: userRolesError } = await supabaseAdmin
-      .from("user_roles")
-      .delete()
-      .eq("user_id", targetUserId);
-    
-    if (userRolesError) {
-      console.error("Error deleting user roles:", userRolesError);
-    }
-
-    // Delete from user_permissions
-    const { error: permissionsError } = await supabaseAdmin
-      .from("user_permissions")
-      .delete()
-      .eq("user_id", targetUserId);
-    
-    if (permissionsError) {
-      console.error("Error deleting user permissions:", permissionsError);
-    }
-
-    // Delete from tenant_users
-    const { error: tenantError } = await supabaseAdmin
+    const { data: tenantMemberships } = await supabaseAdmin
       .from("tenant_users")
-      .delete()
+      .select("tenant_id")
       .eq("user_id", targetUserId);
-    
-    if (tenantError) {
-      console.error("Error deleting tenant users:", tenantError);
+
+    const membershipTenantIds = (tenantMemberships || []).map((row) => row.tenant_id);
+    const scopedTenantId = tenantId || membershipTenantIds[0] || null;
+
+    if (tenantId && membershipTenantIds.length > 0 && !membershipTenantIds.includes(tenantId)) {
+      throw new Error("User is not a member of this organization");
     }
 
-    // Delete from profiles (this will trigger cascade if set up)
+    const removeFromTenantOnly =
+      scopedTenantId &&
+      membershipTenantIds.length > 1 &&
+      membershipTenantIds.includes(scopedTenantId);
+
+    if (removeFromTenantOnly) {
+      await supabaseAdmin
+        .from("user_managed_agencies")
+        .delete()
+        .eq("user_id", targetUserId);
+
+      await supabaseAdmin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", targetUserId)
+        .eq("tenant_id", scopedTenantId);
+
+      const { error: tenantError } = await supabaseAdmin
+        .from("tenant_users")
+        .delete()
+        .eq("user_id", targetUserId)
+        .eq("tenant_id", scopedTenantId);
+
+      if (tenantError) {
+        console.error("Error removing tenant membership:", tenantError);
+        throw tenantError;
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "User removed from organization",
+          removedFromTenantOnly: true,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    await detachUserReferences(supabaseAdmin, targetUserId, user.id);
+
+    await supabaseAdmin.from("user_managed_agencies").delete().eq("user_id", targetUserId);
+
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", targetUserId);
+    await supabaseAdmin.from("user_permissions").delete().eq("user_id", targetUserId);
+    await supabaseAdmin.from("tenant_users").delete().eq("user_id", targetUserId);
+
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .delete()
       .eq("id", targetUserId);
-    
+
     if (profileError) {
       console.error("Error deleting profile:", profileError);
     }
 
-    // Try to delete user from auth
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
 
     if (deleteError) {
-      // If user not found in auth, it's okay - we already cleaned up the database
       if (deleteError.message?.includes("User not found") || deleteError.status === 404) {
+        // Auth user already gone — tenant data was cleaned above.
       } else {
         console.error("Error deleting user from auth:", deleteError);
-        throw deleteError;
+        throw new Error(
+          deleteError.message || "Failed to delete user account. Related records may still reference this user.",
+        );
       }
-    } else {
     }
 
     return new Response(
       JSON.stringify({
         success: true,
         message: "User deleted successfully",
+        removedFromTenantOnly: false,
       }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error: any) {
     console.error("Error in delete-user function:", error);
@@ -170,9 +183,14 @@ serve(async (req: Request) => {
         error: error.message,
       }),
       {
-        status: error.message === "Unauthorized" || error.message === "Only owners and agency owners can delete users" ? 403 : 500,
+        status:
+          error.message === "Unauthorized" ||
+          error.message === "Only owners and agency owners can delete users" ||
+          error.message === "User is not a member of this organization"
+            ? 403
+            : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

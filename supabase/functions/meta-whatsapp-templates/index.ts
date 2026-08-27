@@ -1,5 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
-import { DEFAULT_META_GRAPH_VERSION } from "../_shared/meta-whatsapp.ts";
+import {
+  DEFAULT_META_GRAPH_VERSION,
+  META_TEMPLATE_HEADER_FORMAT_BY_MIME,
+  uploadMetaTemplateMediaHandle,
+} from "../_shared/meta-whatsapp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,6 +50,43 @@ const graphRequest = async (
 
 const placeholderIndexes = (text: string) =>
   [...text.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1]));
+
+const explainTemplateMetaError = (
+  metaError: Record<string, unknown> | undefined,
+  fallback: string,
+  integrationSettings?: Record<string, unknown>,
+) => {
+  const subcode = Number(metaError?.error_subcode ?? 0);
+  const userMsg = String(metaError?.error_user_msg ?? "").trim();
+  if (subcode === 2494160 || /not allowed to create or update templates/i.test(userMsg)) {
+    const platform = String(integrationSettings?.platform_type ?? "").toUpperCase();
+    if (platform === "ON_PREMISE") {
+      return {
+        error:
+          "המספר עדיין במצב On-Premise — Meta לא מאפשרת יצירת תבניות עד השלמת רישום Cloud API.",
+        code: "waba_template_creation_blocked",
+        guidance:
+          "ב-AIOS: חיבור ידני → בחרו את המספר → הזינו PIN בן 6 ספרות (אימות דו-שלבי של WhatsApp Business). אחרי הצלחה platform_type יהפוך ל-CLOUD_API. אם Billing כבר הוגדר — זה הצעד הבא.",
+      };
+    }
+    return {
+      error:
+        "חשבון WhatsApp Business זה עדיין לא מאושר ליצירת תבניות ב-Meta.",
+      code: "waba_template_creation_blocked",
+      guidance:
+        "WhatsApp Manager → Phone numbers → ודאו Cloud API (לא On-Premise) · אימות מספר · Billing על ה-WABA הנכון.",
+    };
+  }
+  return { error: userMsg || fallback, code: "meta_template_error" };
+};
+
+const decodeBase64Payload = (value: string): Uint8Array => {
+  const normalized = value.includes(",") ? value.split(",").pop() ?? value : value;
+  const binary = atob(normalized.trim());
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+};
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -120,6 +161,7 @@ Deno.serve(async (request) => {
     const graphVersion = String(
       settings.graph_version ?? Deno.env.get("META_GRAPH_API_VERSION") ?? DEFAULT_META_GRAPH_VERSION,
     );
+    const appId = Deno.env.get("FACEBOOK_APP_ID") ?? Deno.env.get("META_APP_ID") ?? "";
     if (!wabaId) return reply({ error: "waba_id_missing" }, 400);
 
     const { data: tokenRow, error: tokenError } = await admin
@@ -158,6 +200,50 @@ Deno.serve(async (request) => {
       });
     }
 
+    if (action === "upload_media") {
+      if (!canManage) return reply({ error: "manage_access_required" }, 403);
+      if (!appId) return reply({ error: "meta_app_id_not_configured" }, 503);
+
+      const mimeTypeRaw = String(body.mime_type ?? "").trim().toLowerCase();
+      const fileName = String(body.file_name ?? "template-media").trim() || "template-media";
+      const base64 = String(body.file_base64 ?? "");
+      const mimeType = mimeTypeRaw === "image/jpg" ? "image/jpeg" : mimeTypeRaw;
+      if (!mimeType || !META_TEMPLATE_HEADER_FORMAT_BY_MIME[mimeType]) {
+        return reply({ error: "unsupported_template_media_type" }, 400);
+      }
+      if (!base64) return reply({ error: "file_base64_required" }, 400);
+
+      let fileBytes: Uint8Array;
+      try {
+        fileBytes = decodeBase64Payload(base64);
+      } catch {
+        return reply({ error: "invalid_file_base64" }, 400);
+      }
+
+      try {
+        const handle = await uploadMetaTemplateMediaHandle(
+          appId,
+          tokenRow.access_token,
+          fileName,
+          mimeType,
+          fileBytes,
+          graphVersion,
+        );
+        return reply({
+          success: true,
+          handle,
+          format: META_TEMPLATE_HEADER_FORMAT_BY_MIME[mimeType],
+          file_name: fileName,
+          mime_type: mimeType,
+          byte_length: fileBytes.byteLength,
+        });
+      } catch (error) {
+        return reply({
+          error: error instanceof Error ? error.message : "media_upload_failed",
+        }, 400);
+      }
+    }
+
     if (action === "create") {
       const template = body.template ?? {};
       const name = String(template.name ?? "");
@@ -168,6 +254,10 @@ Deno.serve(async (request) => {
       const examples: string[] = Array.isArray(template.examples)
         ? template.examples.map((value: unknown) => String(value).trim())
         : [];
+      const headerFormat = String(template.header_format ?? "NONE").toUpperCase();
+      const headerText = String(template.header_text ?? "").trim();
+      const headerExample = String(template.header_example ?? "").trim();
+      const headerHandle = String(template.header_handle ?? "").trim();
 
       if (!/^[a-z0-9_]{1,512}$/.test(name)) {
         return reply({ error: "template_name_must_be_lowercase_snake_case" }, 400);
@@ -206,7 +296,44 @@ Deno.serve(async (request) => {
 
       const bodyComponent: Record<string, unknown> = { type: "BODY", text: bodyText };
       if (examples.length) bodyComponent.example = { body_text: [examples] };
-      const components: Array<Record<string, unknown>> = [bodyComponent];
+      const components: Array<Record<string, unknown>> = [];
+
+      if (headerFormat !== "NONE") {
+        if (headerFormat === "TEXT") {
+          if (!headerText || headerText.length > 60) {
+            return reply({ error: "header_text_must_be_1_to_60_characters" }, 400);
+          }
+          const headerIndexes = placeholderIndexes(headerText);
+          const uniqueHeaderIndexes = [...new Set(headerIndexes)].sort((a, b) => a - b);
+          if (uniqueHeaderIndexes.some((value, index) => value !== index + 1)) {
+            return reply({ error: "header_variables_must_be_sequential_from_1" }, 400);
+          }
+          if (uniqueHeaderIndexes.length > 1) {
+            return reply({ error: "header_supports_at_most_one_variable" }, 400);
+          }
+          if (uniqueHeaderIndexes.length === 1 && !headerExample) {
+            return reply({ error: "header_example_required_for_variable" }, 400);
+          }
+          const headerComponent: Record<string, unknown> = {
+            type: "HEADER",
+            format: "TEXT",
+            text: headerText,
+          };
+          if (headerExample) headerComponent.example = { header_text: [headerExample] };
+          components.push(headerComponent);
+        } else if (["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat)) {
+          if (!headerHandle) return reply({ error: "header_handle_required_for_media" }, 400);
+          components.push({
+            type: "HEADER",
+            format: headerFormat,
+            example: { header_handle: [headerHandle] },
+          });
+        } else {
+          return reply({ error: "unsupported_header_format" }, 400);
+        }
+      }
+
+      components.push(bodyComponent);
       if (footerText) components.push({ type: "FOOTER", text: footerText });
 
       // Optional QUICK_REPLY buttons (e.g. lead opt-in warm template).
@@ -230,9 +357,18 @@ Deno.serve(async (request) => {
           buttons: quickReplies.map((row) => ({
             type: "QUICK_REPLY",
             text: row.text,
-            ...(row.payload ? { payload: row.payload } : {}),
           })),
         });
+      }
+
+      const createPayload: Record<string, unknown> = {
+        name,
+        category,
+        language,
+        components,
+      };
+      if (uniqueIndexes.length > 0 || (headerFormat === "TEXT" && placeholderIndexes(headerText).length > 0)) {
+        createPayload.parameter_format = "positional";
       }
 
       const result = await graphRequest(
@@ -240,16 +376,13 @@ Deno.serve(async (request) => {
         tokenRow.access_token,
         {
           method: "POST",
-          body: JSON.stringify({
-            name,
-            category,
-            language,
-            parameter_format: "positional",
-            components,
-          }),
+          body: JSON.stringify(createPayload),
         },
       );
-      if (!result.ok) return reply({ error: result.error, meta_error: result.metaError }, result.status);
+      if (!result.ok) {
+        const explained = explainTemplateMetaError(result.metaError, result.error, settings);
+        return reply({ ...explained, meta_error: result.metaError }, result.status);
+      }
       return reply({ success: true, template: result.data });
     }
 

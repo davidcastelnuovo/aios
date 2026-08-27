@@ -50,7 +50,7 @@ test("offer board builds a clean column, black footer, and four icon objects", (
   assert.equal(layers.filter((layer) => layer.role === "icon" && (layer.y ?? 0) > 64).length, 4);
   assert.ok(layers.some((layer) => layer.role === "cta" && (layer.text?.length ?? 99) <= 28));
   assert.ok(layers.some((layer) => layer.role === "cta_fill" && layer.fill === "#dc2626"));
-  assert.ok(layers.some((layer) => layer.role === "logo"));
+  assert.equal(layers.some((layer) => layer.role === "logo"), false);
 });
 
 test("offer board without copy bullets does not stamp Promo's four services", () => {

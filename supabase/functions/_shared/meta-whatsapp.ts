@@ -1,5 +1,84 @@
 export const DEFAULT_META_GRAPH_VERSION = "v25.0";
 
+/** Meta Resumable Upload API — sample media for WhatsApp template headers. */
+export const META_TEMPLATE_MEDIA_LIMITS_BYTES: Record<string, number> = {
+  "image/jpeg": 5 * 1024 * 1024,
+  "image/png": 5 * 1024 * 1024,
+  "video/mp4": 16 * 1024 * 1024,
+  "application/pdf": 16 * 1024 * 1024,
+};
+
+export const META_TEMPLATE_HEADER_FORMAT_BY_MIME: Record<string, "IMAGE" | "VIDEO" | "DOCUMENT"> = {
+  "image/jpeg": "IMAGE",
+  "image/png": "IMAGE",
+  "video/mp4": "VIDEO",
+  "application/pdf": "DOCUMENT",
+};
+
+export async function uploadMetaTemplateMediaHandle(
+  appId: string,
+  accessToken: string,
+  fileName: string,
+  mimeType: string,
+  fileBytes: Uint8Array,
+  graphVersion = DEFAULT_META_GRAPH_VERSION,
+): Promise<string> {
+  const fileType = mimeType.trim().toLowerCase();
+  const limit = META_TEMPLATE_MEDIA_LIMITS_BYTES[fileType];
+  if (!limit) {
+    throw new Error(`unsupported_template_media_type:${fileType}`);
+  }
+  if (fileBytes.byteLength <= 0 || fileBytes.byteLength > limit) {
+    throw new Error(`template_media_file_size_out_of_range:${fileBytes.byteLength}`);
+  }
+
+  const sessionUrl = new URL(`https://graph.facebook.com/${graphVersion}/${appId}/uploads`);
+  const sessionResponse = await fetch(sessionUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      file_name: fileName,
+      file_length: fileBytes.byteLength,
+      file_type: fileType,
+    }),
+  });
+  const sessionPayload = await sessionResponse.json().catch(() => ({}));
+  if (!sessionResponse.ok || sessionPayload?.error) {
+    const message = sessionPayload?.error?.error_user_msg ||
+      sessionPayload?.error?.message ||
+      "Meta upload session failed";
+    throw new Error(message);
+  }
+
+  const sessionId = String(sessionPayload.id ?? "").replace(/^upload:/, "");
+  if (!sessionId) throw new Error("Meta upload session id missing");
+
+  const uploadUrl = new URL(`https://graph.facebook.com/${graphVersion}/upload:${sessionId}`);
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      file_offset: "0",
+      "Content-Type": fileType,
+    },
+    body: fileBytes,
+  });
+  const uploadPayload = await uploadResponse.json().catch(() => ({}));
+  if (!uploadResponse.ok || uploadPayload?.error) {
+    const message = uploadPayload?.error?.error_user_msg ||
+      uploadPayload?.error?.message ||
+      "Meta media upload failed";
+    throw new Error(message);
+  }
+
+  const handle = String(uploadPayload.h ?? "").trim();
+  if (!handle) throw new Error("Meta media handle missing");
+  return handle;
+}
+
 export type MetaWhatsAppSessionInfo = {
   waba_id?: string;
   waba_ids?: string[];

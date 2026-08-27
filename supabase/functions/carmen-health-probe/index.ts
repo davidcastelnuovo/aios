@@ -5,10 +5,26 @@ import {
   isSyncStale,
   pickFreshestTablePerPlatform,
 } from '../_shared/campaign-pulse.ts';
+import {
+  fetchRecallUsageSeconds,
+  formatRecallBotHours,
+  recallApiKey,
+  recallBudgetThreshold,
+  RECALL_CANARY_MARKER,
+  runRecallCreditCanary,
+  shouldRunRecallCreditCanary,
+  utcMonthRange,
+} from '../_shared/recall.ts';
+import {
+  notifyRecallBudget,
+  notifyRecallCreditEmpty,
+  notifyRecallCreditRecovered,
+} from '../_shared/recall-credit-alert.ts';
 
 // Periodic infrastructure health probe for the Carmen Command Center.
 // Invoked by pg_cron (see migration 20260722160000_service_health_checks.sql).
 // Writes one row per service into service_health_checks; keeps 7 days of history.
+// deploy: recall meeting-bot credit canary (2026-08-26)
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -377,6 +393,90 @@ Deno.serve(async (req) => {
       await flipAlert('anthropic_quota', 'anthropic', row,
         'הקרדיט ב-Claude נגמר — אם כרמן על Claude היא תעבור אוטומטית לספק אחר. טען ב-console.anthropic.com',
         'הקרדיט ב-Claude חזר לפעול');
+    }
+  }
+
+  // 3e. Recall meeting-bot credit — alert David on WhatsApp before he invites
+  // Carmen to Zoom. Recall has no remaining-balance API (only usage seconds +
+  // 402 on create), so we periodically create-and-delete a scheduled bot.
+  if (recallApiKey()) {
+    const month = utcMonthRange();
+    const tUsage = performance.now();
+    let usageSeconds: number | null = null;
+    let recallApi: CheckRow = {
+      tenant_id: null, service: 'recall', status: 'down', latency_ms: null, detail: 'no response',
+    };
+    try {
+      usageSeconds = await fetchRecallUsageSeconds(month.start, month.end);
+      const usageLabel = usageSeconds != null ? formatRecallBotHours(usageSeconds) : 'לא ידוע';
+      recallApi = {
+        tenant_id: null, service: 'recall', status: 'ok',
+        latency_ms: Math.round(performance.now() - tUsage),
+        detail: `API תקין · ${usageLabel} החודש`,
+      };
+    } catch (e) {
+      recallApi = {
+        tenant_id: null, service: 'recall', status: 'down',
+        latency_ms: Math.round(performance.now() - tUsage),
+        detail: e instanceof Error ? e.message.slice(0, 180) : 'usage failed',
+      };
+    }
+    rows.push(recallApi);
+
+    const { data: recentQuota } = await supabase
+      .from('service_health_checks')
+      .select('status, detail, checked_at')
+      .eq('service', 'recall_quota')
+      .order('checked_at', { ascending: false })
+      .limit(50);
+    const prevQuota = recentQuota?.[0] ?? null;
+    const runCanary = recallApi.status === 'ok' && shouldRunRecallCreditCanary(recentQuota ?? []);
+
+    let quota: CheckRow = {
+      tenant_id: null, service: 'recall_quota',
+      status: (prevQuota?.status as CheckRow['status']) || 'ok',
+      latency_ms: recallApi.latency_ms,
+      detail: prevQuota?.detail?.replace(` · ${RECALL_CANARY_MARKER}`, '') || 'ממתין לבדיקת קרדיט',
+    };
+    if (runCanary) {
+      const tCanary = performance.now();
+      try {
+        const canary = await runRecallCreditCanary();
+        const usageBit = usageSeconds != null ? ` · ${formatRecallBotHours(usageSeconds)} החודש` : '';
+        quota = {
+          tenant_id: null, service: 'recall_quota',
+          status: canary.creditEmpty ? 'down' : canary.httpStatus < 300 ? 'ok' : 'warn',
+          latency_ms: Math.round(performance.now() - tCanary),
+          detail: `${canary.detail}${usageBit} · ${RECALL_CANARY_MARKER}`,
+        };
+      } catch (e) {
+        quota = {
+          tenant_id: null, service: 'recall_quota', status: 'warn',
+          latency_ms: Math.round(performance.now() - tCanary),
+          detail: e instanceof Error ? e.message.slice(0, 180) : 'canary failed',
+        };
+      }
+    } else if (recallApi.status !== 'ok') {
+      quota = {
+        tenant_id: null, service: 'recall_quota', status: 'warn',
+        latency_ms: recallApi.latency_ms,
+        detail: `דילוג על בדיקת קרדיט — ${recallApi.detail}`,
+      };
+    }
+
+    rows.push(quota);
+
+    if (quota.status === 'down' && (!prevQuota || prevQuota.status !== 'down')) {
+      await notifyRecallCreditEmpty(supabase);
+    }
+    if (quota.status === 'ok' && prevQuota && prevQuota.status === 'down') {
+      await notifyRecallCreditRecovered(supabase);
+    }
+
+    const budgetHours = Number(Deno.env.get('RECALL_MONTHLY_HOURS_BUDGET') || 0);
+    const threshold = usageSeconds != null ? recallBudgetThreshold(usageSeconds, budgetHours) : null;
+    if (threshold) {
+      await notifyRecallBudget(supabase, threshold, usageSeconds ?? 0, budgetHours, month.start);
     }
   }
 
