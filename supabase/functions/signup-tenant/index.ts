@@ -230,12 +230,13 @@ serve(async (req: Request) => {
     }
 
 
-    // Step 5: Grant owner role
+    // Step 5: Grant owner role (tenant-scoped — required for RLS)
     const { error: roleError } = await supabase
       .from("user_roles")
       .insert({
         user_id: userId,
         role: "owner",
+        tenant_id: newTenant.id,
       });
 
     if (roleError) {

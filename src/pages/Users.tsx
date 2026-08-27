@@ -80,7 +80,8 @@ const roleBadgeColors: Record<UserRole, string> = {
 };
 
 export default function Users() {
-  const { isOwner, isSuperAdmin, userId: currentUserId } = useUserRole();
+  const { isOwner, isAgencyOwner, isSuperAdmin, userId: currentUserId } = useUserRole();
+  const canManageUsers = isOwner || isAgencyOwner || isSuperAdmin;
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { t } = useTerminology();
@@ -706,20 +707,35 @@ export default function Users() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("No active session");
         const { data, error } = await supabase.functions.invoke("delete-user", {
-          body: { userId, email },
+          body: { userId, email, tenantId },
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
         });
-        if (error) throw error;
-        if (!data.success) throw new Error(data.error);
+        if (error) {
+          const ctx = (error as { context?: Response }).context;
+          if (ctx) {
+            try {
+              const payload = await ctx.json();
+              if (payload?.error) throw new Error(payload.error);
+            } catch {
+              // fall through to generic error
+            }
+          }
+          throw error;
+        }
+        if (!data?.success) throw new Error(data?.error || "Delete failed");
         return data;
       },
-      onSuccess: async () => {
+      onSuccess: async (data) => {
         // Force refetch both queries
         await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
         await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
-        toast.success("המשתמש נמחק בהצלחה");
+        toast.success(
+          data?.removedFromTenantOnly
+            ? "המשתמש הוסר מהארגון"
+            : "המשתמש נמחק בהצלחה",
+        );
       },
       onError: (error: Error) => {
         toast.error("שגיאה במחיקת משתמש: " + error.message);
@@ -763,7 +779,7 @@ export default function Users() {
     },
   });
 
-  if (!isOwner && !isSuperAdmin) {
+  if (!canManageUsers) {
     return (
       <div className="container mx-auto py-6">
         <Card className="p-6">

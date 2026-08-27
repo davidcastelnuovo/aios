@@ -629,11 +629,17 @@ function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
   const deleteUser = async () => {
     if (!deleteConfirmUser) return;
     try {
-      const { error } = await supabase.functions.invoke("delete-user", {
-        body: { userId: deleteConfirmUser.id },
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No active session");
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId: deleteConfirmUser.id, tenantId },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
       if (error) throw error;
-      toast.success("המשתמש נמחק");
+      if (!data?.success) throw new Error(data?.error || "Delete failed");
+      toast.success(data?.removedFromTenantOnly ? "המשתמש הוסר מהארגון" : "המשתמש נמחק");
       setDeleteConfirmUser(null);
       refetchMembers();
     } catch (err: any) {
