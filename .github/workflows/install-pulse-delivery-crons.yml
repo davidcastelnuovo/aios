@@ -1,0 +1,75 @@
+name: Install pulse delivery crons
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/install-pulse-delivery-crons.yml'
+      - 'supabase/ops/install_pulse_delivery_crons.sql'
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+      PROJECT_REF: zvoijyneresvkadpprel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve production service key
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYS="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/api-keys")"
+          SERVICE_KEY="$(jq -r '.[] | select(.name == "service_role") | .api_key' <<<"$KEYS")"
+          if [ -z "$SERVICE_KEY" ] || [ "$SERVICE_KEY" = "null" ]; then
+            echo "Could not resolve the service_role key" >&2
+            exit 1
+          fi
+          echo "::add-mask::$SERVICE_KEY"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> "$GITHUB_ENV"
+
+      - name: Substitute SQL and apply cron install
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, sys, time, urllib.error, urllib.request
+
+          service_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+          sql_path = pathlib.Path("supabase/ops/install_pulse_delivery_crons.sql")
+          query = sql_path.read_text().replace("__SUPABASE_SERVICE_ROLE_KEY__", service_key)
+
+          body = json.dumps({
+              "query": query,
+              "name": "install_pulse_delivery_crons",
+          }).encode()
+          url = f"https://api.supabase.com/v1/projects/{os.environ['PROJECT_REF']}/database/migrations"
+          headers = {
+              "Authorization": f"Bearer {os.environ['SUPABASE_ACCESS_TOKEN']}",
+              "Content-Type": "application/json",
+              "User-Agent": "aios-install-pulse-crons/1.0",
+              "Accept": "application/json",
+          }
+
+          for attempt in range(1, 6):
+              req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+              try:
+                  with urllib.request.urlopen(req, timeout=180) as resp:
+                      raw = resp.read().decode()
+                      print(f"HTTP {resp.status} attempt={attempt}")
+                      print(raw[:8000])
+                      sys.exit(0)
+              except urllib.error.HTTPError as e:
+                  raw = e.read().decode()
+                  print(f"HTTP {e.code} attempt={attempt}", file=sys.stderr)
+                  print(raw[:8000], file=sys.stderr)
+                  if e.code in (403, 429, 500, 502, 503, 504) and attempt < 5:
+                      time.sleep(60)
+                      continue
+                  sys.exit(1)
+          PY
