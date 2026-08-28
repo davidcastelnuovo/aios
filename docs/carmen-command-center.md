@@ -18,7 +18,10 @@ npm run build      # בדיקת build
 src/pages/CarmenCommandCenter.tsx        # העמוד — פריסה, מצב הפנים, Realtime
 src/components/carmen-command/
   CarmenFace.tsx        # הפנים (Canvas): idle / listening / speaking / alert
-  CarmenChatBar.tsx     # "דברי עם כרמן": SSE + הקלטה + TTS זורם לפי משפטים
+  CarmenChatBar.tsx     # הקלדה + Realtime + בורר מוח (ערוץ ישיר / פרלמנט)
+  BrainRouteSelector.tsx
+  ParliamentBoard.tsx
+  useBrainChannel.ts    # gateway agent-channel-send
   panels.tsx            # HudPanel + פאנלים: Core, פיד, דופק, משימות, ציר זמן, פקודות
   UsagePanel.tsx        # גרף שימוש ב-API (recharts)
   useCommandData.ts     # כל שאילתות הנתונים (react-query) + Realtime
@@ -50,6 +53,16 @@ src/components/carmen-command/
 `transcribe-voice` נשאר במערכת לשימושים אחרים (למשל הצ'אט הפנימי ב-`AIOSDialog`) אך יצא מנתיב ה-Command Center.
 
 `carmen-speak` משמש כאן רק לתצוגת דוגמת קול בבורר, לא לתשובות מוקלדות.
+
+## בורר מוח
+
+הבורר ב-Command Center בוחר **נתיב שיחה**, לא רק מודל:
+
+- מוח פנימי → `run-ai-agent` (stream)
+- Cursor / Grok / Claude / ChatGPT Direct → `agent-channel-send` + callback לשיחה
+- פרלמנט → Cursor+Grok, שני סבבים, סינתזה של כרמן
+
+פירוט: `docs/agent-brain-channels.md`. טאב MCP Connections נשאר לכלי האצלה.
 
 ## גישה ו-API keys
 

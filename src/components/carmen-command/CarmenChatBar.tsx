@@ -9,6 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { CarmenFaceState } from "./CarmenFace";
 import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
+import { BrainRouteSelector } from "./BrainRouteSelector";
+import { ParliamentBoard } from "./ParliamentBoard";
+import { useBrainChannel } from "./useBrainChannel";
+import { speakerLabel } from "@/lib/agentChannelRouting";
 import {
   CarmenInputMode,
   onRealtimeUnavailable,
@@ -19,9 +23,12 @@ import {
 } from "./carmenCommandInput";
 
 interface ChatMessage {
+  id?: string;
   role: "user" | "assistant" | "tool_call";
   content?: string;
   tool?: string;
+  speaker?: string;
+  channel?: string;
   input_mode?: CarmenInputMode;
   delivery_mode?: "text" | "realtime";
 }
@@ -100,6 +107,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     // OpenAI Realtime session — the only Command Center voice path
     const realtimeRef = useRef<RealtimeHandle | null>(null);
     const { toast } = useToast();
+    const brain = useBrainChannel(tenantId);
+    const [conversationId, setConversationId] = useState<string | null>(null);
 
     const scrollDown = () => {
       requestAnimationFrame(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }));
@@ -217,16 +226,102 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       return null;
     };
 
+    const rememberConv = (id: string | null | undefined) => {
+      if (!id) return;
+      conversationIdRef.current = id;
+      setConversationId(id);
+    };
+
+    const streamInternal = useCallback(async (trimmed: string, history: Array<{ role: string; content: string }>) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("לא מחוברת");
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          command_text: trimmed,
+          tenant_id: tenantId,
+          surface: "internal_chat",
+          stream: true,
+          conversation_id: conversationIdRef.current,
+          conversation_history: history,
+        }),
+      });
+      if (!res.ok) throw new Error(res.status === 429 ? "חריגה ממגבלת הקצב — נסי שוב עוד רגע" : "שגיאה בתקשורת עם כרמן");
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let answer = "";
+      let gotDone = false;
+      let speechBuf = "";
+      let firstSegmentSent = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6);
+          if (payload === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed.type === "token") {
+              answer += parsed.content;
+              setStreamingText(prev => prev + parsed.content);
+              if (shouldSpeakWithLegacyTts(inputModeRef.current)) {
+                speechBuf += parsed.content;
+                let cut = extractSentence(speechBuf, firstSegmentSent ? 90 : 25);
+                while (cut) {
+                  enqueueSpeech(cut[0]);
+                  speechBuf = cut[1];
+                  firstSegmentSent = true;
+                  cut = extractSentence(speechBuf, 90);
+                }
+              }
+              scrollDown();
+            } else if (parsed.type === "tool_call") {
+              setMessages(prev => [...prev, { role: "tool_call", tool: parsed.tool }]);
+              scrollDown();
+            } else if (parsed.type === "conversation_id" && parsed.id) {
+              rememberConv(parsed.id);
+            } else if (parsed.type === "done") {
+              gotDone = true;
+            }
+          } catch { /* partial line */ }
+        }
+      }
+
+      if (shouldSpeakWithLegacyTts(inputModeRef.current) && speechBuf.trim()) enqueueSpeech(speechBuf);
+      const finalText = answer || (gotDone ? "" : "⚠️ החיבור נותק באמצע — נסי שוב.");
+      if (finalText) {
+        setMessages(prev => [...prev, { role: "assistant", content: finalText, speaker: "carmen", channel: "internal", ...tagChatTurn("typed") }]);
+        if (conversationIdRef.current) {
+          brain.persistAssistant(conversationIdRef.current, finalText, crypto.randomUUID());
+        }
+      }
+      setStreamingText("");
+      scrollDown();
+      return finalText;
+    }, [tenantId, enqueueSpeech, brain]);
+
     const sendText = useCallback(async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isStreaming || !tenantId) return;
+      if (brain.locked) {
+        toast({ title: "השיחה נעולה", description: "ממתינים לתשובת הערוץ או לסיום הפרלמנט.", variant: "destructive" });
+        return;
+      }
       stopSpeech();
       const turn = tagChatTurn("typed");
       if (!convModeRef.current) {
         setInputMode("typed");
         inputModeRef.current = "typed";
       }
-      setMessages(prev => [...prev, { role: "user", content: trimmed, ...turn }]);
+      setMessages(prev => [...prev, { role: "user", content: trimmed, speaker: "user", ...turn }]);
       setInput("");
       setExpanded(true);
       setIsStreaming(true);
@@ -234,90 +329,34 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       scrollDown();
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("לא מחוברת");
-
         const history = messages
           .filter(m => m.role === "user" || m.role === "assistant")
           .map(m => ({ role: m.role, content: m.content ?? "" }));
-
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({
-            command_text: trimmed,
-            tenant_id: tenantId,
-            surface: "internal_chat",
-            stream: true,
-            conversation_id: conversationIdRef.current,
-            conversation_history: history,
-          }),
+        const routed = await brain.send({
+          content: trimmed,
+          conversationId: conversationIdRef.current,
+          inputMode: inputModeRef.current,
+          history,
+          idempotencyKey: crypto.randomUUID(),
         });
-        if (!res.ok) throw new Error(res.status === 429 ? "חריגה ממגבלת הקצב — נסי שוב עוד רגע" : "שגיאה בתקשורת עם כרמן");
-
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let answer = "";
-        let gotDone = false;
-        // Sentence-streaming TTS: speak each sentence as soon as it completes,
-        // while the rest of the answer is still being generated.
-        let speechBuf = "";
-        let firstSegmentSent = false;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const payload = line.slice(6);
-            if (payload === "[DONE]") continue;
-            try {
-              const parsed = JSON.parse(payload);
-              if (parsed.type === "token") {
-                answer += parsed.content;
-                setStreamingText(prev => prev + parsed.content);
-                if (shouldSpeakWithLegacyTts(inputModeRef.current)) {
-                  speechBuf += parsed.content;
-                  // Short first segment so speech starts fast, longer afterwards
-                  let cut = extractSentence(speechBuf, firstSegmentSent ? 90 : 25);
-                  while (cut) {
-                    enqueueSpeech(cut[0]);
-                    speechBuf = cut[1];
-                    firstSegmentSent = true;
-                    cut = extractSentence(speechBuf, 90);
-                  }
-                }
-                scrollDown();
-              } else if (parsed.type === "tool_call") {
-                setMessages(prev => [...prev, { role: "tool_call", tool: parsed.tool }]);
-                scrollDown();
-              } else if (parsed.type === "conversation_id" && parsed.id) {
-                conversationIdRef.current = parsed.id;
-              } else if (parsed.type === "done") {
-                gotDone = true;
-              }
-            } catch { /* partial line */ }
-          }
+        rememberConv(routed.conversation_id);
+        if (routed.stream) {
+          await streamInternal(trimmed, history);
+        } else {
+          setMessages(prev => [...prev, {
+            role: "tool_call",
+            tool: routed.accepted_message,
+            channel: routed.kind,
+            ...tagChatTurn("external_channel_callback"),
+          }]);
+          scrollDown();
         }
-
-        if (shouldSpeakWithLegacyTts(inputModeRef.current) && speechBuf.trim()) enqueueSpeech(speechBuf);
-
-        const finalText = answer || (gotDone ? "" : "⚠️ החיבור נותק באמצע — נסי שוב.");
-        if (finalText) {
-          setMessages(prev => [...prev, { role: "assistant", content: finalText, ...tagChatTurn("typed") }]);
-        }
-        setStreamingText("");
-        scrollDown();
       } catch (err: any) {
         toast({ title: "שגיאה", description: err.message ?? "שגיאה בשליחה", variant: "destructive" });
       } finally {
         setIsStreaming(false);
       }
-    }, [isStreaming, tenantId, messages, enqueueSpeech, stopSpeech, toast]);
+    }, [isStreaming, tenantId, messages, stopSpeech, toast, brain, streamInternal]);
 
     const endConversation = useCallback(() => {
       convModeRef.current = false;
@@ -343,7 +382,29 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
      */
     const askCarmenBrain = useCallback(async (question: string): Promise<string> => {
       if (!question.trim() || !tenantId) return "לא התקבלה שאלה.";
-      setMessages(prev => [...prev, { role: "tool_call", tool: `ask_carmen: ${question.slice(0, 80)}` }]);
+      setMessages(prev => [...prev, { role: "tool_call", tool: `מוח: ${brain.selected.label} · ${question.slice(0, 60)}` }]);
+      try {
+        const history = messages
+          .filter(m => m.role === "user" || m.role === "assistant")
+          .map(m => ({ role: m.role, content: m.content ?? "" }))
+          .slice(-24);
+        const routed = await brain.send({
+          content: question,
+          conversationId: conversationIdRef.current,
+          inputMode: "realtime_voice",
+          history,
+          idempotencyKey: crypto.randomUUID(),
+        });
+        rememberConv(routed.conversation_id);
+        if (!routed.stream) {
+          return routed.accepted_message || "נשלח לערוץ. התשובה תופיע בשיחה כשתחזור.";
+        }
+      } catch (e: any) {
+        if (brain.sendPath !== "internal_stream") {
+          return `לא הצלחתי לשלוח לערוץ: ${e?.message ?? e}`;
+        }
+      }
+
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 180000);
       try {
@@ -413,7 +474,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       } finally {
         clearTimeout(timeout);
       }
-    }, [tenantId, messages]);
+    }, [tenantId, messages, brain]);
 
     /** Ship realtime failures to error_logs so they can be diagnosed server-side. */
     const reportRealtimeError = useCallback(async (message: string) => {
@@ -515,6 +576,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             .insert({ user_id: user.id, tenant_id: tenantId, title: (textMsgs[0].content || "שיחה").slice(0, 60), messages: textMsgs })
             .select("id").single();
           conversationIdRef.current = data?.id ?? null;
+          if (data?.id) setConversationId(data.id);
         } else {
           await sbAny.from("ai_conversations")
             .update({ messages: textMsgs, updated_at: new Date().toISOString() })
@@ -529,6 +591,48 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       const last = messages[messages.length - 1];
       if (last?.role === "assistant") persistRef.current(messages);
     }, [messages]);
+
+    useEffect(() => {
+      if (!conversationId) return;
+      const channel = (supabase as any)
+        .channel(`cc-channel-${conversationId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "ai_conversation_messages", filter: `conversation_id=eq.${conversationId}` },
+          (payload: { new: any }) => {
+            const row = payload.new;
+            if (!row?.content) return;
+            if (row.role === "user") return;
+            setMessages((prev) => {
+              if (row.id && prev.some((m) => m.id === row.id)) return prev;
+              if (row.role === "assistant" && prev.some((m) => m.role === "assistant" && m.content === row.content)) return prev;
+              return [...prev, {
+                id: row.id,
+                role: row.role === "assistant" ? "assistant" : row.event_type === "progress" ? "tool_call" : "assistant",
+                content: row.content,
+                tool: row.event_type === "progress" || row.event_type === "system" ? row.content : undefined,
+                speaker: row.speaker,
+                channel: row.channel,
+                ...tagChatTurn(row.channel && row.channel !== "internal" ? "external_channel_callback" : "typed"),
+              }];
+            });
+            if (row.role === "assistant" && row.channel && row.channel !== "internal") {
+              realtimeRef.current?.speakText(row.content);
+              setExpanded(true);
+              scrollDown();
+            }
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "ai_conversations", filter: `id=eq.${conversationId}` },
+          (payload: { new: any }) => {
+            if (payload.new?.status) brain.setStatus(payload.new.status);
+          },
+        )
+        .subscribe();
+      return () => { (supabase as any).removeChannel(channel); };
+    }, [conversationId, brain]);
 
     /** Send a finished conversation to Carmen's memory (importance-graded extraction). */
     const learnFromConversation = useCallback(async () => {
@@ -550,18 +654,34 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const startNewConversation = useCallback(() => {
       learnFromConversation();
       conversationIdRef.current = null;
+      setConversationId(null);
       setMessages([]);
       setStreamingText("");
       setShowHistory(false);
     }, [learnFromConversation]);
 
-    const loadConversation = useCallback((conv: { id: string; messages: unknown }) => {
+    const loadConversation = useCallback(async (conv: { id: string; messages: unknown }) => {
       learnFromConversation();
       conversationIdRef.current = conv.id;
-      const msgs = (Array.isArray(conv.messages) ? conv.messages : []) as { role: string; content?: string }[];
+      setConversationId(conv.id);
+      let msgs = (Array.isArray(conv.messages) ? conv.messages : []) as { role: string; content?: string; speaker?: string; channel?: string }[];
+      try {
+        const { data } = await (supabase as any)
+          .from("ai_conversation_messages")
+          .select("id, role, content, speaker, channel, created_at")
+          .eq("conversation_id", conv.id)
+          .order("created_at", { ascending: true });
+        if (Array.isArray(data) && data.length) msgs = data;
+      } catch { /* jsonb fallback */ }
       setMessages(msgs
-        .filter(m => m.role === "user" || m.role === "assistant")
-        .map(m => ({ role: m.role as "user" | "assistant", content: m.content ?? "" })));
+        .filter(m => m.role === "user" || m.role === "assistant" || m.role === "system")
+        .map(m => ({
+          id: (m as any).id,
+          role: (m.role === "system" ? "assistant" : m.role) as "user" | "assistant",
+          content: m.content ?? "",
+          speaker: m.speaker,
+          channel: m.channel,
+        })));
       setShowHistory(false);
       setExpanded(true);
       scrollDown();
@@ -645,6 +765,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
 
     return (
       <div className="cc-panel cc-talkbar flex flex-col overflow-hidden">
+        {brain.selected.route_type === "parliament" && (
+          <ParliamentBoard
+            route={brain.selected}
+            round={brain.status === "debating" ? 1 : 1}
+            topic={messages.find(m => m.role === "user")?.content}
+            onCancel={conversationId ? () => brain.cancelParliament(conversationId) : undefined}
+          />
+        )}
         {showHistory && (
           <div className="cc-scroll max-h-[40vh] overflow-y-auto border-b border-[var(--cc-line)] p-2">
             <div className="mb-1 flex items-center justify-between px-1">
@@ -684,11 +812,16 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                     <Wrench className="h-3 w-3" /> מפעילה כלי: {m.tool}
                   </p>
                 ) : (
-                  <div key={i} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                  <div key={m.id || i} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
                     m.role === "user"
                       ? "mr-auto bg-[rgba(76,195,255,0.18)]"
                       : "ml-auto border border-[var(--cc-line)] bg-[rgba(14,20,40,0.8)]"
                   }`}>
+                    {(m.speaker || m.channel) && m.role !== "user" && (
+                      <p className="mb-1 text-[10px] tracking-wide text-[var(--cc-accent)]">
+                        {speakerLabel(m.speaker, m.channel)}
+                      </p>
+                    )}
                     <div className="cc-md prose prose-invert prose-sm max-w-none [&_p]:my-1">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content ?? ""}</ReactMarkdown>
                     </div>
@@ -712,6 +845,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         )}
 
         <div className="flex items-center gap-2 p-2.5">
+          <BrainRouteSelector
+            routes={brain.routes}
+            value={brain.selected.id}
+            onChange={(route) => brain.selectRoute(route, conversationIdRef.current)}
+            disabled={isStreaming || brain.status === "debating"}
+            status={brain.status}
+            externalUrl={brain.externalUrl}
+          />
           <button
             onClick={startVoice}
             title={isConvMode ? "סיימי את השיחה הקולית" : "התחילי שיחה קולית רציפה"}
@@ -761,7 +902,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                   : "פותחת שיחה חיה…"
                 : "כתבי לכרמן — הקלדה מחזירה טקסט. המיקרופון פותח שיחה חיה."
             }
-            disabled={isStreaming}
+            disabled={isStreaming || brain.locked}
             className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
           />
           <button
@@ -792,7 +933,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           </div>
           <button
             onClick={() => sendText(input)}
-            disabled={!input.trim() || isStreaming}
+            disabled={!input.trim() || isStreaming || brain.locked}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--cc-accent-dim)] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             title="שליחה"
           >

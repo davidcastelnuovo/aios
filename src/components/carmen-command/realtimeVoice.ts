@@ -24,6 +24,8 @@ export interface RealtimeHandle {
   setMicMuted: (muted: boolean) => void;
   /** Mute only Carmen's speaker output. Transcripts and tool work continue. */
   setOutputMuted: (muted: boolean) => void;
+  /** Speak an external-channel callback while Live is still open. */
+  speakText: (text: string) => void;
 }
 
 export async function startRealtimeVoice(
@@ -77,6 +79,19 @@ export async function startRealtimeVoice(
   // answers queue their response.create until the active one finishes.
   let responseActive = false;
   let pendingResponseCreate = false;
+  let pendingSpeak: string | null = null;
+  const speakNow = (text: string) => {
+    if (stopped || dc.readyState !== "open") return;
+    const clean = text.trim().slice(0, 4000);
+    if (!clean) return;
+    dc.send(JSON.stringify({
+      type: "response.create",
+      response: {
+        instructions:
+          "Say the following to the user in warm Israeli Hebrew, verbatim, with no extra commentary:\n\n" + clean,
+      },
+    }));
+  };
   dc.onmessage = async (e) => {
     let ev: any;
     try { ev = JSON.parse(e.data); } catch { return; }
@@ -93,7 +108,11 @@ export async function startRealtimeVoice(
         responseActive = false;
         if (assistantBuf.trim()) cb.onAssistantDone(assistantBuf.trim());
         assistantBuf = "";
-        if (pendingResponseCreate && !stopped) {
+        if (pendingSpeak && !stopped) {
+          const next = pendingSpeak;
+          pendingSpeak = null;
+          speakNow(next);
+        } else if (pendingResponseCreate && !stopped) {
           pendingResponseCreate = false;
           dc.send(JSON.stringify({ type: "response.create" }));
         }
@@ -153,6 +172,11 @@ export async function startRealtimeVoice(
     },
     setOutputMuted: (muted: boolean) => {
       audioEl.muted = muted;
+    },
+    speakText: (text: string) => {
+      if (stopped) return;
+      if (responseActive) pendingSpeak = text;
+      else speakNow(text);
     },
     stop: () => {
       stopped = true;
