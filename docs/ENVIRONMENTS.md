@@ -66,11 +66,12 @@ Gaps (do not touch Production to close these):
 1. Staging schema/function sync: **237 Edge Functions deployed**; **~229 public tables** applied from repo migrations. Production data seeds were skipped on purpose. Some cron jobs need `pg_cron` (optional).
 2. Add GitHub secret `SUPABASE_STAGING_PROJECT_ID` so the Staging deploy workflow can run.
 3. Copy non-customer secrets the Staging functions need (e.g. `OPENAI_API_KEY`) in the Staging project dashboard — never commit them. Do **not** copy Production WhatsApp/Meta tokens.
-4. No persistent custom Staging domain yet (`STAGING_DOMAIN=<configured-in-vercel>`).
+4. No persistent custom Staging domain yet (`STAGING_DOMAIN=<configured-in-vercel>`). Vercel Authentication is `all_except_custom_domains`, so `*.vercel.app` Preview URLs require a Vercel login. A custom Staging domain would skip that gate.
 5. No dedicated Staging seed/test tenants yet — sign up on the Preview URL to create the first user.
-6. Email / webhooks / cron / automations are not fully on the guard yet (WhatsApp is).
-7. Branch protection on `main` / `develop` is a GitHub settings change.
-8. This Cloud Agent workspace `.env` still points at Production.
+7. Google sign-in on Staging: provider is enabled (same OAuth client as Production). In Google Cloud → that OAuth client → **Authorized redirect URIs**, add the Callback URL shown in **Supabase → AIOS Staging → Authentication → Providers → Google**. Do not change Production callback URIs. Google does not accept `*.vercel.app` wildcards; the URI to add is the Staging `…supabase.co/auth/v1/callback` only.
+8. Email / webhooks / cron / automations are not fully on the guard yet (WhatsApp is).
+9. Branch protection on `main` / `develop` is a GitHub settings change.
+10. This Cloud Agent workspace `.env` still points at Production.
 
 ## Agent working rules
 
