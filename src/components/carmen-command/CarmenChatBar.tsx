@@ -9,11 +9,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { CarmenFaceState } from "./CarmenFace";
 import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
+import {
+  CarmenInputMode,
+  onRealtimeUnavailable,
+  shouldResumeLegacyListen,
+  shouldSpeakWithLegacyTts,
+  tagChatTurn,
+  volumeControlsLiveSession,
+} from "./carmenCommandInput";
 
 interface ChatMessage {
   role: "user" | "assistant" | "tool_call";
   content?: string;
   tool?: string;
+  input_mode?: CarmenInputMode;
+  delivery_mode?: "text" | "realtime";
 }
 
 export interface CarmenChatBarHandle {
@@ -48,9 +58,8 @@ type CarmenVoice = typeof CARMEN_VOICES[number]["id"];
 const VOICE_STORAGE_KEY = "aios:carmen-voice";
 
 /**
- * The "talk to Carmen" bar: text + voice in, streamed text + spoken voice out.
- * Uses the existing run-ai-agent (SSE), transcribe-voice and carmen-speak
- * edge functions — no new backend.
+ * The "talk to Carmen" bar: typed text stays text; the mic opens OpenAI Realtime.
+ * Command Center never auto-plays carmen-speak and never falls back to transcribe-voice.
  */
 export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>(
   function CarmenChatBar({ tenantId, onFaceState, audioLevelRef }, ref) {
@@ -58,9 +67,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [streamingText, setStreamingText] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
-    const [isRecording, setIsRecording] = useState(false);
-    const [isTranscribing, setIsTranscribing] = useState(false);
-    const [voiceOn, setVoiceOn] = useState(true);
+    const [inputMode, setInputMode] = useState<CarmenInputMode>("typed");
     const [expanded, setExpanded] = useState(false);
     const [isConvMode, setIsConvMode] = useState(false);
     const [isRealtime, setIsRealtime] = useState(false);
@@ -87,11 +94,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const ttsGenRef = useRef(0);
     // Continuous conversation mode (VAD): refs so async loops see fresh state
     const convModeRef = useRef(false);
+    const inputModeRef = useRef<CarmenInputMode>("typed");
     const micStreamRef = useRef<MediaStream | null>(null);
     const vadRafRef = useRef(0);
-    const sendTextRef = useRef<(t: string) => void>(() => {});
-    const listenTurnRef = useRef<() => void>(() => {});
-    // OpenAI Realtime session (preferred voice mode; VAD loop is the fallback)
+    // OpenAI Realtime session — the only Command Center voice path
     const realtimeRef = useRef<RealtimeHandle | null>(null);
     const { toast } = useToast();
 
@@ -183,9 +189,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           if (ttsQueueRef.current.length) pumpTts();
           else {
             audioLevelRef.current = 0;
-            // Natural conversation: when Carmen finishes speaking, listen again
-            if (convModeRef.current) listenTurnRef.current();
-            else onFaceState("idle");
+            // Live speech is Realtime — never reopen the old transcribe loop.
+            if (!shouldResumeLegacyListen({ inputMode: inputModeRef.current, realtimeActive: !!realtimeRef.current })) {
+              onFaceState("idle");
+            }
           }
         }
       }
@@ -214,7 +221,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       const trimmed = text.trim();
       if (!trimmed || isStreaming || !tenantId) return;
       stopSpeech();
-      setMessages(prev => [...prev, { role: "user", content: trimmed }]);
+      const turn = tagChatTurn("typed");
+      if (!convModeRef.current) {
+        setInputMode("typed");
+        inputModeRef.current = "typed";
+      }
+      setMessages(prev => [...prev, { role: "user", content: trimmed, ...turn }]);
       setInput("");
       setExpanded(true);
       setIsStreaming(true);
@@ -268,7 +280,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               if (parsed.type === "token") {
                 answer += parsed.content;
                 setStreamingText(prev => prev + parsed.content);
-                if (voiceOn) {
+                if (shouldSpeakWithLegacyTts(inputModeRef.current)) {
                   speechBuf += parsed.content;
                   // Short first segment so speech starts fast, longer afterwards
                   let cut = extractSentence(speechBuf, firstSegmentSent ? 90 : 25);
@@ -292,11 +304,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           }
         }
 
-        if (voiceOn && speechBuf.trim()) enqueueSpeech(speechBuf);
+        if (shouldSpeakWithLegacyTts(inputModeRef.current) && speechBuf.trim()) enqueueSpeech(speechBuf);
 
         const finalText = answer || (gotDone ? "" : "⚠️ החיבור נותק באמצע — נסי שוב.");
         if (finalText) {
-          setMessages(prev => [...prev, { role: "assistant", content: finalText }]);
+          setMessages(prev => [...prev, { role: "assistant", content: finalText, ...tagChatTurn("typed") }]);
         }
         setStreamingText("");
         scrollDown();
@@ -304,16 +316,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         toast({ title: "שגיאה", description: err.message ?? "שגיאה בשליחה", variant: "destructive" });
       } finally {
         setIsStreaming(false);
-        // Hands-free mode with the voice muted (or an empty reply): reopen the mic
-        if (convModeRef.current && !ttsPumpingRef.current && ttsQueueRef.current.length === 0) {
-          listenTurnRef.current();
-        }
       }
-    }, [isStreaming, tenantId, messages, voiceOn, enqueueSpeech, stopSpeech, toast]);
+    }, [isStreaming, tenantId, messages, enqueueSpeech, stopSpeech, toast]);
 
     const endConversation = useCallback(() => {
       convModeRef.current = false;
       setIsConvMode(false);
+      setInputMode("typed");
+      inputModeRef.current = "typed";
       realtimeRef.current?.stop();
       realtimeRef.current = null;
       setIsRealtime(false);
@@ -321,7 +331,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
       micStreamRef.current?.getTracks().forEach(t => t.stop());
       micStreamRef.current = null;
-      setIsRecording(false);
       muteRef.current = false;
       setIsMuted(false);
       stopSpeech();
@@ -420,7 +429,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       } catch { /* diagnostics are best-effort */ }
     }, []);
 
-    /** Try to open an OpenAI Realtime session. Returns false to fall back to the VAD loop. */
+    /** Try to open an OpenAI Realtime session. Returns false on failure — caller must NOT fall back to transcribe-voice. */
     const beginRealtime = useCallback(async (voice: CarmenVoice = selectedVoice): Promise<boolean> => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -439,14 +448,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
 
         const handle = await startRealtimeVoice(client_secret, model, {
           onUserTranscript: (text) => {
-            setMessages(prev => [...prev, { role: "user", content: text }]);
+            setMessages(prev => [...prev, { role: "user", content: text, ...tagChatTurn("realtime_voice") }]);
             setExpanded(true);
             scrollDown();
           },
           onAssistantDelta: (delta) => { setStreamingText(prev => prev + delta); scrollDown(); },
           onAssistantDone: (text) => {
             setStreamingText("");
-            setMessages(prev => [...prev, { role: "assistant", content: text }]);
+            setMessages(prev => [...prev, { role: "assistant", content: text, ...tagChatTurn("realtime_voice") }]);
             scrollDown();
           },
           onToolCall: askCarmenBrain,
@@ -466,132 +475,36 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     }, [askCarmenBrain, audioLevelRef, onFaceState, reportRealtimeError, selectedVoice]);
 
     /**
-     * One listening turn in continuous-conversation mode: open the mic with a
-     * voice-activity detector — recording ends automatically after ~1.2s of
-     * silence following speech, is transcribed and sent; Carmen's spoken reply
-     * hands the mic back (see pumpTts). No clicks between turns.
-     */
-    const beginListenTurn = useCallback(async () => {
-      if (!convModeRef.current) return;
-      if (muteRef.current) return; // muted: stay in the conversation, don't listen
-      if (mediaRecorderRef.current?.state === "recording") return; // already listening
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        });
-        if (!convModeRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
-        micStreamRef.current = stream;
-        const rec = new MediaRecorder(stream, { mimeType: "audio/webm" });
-        mediaRecorderRef.current = rec;
-        chunksRef.current = [];
-        rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-
-        // Voice-activity detection on the mic stream
-        const ctx = audioCtxRef.current ?? new AudioContext();
-        audioCtxRef.current = ctx;
-        if (ctx.state === "suspended") await ctx.resume();
-        const src = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 512;
-        src.connect(analyser);
-        const buf = new Uint8Array(analyser.frequencyBinCount);
-        const startedAt = performance.now();
-        let speechStarted = false;
-        let lastSpeechAt = startedAt;
-
-        const SPEECH_RMS = 0.045;      // above → counts as speech
-        const SILENCE_MS = 1200;       // this much quiet after speech → turn over
-        const NO_SPEECH_TIMEOUT = 12000; // nothing said → end the conversation
-        const MAX_TURN_MS = 60000;
-
-        const vad = () => {
-          if (!convModeRef.current || mediaRecorderRef.current !== rec) return;
-          analyser.getByteTimeDomainData(buf);
-          let sum = 0;
-          for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
-          const rms = Math.sqrt(sum / buf.length);
-          audioLevelRef.current = Math.min(1, rms * 5); // face pulses while you talk
-          const now = performance.now();
-          if (rms > SPEECH_RMS) { speechStarted = true; lastSpeechAt = now; }
-          const turnOver = speechStarted && now - lastSpeechAt > SILENCE_MS;
-          const gaveUp = !speechStarted && now - startedAt > NO_SPEECH_TIMEOUT;
-          const tooLong = now - startedAt > MAX_TURN_MS;
-          if (turnOver || tooLong) { rec.stop(); return; }
-          if (gaveUp) { endConversation(); onFaceState("idle"); return; }
-          vadRafRef.current = requestAnimationFrame(vad);
-        };
-
-        rec.onstop = async () => {
-          cancelAnimationFrame(vadRafRef.current);
-          src.disconnect();
-          stream.getTracks().forEach(t => t.stop());
-          if (micStreamRef.current === stream) micStreamRef.current = null;
-          setIsRecording(false);
-          audioLevelRef.current = 0;
-          if (muteRef.current) return; // muted mid-recording: discard quietly
-          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-          if (!speechStarted || blob.size < 1000) {
-            if (convModeRef.current) beginListenTurn();
-            return;
-          }
-          setIsTranscribing(true);
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error("לא מחוברת");
-            const form = new FormData();
-            form.append("audio", blob, "voice.webm");
-            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-voice`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${session.access_token}` },
-              body: form,
-            });
-            if (!res.ok) throw new Error("התמלול נכשל");
-            const { text } = await res.json();
-            const clean = (text ?? "").trim();
-            if (clean.length >= 2) sendTextRef.current(clean);
-            else if (convModeRef.current) beginListenTurn();
-          } catch {
-            toast({ title: "שגיאה בתמלול", description: "לא הצלחנו לתמלל — נסי שוב", variant: "destructive" });
-            if (convModeRef.current) beginListenTurn();
-          } finally {
-            setIsTranscribing(false);
-          }
-        };
-
-        rec.start();
-        setIsRecording(true);
-        onFaceState("listening");
-        vadRafRef.current = requestAnimationFrame(vad);
-      } catch {
-        endConversation();
-        toast({ title: "אין גישה למיקרופון", description: "יש לאפשר גישה למיקרופון בדפדפן", variant: "destructive" });
-      }
-    }, [audioLevelRef, endConversation, onFaceState, toast]);
-
-    /**
-     * Mic button: toggles a natural hands-free conversation with Carmen.
-     * Prefers OpenAI Realtime (ChatGPT-voice-grade latency + barge-in); falls
-     * back to the local VAD loop when the realtime session can't be opened.
+     * Mic button: OpenAI Realtime only. A failed session shows an error —
+     * it does not fall back to transcribe-voice.
      */
     const startVoice = useCallback(async () => {
       if (convModeRef.current) { endConversation(); onFaceState("idle"); return; }
       stopSpeech();
       convModeRef.current = true;
       setIsConvMode(true);
+      setInputMode("realtime_voice");
+      inputModeRef.current = "realtime_voice";
       const realtimeOk = await beginRealtime();
       if (!realtimeOk && convModeRef.current) {
-        // Loud fallback — a silent one makes realtime failures invisible
-        toast({ title: "שיחה חיה לא זמינה כרגע", description: "עברתי למצב שיחה רגיל (הקלטה ותמלול)" });
-        beginListenTurn();
+        const fail = onRealtimeUnavailable();
+        toast({ title: fail.title, description: fail.description, variant: "destructive" });
+        endConversation();
+        onFaceState("idle");
       }
-    }, [beginListenTurn, beginRealtime, endConversation, onFaceState, stopSpeech, toast]);
+    }, [beginRealtime, endConversation, onFaceState, stopSpeech, toast]);
 
     /* ---------- Conversation persistence + Carmen's memory ---------- */
 
     // Save the thread to ai_conversations after every completed exchange, so
     // it survives refreshes and appears in the history drawer.
     const persistConversation = useCallback(async (msgs: ChatMessage[]) => {
-      const textMsgs = msgs.filter(m => m.role !== "tool_call").map(m => ({ role: m.role, content: m.content ?? "" }));
+      const textMsgs = msgs.filter(m => m.role !== "tool_call").map(m => ({
+        role: m.role,
+        content: m.content ?? "",
+        input_mode: m.input_mode ?? "typed",
+        delivery_mode: m.delivery_mode ?? "text",
+      }));
       if (textMsgs.length < 2 || !tenantId) return;
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -670,27 +583,18 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     /* ---------- Mute (keep the conversation, stop listening) ---------- */
 
     const toggleMute = useCallback(() => {
+      if (!volumeControlsLiveSession(inputModeRef.current) && !realtimeRef.current) return;
       const next = !muteRef.current;
       muteRef.current = next;
       setIsMuted(next);
-      // Realtime: just disable the mic track — the session and Carmen's own
-      // speech continue untouched
       realtimeRef.current?.setMicMuted(next);
-      if (!realtimeRef.current && convModeRef.current) {
-        // VAD fallback: stop the open listening turn quietly; resume on unmute
-        if (next && mediaRecorderRef.current?.state === "recording") {
-          cancelAnimationFrame(vadRafRef.current);
-          mediaRecorderRef.current.stop();
-        }
-        if (!next) listenTurnRef.current();
-      }
     }, []);
 
     const toggleOutputMute = useCallback(() => {
+      if (!volumeControlsLiveSession(inputModeRef.current) && !realtimeRef.current) return;
       const next = !outputMutedRef.current;
       outputMutedRef.current = next;
       setIsOutputMuted(next);
-      setVoiceOn(!next);
       realtimeRef.current?.setOutputMuted(next);
       if (next) stopSpeech();
     }, [stopSpeech]);
@@ -705,8 +609,13 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setIsRealtime(false);
       onFaceState("idle");
       const restarted = await beginRealtime(voice);
-      if (!restarted && convModeRef.current) beginListenTurn();
-    }, [beginListenTurn, beginRealtime, onFaceState]);
+      if (!restarted && convModeRef.current) {
+        const fail = onRealtimeUnavailable();
+        toast({ title: fail.title, description: fail.description, variant: "destructive" });
+        endConversation();
+        onFaceState("idle");
+      }
+    }, [beginRealtime, endConversation, onFaceState, toast]);
 
     const previewVoice = useCallback(async () => {
       if (isPreviewingVoice) return;
@@ -722,10 +631,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         setIsPreviewingVoice(false);
       }
     }, [fetchTts, isPreviewingVoice, playBlob, stopSpeech]);
-
-    // Keep async loops (VAD, TTS pump) pointed at the freshest callbacks
-    sendTextRef.current = sendText;
-    listenTurnRef.current = beginListenTurn;
 
     // Release the mic and stop audio when the page unmounts
     useEffect(() => () => endConversation(), [endConversation]);
@@ -816,7 +721,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(76,195,255,0.15)]"
             }`}
           >
-            {isTranscribing ? <Loader2 className="h-5 w-5 animate-spin" /> : isConvMode ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
+            {isConvMode ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
           </button>
           {isConvMode && (
             <>
@@ -852,9 +757,9 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             placeholder={
               isConvMode
                 ? isRealtime
-                  ? "שיחה חיה פעילה — דברי חופשי, אפשר גם לקטוע אותי באמצע…"
-                  : isRecording ? "שיחה פעילה — דברי חופשי, אני מקשיבה…" : "שיחה פעילה — כרמן עונה…"
-                : "דברי עם כרמן — כתבי, או לחצי על המיקרופון לשיחה רציפה"
+                  ? "שיחה חיה פעילה — דברי חופשי. אפשר גם לכתוב; הקלדה נשארת על המסך."
+                  : "פותחת שיחה חיה…"
+                : "כתבי לכרמן — הקלדה מחזירה טקסט. המיקרופון פותח שיחה חיה."
             }
             disabled={isStreaming}
             className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
@@ -865,13 +770,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             className={`shrink-0 ${showHistory ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"}`}
           >
             <History className="h-5 w-5" />
-          </button>
-          <button
-            onClick={toggleOutputMute}
-            title={isOutputMuted ? "הפעל את הקול של כרמן" : "השתק את כרמן — היא תמשיך לכתוב"}
-            className={`shrink-0 ${!isOutputMuted ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)]"}`}
-          >
-            {!isOutputMuted ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           </button>
           <div className="flex h-10 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2">
             <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />

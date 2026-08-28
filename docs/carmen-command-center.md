@@ -41,13 +41,15 @@ src/components/carmen-command/
 
 ## קול
 
-שלוש שכבות, מהטובה ביותר למטה:
+שתי שכבות נפרדות — אין ערבוב:
 
-1. **שיחה חיה — OpenAI Realtime (ברירת המחדל):** לחיצה על המיקרופון פותחת session דרך `carmen-realtime-session` (טוקן זמני, המפתח לא בפרונט) → WebRTC ישיר דפדפן↔OpenAI (`gpt-realtime`, קול marin). latency ~300ms, VAD בצד השרת, barge-in (אפשר לקטוע באמצע). שאלות על נתוני המערכת עוברות דרך הכלי `ask_carmen` → `run-ai-agent` (non-streaming) עם ה-JWT של המשתמש — המוח של כרמן נשאר המקור היחיד לנתונים. עלות: ~$0.10–0.30 לדקת שיחה.
-2. **Fallback — לולאת VAD מקומית:** אם ה-session לא נפתח (אין רשת/מפתח) — הקלטה עם זיהוי סוף-דיבור לפי שקט (~1.2s) → `transcribe-voice` (Whisper) → תשובה ב-TTS זורם משפט-משפט דרך `carmen-speak` עם prefetch.
-3. **טקסט:** הצ'אט הרגיל ב-SSE; כפתור הרמקול מפעיל/מכבה הקראה.
+1. **הקלדה:** שליחת טקסט מחזירה טקסט על המסך בלבד. אין `carmen-speak`, אין הקראה, ואין תמלול.
+2. **שיחה חיה — OpenAI Realtime:** לחיצה על המיקרופון פותחת session דרך `carmen-realtime-session` → WebRTC דפדפן↔OpenAI. אם Realtime נכשל מוצגת שגיאה ברורה; **אין** fallback ל-`transcribe-voice`.
+3. מתג עוצמת הקול מופיע רק בזמן שיחה חיה פעילה.
 
-`carmen-speak` תומך גם ב-`instructions` (הכוונת סגנון עברית ל-`gpt-4o-mini-tts`, פעיל כברירת מחדל) וגם ב-`provider:'elevenlabs'` (eleven_multilingual_v2, דורש `ELEVENLABS_API_KEY`; אפשר לקבוע קול עם `ELEVENLABS_VOICE_ID`).
+`transcribe-voice` נשאר במערכת לשימושים אחרים (למשל הצ'אט הפנימי ב-`AIOSDialog`) אך יצא מנתיב ה-Command Center.
+
+`carmen-speak` משמש כאן רק לתצוגת דוגמת קול בבורר, לא לתשובות מוקלדות.
 
 ## גישה ו-API keys
 
