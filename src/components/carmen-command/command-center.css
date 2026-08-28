@@ -204,10 +204,10 @@
   left: 50%;
   top: 54%;
   width: 62%;
-  height: 96px;
+  height: 112px;
   padding: 0;
   appearance: none;
-  transform: translate(-50%, -50%) rotateX(58deg);
+  transform: translate(-50%, -50%) rotateX(52deg);
   border-radius: 50%;
   background:
     url("/command-center/knights_round_table_hud.jpg") center 42% / 180% no-repeat,
@@ -277,17 +277,22 @@
 
 .cc-ghost-body {
   position: relative;
+  z-index: 2;
   display: flex;
-  width: 88px;
+  width: 96px;
   flex-direction: column;
   align-items: center;
-  padding-bottom: 2px;
-  opacity: 0.9;
+  margin-top: 2px;
+  padding: 2px 4px 4px;
+  border-radius: 8px;
+  background: rgba(5, 10, 22, 0.72);
+  opacity: 0.96;
 }
 .cc-ghost-name {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
+  text-shadow: 0 1px 4px #050a16;
 }
 .cc-ghost-role {
   font-size: 9px;
