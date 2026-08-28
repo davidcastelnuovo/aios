@@ -30,14 +30,15 @@ When a task finishes, **always send David the development environment link**: th
 
 ```
 feature/* or fix/*
-    → Vercel Preview (this branch)
-    → merge to develop
-    → AIOS Staging (persistent)
-    → validate
+    → Vercel Preview (this branch, Staging data)
     → explicit approval
     → merge to main
     → Production
+    → auto-sync develop  (sync-develop-from-main.yml)
+    → persistent Staging stays on the same code
 ```
+
+A merge to `main` also updates `develop`. That keeps the development environment current (frontend on the `develop` Vercel deploy, plus Staging Edge Functions via `deploy-staging-edge-functions.yml`). Do not treat `develop` as a separate release train.
 
 | Git | Deploy | Data |
 | --- | --- | --- |
@@ -77,8 +78,8 @@ Gaps (do not touch Production to close these):
 1. Create `feature/*` or `fix/*` from `develop` when Staging work is in flight; from `main` only for hotfixes David asked for.
 2. Implement on the feature branch. Never commit to `main`. Never run unbounded `DELETE`/`UPDATE` on Production.
 3. Open a PR. **Always reply with the Vercel Preview URL** (the development environment link) and the in-app path.
-4. Merge to `develop` only when David asks. That is Staging.
-5. Merge `develop` → `main` only after `מאשר לפרודקשן`.
+4. Merge to `main` only after `מאשר לפרודקשן`. `develop` is then updated automatically from `main`.
+5. Do not merge to `develop` by hand unless the auto-sync failed.
 6. Edge-function or migration work: add files under `supabase/functions` / `supabase/migrations`. Do not apply them to Production from the agent. Staging apply is a later phase.
 
 ## Staging Safe Mode

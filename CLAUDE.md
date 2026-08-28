@@ -4,6 +4,7 @@
 - **There IS a development environment. Never tell David or Carmen that it does not exist.**
 - Source of truth: `docs/ENVIRONMENTS.md`. Cursor rule: `.cursor/rules/environments.mdc`.
 - Development environment = Vercel Preview URL of the branch (talks to Staging). `develop` = Staging. `main` = Production.
+- A merge to `main` auto-updates `develop` so the persistent Staging frontend/functions stay current.
 - A Cloud Agent local `.env` pointing at Production is expected — it is not proof that Staging is missing.
 - **NEVER MODIFY PRODUCTION DIRECTLY.** Every completed task must include the Vercel Preview URL. Merge to `main` only after David says `מאשר לפרודקשן`.
 

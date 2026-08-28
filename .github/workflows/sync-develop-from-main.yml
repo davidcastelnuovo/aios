@@ -1,0 +1,44 @@
+name: Sync develop from main
+
+# Keeps Staging (`develop`) on the same code as Production (`main`).
+# When David merges a feature to main, develop is updated automatically so
+# the persistent development environment (frontend + Staging function deploy)
+# stays current. This workflow never pushes to main.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sync-develop-from-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: develop
+
+      - name: Merge main into develop
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "develop already contains main — nothing to sync"
+            exit 0
+          fi
+          if git merge-base --is-ancestor HEAD origin/main; then
+            git merge --ff-only origin/main
+          else
+            git merge --no-edit origin/main
+          fi
+          git push origin HEAD:develop
