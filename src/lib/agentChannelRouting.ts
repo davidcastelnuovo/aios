@@ -69,6 +69,30 @@ export function sendPathForRoute(route: BrainRoute | null | undefined): "interna
   return "channel_gateway";
 }
 
+export type HudStage = "table" | "direct";
+export type CouncilSeatId = "carmen" | "cursor" | "grok" | "codex";
+
+/** Round table is the picker + council. Direct 1:1 is a solo full-screen ghost. */
+export function hudStage(args: {
+  userStage: HudStage;
+  routeType?: string | null;
+  debating?: boolean;
+}): HudStage {
+  if (args.debating || args.routeType === "parliament") return "table";
+  return args.userStage;
+}
+
+export function slugForCouncilSeat(id: CouncilSeatId): string {
+  return id === "carmen" ? "internal" : id;
+}
+
+export function councilSeatFromSlug(slug?: string | null): CouncilSeatId | null {
+  const key = (slug || "").toLowerCase();
+  if (key === "internal" || key === "carmen") return "carmen";
+  if (key === "cursor" || key === "grok" || key === "codex") return key;
+  return null;
+}
+
 export function parliamentSeats(route: BrainRoute | null | undefined): string[] {
   const raw = route?.config?.seats;
   if (Array.isArray(raw) && raw.length) return raw.map(String);

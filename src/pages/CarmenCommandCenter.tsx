@@ -12,6 +12,7 @@ import {
 import { UsagePanel } from "@/components/carmen-command/UsagePanel";
 import { CarmenChatBar, CarmenChatBarHandle } from "@/components/carmen-command/CarmenChatBar";
 import { useCommandRealtime } from "@/components/carmen-command/useCommandData";
+import type { HudStage } from "@/lib/agentChannelRouting";
 import "@/components/carmen-command/command-center.css";
 
 function Clock() {
@@ -43,6 +44,7 @@ export default function CarmenCommandCenter() {
   const chatRef = useRef<CarmenChatBarHandle>(null);
   const alertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hudMode, setHudMode] = useState<HudStage>("table");
 
   // Critical alert → brief face flash (unless she's mid-conversation)
   const flashAlert = useCallback(() => {
@@ -107,7 +109,7 @@ export default function CarmenCommandCenter() {
         <Clock />
       </header>
 
-      <main className="hidden min-h-0 flex-1 grid-cols-12 gap-3 overflow-hidden p-3 lg:grid">
+      <main className={`min-h-0 flex-1 grid-cols-12 gap-3 overflow-hidden p-3 ${hudMode === "direct" ? "hidden" : "hidden lg:grid"}`}>
         <div className="hidden min-h-0 flex-col gap-3 overflow-y-auto lg:order-1 lg:col-span-3 lg:flex">
           <TasksPanel tenantId={tenantId} className="max-h-[300px] shrink-0" />
           <TimelinePanel tenantId={tenantId} className="max-h-[240px] shrink-0" />
@@ -136,7 +138,7 @@ export default function CarmenCommandCenter() {
         </div>
       </main>
 
-      <footer className="flex min-h-0 flex-1 flex-col p-2 pt-0 sm:p-3 sm:pt-0 lg:flex-none">
+      <footer className={`flex min-h-0 flex-1 flex-col p-2 pt-0 sm:p-3 sm:pt-0 ${hudMode === "direct" ? "" : "lg:flex-none"}`}>
         <CarmenChatBar
           ref={chatRef}
           tenantId={tenantId}
@@ -145,6 +147,7 @@ export default function CarmenCommandCenter() {
           menuOpen={menuOpen}
           onMenuOpenChange={setMenuOpen}
           menuPanels={rails}
+          onHudModeChange={setHudMode}
         />
       </footer>
     </div>

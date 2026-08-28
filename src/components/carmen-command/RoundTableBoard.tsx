@@ -1,7 +1,13 @@
 import type { BrainRoute, ChatLike, ParliamentSeatView } from "@/lib/agentChannelRouting";
-import { speakerLabel } from "@/lib/agentChannelRouting";
+import {
+  councilSeatFromSlug,
+  slugForCouncilSeat,
+  speakerLabel,
+  type CouncilSeatId,
+  type HudStage,
+} from "@/lib/agentChannelRouting";
 
-export type CouncilSeatId = "carmen" | "cursor" | "grok" | "codex";
+export type { CouncilSeatId };
 
 const SEATS: Array<{ id: CouncilSeatId; label: string; role: string; place: string; sprite: string }> = [
   { id: "carmen", label: "כרמן", role: "יו\"ר", place: "south", sprite: "/command-center/ghost-carmen.png" },
@@ -16,16 +22,14 @@ interface RoundTableBoardProps {
   seats?: ParliamentSeatView[];
   selectedProvider?: string | null;
   debating?: boolean;
+  stage?: HudStage;
   onAddress?: (seat: CouncilSeatId) => void;
   onOpenCouncil?: () => void;
+  onBackToTable?: () => void;
   onCancel?: () => void;
   onContinue?: () => void;
   onSynthesize?: () => void;
   onClarify?: (provider: string) => void;
-}
-
-function slugForSeat(id: CouncilSeatId): string {
-  return id === "carmen" ? "internal" : id;
 }
 
 function speakerOf(m: ChatLike): string {
@@ -34,7 +38,7 @@ function speakerOf(m: ChatLike): string {
 
 function lastLine(messages: ChatLike[] | undefined, who: CouncilSeatId, activeSlug: string): { text: string; from: string; to: string } | null {
   const list = messages || [];
-  const seatSlug = slugForSeat(who);
+  const seatSlug = slugForCouncilSeat(who);
   const own = [...list].reverse().find((m) => {
     if (m.role === "tool_call" || !m.content) return false;
     const speaker = speakerOf(m);
@@ -83,8 +87,10 @@ export function RoundTableBoard({
   seats = [],
   selectedProvider,
   debating,
+  stage = "table",
   onAddress,
   onOpenCouncil,
+  onBackToTable,
   onCancel,
   onContinue,
   onSynthesize,
@@ -93,15 +99,51 @@ export function RoundTableBoard({
   const active = (selectedProvider || route?.slug || "cursor") as string;
   const parliament = route?.route_type === "parliament";
   const log = recentTalk(messages);
+  const soloId = councilSeatFromSlug(selectedProvider || route?.slug);
+  const solo = SEATS.find((s) => s.id === soloId) || SEATS[0];
+
+  if (stage === "direct") {
+    const line = lastLine(messages, solo.id, active);
+    return (
+      <div className="cc-direct-stage" dir="rtl">
+        <div className="flex items-center justify-between gap-2 px-1">
+          <p className="cc-panel-title">{solo.label}</p>
+          <button type="button" onClick={() => onBackToTable?.()} className="text-[10px] text-[var(--cc-accent)] hover:underline">
+            שולחן
+          </button>
+        </div>
+        <button type="button" className="cc-ghost cc-ghost-solo is-selected" tabIndex={-1}>
+          <span className="cc-ghost-aura" />
+          <span
+            className="cc-ghost-sprite"
+            style={{ backgroundImage: `url(${solo.sprite})` }}
+            aria-hidden
+          />
+          <span className="cc-ghost-body">
+            <span className="cc-ghost-name">{solo.label}</span>
+            <span className="cc-ghost-role">{solo.role}</span>
+          </span>
+          {line && (
+            <span className="cc-ghost-bubble">
+              <span className="cc-ghost-bubble-meta">
+                {line.from} → {line.to}
+              </span>
+              {line.text}
+            </span>
+          )}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="cc-roundtable" dir="rtl">
       <div className="mb-1 flex items-center justify-between gap-2 px-1">
         <p className="cc-panel-title">שולחן אבירים</p>
         <div className="flex flex-wrap gap-2">
-          {!parliament && onOpenCouncil && (
+          {onOpenCouncil && (
             <button type="button" onClick={onOpenCouncil} className="text-[10px] text-[var(--cc-accent)] hover:underline">
-              הפעל מועצה
+              {parliament ? "מועצה" : "הפעל מועצה"}
             </button>
           )}
           {parliament && debating && onContinue && (
@@ -124,15 +166,14 @@ export function RoundTableBoard({
           aria-label="שולחן אבירים"
         />
         {SEATS.map((seat) => {
-          const line = lastLine(messages, seat.id, active);
+          const line = parliament ? lastLine(messages, seat.id, active) : null;
           const state = seatState(seats, seat.id);
-          const selected = active === seat.id || active === slugForSeat(seat.id);
           return (
             <button
               key={seat.id}
               type="button"
-              className={`cc-ghost cc-ghost-${seat.place} ${selected ? "is-selected" : ""} is-${state}`}
-              title={`פנה אל ${seat.label}`}
+              className={`cc-ghost cc-ghost-${seat.place} is-${state}`}
+              title={seat.label}
               onClick={() => onAddress?.(seat.id)}
             >
               <span className="cc-ghost-aura" />
@@ -153,7 +194,7 @@ export function RoundTableBoard({
                   {line.text}
                 </span>
               )}
-              {parliament && debating && onClarify && seat.id !== "carmen" && selected && (
+              {parliament && debating && onClarify && seat.id !== "carmen" && (
                 <span
                   role="link"
                   className="cc-ghost-clarify"
@@ -166,7 +207,7 @@ export function RoundTableBoard({
           );
         })}
       </div>
-      {log.length > 0 && (
+      {parliament && log.length > 0 && (
         <ol className="cc-roundtable-log">
           {log.map((row, i) => (
             <li key={`${row.from}-${i}`}>

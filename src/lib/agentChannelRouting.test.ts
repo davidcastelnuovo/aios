@@ -10,6 +10,9 @@ import {
   pickDefaultRoute,
   sendPathForRoute,
   speakerLabel,
+  hudStage,
+  slugForCouncilSeat,
+  councilSeatFromSlug,
 } from "./agentChannelRouting.ts";
 
 test("selecting a direct channel changes the send path", () => {
@@ -38,6 +41,16 @@ test("default brain is Cursor Direct", () => {
   assert.equal(DEFAULT_BRAIN_SLUG, "cursor");
   assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES).slug, "cursor");
   assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, "grok").slug, "grok");
+});
+
+test("HUD stays on the round table for council, solo for a direct chat", () => {
+  assert.equal(hudStage({ userStage: "direct", routeType: "direct_channel" }), "direct");
+  assert.equal(hudStage({ userStage: "direct", routeType: "parliament" }), "table");
+  assert.equal(hudStage({ userStage: "direct", debating: true }), "table");
+  assert.equal(hudStage({ userStage: "table", routeType: "internal" }), "table");
+  assert.equal(slugForCouncilSeat("carmen"), "internal");
+  assert.equal(councilSeatFromSlug("internal"), "carmen");
+  assert.equal(councilSeatFromSlug("parliament"), null);
 });
 
 test("parliament seats are Cursor + Grok + Codex", () => {

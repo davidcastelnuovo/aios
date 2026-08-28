@@ -63,6 +63,7 @@ export function useBrainChannel(tenantId: string | null) {
   }, [tenantId]);
 
   const selectRoute = useCallback(async (route: BrainRoute, conversationId?: string | null) => {
+    selectedRef.current = route;
     setSelected(route);
     setStatus("idle");
     if (tenantId) localStorage.setItem(storageKeyForRoute(tenantId), route.slug);
@@ -89,9 +90,10 @@ export function useBrainChannel(tenantId: string | null) {
     inputMode: string;
     history: Array<{ role: string; content: string }>;
     idempotencyKey: string;
+    route?: BrainRoute;
   }): Promise<ChannelSendResult> => {
     if (!tenantId) throw new Error("missing tenant");
-    const route = selectedRef.current;
+    const route = args.route || selectedRef.current;
     const headers = await authHeader();
     const res = await fetch(FN, {
       method: "POST",

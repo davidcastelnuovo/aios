@@ -11,7 +11,8 @@ import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
 import { BrainRouteSelector } from "./BrainRouteSelector";
 import { RoundTableBoard, type CouncilSeatId } from "./RoundTableBoard";
 import { useBrainChannel } from "./useBrainChannel";
-import { deriveParliamentView, speakerLabel } from "@/lib/agentChannelRouting";
+import { deriveParliamentView, hudStage, slugForCouncilSeat, speakerLabel } from "@/lib/agentChannelRouting";
+import type { HudStage } from "@/lib/agentChannelRouting";
 import {
   CarmenInputMode,
   onRealtimeUnavailable,
@@ -49,6 +50,7 @@ interface CarmenChatBarProps {
   menuOpen?: boolean;
   onMenuOpenChange?: (open: boolean) => void;
   menuPanels?: ReactNode;
+  onHudModeChange?: (mode: HudStage) => void;
 }
 
 const CARMEN_VOICES = [
@@ -72,7 +74,7 @@ const VOICE_STORAGE_KEY = "aios:carmen-voice";
  * Command Center never auto-plays carmen-speak and never falls back to transcribe-voice.
  */
 export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>(
-  function CarmenChatBar({ tenantId, onFaceState, audioLevelRef, menuOpen, onMenuOpenChange, menuPanels }, ref) {
+  function CarmenChatBar({ tenantId, onFaceState, audioLevelRef, menuOpen, onMenuOpenChange, menuPanels, onHudModeChange }, ref) {
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [streamingText, setStreamingText] = useState("");
@@ -110,6 +112,13 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const brain = useBrainChannel(tenantId);
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+    const [userStage, setUserStage] = useState<HudStage>("table");
+    const hud = hudStage({
+      userStage,
+      routeType: brain.selected.route_type,
+      debating: brain.status === "debating",
+    });
+    useEffect(() => { onHudModeChange?.(hud); }, [hud, onHudModeChange]);
 
     const scrollDown = () => {
       requestAnimationFrame(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }));
@@ -333,12 +342,21 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         const history = messages
           .filter(m => m.role === "user" || m.role === "assistant")
           .map(m => ({ role: m.role, content: m.content ?? "" }));
+        let route = brain.selected;
+        if (hud === "table" && route.route_type !== "parliament") {
+          const parl = brain.routes.find((r) => r.slug === "parliament");
+          if (parl) {
+            await brain.selectRoute(parl, conversationIdRef.current);
+            route = parl;
+          }
+        }
         const routed = await brain.send({
           content: trimmed,
           conversationId: conversationIdRef.current,
           inputMode: inputModeRef.current,
           history,
           idempotencyKey: crypto.randomUUID(),
+          route,
         });
         rememberConv(routed.conversation_id);
         if (routed.stream) {
@@ -357,7 +375,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       } finally {
         setIsStreaming(false);
       }
-    }, [isStreaming, tenantId, messages, stopSpeech, toast, brain, streamInternal]);
+    }, [isStreaming, tenantId, messages, stopSpeech, toast, brain, streamInternal, hud]);
 
     const endConversation = useCallback(() => {
       convModeRef.current = false;
@@ -811,7 +829,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     );
 
     return (
-      <div className="cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden">
+      <div className={`cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden ${hud === "direct" ? "is-direct" : "is-table"}`}>
         <Sheet open={!!menuOpen} onOpenChange={onMenuOpenChange}>
             <SheetContent
               side="right"
@@ -830,16 +848,23 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           seats={parliamentView.seats}
           selectedProvider={selectedSeat || brain.selected.slug}
           debating={brain.status === "debating"}
+          stage={hud}
           onAddress={(seat: CouncilSeatId) => {
-            const slug = seat === "carmen" ? "internal" : seat;
+            const slug = slugForCouncilSeat(seat);
             const next = brain.routes.find((r) => r.slug === slug);
             if (next) brain.selectRoute(next, conversationIdRef.current);
             setSelectedSeat(seat);
+            setUserStage("direct");
           }}
           onOpenCouncil={() => {
             const next = brain.routes.find((r) => r.slug === "parliament");
             if (next) brain.selectRoute(next, conversationIdRef.current);
             setSelectedSeat(null);
+            setUserStage("table");
+          }}
+          onBackToTable={() => {
+            setSelectedSeat(null);
+            setUserStage("table");
           }}
           onCancel={conversationId ? () => brain.cancelParliament(conversationId) : undefined}
           onContinue={conversationId ? () => brain.parliamentAction("parliament_continue", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
@@ -996,7 +1021,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") sendText(input); }}
-            placeholder={isConvMode ? (isRealtime ? "שיחה חיה" : "פותחת…") : `אל ${speakerLabel(brain.selected.slug)}`}
+            placeholder={isConvMode ? (isRealtime ? "שיחה חיה" : "פותחת…") : hud === "table" ? "מועצה" : `אל ${speakerLabel(brain.selected.slug)}`}
             disabled={isStreaming || brain.locked}
             className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
           />
