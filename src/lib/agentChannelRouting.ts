@@ -72,14 +72,17 @@ export function sendPathForRoute(route: BrainRoute | null | undefined): "interna
 export type HudStage = "table" | "direct";
 export type CouncilSeatId = "carmen" | "cursor" | "grok" | "codex";
 
-/** Round table is the picker + council. Direct 1:1 is a solo full-screen ghost. */
+/**
+ * HUD follows the brain-route tab, not ghost taps.
+ * Direct Chat (Cursor / Grok / Codex / Carmen) → one full-screen figure.
+ * Knights Round Table → all four stay at the table.
+ */
 export function hudStage(args: {
-  userStage: HudStage;
   routeType?: string | null;
   debating?: boolean;
 }): HudStage {
   if (args.debating || args.routeType === "parliament") return "table";
-  return args.userStage;
+  return "direct";
 }
 
 export function slugForCouncilSeat(id: CouncilSeatId): string {

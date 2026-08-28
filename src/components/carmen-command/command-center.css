@@ -238,7 +238,7 @@
   background: none;
   border: 0;
   color: var(--cc-text);
-  cursor: pointer;
+  cursor: default;
   z-index: 2;
 }
 

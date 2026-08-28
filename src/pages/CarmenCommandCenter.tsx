@@ -44,7 +44,7 @@ export default function CarmenCommandCenter() {
   const chatRef = useRef<CarmenChatBarHandle>(null);
   const alertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [hudMode, setHudMode] = useState<HudStage>("table");
+  const [hudMode, setHudMode] = useState<HudStage>("direct");
 
   // Critical alert → brief face flash (unless she's mid-conversation)
   const flashAlert = useCallback(() => {

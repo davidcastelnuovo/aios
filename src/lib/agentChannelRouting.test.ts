@@ -43,11 +43,11 @@ test("default brain is Cursor Direct", () => {
   assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, "grok").slug, "grok");
 });
 
-test("HUD stays on the round table for council, solo for a direct chat", () => {
-  assert.equal(hudStage({ userStage: "direct", routeType: "direct_channel" }), "direct");
-  assert.equal(hudStage({ userStage: "direct", routeType: "parliament" }), "table");
-  assert.equal(hudStage({ userStage: "direct", debating: true }), "table");
-  assert.equal(hudStage({ userStage: "table", routeType: "internal" }), "table");
+test("HUD is solo for Direct Chat tabs, table only for Knights Round Table", () => {
+  assert.equal(hudStage({ routeType: "direct_channel" }), "direct");
+  assert.equal(hudStage({ routeType: "internal" }), "direct");
+  assert.equal(hudStage({ routeType: "parliament" }), "table");
+  assert.equal(hudStage({ debating: true }), "table");
   assert.equal(slugForCouncilSeat("carmen"), "internal");
   assert.equal(councilSeatFromSlug("internal"), "carmen");
   assert.equal(councilSeatFromSlug("parliament"), null);

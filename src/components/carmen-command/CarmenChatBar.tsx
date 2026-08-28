@@ -9,9 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import type { CarmenFaceState } from "./CarmenFace";
 import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
 import { BrainRouteSelector } from "./BrainRouteSelector";
-import { RoundTableBoard, type CouncilSeatId } from "./RoundTableBoard";
+import { RoundTableBoard } from "./RoundTableBoard";
 import { useBrainChannel } from "./useBrainChannel";
-import { deriveParliamentView, hudStage, slugForCouncilSeat, speakerLabel } from "@/lib/agentChannelRouting";
+import { deriveParliamentView, hudStage, speakerLabel } from "@/lib/agentChannelRouting";
 import type { HudStage } from "@/lib/agentChannelRouting";
 import {
   CarmenInputMode,
@@ -111,10 +111,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const { toast } = useToast();
     const brain = useBrainChannel(tenantId);
     const [conversationId, setConversationId] = useState<string | null>(null);
-    const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
-    const [userStage, setUserStage] = useState<HudStage>("table");
     const hud = hudStage({
-      userStage,
       routeType: brain.selected.route_type,
       debating: brain.status === "debating",
     });
@@ -342,14 +339,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         const history = messages
           .filter(m => m.role === "user" || m.role === "assistant")
           .map(m => ({ role: m.role, content: m.content ?? "" }));
-        let route = brain.selected;
-        if (hud === "table" && route.route_type !== "parliament") {
-          const parl = brain.routes.find((r) => r.slug === "parliament");
-          if (parl) {
-            await brain.selectRoute(parl, conversationIdRef.current);
-            route = parl;
-          }
-        }
+        const route = brain.selected;
         const routed = await brain.send({
           content: trimmed,
           conversationId: conversationIdRef.current,
@@ -375,7 +365,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       } finally {
         setIsStreaming(false);
       }
-    }, [isStreaming, tenantId, messages, stopSpeech, toast, brain, streamInternal, hud]);
+    }, [isStreaming, tenantId, messages, stopSpeech, toast, brain, streamInternal]);
 
     const endConversation = useCallback(() => {
       convModeRef.current = false;
@@ -846,25 +836,16 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           route={brain.selected}
           messages={messages}
           seats={parliamentView.seats}
-          selectedProvider={selectedSeat || brain.selected.slug}
+          selectedProvider={brain.selected.slug}
           debating={brain.status === "debating"}
           stage={hud}
-          onAddress={(seat: CouncilSeatId) => {
-            const slug = slugForCouncilSeat(seat);
-            const next = brain.routes.find((r) => r.slug === slug);
-            if (next) brain.selectRoute(next, conversationIdRef.current);
-            setSelectedSeat(seat);
-            setUserStage("direct");
-          }}
           onOpenCouncil={() => {
             const next = brain.routes.find((r) => r.slug === "parliament");
             if (next) brain.selectRoute(next, conversationIdRef.current);
-            setSelectedSeat(null);
-            setUserStage("table");
           }}
           onBackToTable={() => {
-            setSelectedSeat(null);
-            setUserStage("table");
+            const next = brain.routes.find((r) => r.slug === "parliament");
+            if (next) brain.selectRoute(next, conversationIdRef.current);
           }}
           onCancel={conversationId ? () => brain.cancelParliament(conversationId) : undefined}
           onContinue={conversationId ? () => brain.parliamentAction("parliament_continue", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
