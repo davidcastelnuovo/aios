@@ -1,3 +1,43 @@
+## AIOS environment workflow — mandatory
+
+Read `docs/ENVIRONMENTS.md` before any architecture, implementation, database,
+integration, deployment, or debugging work. These rules apply to every coding
+agent and every session, regardless of where the work starts.
+
+- **Never modify Production directly.** Production is `main` + the Production
+  Vercel deployment + Supabase project `zvoijyneresvkadpprel`.
+- Start every change from an up-to-date integration branch and create a dedicated
+  `feature/*`, `fix/*`, or `refactor/*` branch. While the staging migration is in
+  progress, do not assume `develop` exists; check the repository first.
+- The target flow is `Feature -> Preview -> Staging (develop) -> Production (main)`.
+- A feature branch must use an isolated Preview environment. It must never be
+  configured with Production Supabase credentials or Production integration
+  secrets.
+- Database changes belong in `supabase/migrations/` and must be validated outside
+  Production before they are eligible for Production.
+- Never run Production migrations, deploy Production Edge Functions, test external
+  side effects against real customers, or merge to `main` without David's explicit
+  approval: **"מאשר לפרודקשן"**.
+- Do not use the committed root `.env` for testing: it currently points at the
+  hosted Production Supabase project. Treat local app use as Production-connected
+  until the staging foundation is complete.
+- Every integration change must preserve safe-by-default behavior. In non-production
+  environments, external actions must be blocked, redirected, mocked, allowlisted,
+  or dry-run through the central guard described in `docs/ENVIRONMENTS.md`.
+
+### Required completion handoff
+
+An implementation task is not complete until the agent pushes its branch, waits for
+the Vercel Preview deployment, verifies that it is reachable, and sends David:
+
+1. the exact Vercel Preview URL;
+2. the relevant in-app route;
+3. verification status and any known limitations;
+4. an explicit statement that Production was not changed.
+
+If a Preview cannot be created, report the blocker clearly. Never substitute a
+Production URL or describe the task as complete without a usable Preview link.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
