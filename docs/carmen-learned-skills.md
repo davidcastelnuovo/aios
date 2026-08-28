@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-28 — Knights round table + Codex seat + QA loop + skill builder
+- **Skin slugs:** `knights_round_table`, `qa_loop`, `skill_builder`, `skill_builder_meta` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`). Also appends Cursor-default note onto `cursor_escalation`.
+- **What Carmen can now do:** Chair a Command Center round table. Default brain is **Cursor Direct**. Seats: Carmen (goals), Cursor, Grok Bot, Codex. After a seat replies she runs `qa_loop` (return with concrete defects, max 3) until the goal is actually met. Missing repeatable work becomes a tenant skin via `skill_builder`; `skill_builder_meta` is the template for building those skins. Session learning catalogs pointers under `process/{task_type}/...`.
+- **How:** Command Center `RoundTableBoard` (click a ghost to address that brain; table click opens parliament). Gateway `agent-channel-send` launches Codex like Cursor/Grok (`CURSOR_API_KEY`, optional `CODEX_MODEL_ID` / `CODEX_CLOUD_ENV_NAME`). Parliament seats `cursor+grok+codex`. Not live until migration `20260828200000_agent_brain_channels` + this seed are applied and the gateway functions are deployed.
+- **Origin:** David — add Codex, 3D knights table with ghost talk, QA until perfect, default Cursor brain, catalog memory/skills by task type.
+
 ### 2026-08-28 — Carmen Direct talk vs ping; board no longer dumps old done tasks
 - **Skin slug:** `cursor_grok_direct_channel_ping` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Ping phrases stay local. A real request to talk to Cursor uses `reply_to_cursor_session` on sticky `bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c`. If that chat is mid-run, she reports 409 busy instead of pretending the message landed.
