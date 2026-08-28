@@ -16,3 +16,5 @@ There **is** a development environment. Never tell David or Carmen that it does 
 - Source of truth: `docs/ENVIRONMENTS.md`.
 
 If asked whether a staging / development environment exists: **yes**. Send the Preview URL.
+
+Staging has cloned operational data (users, Carmen, clients, tasks, live integrations). WhatsApp integrations look connected but are mocked — send is blocked. Do not copy Production WhatsApp tokens.
