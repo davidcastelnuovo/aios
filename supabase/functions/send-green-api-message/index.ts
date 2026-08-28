@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { checkWhatsAppSend } from '../_shared/integration-guard.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -245,6 +246,18 @@ Deno.serve(async (req) => {
       chatId = `${e164Digits}@c.us`;
     }
 
+    const guard = checkWhatsAppSend(groupChatId ? `group:${groupChatId}` : chatId);
+    if (guard.decision === 'BLOCK') {
+      console.warn('[send-green-api] blocked by integration-guard', guard);
+      return new Response(JSON.stringify({
+        error: 'blocked_by_staging_safe_mode',
+        reason: guard.reason,
+        environment: guard.environment,
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Send message via Green API
     const greenApiUrl = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;

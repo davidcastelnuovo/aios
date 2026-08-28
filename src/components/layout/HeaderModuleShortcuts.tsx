@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Pin, Settings2 } from "lucide-react";
+import { ChevronDown, Pin, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -58,13 +58,15 @@ export function HeaderModuleShortcuts() {
             type="button"
             variant="outline"
             size="sm"
-            className="h-9 gap-1.5 px-2"
+            className="h-9 gap-1 px-2 sm:px-2.5"
             disabled={isLoading}
-            title="בחירת קיצורי דרך"
+            title="קיצורי דרך"
+            aria-label="קיצורי דרך"
           >
             <Pin className="h-4 w-4" />
-            <span className="hidden sm:inline">קיצורים</span>
-            <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs sm:text-sm">קיצורים</span>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground xl:hidden" />
+            <Settings2 className="h-3.5 w-3.5 text-muted-foreground hidden xl:inline" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

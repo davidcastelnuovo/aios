@@ -74,6 +74,7 @@ import { useUserTenants } from "@/hooks/useUserTenants";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
+import { useAgency } from "@/contexts/AgencyContext";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
@@ -114,11 +115,12 @@ export function AppSidebar() {
   const { logoUrl } = useTheme();
   const { buildPath } = useTenantPath();
   const { menuItems: dbMenuItems, isLoading: isLoadingMenuItems } = useMenuItems();
-  const isCollapsed = state === "collapsed";
+  const isCollapsed = !isMobile && state === "collapsed";
   const [activeTab, setActiveTab] = useState<string>("daily");
 
   const { userId } = useCurrentUser();
   const { currentTenantId } = useTenant();
+  const { selectedAgency, setSelectedAgency, agencies } = useAgency();
 
   // Build a set of visible menu_keys from DB
   const visibleKeys = new Set<string>(
@@ -429,6 +431,28 @@ export function AppSidebar() {
         })}
 
       </SidebarContent>
+
+      {isMobile && agencies && agencies.length > 0 && (
+        <div className="p-3 border-t border-sidebar-border" dir="rtl">
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">סוכנות</p>
+          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+            <SelectTrigger className="w-full bg-background">
+              <Building2 className="h-4 w-4 ml-2 flex-shrink-0" />
+              <SelectValue placeholder="בחר סוכנות" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              {agencies.length > 1 && (
+                <SelectItem value="all">כל הסוכנויות</SelectItem>
+              )}
+              {agencies.map((agency) => (
+                <SelectItem key={agency.id} value={agency.id}>
+                  {agency.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Install PWA Button */}
       <InstallAppButton isCollapsed={isCollapsed} />

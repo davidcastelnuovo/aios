@@ -188,23 +188,23 @@ export function AppLayout() {
 
   return (
     <ViewAsProvider>
-      <SidebarProvider defaultOpen={false} expandOnHover>
+      <SidebarProvider defaultOpen={false}>
         <div className="flex h-screen max-h-screen w-full overflow-hidden" dir="rtl">
           <AppSidebar />
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
             <ViewAsBanner />
-            <header className="sticky top-0 z-50 h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4 flex-shrink-0">
-              <div className="flex items-center gap-2 md:gap-4 min-w-0">
-                <SidebarTrigger className="md:hidden" />
-                <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
+            <header className="sticky top-0 z-50 h-14 md:h-16 border-b bg-card flex items-center justify-between px-2 sm:px-4 md:px-6 gap-1.5 sm:gap-2 md:gap-4 flex-shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 md:gap-4 min-w-0">
+                <SidebarTrigger className="shrink-0" />
+                <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate hidden sm:inline">
                   מערכת ניהול סוכנויות
                 </h1>
               </div>
-              <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 md:gap-4 flex-shrink-0">
                 <HeaderModuleShortcuts />
                 {agencies && agencies.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>
+                  <div className="hidden md:flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground hidden lg:inline">סוכנות:</span>
                     <Select value={selectedAgency} onValueChange={setSelectedAgency}>
                       <SelectTrigger className="w-[160px] md:w-[220px] bg-background border-2">
                         <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
