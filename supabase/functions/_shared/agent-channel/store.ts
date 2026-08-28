@@ -63,32 +63,43 @@ export async function ensureDefaultRoutes(
     .select("*")
     .eq("tenant_id", tenantId)
     .eq("active", true);
-  if (existing && existing.length) return existing as BrainRouteRow[];
-
-  const rows = DEFAULT_BRAIN_ROUTE_SEEDS.map((seed) => ({
-    tenant_id: tenantId,
-    agent_id: agentId,
-    slug: seed.slug,
-    label: seed.label,
-    route_type: seed.route_type,
-    provider: seed.provider,
-    config: seed.config,
-    active: true,
-  }));
-  const { data: inserted, error } = await sb
-    .from("agent_brain_routes")
-    .upsert(rows, { onConflict: "tenant_id,slug" })
-    .select("*");
-  if (error) {
-    console.error("[agent-channel] seed routes failed", error.message);
-    const { data: retry } = await sb
+  const have = new Set((existing || []).map((r: { slug: string }) => r.slug));
+  const missing = DEFAULT_BRAIN_ROUTE_SEEDS.filter((seed) => !have.has(seed.slug));
+  if (missing.length) {
+    const rows = missing.map((seed) => ({
+      tenant_id: tenantId,
+      agent_id: agentId,
+      slug: seed.slug,
+      label: seed.label,
+      route_type: seed.route_type,
+      provider: seed.provider,
+      config: seed.config,
+      active: true,
+    }));
+    const { error } = await sb
       .from("agent_brain_routes")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .eq("active", true);
-    return (retry || []) as BrainRouteRow[];
+      .upsert(rows, { onConflict: "tenant_id,slug" });
+    if (error) console.error("[agent-channel] seed routes failed", error.message);
   }
-  return (inserted || []) as BrainRouteRow[];
+
+  const parliament = (existing || []).find((r: { slug: string }) => r.slug === "parliament") as BrainRouteRow | undefined;
+  if (parliament) {
+    const cfg = (parliament.config && typeof parliament.config === "object") ? { ...parliament.config } : {};
+    const seats = Array.isArray(cfg.seats) ? cfg.seats.map(String) : [];
+    if (!seats.includes("codex")) {
+      await sb.from("agent_brain_routes").update({
+        label: "שולחן אבירים · Cursor + Grok + Codex",
+        config: { ...cfg, seats: [...(seats.length ? seats : ["cursor", "grok"]), "codex"], chair: "carmen" },
+      }).eq("id", parliament.id);
+    }
+  }
+
+  const { data: all } = await sb
+    .from("agent_brain_routes")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("active", true);
+  return (all || existing || []) as BrainRouteRow[];
 }
 
 export async function loadRoute(
@@ -108,8 +119,11 @@ export async function loadRoute(
       .maybeSingle();
     if (data) return data as BrainRouteRow;
   }
-  const slug = opts.slug || "internal";
-  return routes.find((r) => r.slug === slug) || routes.find((r) => r.route_type === "internal") || null;
+  const slug = opts.slug || "cursor";
+  return routes.find((r) => r.slug === slug)
+    || routes.find((r) => r.slug === "cursor")
+    || routes.find((r) => r.route_type === "internal")
+    || null;
 }
 
 export async function ensureConversation(

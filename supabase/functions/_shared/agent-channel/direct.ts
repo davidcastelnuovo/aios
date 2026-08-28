@@ -1,4 +1,4 @@
-import type { SendContext, SendResult } from "./types.ts";
+import type { CloudDirectProvider, SendContext, SendResult } from "./types.ts";
 import { acceptedMessageFor, capabilitiesForProvider } from "./logic.ts";
 import { createCloudAgent, followUpCloudAgent, cursorApiKey } from "./cursor-api.ts";
 import { mintCallbackToken } from "./hmac.ts";
@@ -11,9 +11,25 @@ function clip(text: string, max = MAX_TEXT): string {
   return text.length > max ? text.slice(0, max) : text;
 }
 
+function modelIdFor(provider: CloudDirectProvider): string {
+  if (provider === "grok") return Deno.env.get("GROK_MODEL_ID") || "cursor-grok-4.6-high-fast";
+  if (provider === "codex") return Deno.env.get("CODEX_MODEL_ID") || Deno.env.get("CURSOR_CODEX_MODEL_ID") || "";
+  return Deno.env.get("CURSOR_MODEL_ID") || "";
+}
+
+function envNameFor(provider: CloudDirectProvider): string | undefined {
+  if (provider === "codex") {
+    return Deno.env.get("CODEX_CLOUD_ENV_NAME") || Deno.env.get("CURSOR_CLOUD_ENV_NAME") || undefined;
+  }
+  if (provider === "grok") {
+    return Deno.env.get("GROK_CLOUD_ENV_NAME") || Deno.env.get("CURSOR_CLOUD_ENV_NAME") || undefined;
+  }
+  return Deno.env.get("CURSOR_CLOUD_ENV_NAME") || undefined;
+}
+
 export async function launchCloudDirect(
   ctx: SendContext,
-  provider: "cursor" | "grok",
+  provider: CloudDirectProvider,
   extraPrompt?: string,
   parliament?: { runId: string; round: number },
 ): Promise<SendResult> {
@@ -48,18 +64,17 @@ export async function launchCloudDirect(
       readOnly: !!parliament,
     });
 
-  const modelId = provider === "grok"
-    ? (Deno.env.get("GROK_MODEL_ID") || "cursor-grok-4.6-high-fast")
-    : (Deno.env.get("CURSOR_MODEL_ID") || "");
+  const modelId = modelIdFor(provider);
   const name = `AIOS ${provider} · ${ctx.content.slice(0, 40)}`;
+  const envName = envNameFor(provider);
 
   let fired: { url: string; id: string; reused: boolean };
   const stickyId = session.external_session_id;
   if (stickyId && stickyId.startsWith("bc-")) {
     const followed = await followUpCloudAgent(apiKey, stickyId, clip(prompt));
-    fired = followed || await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined });
+    fired = followed || await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
   } else {
-    fired = await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined });
+    fired = await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
   }
 
   const updated = await upsertRunningSession(sb, {
@@ -97,7 +112,7 @@ export async function launchCloudDirect(
 
 export async function launchParliamentSeat(
   ctx: SendContext,
-  provider: "cursor" | "grok",
+  provider: CloudDirectProvider,
   prompt: string,
   parliament: { runId: string; round: number },
 ): Promise<SendResult> {

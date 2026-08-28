@@ -21,10 +21,10 @@ function base(): ParliamentState {
   };
 }
 
-test("parliament MVP seats default to cursor+grok", () => {
-  assert.deepEqual(parliamentSeatsFromConfig({}), ["cursor", "grok"]);
-  assert.deepEqual(parliamentSeatsFromConfig({ seats: ["cursor", "grok", "claude", "chatgpt", "extra"] }), [
-    "cursor", "grok", "claude", "chatgpt",
+test("parliament MVP seats default to cursor+grok+codex", () => {
+  assert.deepEqual(parliamentSeatsFromConfig({}), ["cursor", "grok", "codex"]);
+  assert.deepEqual(parliamentSeatsFromConfig({ seats: ["cursor", "grok", "codex", "claude", "extra"] }), [
+    "cursor", "grok", "codex", "claude",
   ]);
 });
 
@@ -41,5 +41,6 @@ test("direct channels require a callback; internal streams", () => {
   assert.equal(capabilitiesForProvider("internal").streaming_reply, true);
   assert.equal(capabilitiesForProvider("internal").callback_required, false);
   assert.equal(capabilitiesForProvider("cursor").callback_required, true);
+  assert.equal(capabilitiesForProvider("codex").callback_required, true);
   assert.equal(capabilitiesForProvider("chatgpt").callback_required, true);
 });

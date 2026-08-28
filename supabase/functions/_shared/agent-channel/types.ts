@@ -1,6 +1,7 @@
 export type BrainMode = "internal" | "direct_channel" | "parliament";
 export type RouteType = BrainMode;
-export type ChannelProvider = "cursor" | "grok" | "claude" | "chatgpt" | "internal" | "parliament";
+export type ChannelProvider = "cursor" | "grok" | "codex" | "claude" | "chatgpt" | "internal" | "parliament";
+export type CloudDirectProvider = "cursor" | "grok" | "codex";
 export type ConversationStatus = "idle" | "streaming" | "waiting_external" | "debating" | "error";
 export type SessionStatus = "running" | "waiting" | "completed" | "failed" | "cancelled";
 export type MessageRole = "user" | "assistant" | "system" | "tool";
@@ -109,16 +110,17 @@ export const DEFAULT_BRAIN_ROUTE_SEEDS: Array<{
   provider: ChannelProvider | null;
   config: Record<string, unknown>;
 }> = [
-  { slug: "internal", label: "מוח פנימי · כרמן", route_type: "internal", provider: "internal", config: {} },
   { slug: "cursor", label: "Cursor Direct", route_type: "direct_channel", provider: "cursor", config: {} },
+  { slug: "internal", label: "מוח פנימי · כרמן", route_type: "internal", provider: "internal", config: {} },
   { slug: "grok", label: "Grok Bot Direct", route_type: "direct_channel", provider: "grok", config: {} },
+  { slug: "codex", label: "Codex Direct", route_type: "direct_channel", provider: "codex", config: {} },
   { slug: "claude", label: "Claude Direct", route_type: "direct_channel", provider: "claude", config: {} },
   { slug: "chatgpt", label: "ChatGPT Work Agent", route_type: "direct_channel", provider: "chatgpt", config: {} },
   {
     slug: "parliament",
-    label: "פרלמנט · Cursor + Grok",
+    label: "שולחן אבירים · Cursor + Grok + Codex",
     route_type: "parliament",
     provider: "parliament",
-    config: { seats: ["cursor", "grok"], rounds: 2, chair: "carmen", tools: "read_only" },
+    config: { seats: ["cursor", "grok", "codex"], rounds: 2, chair: "carmen", tools: "read_only" },
   },
 ];

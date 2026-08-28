@@ -21,7 +21,7 @@ export async function dispatchSend(ctx: SendContext): Promise<SendResult> {
     };
   }
 
-  if (kind === "cursor" || kind === "grok") return launchCloudDirect(ctx, kind);
+  if (kind === "cursor" || kind === "grok" || kind === "codex") return launchCloudDirect(ctx, kind);
   if (kind === "claude") return launchClaude(ctx);
   if (kind === "chatgpt") return launchChatgpt(ctx);
   if (kind === "parliament") return startParliament(ctx);

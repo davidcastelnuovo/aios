@@ -10,7 +10,7 @@ import {
 } from "./store.ts";
 import { onParliamentCallback } from "./parliament.ts";
 
-const ORIGINS = new Set<ChannelProvider>(["cursor", "grok", "claude", "chatgpt", "internal", "parliament"]);
+const ORIGINS = new Set<ChannelProvider>(["cursor", "grok", "codex", "claude", "chatgpt", "internal", "parliament"]);
 
 export async function ingestChannelReply(payload: CallbackPayload): Promise<{ duplicate: boolean; message_id: string }> {
   const origin = ORIGINS.has(payload.origin) ? payload.origin : "internal";

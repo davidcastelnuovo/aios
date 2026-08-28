@@ -1,5 +1,5 @@
 import { aiChat } from "../ai.ts";
-import type { ChannelProvider, SendContext, SendResult } from "./types.ts";
+import type { ChannelProvider, CloudDirectProvider, SendContext, SendResult } from "./types.ts";
 import {
   acceptedMessageFor,
   buildReviewPrompt,
@@ -7,6 +7,7 @@ import {
   canAdvanceToReview,
   canSynthesize,
   capabilitiesForProvider,
+  isCloudDirect,
   livingSeats,
   markParliamentFailed,
   parliamentRounds,
@@ -39,7 +40,7 @@ function withParliament(context: unknown, state: ParliamentState): Record<string
 
 export async function startParliament(ctx: SendContext): Promise<SendResult> {
   const sb = serviceClient();
-  const seats = parliamentSeatsFromConfig(ctx.route.config).filter((s): s is "cursor" | "grok" => s === "cursor" || s === "grok");
+  const seats = parliamentSeatsFromConfig(ctx.route.config).filter(isCloudDirect);
   const maxRounds = parliamentRounds(ctx.route.config);
   const state: ParliamentState = {
     round: 1,
@@ -103,7 +104,7 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
   if (!living.length) {
     await setConversationStatus(sb, ctx.conversationId, "error");
     await sb.from("agent_runs").update({ status: "failed", error_message: "all seats failed to start" }).eq("id", parent.id);
-    throw new Error("Parliament could not start — Cursor and Grok both failed to launch.");
+    throw new Error("Parliament could not start — all seats failed to launch.");
   }
 
   await logChannelAction(sb, {
@@ -176,11 +177,11 @@ export async function onParliamentCallback(args: {
     });
     const ctx = await rebuildCtx(run, args.conversationId, state);
     const launches = livingSeats(state)
-      .filter((s) => s.provider === "cursor" || s.provider === "grok")
+      .filter((s) => isCloudDirect(s.provider))
       .map((s) =>
         launchParliamentSeat(
           ctx,
-          s.provider as "cursor" | "grok",
+          s.provider as CloudDirectProvider,
           buildReviewPrompt(state, s.provider),
           { runId, round: 2 },
         ).catch(async (err) => {
@@ -215,7 +216,7 @@ async function rebuildCtx(run: any, conversationId: string, state: ParliamentSta
       route_type: "parliament",
       provider: "parliament",
       connection_id: null,
-      config: { seats: ["cursor", "grok"], rounds: 2 },
+      config: { seats: ["cursor", "grok", "codex"], rounds: 2 },
       active: true,
     },
     content: state.topic || run.goal,
@@ -375,9 +376,9 @@ export async function forceContinueParliament(conversationId: string): Promise<{
     const ctx = await rebuildCtx(run, conversationId, state);
     await Promise.allSettled(
       living
-        .filter((s) => s.provider === "cursor" || s.provider === "grok")
+        .filter((s) => isCloudDirect(s.provider))
         .map((s) =>
-          launchParliamentSeat(ctx, s.provider as "cursor" | "grok", buildReviewPrompt(state, s.provider), {
+          launchParliamentSeat(ctx, s.provider as CloudDirectProvider, buildReviewPrompt(state, s.provider), {
             runId: run.id,
             round: 2,
           }),
@@ -401,7 +402,7 @@ export async function forceSynthesizeParliament(conversationId: string): Promise
 
 export async function clarifyParliamentSeat(
   conversationId: string,
-  provider: "cursor" | "grok",
+  provider: CloudDirectProvider,
   question: string,
 ): Promise<{ ok: true; status: string }> {
   const loaded = await loadRunningParliament(conversationId);

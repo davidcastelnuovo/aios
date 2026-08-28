@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   FALLBACK_BRAIN_ROUTES,
   isInputLocked,
+  pickDefaultRoute,
   sendPathForRoute,
   storageKeyForRoute,
   type BrainRoute,
@@ -54,11 +55,9 @@ export function useBrainChannel(tenantId: string | null) {
         const json = await res.json();
         const list = Array.isArray(json.routes) && json.routes.length ? json.routes as BrainRoute[] : FALLBACK_BRAIN_ROUTES;
         setRoutes(list);
-        const match = list.find((r) => r.id === saved || r.slug === saved) || list.find((r) => r.slug === "internal") || list[0];
-        setSelected(match);
+        setSelected(pickDefaultRoute(list, saved));
       } catch {
-        const match = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === saved) || FALLBACK_BRAIN_ROUTES[0];
-        setSelected(match);
+        setSelected(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, saved));
       }
     })();
   }, [tenantId]);

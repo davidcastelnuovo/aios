@@ -1,4 +1,10 @@
-import type { AdapterCapabilities, ChannelProvider, ConversationStatus } from "./types.ts";
+import type { AdapterCapabilities, ChannelProvider, CloudDirectProvider, ConversationStatus } from "./types.ts";
+
+export const CLOUD_DIRECT_PROVIDERS: CloudDirectProvider[] = ["cursor", "grok", "codex"];
+
+export function isCloudDirect(provider: string): provider is CloudDirectProvider {
+  return provider === "cursor" || provider === "grok" || provider === "codex";
+}
 
 export function capabilitiesForProvider(provider: ChannelProvider): AdapterCapabilities {
   switch (provider) {
@@ -14,6 +20,7 @@ export function capabilitiesForProvider(provider: ChannelProvider): AdapterCapab
       };
     case "cursor":
     case "grok":
+    case "codex":
       return {
         streaming_reply: false,
         async_reply: true,
@@ -54,13 +61,13 @@ export function statusForKind(kind: ChannelProvider): ConversationStatus {
 }
 
 export function parliamentSeatsFromConfig(config: Record<string, unknown> | null | undefined): ChannelProvider[] {
-  const raw = Array.isArray(config?.seats) ? config!.seats : ["cursor", "grok"];
-  const allowed = new Set<ChannelProvider>(["cursor", "grok", "claude", "chatgpt"]);
+  const raw = Array.isArray(config?.seats) ? config!.seats : ["cursor", "grok", "codex"];
+  const allowed = new Set<ChannelProvider>(["cursor", "grok", "codex", "claude", "chatgpt"]);
   const seats = raw
     .map((s) => String(s) as ChannelProvider)
     .filter((s) => allowed.has(s))
     .slice(0, 4);
-  return seats.length ? seats : ["cursor", "grok"];
+  return seats.length ? seats : ["cursor", "grok", "codex"];
 }
 
 export function parliamentRounds(config: Record<string, unknown> | null | undefined): number {
@@ -180,12 +187,14 @@ export function acceptedMessageFor(kind: ChannelProvider, url?: string | null): 
       return url ? `נשלח ל-Cursor Direct. מעקב: ${url}` : "נשלח ל-Cursor Direct. מחכה לתשובה בשיחה הזו.";
     case "grok":
       return url ? `נשלח ל-Grok Bot Direct. מעקב: ${url}` : "נשלח ל-Grok Bot Direct. מחכה לתשובה בשיחה הזו.";
+    case "codex":
+      return url ? `נשלח ל-Codex Direct. מעקב: ${url}` : "נשלח ל-Codex Direct. מחכה לתשובה בשיחה הזו.";
     case "claude":
       return url ? `נשלח ל-Claude Direct. מעקב: ${url}` : "נשלח ל-Claude Direct. מחכה לתשובה בשיחה הזו.";
     case "chatgpt":
       return url ? `נשלח ל-ChatGPT Work Agent. מעקב: ${url}` : "נשלח ל-ChatGPT Work Agent. מחכה לתשובה בשיחה הזו.";
     case "parliament":
-      return "פרלמנט נפתח — Cursor ו-Grok דנים. השיחה נעולה עד הסיכום של כרמן.";
+      return "שולחן אבירים נפתח — Cursor, Grok ו-Codex דנים. השיחה נעולה עד הסיכום של כרמן.";
   }
 }
 

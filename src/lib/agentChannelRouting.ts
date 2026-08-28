@@ -1,5 +1,5 @@
 export type BrainRouteType = "internal" | "direct_channel" | "parliament";
-export type BrainProvider = "internal" | "cursor" | "grok" | "claude" | "chatgpt" | "parliament";
+export type BrainProvider = "internal" | "cursor" | "grok" | "claude" | "chatgpt" | "codex" | "parliament";
 export type ConversationChannelStatus = "idle" | "streaming" | "waiting_external" | "debating" | "error";
 
 export type BrainRoute = {
@@ -14,17 +14,28 @@ export type BrainRoute = {
   session_status?: string | null;
 };
 
+export const DEFAULT_BRAIN_SLUG = "cursor";
+
 export const FALLBACK_BRAIN_ROUTES: BrainRoute[] = [
-  { id: "fallback-internal", slug: "internal", label: "מוח פנימי · כרמן", route_type: "internal", provider: "internal" },
   { id: "fallback-cursor", slug: "cursor", label: "Cursor Direct", route_type: "direct_channel", provider: "cursor" },
+  { id: "fallback-internal", slug: "internal", label: "מוח פנימי · כרמן", route_type: "internal", provider: "internal" },
   { id: "fallback-grok", slug: "grok", label: "Grok Bot Direct", route_type: "direct_channel", provider: "grok" },
+  { id: "fallback-codex", slug: "codex", label: "Codex Direct", route_type: "direct_channel", provider: "codex" },
   { id: "fallback-claude", slug: "claude", label: "Claude Direct", route_type: "direct_channel", provider: "claude" },
   { id: "fallback-chatgpt", slug: "chatgpt", label: "ChatGPT Work Agent", route_type: "direct_channel", provider: "chatgpt" },
-  { id: "fallback-parliament", slug: "parliament", label: "פרלמנט · Cursor + Grok", route_type: "parliament", provider: "parliament" },
+  { id: "fallback-parliament", slug: "parliament", label: "שולחן אבירים · Cursor + Grok + Codex", route_type: "parliament", provider: "parliament", config: { seats: ["cursor", "grok", "codex"], rounds: 2, chair: "carmen" } },
 ];
 
 export function storageKeyForRoute(tenantId: string): string {
   return `aios:brain-route:${tenantId}`;
+}
+
+export function pickDefaultRoute(list: BrainRoute[], saved?: string | null): BrainRoute {
+  if (saved) {
+    const hit = list.find((r) => r.id === saved || r.slug === saved);
+    if (hit) return hit;
+  }
+  return list.find((r) => r.slug === DEFAULT_BRAIN_SLUG) || list[0];
 }
 
 export function isInputLocked(status: ConversationChannelStatus | string | null | undefined): boolean {
@@ -47,7 +58,8 @@ export function speakerLabel(speaker?: string | null, channel?: string | null): 
     case "grok": return "Grok";
     case "claude": return "Claude";
     case "chatgpt": return "ChatGPT";
-    case "parliament": return "פרלמנט";
+    case "codex": return "Codex";
+    case "parliament": return "שולחן אבירים";
     default: return speaker || channel || "כרמן";
   }
 }
@@ -60,7 +72,7 @@ export function sendPathForRoute(route: BrainRoute | null | undefined): "interna
 export function parliamentSeats(route: BrainRoute | null | undefined): string[] {
   const raw = route?.config?.seats;
   if (Array.isArray(raw) && raw.length) return raw.map(String);
-  return ["cursor", "grok"];
+  return ["cursor", "grok", "codex"];
 }
 
 export type ParliamentSeatStateUi = "waiting" | "thinking" | "replied" | "reviewing" | "failed";
@@ -82,10 +94,12 @@ export type ChatLike = {
 };
 
 const SEAT_LABEL: Record<string, string> = {
+  carmen: "כרמן",
   cursor: "Cursor",
   grok: "Grok",
   claude: "Claude",
   chatgpt: "ChatGPT",
+  codex: "Codex",
 };
 
 export function deriveParliamentView(

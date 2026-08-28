@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   FALLBACK_BRAIN_ROUTES,
+  DEFAULT_BRAIN_SLUG,
   deriveParliamentView,
   groupLabel,
   isInputLocked,
   parliamentSeats,
+  pickDefaultRoute,
   sendPathForRoute,
   speakerLabel,
 } from "./agentChannelRouting.ts";
@@ -27,13 +29,20 @@ test("debate and waiting_external lock the composer", () => {
 
 test("speaker labels distinguish channels", () => {
   assert.equal(speakerLabel("cursor"), "Cursor");
+  assert.equal(speakerLabel("codex"), "Codex");
   assert.equal(speakerLabel("carmen", "internal"), "כרמן");
   assert.equal(groupLabel("direct_channel"), "ערוץ ישיר");
 });
 
-test("parliament MVP seats are Cursor + Grok", () => {
+test("default brain is Cursor Direct", () => {
+  assert.equal(DEFAULT_BRAIN_SLUG, "cursor");
+  assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES).slug, "cursor");
+  assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, "grok").slug, "grok");
+});
+
+test("parliament seats are Cursor + Grok + Codex", () => {
   const p = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "parliament")!;
-  assert.deepEqual(parliamentSeats(p), ["cursor", "grok"]);
+  assert.deepEqual(parliamentSeats(p), ["cursor", "grok", "codex"]);
 });
 
 test("parliament view maps seat replies and advances to review round", () => {

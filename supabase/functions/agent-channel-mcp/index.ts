@@ -18,7 +18,7 @@ const TOOLS = [
       properties: {
         conversation_id: { type: "string" },
         session_id: { type: "string" },
-        origin: { type: "string", description: "cursor | grok | claude | chatgpt | parliament" },
+        origin: { type: "string", description: "cursor | grok | codex | claude | chatgpt | parliament" },
         content: { type: "string", description: "Full answer to show David in Carmen's chat." },
         idempotency_key: { type: "string" },
         parliament_round: { type: "number" },

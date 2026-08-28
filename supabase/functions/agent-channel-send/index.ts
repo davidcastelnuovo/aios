@@ -75,7 +75,9 @@ Deno.serve(async (req) => {
     const provider = String(body.provider || "");
     const question = String(body.content || body.question || "").trim();
     if (!conversationId || !question) return json(400, { error: "conversation_id and content are required" });
-    if (provider !== "cursor" && provider !== "grok") return json(400, { error: "clarify only supports cursor or grok" });
+    if (provider !== "cursor" && provider !== "grok" && provider !== "codex") {
+      return json(400, { error: "clarify only supports cursor, grok, or codex" });
+    }
     return json(200, await clarifyParliamentSeat(conversationId, provider, question));
   }
 
