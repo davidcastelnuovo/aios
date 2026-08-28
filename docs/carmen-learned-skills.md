@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-28 — פרסום דף נחיתה לאתר PBN קיים (מגזין site-01..site-10)
+- **Skin slug:** `publish_landing_to_pbn` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Publish a Hebrew RTL landing/article onto an existing magazine PBN site without inventing a domain. Look up `publishing_sites` by `site_key`, insert/upsert `publishing_articles` as `published`, return `{base_url}/articles/{slug}` only after GET 200.
+- **How:** Magazine pipeline = published row → `publishing-feed?site_id=` → Vercel `api/article.js` (cache ~60s). Canonical URL is `publishing_sites.base_url`, not `aios-magazine-site-NN.vercel.app`. CTA must be a real `target_url`. Content is a jsonb string array (`## `, `LIST:`, `TIP:`). Unique key `(tenant_id, target_url, primary_keyword, proposed_topic)`. Example: site-03 מרחב עסקי → `https://ai-online.online/articles/level-up-masterclass`.
+- **Origin:** Carmen → Cursor — "Publish LEVEL Up MASTERCLASS to site-03 (מרחב עסקי). Return live HTTPS URL only after 200. Do not invent URL."
+
 ### 2026-08-28 — סטטוס מרכז הבקרה / פרויקט Cursor
 - **Skin slug:** `command_center_cursor_project_status` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When David asks what happened to the Cursor Command Center project, answer from PR #499 + preview vs live, without opening a new coding task.
