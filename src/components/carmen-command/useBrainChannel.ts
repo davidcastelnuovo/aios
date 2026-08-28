@@ -159,6 +159,24 @@ export function useBrainChannel(tenantId: string | null) {
     setStatus("idle");
   }, [tenantId]);
 
+  const parliamentAction = useCallback(async (
+    action: "parliament_continue" | "parliament_synthesize" | "parliament_clarify",
+    conversationId: string | null,
+    extra?: Record<string, string>,
+  ) => {
+    if (!tenantId || !conversationId) return;
+    const headers = await authHeader();
+    const res = await fetch(FN, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ action, tenant_id: tenantId, conversation_id: conversationId, ...(extra || {}) }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || "פעולת פרלמנט נכשלה");
+    if (json.status) setStatus(json.status);
+    return json;
+  }, [tenantId]);
+
   return {
     routes,
     selected,
@@ -171,6 +189,7 @@ export function useBrainChannel(tenantId: string | null) {
     send,
     persistAssistant,
     cancelParliament,
+    parliamentAction,
     sendPath: sendPathForRoute(selected),
   };
 }

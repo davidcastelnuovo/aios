@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   FALLBACK_BRAIN_ROUTES,
+  deriveParliamentView,
   groupLabel,
   isInputLocked,
   parliamentSeats,
@@ -33,4 +34,21 @@ test("speaker labels distinguish channels", () => {
 test("parliament MVP seats are Cursor + Grok", () => {
   const p = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "parliament")!;
   assert.deepEqual(parliamentSeats(p), ["cursor", "grok"]);
+});
+
+test("parliament view maps seat replies and advances to review round", () => {
+  const p = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "parliament")!;
+  const view = deriveParliamentView([
+    { role: "user", content: "איך לשחרר את הדופק?" },
+    { role: "tool_call", tool: "פרלמנט נפתח — סבב 1", channel: "parliament" },
+    { role: "assistant", speaker: "cursor", channel: "cursor", content: "תקן את ה-JID" },
+    { role: "tool_call", tool: "סבב ביקורת — כל מושב מקבל את תשובות האחרים." },
+  ], p);
+  assert.equal(view.round, 2);
+  assert.equal(view.topic, "איך לשחרר את הדופק?");
+  const cursor = view.seats.find((s) => s.provider === "cursor")!;
+  const grok = view.seats.find((s) => s.provider === "grok")!;
+  assert.equal(cursor.state, "reviewing");
+  assert.equal(grok.state, "waiting");
+  assert.match(cursor.preview || "", /JID/);
 });

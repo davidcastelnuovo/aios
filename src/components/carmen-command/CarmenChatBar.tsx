@@ -12,7 +12,7 @@ import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
 import { BrainRouteSelector } from "./BrainRouteSelector";
 import { ParliamentBoard } from "./ParliamentBoard";
 import { useBrainChannel } from "./useBrainChannel";
-import { speakerLabel } from "@/lib/agentChannelRouting";
+import { deriveParliamentView, speakerLabel } from "@/lib/agentChannelRouting";
 import {
   CarmenInputMode,
   onRealtimeUnavailable,
@@ -109,6 +109,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const { toast } = useToast();
     const brain = useBrainChannel(tenantId);
     const [conversationId, setConversationId] = useState<string | null>(null);
+    const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
 
     const scrollDown = () => {
       requestAnimationFrame(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }));
@@ -762,15 +763,30 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     }), [sendText, startVoice]);
 
     const hasThread = messages.length > 0 || !!streamingText;
+    const parliamentView = deriveParliamentView(messages, brain.selected);
 
     return (
       <div className="cc-panel cc-talkbar flex flex-col overflow-hidden">
         {brain.selected.route_type === "parliament" && (
           <ParliamentBoard
             route={brain.selected}
-            round={brain.status === "debating" ? 1 : 1}
-            topic={messages.find(m => m.role === "user")?.content}
+            round={parliamentView.round}
+            maxRounds={parliamentView.maxRounds}
+            topic={parliamentView.topic}
+            seats={parliamentView.seats}
+            carmenSummary={parliamentView.carmenSummary}
+            selectedProvider={selectedSeat}
+            debating={brain.status === "debating"}
+            onSelectSeat={setSelectedSeat}
             onCancel={conversationId ? () => brain.cancelParliament(conversationId) : undefined}
+            onContinue={conversationId ? () => brain.parliamentAction("parliament_continue", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
+            onSynthesize={conversationId ? () => brain.parliamentAction("parliament_synthesize", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
+            onClarify={conversationId ? (provider) => {
+              const q = input.trim() || "אפשר לפרט את ההמלצה ואת הסיכון העיקרי?";
+              brain.parliamentAction("parliament_clarify", conversationId, { provider, content: q })
+                .then(() => setInput(""))
+                .catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" }));
+            } : undefined}
           />
         )}
         {showHistory && (

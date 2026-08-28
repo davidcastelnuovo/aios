@@ -61,6 +61,8 @@ OpenAI Realtime הוא מעטפת שמע בלבד. `ask_carmen` ב-Live עובר
 
 Cursor + Grok, שני סבבים, כרמן מסכמת. כשל חלקי לא מפיל את הדיון. בזמן דיון הכלים read-only ואין פרלמנט מקונן. השיחה נעולה עד הסיכום.
 
+כפתורים בלוח: **המשך סבב** (מדלג על מושב שותק), **סיים וסכם**, **בקש הבהרה** ממושב שנבחר, **עצור**. פעולות: `parliament_continue` / `parliament_synthesize` / `parliament_clarify` על `agent-channel-send`.
+
 ## פריסה
 
 הפונקציות עולות עם `deploy-edge-function.yml` אחרי merge ל-`main`. המיגרציה צריכה לרוץ על פרוד לפני שה-UI כותב לטבלאות החדשות; עד אז הבורר עובד עם fallback מקומי והמוח הפנימי ממשיך ב-`run-ai-agent`.

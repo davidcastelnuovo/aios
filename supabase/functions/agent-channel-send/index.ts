@@ -2,7 +2,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { requireAuth } from "../_shared/security.ts";
 import { dispatchSend } from "../_shared/agent-channel/adapters.ts";
 import type { InputMode, SendResult } from "../_shared/agent-channel/types.ts";
-import { cancelParliament } from "../_shared/agent-channel/parliament.ts";
+import { cancelParliament, clarifyParliamentSeat, forceContinueParliament, forceSynthesizeParliament } from "../_shared/agent-channel/parliament.ts";
 import {
   duplicateSendResult,
   ensureConversation,
@@ -56,6 +56,27 @@ Deno.serve(async (req) => {
     if (!conversationId) return json(400, { error: "conversation_id is required" });
     await cancelParliament(conversationId);
     return json(200, { ok: true, status: "idle" });
+  }
+
+  if (action === "parliament_continue") {
+    const conversationId = String(body.conversation_id || "");
+    if (!conversationId) return json(400, { error: "conversation_id is required" });
+    return json(200, await forceContinueParliament(conversationId));
+  }
+
+  if (action === "parliament_synthesize") {
+    const conversationId = String(body.conversation_id || "");
+    if (!conversationId) return json(400, { error: "conversation_id is required" });
+    return json(200, await forceSynthesizeParliament(conversationId));
+  }
+
+  if (action === "parliament_clarify") {
+    const conversationId = String(body.conversation_id || "");
+    const provider = String(body.provider || "");
+    const question = String(body.content || body.question || "").trim();
+    if (!conversationId || !question) return json(400, { error: "conversation_id and content are required" });
+    if (provider !== "cursor" && provider !== "grok") return json(400, { error: "clarify only supports cursor or grok" });
+    return json(200, await clarifyParliamentSeat(conversationId, provider, question));
   }
 
   if (action === "persist_assistant") {

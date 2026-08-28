@@ -288,21 +288,12 @@ function fallbackSynthesis(state: ParliamentState): string {
 }
 
 export async function cancelParliament(conversationId: string): Promise<void> {
-  const sb = serviceClient();
-  const { data: run } = await sb
-    .from("agent_runs")
-    .select("id, context, tenant_id")
-    .eq("conversation_id", conversationId)
-    .eq("trigger_source", "parliament")
-    .eq("status", "running")
-    .order("started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!run) {
-    await setConversationStatus(sb, conversationId, "idle");
+  const loaded = await loadRunningParliament(conversationId);
+  if (!loaded.run) {
+    await setConversationStatus(serviceClient(), conversationId, "idle");
     return;
   }
-  const state = stateFromRun(run);
+  const { sb, run, state } = loaded;
   await sb
     .from("agent_runs")
     .update({
@@ -328,4 +319,110 @@ export async function cancelParliament(conversationId: string): Promise<void> {
     event_type: "system",
     correlation_id: run.id,
   });
+}
+
+async function loadRunningParliament(conversationId: string): Promise<{
+  sb: ReturnType<typeof serviceClient>;
+  run: any | null;
+  state: ParliamentState | null;
+}> {
+  const sb = serviceClient();
+  const { data: run } = await sb
+    .from("agent_runs")
+    .select("*")
+    .eq("conversation_id", conversationId)
+    .eq("trigger_source", "parliament")
+    .eq("status", "running")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return { sb, run: run || null, state: run ? stateFromRun(run) : null };
+}
+
+function skipSilentSeats(state: ParliamentState): ParliamentState {
+  let next = state;
+  for (const seat of Object.values(state.seats)) {
+    const hasAnswer = state.round >= 2 ? !!(seat.round2 || seat.round1) : !!seat.round1;
+    if (!hasAnswer && !seat.failed) {
+      next = markParliamentFailed(next, seat.provider, "skipped — no answer in time");
+    }
+  }
+  return next;
+}
+
+/** Skip silent seats and start round 2, or synthesize if already in review. */
+export async function forceContinueParliament(conversationId: string): Promise<{ ok: true; status: string }> {
+  const loaded = await loadRunningParliament(conversationId);
+  if (!loaded.run || !loaded.state) throw new Error("no running parliament");
+  const { sb, run } = loaded;
+  let state = skipSilentSeats(loaded.state);
+  await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", run.id);
+
+  const living = livingSeats(state);
+  if (state.status === "round1" && state.max_rounds >= 2 && living.some((s) => s.round1)) {
+    state = { ...state, round: 2, status: "round2" };
+    await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", run.id);
+    await insertMessage(sb, {
+      tenant_id: run.tenant_id,
+      conversation_id: conversationId,
+      role: "system",
+      speaker: "carmen",
+      channel: "parliament",
+      content: "סבב ביקורת — כל מושב מקבל את תשובות האחרים.",
+      event_type: "progress",
+      correlation_id: run.id,
+    });
+    const ctx = await rebuildCtx(run, conversationId, state);
+    await Promise.allSettled(
+      living
+        .filter((s) => s.provider === "cursor" || s.provider === "grok")
+        .map((s) =>
+          launchParliamentSeat(ctx, s.provider as "cursor" | "grok", buildReviewPrompt(state, s.provider), {
+            runId: run.id,
+            round: 2,
+          }),
+        ),
+    );
+    return { ok: true, status: "debating" };
+  }
+
+  await synthesizeParliament(run.id, run.tenant_id, conversationId, { ...state, status: "synthesizing" }, run.context);
+  return { ok: true, status: "idle" };
+}
+
+export async function forceSynthesizeParliament(conversationId: string): Promise<{ ok: true; status: string }> {
+  const loaded = await loadRunningParliament(conversationId);
+  if (!loaded.run || !loaded.state) throw new Error("no running parliament");
+  const { run, state } = loaded;
+  const skipped = skipSilentSeats(state);
+  await synthesizeParliament(run.id, run.tenant_id, conversationId, { ...skipped, status: "synthesizing" }, run.context);
+  return { ok: true, status: "idle" };
+}
+
+export async function clarifyParliamentSeat(
+  conversationId: string,
+  provider: "cursor" | "grok",
+  question: string,
+): Promise<{ ok: true; status: string }> {
+  const loaded = await loadRunningParliament(conversationId);
+  if (!loaded.run || !loaded.state) throw new Error("no running parliament");
+  const { run, state } = loaded;
+  const ctx = await rebuildCtx(run, conversationId, state);
+  const prompt =
+    `PARLIAMENT CLARIFICATION from Carmen (chair).\n` +
+    `Topic:\n${state.topic}\n\n` +
+    `David / Carmen asks:\n${question}\n\n` +
+    `Answer this clarification only. Read-only. Do not start another parliament.`;
+  await launchParliamentSeat(ctx, provider, prompt, { runId: run.id, round: state.round });
+  await insertMessage(serviceClient(), {
+    tenant_id: run.tenant_id,
+    conversation_id: conversationId,
+    role: "system",
+    speaker: "carmen",
+    channel: "parliament",
+    content: `בקשת הבהרה מ-${provider}: ${question}`,
+    event_type: "progress",
+    correlation_id: run.id,
+  });
+  return { ok: true, status: "debating" };
 }

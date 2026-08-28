@@ -62,3 +62,79 @@ export function parliamentSeats(route: BrainRoute | null | undefined): string[] 
   if (Array.isArray(raw) && raw.length) return raw.map(String);
   return ["cursor", "grok"];
 }
+
+export type ParliamentSeatStateUi = "waiting" | "thinking" | "replied" | "reviewing" | "failed";
+
+export type ParliamentSeatView = {
+  provider: string;
+  label: string;
+  state: ParliamentSeatStateUi;
+  preview?: string;
+  url?: string | null;
+};
+
+export type ChatLike = {
+  role: string;
+  content?: string;
+  speaker?: string;
+  channel?: string;
+  tool?: string;
+};
+
+const SEAT_LABEL: Record<string, string> = {
+  cursor: "Cursor",
+  grok: "Grok",
+  claude: "Claude",
+  chatgpt: "ChatGPT",
+};
+
+export function deriveParliamentView(
+  messages: ChatLike[],
+  route: BrainRoute | null,
+): {
+  round: number;
+  maxRounds: number;
+  topic: string;
+  seats: ParliamentSeatView[];
+  carmenSummary: string | null;
+} {
+  const names = parliamentSeats(route);
+  const topic = [...messages].reverse().find((m) => m.role === "user")?.content?.trim() || "";
+  const joined = messages.map((m) => `${m.tool || ""} ${m.content || ""}`).join("\n");
+  const round = /סבב ביקורת|round 2/i.test(joined) ? 2 : 1;
+  const carmenSummary =
+    [...messages].reverse().find((m) =>
+      m.role === "assistant" &&
+      (m.speaker === "carmen" || m.channel === "parliament") &&
+      (m.content || "").includes("המלצ"),
+    )?.content ||
+    [...messages].reverse().find((m) =>
+      m.role === "assistant" && m.speaker === "carmen" && m.channel === "parliament" && (m.content || "").length > 80,
+    )?.content ||
+    null;
+
+  const seats: ParliamentSeatView[] = names.map((provider) => {
+    const replies = messages.filter((m) =>
+      (m.role === "assistant" || m.role === "tool_call") &&
+      (m.channel === provider || m.speaker === provider),
+    );
+    const failed = messages.some((m) =>
+      (m.channel === provider || (m.content || "").toLowerCase().includes(provider)) &&
+      /נכשל|failed|timeout/i.test(`${m.content || ""} ${m.tool || ""}`),
+    );
+    const last = replies.filter((m) => m.role === "assistant").at(-1);
+    let state: ParliamentSeatStateUi = "waiting";
+    if (failed && !last) state = "failed";
+    else if (round >= 2 && last) state = replies.filter((m) => m.role === "assistant").length >= 2 ? "replied" : "reviewing";
+    else if (last) state = "replied";
+    else if (replies.length || /נשלח ל-|parliament|חושב/i.test(joined)) state = round >= 2 ? "reviewing" : "thinking";
+    return {
+      provider,
+      label: SEAT_LABEL[provider] || provider,
+      state,
+      preview: last?.content?.slice(0, 800),
+    };
+  });
+
+  return { round, maxRounds: 2, topic, seats, carmenSummary };
+}

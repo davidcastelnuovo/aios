@@ -1,6 +1,12 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { requireAuth } from "../_shared/security.ts";
-import { cancelParliament, startParliament } from "../_shared/agent-channel/parliament.ts";
+import {
+  cancelParliament,
+  clarifyParliamentSeat,
+  forceContinueParliament,
+  forceSynthesizeParliament,
+  startParliament,
+} from "../_shared/agent-channel/parliament.ts";
 import {
   ensureConversation,
   loadRoute,
@@ -32,11 +38,26 @@ Deno.serve(async (req) => {
   if (!(await userHasTenantAccess(sb, auth.userId, tenantId))) return json(403, { error: "Forbidden" });
 
   const action = String(body.action || "start");
+  const conversationId = String(body.conversation_id || "");
   if (action === "cancel") {
-    const conversationId = String(body.conversation_id || "");
     if (!conversationId) return json(400, { error: "conversation_id is required" });
     await cancelParliament(conversationId);
     return json(200, { ok: true, status: "idle" });
+  }
+  if (action === "continue") {
+    if (!conversationId) return json(400, { error: "conversation_id is required" });
+    return json(200, await forceContinueParliament(conversationId));
+  }
+  if (action === "synthesize") {
+    if (!conversationId) return json(400, { error: "conversation_id is required" });
+    return json(200, await forceSynthesizeParliament(conversationId));
+  }
+  if (action === "clarify") {
+    const provider = String(body.provider || "");
+    const question = String(body.content || body.question || "").trim();
+    if (!conversationId || !question) return json(400, { error: "conversation_id and content are required" });
+    if (provider !== "cursor" && provider !== "grok") return json(400, { error: "clarify only supports cursor or grok" });
+    return json(200, await clarifyParliamentSeat(conversationId, provider, question));
   }
 
   const content = String(body.content || body.goal || "").trim();
