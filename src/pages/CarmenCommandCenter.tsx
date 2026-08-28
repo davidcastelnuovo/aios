@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Menu } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
@@ -22,8 +22,8 @@ function Clock() {
   }, []);
   return (
     <div className="text-left leading-tight">
-      <p className="cc-num text-lg font-bold">{now.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</p>
-      <p className="text-[11px] text-[var(--cc-text-dim)]">{now.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" })}</p>
+      <p className="cc-num text-base font-bold sm:text-lg">{now.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</p>
+      <p className="hidden text-[11px] text-[var(--cc-text-dim)] sm:block">{now.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" })}</p>
     </div>
   );
 }
@@ -42,6 +42,7 @@ export default function CarmenCommandCenter() {
   const audioLevelRef = useRef(0);
   const chatRef = useRef<CarmenChatBarHandle>(null);
   const alertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Critical alert → brief face flash (unless she's mid-conversation)
   const flashAlert = useCallback(() => {
@@ -64,53 +65,65 @@ export default function CarmenCommandCenter() {
   if (access.loading) return <div className="cc-root h-dvh" />;
   if (!access.allowed) return <Navigate to={tenantSlug ? `/t/${tenantSlug}` : "/"} replace />;
 
+  const rails: ReactNode = (
+    <>
+      <TasksPanel tenantId={tenantId} className="max-h-[300px] shrink-0" />
+      <TimelinePanel tenantId={tenantId} className="max-h-[240px] shrink-0" />
+      <CoreOverviewPanel tenantId={tenantId} className="shrink-0" />
+      <IntelFeedPanel tenantId={tenantId} className="max-h-[300px] shrink-0" />
+      <QuickCommandsPanel
+        onCommand={(text) => { chatRef.current?.prefill(text); setMenuOpen(false); }}
+        onVoice={() => { chatRef.current?.startVoice(); setMenuOpen(false); }}
+        onHealthCheck={healthCheck}
+        className="shrink-0"
+      />
+      <HealthPanel tenantId={tenantId} className="shrink-0" />
+      <UsagePanel tenantId={tenantId} className="shrink-0" />
+    </>
+  );
+
   return (
     <div dir="rtl" className="cc-root flex h-dvh flex-col overflow-hidden font-heebo">
-      {/* Header */}
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--cc-line)] px-4 py-2">
-        <div className="flex items-center gap-3">
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--cc-line)] px-3 py-2 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              title="פרמטרים"
+              className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--cc-line)] text-[var(--cc-accent)] lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
           <Link
             to={tenantSlug ? `/t/${tenantSlug}` : "/"}
             title="חזרה לאפליקציה"
             className="flex items-center gap-1 rounded-md border border-[var(--cc-line)] px-2 py-1 text-xs text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)] hover:text-[var(--cc-text)]"
           >
             <ArrowRight className="h-3.5 w-3.5" />
-            חזרה
+            <span className="hidden sm:inline">חזרה</span>
           </Link>
-          <h1 className="cc-title text-lg font-bold text-[var(--cc-accent)]">CARMEN</h1>
-          <span className="hidden text-xs tracking-[0.15em] text-[var(--cc-text-dim)] sm:inline">COMMAND CENTER · מרכז פיקוד</span>
+          <h1 className="cc-title text-base font-bold text-[var(--cc-accent)] sm:text-lg">CARMEN</h1>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="cc-chip text-xs">
-            <span className="cc-live-dot inline-block h-2 w-2 rounded-full bg-[var(--cc-ok)]" />
-            <span className="text-[var(--cc-text-dim)]">סטטוס מערכת</span>
-            <span className="font-bold text-[var(--cc-ok)]">תקין</span>
-          </span>
-          <Clock />
-        </div>
+        <Clock />
       </header>
 
-      {/* Main grid — Carmen owns the whole center; every panel lives in the side rails */}
-      <main className="cc-scroll grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-12 lg:overflow-hidden">
-        {/* Center — Carmen, full height inside the sphere */}
-        <div className="order-1 flex min-h-[320px] lg:order-2 lg:col-span-6">
-          <div className="cc-panel relative flex-1 overflow-hidden">
-            <CarmenFace state={faceState} audioLevelRef={audioLevelRef} className="absolute inset-0 h-full w-full" />
-            <span className="absolute right-3 top-2 text-[10px] tracking-[0.2em] text-[var(--cc-text-dim)]">
-              CARMEN AI CORE · {faceState === "listening" ? "מקשיבה…" : faceState === "speaking" ? "מדברת…" : faceState === "alert" ? "התראה!" : "בהמתנה"}
-            </span>
-          </div>
-        </div>
-
-        {/* Right rail */}
-        <div className="cc-scroll order-2 flex min-h-0 flex-col gap-3 lg:order-1 lg:col-span-3 lg:overflow-y-auto">
+      <main className="hidden min-h-0 flex-1 grid-cols-12 gap-3 overflow-hidden p-3 lg:grid">
+        <div className="hidden min-h-0 flex-col gap-3 overflow-y-auto lg:order-1 lg:col-span-3 lg:flex">
           <TasksPanel tenantId={tenantId} className="max-h-[300px] shrink-0" />
           <TimelinePanel tenantId={tenantId} className="max-h-[240px] shrink-0" />
           <CoreOverviewPanel tenantId={tenantId} className="shrink-0" />
         </div>
 
-        {/* Left rail */}
-        <div className="cc-scroll order-3 flex min-h-0 flex-col gap-3 lg:col-span-3 lg:overflow-y-auto">
+        <div className="hidden min-h-0 lg:order-2 lg:col-span-6 lg:flex">
+          <div className="cc-panel relative flex-1 overflow-hidden">
+            <CarmenFace state={faceState} audioLevelRef={audioLevelRef} className="absolute inset-0 h-full w-full" />
+            <span className="absolute right-3 top-2 text-[10px] tracking-[0.2em] text-[var(--cc-text-dim)]">
+              {faceState === "listening" ? "מקשיבה…" : faceState === "speaking" ? "מדברת…" : faceState === "alert" ? "התראה" : "בהמתנה"}
+            </span>
+          </div>
+        </div>
+
+        <div className="hidden min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3 lg:flex">
           <IntelFeedPanel tenantId={tenantId} className="max-h-[300px] shrink-0" />
           <QuickCommandsPanel
             onCommand={(text) => chatRef.current?.prefill(text)}
@@ -123,9 +136,16 @@ export default function CarmenCommandCenter() {
         </div>
       </main>
 
-      {/* Talk-to-Carmen bar */}
-      <footer className="shrink-0 p-3 pt-0">
-        <CarmenChatBar ref={chatRef} tenantId={tenantId} onFaceState={setFaceState} audioLevelRef={audioLevelRef} />
+      <footer className="flex min-h-0 flex-1 flex-col p-2 pt-0 sm:p-3 sm:pt-0 lg:flex-none">
+        <CarmenChatBar
+          ref={chatRef}
+          tenantId={tenantId}
+          onFaceState={setFaceState}
+          audioLevelRef={audioLevelRef}
+          menuOpen={menuOpen}
+          onMenuOpenChange={setMenuOpen}
+          menuPanels={rails}
+        />
       </footer>
     </div>
   );

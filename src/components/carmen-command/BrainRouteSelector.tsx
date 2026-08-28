@@ -1,6 +1,6 @@
 import { Brain, ExternalLink, Landmark, Loader2 } from "lucide-react";
 import type { BrainRoute, BrainRouteType } from "@/lib/agentChannelRouting";
-import { FALLBACK_BRAIN_ROUTES, groupLabel, sendPathForRoute } from "@/lib/agentChannelRouting";
+import { FALLBACK_BRAIN_ROUTES, groupLabel } from "@/lib/agentChannelRouting";
 
 interface BrainRouteSelectorProps {
   routes: BrainRoute[];
@@ -9,6 +9,7 @@ interface BrainRouteSelectorProps {
   disabled?: boolean;
   status?: string | null;
   externalUrl?: string | null;
+  className?: string;
 }
 
 function RouteIcon({ type }: { type: BrainRouteType }) {
@@ -32,6 +33,7 @@ export function BrainRouteSelector({
   disabled,
   status,
   externalUrl,
+  className = "",
 }: BrainRouteSelectorProps) {
   const list = routes.length ? routes : FALLBACK_BRAIN_ROUTES;
   const current = list.find((r) => r.id === value || r.slug === value) || list[0];
@@ -40,10 +42,9 @@ export function BrainRouteSelector({
     return acc;
   }, {});
   const waiting = status === "waiting_external" || status === "debating";
-  const path = sendPathForRoute(current);
 
   return (
-    <div className="flex min-w-0 flex-col gap-1" dir="rtl">
+    <div className={`flex min-w-0 flex-col gap-1 ${className}`} dir="rtl">
       <div className="flex h-10 items-center gap-1.5 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2">
         <RouteIcon type={current?.route_type || "internal"} />
         <select
@@ -54,7 +55,7 @@ export function BrainRouteSelector({
             const next = list.find((r) => r.id === e.target.value);
             if (next) onChange(next);
           }}
-          className="max-w-[170px] bg-transparent text-xs text-[var(--cc-text)] outline-none disabled:opacity-50"
+          className="min-w-0 flex-1 bg-transparent text-xs text-[var(--cc-text)] outline-none disabled:opacity-50"
         >
           {(Object.keys(grouped) as BrainRouteType[]).map((type) => (
             <optgroup key={type} label={groupLabel(type)}>
@@ -67,19 +68,20 @@ export function BrainRouteSelector({
           ))}
         </select>
       </div>
-      <p className="px-1 text-[10px] text-[var(--cc-text-dim)]">
-        {path === "internal_stream" ? "נתיב: run-ai-agent" : "נתיב: agent-channel-send"}
-        {statusLabel(status) ? ` · ${statusLabel(status)}` : ""}
-        {waiting && <Loader2 className="mr-1 inline h-2.5 w-2.5 animate-spin" />}
-        {externalUrl && (
-          <>
-            {" · "}
-            <a href={externalUrl} target="_blank" rel="noreferrer" className="text-[var(--cc-accent)] hover:underline">
-              צפייה חיצונית
-            </a>
-          </>
-        )}
-      </p>
+      {(waiting || externalUrl) && (
+        <p className="px-1 text-[10px] text-[var(--cc-text-dim)]">
+          {statusLabel(status)}
+          {waiting && <Loader2 className="mr-1 inline h-2.5 w-2.5 animate-spin" />}
+          {externalUrl && (
+            <>
+              {" · "}
+              <a href={externalUrl} target="_blank" rel="noreferrer" className="text-[var(--cc-accent)] hover:underline">
+                סשן
+              </a>
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }

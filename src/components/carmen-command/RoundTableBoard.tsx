@@ -4,10 +4,10 @@ import { speakerLabel } from "@/lib/agentChannelRouting";
 export type CouncilSeatId = "carmen" | "cursor" | "grok" | "codex";
 
 const SEATS: Array<{ id: CouncilSeatId; label: string; role: string; place: string; sprite: string }> = [
-  { id: "carmen", label: "כרמן", role: "יו\"ר · יעדים", place: "south", sprite: "/command-center/ghost-carmen.jpg" },
-  { id: "cursor", label: "Cursor", role: "מוח ברירת מחדל", place: "west", sprite: "/command-center/ghost-cursor.jpg" },
-  { id: "grok", label: "Grok", role: "ערוץ ישיר", place: "east", sprite: "/command-center/ghost-grok.jpg" },
-  { id: "codex", label: "Codex", role: "ביצוע + QA", place: "north", sprite: "/command-center/ghost-codex.jpg" },
+  { id: "carmen", label: "כרמן", role: "יו\"ר", place: "south", sprite: "/command-center/ghost-carmen.png" },
+  { id: "cursor", label: "Cursor", role: "מוח", place: "west", sprite: "/command-center/ghost-cursor.png" },
+  { id: "grok", label: "Grok", role: "Grok", place: "east", sprite: "/command-center/ghost-grok.png" },
+  { id: "codex", label: "Codex", role: "Codex", place: "north", sprite: "/command-center/ghost-codex.png" },
 ];
 
 interface RoundTableBoardProps {
@@ -115,9 +115,6 @@ export function RoundTableBoard({
           )}
         </div>
       </div>
-      <p className="mb-2 px-1 text-[10px] text-[var(--cc-text-dim)]">
-        לחצי על רוח כדי לפנות אליה ישירות. ברירת מחדל: Cursor. כרמן מנצחת על היעדים. לחיצה על השולחן פותחת מועצה.
-      </p>
       <div className="cc-roundtable-stage">
         <button
           type="button"
@@ -156,7 +153,6 @@ export function RoundTableBoard({
                   {line.text}
                 </span>
               )}
-              {selected && <span className="cc-ghost-live">מדברים איתה</span>}
               {parliament && debating && onClarify && seat.id !== "carmen" && selected && (
                 <span
                   role="link"
