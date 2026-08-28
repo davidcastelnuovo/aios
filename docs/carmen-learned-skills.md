@@ -32,10 +32,16 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-28 — Carmen Direct talk vs ping; board no longer dumps old done tasks
+- **Skin slug:** `cursor_grok_direct_channel_ping` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Ping phrases stay local. A real request to talk to Cursor uses `reply_to_cursor_session` on sticky `bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c`. If that chat is mid-run, she reports 409 busy instead of pretending the message landed.
+- **How:** Narrowed triggers (removed bare "ערוץ ישיר" / "כרמן ישיר"). Refreshed `agent_mcp_connections` Cursor `available_tools` to include `reply_to_cursor_session`. `mcp-tools` live-lists tools so the cache cannot go stale. `cursor-mcp` 1.3.1 no longer fake-succeeds on 409. Task board filter no longer ORs unbounded untimed + all undated (including done) rows.
+- **Origin:** David — "תבדוק למה כרמן לא מצליחה לדבר איתך ישירות ותבדוק למה קפצו מלא משימות ישנות מהדטאבייס".
+
 ### 2026-08-27 — Cursor↔Grok Bot direct channel ping
 - **Skin slug:** `cursor_grok_direct_channel_ping` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Treat "בדיקת ערוץ ישיר" / "ענה חזרה דרך ask_cursor" as a handshake. Reply `OK ערוץ ישיר עובד` or `OK גרוק מחובר לקרסר ישירות` immediately. Do not open a coding task.
-- **How:** Answer locally only. Do **not** call `ask_cursor` / `ask_grok` for a ping — that is the loop. Sticky agent `כרמן - ישיר` = `https://cursor.com/agents/bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c`. Escalate only on real MCP/timeout errors.
+- **How:** Answer locally only. Do **not** call `ask_cursor` / `ask_grok` for a ping — that is the loop. Sticky agent `כרמן - ישיר` = `https://cursor.com/agents/bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c`. Escalate only on real MCP/timeout errors. Triggers must stay ping-specific — never the bare phrases "ערוץ ישיר" / "כרמן ישיר".
 - **Origin:** Carmen — "סיימתי. OK ערוץ ישיר עובד" then "OK גרוק מחובר לקרסר ישירות".
 
 ### 2026-08-27 — Every WhatsApp chat is its own Carmen session (chat JID key)

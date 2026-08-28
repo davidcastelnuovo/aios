@@ -1,18 +1,17 @@
-// cursor-mcp — MCP server that lets Carmen (and any AIOS agent) escalate to
-// Cursor Cloud Agents — the same runtime David uses here (repo + GitHub + DB).
+// cursor-mcp — MCP server that lets Carmen (and Grok Bot) escalate to Cursor Cloud Agents.
 //
-// JSON-RPC 2.0 over HTTP (mcp-connect / _shared/mcp-tools dialect). Each
-// tools/call prefers a sticky Cursor Cloud Agent per tenant (follow-up run via
-// POST /v1/agents/{id}/runs) so conversation history is preserved; creates a
-// new agent only when none exists / sticky is dead. Returns the agent URL.
+// Grok Bot → Cursor: Settings → Plugins → custom MCP → …/cursor-mcp/mcp + CURSOR_MCP_BEARER
+// Carmen (legacy): …/cursor-mcp + CURSOR_MCP_BEARER via mcp-connect
 //
 // Tools:
 //   - request_dev_task : code/feature/bugfix → Cursor implements + opens a PR
 //   - ask_cursor       : research / analysis / planning / investigation
+//   - generate_creative: send a job to the sticky AIOS Creative Direct image chat
 //
 // Required Supabase secrets:
 //   CURSOR_API_KEY          API key from https://cursor.com/dashboard/api
-//   CURSOR_MCP_BEARER       shared secret Carmen's MCP client must present
+//   CURSOR_MCP_BEARER       Carmen's MCP client (mcp-connect / agent_mcp_connections)
+//   GROK_CURSOR_MCP_BEARER  Grok Bot direct → Cursor only (separate from Carmen)
 // Optional:
 //   CURSOR_REPO_URL         default https://github.com/davidcastelnuovo/aios
 //   CURSOR_STARTING_REF     default main
@@ -23,17 +22,29 @@
 //   CURSOR_STICKY_AGENT_ID  force one global sticky agent id (bc-…)
 //   CURSOR_STICKY           "false" to disable sticky reuse (default true)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  compactToolsForGrok,
+  grokCompatibleInitializeResult,
+  handleStreamableMcpRequest,
+  isStreamableMcpPath,
+  wantsStreamableHttp,
+  type McpRpcMessage,
+} from "../_shared/mcp-streamable-http.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, accept, mcp-session-id, mcp-protocol-version",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.1.0" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.3.1" };
+const CURSOR_MCP_STREAMABLE_URL =
+  "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 100_000;
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
@@ -90,23 +101,47 @@ const TOOLS = [
     },
   },
   {
-    name: "reply_to_cursor_session",
+    name: "generate_creative",
     description:
-      "Post a follow-up into a SPECIFIC live Cursor Cloud Agent chat (bc-…). Does NOT open a new agent. " +
-      "Use when continuing an already-running Direct channel session.",
+      "Send a job to קריאייטיב דיירקט, the dedicated image chat (Carmen's איש קריאייטיב skin). " +
+      "Follow-ups go to the same sticky conversation. Do not re-explain the art-director role. " +
+      "It generates a finished Hebrew advertising still with GenerateImage and writes the PNG onto the marketing work item. " +
+      "Use when David, Carmen, or מחלקת קריאייטיב needs images.",
     inputSchema: {
       type: "object",
       properties: {
-        cursor_agent_id: {
+        item_id: { type: "string", description: "marketing_work_items.id of the creative project." },
+        director_note: { type: "string", description: "Optional fix request for a revision." },
+        copy_label: { type: "string", description: "Optional copy-variation label to generate." },
+      },
+      required: ["item_id"],
+    },
+  },
+  {
+    name: "reply_to_cursor_session",
+    description:
+      "Grok Bot Direct — post a message into a SPECIFIC live Cursor Cloud Agent chat " +
+      "(same pattern as Carmen Direct). Does NOT open a new agent. " +
+      "Use this when Cursor already sent you a webhook with reply_to_bc_id. " +
+      "Required for the Grok↔Cursor direct loop. Never use ask_cursor for replies.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        session_id: {
           type: "string",
-          description: "Cursor Cloud Agent id starting with bc-",
+          description: "Cursor Cloud Agent id (bc-…). From webhook context reply_to_bc_id.",
         },
         message: {
           type: "string",
-          description: "Follow-up text to post into that agent.",
+          description: "What to say in that Cursor chat — the reply Cursor is waiting for.",
+        },
+        context: {
+          type: "string",
+          description: "Optional extra notes (files, links, what you did).",
         },
       },
-      required: ["cursor_agent_id", "message"],
+      required: ["session_id", "message"],
+      additionalProperties: false,
     },
   },
   {
@@ -140,6 +175,19 @@ function rpcError(id: unknown, code: number, message: string, httpStatus = 200) 
     status: httpStatus,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function acceptedBearers(): string[] {
+  return [
+    Deno.env.get("CURSOR_MCP_BEARER") || "",
+    Deno.env.get("GROK_CURSOR_MCP_BEARER") || "",
+  ].filter(Boolean);
+}
+
+function isAuthorizedBearer(bearer: string | undefined): boolean {
+  const allowed = acceptedBearers();
+  if (!allowed.length) return true;
+  return !!bearer && allowed.includes(bearer);
 }
 
 function bearerFrom(req: Request): string | undefined {
@@ -183,7 +231,14 @@ async function resolveContext(
   }
 }
 
-type FireResult = { url: string; id: string; reused: boolean };
+type FireResult = {
+  url: string;
+  id: string;
+  reused: boolean;
+  delivered?: boolean;
+  parallel?: boolean;
+  stickyUrl?: string;
+};
 
 function cursorAuthHeaders(apiKey: string, basic = false): Record<string, string> {
   return {
@@ -281,8 +336,10 @@ async function followUpStickyAgent(
   promptText: string,
 ): Promise<FireResult | null> {
   const url = `https://api.cursor.com/v1/agents/${encodeURIComponent(agentId)}/runs`;
-  // Retry a few times on agent_busy (only one run at a time).
-  for (let attempt = 1; attempt <= 4; attempt++) {
+  const sessionUrl = `https://cursor.com/agents/${agentId}`;
+  // Cursor allows one run per agent. A long retry loop makes Carmen's MCP client
+  // time out, and a fake success after 409 drops the message. One short retry only.
+  for (let attempt = 1; attempt <= 2; attempt++) {
     const resp = await cursorFetch(apiKey, url, {
       method: "POST",
       body: JSON.stringify({ prompt: { text: promptText } }),
@@ -290,16 +347,15 @@ async function followUpStickyAgent(
     const raw = await resp.text();
     if (resp.ok) {
       const parsed = parseAgentResponse(raw);
-      // run responses nest agentId; keep sticky id
       return {
         id: agentId,
-        url: parsed.url.includes("/agents/") ? parsed.url : `https://cursor.com/agents/${agentId}`,
+        url: parsed.url.includes("/agents/") ? parsed.url : sessionUrl,
         reused: true,
+        delivered: true,
       };
     }
     if (resp.status === 409) {
-      // Busy — wait and retry.
-      await new Promise((r) => setTimeout(r, 2500 * attempt));
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 1500));
       continue;
     }
     // Dead / archived / not found → caller should create a new agent.
@@ -311,11 +367,11 @@ async function followUpStickyAgent(
     try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
     throw new Error(`Cursor follow-up ${resp.status}: ${detail}`);
   }
-  // Still busy — return the sticky URL so Carmen can point David at it.
   return {
     id: agentId,
-    url: `https://cursor.com/agents/${agentId}`,
+    url: sessionUrl,
     reused: true,
+    delivered: false,
   };
 }
 
@@ -372,9 +428,19 @@ async function fireCursorAgent(promptText: string, opts?: {
     const stickyId = await getStickyAgentId(opts?.tenantId ?? null);
     if (stickyId) {
       const followed = await followUpStickyAgent(apiKey, stickyId, text);
-      if (followed) {
+      if (followed?.delivered) {
         await saveStickyAgent(opts?.tenantId ?? null, followed.id, followed.url);
         return followed;
+      }
+      if (followed && followed.delivered === false) {
+        // Sticky is mid-run. Open a parallel agent so the message is not dropped,
+        // but do NOT steal the sticky pointer away from the live coding session.
+        const created = await createCursorAgent(apiKey, text, opts);
+        return {
+          ...created,
+          parallel: true,
+          stickyUrl: followed.url,
+        };
       }
       await clearStickyAgent(opts?.tenantId ?? null);
     }
@@ -383,6 +449,23 @@ async function fireCursorAgent(promptText: string, opts?: {
   const created = await createCursorAgent(apiKey, text, opts);
   await saveStickyAgent(opts?.tenantId ?? null, created.id, created.url);
   return created;
+}
+
+function formatDispatchReply(kind: string, fired: FireResult): string {
+  if (fired.parallel) {
+    return (
+      `✅ Sticky Cursor session is mid-run so this ${kind} was opened in a PARALLEL agent (message was delivered there, not dropped).\n` +
+      `Parallel session: ${fired.url}\n` +
+      (fired.stickyUrl ? `Original sticky (still busy): ${fired.stickyUrl}\n` : "") +
+      `To talk inside the live sticky chat, use reply_to_cursor_session when that run is idle.`
+    );
+  }
+  return (
+    `✅ Sent your ${kind} to Cursor` +
+    (fired.reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
+    `. A Cloud Agent session is now running on it.\n` +
+    `Session: ${fired.url}`
+  );
 }
 
 async function recentDispatchContext(tenantId: string | null): Promise<string> {
@@ -494,7 +577,7 @@ async function handleToolCall(
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
-    const { url, id, reused } = await fireCursorAgent(text, {
+    const fired = await fireCursorAgent(text, {
       name: `Carmen DEV: ${task.slice(0, 60)}`,
       startingRef: branch || undefined,
       tenantId: ctx.tenantId,
@@ -506,15 +589,10 @@ async function handleToolCall(
       requestText: task,
       context,
       branch,
-      sessionUrl: url,
-      cursorAgentId: id,
+      sessionUrl: fired.url,
+      cursorAgentId: fired.id,
     });
-    return (
-      `✅ Dispatched the dev task to Cursor Cloud Agent` +
-      (reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
-      `. Cursor is now working on it and will open a pull request when finished.\n` +
-      `Session: ${url}`
-    );
+    return formatDispatchReply("dev task", fired);
   }
 
   if (name === "ask_cursor") {
@@ -528,7 +606,7 @@ async function handleToolCall(
       (context ? `\nContext:\n${context}\n` : ``) +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
-    const { url, id, reused } = await fireCursorAgent(text, {
+    const fired = await fireCursorAgent(text, {
       name: `Carmen: ${request.slice(0, 60)}`,
       tenantId: ctx.tenantId,
     });
@@ -539,27 +617,51 @@ async function handleToolCall(
       requestText: request,
       context,
       branch: "",
-      sessionUrl: url,
-      cursorAgentId: id,
+      sessionUrl: fired.url,
+      cursorAgentId: fired.id,
     });
-    return (
-      `✅ Sent your request to Cursor` +
-      (reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
-      `. A Cloud Agent session is now running on it.\n` +
-      `Session: ${url}`
-    );
+    return formatDispatchReply("request", fired);
   }
 
   if (name === "reply_to_cursor_session") {
-    const agentId = String(args?.cursor_agent_id ?? "").trim();
+    const sessionId = String(args?.session_id ?? args?.bc_id ?? "").trim();
+    if (!sessionId.startsWith("bc-")) {
+      throw new Error("reply_to_cursor_session requires session_id starting with bc-.");
+    }
     const message = String(args?.message ?? "").trim();
-    if (!agentId.startsWith("bc-")) throw new Error("reply_to_cursor_session requires cursor_agent_id starting with bc-");
     if (!message) throw new Error("reply_to_cursor_session requires a non-empty message.");
+    const context = String(args?.context ?? "").trim();
     const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
     if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
-    const followed = await followUpStickyAgent(apiKey, agentId, message);
-    if (!followed) throw new Error("That Cursor agent is gone or archived — cannot follow up.");
-    return `✅ Posted into ${followed.url}`;
+
+    const text =
+      `[Grok Bot Direct → Cursor]\n` +
+      `This is a reply in THIS chat — do not open a new session.\n\n` +
+      `${message}\n` +
+      (context ? `\nContext:\n${context}\n` : ``);
+
+    const followed = await followUpStickyAgent(apiKey, sessionId, text);
+    if (!followed) {
+      throw new Error(`Cursor session ${sessionId} is gone (404/410). Give Cursor a new session_id.`);
+    }
+    if (followed.delivered === false) {
+      throw new Error(
+        `Cursor session ${sessionId} is BUSY (only one run at a time). ` +
+        `The message was NOT delivered. Retry when that run finishes, or ask David to paste it as a follow-up in ${followed.url}. ` +
+        `Do not call ask_cursor — that opens a different agent.`,
+      );
+    }
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "reply_to_cursor_session",
+      requestText: message,
+      context: `${sessionId}${context ? `\n${context}` : ""}`,
+      branch: "",
+      sessionUrl: followed.url,
+      cursorAgentId: sessionId,
+    });
+    return `✅ נשלח לצ׳אט Cursor הישיר ${followed.url}`;
   }
 
   if (name === "reply_to_aios_session") {
@@ -580,58 +682,102 @@ async function handleToolCall(
       : "Answer delivered to the AIOS Carmen conversation.";
   }
 
+  if (name === "generate_creative") {
+    const itemId = String(args?.item_id ?? "").trim();
+    if (!itemId) throw new Error("generate_creative requires item_id.");
+    if (!ctx.tenantId) throw new Error("generate_creative needs a tenant on the MCP connection.");
+    const directorNote = String(args?.director_note ?? "").trim();
+    const copyLabel = String(args?.copy_label ?? "").trim();
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/cursor-generate-creative`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "dispatch",
+        tenant_id: ctx.tenantId,
+        item_id: itemId,
+        prompt: [
+          "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
+          `Load APPROVED CONCEPTS from marketing_work_items id=${itemId}. Photograph the concept. Type the copy.`,
+          copyLabel && `Copy variation «${copyLabel}».`,
+          directorNote && `DIRECTOR / REJECT: ${directorNote}`,
+        ].filter(Boolean).join("\n"),
+        lesson: directorNote || undefined,
+        variation: {
+          name: copyLabel || "וריאציה",
+          copy_label: copyLabel || undefined,
+        },
+      }),
+    });
+    const raw = await resp.text();
+    let data: any = {};
+    try { data = JSON.parse(raw); } catch { /* ignore */ }
+    if (!resp.ok || data?.error) {
+      throw new Error(data?.error || `cursor-generate-creative ${resp.status}: ${raw.slice(0, 200)}`);
+    }
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "ask_cursor",
+      requestText: `${"[CREATIVE AGENT]"} Carmen asked for item ${itemId}`,
+      context: directorNote,
+      branch: "",
+      sessionUrl: String(data.agent_url || ""),
+      cursorAgentId: String(data.cursor_agent_id || ""),
+    });
+    return (
+      `✅ נשלח לקריאייטיב דיירקט (אותו צ׳אט דביק)` +
+      (data.agent_url ? `\nSession: ${data.agent_url}` : "") +
+      `\nהתמונה תופיע על פרויקט הקריאייטיב אחרי שהצ׳אט מעלה אותה.`
+    );
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+type RpcCtx = { tenantId: string | null; agentId: string | null; grokMode: boolean };
 
-  if (req.method === "GET") {
-    return new Response(JSON.stringify({ ok: true, server: SERVER_INFO, tools: TOOLS.map((t) => t.name) }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  let msg: any;
-  try {
-    msg = await req.json();
-  } catch {
-    return rpcError(null, -32700, "Parse error");
-  }
-
+async function handleRpcMessage(
+  msg: McpRpcMessage,
+  ctx: RpcCtx,
+  bearer: string | undefined,
+): Promise<Response> {
   const { id, method, params } = msg ?? {};
-
-  const requiredBearer = Deno.env.get("CURSOR_MCP_BEARER");
-  if (requiredBearer && bearerFrom(req) !== requiredBearer) {
-    return rpcError(id, -32001, "Unauthorized: invalid or missing bearer token", 401);
-  }
+  const clientProtocol =
+    typeof (params as any)?.protocolVersion === "string" ? (params as any).protocolVersion : undefined;
 
   try {
     switch (method) {
       case "initialize":
-        return rpcResult(id, {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: SERVER_INFO,
-        });
-
+        return rpcResult(
+          id,
+          ctx.grokMode
+            ? grokCompatibleInitializeResult(clientProtocol, SERVER_INFO)
+            : {
+              protocolVersion: PROTOCOL_VERSION,
+              capabilities: { tools: {} },
+              serverInfo: SERVER_INFO,
+            },
+        );
       case "notifications/initialized":
       case "initialized":
         return new Response("", { status: 202, headers: corsHeaders });
-
       case "ping":
         return rpcResult(id, {});
-
       case "tools/list":
-        return rpcResult(id, { tools: TOOLS });
-
+        return rpcResult(id, {
+          tools: ctx.grokMode ? compactToolsForGrok(TOOLS) : TOOLS,
+        });
       case "tools/call": {
         const name = params?.name as string;
         const args = (params?.arguments ?? {}) as Record<string, any>;
         try {
-          const ctx = await resolveContext(bearerFrom(req));
-          const text = await handleToolCall(name, args, ctx);
+          const callCtx = ctx.tenantId || ctx.agentId
+            ? { tenantId: ctx.tenantId, agentId: ctx.agentId }
+            : await resolveContext(bearer);
+          const text = await handleToolCall(name, args, callCtx);
           return rpcResult(id, { content: [{ type: "text", text }] });
         } catch (e: any) {
           return rpcResult(id, {
@@ -640,7 +786,6 @@ Deno.serve(async (req) => {
           });
         }
       }
-
       default:
         return rpcError(id, -32601, `Method not found: ${method}`);
     }
@@ -648,4 +793,52 @@ Deno.serve(async (req) => {
     console.error("[cursor-mcp]", e?.message ?? e);
     return rpcError(id, -32603, `Internal error: ${String(e?.message ?? e)}`);
   }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const pathname = new URL(req.url).pathname;
+  const streamable = wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
+
+  if (!streamable && req.method === "GET") {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        server: SERVER_INFO,
+        tools: TOOLS.map((t) => t.name),
+        streamable_http: CURSOR_MCP_STREAMABLE_URL,
+        setup: "Grok Bot direct → /mcp + GROK_CURSOR_MCP_BEARER. Carmen → /cursor-mcp + CURSOR_MCP_BEARER.",
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const bearer = bearerFrom(req);
+  if (!isAuthorizedBearer(bearer)) {
+    if (streamable) {
+      return handleStreamableMcpRequest(req, async (msg) =>
+        rpcError(msg.id, -32001, "Unauthorized: invalid or missing bearer token", 401));
+    }
+    return rpcError(null, -32001, "Unauthorized: invalid or missing bearer token", 401);
+  }
+
+  const ctx: RpcCtx = {
+    tenantId: null,
+    agentId: null,
+    grokMode: streamable,
+  };
+
+  if (streamable) {
+    return handleStreamableMcpRequest(req, (msg) => handleRpcMessage(msg, ctx, bearer));
+  }
+
+  let msg: McpRpcMessage;
+  try {
+    msg = await req.json();
+  } catch {
+    return rpcError(null, -32700, "Parse error");
+  }
+
+  return handleRpcMessage(msg, ctx, bearer);
 });

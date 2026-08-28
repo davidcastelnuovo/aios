@@ -41,7 +41,8 @@ export async function followUpCloudAgent(
   promptText: string,
 ): Promise<CloudAgentResult | null> {
   const url = `https://api.cursor.com/v1/agents/${encodeURIComponent(agentId)}/runs`;
-  for (let attempt = 1; attempt <= 4; attempt++) {
+  const sessionUrl = `https://cursor.com/agents/${agentId}`;
+  for (let attempt = 1; attempt <= 2; attempt++) {
     const resp = await cursorFetch(apiKey, url, {
       method: "POST",
       body: JSON.stringify({ prompt: { text: promptText } }),
@@ -51,12 +52,12 @@ export async function followUpCloudAgent(
       const parsed = parseAgentResponse(raw);
       return {
         id: agentId,
-        url: parsed.url.includes("/agents/") ? parsed.url : `https://cursor.com/agents/${agentId}`,
+        url: parsed.url.includes("/agents/") ? parsed.url : sessionUrl,
         reused: true,
       };
     }
     if (resp.status === 409) {
-      await new Promise((r) => setTimeout(r, 2500 * attempt));
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 1500));
       continue;
     }
     if (resp.status === 404 || resp.status === 410 || resp.status === 400) {
@@ -67,7 +68,9 @@ export async function followUpCloudAgent(
     try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
     throw new Error(`Cloud agent follow-up ${resp.status}: ${detail}`);
   }
-  return { id: agentId, url: `https://cursor.com/agents/${agentId}`, reused: true };
+  // Busy — return null so the caller opens a parallel agent instead of faking success.
+  console.warn(`[agent-channel] follow-up 409 busy on ${agentId}; not delivered`);
+  return null;
 }
 
 export async function createCloudAgent(args: {

@@ -28,6 +28,7 @@ async function mcpJsonRpc(url: string, bearer: string | undefined, method: strin
     method: 'POST',
     headers,
     body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
+    signal: AbortSignal.timeout(12_000),
   })
   const text = await resp.text()
   if (!resp.ok) throw new Error(`MCP ${method} ${resp.status}: ${text.slice(0, 400)}`)
@@ -41,6 +42,23 @@ async function mcpJsonRpc(url: string, bearer: string | undefined, method: strin
 
 function sanitizeToolName(raw: string): string {
   return raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60)
+}
+
+function toolNames(list: any[]): string {
+  return (list || []).map((t) => t?.name).filter(Boolean).sort().join(',')
+}
+
+async function toolsForConnection(conn: McpConnRow): Promise<any[]> {
+  const cached = Array.isArray(conn.available_tools) ? conn.available_tools : []
+  const bearer = conn.oauth_tokens?.bearer as string | undefined
+  try {
+    const listResp = await mcpJsonRpc(conn.url, bearer, 'tools/list')
+    const live = listResp?.result?.tools
+    if (Array.isArray(live) && live.length > 0) return live
+  } catch (e) {
+    console.warn(`[mcp-tools] tools/list failed for ${conn.name}:`, (e as any)?.message ?? e)
+  }
+  return cached
 }
 
 export async function loadMcpTools(
@@ -73,9 +91,21 @@ export async function loadMcpTools(
   for (const conn of data as McpConnRow[]) {
     // Access control: skip integrations turned OFF for this agent.
     if (disabledSet.has(conn.name)) continue
-    const tools = Array.isArray(conn.available_tools) ? conn.available_tools : []
+    const tools = await toolsForConnection(conn)
     const bearer = conn.oauth_tokens?.bearer as string | undefined
     const connSlug = sanitizeToolName(conn.name || conn.id.slice(0, 6))
+
+    if (toolNames(tools) !== toolNames(Array.isArray(conn.available_tools) ? conn.available_tools : [])) {
+      try {
+        await supabase
+          .from('agent_mcp_connections')
+          .update({ available_tools: tools, last_error: null, updated_at: new Date().toISOString() })
+          .eq('id', conn.id)
+          .eq('tenant_id', tenantId)
+      } catch (e) {
+        console.warn('[mcp-tools] cache refresh failed:', (e as any)?.message ?? e)
+      }
+    }
 
     for (const t of tools) {
       if (!t?.name) continue
