@@ -184,3 +184,190 @@
 .cc-md tbody tr:last-child td { border-bottom: none; }
 .cc-md tbody tr:nth-child(even) { background: rgba(76, 195, 255, 0.04); }
 .cc-md tbody tr:hover { background: rgba(76, 195, 255, 0.09); }
+
+/* ---------- Knights of the Round Table ---------- */
+
+.cc-roundtable {
+  border-bottom: 1px solid var(--cc-line);
+  padding: 0.5rem 0.6rem 0.75rem;
+}
+
+.cc-roundtable-stage {
+  position: relative;
+  height: 280px;
+  perspective: 980px;
+  transform-style: preserve-3d;
+}
+
+.cc-roundtable-table {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  width: 62%;
+  height: 112px;
+  padding: 0;
+  appearance: none;
+  transform: translate(-50%, -50%) rotateX(52deg);
+  border-radius: 50%;
+  background:
+    url("/command-center/knights_round_table_hud.jpg") center 42% / 180% no-repeat,
+    radial-gradient(ellipse at 50% 40%, rgba(76, 195, 255, 0.28), transparent 55%),
+    radial-gradient(ellipse at 50% 50%, rgba(8, 18, 38, 0.95), rgba(5, 10, 22, 0.92));
+  border: 2px solid rgba(76, 195, 255, 0.45);
+  box-shadow:
+    0 24px 40px rgba(0, 0, 0, 0.45),
+    0 0 28px rgba(76, 195, 255, 0.18),
+    inset 0 0 24px rgba(76, 195, 255, 0.12);
+  cursor: pointer;
+}
+.cc-roundtable-table.is-live {
+  box-shadow:
+    0 24px 40px rgba(0, 0, 0, 0.45),
+    0 0 36px rgba(251, 191, 36, 0.35),
+    inset 0 0 24px rgba(76, 195, 255, 0.18);
+}
+
+.cc-ghost {
+  position: absolute;
+  width: 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: none;
+  border: 0;
+  color: var(--cc-text);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.cc-ghost-south { left: 50%; bottom: 0; transform: translateX(-50%); }
+.cc-ghost-west { left: 3%; top: 28%; }
+.cc-ghost-east { right: 3%; top: 28%; }
+.cc-ghost-north { left: 50%; top: -8px; transform: translateX(-50%); }
+
+.cc-ghost-aura {
+  position: absolute;
+  inset: auto 22px 18px;
+  height: 36px;
+  border-radius: 50%;
+  filter: blur(8px);
+  opacity: 0.55;
+  animation: cc-ghost-float 3.6s ease-in-out infinite;
+}
+.cc-ghost-south .cc-ghost-aura { background: #4cc3ff; }
+.cc-ghost-west .cc-ghost-aura { background: #60a5fa; }
+.cc-ghost-east .cc-ghost-aura { background: #fbbf24; }
+.cc-ghost-north .cc-ghost-aura { background: #e7d3a1; }
+
+.cc-ghost-sprite {
+  position: relative;
+  width: 72px;
+  height: 92px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  filter: drop-shadow(0 0 10px rgba(76, 195, 255, 0.35));
+  opacity: 0.92;
+  animation: cc-ghost-float 3.6s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+.cc-ghost-west .cc-ghost-sprite { animation-delay: 0.4s; }
+.cc-ghost-east .cc-ghost-sprite { animation-delay: 0.9s; }
+.cc-ghost-north .cc-ghost-sprite { animation-delay: 1.3s; }
+
+.cc-ghost-body {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 96px;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 2px;
+  padding: 2px 4px 4px;
+  border-radius: 8px;
+  background: rgba(5, 10, 22, 0.72);
+  opacity: 0.96;
+}
+.cc-ghost-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 4px #050a16;
+}
+.cc-ghost-role {
+  font-size: 9px;
+  color: var(--cc-text-dim);
+}
+.cc-ghost.is-selected .cc-ghost-sprite {
+  opacity: 1;
+  filter: drop-shadow(0 0 16px rgba(76, 195, 255, 0.7));
+}
+.cc-ghost.is-thinking .cc-ghost-sprite,
+.cc-ghost.is-reviewing .cc-ghost-sprite {
+  filter: drop-shadow(0 0 16px rgba(251, 191, 36, 0.7));
+}
+.cc-ghost.is-failed .cc-ghost-sprite {
+  filter: drop-shadow(0 0 16px rgba(248, 113, 113, 0.7));
+}
+
+.cc-ghost-bubble {
+  position: absolute;
+  bottom: 118px;
+  width: 150px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(5, 10, 22, 0.88);
+  border: 1px solid var(--cc-line);
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: right;
+  color: var(--cc-text);
+  z-index: 3;
+}
+.cc-ghost-north .cc-ghost-bubble { bottom: auto; top: 96px; }
+.cc-ghost-bubble-meta {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--cc-accent);
+  font-size: 9px;
+}
+.cc-ghost-live,
+.cc-ghost-clarify {
+  margin-top: 4px;
+  font-size: 9px;
+  color: var(--cc-accent);
+}
+.cc-ghost-clarify:hover { text-decoration: underline; }
+
+.cc-roundtable-log {
+  margin: 0.4rem 0 0;
+  max-height: 72px;
+  overflow-y: auto;
+  padding: 0;
+  list-style: none;
+}
+.cc-roundtable-log li {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--cc-text);
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--cc-line);
+}
+.cc-roundtable-log-meta {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--cc-accent);
+  font-size: 9px;
+}
+
+@keyframes cc-ghost-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@media (max-width: 640px) {
+  .cc-roundtable-stage { height: 248px; }
+  .cc-ghost { width: 78px; }
+  .cc-ghost-sprite { width: 58px; height: 76px; }
+  .cc-ghost-bubble { width: 120px; }
+}

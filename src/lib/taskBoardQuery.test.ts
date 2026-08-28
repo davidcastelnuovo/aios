@@ -14,8 +14,38 @@ test("buildTaskDueDateOrFilter uses due_date only (no target_date — column may
   });
   assert.equal(filter.includes("target_date"), false);
   assert.match(filter, /due_date\.lt\.2026-08-24/);
-  assert.match(filter, /due_time\.is\.null/);
-  assert.match(filter, /due_date\.not\.is\.null/);
+  assert.match(filter, /due_date\.gte\.2026-08-24/);
+  assert.match(filter, /due_date\.lte\.2026-08-30/);
+});
+
+test("buildTaskDueDateOrFilter does not pull all historical untimed or done-undated rows", () => {
+  const filter = buildTaskDueDateOrFilter({
+    rangeStart: "2026-08-24",
+    rangeEnd: "2026-08-30",
+    today: "2026-08-28",
+  });
+  assert.equal(filter.includes("due_time.is.null"), false);
+  assert.match(filter, /due_date\.is\.null/);
+  assert.match(filter, /and\(due_date\.is\.null,status\.neq\.done\)/);
+  assert.equal(
+    filter,
+    "and(due_date.gte.2026-08-24,due_date.lte.2026-08-30)," +
+      "and(due_date.lt.2026-08-28,status.neq.done)," +
+      "and(due_date.is.null,status.neq.done)",
+  );
+});
+
+test("custom range still excludes unbounded untimed and done-undated", () => {
+  const filter = buildTaskDueDateOrFilter({
+    rangeStart: "2026-08-24",
+    rangeEnd: "2026-08-30",
+    today: "2026-08-28",
+    customStart: "2026-08-01",
+    customEnd: "2026-08-31",
+  });
+  assert.match(filter, /due_date\.gte\.2026-08-01/);
+  assert.match(filter, /due_date\.lte\.2026-08-31/);
+  assert.equal(filter.includes("due_time.is.null"), false);
 });
 
 test("taskAppearsOnTimeGrid requires date, time, in-range, and not overdue", () => {

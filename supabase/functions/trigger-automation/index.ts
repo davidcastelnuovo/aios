@@ -1,5 +1,7 @@
+// redeploy trigger: Carmen sessions keyed by chat JID only; never speaker-phone fallback (2026-08-27b)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { sendCarmenReplyViaActionStep } from '../_shared/carmen.ts'
+import { buildWaNotifyFromOrigin, requireOriginChatId } from '../_shared/carmen-session-identity.ts'
 import { formatClientFollowUpMessage } from '../_shared/client-follow-up-message.ts'
 import { dropUnresolvedTemplateLines, sanitizeTemplateParameter } from '../_shared/meta-whatsapp.ts'
 import {
@@ -1258,16 +1260,19 @@ Deno.serve(async (req) => {
         // for this sender. If yes, bypass keyword requirement so mid-session messages are routed.
         let hasActiveCarmenSession = false
         const senderPhone = payloadData?.sender_phone || payloadData?.phone || ''
-        const chatId = payloadData?.chat_id || ''
+        const chatId = payloadData?.chat_id || payloadData?.group_chat_id || ''
         const connectionUserId = payloadData?.connection_user_id || ''
-        if (senderPhone && chatId) {
+        const origin = requireOriginChatId(chatId)
+        if (origin.ok) {
+          // Lookup by chat JID only. Phone is the last speaker — filtering on it
+          // dropped the same group when a different member spoke, and matching
+          // phone across chats would steal another group's session.
           const sessionQuery = supabase
             .from('carmen_whatsapp_sessions')
             .select('id, agent_id, conversation_history, end_keyword, last_message_at, automation_id')
             .eq('tenant_id', payload.tenant_id)
             .eq('status', 'active')
-            .eq('chat_id', chatId)
-            .eq('phone', senderPhone)
+            .eq('chat_id', origin.chatId)
           // connection_user_id is optional — only filter if present
           if (connectionUserId) {
             sessionQuery.eq('connection_user_id', connectionUserId)
@@ -1882,13 +1887,19 @@ Deno.serve(async (req) => {
                           continue
                         }
 
-                        // Trigger keyword found — create new session
+                        // Trigger keyword found — create new session keyed by THIS chat JID.
+                        // Never fall back to speaker phone: the same person sits in many groups.
+                        const originForCreate = requireOriginChatId(cId)
+                        if (!originForCreate.ok) {
+                          console.log('[CARMEN] refusing to create session without chat_id')
+                          continue
+                        }
                         const connUserId = payloadData?.connection_user_id || ''
                         const { data: newSession } = await supabase
                           .from('carmen_whatsapp_sessions')
                           .insert({
                             tenant_id: tenantId,
-                            chat_id: cId,
+                            chat_id: originForCreate.chatId,
                             phone: sPhone,
                             sender_name: payloadData?.sender_name || payloadData?.contact_name || '',
                             agent_id: agentId,
@@ -1953,33 +1964,24 @@ Deno.serve(async (req) => {
                     }
 
                     const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
-                    // Build conversation history — prefer the active Carmen session,
-                    // otherwise reuse the most recent Carmen session for this chat.
+                    // Build conversation history — only from THIS chat's session.
+                    // Never restore by speaker phone: the same person is in many groups.
                     let carmenHistory: any[] = payloadData?._carmen_history || []
                     if (carmenHistory.length === 0) {
-                      const sessionChatId = payloadData?.chat_id || ''
-                      const sessionPhone = payloadData?.sender_phone || payloadData?.phone || ''
+                      const originChat = requireOriginChatId(payloadData?.chat_id || payloadData?.group_chat_id || '')
 
-                      if (sessionChatId || sessionPhone) {
-                        // Only restore from sessions that were active within the last 30 minutes —
-                        // older sessions are considered dead and must not bleed stale context
-                        // into a fresh conversation.
+                      if (originChat.ok) {
                         const freshSince = new Date(Date.now() - 30 * 60_000).toISOString()
                         let previousSessionQuery = supabase
                           .from('carmen_whatsapp_sessions')
                           .select('id, conversation_history, last_message_at')
                           .eq('tenant_id', tenantId)
+                          .eq('chat_id', originChat.chatId)
                           .gte('last_message_at', freshSince)
                           .order('last_message_at', { ascending: false })
                           .order('created_at', { ascending: false })
                           .limit(1)
 
-                        if (sessionChatId) {
-                          previousSessionQuery = previousSessionQuery.eq('chat_id', sessionChatId)
-                        }
-                        if (sessionPhone) {
-                          previousSessionQuery = previousSessionQuery.eq('phone', sessionPhone)
-                        }
                         if (payloadData?.connection_user_id) {
                           previousSessionQuery = previousSessionQuery.eq('connection_user_id', payloadData.connection_user_id)
                         }
@@ -2038,6 +2040,14 @@ Deno.serve(async (req) => {
                     if (carmenHistory.length > 0) {
                       agentBody.conversation_history = carmenHistory
                     }
+                    const waNotify = buildWaNotifyFromOrigin({
+                      tenantId,
+                      automationId: automation.id,
+                      connectionUserId: String(payloadData?.connection_user_id || ''),
+                      chatId: payloadData?.chat_id || payloadData?.group_chat_id || '',
+                      speakerPhone: payloadData?.sender_phone || payloadData?.phone || null,
+                    })
+                    if (waNotify) agentBody.wa_notify = waNotify
                     const agentRes = await fetch(agentUrl, {
                       method: 'POST',
                       headers: {
@@ -2227,7 +2237,9 @@ Deno.serve(async (req) => {
                   stepResponse = { success: true, message_id: telegramData.result?.message_id }
                   previousStepOutput = stepResponse
                   // WHATSAPP SESSION STEP: save/update conversation history by chat_id
-                  const chatId = payloadData?.chat_id || payloadData?.sender_phone || ''
+                  // Never key this on sender_phone — that would merge every group the same speaker is in.
+                  const originSession = requireOriginChatId(payloadData?.chat_id || payloadData?.group_chat_id)
+                  const chatId = originSession.ok ? originSession.chatId : ''
                   const agentOutput = previousStepOutput?.output || ''
                   const userMsg = payloadData?.message_text || payloadData?.text || ''
                   // Use pre-built history from agent step if available

@@ -10,9 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plug, Trash2, Plus, CheckCircle2, XCircle, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-
-// Production Supabase project ref (AfterLead). Used to prefill the Claude MCP URL.
-const SUPABASE_PROJECT_REF = "zvoijyneresvkadpprel";
+import { mcpPresetFunctionUrl } from "@/lib/mcpPresetUrl";
 
 export function McpConnectionsTab({ agent }: { agent: any }) {
   const qc = useQueryClient();
@@ -82,7 +80,7 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
                 className="w-full"
                 onClick={() => {
                   setName("Cursor");
-                  setUrl(`https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/cursor-mcp`);
+                  setUrl(mcpPresetFunctionUrl("cursor-mcp"));
                 }}
               >
                 🖱️ הוסף את Cursor (כרמן תוכל להפנות אליך משימות מורכבות ותיקונים)
@@ -94,7 +92,7 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
                 className="w-full"
                 onClick={() => {
                   setName("Claude");
-                  setUrl(`https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/claude-mcp`);
+                  setUrl(mcpPresetFunctionUrl("claude-mcp"));
                 }}
               >
                 ⚡ הוסף את Claude (כרמן תוכל לבקש ממנו משימות פיתוח)
@@ -106,7 +104,7 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
                 className="w-full"
                 onClick={() => {
                   setName("Manus");
-                  setUrl(`https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/manus-mcp`);
+                  setUrl(mcpPresetFunctionUrl("manus-mcp"));
                 }}
               >
                 🤖 הוסף את Manus (כרמן תוכל להאציל לו משימות מורכבות)
@@ -118,7 +116,7 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
                 className="w-full"
                 onClick={() => {
                   setName("Grok");
-                  setUrl(`https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/grok-mcp`);
+                  setUrl(mcpPresetFunctionUrl("grok-mcp"));
                 }}
               >
                 🪐 הוסף את Grok Bot (כרמן תוכל להפנות אליו משימות מורכבות ותיקונים)

@@ -31,6 +31,19 @@ verify_jwt = false
 [functions.grok-mcp]
 verify_jwt = false
 
+# Channel gateway — Command Center Direct / Parliament. JWT is checked in-function.
+[functions.agent-channel-send]
+verify_jwt = false
+
+[functions.agent-channel-callback]
+verify_jwt = false
+
+[functions.agent-channel-mcp]
+verify_jwt = false
+
+[functions.run-agent-parliament]
+verify_jwt = false
+
 # Carmen MCP — Grok Bot (external) talks to Carmen. Custom bearer CARMEN_MCP_BEARER.
 [functions.carmen-mcp]
 verify_jwt = false

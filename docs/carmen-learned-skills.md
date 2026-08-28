@@ -32,6 +32,54 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-28 — סטטוס מרכז הבקרה / פרויקט Cursor
+- **Skin slug:** `command_center_cursor_project_status` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When David asks what happened to the Cursor Command Center project, answer from PR #499 + preview vs live, without opening a new coding task.
+- **How:** Recite the snapshot in the skin. Refresh via `mcp_Cursor__ask_cursor` (status only). Do not merge to `main` without `מאשר לפרודקשן` unless David already said to merge.
+- **Origin:** David via WhatsApp — "מה עם הפרויקט של קרסר על מרכז הבקרה שלך?"
+
+### 2026-08-28 — Staging Cursor MCP token 401 + Command Center preset URL
+- **Skin slug:** n/a (ops). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
+- **What Carmen can now do:** On **staging**, Cursor MCP talks to staging `cursor-mcp` with the current `CURSOR_MCP_BEARER`. Previously the cloned row pointed at **prod** `cursor-mcp` with the staging bearer → 401. `tools/list` is green: `ask_cursor`, `request_dev_task`, `generate_creative`, `reply_to_cursor_session`.
+- **How:** Repointed `agent_mcp_connections` Cursor URL to `mzjsuvatrzhciojmbbbm`. Deployed staging `mcp-connect` (resync). Copied secret via `{resync_from_secret:true}` — secret never logged. Command Center / Agent Editor Cursor preset now uses `VITE_SUPABASE_URL` instead of hardcoded prod ref, so the preview fills the matching project's token URL.
+- **Origin:** David — "צריך גם בסטייג׳ינג לתקן וגם בפריוויו של מרכז הבקרה לתקן את הטוקן של קרסר".
+
+### 2026-08-28 — Knights round table + Codex seat + QA loop + skill builder
+- **Skin slugs:** `knights_round_table`, `qa_loop`, `skill_builder`, `skill_builder_meta` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`). Also appends Cursor-default note onto `cursor_escalation`.
+- **What Carmen can now do:** Chair a Command Center round table. Default brain is **Cursor Direct**. Seats: Carmen (goals), Cursor, Grok Bot, Codex. After a seat replies she runs `qa_loop` (return with concrete defects, max 3) until the goal is actually met. Missing repeatable work becomes a tenant skin via `skill_builder`; `skill_builder_meta` is the template for building those skins. Session learning catalogs pointers under `process/{task_type}/...`.
+- **How:** Command Center `RoundTableBoard` (click a ghost to address that brain; table click opens parliament). Gateway `agent-channel-send` launches Codex like Cursor/Grok (`CURSOR_API_KEY`, optional `CODEX_MODEL_ID` / `CODEX_CLOUD_ENV_NAME`). Parliament seats `cursor+grok+codex`. Not live until migration `20260828200000_agent_brain_channels` + this seed are applied and the gateway functions are deployed.
+- **Origin:** David — add Codex, 3D knights table with ghost talk, QA until perfect, default Cursor brain, catalog memory/skills by task type.
+
+### 2026-08-28 — Carmen Direct talk vs ping; board no longer dumps old done tasks
+- **Skin slug:** `cursor_grok_direct_channel_ping` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Ping phrases stay local. A real request to talk to Cursor uses `reply_to_cursor_session` on sticky `bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c`. If that chat is mid-run, she reports 409 busy instead of pretending the message landed.
+- **How:** Narrowed triggers (removed bare "ערוץ ישיר" / "כרמן ישיר"). Refreshed `agent_mcp_connections` Cursor `available_tools` to include `reply_to_cursor_session`. `mcp-tools` live-lists tools so the cache cannot go stale. `cursor-mcp` 1.3.1 no longer fake-succeeds on 409. Task board filter no longer ORs unbounded untimed + all undated (including done) rows.
+- **Origin:** David — "תבדוק למה כרמן לא מצליחה לדבר איתך ישירות ותבדוק למה קפצו מלא משימות ישנות מהדטאבייס".
+
+### 2026-08-27 — Cursor↔Grok Bot direct channel ping
+- **Skin slug:** `cursor_grok_direct_channel_ping` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Treat "בדיקת ערוץ ישיר" / "ענה חזרה דרך ask_cursor" as a handshake. Reply `OK ערוץ ישיר עובד` or `OK גרוק מחובר לקרסר ישירות` immediately. Do not open a coding task.
+- **How:** Answer locally only. Do **not** call `ask_cursor` / `ask_grok` for a ping — that is the loop. Sticky agent `כרמן - ישיר` = `https://cursor.com/agents/bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c`. Escalate only on real MCP/timeout errors. Triggers must stay ping-specific — never the bare phrases "ערוץ ישיר" / "כרמן ישיר".
+- **Origin:** Carmen — "סיימתי. OK ערוץ ישיר עובד" then "OK גרוק מחובר לקרסר ישירות".
+
+### 2026-08-27 — Every WhatsApp chat is its own Carmen session (chat JID key)
+- **Skin slug:** `carmen_session_keyed_by_chat_id` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Treat every group and every private chat as a separate session. A question in group A is never answered in group B just because B was more recent, and the same speaker (David) being in many groups does not merge those conversations. System automations (pulse/notify) use a configured recipient, not the freshest live session.
+- **How:** Canonical key = WhatsApp `chat_id` (`972…@c.us` or `120363…@g.us`). `phone` is last-speaker metadata only. Helper: `_shared/carmen-session-identity`. Lookups/history in `trigger-automation` are chat_id-only. `handleCarmenMessage` refuses to send to a different chat than this turn. Unique index `carmen_sessions_one_active_per_chat`.
+- **Origin:** David — "כל אוטומציה צריכה להישלח רק ליעד שלה ולא לפי הסשן הטרי ביותר… כל קבוצה כל סשן".
+
+### 2026-08-27 — Pulse/notify never follows the live group session
+- **Skin slug:** `wa_notify_never_group_session` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Know that בדיקת דופק, health digest, and coding-agent "עדכון לדוד" always go to David's (or Felix's) **private** WhatsApp — never to the group the team happens to be chatting in. Group replies stay in the group only when someone addressed Carmen there (זימון, שאלה). Sessions are keyed by `chat_id`; mixing them by last-speaker phone is a bug.
+- **How:** `resolveCarmenNotifyTarget` + `pickNotifyDelivery` ignore `@g.us` rows. `claude-notify` / `manus-notify` always send `isGroup=false`. Path: pulse/health → `claude_notify_david` → private `@c.us`.
+- **Origin:** David — "כרמן היום שלחה עדכון בקבוצה בזמן שהתכתבנו שם במקום לשלוח לי בפרטי".
+
+### 2026-08-27 — Lead-to-WhatsApp-group flood is Make + Green API, not Carmen/Manus
+- **Skin slug:** `lead_groups_are_make_greenapi_not_manus` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** If David says Carmen is sending lots of leads to groups blocked in Manus, explain the sender is **Make.com → Green API** instance `7103954455` (phone `972507677613`). Manus WA Carmen (`972549696673`) has no group traffic. AIOS group automations (מימד נוסף / פבליקו) are idle. Do not pause Make scenarios without David's explicit OK.
+- **How:** Inspect `chat_messages` (`outgoingAPIMessageReceived` + Green API). List Make team 149002 eu2 scenarios using `app#greenapi-nuycxg`. Manus lead path is only `התראת ליד ללקוח מ-Make / Webhook` to client **phones**.
+- **Origin:** David via Carmen — "את מנסה לשלוח הרבה לידים לקבוצות שנחסם במנוס".
+
 ### 2026-08-28 — סביבת פיתוח קיימת
 - **Skin slug:** `dev_environment_exists` (global)
 - **What Carmen can now do:** Confirm that a development environment exists. Never say it does not. Point to the Vercel Preview URL (Staging). `develop` = Staging, `main` = Production.

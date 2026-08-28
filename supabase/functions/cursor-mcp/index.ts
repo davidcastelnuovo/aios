@@ -42,7 +42,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.3.0" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.3.1" };
 const CURSOR_MCP_STREAMABLE_URL =
   "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
@@ -144,6 +144,23 @@ const TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: "reply_to_aios_session",
+    description:
+      "Deliver a finished answer into the AIOS Carmen conversation that dispatched this agent. " +
+      "Writes directly to the Command Center thread. Do not call ask_carmen to deliver the answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        conversation_id: { type: "string" },
+        session_id: { type: "string" },
+        origin: { type: "string" },
+        content: { type: "string" },
+        idempotency_key: { type: "string" },
+      },
+      required: ["conversation_id", "content"],
+    },
+  },
 ];
 
 function rpcResult(id: unknown, result: unknown) {
@@ -214,7 +231,14 @@ async function resolveContext(
   }
 }
 
-type FireResult = { url: string; id: string; reused: boolean };
+type FireResult = {
+  url: string;
+  id: string;
+  reused: boolean;
+  delivered?: boolean;
+  parallel?: boolean;
+  stickyUrl?: string;
+};
 
 function cursorAuthHeaders(apiKey: string, basic = false): Record<string, string> {
   return {
@@ -312,8 +336,10 @@ async function followUpStickyAgent(
   promptText: string,
 ): Promise<FireResult | null> {
   const url = `https://api.cursor.com/v1/agents/${encodeURIComponent(agentId)}/runs`;
-  // Retry a few times on agent_busy (only one run at a time).
-  for (let attempt = 1; attempt <= 4; attempt++) {
+  const sessionUrl = `https://cursor.com/agents/${agentId}`;
+  // Cursor allows one run per agent. A long retry loop makes Carmen's MCP client
+  // time out, and a fake success after 409 drops the message. One short retry only.
+  for (let attempt = 1; attempt <= 2; attempt++) {
     const resp = await cursorFetch(apiKey, url, {
       method: "POST",
       body: JSON.stringify({ prompt: { text: promptText } }),
@@ -321,16 +347,15 @@ async function followUpStickyAgent(
     const raw = await resp.text();
     if (resp.ok) {
       const parsed = parseAgentResponse(raw);
-      // run responses nest agentId; keep sticky id
       return {
         id: agentId,
-        url: parsed.url.includes("/agents/") ? parsed.url : `https://cursor.com/agents/${agentId}`,
+        url: parsed.url.includes("/agents/") ? parsed.url : sessionUrl,
         reused: true,
+        delivered: true,
       };
     }
     if (resp.status === 409) {
-      // Busy — wait and retry.
-      await new Promise((r) => setTimeout(r, 2500 * attempt));
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 1500));
       continue;
     }
     // Dead / archived / not found → caller should create a new agent.
@@ -342,11 +367,11 @@ async function followUpStickyAgent(
     try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
     throw new Error(`Cursor follow-up ${resp.status}: ${detail}`);
   }
-  // Still busy — return the sticky URL so Carmen can point David at it.
   return {
     id: agentId,
-    url: `https://cursor.com/agents/${agentId}`,
+    url: sessionUrl,
     reused: true,
+    delivered: false,
   };
 }
 
@@ -403,9 +428,19 @@ async function fireCursorAgent(promptText: string, opts?: {
     const stickyId = await getStickyAgentId(opts?.tenantId ?? null);
     if (stickyId) {
       const followed = await followUpStickyAgent(apiKey, stickyId, text);
-      if (followed) {
+      if (followed?.delivered) {
         await saveStickyAgent(opts?.tenantId ?? null, followed.id, followed.url);
         return followed;
+      }
+      if (followed && followed.delivered === false) {
+        // Sticky is mid-run. Open a parallel agent so the message is not dropped,
+        // but do NOT steal the sticky pointer away from the live coding session.
+        const created = await createCursorAgent(apiKey, text, opts);
+        return {
+          ...created,
+          parallel: true,
+          stickyUrl: followed.url,
+        };
       }
       await clearStickyAgent(opts?.tenantId ?? null);
     }
@@ -414,6 +449,23 @@ async function fireCursorAgent(promptText: string, opts?: {
   const created = await createCursorAgent(apiKey, text, opts);
   await saveStickyAgent(opts?.tenantId ?? null, created.id, created.url);
   return created;
+}
+
+function formatDispatchReply(kind: string, fired: FireResult): string {
+  if (fired.parallel) {
+    return (
+      `✅ Sticky Cursor session is mid-run so this ${kind} was opened in a PARALLEL agent (message was delivered there, not dropped).\n` +
+      `Parallel session: ${fired.url}\n` +
+      (fired.stickyUrl ? `Original sticky (still busy): ${fired.stickyUrl}\n` : "") +
+      `To talk inside the live sticky chat, use reply_to_cursor_session when that run is idle.`
+    );
+  }
+  return (
+    `✅ Sent your ${kind} to Cursor` +
+    (fired.reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
+    `. A Cloud Agent session is now running on it.\n` +
+    `Session: ${fired.url}`
+  );
 }
 
 async function recentDispatchContext(tenantId: string | null): Promise<string> {
@@ -525,7 +577,7 @@ async function handleToolCall(
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
-    const { url, id, reused } = await fireCursorAgent(text, {
+    const fired = await fireCursorAgent(text, {
       name: `Carmen DEV: ${task.slice(0, 60)}`,
       startingRef: branch || undefined,
       tenantId: ctx.tenantId,
@@ -537,15 +589,10 @@ async function handleToolCall(
       requestText: task,
       context,
       branch,
-      sessionUrl: url,
-      cursorAgentId: id,
+      sessionUrl: fired.url,
+      cursorAgentId: fired.id,
     });
-    return (
-      `✅ Dispatched the dev task to Cursor Cloud Agent` +
-      (reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
-      `. Cursor is now working on it and will open a pull request when finished.\n` +
-      `Session: ${url}`
-    );
+    return formatDispatchReply("dev task", fired);
   }
 
   if (name === "ask_cursor") {
@@ -559,7 +606,7 @@ async function handleToolCall(
       (context ? `\nContext:\n${context}\n` : ``) +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
-    const { url, id, reused } = await fireCursorAgent(text, {
+    const fired = await fireCursorAgent(text, {
       name: `Carmen: ${request.slice(0, 60)}`,
       tenantId: ctx.tenantId,
     });
@@ -570,14 +617,120 @@ async function handleToolCall(
       requestText: request,
       context,
       branch: "",
-      sessionUrl: url,
-      cursorAgentId: id,
+      sessionUrl: fired.url,
+      cursorAgentId: fired.id,
+    });
+    return formatDispatchReply("request", fired);
+  }
+
+  if (name === "reply_to_cursor_session") {
+    const sessionId = String(args?.session_id ?? args?.bc_id ?? "").trim();
+    if (!sessionId.startsWith("bc-")) {
+      throw new Error("reply_to_cursor_session requires session_id starting with bc-.");
+    }
+    const message = String(args?.message ?? "").trim();
+    if (!message) throw new Error("reply_to_cursor_session requires a non-empty message.");
+    const context = String(args?.context ?? "").trim();
+    const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
+    if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
+
+    const text =
+      `[Grok Bot Direct → Cursor]\n` +
+      `This is a reply in THIS chat — do not open a new session.\n\n` +
+      `${message}\n` +
+      (context ? `\nContext:\n${context}\n` : ``);
+
+    const followed = await followUpStickyAgent(apiKey, sessionId, text);
+    if (!followed) {
+      throw new Error(`Cursor session ${sessionId} is gone (404/410). Give Cursor a new session_id.`);
+    }
+    if (followed.delivered === false) {
+      throw new Error(
+        `Cursor session ${sessionId} is BUSY (only one run at a time). ` +
+        `The message was NOT delivered. Retry when that run finishes, or ask David to paste it as a follow-up in ${followed.url}. ` +
+        `Do not call ask_cursor — that opens a different agent.`,
+      );
+    }
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "reply_to_cursor_session",
+      requestText: message,
+      context: `${sessionId}${context ? `\n${context}` : ""}`,
+      branch: "",
+      sessionUrl: followed.url,
+      cursorAgentId: sessionId,
+    });
+    return `✅ נשלח לצ׳אט Cursor הישיר ${followed.url}`;
+  }
+
+  if (name === "reply_to_aios_session") {
+    const { ingestChannelReply } = await import("../_shared/agent-channel/ingest.ts");
+    const conversationId = String(args?.conversation_id ?? "").trim();
+    const content = String(args?.content ?? "").trim();
+    if (!conversationId || !content) throw new Error("conversation_id and content are required");
+    const result = await ingestChannelReply({
+      conversation_id: conversationId,
+      session_id: args?.session_id ? String(args.session_id) : undefined,
+      origin: (args?.origin || "cursor") as any,
+      content,
+      idempotency_key: args?.idempotency_key ? String(args.idempotency_key) : undefined,
+      tenant_id: ctx.tenantId || undefined,
+    });
+    return result.duplicate
+      ? "Already delivered (idempotent). No duplicate message was created."
+      : "Answer delivered to the AIOS Carmen conversation.";
+  }
+
+  if (name === "generate_creative") {
+    const itemId = String(args?.item_id ?? "").trim();
+    if (!itemId) throw new Error("generate_creative requires item_id.");
+    if (!ctx.tenantId) throw new Error("generate_creative needs a tenant on the MCP connection.");
+    const directorNote = String(args?.director_note ?? "").trim();
+    const copyLabel = String(args?.copy_label ?? "").trim();
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/cursor-generate-creative`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "dispatch",
+        tenant_id: ctx.tenantId,
+        item_id: itemId,
+        prompt: [
+          "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
+          `Load APPROVED CONCEPTS from marketing_work_items id=${itemId}. Photograph the concept. Type the copy.`,
+          copyLabel && `Copy variation «${copyLabel}».`,
+          directorNote && `DIRECTOR / REJECT: ${directorNote}`,
+        ].filter(Boolean).join("\n"),
+        lesson: directorNote || undefined,
+        variation: {
+          name: copyLabel || "וריאציה",
+          copy_label: copyLabel || undefined,
+        },
+      }),
+    });
+    const raw = await resp.text();
+    let data: any = {};
+    try { data = JSON.parse(raw); } catch { /* ignore */ }
+    if (!resp.ok || data?.error) {
+      throw new Error(data?.error || `cursor-generate-creative ${resp.status}: ${raw.slice(0, 200)}`);
+    }
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "ask_cursor",
+      requestText: `${"[CREATIVE AGENT]"} Carmen asked for item ${itemId}`,
+      context: directorNote,
+      branch: "",
+      sessionUrl: String(data.agent_url || ""),
+      cursorAgentId: String(data.cursor_agent_id || ""),
     });
     return (
-      `✅ Sent your request to Cursor` +
-      (reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
-      `. A Cloud Agent session is now running on it.\n` +
-      `Session: ${url}`
+      `✅ נשלח לקריאייטיב דיירקט (אותו צ׳אט דביק)` +
+      (data.agent_url ? `\nSession: ${data.agent_url}` : "") +
+      `\nהתמונה תופיע על פרויקט הקריאייטיב אחרי שהצ׳אט מעלה אותה.`
     );
   }
 

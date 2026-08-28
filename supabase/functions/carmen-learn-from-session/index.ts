@@ -18,7 +18,14 @@ type Insight = {
   style_preferences: { preference: string }[];
   session_summary: string;
   quality_score: number; // 1-5
+  task_type?: string;
 };
+
+function normalizeTaskType(raw?: string | null): string {
+  const t = String(raw || "other").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+  const allowed = new Set(["bugfix", "feature", "qa", "ops", "access", "campaign", "creative", "memory", "council", "other"]);
+  return allowed.has(t) ? t : (t || "other");
+}
 
 const SYSTEM_PROMPT = `אתה מנתח שיחות WhatsApp בין משתמש (איש צוות בסוכנות שיווק) לבין כרמן (סוכן AI).
 מטרה: ללמוד איך לשפר את כרמן.
@@ -31,6 +38,7 @@ const SYSTEM_PROMPT = `אתה מנתח שיחות WhatsApp בין משתמש (א
 5. style_preferences – העדפות תקשורת: אורך תשובה, טון, פורמט, שפה
 6. session_summary – משפט-שניים בעברית
 7. quality_score – 1 (גרוע) עד 5 (מצוין)
+8. task_type – סוג המשימה באנגלית: bugfix, feature, qa, ops, access, campaign, creative, memory, council, other
 
 החזר JSON בלבד לפי הסכמה. אם אין מה לחלץ בקטגוריה – החזר מערך ריק.`;
 
@@ -91,6 +99,7 @@ function buildSchema() {
       },
       session_summary: { type: "string" },
       quality_score: { type: "integer" },
+      task_type: { type: "string" },
     },
     required: [
       "what_worked",
@@ -277,6 +286,7 @@ Deno.serve(async (req) => {
 
     // 2. Pointers — facts
     let facts = 0, instructions = 0, style = 0, worked = 0, failed = 0;
+    const taskType = normalizeTaskType(insight.task_type);
 
     for (const f of insight.facts) {
       await upsertPointer(supabase, {
@@ -290,7 +300,7 @@ Deno.serve(async (req) => {
         summary: f.fact,
         ref_date,
         importance: 60,
-        metadata: { source: "carmen_learn", session_id: session.id },
+        metadata: { source: "carmen_learn", session_id: session.id, task_type: taskType },
       });
       facts++;
     }
@@ -299,14 +309,15 @@ Deno.serve(async (req) => {
       await upsertPointer(supabase, {
         tenant_id,
         category: "instructions",
-        path: `instructions/${session.id}/${instructions}`,
+        subcategory: taskType,
+        path: `process/${taskType}/instructions/${session.id}/${instructions}`,
         entity_type: "instruction",
         entity_id: `${session.id}-i${instructions}`,
         title: shortText(i.instruction, 80),
         summary: i.instruction,
         ref_date,
         importance: 90,
-        metadata: { source: "carmen_learn", session_id: session.id, sender: session.sender_name },
+        metadata: { source: "carmen_learn", session_id: session.id, sender: session.sender_name, task_type: taskType },
       });
       instructions++;
     }
@@ -331,14 +342,15 @@ Deno.serve(async (req) => {
       await upsertPointer(supabase, {
         tenant_id,
         category: "what_worked",
-        path: `what_worked/${session.id}/${worked}`,
+        subcategory: taskType,
+        path: `process/${taskType}/what_worked/${session.id}/${worked}`,
         entity_type: "lesson",
         entity_id: `${session.id}-w${worked}`,
         title: shortText(w.observation, 80),
         summary: [w.observation, w.example].filter(Boolean).join(" — "),
         ref_date,
         importance: 60,
-        metadata: { source: "carmen_learn", session_id: session.id, kind: "positive" },
+        metadata: { source: "carmen_learn", session_id: session.id, kind: "positive", task_type: taskType },
       });
       worked++;
     }
@@ -347,7 +359,8 @@ Deno.serve(async (req) => {
       await upsertPointer(supabase, {
         tenant_id,
         category: "what_failed",
-        path: `what_failed/${session.id}/${failed}`,
+        subcategory: taskType,
+        path: `process/${taskType}/what_failed/${session.id}/${failed}`,
         entity_type: "lesson",
         entity_id: `${session.id}-f${failed}`,
         title: shortText(f.observation, 80),
@@ -355,7 +368,7 @@ Deno.serve(async (req) => {
           .filter(Boolean).join(" — "),
         ref_date,
         importance: 80,
-        metadata: { source: "carmen_learn", session_id: session.id, kind: "negative" },
+        metadata: { source: "carmen_learn", session_id: session.id, kind: "negative", task_type: taskType },
       });
       failed++;
     }

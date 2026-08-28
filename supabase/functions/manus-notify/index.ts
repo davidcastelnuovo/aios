@@ -3,7 +3,8 @@
 // live session.
 //
 // Mirrors claude-notify — same recipient resolution (never cross-tenant
-// owner fallback), same sendViaActionStep logic.
+// owner fallback, never a group chat whose session row stores the
+// recipient's phone as last speaker). Pulse/notify is always 1:1.
 //
 // Auth: Authorization: Bearer == MANUS_MCP_BEARER (same shared secret as manus-mcp).
 //
@@ -12,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import {
   normalizeNotifyPhone,
+  pickNotifyDelivery,
   resolveCarmenNotifyTarget,
 } from "../_shared/carmen-notify-target.ts";
 
@@ -167,11 +169,8 @@ Deno.serve(async (req) => {
     });
   }
 
-  const matchedSession = (sessions || []).find((s: any) =>
-    normalizeNotifyPhone(s.chat_id) === target.phone ||
-    normalizeNotifyPhone(s.phone) === target.phone
-  ) || null;
-  const bridgeSession = matchedSession || (sessions || []).find((s: any) => s.automation_id) || null;
+  const delivery = pickNotifyDelivery(sessions || [], target);
+  const bridgeSession = delivery.bridgeSession;
 
   if (!bridgeSession?.automation_id) {
     return json({
@@ -179,28 +178,25 @@ Deno.serve(async (req) => {
       sent: false,
       reason: "no Carmen WhatsApp automation/session bridge for this tenant",
       source: target.source,
-      chat_id: target.chatId,
+      chat_id: delivery.chatId,
     });
   }
 
-  const chatId = matchedSession?.chat_id || target.chatId;
-  const phoneNumber = normalizeNotifyPhone(matchedSession?.phone) || target.phone;
-  const isGroup = String(chatId).endsWith("@g.us");
   const sent = await sendViaActionStep(sb, {
     automationId: bridgeSession.automation_id,
     tenantId,
     connectionUserId: bridgeSession.connection_user_id || "",
-    chatId,
-    phoneNumber,
-    isGroup,
+    chatId: delivery.chatId,
+    phoneNumber: delivery.phoneNumber,
+    isGroup: false,
     message,
   });
 
   return json({
     ok: sent,
     sent,
-    chat_id: chatId,
-    phone: phoneNumber,
+    chat_id: delivery.chatId,
+    phone: delivery.phoneNumber,
     contact_name: target.contactName,
     source: target.source,
   });

@@ -48,7 +48,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "grok-mcp", version: "1.2.0" };
+const SERVER_INFO = { name: "grok-mcp", version: "1.2.1" };
 const GROK_MCP_STREAMABLE_URL =
   "https://zvoijyneresvkadpprel.supabase.co/functions/v1/grok-mcp/mcp";
 const CURSOR_MCP_STREAMABLE_URL =
@@ -129,6 +129,23 @@ const TOOLS = [
       required: ["request"],
     },
   },
+  {
+    name: "reply_to_aios_session",
+    description:
+      "Deliver a finished answer into the AIOS Carmen conversation that dispatched this agent. " +
+      "Writes directly to the Command Center thread. Do not call ask_carmen or ask_cursor to deliver the answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        conversation_id: { type: "string" },
+        session_id: { type: "string" },
+        origin: { type: "string" },
+        content: { type: "string" },
+        idempotency_key: { type: "string" },
+      },
+      required: ["conversation_id", "content"],
+    },
+  },
 ];
 
 function rpcResult(id: unknown, result: unknown) {
@@ -190,7 +207,15 @@ async function resolveContext(
   }
 }
 
-type FireResult = { url: string; id: string; reused: boolean; viaWebhook?: boolean };
+type FireResult = {
+  url: string;
+  id: string;
+  reused: boolean;
+  viaWebhook?: boolean;
+  delivered?: boolean;
+  parallel?: boolean;
+  stickyUrl?: string;
+};
 
 function webhookConfig(): { url: string; key: string } | null {
   const url = String(Deno.env.get("GROK_BOT_WEBHOOK_URL") || "").trim();
@@ -372,7 +397,8 @@ async function followUpStickyAgent(
   promptText: string,
 ): Promise<FireResult | null> {
   const url = `https://api.cursor.com/v1/agents/${encodeURIComponent(agentId)}/runs`;
-  for (let attempt = 1; attempt <= 4; attempt++) {
+  const sessionUrl = `https://cursor.com/agents/${agentId}`;
+  for (let attempt = 1; attempt <= 2; attempt++) {
     const resp = await cursorFetch(apiKey, url, {
       method: "POST",
       body: JSON.stringify({ prompt: { text: promptText } }),
@@ -382,12 +408,13 @@ async function followUpStickyAgent(
       const parsed = parseAgentResponse(raw);
       return {
         id: agentId,
-        url: parsed.url.includes("/agents/") ? parsed.url : `https://cursor.com/agents/${agentId}`,
+        url: parsed.url.includes("/agents/") ? parsed.url : sessionUrl,
         reused: true,
+        delivered: true,
       };
     }
     if (resp.status === 409) {
-      await new Promise((r) => setTimeout(r, 2500 * attempt));
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 1500));
       continue;
     }
     if (resp.status === 404 || resp.status === 410 || resp.status === 400) {
@@ -400,8 +427,9 @@ async function followUpStickyAgent(
   }
   return {
     id: agentId,
-    url: `https://cursor.com/agents/${agentId}`,
+    url: sessionUrl,
     reused: true,
+    delivered: false,
   };
 }
 
@@ -485,9 +513,13 @@ async function fireGrokAgent(promptText: string, opts?: {
     const stickyId = await getStickyAgentId(opts?.tenantId ?? null);
     if (stickyId) {
       const followed = await followUpStickyAgent(apiKey, stickyId, text);
-      if (followed) {
+      if (followed?.delivered) {
         await saveStickyAgent(opts?.tenantId ?? null, followed.id, followed.url);
         return followed;
+      }
+      if (followed && followed.delivered === false) {
+        const created = await createGrokAgent(apiKey, text, opts);
+        return { ...created, parallel: true, stickyUrl: followed.url };
       }
       await clearStickyAgent(opts?.tenantId ?? null);
     }
@@ -695,6 +727,24 @@ async function handleToolCall(
         `. A Grok session is now running on it.\n` +
         `Session: ${url}`
       );
+  }
+
+  if (name === "reply_to_aios_session") {
+    const { ingestChannelReply } = await import("../_shared/agent-channel/ingest.ts");
+    const conversationId = String(args?.conversation_id ?? "").trim();
+    const content = String(args?.content ?? "").trim();
+    if (!conversationId || !content) throw new Error("conversation_id and content are required");
+    const result = await ingestChannelReply({
+      conversation_id: conversationId,
+      session_id: args?.session_id ? String(args.session_id) : undefined,
+      origin: (args?.origin || "grok") as any,
+      content,
+      idempotency_key: args?.idempotency_key ? String(args.idempotency_key) : undefined,
+      tenant_id: ctx.tenantId || undefined,
+    });
+    return result.duplicate
+      ? "Already delivered (idempotent). No duplicate message was created."
+      : "Answer delivered to the AIOS Carmen conversation.";
   }
 
   throw new Error(`Unknown tool: ${name}`);
