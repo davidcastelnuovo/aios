@@ -340,8 +340,9 @@ export function WeeklyTaskBoard() {
         buildTasksBoardScopeOrFilter(boardScope, personScopeCampaignerIds, collaboratorTaskIds),
       );
 
-      // Include: current range OR overdue (past due_date with status != done) OR null due_date
-      // Overdue = due_date < today AND status != 'done'
+      // Include: current range OR overdue open OR unscheduled open (no due_date).
+      // Do not fetch historical done-undated / all-time untimed rows — that
+      // flooded the board after the target_date 400-fix made the query succeed.
       query = query.or(
         buildTaskDueDateOrFilter({
           rangeStart: rangeStartStr,

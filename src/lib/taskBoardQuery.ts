@@ -3,8 +3,14 @@ import { startOfDay } from "date-fns";
 /**
  * PostgREST `.or()` filter for the tasks board.
  *
- * Always includes: unscheduled, overdue, dated-without-time (backlog), and tasks
- * whose due_date falls in the active view range (timed or untimed).
+ * Includes:
+ * - tasks whose due_date falls in the active view range (timed or untimed, any status)
+ * - overdue open tasks (due_date < today, status != done)
+ * - unscheduled OPEN tasks (no due_date, not done)
+ *
+ * Does NOT pull historical completed tasks that have no due_date, and does NOT
+ * pull every untimed dated row in the tenant — those two clauses were flooding
+ * the board after the target_date 400-fix made the query succeed again.
  */
 export function buildTaskDueDateOrFilter(input: {
   rangeStart: string;
@@ -14,25 +20,17 @@ export function buildTaskDueDateOrFilter(input: {
   customEnd?: string;
 }): string {
   const { rangeStart, rangeEnd, today, customStart, customEnd } = input;
-  const datedUntimed = "and(due_time.is.null,due_date.not.is.null)";
   // Filter only on due_date. `tasks.target_date` is a later column; referencing it
   // in PostgREST before the migration is applied 400s the whole board query.
-  const overdueByDue = `and(due_date.lt.${today},status.neq.done)`;
-
-  if (customStart && customEnd) {
-    return (
-      `and(due_date.gte.${customStart},due_date.lte.${customEnd}),` +
-      overdueByDue + "," +
-      "due_date.is.null," +
-      datedUntimed
-    );
-  }
+  const overdueOpen = `and(due_date.lt.${today},status.neq.done)`;
+  const unscheduledOpen = "and(due_date.is.null,status.neq.done)";
+  const start = customStart && customEnd ? customStart : rangeStart;
+  const end = customStart && customEnd ? customEnd : rangeEnd;
 
   return (
-    `and(due_date.gte.${rangeStart},due_date.lte.${rangeEnd}),` +
-    overdueByDue + "," +
-    "due_date.is.null," +
-    datedUntimed
+    `and(due_date.gte.${start},due_date.lte.${end}),` +
+    overdueOpen + "," +
+    unscheduledOpen
   );
 }
 
