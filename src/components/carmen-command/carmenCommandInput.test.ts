@@ -6,6 +6,7 @@ import {
   shouldResumeLegacyListen,
   shouldSpeakWithLegacyTts,
   tagChatTurn,
+  shouldLogRealtimeTranscript,
   volumeControlsLiveSession,
 } from "./carmenCommandInput.ts";
 
@@ -36,6 +37,10 @@ test("Realtime failure must not fall back to transcribe-voice", () => {
 test("typed send never reopens the legacy listen loop", () => {
   assert.equal(shouldResumeLegacyListen({ inputMode: "typed", realtimeActive: false }), false);
   assert.equal(shouldResumeLegacyListen({ inputMode: "realtime_voice", realtimeActive: false }), false);
+});
+
+test("live voice does not dump transcription into the typed thread", () => {
+  assert.equal(shouldLogRealtimeTranscript(), false);
 });
 
 test("chat turns are tagged with input and delivery mode", () => {

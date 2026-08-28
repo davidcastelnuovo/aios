@@ -54,3 +54,8 @@ export function shouldResumeLegacyListen(_args: {
 }): boolean {
   return false;
 }
+
+/** Live speech stays spoken. Typed chat stays typed. Do not mix STT into the thread. */
+export function shouldLogRealtimeTranscript(): boolean {
+  return false;
+}

@@ -1,10 +1,9 @@
-import {
-  forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState,
-} from "react";
+import { ReactNode, forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, Headphones, History, Loader2, Mic, MicOff, Play, Plus, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { CarmenFaceState } from "./CarmenFace";
@@ -16,6 +15,7 @@ import { deriveParliamentView, speakerLabel } from "@/lib/agentChannelRouting";
 import {
   CarmenInputMode,
   onRealtimeUnavailable,
+  shouldLogRealtimeTranscript,
   shouldResumeLegacyListen,
   shouldSpeakWithLegacyTts,
   tagChatTurn,
@@ -46,6 +46,9 @@ interface CarmenChatBarProps {
   tenantId: string | null;
   onFaceState: (state: CarmenFaceState) => void;
   audioLevelRef: React.MutableRefObject<number>;
+  menuOpen?: boolean;
+  onMenuOpenChange?: (open: boolean) => void;
+  menuPanels?: ReactNode;
 }
 
 const CARMEN_VOICES = [
@@ -69,7 +72,7 @@ const VOICE_STORAGE_KEY = "aios:carmen-voice";
  * Command Center never auto-plays carmen-speak and never falls back to transcribe-voice.
  */
 export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>(
-  function CarmenChatBar({ tenantId, onFaceState, audioLevelRef }, ref) {
+  function CarmenChatBar({ tenantId, onFaceState, audioLevelRef, menuOpen, onMenuOpenChange, menuPanels }, ref) {
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [streamingText, setStreamingText] = useState("");
@@ -91,8 +94,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const conversationIdRef = useRef<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const chunksRef = useRef<Blob[]>([]);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const playingRef = useRef<HTMLAudioElement | null>(null);
     // Sentence-streaming TTS: queue of segments + generation counter for cancellation
@@ -103,7 +104,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const convModeRef = useRef(false);
     const inputModeRef = useRef<CarmenInputMode>("typed");
     const micStreamRef = useRef<MediaStream | null>(null);
-    const vadRafRef = useRef(0);
     // OpenAI Realtime session — the only Command Center voice path
     const realtimeRef = useRef<RealtimeHandle | null>(null);
     const { toast } = useToast();
@@ -367,8 +367,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       realtimeRef.current?.stop();
       realtimeRef.current = null;
       setIsRealtime(false);
-      cancelAnimationFrame(vadRafRef.current);
-      if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
       micStreamRef.current?.getTracks().forEach(t => t.stop());
       micStreamRef.current = null;
       muteRef.current = false;
@@ -510,12 +508,18 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
 
         const handle = await startRealtimeVoice(client_secret, model, {
           onUserTranscript: (text) => {
+            if (!shouldLogRealtimeTranscript()) return;
             setMessages(prev => [...prev, { role: "user", content: text, ...tagChatTurn("realtime_voice") }]);
             setExpanded(true);
             scrollDown();
           },
-          onAssistantDelta: (delta) => { setStreamingText(prev => prev + delta); scrollDown(); },
+          onAssistantDelta: (delta) => {
+            if (!shouldLogRealtimeTranscript()) return;
+            setStreamingText(prev => prev + delta);
+            scrollDown();
+          },
           onAssistantDone: (text) => {
+            if (!shouldLogRealtimeTranscript()) return;
             setStreamingText("");
             setMessages(prev => [...prev, { role: "assistant", content: text, ...tagChatTurn("realtime_voice") }]);
             scrollDown();
@@ -765,8 +769,61 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const hasThread = messages.length > 0 || !!streamingText;
     const parliamentView = deriveParliamentView(messages, brain.selected);
 
+    const params = (
+      <div className="flex min-w-0 flex-col gap-2">
+        <BrainRouteSelector
+          className="w-full"
+          routes={brain.routes}
+          value={brain.selected.id}
+          onChange={(route) => brain.selectRoute(route, conversationIdRef.current)}
+          disabled={isStreaming || brain.status === "debating"}
+          status={brain.status}
+          externalUrl={brain.externalUrl}
+        />
+        <div className="flex h-10 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2">
+          <Headphones className="h-4 w-4 shrink-0 text-[var(--cc-accent)]" />
+          <select
+            value={selectedVoice}
+            onChange={e => selectVoice(e.target.value as CarmenVoice)}
+            title="קול"
+            className="min-w-0 flex-1 bg-transparent text-xs text-[var(--cc-text)] outline-none"
+          >
+            {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
+          </select>
+          <button
+            onClick={previewVoice}
+            disabled={isPreviewingVoice}
+            title="דוגמה"
+            className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50"
+          >
+            {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+        <button
+          onClick={() => setShowHistory(h => !h)}
+          title="שיחות קודמות"
+          className={`flex h-10 items-center justify-center gap-1 rounded-lg border border-[var(--cc-line)] text-xs ${showHistory ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)]"}`}
+        >
+          <History className="h-4 w-4" />
+          שיחות
+        </button>
+      </div>
+    );
+
     return (
-      <div className="cc-panel cc-talkbar flex flex-col overflow-hidden">
+      <div className="cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden">
+        <Sheet open={!!menuOpen} onOpenChange={onMenuOpenChange}>
+            <SheetContent
+              side="right"
+              className="cc-root cc-scroll w-[min(92vw,24rem)] overflow-y-auto border-[var(--cc-line)] p-3 pt-12 text-[var(--cc-text)] sm:max-w-md"
+            >
+              <SheetHeader className="mb-3 text-right">
+                <SheetTitle className="text-[var(--cc-accent)]">פרמטרים</SheetTitle>
+              </SheetHeader>
+              {params}
+              <div className="mt-4 flex flex-col gap-3">{menuPanels}</div>
+            </SheetContent>
+          </Sheet>
         <RoundTableBoard
           route={brain.selected}
           messages={messages}
@@ -795,7 +852,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           } : undefined}
         />
         {showHistory && (
-          <div className="cc-scroll max-h-[40vh] overflow-y-auto border-b border-[var(--cc-line)] p-2">
+          <div className="cc-scroll max-h-[30vh] overflow-y-auto border-b border-[var(--cc-line)] p-2">
             <div className="mb-1 flex items-center justify-between px-1">
               <span className="cc-panel-title">שיחות קודמות</span>
               <button onClick={startNewConversation} className="flex items-center gap-1 text-xs text-[var(--cc-accent)] hover:underline">
@@ -824,13 +881,13 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               className="flex items-center justify-center gap-1 border-b border-[var(--cc-line)] py-1 text-xs text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
             >
               {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-              {expanded ? "כווץ שיחה" : `הצג שיחה (${messages.filter(m => m.role !== "tool_call").length})`}
+              {expanded ? "כווץ" : `שיחה (${messages.filter(m => m.role !== "tool_call").length})`}
             </button>
             {expanded && (
-              <div ref={listRef} className="cc-scroll max-h-[38vh] space-y-2 overflow-y-auto p-3">
+              <div ref={listRef} className="cc-scroll max-h-[28vh] space-y-2 overflow-y-auto p-3 lg:max-h-[38vh]">
                 {messages.map((m, i) => m.role === "tool_call" ? (
                   <p key={i} className="flex items-center gap-1.5 text-xs text-[var(--cc-text-dim)]">
-                    <Wrench className="h-3 w-3" /> מפעילה כלי: {m.tool}
+                    <Wrench className="h-3 w-3" /> {m.tool}
                   </p>
                 ) : (
                   <div key={m.id || i} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
@@ -865,18 +922,41 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           </>
         )}
 
-        <div className="flex items-center gap-2 p-2.5">
-          <BrainRouteSelector
-            routes={brain.routes}
-            value={brain.selected.id}
-            onChange={(route) => brain.selectRoute(route, conversationIdRef.current)}
-            disabled={isStreaming || brain.status === "debating"}
-            status={brain.status}
-            externalUrl={brain.externalUrl}
-          />
+        <div className="cc-talkbar-row mt-auto flex items-center gap-2">
+          <div className="hidden items-center gap-2 lg:flex">
+              <BrainRouteSelector
+                routes={brain.routes}
+                value={brain.selected.id}
+                onChange={(route) => brain.selectRoute(route, conversationIdRef.current)}
+                disabled={isStreaming || brain.status === "debating"}
+                status={brain.status}
+                externalUrl={brain.externalUrl}
+              />
+              <div className="flex h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2">
+                <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />
+                <select
+                  value={selectedVoice}
+                  onChange={e => selectVoice(e.target.value as CarmenVoice)}
+                  title="קול"
+                  className="max-w-[130px] bg-transparent text-xs text-[var(--cc-text)] outline-none"
+                >
+                  {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
+                </select>
+                <button onClick={previewVoice} disabled={isPreviewingVoice} title="דוגמה" className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50">
+                  {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+              <button
+                onClick={() => setShowHistory(h => !h)}
+                title="שיחות"
+                className={`shrink-0 ${showHistory ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"}`}
+              >
+                <History className="h-5 w-5" />
+              </button>
+            </div>
           <button
             onClick={startVoice}
-            title={isConvMode ? "סיימי את השיחה הקולית" : "התחילי שיחה קולית רציפה"}
+            title={isConvMode ? "סיים שיחה חיה" : "שיחה חיה"}
             className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
               isConvMode
                 ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
@@ -889,7 +969,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             <>
               <button
                 onClick={toggleMute}
-                title={isMuted ? "פתחי את המיקרופון" : "השתק את המיקרופון שלי"}
+                title={isMuted ? "מיקרופון" : "השתק מיקרופון"}
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
                   isMuted
                     ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
@@ -900,7 +980,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               </button>
               <button
                 onClick={toggleOutputMute}
-                title={isOutputMuted ? "הפעל את הקול של כרמן" : "השתק את כרמן — הכתיבה תמשיך"}
+                title={isOutputMuted ? "השמע" : "השתק כרמן"}
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
                   isOutputMuted
                     ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
@@ -916,46 +996,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") sendText(input); }}
-            placeholder={
-              isConvMode
-                ? isRealtime
-                  ? "שיחה חיה פעילה — דברי חופשי. אפשר גם לכתוב; הקלדה נשארת על המסך."
-                  : "פותחת שיחה חיה…"
-                : `כתבי אל ${speakerLabel(brain.selected.slug)} — הקלדה מחזירה טקסט. לחצי על רוח בשולחן כדי להחליף.`
-            }
+            placeholder={isConvMode ? (isRealtime ? "שיחה חיה" : "פותחת…") : `אל ${speakerLabel(brain.selected.slug)}`}
             disabled={isStreaming || brain.locked}
-            className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
+            className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
           />
-          <button
-            onClick={() => setShowHistory(h => !h)}
-            title="שיחות קודמות"
-            className={`shrink-0 ${showHistory ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"}`}
-          >
-            <History className="h-5 w-5" />
-          </button>
-          <div className="flex h-10 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2">
-            <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />
-            <select
-              value={selectedVoice}
-              onChange={e => selectVoice(e.target.value as CarmenVoice)}
-              title="בחירת הקול של כרמן"
-              className="max-w-[145px] bg-transparent text-xs text-[var(--cc-text)] outline-none"
-            >
-              {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
-            </select>
-            <button
-              onClick={previewVoice}
-              disabled={isPreviewingVoice}
-              title="השמעת דוגמה"
-              className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50"
-            >
-              {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-            </button>
-          </div>
           <button
             onClick={() => sendText(input)}
             disabled={!input.trim() || isStreaming || brain.locked}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--cc-accent-dim)] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--cc-accent-dim)] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             title="שליחה"
           >
             {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
