@@ -89,6 +89,43 @@ const TOOLS = [
       required: ["request"],
     },
   },
+  {
+    name: "reply_to_cursor_session",
+    description:
+      "Post a follow-up into a SPECIFIC live Cursor Cloud Agent chat (bc-…). Does NOT open a new agent. " +
+      "Use when continuing an already-running Direct channel session.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        cursor_agent_id: {
+          type: "string",
+          description: "Cursor Cloud Agent id starting with bc-",
+        },
+        message: {
+          type: "string",
+          description: "Follow-up text to post into that agent.",
+        },
+      },
+      required: ["cursor_agent_id", "message"],
+    },
+  },
+  {
+    name: "reply_to_aios_session",
+    description:
+      "Deliver a finished answer into the AIOS Carmen conversation that dispatched this agent. " +
+      "Writes directly to the Command Center thread. Do not call ask_carmen to deliver the answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        conversation_id: { type: "string" },
+        session_id: { type: "string" },
+        origin: { type: "string" },
+        content: { type: "string" },
+        idempotency_key: { type: "string" },
+      },
+      required: ["conversation_id", "content"],
+    },
+  },
 ];
 
 function rpcResult(id: unknown, result: unknown) {
@@ -511,6 +548,36 @@ async function handleToolCall(
       `. A Cloud Agent session is now running on it.\n` +
       `Session: ${url}`
     );
+  }
+
+  if (name === "reply_to_cursor_session") {
+    const agentId = String(args?.cursor_agent_id ?? "").trim();
+    const message = String(args?.message ?? "").trim();
+    if (!agentId.startsWith("bc-")) throw new Error("reply_to_cursor_session requires cursor_agent_id starting with bc-");
+    if (!message) throw new Error("reply_to_cursor_session requires a non-empty message.");
+    const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
+    if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
+    const followed = await followUpStickyAgent(apiKey, agentId, message);
+    if (!followed) throw new Error("That Cursor agent is gone or archived — cannot follow up.");
+    return `✅ Posted into ${followed.url}`;
+  }
+
+  if (name === "reply_to_aios_session") {
+    const { ingestChannelReply } = await import("../_shared/agent-channel/ingest.ts");
+    const conversationId = String(args?.conversation_id ?? "").trim();
+    const content = String(args?.content ?? "").trim();
+    if (!conversationId || !content) throw new Error("conversation_id and content are required");
+    const result = await ingestChannelReply({
+      conversation_id: conversationId,
+      session_id: args?.session_id ? String(args.session_id) : undefined,
+      origin: (args?.origin || "cursor") as any,
+      content,
+      idempotency_key: args?.idempotency_key ? String(args.idempotency_key) : undefined,
+      tenant_id: ctx.tenantId || undefined,
+    });
+    return result.duplicate
+      ? "Already delivered (idempotent). No duplicate message was created."
+      : "Answer delivered to the AIOS Carmen conversation.";
   }
 
   throw new Error(`Unknown tool: ${name}`);

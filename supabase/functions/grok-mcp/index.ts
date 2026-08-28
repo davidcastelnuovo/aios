@@ -89,6 +89,23 @@ const TOOLS = [
       required: ["request"],
     },
   },
+  {
+    name: "reply_to_aios_session",
+    description:
+      "Deliver a finished answer into the AIOS Carmen conversation that dispatched this Grok agent. " +
+      "Writes directly to the Command Center thread. Do not call ask_carmen or ask_cursor to deliver the answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        conversation_id: { type: "string" },
+        session_id: { type: "string" },
+        origin: { type: "string" },
+        content: { type: "string" },
+        idempotency_key: { type: "string" },
+      },
+      required: ["conversation_id", "content"],
+    },
+  },
 ];
 
 function rpcResult(id: unknown, result: unknown) {
@@ -512,6 +529,24 @@ async function handleToolCall(
       `. A Grok session is now running on it.\n` +
       `Session: ${url}`
     );
+  }
+
+  if (name === "reply_to_aios_session") {
+    const { ingestChannelReply } = await import("../_shared/agent-channel/ingest.ts");
+    const conversationId = String(args?.conversation_id ?? "").trim();
+    const content = String(args?.content ?? "").trim();
+    if (!conversationId || !content) throw new Error("conversation_id and content are required");
+    const result = await ingestChannelReply({
+      conversation_id: conversationId,
+      session_id: args?.session_id ? String(args.session_id) : undefined,
+      origin: (args?.origin || "grok") as any,
+      content,
+      idempotency_key: args?.idempotency_key ? String(args.idempotency_key) : undefined,
+      tenant_id: ctx.tenantId || undefined,
+    });
+    return result.duplicate
+      ? "Already delivered (idempotent). No duplicate message was created."
+      : "Answer delivered to the AIOS Carmen conversation.";
   }
 
   throw new Error(`Unknown tool: ${name}`);

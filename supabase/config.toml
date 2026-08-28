@@ -27,6 +27,19 @@ verify_jwt = false
 [functions.grok-mcp]
 verify_jwt = false
 
+# Channel gateway — Command Center Direct / Parliament. JWT is checked in-function.
+[functions.agent-channel-send]
+verify_jwt = false
+
+[functions.agent-channel-callback]
+verify_jwt = false
+
+[functions.agent-channel-mcp]
+verify_jwt = false
+
+[functions.run-agent-parliament]
+verify_jwt = false
+
 # Shared read-only architecture graph MCP. It validates its own bearer token.
 [functions.system-graph-mcp]
 verify_jwt = false
