@@ -1,4 +1,4 @@
-# Staging Preview environment variables
+Canonical environment docs: [`docs/ENVIRONMENTS.md`](./ENVIRONMENTS.md).
 
 Configure **Vercel → Settings → Environment Variables**. Values live only in Vercel (and the Staging project dashboard). They must never be committed or pasted into a public PR.
 

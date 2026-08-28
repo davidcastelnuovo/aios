@@ -1,3 +1,13 @@
+## Environments (standing — read first)
+
+Source of truth: `docs/ENVIRONMENTS.md`.
+
+- Flow: **Feature → Preview → Staging → Production**. Never use Production as a development environment.
+- `main` = Production. `develop` = Staging. Feature work = `feature/*` or `fix/*`.
+- **NEVER MODIFY PRODUCTION DIRECTLY.** No direct commits to `main`, no ad-hoc Production SQL, no Production migrations without Staging + David's `מאשר לפרודקשן`.
+- When a task is done, **always send David the development environment link**: the Vercel Preview URL for this branch (and the in-app path). If the work is on `develop`, also send `STAGING_DOMAIN=<configured-in-vercel>`.
+- Do not merge to `main` until he has that preview link **and** explicitly says `מאשר לפרודקשן`. Merge to `develop` only when he asks for Staging.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
@@ -20,11 +30,11 @@ Rules:
 
 ## Cursor Cloud specific instructions
 
-Scope note: this environment sets up the **frontend web app** (the core product surface). The backend is the **hosted/remote Supabase project** (`zvoijyneresvkadpprel`), not a local stack — there is no local DB/`supabase start` config, so no local backend is needed to run and use the app.
+Scope note: this environment sets up the **frontend web app** (the core product surface). The backend is the hosted/remote Supabase project (`SUPABASE_PRODUCTION_PROJECT_ID=<configured-outside-git>`), not a local stack — there is no local DB/`supabase start` config, so no local backend is needed to run and use the app.
 
 Services and how to run them:
 - **Frontend (Vite + React + TS)** — start with `pnpm dev`; it serves on `http://localhost:8080` (host `::`, port fixed in `vite.config.ts`). Other scripts (in `package.json`): `pnpm build`, `pnpm build:dev`, `pnpm preview`, `pnpm lint`.
-- The app reads `VITE_SUPABASE_*` from the committed root `.env` and talks directly to the hosted Supabase (Postgres + ~215 Deno Edge Functions). Auth, data, and edge functions are all remote, so login/data actions hit **production** — do not create throwaway accounts or write test data casually.
+- The app reads `VITE_SUPABASE_*` from the committed root `.env`. **This Cloud Agent checkout still talks to Production Supabase** — do not create throwaway accounts or write test data. Staging credentials live in Vercel Preview+`develop` only (`docs/ENVIRONMENTS.md`). The backend project refs are `<configured-outside-git>`.
 
 Non-obvious gotchas:
 - Package manager is `pnpm` (a `pnpm-workspace.yaml` exists). Multiple lockfiles coexist (`package-lock.json`, `pnpm-lock.yaml`, `bun.lock*`) but Vercel/production and this dev setup use different managers; prefer `pnpm` locally for consistency. `bun` is not installed here.
@@ -38,5 +48,5 @@ Verification / token budget:
 - Skip extra “manual testing” loops by default. If a check is not needed to prove the change, do not run it.
 
 Preview / merge (standing rule for every Cloud Agent):
-- **Always send David the Vercel preview URL** when you finish work on a branch, and again after every follow-up that pushes new commits. Include the in-app path when known (e.g. `/t/<tenant>/marketing/department/copy`).
-- **Do not merge to `main` until he has that preview link and explicitly asks to merge.** Coordinate with other open agents the same way — each agent sends its own branch preview; nobody merges on another agent's behalf.
+- **Always send David the Vercel preview URL** (the development environment link) when you finish work on a branch, and again after every follow-up that pushes new commits. Include the in-app path when known (e.g. `/t/<tenant>/marketing/department/copy`).
+- **Do not merge to `main` until he has that preview link and explicitly says `מאשר לפרודקשן`.** Coordinate with other open agents the same way — each agent sends its own branch preview; nobody merges on another agent's behalf.

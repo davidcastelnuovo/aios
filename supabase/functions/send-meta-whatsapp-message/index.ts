@@ -5,6 +5,7 @@ import {
   explainMetaWhatsAppError,
   renderTemplateText,
 } from "../_shared/meta-whatsapp.ts";
+import { checkWhatsAppSend } from "../_shared/integration-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,6 +91,16 @@ Deno.serve(async (request) => {
     const to = digitsOnly(contactPhone).replace(/^00/, "").replace(/^0/, "972");
     if (!tenantId) return reply({ error: "tenant_not_found" }, 404);
     if (!to) return reply({ error: "phone_number_required" }, 400);
+
+    const guard = checkWhatsAppSend(to);
+    if (guard.decision === "BLOCK") {
+      console.warn("[send-meta-whatsapp] blocked by integration-guard", guard);
+      return reply({
+        error: "blocked_by_staging_safe_mode",
+        reason: guard.reason,
+        environment: guard.environment,
+      }, 403);
+    }
 
     const [{ data: membership }, { data: superAdmin }] = await Promise.all([
       admin.from("tenant_users").select("user_id").eq("tenant_id", tenantId).eq("user_id", userId).maybeSingle(),
