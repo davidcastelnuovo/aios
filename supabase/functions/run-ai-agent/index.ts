@@ -13,6 +13,7 @@ import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
 import { resolveActiveSkills, buildSkillsBlockBySlug, resolveSkillsBySlug } from '../_shared/skills/registry.ts'
+import { DEV_ENVIRONMENT_STANDING } from '../_shared/environments-standing.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 import { asUuidOrNull } from '../_shared/uuid.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
@@ -7109,6 +7110,10 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     const model = resolveModel(agent.engine || 'gemini-3-flash')
     const maxRounds = agent.max_tool_rounds || 25
     const safeTemp = typeof temperature === 'number' ? Math.min(2, Math.max(0, temperature)) : undefined
+
+    if (isCarmen) {
+      systemPrompt += `\n\n=== סביבת פיתוח (חובה) ===\n${DEV_ENVIRONMENT_STANDING}`
+    }
 
     // ─── Skill resolver: detect active skills from the user message and append their prompts (DB-backed) ───
     const skillTenantId = (agent as any).tenant_id || tenant_id || null

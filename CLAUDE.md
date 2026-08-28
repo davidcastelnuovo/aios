@@ -1,9 +1,11 @@
 # AIOS — project notes for Claude
 
 ## Environments (standing)
-- Source of truth: `docs/ENVIRONMENTS.md`. Flow: Feature → Preview → Staging → Production.
-- **NEVER MODIFY PRODUCTION DIRECTLY.** `main` is Production; `develop` is Staging.
-- Every completed task must include the Vercel Preview URL (the development environment link). Merge to `main` only after David says `מאשר לפרודקשן`.
+- **There IS a development environment. Never tell David or Carmen that it does not exist.**
+- Source of truth: `docs/ENVIRONMENTS.md`. Cursor rule: `.cursor/rules/environments.mdc`.
+- Development environment = Vercel Preview URL of the branch (talks to Staging). `develop` = Staging. `main` = Production.
+- A Cloud Agent local `.env` pointing at Production is expected — it is not proof that Staging is missing.
+- **NEVER MODIFY PRODUCTION DIRECTLY.** Every completed task must include the Vercel Preview URL. Merge to `main` only after David says `מאשר לפרודקשן`.
 
 ## Shared AIOS system graph
 - Before architecture or implementation work, query the `aios-system-graph` MCP server to locate existing components, dependencies, database objects, Edge Functions, Carmen skins, skills, tools, and memory paths. Reuse or improve existing functionality instead of creating a parallel implementation.

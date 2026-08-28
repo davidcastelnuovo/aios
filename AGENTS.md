@@ -1,9 +1,13 @@
 ## Environments (standing — read first)
 
-Source of truth: `docs/ENVIRONMENTS.md`.
+**There IS a development environment. Never tell David or Carmen that it does not exist.**
 
+Source of truth: `docs/ENVIRONMENTS.md`. Cursor rule: `.cursor/rules/environments.mdc`.
+
+- The **development environment** is the Vercel Preview URL of this branch. It talks to AIOS Staging.
 - Flow: **Feature → Preview → Staging → Production**. Never use Production as a development environment.
 - `main` = Production. `develop` = Staging. Feature work = `feature/*` or `fix/*`.
+- This Cloud Agent's local `.env` still points at Production. That is **not** proof Staging is missing.
 - **NEVER MODIFY PRODUCTION DIRECTLY.** No direct commits to `main`, no ad-hoc Production SQL, no Production migrations without Staging + David's `מאשר לפרודקשן`.
 - When a task is done, **always send David the development environment link**: the Vercel Preview URL for this branch (and the in-app path). If the work is on `develop`, also send `STAGING_DOMAIN=<configured-in-vercel>`.
 - Do not merge to `main` until he has that preview link **and** explicitly says `מאשר לפרודקשן`. Merge to `develop` only when he asks for Staging.

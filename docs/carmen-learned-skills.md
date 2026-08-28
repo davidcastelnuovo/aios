@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-28 — סביבת פיתוח קיימת
+- **Skin slug:** `dev_environment_exists` (global)
+- **What Carmen can now do:** Confirm that a development environment exists. Never say it does not. Point to the Vercel Preview URL (Staging). `develop` = Staging, `main` = Production.
+- **How:** Global `ai_skills` row + always-on fallback in `_shared/skills/registry.ts`. Agents also read `docs/ENVIRONMENTS.md`, `AGENTS.md`, and `.cursor/rules/environments.mdc`.
+- **Origin:** David — Carmen Direct said she could not see a development environment.
+
 ### 2026-08-26 — לוגו — עיצוב בהיר מראש, בלי פלסטר
 - **Skin slug:** `creative_direct` (global + tenant)
 - **What Creative Direct must do:** Promo logo is red-on-transparent; on black heroes it disappears. **No plaster pad.** Design **bright-dominant** comps (paper/white/light ~60%+) with natural light header/wall for logo; composite exact PNG after generation.

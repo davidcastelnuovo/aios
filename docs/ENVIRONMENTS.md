@@ -1,5 +1,13 @@
 # AIOS environments
 
+**There IS a development environment. Never tell David or Carmen that it does not exist.**
+
+What to say when asked:
+
+- Yes — the development environment is the Vercel Preview URL of the current branch. It talks to AIOS Staging.
+- Staging is git branch `develop`. Production is `main` only.
+- A Cloud Agent checkout whose `.env` still points at Production is expected. That local `.env` is not the development environment.
+
 Standing rule for every agent and human:
 
 ```
@@ -34,7 +42,7 @@ feature/* or fix/*
 | Git | Deploy | Data |
 | --- | --- | --- |
 | local | `pnpm dev` | Cloud Agent `.env` still talks to Production — do not write test data |
-| `feature/*` | Vercel Preview | Target: isolated/staging data (Preview DB still pending) |
+| `feature/*` | Vercel Preview | AIOS Staging (every Preview deploy) |
 | `develop` | Persistent Staging | AIOS Staging Supabase |
 | `main` | Production | Production Supabase |
 
