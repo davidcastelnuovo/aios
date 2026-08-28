@@ -55,7 +55,7 @@ Already in place:
 
 Gaps (do not touch Production to close these):
 
-1. Staging schema/function sync is applied from this repo onto Staging; leftover seed migrations that require a Production user will fail until you sign up on Staging.
+1. Staging schema/function sync: **237 Edge Functions deployed**; **~229 public tables** applied from repo migrations. Production data seeds were skipped on purpose. Some cron jobs need `pg_cron` (optional).
 2. Add GitHub secret `SUPABASE_STAGING_PROJECT_ID` so the Staging deploy workflow can run.
 3. Copy non-customer secrets the Staging functions need (e.g. `OPENAI_API_KEY`) in the Staging project dashboard — never commit them. Do **not** copy Production WhatsApp/Meta tokens.
 4. No persistent custom Staging domain yet (`STAGING_DOMAIN=<configured-in-vercel>`).
