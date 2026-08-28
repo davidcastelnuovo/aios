@@ -5,6 +5,13 @@ import {
   parseCopyConceptsFromPayload,
   type CopyConcept,
 } from "./copyConcepts.ts";
+import {
+  approvedCopyVariations,
+  hydrateCopyVariations,
+  joinCopyVariations,
+  pairConceptsToCopyVariations,
+  parseCopyVariationsFromPayload,
+} from "./departments/creative/copyVariations.ts";
 import { isCreativeDepartmentItem } from "./departmentFilters.ts";
 
 export type HandoffWorkItem = {
@@ -108,18 +115,36 @@ export function overlayCopyHandoffPayload({
 }): Record<string, unknown> {
   const existing = existingPayload ?? {};
   const copy = copyPayload ?? {};
-  const primary = approved[0];
-  const conceptBrief = formatCopyConceptsForCreative(approved);
-  const visualPrompt = formatCopyConceptsForImagePrompt(approved);
+  const copyVariations = hydrateCopyVariations(
+    asText(copy.copy_text) || asText(existing.copy_text),
+    parseCopyVariationsFromPayload(copy).length > 0
+      ? parseCopyVariationsFromPayload(copy)
+      : parseCopyVariationsFromPayload(existing),
+  );
+  const approvedCopy = approvedCopyVariations(copyVariations);
+  const pairSource = approvedCopy.length > 0 ? approvedCopy : copyVariations;
+  const pairedConcepts = concepts.length > 0
+    ? pairConceptsToCopyVariations(concepts, pairSource)
+    : parseCopyConceptsFromPayload(existing);
+  const pairedApproved = approved.length > 0
+    ? pairConceptsToCopyVariations(approved, pairSource)
+    : approvedCopyConcepts(pairedConcepts);
+  const copyText = joinCopyVariations(approvedCopy.length > 0 ? approvedCopy : copyVariations)
+    || asText(copy.copy_text)
+    || asText(existing.copy_text);
+  const primary = pairedApproved[0];
+  const conceptBrief = formatCopyConceptsForCreative(pairedApproved);
+  const visualPrompt = formatCopyConceptsForImagePrompt(pairedApproved);
   return {
     ...existing,
     department: "creative",
     project_type: existing.project_type ?? "static",
     format: existing.format ?? copy.format ?? "1:1",
-    copy_text: copy.copy_text ?? existing.copy_text ?? "",
+    copy_text: copyText,
+    copy_variations: copyVariations.length > 0 ? cloneJson(copyVariations) : cloneJson(existing.copy_variations ?? []),
     brief_text: copy.brief_text ?? existing.brief_text ?? "",
-    copy_concepts: concepts.length > 0 ? cloneJson(concepts) : cloneJson(existing.copy_concepts ?? []),
-    approved_concepts: concepts.length > 0 ? cloneJson(approved) : cloneJson(existing.approved_concepts ?? []),
+    copy_concepts: pairedConcepts.length > 0 ? cloneJson(pairedConcepts) : cloneJson(existing.copy_concepts ?? []),
+    approved_concepts: pairedApproved.length > 0 ? cloneJson(pairedApproved) : cloneJson(existing.approved_concepts ?? []),
     creative_concept: primary
       ? {
         name: primary.name,

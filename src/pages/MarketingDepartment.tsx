@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { clientFilterToParam, entryClientFilter, parseClientFilter } from "@/components/marketing/clientFilter";
+import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

@@ -37,7 +37,7 @@ test("deriveBrandBook uses client + brief and never invents a logo rule-break", 
   assert.equal(book.source, "auto");
 });
 
-test("brandKitPrompt locks logo colors and refuses style-board layouts", () => {
+test("brandKitPrompt locks logo colors and attaches project style refs", () => {
   const prompt = brandKitPrompt({
     logoUrl: "https://example.com/logo.png",
     website: "https://smartair.co.il",
@@ -45,11 +45,26 @@ test("brandKitPrompt locks logo colors and refuses style-board layouts", () => {
     styleReferences: [{ url: "https://example.com/a.jpg" }],
   });
   assert.doesNotMatch(prompt, /top-right pad/i);
-  assert.match(prompt, /RANGE only/i);
-  assert.match(prompt, /Do not attach, recall, or copy/i);
+  assert.match(prompt, /STYLE REFERENCE/i);
+  assert.match(prompt, /palette dominance/i);
+  assert.doesNotMatch(prompt, /Do not attach, recall, or copy/i);
+  assert.doesNotMatch(prompt, /RANGE only/i);
   assert.match(prompt, /ONLY these logo\/brand colors/i);
   assert.match(prompt, /#111/);
   assert.match(prompt, /smartair\.co\.il/);
+  assert.match(prompt, /will not overlay a watermark/i);
+  assert.match(prompt, /bottom-corner/i);
+});
+
+test("brandKitPrompt talent lock keeps the spokesman instead of forbidding faces", () => {
+  const prompt = brandKitPrompt({
+    logoUrl: "https://example.com/logo.png",
+    brandBook: { colors: ["#c00000"], notes: "", source: "auto" },
+    styleReferences: [{ url: "https://example.com/person.jpg" }],
+  }, { talentLock: true });
+  assert.match(prompt, /Keep that spokesman/i);
+  assert.doesNotMatch(prompt, /RANGE only/i);
+  assert.doesNotMatch(prompt, /Do not attach, recall, or copy/i);
 });
 
 test("client attachments become image style refs and ignore non-images", () => {
@@ -74,6 +89,13 @@ test("getBrandKit keeps an uploaded brand-book file", () => {
   });
   assert.equal(kit.brandBook?.fileName, "book.pdf");
   assert.equal(kit.brandBook?.source, "upload");
+});
+
+test("isGenerationAborted recognizes abort signals and abort errors", () => {
+  assert.equal(isGenerationAborted(new Error("ABORTED")), true);
+  assert.equal(isGenerationAborted(new DOMException("Aborted", "AbortError")), true);
+  assert.equal(isGenerationAborted(new Error("The user aborted a request.")), true);
+  assert.equal(isGenerationAborted(new Error("network down")), false);
 });
 
 test("throwIfGenerationAborted raises a recognizable abort error", () => {

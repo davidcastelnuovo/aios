@@ -111,3 +111,4 @@ BEGIN
   );
 END;
 $pulse_crons$;
+-- Re-applied via apply-sql-migration.yml to install morning/afternoon deliver crons.

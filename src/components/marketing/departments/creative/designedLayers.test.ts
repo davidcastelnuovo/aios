@@ -5,6 +5,7 @@ import {
   buildCopyOverlayLock,
   buildCopySceneBrief,
   buildDesignedCopyLayers,
+  buildPaintedCopyLock,
   ensureLogoLayer,
   extractCopyAngle,
   heroWord,
@@ -94,6 +95,47 @@ test("copy overlay lock keeps the concept in charge of the photograph", () => {
   assert.match(lock, /Do not invent a new subject from the slogan/);
   assert.match(lock, /טיקטוק/);
   assert.doesNotMatch(lock, /STAGE THIS IDEA/);
+});
+
+test("painted copy lock quotes headline and CTA for a finished ad", () => {
+  const lock = buildPaintedCopyLock({
+    title: "פרומו",
+    copyLabel: "וריאציה 1",
+    copyText: `כותרת: המתחרים שלך כבר נכנסים לתשובות של הצ׳אט?
+CTA: השאירו פרטים לבדיקת הנוכחות שלכם בצ׳אט`,
+  });
+  assert.match(lock, /FINISHED AD/);
+  assert.match(lock, /המתחרים שלך/);
+  assert.match(lock, /השאירו פרטים/);
+  assert.match(lock, /right-to-left/i);
+  assert.doesNotMatch(lock, /COPY IS OVERLAY ONLY/);
+  assert.doesNotMatch(lock, /TYPE ONLY/);
+});
+
+test("concept-locked painted copy is type on the photograph, not a new scene", () => {
+  const lock = buildPaintedCopyLock({
+    title: "פרומו",
+    copyLabel: "וריאציה 1",
+    conceptLocked: true,
+    copyText: `כותרת: המתחרים שלך כבר נכנסים לתשובות של הצ׳אט?
+CTA: השאירו פרטים לבדיקת הנוכחות שלכם בצ׳אט`,
+  });
+  assert.match(lock, /TYPE ONLY/);
+  assert.match(lock, /not a new scene/);
+  assert.match(lock, /המתחרים שלך/);
+  assert.doesNotMatch(lock, /STAGE THIS IDEA/);
+});
+
+test("paintCopy scene brief stages the idea and then paints type", () => {
+  const scene = buildCopySceneBrief({
+    title: "פרומו",
+    copyText: "כותרת: המתחרים שלך כבר נכנסים לתשובות של הצ׳אט?",
+    paintCopy: true,
+  });
+  assert.match(scene, /NO APPROVED CONCEPT/);
+  assert.match(scene, /STAGE THIS IDEA/);
+  assert.match(scene, /paint the quoted Hebrew/i);
+  assert.doesNotMatch(scene, /NEVER draw these characters/);
 });
 
 test("copy scene brief stages chat-scroll copy, not a style postcard", () => {
@@ -219,7 +261,7 @@ test("designed layers never paint AIDA labels or a bottom caption plate", () => 
   assert.ok(!layers.some((layer) => layer.type === "shape" && layer.y >= 58 && layer.height >= 18 && layer.height <= 36 && layer.width >= 70));
 });
 
-test("logo is composited as an image layer and shrinks the headline band", () => {
+test("designed layers no longer overlay a logo watermark", () => {
   const layers = buildDesignedCopyLayers({
     copyText: "כותרת:\nרודוס\nCTA:\nלהזמנה",
     format: "1:1",
@@ -227,12 +269,8 @@ test("logo is composited as an image layer and shrinks the headline band", () =>
     logoUrl: "https://example.com/logo.png",
     compositionId: "flag",
   });
-  const logo = layers.find((layer) => layer.type === "image");
-  const headline = layers.find((layer) => layer.text === "רודוס");
-  assert.ok(logo);
-  assert.equal(logo?.src, "https://example.com/logo.png");
-  assert.ok((logo?.x ?? 99) <= 20);
-  assert.ok(headline);
+  assert.equal(layers.some((layer) => layer.type === "image" || layer.role === "logo"), false);
+  assert.ok(layers.some((layer) => layer.text === "רודוס"));
 });
 
 test("ensureLogoLayer updates or removes the logo without touching copy", () => {
@@ -325,4 +363,51 @@ test("hydrateVariationLayers does not crash when layers are missing", () => {
     "",
   );
   assert.ok(Array.isArray(next.layers));
+});
+
+test("hydrateVariationLayers skips live-text rebuild when live text is off", () => {
+  const next = hydrateVariationLayers(
+    {
+      id: "v1",
+      name: "test",
+      imageUrl: "https://example.com/x.png",
+      format: "1:1",
+      layers: [{ id: "t1", type: "text", x: 0, y: 0, width: 80, height: 20, text: "כותרת ישנה" }],
+      comments: [],
+      createdAt: "",
+    },
+    "כותרת: כותרת חדשה לגמרי\nCTA: השאירו פרטים",
+    undefined,
+    "cinematic",
+    undefined,
+    undefined,
+    false,
+  );
+  assert.equal(next.layers.some((layer) => layer.text === "כותרת ישנה"), true);
+  assert.equal(next.layers.some((layer) => (layer.text ?? "").includes("חדשה")), false);
+});
+
+test("hydrateVariationLayers strips auto-composited logo watermarks", () => {
+  const next = hydrateVariationLayers(
+    {
+      id: "v1",
+      name: "test",
+      imageUrl: "https://example.com/x.png",
+      format: "1:1",
+      layers: [
+        { id: "t1", type: "text", x: 0, y: 0, width: 80, height: 20, text: "כותרת" },
+        { id: "logo", type: "image", role: "logo", x: 74, y: 86, width: 20, height: 8, src: "https://example.com/logo.png" },
+      ],
+      comments: [],
+      createdAt: "",
+    },
+    "כותרת",
+    undefined,
+    "cinematic",
+    "https://example.com/logo.png",
+    undefined,
+    false,
+  );
+  assert.equal(next.layers.some((layer) => layer.role === "logo" || layer.type === "image"), false);
+  assert.equal(next.layers.some((layer) => layer.text === "כותרת"), true);
 });

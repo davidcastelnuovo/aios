@@ -734,6 +734,92 @@ async function handleToolCall(
     );
   }
 
+  if (name === "reply_to_cursor_session") {
+    const sessionId = String(args?.session_id ?? args?.bc_id ?? "").trim();
+    if (!sessionId.startsWith("bc-")) {
+      throw new Error("reply_to_cursor_session requires session_id starting with bc-.");
+    }
+    const message = String(args?.message ?? "").trim();
+    if (!message) throw new Error("reply_to_cursor_session requires a non-empty message.");
+    const context = String(args?.context ?? "").trim();
+    const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
+    if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
+
+    const text =
+      `[Grok Bot Direct → Cursor]\n` +
+      `This is a reply in THIS chat — do not open a new session.\n\n` +
+      `${message}\n` +
+      (context ? `\nContext:\n${context}\n` : ``);
+
+    const followed = await followUpStickyAgent(apiKey, sessionId, text);
+    if (!followed) {
+      throw new Error(`Cursor session ${sessionId} is gone (404/410). Give Cursor a new session_id.`);
+    }
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "reply_to_cursor_session",
+      requestText: message,
+      context: `${sessionId}${context ? `\n${context}` : ""}`,
+      branch: "",
+      sessionUrl: followed.url,
+      cursorAgentId: sessionId,
+    });
+    return `✅ נשלח לצ׳אט Cursor הישיר ${followed.url}`;
+  }
+
+  if (name === "generate_creative") {
+    const itemId = String(args?.item_id ?? "").trim();
+    if (!itemId) throw new Error("generate_creative requires item_id.");
+    if (!ctx.tenantId) throw new Error("generate_creative needs a tenant on the MCP connection.");
+    const directorNote = String(args?.director_note ?? "").trim();
+    const copyLabel = String(args?.copy_label ?? "").trim();
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/cursor-generate-creative`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "dispatch",
+        tenant_id: ctx.tenantId,
+        item_id: itemId,
+        prompt: [
+          "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
+          `Load APPROVED CONCEPTS from marketing_work_items id=${itemId}. Photograph the concept. Type the copy.`,
+          copyLabel && `Copy variation «${copyLabel}».`,
+          directorNote && `DIRECTOR / REJECT: ${directorNote}`,
+        ].filter(Boolean).join("\n"),
+        lesson: directorNote || undefined,
+        variation: {
+          name: copyLabel || "וריאציה",
+          copy_label: copyLabel || undefined,
+        },
+      }),
+    });
+    const raw = await resp.text();
+    let data: any = {};
+    try { data = JSON.parse(raw); } catch { /* ignore */ }
+    if (!resp.ok || data?.error) {
+      throw new Error(data?.error || `cursor-generate-creative ${resp.status}: ${raw.slice(0, 200)}`);
+    }
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "ask_cursor",
+      requestText: `${"[CREATIVE AGENT]"} Carmen asked for item ${itemId}`,
+      context: directorNote,
+      branch: "",
+      sessionUrl: String(data.agent_url || ""),
+      cursorAgentId: String(data.cursor_agent_id || ""),
+    });
+    return (
+      `✅ נשלח לקריאייטיב דיירקט (אותו צ׳אט דביק)` +
+      (data.agent_url ? `\nSession: ${data.agent_url}` : "") +
+      `\nהתמונה תופיע על פרויקט הקריאייטיב אחרי שהצ׳אט מעלה אותה.`
+    );
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 }
 

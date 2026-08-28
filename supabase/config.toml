@@ -23,6 +23,10 @@ verify_jwt = false
 [functions.cursor-mcp]
 verify_jwt = false
 
+# Creative department → dedicated Cursor Creative Agent (user JWT or job token).
+[functions.cursor-generate-creative]
+verify_jwt = false
+
 # Grok Bot MCP — custom bearer (GROK_MCP_BEARER, falls back to CURSOR_MCP_BEARER).
 [functions.grok-mcp]
 verify_jwt = false
@@ -38,6 +42,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.run-agent-parliament]
+verify_jwt = false
+
+# Carmen MCP — Grok Bot (external) talks to Carmen. Custom bearer CARMEN_MCP_BEARER.
+[functions.carmen-mcp]
 verify_jwt = false
 
 # Shared read-only architecture graph MCP. It validates its own bearer token.

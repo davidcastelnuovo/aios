@@ -12,6 +12,11 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  DEV_ENVIRONMENT_SKILL_SLUG,
+  DEV_ENVIRONMENT_STANDING,
+  DEV_ENVIRONMENT_TRIGGERS,
+} from '../environments-standing.ts'
 
 export interface CarmenSkill {
   id: string
@@ -62,17 +67,31 @@ const FALLBACK_AD_HEALTH: CarmenSkill = {
   source: 'fallback',
 }
 
+const FALLBACK_DEV_ENVIRONMENT: CarmenSkill = {
+  id: DEV_ENVIRONMENT_SKILL_SLUG,
+  triggers: DEV_ENVIRONMENT_TRIGGERS.map((t) => {
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*')
+    return new RegExp(escaped, 'i')
+  }),
+  tools: [],
+  prompt: `=== סקיל: ${DEV_ENVIRONMENT_SKILL_SLUG} ===\n${DEV_ENVIRONMENT_STANDING}`,
+  source: 'fallback',
+}
+
 const FALLBACKS: Record<string, CarmenSkill> = {
   pulse_check: FALLBACK_PULSE_CHECK,
   ecommerce_pulse: FALLBACK_ECOMMERCE,
   ad_accounts_health: FALLBACK_AD_HEALTH,
+  [DEV_ENVIRONMENT_SKILL_SLUG]: FALLBACK_DEV_ENVIRONMENT,
 }
+
+const ALWAYS_ON_SKILL_SLUGS = new Set([DEV_ENVIRONMENT_SKILL_SLUG])
 
 // Backwards-compat exports (some files may still import these)
 export const PULSE_CHECK_SKILL = FALLBACK_PULSE_CHECK
 export const ECOMMERCE_PULSE_SKILL = FALLBACK_ECOMMERCE
 export const AD_ACCOUNTS_HEALTH_SKILL = FALLBACK_AD_HEALTH
-export const SKILLS_REGISTRY = [FALLBACK_PULSE_CHECK, FALLBACK_ECOMMERCE, FALLBACK_AD_HEALTH]
+export const SKILLS_REGISTRY = [FALLBACK_PULSE_CHECK, FALLBACK_ECOMMERCE, FALLBACK_AD_HEALTH, FALLBACK_DEV_ENVIRONMENT]
 
 // ────────── DB Loader with cache ──────────
 
@@ -177,12 +196,11 @@ export async function resolveActiveSkills(
   commandText: string,
   tenantId: string | null = null
 ): Promise<CarmenSkill[]> {
-  if (!commandText) return []
   const all = await loadSkillsForTenant(tenantId)
-  const text = commandText.toLowerCase()
+  const text = String(commandText || '').toLowerCase()
   const matches: CarmenSkill[] = []
   for (const skill of all) {
-    if (skill.triggers.some((re) => re.test(text))) {
+    if (ALWAYS_ON_SKILL_SLUGS.has(skill.id) || (text && skill.triggers.some((re) => re.test(text)))) {
       matches.push(skill)
     }
   }

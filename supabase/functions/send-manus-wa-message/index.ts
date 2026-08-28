@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { checkWhatsAppSend } from '../_shared/integration-guard.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -160,6 +161,18 @@ Deno.serve(async (req) => {
     const to = groupChatId
       ? groupChatId
       : toGatewayPhone(String(phoneNumber || ''), /^\d{1,3}$/.test(cc) ? cc : '972');
+
+    const guard = checkWhatsAppSend(groupChatId ? `group:${groupChatId}` : to);
+    if (guard.decision === 'BLOCK') {
+      console.warn('[send-manus-wa] blocked by integration-guard', guard);
+      return new Response(JSON.stringify({
+        error: 'blocked_by_staging_safe_mode',
+        reason: guard.reason,
+        environment: guard.environment,
+      }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const url = groupChatId
       ? `${BASE_URL}/api/v1/instances/${instanceId}/send/group`

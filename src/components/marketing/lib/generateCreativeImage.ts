@@ -11,7 +11,7 @@ import {
 import { wrapCreativeImagePrompt, type CreativeReferenceRole } from "@/components/marketing/lib/creativeImagePrompt";
 
 export type { CreativeReferenceRole } from "@/components/marketing/lib/creativeImagePrompt";
-export { NO_TEXT_ON_IMAGE, buildNoGlyphLock, wrapCreativeImagePrompt } from "@/components/marketing/lib/creativeImagePrompt";
+export { FINISHED_HEBREW_AD, NO_TEXT_ON_IMAGE, buildFinishedAdLock, buildNoGlyphLock, wrapCreativeImagePrompt } from "@/components/marketing/lib/creativeImagePrompt";
 
 interface GenerateCreativeImageArgs {
   supabase: SupabaseClient;
@@ -24,6 +24,11 @@ interface GenerateCreativeImageArgs {
   size?: ImageSize;
   quality?: ImageQuality;
   regenerate?: boolean;
+  liveTextLayers?: boolean;
+  maskPngBase64?: string;
+  imagePngBase64?: string;
+  inpaint?: boolean;
+  signal?: AbortSignal;
 }
 
 async function invokeSocialImage(
@@ -36,18 +41,27 @@ async function invokeSocialImage(
   quality?: GenerateCreativeImageArgs["quality"],
   referenceRole?: CreativeReferenceRole,
   regenerate?: boolean,
+  liveTextLayers?: boolean,
+  signal?: AbortSignal,
+  maskPngBase64?: string,
+  imagePngBase64?: string,
+  inpaint?: boolean,
 ) {
   return supabase.functions.invoke("ai-generate-social-image", {
     body: {
-      prompt: wrapCreativeImagePrompt(prompt, { regenerate }),
+      prompt: wrapCreativeImagePrompt(prompt, { regenerate, liveTextLayers, inpaint }),
       tenant_id: tenantId,
       post_id: itemId,
       reference_image_url: referenceImageUrls?.[0],
       reference_image_urls: referenceImageUrls,
       reference_role: referenceRole,
+      live_text_layers: !!liveTextLayers,
       size,
       quality,
+      mask_png_base64: maskPngBase64,
+      image_png_base64: imagePngBase64,
     },
+    signal,
   });
 }
 
@@ -91,14 +105,16 @@ export const estimateCreativeImageCall = ({
   quality = "high",
   size = "1024x1024",
   referenceCount = 0,
+  liveTextLayers,
 }: {
   prompt: string;
   quality?: ImageQuality;
   size?: ImageSize;
   referenceCount?: number;
+  liveTextLayers?: boolean;
 }): ImageGenerationCost =>
   estimateGptImage1({
-    prompt: wrapCreativeImagePrompt(prompt),
+    prompt: wrapCreativeImagePrompt(prompt, { liveTextLayers }),
     quality,
     size,
     referenceCount,
@@ -116,12 +132,19 @@ export async function generateCreativeImage({
   size = "1024x1024",
   quality = "high",
   regenerate,
+  liveTextLayers,
+  signal,
+  maskPngBase64,
+  imagePngBase64,
+  inpaint,
 }: GenerateCreativeImageArgs): Promise<{ imageUrl: string; usedFallback: boolean; cost: ImageGenerationCost }> {
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   const estimate = estimateCreativeImageCall({
     prompt,
     quality,
     size,
     referenceCount: referenceImageUrls?.length ?? 0,
+    liveTextLayers,
   });
   const socialResult = await invokeSocialImage(
     supabase,
@@ -133,6 +156,11 @@ export async function generateCreativeImage({
     quality,
     referenceRole,
     regenerate,
+    liveTextLayers,
+    signal,
+    maskPngBase64,
+    imagePngBase64,
+    inpaint,
   );
   if (!socialResult.error && !socialResult.data?.error) {
     const imageUrl = socialResult.data?.image_url;
@@ -142,6 +170,8 @@ export async function generateCreativeImage({
       return { imageUrl: (await resolveCreativeImageUrl(imageUrl)) ?? imageUrl, usedFallback: true, cost };
     }
   }
+
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
   const socialError = socialResult.error
     ? await invokeErrorMessage(socialResult.error, socialResult.data, "יצירת תמונה נכשלה", socialResult.response)

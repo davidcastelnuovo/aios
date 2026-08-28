@@ -453,11 +453,15 @@ export default function Clients() {
 
   const deleteClientMutation = useMutation({
     mutationFn: async (clientId: string) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("clients")
         .delete()
-        .eq("id", clientId);
+        .eq("id", clientId)
+        .select("id");
       if (error) throw error;
+      if (!data?.length) {
+        throw new Error("לא ניתן למחוק לקוח — אין הרשאה או שהלקוח כבר נמחק");
+      }
     },
     onSuccess: () => {
       toast.success("הלקוח נמחק בהצלחה");

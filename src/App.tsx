@@ -14,6 +14,7 @@ import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { tenantRoutes } from "@/routes/tenantRoutes";
+import { StagingBanner } from "@/components/StagingBanner";
 
 import Auth from "./pages/Auth";
 import SignUp from "./pages/SignUp";
@@ -80,6 +81,7 @@ const App = () => (
             <UIModeProvider>
             <AIOSProvider>
             <AgencyProvider>
+              <StagingBanner />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<Landing />} />

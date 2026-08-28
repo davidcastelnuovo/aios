@@ -13,6 +13,7 @@ import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
 import { resolveActiveSkills, buildSkillsBlockBySlug, resolveSkillsBySlug } from '../_shared/skills/registry.ts'
+import { DEV_ENVIRONMENT_STANDING } from '../_shared/environments-standing.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 import { asUuidOrNull } from '../_shared/uuid.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
@@ -6153,7 +6154,7 @@ import { requireAuth } from "../_shared/security.ts";
 // Surface for which the agent is currently invoked.
 // 'internal_chat' = the in-app chat / dialog / AI Support page (same brain as AIOS,
 // but no dialog progress UI). Default for unspecified callers.
-type Surface = 'whatsapp' | 'aios' | 'task' | 'internal_chat'
+type Surface = 'whatsapp' | 'aios' | 'task' | 'internal_chat' | 'grok_bot'
 
 // Emit function used by the streaming wrapper to push SSE events to the client.
 // In non-streaming mode it's a no-op.
@@ -6276,7 +6277,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     // the exact same conversation as typed chat.
     let serverConversationId: string | null = null
     let serverConversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
-    if ((surface === 'internal_chat' || surface === 'aios') && callerUserId) {
+    if ((surface === 'internal_chat' || surface === 'aios' || surface === 'grok_bot') && callerUserId) {
       if (conversation_id) {
         const { data: existingConversation } = await supabase
           .from('ai_conversations')
@@ -6910,6 +6911,13 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       systemPrompt += buildVoiceCapabilityPromptRule()
     }
 
+    if (isCarmen && surface === 'grok_bot') {
+      systemPrompt +=
+        '\n\n=== Grok Bot (חיצוני) ===\n' +
+        'הבקשה הגיעה מ-Grok Bot — עוזר דיוויד מחוץ לאפליקציה. עני ישירות; אל תשלחי בחזרה ל-Grok Bot (mcp_Grok__*) — ' +
+        'את כבר המטפלת. אם צריך פיתוח/קוד — Cursor או Claude, לא Grok.'
+    }
+
     if (isCarmen && relevantLongTermMemory.length > 0) {
       systemPrompt += `\n\n🧠 === זיכרון ארוך רלוונטי שנשלף אוטומטית ===
 זהו זיכרון העבודה שלך מהמערכת, לא "מערכת אחרת". השתמשי בו כשהוא רלוונטי לבקשה, אך העדיפי נתוני כלים חיים כשיש סתירה.
@@ -7078,6 +7086,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         const isEscalationMcp = (n: string) =>
           n.startsWith('mcp_Claude__') || n.startsWith('mcp_Manus__') || n.startsWith('mcp_Cursor__') || n.startsWith('mcp_Grok__')
         for (const t of mcp.toolDefs) {
+          // Grok Bot is calling Carmen — do not expose Grok MCP back (ping-pong loop).
+          if (surface === 'grok_bot' && t.name.startsWith('mcp_Grok__')) continue
           if (escalationAgent === 'cursor' && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Manus__') || t.name.startsWith('mcp_Grok__'))) continue
           if (escalationAgent === 'claude' && (t.name.startsWith('mcp_Manus__') || t.name.startsWith('mcp_Cursor__') || t.name.startsWith('mcp_Grok__'))) continue
           if (escalationAgent === 'manus'  && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Cursor__') || t.name.startsWith('mcp_Grok__'))) continue
@@ -7100,6 +7110,10 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     const model = resolveModel(agent.engine || 'gemini-3-flash')
     const maxRounds = agent.max_tool_rounds || 25
     const safeTemp = typeof temperature === 'number' ? Math.min(2, Math.max(0, temperature)) : undefined
+
+    if (isCarmen) {
+      systemPrompt += `\n\n=== סביבת פיתוח (חובה) ===\n${DEV_ENVIRONMENT_STANDING}`
+    }
 
     // ─── Skill resolver: detect active skills from the user message and append their prompts (DB-backed) ───
     const skillTenantId = (agent as any).tenant_id || tenant_id || null
@@ -7684,6 +7698,7 @@ Deno.serve(async (req) => {
   const surface: Surface = bodyJson.surface === 'aios' ? 'aios'
     : bodyJson.surface === 'task' ? 'task'
     : bodyJson.surface === 'whatsapp' ? 'whatsapp'
+    : bodyJson.surface === 'grok_bot' ? 'grok_bot'
     : 'internal_chat'
 
   if (!wantStream) {

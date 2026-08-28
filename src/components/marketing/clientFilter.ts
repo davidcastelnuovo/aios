@@ -4,13 +4,15 @@ export const ALL_CLIENTS_FILTER = "__all_clients__";
 export type MarketingClientFilter = string | null;
 
 export function parseClientFilter(param: string | null | undefined): MarketingClientFilter {
-  if (param === "all") return ALL_CLIENTS_FILTER;
-  return param ?? null;
+  if (param === "all" || param == null || param === "") return ALL_CLIENTS_FILTER;
+  if (param === "general" || param === "none") return null;
+  return param;
 }
 
 export function clientFilterToParam(filter: MarketingClientFilter): string | undefined {
   if (filter === ALL_CLIENTS_FILTER) return "all";
-  return filter ?? undefined;
+  if (!filter) return "general";
+  return filter;
 }
 
 export function applyClientFilter<T extends { eq: (col: string, val: string) => T; is: (col: string, val: null) => T }>(

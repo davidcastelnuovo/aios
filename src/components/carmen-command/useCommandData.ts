@@ -96,10 +96,11 @@ export function useIntelFeed(tenantId: string | null) {
             budget_80: { sev: "warning", title: a.reason || "השימוש ב-AI חצה 80% מהתקציב החודשי" },
           };
           const m = map[a.alert_type];
+          const isRecall = a.provider === "recall";
           return {
             id: `il-${a.id}`,
             severity: m?.sev ?? "critical",
-            source: m ? "קרדיט AI" : "אינטגרציות",
+            source: isRecall ? "הקלטות" : m ? "קרדיט AI" : "אינטגרציות",
             title: m?.title ?? `${a.provider} התנתק${a.reason ? ` — ${a.reason}` : ""}`,
             time: a.fired_at,
           };
@@ -180,6 +181,8 @@ export function useHealth(tenantId: string | null) {
       const quotaProbe = latestOf("openai_quota");
       const googleQuotaProbe = latestOf("google_quota");
       const anthropicQuotaProbe = latestOf("anthropic_quota");
+      const recallProbe = latestOf("recall");
+      const recallQuotaProbe = latestOf("recall_quota");
 
       const services: ServiceHealth[] = [
         {
@@ -233,6 +236,17 @@ export function useHealth(tenantId: string | null) {
           status: anthropicQuotaProbe.status,
           detail: anthropicQuotaProbe.detail,
           history: historyOf("anthropic_quota"),
+        }] : []),
+        ...(recallQuotaProbe ? [{
+          key: "recall_quota", label: "קרדיט הקלטות (Recall)",
+          status: recallQuotaProbe.status,
+          detail: recallQuotaProbe.detail,
+          history: historyOf("recall_quota"),
+        }] : recallProbe ? [{
+          key: "recall", label: "Recall",
+          status: recallProbe.status,
+          detail: recallProbe.detail,
+          history: historyOf("recall"),
         }] : []),
         {
           key: "integrations", label: "אינטגרציות",
