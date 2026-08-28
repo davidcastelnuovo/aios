@@ -44,22 +44,24 @@ feature/* or fix/*
 
 Already in place:
 
-- Vercel Production on `main`
+- Vercel Production on `main` (Production env rows unchanged)
 - GitHub `develop` branch
-- Vercel Preview env rows for **`develop` only** pointing at AIOS Staging (`APP_ENV=staging`, `STAGING_SAFE_MODE=true`, Staging URL/keys)
-- Production Vercel values left untouched
-- WhatsApp send paths go through `IntegrationGuard` (`send-manus-wa-message`, `send-green-api-message`, `send-meta-whatsapp-message`)
+- **Every Vercel Preview** (all feature branches + `develop`) uses AIOS Staging credentials
+- `APP_ENV=staging`, `VITE_APP_ENV=staging`, `STAGING_SAFE_MODE=true` on Preview
+- Staging auth allows `http://localhost:8080` and `https://*.vercel.app`; email signup autoconfirm is on
+- WhatsApp send paths go through `IntegrationGuard`
 - Staging / Preview / Dev visual banner via `VITE_APP_ENV`
+- `deploy-staging-edge-functions.yml` deploys functions on `develop` only, using GitHub secret `SUPABASE_STAGING_PROJECT_ID` (never a hardcoded ref)
 
 Gaps (do not touch Production to close these):
 
-1. Staging Supabase schema / Edge Functions / cron are not yet synced from this repo (Staging project had no migrations connected).
-2. GitHub Actions (`deploy-edge-function`, `apply-sql-migration`) still deploy **only** to Production on `main`.
-3. Feature-branch Previews still inherit the shared Production frontend keys unless the branch is `develop`.
-4. No persistent Staging domain alias yet (`STAGING_DOMAIN=<configured-in-vercel>`).
-5. No Staging seed/test data.
+1. Staging schema/function sync is applied from this repo onto Staging; leftover seed migrations that require a Production user will fail until you sign up on Staging.
+2. Add GitHub secret `SUPABASE_STAGING_PROJECT_ID` so the Staging deploy workflow can run.
+3. Copy non-customer secrets the Staging functions need (e.g. `OPENAI_API_KEY`) in the Staging project dashboard — never commit them. Do **not** copy Production WhatsApp/Meta tokens.
+4. No persistent custom Staging domain yet (`STAGING_DOMAIN=<configured-in-vercel>`).
+5. No dedicated Staging seed/test tenants yet — sign up on the Preview URL to create the first user.
 6. Email / webhooks / cron / automations are not fully on the guard yet (WhatsApp is).
-7. Branch protection on `main` / `develop` is a GitHub settings change, not a code change.
+7. Branch protection on `main` / `develop` is a GitHub settings change.
 8. This Cloud Agent workspace `.env` still points at Production.
 
 ## Agent working rules

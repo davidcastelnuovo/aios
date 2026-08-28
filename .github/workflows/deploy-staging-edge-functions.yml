@@ -1,0 +1,87 @@
+name: Deploy Staging Edge Functions
+
+# Deploys edge functions to the STAGING Supabase project only.
+# Production deploy stays in deploy-edge-function.yml (main only).
+#
+# Requires GitHub secrets:
+#   BASE_ACCESS_TOKEN = Supabase access token
+#   SUPABASE_STAGING_PROJECT_ID = staging project ref (never commit the ref)
+
+on:
+  workflow_dispatch:
+    inputs:
+      function_name:
+        description: 'Edge function folder name(s) — empty deploys all with index.ts'
+        required: false
+        default: ''
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/deploy-staging-edge-functions.yml'
+      - 'supabase/functions/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require staging project secret
+        run: |
+          set -euo pipefail
+          if [ -z "${PROJECT_REF}" ]; then
+            echo "SUPABASE_STAGING_PROJECT_ID GitHub secret is not set. Refusing to deploy."
+            exit 1
+          fi
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Determine functions to deploy
+        id: funcs
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.function_name }}" ]; then
+            echo "list=${{ github.event.inputs.function_name }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            LIST=$(find supabase/functions -mindepth 2 -maxdepth 2 -name index.ts \
+              | sed 's#supabase/functions/##;s#/index.ts##' \
+              | grep -v '^_shared$' | sort | tr '\n' ' ')
+            echo "list=$LIST" >> "$GITHUB_OUTPUT"
+          else
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+               || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              BEFORE="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+            fi
+            CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- 'supabase/functions/**' \
+              | sed -E 's#supabase/functions/([^/]+)/.*#\1#' \
+              | { grep -v '^_shared$' || true; } | sort -u | tr '\n' ' ')
+            echo "list=$CHANGED" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to Staging
+        run: |
+          set -euo pipefail
+          FUNCS="${{ steps.funcs.outputs.list }}"
+          if [ -z "${FUNCS// }" ]; then echo "No functions to deploy."; exit 0; fi
+          for FUNC in $FUNCS; do
+            VJWT=$(awk -v sec="[functions.$FUNC]" '
+              $0==sec {found=1; next}
+              found && /^\[/ {exit}
+              found && /verify_jwt/ {print $3; exit}' supabase/config.toml)
+            VJWT="${VJWT:-true}"
+            FLAG=""
+            if [ "$VJWT" = "false" ]; then FLAG="--no-verify-jwt"; fi
+            echo "::group::Staging deploy $FUNC (verify_jwt=$VJWT)"
+            supabase functions deploy "$FUNC" --project-ref "$PROJECT_REF" $FLAG
+            echo "::endgroup::"
+          done

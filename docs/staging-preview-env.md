@@ -28,9 +28,9 @@ The frontend client also reads `VITE_SUPABASE_PUBLISHABLE_KEY`. Set that Preview
 ## Save rules (every variable)
 
 - Add a **new** value. Do not edit or delete existing Production values.
-- Target: **Preview only**.
-- If Branch is offered, set it to **`develop`**.
-- Do not enable Production or Development for these Staging rows.
+- Target: **Preview only** (all Preview deployments, not Production).
+- Optional extra row: Branch `develop` for the persistent Staging deploy.
+- Do not enable Production for these Staging rows.
 
 ## Apply via API (optional)
 
