@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-28 — Staging Cursor MCP token 401 + Command Center preset URL
+- **Skin slug:** n/a (ops). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
+- **What Carmen can now do:** On **staging**, Cursor MCP talks to staging `cursor-mcp` with the current `CURSOR_MCP_BEARER`. Previously the cloned row pointed at **prod** `cursor-mcp` with the staging bearer → 401. `tools/list` is green: `ask_cursor`, `request_dev_task`, `generate_creative`, `reply_to_cursor_session`.
+- **How:** Repointed `agent_mcp_connections` Cursor URL to `mzjsuvatrzhciojmbbbm`. Deployed staging `mcp-connect` (resync). Copied secret via `{resync_from_secret:true}` — secret never logged. Command Center / Agent Editor Cursor preset now uses `VITE_SUPABASE_URL` instead of hardcoded prod ref, so the preview fills the matching project's token URL.
+- **Origin:** David — "צריך גם בסטייג׳ינג לתקן וגם בפריוויו של מרכז הבקרה לתקן את הטוקן של קרסר".
+
 ### 2026-08-28 — Knights round table + Codex seat + QA loop + skill builder
 - **Skin slugs:** `knights_round_table`, `qa_loop`, `skill_builder`, `skill_builder_meta` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`). Also appends Cursor-default note onto `cursor_escalation`.
 - **What Carmen can now do:** Chair a Command Center round table. Default brain is **Cursor Direct**. Seats: Carmen (goals), Cursor, Grok Bot, Codex. After a seat replies she runs `qa_loop` (return with concrete defects, max 3) until the goal is actually met. Missing repeatable work becomes a tenant skin via `skill_builder`; `skill_builder_meta` is the template for building those skins. Session learning catalogs pointers under `process/{task_type}/...`.
