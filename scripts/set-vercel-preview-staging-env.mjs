@@ -36,6 +36,7 @@ const desired = [
   ["SUPABASE_ANON_KEY", stagingAnon],
   ["SUPABASE_SERVICE_ROLE_KEY", stagingService],
   ["APP_ENV", "staging"],
+  ["VITE_APP_ENV", "staging"],
   ["STAGING_SAFE_MODE", "true"],
 ];
 if (stagingProjectId) {
