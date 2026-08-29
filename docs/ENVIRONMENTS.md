@@ -94,10 +94,10 @@ Vercel Preview is the development environment. It talks to **AIOS Staging**, nev
 
 How we keep them working:
 
-1. **Same wiring as Production, different project.** Staging already has `agent_brain_routes`, Carmen, `cursor-mcp`, and the `CURSOR_API_KEY` *name*. A leftover or placeholder value returns `401 Invalid User API Key` and Cloud seats fail. Internal Carmen still works.
-2. **Health probe.** Command Center calls `agent-channel-send` `action=channel_health` (GET `https://api.cursor.com/v1/models`). If the key is missing or rejected, the HUD shows a Hebrew banner. Replacing the secret does **not** need a function redeploy.
-3. **After rotating the key:** from Preview → Command Center, send a one-word ping on Cursor Direct or the table. Expect `agent_channel_sessions.external_url` and no 401 on the run.
-4. **Never paste the key into chat.** David sets it in **Supabase → AIOS Staging → Edge Functions → Secrets → `CURSOR_API_KEY`** using a current User key from https://cursor.com/dashboard/api (the same class of key Production already uses).
+1. **The database is not the Edge secret store.** A Staging DB clone brings `tenant_integrations` (OpenAI / Carmen). It does **not** bring Edge Function secrets. The Management API only returns SHA-256 hashes, so values cannot be read back from the dashboard/API.
+2. **Copy from Production, do not re-type.** The gated function `copy-edge-secrets-to-staging` runs on Production, reads allowlisted agent secrets from `Deno.env`, and writes them to Staging. WhatsApp / Meta / project keys stay out. David is not asked to paste keys.
+3. **Health probe.** Command Center calls `agent-channel-send` `action=channel_health`. If the key is rejected, the HUD shows a banner. After a copy, hashes of the allowlist should match Production; no function redeploy is required.
+4. **After a copy:** from Preview → Command Center, send a one-word ping on Cursor Direct or the table. Expect `agent_channel_sessions.external_url` and no 401.
 
 Local `pnpm dev` in this Cloud Agent workspace still reads Production `.env`. That is not the development environment — use the Vercel Preview URL.
 

@@ -34,9 +34,9 @@ logged.
 <!-- New entries go below this line, newest first. -->
 ### 2026-08-29 — סוכנים בסביבת הפיתוח (Preview → Staging)
 - **Skin slug:** `staging_agents_need_cursor_key` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
-- **What Carmen can now do:** When David asks why Cursor/Grok/Codex fail on Preview or how to make agents work in development, answer without opening a coding task: Preview talks to Staging; Carmen internal works; Cloud seats need a valid Staging `CURSOR_API_KEY`.
-- **How:** HUD probes `agent-channel-send` `channel_health`. Banner appears on 401. David sets the User key in Staging secrets (never paste in chat). No function redeploy after rotate. Never point Preview at Production.
-- **Origin:** David — "ואיך אנחנו דואגים שהסוכנים יעבדו גם בסביבת הפיתוח?"
+- **What Carmen can now do:** Preview talks to Staging. Carmen internal works from the cloned DB (`tenant_integrations`). Cloud seats use Edge Function secrets — not Postgres. Copy them with `copy-edge-secrets-to-staging`; do not ask David to re-enter keys.
+- **How:** Gated Production function reads allowlisted `Deno.env` names and POSTs them to Staging. Management API only returns hashes (verified MATCH after copy). HUD `channel_health` banners on 401. Never copy WhatsApp/Meta. Never point Preview at Production.
+- **Origin:** David — "למה אני צריך להכניס שוב מפתחות הכל בדאטבייס אתה לא יכול להעביר לסטייג'ינג?"
 
 ### 2026-08-28 — פרסום דף נחיתה לאתר PBN קיים (מגזין site-01..site-10)
 - **Skin slug:** `publish_landing_to_pbn` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)

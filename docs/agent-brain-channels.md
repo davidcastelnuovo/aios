@@ -45,7 +45,7 @@ JSONB ב-`ai_conversations.messages` נשמר בתקופת המעבר.
 
 קיימים: `CURSOR_API_KEY`, `CURSOR_MCP_BEARER`, `GROK_MCP_BEARER`, `CLAUDE_ROUTINE_ID`, `CLAUDE_ROUTINE_TOKEN`.
 
-פריוויו מדבר עם Staging. מושבי Cloud שם משתמשים ב-`CURSOR_API_KEY` של Staging. בדיקת תקינות: `POST agent-channel-send` עם `action=channel_health` (GET `api.cursor.com/v1/models`). 401 = צריך מפתח User תקף ב-Staging Secrets. בלי redeploy אחרי סיבוב. ראו `docs/ENVIRONMENTS.md` § Development agents.
+פריוויו מדבר עם Staging. מושבי Cloud שם משתמשים ב-`CURSOR_API_KEY` של Staging. הסודות האלה **לא** בדאטאבייס — מעתיקים מפרוד עם `copy-edge-secrets-to-staging` (allowlist בלבד). בדיקת תקינות: `POST agent-channel-send` עם `action=channel_health`. ראו `docs/ENVIRONMENTS.md` § Development agents.
 
 מומלץ להוסיף:
 
