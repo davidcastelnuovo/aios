@@ -197,36 +197,79 @@
   height: 280px;
   overflow: visible;
   perspective: 980px;
-  transform-style: preserve-3d;
 }
 
 .cc-roundtable-table {
   position: absolute;
   left: 50%;
   top: 48%;
-  width: 58%;
-  height: 96px;
+  width: 62%;
+  height: 108px;
   padding: 0;
   appearance: none;
-  z-index: 1;
-  transform: translate(-50%, -50%) rotateX(52deg);
+  z-index: 3;
+  overflow: hidden;
+  isolation: isolate;
+  transform: translate(-50%, -50%) rotateX(56deg);
   border-radius: 50%;
   background:
-    url("/command-center/knights_round_table_hud.jpg") center 42% / 180% no-repeat,
-    radial-gradient(ellipse at 50% 40%, rgba(76, 195, 255, 0.28), transparent 55%),
-    radial-gradient(ellipse at 50% 50%, rgba(8, 18, 38, 0.95), rgba(5, 10, 22, 0.92));
-  border: 2px solid rgba(76, 195, 255, 0.45);
+    radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.55) 0 1.2%, rgba(196, 168, 255, 0.28) 6%, transparent 18%),
+    radial-gradient(ellipse at 50% 50%, #1a1038 0%, #070614 58%, #04040c 100%);
+  border: 2px solid rgba(168, 150, 255, 0.42);
   box-shadow:
-    0 24px 40px rgba(0, 0, 0, 0.45),
-    0 0 28px rgba(76, 195, 255, 0.18),
-    inset 0 0 24px rgba(76, 195, 255, 0.12);
+    0 22px 40px rgba(0, 0, 0, 0.55),
+    0 0 36px rgba(124, 92, 255, 0.22),
+    inset 0 0 28px rgba(8, 6, 24, 0.85);
   cursor: pointer;
 }
+.cc-roundtable-table::before,
+.cc-roundtable-table::after {
+  content: "";
+  position: absolute;
+  inset: -35%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.cc-roundtable-table::before {
+  background:
+    conic-gradient(
+      from 210deg,
+      transparent 0 6%,
+      rgba(90, 170, 255, 0.22) 12%,
+      transparent 20%,
+      rgba(176, 92, 255, 0.28) 32%,
+      transparent 42%,
+      rgba(255, 176, 92, 0.16) 54%,
+      transparent 64%,
+      rgba(80, 230, 255, 0.2) 76%,
+      transparent 88%
+    );
+  animation: cc-galaxy-spin 26s linear infinite;
+  filter: blur(0.6px);
+  opacity: 0.95;
+}
+.cc-roundtable-table::after {
+  inset: 14%;
+  background:
+    radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.85) 0 2%, rgba(210, 180, 255, 0.35) 10%, transparent 24%),
+    radial-gradient(circle at 58% 62%, rgba(90, 170, 255, 0.28), transparent 32%),
+    radial-gradient(circle at 50% 50%, rgba(40, 16, 80, 0.15) 0 18%, rgba(8, 6, 20, 0.55) 55%, #04040c 78%);
+  animation: cc-galaxy-expand 7.5s ease-in-out infinite;
+  box-shadow: inset 0 0 28px rgba(12, 8, 36, 0.65);
+}
 .cc-roundtable-table.is-live {
+  border-color: rgba(251, 191, 36, 0.55);
   box-shadow:
-    0 24px 40px rgba(0, 0, 0, 0.45),
-    0 0 36px rgba(251, 191, 36, 0.35),
-    inset 0 0 24px rgba(76, 195, 255, 0.18);
+    0 22px 40px rgba(0, 0, 0, 0.55),
+    0 0 42px rgba(251, 191, 36, 0.28),
+    inset 0 0 28px rgba(8, 6, 24, 0.85);
+}
+@keyframes cc-galaxy-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes cc-galaxy-expand {
+  0%, 100% { transform: scale(0.78); opacity: 0.7; }
+  50% { transform: scale(1.18); opacity: 1; }
 }
 
 .cc-ghost {
@@ -242,10 +285,11 @@
   z-index: 2;
 }
 
-.cc-ghost-south { left: 50%; bottom: 0; z-index: 4; transform: translateX(-50%); }
-.cc-ghost-west { left: 2%; top: 30%; z-index: 3; }
-.cc-ghost-east { right: 2%; top: 30%; z-index: 3; }
-.cc-ghost-north { left: 50%; top: 0; z-index: 3; transform: translateX(-50%); }
+.cc-ghost-south { left: 50%; bottom: 8px; z-index: 5; transform: translateX(-50%); }
+.cc-ghost-south .cc-ghost-sprite { width: 86px; height: 110px; }
+.cc-ghost-west { left: 2%; top: 28%; z-index: 4; }
+.cc-ghost-east { right: 2%; top: 28%; z-index: 4; }
+.cc-ghost-north { left: 50%; top: 10%; z-index: 1; transform: translateX(-50%); }
 
 .cc-ghost-aura {
   position: absolute;
@@ -289,6 +333,12 @@
   border-radius: 8px;
   background: rgba(5, 10, 22, 0.72);
   opacity: 0.96;
+}
+.cc-ghost-north .cc-ghost-body {
+  order: -1;
+  margin-top: 0;
+  margin-bottom: 4px;
+  background: rgba(5, 10, 22, 0.82);
 }
 .cc-ghost-name {
   font-size: 11px;
@@ -341,7 +391,7 @@
   color: var(--cc-text);
   z-index: 3;
 }
-.cc-ghost-north .cc-ghost-bubble { bottom: auto; top: 96px; }
+.cc-ghost-north .cc-ghost-bubble { bottom: auto; top: -10px; }
 .cc-ghost-bubble-meta {
   display: block;
   margin-bottom: 2px;
@@ -422,8 +472,8 @@
   .cc-roundtable-table { width: 56%; height: 64px; top: 42%; }
   .cc-ghost { width: 80px; }
   .cc-ghost-sprite { width: 68px; height: 96px; }
-  .cc-ghost-south { bottom: 4px; }
-  .cc-ghost-north { top: 4px; }
+  .cc-ghost-south { bottom: 10px; }
+  .cc-ghost-north { top: 8%; }
   .cc-ghost-bubble { width: 110px; font-size: 9px; }
   .cc-roundtable { padding: 0.35rem 0.4rem 0.15rem; }
   .cc-roundtable-log { display: none; }
