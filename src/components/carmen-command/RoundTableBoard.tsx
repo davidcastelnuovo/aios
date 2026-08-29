@@ -23,6 +23,7 @@ interface RoundTableBoardProps {
   selectedProvider?: string | null;
   debating?: boolean;
   stage?: HudStage;
+  onAddress?: (seat: CouncilSeatId) => void;
   onOpenCouncil?: () => void;
   onBackToTable?: () => void;
   onCancel?: () => void;
@@ -87,6 +88,7 @@ export function RoundTableBoard({
   selectedProvider,
   debating,
   stage = "table",
+  onAddress,
   onOpenCouncil,
   onBackToTable,
   onCancel,
@@ -166,13 +168,14 @@ export function RoundTableBoard({
         {SEATS.map((seat) => {
           const line = parliament ? lastLine(messages, seat.id, active) : null;
           const state = seatState(seats, seat.id);
+          const selected = councilSeatFromSlug(selectedProvider) === seat.id || selectedProvider === seat.id;
           return (
             <button
               key={seat.id}
               type="button"
-              className={`cc-ghost cc-ghost-${seat.place} is-${state}`}
-              title={seat.label}
-              tabIndex={-1}
+              className={`cc-ghost cc-ghost-${seat.place} is-${state}${selected ? " is-selected" : ""}`}
+              title={`פנה אל ${seat.label}`}
+              onClick={() => onAddress?.(seat.id)}
             >
               <span className="cc-ghost-aura" />
               <span

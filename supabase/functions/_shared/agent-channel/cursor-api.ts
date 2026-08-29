@@ -102,6 +102,9 @@ export async function createCloudAgent(args: {
   if (!resp.ok) {
     let detail = raw.slice(0, 500);
     try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    if (resp.status === 401 || resp.status === 403) {
+      throw new Error("מפתח Cursor API לא תקף (401). הפריוויו מדבר עם Staging — צריך מפתח User תקף שם.");
+    }
     throw new Error(`Cloud agent create ${resp.status}: ${detail}`);
   }
   const parsed = parseAgentResponse(raw);

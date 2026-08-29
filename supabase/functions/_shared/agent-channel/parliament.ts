@@ -102,9 +102,12 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
 
   const living = livingSeats(nextState);
   if (!living.length) {
+    const firstError = Object.values(nextState.seats).map((s) => s.error).find(Boolean) || "all seats failed to start";
     await setConversationStatus(sb, ctx.conversationId, "error");
-    await sb.from("agent_runs").update({ status: "failed", error_message: "all seats failed to start" }).eq("id", parent.id);
-    throw new Error("Parliament could not start — all seats failed to launch.");
+    await sb.from("agent_runs").update({ status: "failed", error_message: firstError }).eq("id", parent.id);
+    throw new Error(firstError.includes("401") || /api key/i.test(firstError)
+      ? firstError
+      : `Parliament could not start — ${firstError}`);
   }
 
   await logChannelAction(sb, {

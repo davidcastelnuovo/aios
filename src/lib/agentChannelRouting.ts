@@ -89,6 +89,16 @@ export function slugForCouncilSeat(id: CouncilSeatId): string {
   return id === "carmen" ? "internal" : id;
 }
 
+/** Table stays up. A tapped seat is who we address; no seat = the whole council. */
+export function routeForTableAddress(
+  routes: BrainRoute[],
+  addressed: CouncilSeatId | null,
+): BrainRoute | undefined {
+  if (!addressed) return routes.find((r) => r.slug === "parliament" || r.route_type === "parliament");
+  const slug = slugForCouncilSeat(addressed);
+  return routes.find((r) => r.slug === slug);
+}
+
 export function councilSeatFromSlug(slug?: string | null): CouncilSeatId | null {
   const key = (slug || "").toLowerCase();
   if (key === "internal" || key === "carmen") return "carmen";

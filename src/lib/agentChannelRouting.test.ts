@@ -13,6 +13,7 @@ import {
   hudStage,
   slugForCouncilSeat,
   councilSeatFromSlug,
+  routeForTableAddress,
 } from "./agentChannelRouting.ts";
 
 test("selecting a direct channel changes the send path", () => {
@@ -51,6 +52,14 @@ test("HUD is solo for Direct Chat tabs, table only for Knights Round Table", () 
   assert.equal(slugForCouncilSeat("carmen"), "internal");
   assert.equal(councilSeatFromSlug("internal"), "carmen");
   assert.equal(councilSeatFromSlug("parliament"), null);
+});
+
+test("table address picks a seat route without leaving parliament HUD", () => {
+  const routes = FALLBACK_BRAIN_ROUTES;
+  assert.equal(routeForTableAddress(routes, null)?.slug, "parliament");
+  assert.equal(routeForTableAddress(routes, "cursor")?.slug, "cursor");
+  assert.equal(routeForTableAddress(routes, "carmen")?.slug, "internal");
+  assert.equal(hudStage({ routeType: "parliament" }), "table");
 });
 
 test("parliament seats are Cursor + Grok + Codex", () => {
