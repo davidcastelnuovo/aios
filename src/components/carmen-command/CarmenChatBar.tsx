@@ -10,6 +10,7 @@ import type { CarmenFaceState } from "./CarmenFace";
 import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
 import { BrainRouteSelector } from "./BrainRouteSelector";
 import { RoundTableBoard } from "./RoundTableBoard";
+import { ThinkingGalaxy } from "./ThinkingGalaxy";
 import { useBrainChannel } from "./useBrainChannel";
 import { deriveParliamentView, hudStage, routeForTableAddress, speakerLabel } from "@/lib/agentChannelRouting";
 import type { CouncilSeatId, HudStage } from "@/lib/agentChannelRouting";
@@ -930,10 +931,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                     </div>
                   </div>
                 )}
-                {isStreaming && !streamingText && (
-                  <p className="flex items-center gap-2 text-xs text-[var(--cc-text-dim)]">
-                    <Loader2 className="h-3 w-3 animate-spin" /> כרמן חושבת…
-                  </p>
+                {(isStreaming || brain.locked) && !streamingText && (
+                  <ThinkingGalaxy />
                 )}
               </div>
             )}
@@ -1034,7 +1033,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--cc-accent-dim)] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             title="שליחה"
           >
-            {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {isStreaming || brain.locked ? <ThinkingGalaxy size="sm" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
       </div>

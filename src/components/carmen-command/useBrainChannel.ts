@@ -133,7 +133,7 @@ export function useBrainChannel(tenantId: string | null) {
           conversation_id: args.conversationId || "",
           status: "streaming",
           stream: true,
-          accepted_message: "כרמן חושבת…",
+          accepted_message: "",
         };
       }
       throw new Error(json.error || "שגיאה בשליחה לערוץ");
