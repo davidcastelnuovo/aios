@@ -114,3 +114,9 @@ export async function createCloudAgent(args: {
 export function cursorApiKey(): string {
   return Deno.env.get("CURSOR_API_KEY") || Deno.env.get("GROK_BOT_API_KEY") || "";
 }
+
+export async function probeCursorApiKey(apiKey: string): Promise<{ ok: boolean; status: number }> {
+  if (!apiKey) return { ok: false, status: 0 };
+  const resp = await cursorFetch(apiKey, "https://api.cursor.com/v1/models", { method: "GET" });
+  return { ok: resp.ok, status: resp.status };
+}

@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   FALLBACK_BRAIN_ROUTES,
+  channelHealthBanner,
   isInputLocked,
   pickDefaultRoute,
   sendPathForRoute,
   storageKeyForRoute,
   type BrainRoute,
+  type ChannelHealth,
   type ConversationChannelStatus,
 } from "@/lib/agentChannelRouting";
 
@@ -37,6 +39,7 @@ export function useBrainChannel(tenantId: string | null) {
   const [selected, setSelected] = useState<BrainRoute>(FALLBACK_BRAIN_ROUTES[0]);
   const [status, setStatus] = useState<ConversationChannelStatus>("idle");
   const [externalUrl, setExternalUrl] = useState<string | null>(null);
+  const [channelHealth, setChannelHealth] = useState<ChannelHealth | null>(null);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
@@ -59,6 +62,17 @@ export function useBrainChannel(tenantId: string | null) {
       } catch {
         setSelected(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, saved));
       }
+      try {
+        const headers = await authHeader();
+        const res = await fetch(FN, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ action: "channel_health", tenant_id: tenantId }),
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json && typeof json.ok === "boolean") setChannelHealth(json as ChannelHealth);
+      } catch { /* health is advisory */ }
     })();
   }, [tenantId]);
 
@@ -192,5 +206,7 @@ export function useBrainChannel(tenantId: string | null) {
     cancelParliament,
     parliamentAction,
     sendPath: sendPathForRoute(selected),
+    channelHealth,
+    healthBanner: channelHealthBanner(channelHealth),
   };
 }

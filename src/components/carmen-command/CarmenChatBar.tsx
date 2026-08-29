@@ -940,6 +940,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           </>
         )}
 
+        {brain.healthBanner && (
+          <p className="cc-channel-health" role="status">
+            {brain.healthBanner}
+          </p>
+        )}
         <div className="cc-talkbar-row mt-auto flex items-center gap-2">
           <div className="hidden items-center gap-2 lg:flex">
               <BrainRouteSelector

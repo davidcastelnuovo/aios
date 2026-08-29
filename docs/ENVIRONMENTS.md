@@ -82,6 +82,25 @@ Gaps (do not touch Production to close these):
 5. Merge `develop` → `main` only after `מאשר לפרודקשן`.
 6. Edge-function or migration work: add files under `supabase/functions` / `supabase/migrations`. Do not apply them to Production from the agent. Staging apply is a later phase.
 
+## Development agents (Preview / Staging)
+
+Vercel Preview is the development environment. It talks to **AIOS Staging**, never Production. Do not “fix” Preview by pointing it at Production.
+
+| Seat | Works on Preview today? | Why |
+| --- | --- | --- |
+| Carmen (internal / `run-ai-agent`) | Yes | Staging has the tenant, agent, and OpenAI path |
+| Cursor / Grok / Codex Cloud seats | Only if Staging `CURSOR_API_KEY` is a **valid Cursor User key** | All three launch via `api.cursor.com` with that secret |
+| Knights Round Table | Same as Cloud seats | Parliament fans out to those three |
+
+How we keep them working:
+
+1. **Same wiring as Production, different project.** Staging already has `agent_brain_routes`, Carmen, `cursor-mcp`, and the `CURSOR_API_KEY` *name*. A leftover or placeholder value returns `401 Invalid User API Key` and Cloud seats fail. Internal Carmen still works.
+2. **Health probe.** Command Center calls `agent-channel-send` `action=channel_health` (GET `https://api.cursor.com/v1/models`). If the key is missing or rejected, the HUD shows a Hebrew banner. Replacing the secret does **not** need a function redeploy.
+3. **After rotating the key:** from Preview → Command Center, send a one-word ping on Cursor Direct or the table. Expect `agent_channel_sessions.external_url` and no 401 on the run.
+4. **Never paste the key into chat.** David sets it in **Supabase → AIOS Staging → Edge Functions → Secrets → `CURSOR_API_KEY`** using a current User key from https://cursor.com/dashboard/api (the same class of key Production already uses).
+
+Local `pnpm dev` in this Cloud Agent workspace still reads Production `.env`. That is not the development environment — use the Vercel Preview URL.
+
 ## Staging Safe Mode
 
 On Staging (`APP_ENV=staging`, `STAGING_SAFE_MODE=true`):

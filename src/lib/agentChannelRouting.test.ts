@@ -14,6 +14,7 @@ import {
   slugForCouncilSeat,
   councilSeatFromSlug,
   routeForTableAddress,
+  channelHealthBanner,
 } from "./agentChannelRouting.ts";
 
 test("selecting a direct channel changes the send path", () => {
@@ -60,6 +61,16 @@ test("table address picks a seat route without leaving parliament HUD", () => {
   assert.equal(routeForTableAddress(routes, "cursor")?.slug, "cursor");
   assert.equal(routeForTableAddress(routes, "carmen")?.slug, "internal");
   assert.equal(hudStage({ routeType: "parliament" }), "table");
+});
+
+test("channel health banner only when Cursor key is rejected", () => {
+  assert.equal(channelHealthBanner(null), null);
+  assert.equal(channelHealthBanner({ ok: true, cursor: { ok: true, status: 200 } }), null);
+  assert.equal(channelHealthBanner({ ok: false }), null);
+  const banner = channelHealthBanner({ ok: false, cursor: { ok: false, status: 401 } });
+  assert.match(banner || "", /CURSOR_API_KEY/);
+  assert.match(banner || "", /Staging/);
+  assert.match(banner || "", /כרמן הפנימית עובדת/);
 });
 
 test("parliament seats are Cursor + Grok + Codex", () => {

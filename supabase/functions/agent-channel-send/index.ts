@@ -51,6 +51,20 @@ Deno.serve(async (req) => {
     return json(200, { ok: true, routes, agent_id: agentId });
   }
 
+  if (action === "channel_health") {
+    const { probeCursorApiKey, cursorApiKey } = await import("../_shared/agent-channel/cursor-api.ts");
+    const cursor = await probeCursorApiKey(cursorApiKey());
+    const appEnv = Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "";
+    return json(200, {
+      ok: cursor.ok,
+      cursor,
+      app_env: appEnv || null,
+      message: cursor.ok
+        ? "Cursor Cloud seats are reachable."
+        : "CURSOR_API_KEY on this project is missing or rejected (401). Preview uses Staging — set a valid User key there.",
+    });
+  }
+
   if (action === "cancel_parliament") {
     const conversationId = String(body.conversation_id || "");
     if (!conversationId) return json(400, { error: "conversation_id is required" });

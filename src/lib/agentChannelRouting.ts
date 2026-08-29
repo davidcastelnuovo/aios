@@ -69,6 +69,22 @@ export function sendPathForRoute(route: BrainRoute | null | undefined): "interna
   return "channel_gateway";
 }
 
+export type ChannelHealth = {
+  ok?: boolean;
+  cursor?: { ok?: boolean; status?: number };
+  app_env?: string | null;
+  message?: string;
+};
+
+/** Preview/Staging HUD copy when Cloud seats cannot launch. Null = hide the banner. */
+export function channelHealthBanner(health: ChannelHealth | null | undefined): string | null {
+  if (!health || health.ok) return null;
+  if (health.cursor && health.cursor.ok === false) {
+    return "מושבי Cursor / Grok / Codex לא מחוברים בסביבת הפיתוח. הפריוויו מדבר עם Staging — צריך מפתח User תקף ב-CURSOR_API_KEY שם. כרמן הפנימית עובדת.";
+  }
+  return null;
+}
+
 export type HudStage = "table" | "direct";
 export type CouncilSeatId = "carmen" | "cursor" | "grok" | "codex";
 
