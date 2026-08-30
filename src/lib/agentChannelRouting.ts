@@ -14,7 +14,8 @@ export type BrainRoute = {
   session_status?: string | null;
 };
 
-export const DEFAULT_BRAIN_SLUG = "parliament";
+/** Command Center opens on Carmen Direct (Cursor open chat), not the knights table. */
+export const DEFAULT_BRAIN_SLUG = "cursor";
 
 export function readSavedRouteSlug(tenantId: string | null | undefined): string | null {
   if (!tenantId) return null;
@@ -25,12 +26,12 @@ export function readSavedRouteSlug(tenantId: string | null | undefined): string 
   }
 }
 
-/** First paint is always the knights table. A saved slug must not flash Cursor first. */
+/** First paint is Carmen Direct (כרמן ישיר). Saved slug is not applied until a chat is restored. */
 export function initialSelectedRoute(_tenantId?: string | null, routes: BrainRoute[] = FALLBACK_BRAIN_ROUTES): BrainRoute {
   return pickDefaultRoute(routes);
 }
 
-/** Last chat's brain wins. Saved slug is only for a brand-new empty session — and even then we stay on the table. */
+/** Last chat's brain wins. Empty session stays on Carmen Direct. */
 export function routeForRestoredChat(
   routes: BrainRoute[],
   lastChat?: { brain_route_id?: string | null; routing_mode?: string | null } | null,

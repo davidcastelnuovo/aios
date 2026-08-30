@@ -39,7 +39,7 @@ export default function CarmenCommandCenter() {
   const audioLevelRef = useRef(0);
   const chatRef = useRef<CarmenChatBarHandle>(null);
   const alertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [, setHudMode] = useState<HudStage>("table");
+  const [, setHudMode] = useState<HudStage>("direct");
   const [chatsOpen, setChatsOpen] = useState(false);
 
   const flashAlert = useCallback(() => {
