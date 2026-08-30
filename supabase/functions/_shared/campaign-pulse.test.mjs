@@ -13,6 +13,7 @@ import {
   normalizeAdAccountId,
   expandSnapshotToGoalRows,
   filterPulseRowsByClientIds,
+  isPulseDeliveryExcludedPhone,
   isPulseDeliveryExcludedRecipient,
   pickFreshestTablePerPlatform,
   resolveLastSyncAt,
@@ -516,4 +517,10 @@ test("hybrid snapshot expands to separate lead and ecommerce goal rows", () => {
 test("isPulseDeliveryExcludedRecipient blocks אילנית", () => {
   assert.equal(isPulseDeliveryExcludedRecipient("אילנית"), true);
   assert.equal(isPulseDeliveryExcludedRecipient("דנה"), false);
+});
+
+test("isPulseDeliveryExcludedPhone blocks David owner phone", () => {
+  assert.equal(isPulseDeliveryExcludedPhone("972507677613"), true);
+  assert.equal(isPulseDeliveryExcludedPhone("0507677613"), true);
+  assert.equal(isPulseDeliveryExcludedPhone("972558833168"), false);
 });

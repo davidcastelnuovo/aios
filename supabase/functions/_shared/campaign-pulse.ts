@@ -424,12 +424,21 @@ export type CampaignGoalMode = CampaignGoal | 'hybrid'
 /** Team managers / recipients who must never receive scoped pulse digests. */
 export const PULSE_DELIVERY_EXCLUDED_RECIPIENT_NAMES = ['אילנית'] as const
 
+/** Owner phones that must never receive DMM/MarketingCaptain pulse digests or previews. */
+export const PULSE_DELIVERY_EXCLUDED_PHONE_SUFFIXES = ['507677613'] as const
+
 export function isPulseDeliveryExcludedRecipient(name: string | null | undefined): boolean {
   const normalized = String(name || '').trim()
   if (!normalized) return false
   return PULSE_DELIVERY_EXCLUDED_RECIPIENT_NAMES.some(
     (excluded) => normalized === excluded || normalized.startsWith(`${excluded} `),
   )
+}
+
+export function isPulseDeliveryExcludedPhone(phone: string | null | undefined): boolean {
+  const digits = String(phone || '').replace(/\D/g, '')
+  if (!digits) return false
+  return PULSE_DELIVERY_EXCLUDED_PHONE_SUFFIXES.some((suffix) => digits.endsWith(suffix))
 }
 
 export function integrationTypeToGoal(integrationType: string | null | undefined): CampaignGoal | null {

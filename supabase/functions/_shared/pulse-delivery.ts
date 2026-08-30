@@ -3,7 +3,11 @@
  * Campaigners: client_team assignments. Team managers: managed agencies.
  */
 
-import { filterPulseRowsByClientIds, isPulseDeliveryExcludedRecipient } from './campaign-pulse.ts'
+import {
+  filterPulseRowsByClientIds,
+  isPulseDeliveryExcludedPhone,
+  isPulseDeliveryExcludedRecipient,
+} from './campaign-pulse.ts'
 import { normalizeNotifyPhone } from './carmen-notify-target.ts'
 
 export type PulseDeliveryRole = 'campaigner' | 'team_manager'
@@ -57,6 +61,7 @@ export function planCampaignerPulseDeliveries(
   for (const campaigner of campaigners) {
     if (isPulseDeliveryExcludedRecipient(campaigner.full_name)) continue
     const phone = normalizeNotifyPhone(campaigner.phone)
+    if (isPulseDeliveryExcludedPhone(phone)) continue
     const clientIds = Array.from(clientsByCampaigner.get(campaigner.id) || [])
     if (!phone || !clientIds.length) continue
     plans.push({
@@ -78,6 +83,7 @@ export function planTeamManagerPulseDeliveries(
   for (const manager of managers) {
     if (isPulseDeliveryExcludedRecipient(manager.full_name)) continue
     const phone = normalizeNotifyPhone(manager.phone)
+    if (isPulseDeliveryExcludedPhone(phone)) continue
     if (!phone || !manager.agency_ids.length) continue
     const agencySet = new Set(manager.agency_ids)
     const clientIds = snapshots
