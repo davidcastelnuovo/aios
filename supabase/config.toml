@@ -45,6 +45,10 @@ verify_jwt = false
 [functions.copy-edge-secrets-to-staging]
 verify_jwt = false
 
+# Registers MCP servers for Carmen. Service role inside; resync copies edge secrets only.
+[functions.mcp-connect]
+verify_jwt = false
+
 [functions.run-agent-parliament]
 verify_jwt = false
 

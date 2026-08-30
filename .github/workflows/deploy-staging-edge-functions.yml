@@ -3,9 +3,9 @@ name: Deploy Staging Edge Functions
 # Deploys edge functions to the STAGING Supabase project only.
 # Production deploy stays in deploy-edge-function.yml (main only).
 #
-# Requires GitHub secrets:
-#   BASE_ACCESS_TOKEN = Supabase access token
-#   SUPABASE_STAGING_PROJECT_ID = staging project ref (never commit the ref)
+# Requires GitHub secret BASE_ACCESS_TOKEN (Supabase access token).
+# Staging project ref matches supabase/ops/repoint_staging_carmen_cursor_mcp_url.sql
+# and deploy-edge-function.yml (prod ref is hardcoded the same way).
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ on:
         required: false
         default: ''
   push:
-    branches: [develop]
+    branches: [develop, main]
     paths:
       - '.github/workflows/deploy-staging-edge-functions.yml'
       - 'supabase/functions/**'
@@ -25,20 +25,15 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
-      PROJECT_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
+      # Same ref as ops SQL + mcpPresetUrl tests; override via secret if it ever moves.
+      PROJECT_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+      PRODUCTION_REF: zvoijyneresvkadpprel
+      CARMEN_TENANT_ID: 2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Require staging project secret
-        run: |
-          set -euo pipefail
-          if [ -z "${PROJECT_REF}" ]; then
-            echo "SUPABASE_STAGING_PROJECT_ID GitHub secret is not set. Refusing to deploy."
-            exit 1
-          fi
 
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
@@ -49,6 +44,7 @@ jobs:
         id: funcs
         run: |
           set -euo pipefail
+          AGENT_MCP_BUNDLE="mcp-connect cursor-mcp run-ai-agent carmen-health-probe grok-mcp claude-mcp agent-channel-send"
           if [ -n "${{ github.event.inputs.function_name }}" ]; then
             echo "list=${{ github.event.inputs.function_name }}" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -56,6 +52,20 @@ jobs:
               | sed 's#supabase/functions/##;s#/index.ts##' \
               | grep -v '^_shared$' | sort | tr '\n' ' ')
             echo "list=$LIST" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+               || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              BEFORE="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+            fi
+            CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- 'supabase/functions/**' \
+              | sed -E 's#supabase/functions/([^/]+)/.*#\1#' \
+              | { grep -v '^_shared$' || true; } | sort -u | tr '\n' ' ')
+            if echo " $CHANGED " | grep -qE ' (mcp-connect|cursor-mcp|run-ai-agent|_shared) '; then
+              echo "list=$AGENT_MCP_BUNDLE" >> "$GITHUB_OUTPUT"
+            else
+              echo "list=$CHANGED" >> "$GITHUB_OUTPUT"
+            fi
           else
             BEFORE="${{ github.event.before }}"
             if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
@@ -85,3 +95,24 @@ jobs:
             supabase functions deploy "$FUNC" --project-ref "$PROJECT_REF" $FLAG
             echo "::endgroup::"
           done
+
+      - name: Copy agent secrets Production → Staging
+        if: contains(steps.funcs.outputs.list, 'mcp-connect') || contains(steps.funcs.outputs.list, 'cursor-mcp') || contains(steps.funcs.outputs.list, 'run-ai-agent')
+        run: |
+          set -euo pipefail
+          RESP=$(curl -sS -X POST "https://${PRODUCTION_REF}.supabase.co/functions/v1/copy-edge-secrets-to-staging" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"target_ref\":\"${PROJECT_REF}\",\"names\":[\"CURSOR_API_KEY\",\"CURSOR_MCP_BEARER\",\"CURSOR_CLOUD_ENV_NAME\",\"CURSOR_DEFAULT_TENANT_ID\",\"GROK_MCP_BEARER\",\"GROK_CURSOR_MCP_BEARER\",\"AGENT_CHANNEL_MCP_BEARER\",\"AGENT_CHANNEL_CALLBACK_SECRET\"]}")
+          echo "$RESP"
+          echo "$RESP" | grep -q '"ok":true' || exit 1
+
+      - name: Resync Carmen Cursor MCP on Staging
+        if: contains(steps.funcs.outputs.list, 'mcp-connect') || contains(steps.funcs.outputs.list, 'cursor-mcp') || contains(steps.funcs.outputs.list, 'run-ai-agent')
+        run: |
+          set -euo pipefail
+          RESP=$(curl -sS -X POST "https://${PROJECT_REF}.supabase.co/functions/v1/mcp-connect" \
+            -H "Content-Type: application/json" \
+            -d "{\"resync_from_secret\":true,\"tenant_id\":\"${CARMEN_TENANT_ID}\",\"name\":\"Cursor\"}")
+          echo "$RESP"
+          echo "$RESP" | grep -q '"state":"ready"' || exit 1

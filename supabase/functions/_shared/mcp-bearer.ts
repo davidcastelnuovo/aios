@@ -29,6 +29,40 @@ export function isInternalMcpUrl(url: string): boolean {
   }
 }
 
+const PRESET_FUNCTION_SLUGS: Record<string, string> = {
+  cursor: "cursor-mcp",
+  grok: "grok-mcp",
+  claude: "claude-mcp",
+  manus: "manus-mcp",
+};
+
+/** Carmen preset URLs should target this project's edge function, not a cloned prod host. */
+export function canonicalInternalMcpUrl(
+  connectionName: string,
+  supabaseUrl = Deno.env.get("SUPABASE_URL") || "",
+): string | null {
+  const slug = PRESET_FUNCTION_SLUGS[connectionName.trim().toLowerCase()];
+  if (!slug || !supabaseUrl.startsWith("https://")) return null;
+  return `${supabaseUrl.replace(/\/$/, "")}/functions/v1/${slug}`;
+}
+
+export function repointInternalMcpUrlIfNeeded(
+  connectionName: string,
+  currentUrl: string,
+  supabaseUrl = Deno.env.get("SUPABASE_URL") || "",
+): string {
+  const canonical = canonicalInternalMcpUrl(connectionName, supabaseUrl);
+  if (!canonical || !isInternalMcpUrl(currentUrl)) return currentUrl;
+  try {
+    const cur = new URL(currentUrl);
+    const next = new URL(canonical);
+    if (cur.hostname === next.hostname && cur.pathname === next.pathname) return currentUrl;
+    return canonical;
+  } catch {
+    return currentUrl;
+  }
+}
+
 export async function mcpJsonRpc(
   url: string,
   bearer: string | undefined,
@@ -89,13 +123,15 @@ export function isMcpAuthError(err: unknown): boolean {
 export async function resyncInternalMcpBearer(
   supabase: any,
   conn: { id: string; name: string; url: string; tenant_id?: string | null },
-): Promise<{ bearer: string; tools: any[]; state: McpProbeResult["state"]; lastError: string | null } | null> {
-  if (!isInternalMcpUrl(conn.url)) return null;
+): Promise<{ bearer: string; tools: any[]; state: McpProbeResult["state"]; lastError: string | null; url?: string } | null> {
+  if (!isInternalMcpUrl(conn.url) && !canonicalInternalMcpUrl(conn.name)) return null;
   const bearer = secretForConnectionName(conn.name);
   if (!bearer) return null;
 
-  const { tools, state, lastError } = await probeMcp(conn.url, bearer);
+  const url = repointInternalMcpUrlIfNeeded(conn.name, conn.url);
+  const { tools, state, lastError } = await probeMcp(url, bearer);
   const update: Record<string, unknown> = {
+    url,
     oauth_tokens: { bearer },
     available_tools: tools,
     state,
@@ -106,5 +142,6 @@ export async function resyncInternalMcpBearer(
   if (conn.tenant_id) q = q.eq("tenant_id", conn.tenant_id);
   const { error } = await q;
   if (error) throw error;
-  return { bearer, tools, state, lastError };
+  conn.url = url;
+  return { bearer, tools, state, lastError, url };
 }
