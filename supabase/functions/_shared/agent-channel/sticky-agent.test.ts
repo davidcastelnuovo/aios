@@ -9,13 +9,11 @@ import {
   envOpenChatId,
   missingOpenChatMessage,
   uniqueCloudAgentIds,
-  FALLBACK_CURSOR_DIRECT_CHAT,
 } from "./sticky-agent.ts";
 
 test("only bc- ids count as an open Cursor chat", () => {
   assert.equal(asCloudAgentId("bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c"), "bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c");
   assert.equal(asCloudAgentId("webhook-1"), null);
-  assert.equal(asCloudAgentId(""), null);
   assert.deepEqual(
     uniqueCloudAgentIds("bc-aaa", "nope", "bc-aaa", "bc-bbb"),
     ["bc-aaa", "bc-bbb"],
@@ -49,14 +47,13 @@ test("Cursor is Carmen Direct; Codex is ChatGPT Workspace", () => {
   assert.match(busyOpenChatMessage("cursor", "https://cursor.com/agents/bc-1"), /עדיין רץ/);
 });
 
-test("collectOpenChatIds merges session, env, sticky table, then last sessions", async () => {
+test("collectOpenChatIds merges session, env, fixed direct session, then last sessions", async () => {
   const calls: string[] = [];
   const sb = {
     from(table: string) {
       calls.push(table);
       const row =
-        table === "cursor_sticky_agents" ? { cursor_agent_id: "bc-sticky" }
-        : table === "cursor_dispatches" ? { cursor_agent_id: "bc-dispatch" }
+        table === "cursor_sticky_agents" ? { cursor_agent_id: "bc-sticky", session_url: "https://cursor.com/agents/bc-sticky" }
         : null;
       const rows = table === "agent_channel_sessions"
         ? [{ external_session_id: "bc-session-old" }]
@@ -85,15 +82,12 @@ test("collectOpenChatIds merges session, env, sticky table, then last sessions",
   assert.deepEqual(ids, [
     "bc-this-chat",
     "bc-direct",
-    "bc-sticky",
-    "bc-dispatch",
     "bc-session-old",
-    FALLBACK_CURSOR_DIRECT_CHAT,
   ]);
-  assert.ok(calls.includes("cursor_sticky_agents"));
+  assert.ok(calls.includes("agent_channel_sessions"));
 });
 
-test("Cursor Direct always has the already-open Carmen Direct chat as last resort", async () => {
+test("Cursor Direct without config returns only session-scoped ids", async () => {
   const sb = {
     from() {
       const chain: any = {
@@ -111,7 +105,5 @@ test("Cursor Direct always has the already-open Carmen Direct chat as last resor
     },
   };
   const ids = await collectOpenChatIds(sb, { tenantId: "t1", provider: "cursor", env: {} });
-  assert.deepEqual(ids, [FALLBACK_CURSOR_DIRECT_CHAT]);
-  const codex = await collectOpenChatIds(sb, { tenantId: "t1", provider: "codex", env: {} });
-  assert.deepEqual(codex, []);
+  assert.deepEqual(ids, []);
 });

@@ -1,0 +1,19 @@
+-- Ops note (run manually on each Supabase project — NOT in app code):
+--
+--   supabase secrets set CURSOR_DIRECT_AGENT_ID=bc-XXXXXXXX \
+--     --project-ref zvoijyneresvkadpprel   # Production
+--   supabase secrets set CURSOR_DIRECT_AGENT_ID=bc-XXXXXXXX \
+--     --project-ref mzjsuvatrzhciojmbbbm   # Staging (Preview Carmen)
+--
+-- Optional: seed cursor_sticky_agents for the tenant instead of the secret.
+--
+--   INSERT INTO public.cursor_sticky_agents (tenant_id, cursor_agent_id, session_url)
+--   VALUES (
+--     '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019'::uuid,
+--     'bc-XXXXXXXX',
+--     'https://cursor.com/agents/bc-XXXXXXXX'
+--   )
+--   ON CONFLICT (tenant_id) DO UPDATE SET
+--     cursor_agent_id = EXCLUDED.cursor_agent_id,
+--     session_url = EXCLUDED.session_url,
+--     updated_at = now();
