@@ -1,9 +1,8 @@
-import { ReactNode, forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Headphones, History, Loader2, Mic, MicOff, Play, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
+import { ChevronDown, ChevronUp, Headphones, Loader2, Mic, MicOff, Play, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { CarmenFaceState } from "./CarmenFace";
@@ -44,15 +43,15 @@ export interface CarmenChatBarHandle {
   send: (text: string) => void;
   /** Start voice capture */
   startVoice: () => void;
+  toggleHistory: () => void;
 }
 
 interface CarmenChatBarProps {
   tenantId: string | null;
   onFaceState: (state: CarmenFaceState) => void;
   audioLevelRef: React.MutableRefObject<number>;
-  menuOpen?: boolean;
-  onMenuOpenChange?: (open: boolean) => void;
-  menuPanels?: ReactNode;
+  historyOpen?: boolean;
+  onHistoryOpenChange?: (open: boolean) => void;
   onHudModeChange?: (mode: HudStage) => void;
 }
 
@@ -77,7 +76,7 @@ const VOICE_STORAGE_KEY = "aios:carmen-voice";
  * Command Center never auto-plays carmen-speak and never falls back to transcribe-voice.
  */
 export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>(
-  function CarmenChatBar({ tenantId, onFaceState, audioLevelRef, menuOpen, onMenuOpenChange, menuPanels, onHudModeChange }, ref) {
+  function CarmenChatBar({ tenantId, onFaceState, audioLevelRef, historyOpen, onHistoryOpenChange, onHudModeChange }, ref) {
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [streamingText, setStreamingText] = useState("");
@@ -98,6 +97,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       return CARMEN_VOICES.some(voice => voice.id === saved) ? saved as CarmenVoice : "marin";
     });
     const [showHistory, setShowHistory] = useState(false);
+    const historyVisible = historyOpen ?? showHistory;
+    const setHistory = (open: boolean) => {
+      setShowHistory(open);
+      onHistoryOpenChange?.(open);
+    };
     const muteRef = useRef(false);
     const outputMutedRef = useRef(false);
     const conversationIdRef = useRef<string | null>(null);
@@ -707,7 +711,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setConversationId(null);
       setMessages([]);
       setStreamingText("");
-      setShowHistory(false);
+      setHistory(false);
       setAddressedSeat(null);
       brain.setStatus("idle");
       if (tenantId) localStorage.removeItem(lastConversationStorageKey(tenantId));
@@ -741,7 +745,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           speaker: m.speaker,
           channel: m.channel,
         })));
-      setShowHistory(false);
+      setHistory(false);
       setExpanded(true);
       scrollDown();
     }, [learnFromConversation, brain]);
@@ -831,7 +835,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       prefill: (text: string) => { setInput(text); inputRef.current?.focus(); },
       send: sendText,
       startVoice,
-    }), [sendText, startVoice]);
+      toggleHistory: () => setHistory(!historyVisible),
+    }), [sendText, startVoice, historyVisible]);
 
     const hasThread = messages.length > 0 || !!streamingText;
     const parliamentView = deriveParliamentView(messages, brain.selected);
@@ -842,72 +847,18 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       status: activeTopic?.status ?? (conversationId && liveStreamIds.includes(conversationId) ? "streaming" : brain.status),
     });
 
-    const params = (
-      <div className="flex min-w-0 flex-col gap-2">
-        <BrainRouteSelector
-          className="w-full"
-          routes={brain.routes}
-          value={brain.selected.id}
-          onChange={(route) => {
-            brain.selectRoute(route, conversationIdRef.current);
-            if (route.route_type === "parliament") setAddressedSeat(null);
-          }}
-          disabled={thisChatBusy}
-          status={brain.status}
-          externalUrl={brain.externalUrl}
-        />
-        <div className="flex h-10 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2">
-          <Headphones className="h-4 w-4 shrink-0 text-[var(--cc-accent)]" />
-          <select
-            value={selectedVoice}
-            onChange={e => selectVoice(e.target.value as CarmenVoice)}
-            title="קול"
-            className="min-w-0 flex-1 bg-transparent text-xs text-[var(--cc-text)] outline-none"
-          >
-            {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
-          </select>
-          <button
-            onClick={previewVoice}
-            disabled={isPreviewingVoice}
-            title="דוגמה"
-            className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50"
-          >
-            {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-          </button>
-        </div>
-        <button
-          onClick={() => setShowHistory(h => !h)}
-          title="שיחות קודמות"
-          className={`flex h-10 items-center justify-center gap-1 rounded-lg border border-[var(--cc-line)] text-xs ${showHistory ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)]"}`}
-        >
-          <History className="h-4 w-4" />
-          שיחות
-        </button>
-      </div>
-    );
-
     return (
       <div className={`cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden ${hud === "direct" ? "is-direct" : "is-table"}`}>
-        <Sheet open={!!menuOpen} onOpenChange={onMenuOpenChange}>
-            <SheetContent
-              side="right"
-              className="cc-root cc-scroll w-[min(92vw,24rem)] overflow-y-auto border-[var(--cc-line)] p-3 pt-12 text-[var(--cc-text)] sm:max-w-md"
-            >
-              <SheetHeader className="mb-3 text-right">
-                <SheetTitle className="text-[var(--cc-accent)]">פרמטרים</SheetTitle>
-              </SheetHeader>
-              {params}
-              <div className="mt-4 flex flex-col gap-3">{menuPanels}</div>
-            </SheetContent>
-          </Sheet>
         <div className="cc-talkbar-shell min-h-0 flex-1">
-        <ChatTopicRail
-          className="hidden lg:flex"
-          items={pastConversations ?? []}
-          activeId={conversationId}
-          onSelect={(conv) => { loadConversation(conv); }}
-          onNew={startNewConversation}
-        />
+        {historyVisible && (
+          <ChatTopicRail
+            className="is-overlay"
+            items={pastConversations ?? []}
+            activeId={conversationId}
+            onSelect={(conv) => { loadConversation(conv); }}
+            onNew={startNewConversation}
+          />
+        )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <RoundTableBoard
           route={brain.selected}
@@ -939,17 +890,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               .catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" }));
           } : undefined}
         />
-        {showHistory && (
-          <div className="max-h-[34vh] min-h-0 overflow-hidden border-b border-[var(--cc-line)] lg:hidden">
-            <ChatTopicRail
-              className="is-overlay"
-              items={pastConversations ?? []}
-              activeId={conversationId}
-              onSelect={(conv) => { loadConversation(conv); }}
-              onNew={startNewConversation}
-            />
-          </div>
-        )}
         {hasThread && (
           <>
             <button
@@ -1004,7 +944,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           </p>
         )}
         <div className="cc-talkbar-row mt-auto flex shrink-0 items-center gap-2">
-          <div className="hidden items-center gap-2 lg:flex">
+          <div className="flex min-w-0 items-center gap-2">
               <BrainRouteSelector
                 routes={brain.routes}
                 value={brain.selected.id}
@@ -1016,7 +956,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 status={brain.status}
                 externalUrl={brain.externalUrl}
               />
-              <div className="flex h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2">
+              <div className="hidden h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:flex">
                 <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />
                 <select
                   value={selectedVoice}
@@ -1031,13 +971,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 </button>
               </div>
             </div>
-          <button
-            onClick={() => setShowHistory(h => !h)}
-            title="שיחות"
-            className={`shrink-0 lg:hidden ${showHistory ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"}`}
-          >
-            <History className="h-5 w-5" />
-          </button>
           <button
             onClick={startVoice}
             title={isConvMode ? "סיים שיחה חיה" : "שיחה חיה"}

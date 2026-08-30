@@ -8,6 +8,7 @@ export function StagingBanner() {
 
   return (
     <div
+      data-staging-banner
       className="sticky top-0 z-[70] bg-amber-500 text-black px-4 py-1.5 text-center text-sm font-bold tracking-wide"
       role="status"
     >

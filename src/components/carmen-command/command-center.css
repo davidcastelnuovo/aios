@@ -2,7 +2,19 @@
    Signature color: electric cyan-blue. Chart series colors are validated
    for CVD-safety on the dark navy surface (#060B18): #3B82F6 / #0EA5A0. */
 
+html:has(.cc-root) {
+  --cc-banner-h: 0px;
+  height: 100dvh;
+  overflow: hidden;
+}
+html:has([data-staging-banner]) {
+  --cc-banner-h: 2.25rem;
+}
+
 .cc-root {
+  height: calc(100dvh - var(--cc-banner-h, 0px));
+  max-height: calc(100dvh - var(--cc-banner-h, 0px));
+  overflow: hidden;
   --cc-bg: #050a16;
   --cc-bg-2: #081226;
   --cc-panel: rgba(9, 16, 34, 0.68);
@@ -138,6 +150,7 @@
 }
 
 .cc-talkbar-shell {
+  position: relative;
   display: flex;
   min-height: 0;
   flex: 1 1 auto;
@@ -145,12 +158,25 @@
   align-items: stretch;
 }
 
-.cc-talkbar.is-table {
-  max-height: min(48dvh, 520px);
-}
-
 .cc-talkbar-row {
   flex-shrink: 0;
+}
+
+.cc-hud-window {
+  position: absolute;
+  top: 3.6rem;
+  inset-inline-start: 0.75rem;
+  z-index: 40;
+  display: flex;
+  width: min(24rem, 92vw);
+  max-height: min(70dvh, 36rem);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--cc-line-strong);
+  border-radius: 0.625rem;
+  background: rgba(8, 16, 34, 0.96);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(76, 195, 255, 0.12);
+  padding: 0.7rem 0.75rem;
 }
 
 .cc-chat-rail {
@@ -166,10 +192,17 @@
   background: rgba(5, 10, 22, 0.35);
 }
 .cc-chat-rail.is-overlay {
-  width: 100%;
-  flex: 1 1 auto;
-  max-height: 34vh;
-  border-inline-end: 0;
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  bottom: 0;
+  z-index: 30;
+  width: min(16rem, 86vw);
+  flex: none;
+  max-height: none;
+  border-inline-end: 1px solid var(--cc-line);
+  background: rgba(5, 10, 22, 0.94);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
 }
 .cc-chat-rail-list {
   min-height: 0;
@@ -267,14 +300,19 @@
 /* ---------- Knights of the Round Table ---------- */
 
 .cc-roundtable {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
   border-bottom: 1px solid var(--cc-line);
   padding: 0.5rem 0.6rem 0.75rem;
 }
 
 .cc-roundtable-stage {
   position: relative;
-  height: 280px;
-  overflow: visible;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
   perspective: 980px;
 }
 
@@ -608,7 +646,7 @@
 }
 
 @media (max-width: 640px) {
-  .cc-roundtable-stage { height: 268px; overflow: visible; }
+  .cc-roundtable-stage { min-height: 220px; overflow: hidden; }
   .cc-roundtable-table { width: 56%; height: 64px; top: 42%; }
   .cc-ghost { width: 80px; }
   .cc-ghost-sprite { width: 68px; height: 96px; }
