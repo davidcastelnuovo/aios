@@ -191,7 +191,7 @@ async function deliverScopedPulseRecipients(
   const deliveries: any[] = []
   for (const plan of plans) {
     const recipientPhone = normalizeNotifyPhone(plan.phone)
-    if (!recipientPhone || skipPhones.has(recipientPhone)) continue
+    if (!recipientPhone || skipPhones.has(recipientPhone) || isPulseDeliveryExcludedPhone(recipientPhone)) continue
 
     const scoped = scopeSnapshotsForPlan(snapshots, plan)
     if (!scoped.length) continue
