@@ -176,6 +176,51 @@ html:has([data-staging-banner]) {
   backdrop-filter: blur(8px);
 }
 
+.cc-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--cc-line);
+  background: rgba(5, 10, 22, 0.92);
+  backdrop-filter: blur(8px);
+}
+.cc-header-bar__brand {
+  flex-shrink: 0;
+}
+.cc-header-bar__tools {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+.cc-header-btn {
+  height: 40px;
+  min-width: 40px;
+  justify-content: center;
+}
+@media (min-width: 640px) {
+  .cc-header-btn {
+    height: 44px;
+    min-width: auto;
+  }
+}
+.cc-header-clock--compact .cc-num {
+  font-size: 0.875rem;
+}
+.cc-seat-buttons {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cc-seat-buttons::-webkit-scrollbar {
+  display: none;
+}
+.cc-seat-status {
+  border-bottom: 1px solid var(--cc-line);
+  background: rgba(5, 10, 22, 0.65);
+}
+
 .cc-seat-rail {
   background: transparent;
 }
