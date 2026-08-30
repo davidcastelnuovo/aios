@@ -868,6 +868,7 @@ const ALL_TOOLS = [
   { name: 'list_goals', description: 'רשימת יעדים עם אחוז התקדמות', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' } } } },
   // AGENT TASK OWNERSHIP
   { name: 'take_task', description: 'כרמן לוקחת בעלות על משימה - מעדכנת assigned_agent וסטטוס ל-agent_working', parameters: { type: 'object', properties: { task_id: { type: 'string' }, agent_name: { type: 'string', description: 'שם הסוכן שלוקח את המשימה (ברירת מחדל: כרמן)' } }, required: ['task_id'] } },
+  { name: 'assign_task_to_cursor', description: 'מקצה משימה ל-Cursor (תור פיתוח). מעדכן assigned_agent=Cursor ומפעיל dispatch אוטומטי אם אין משימה אחרת ב-in_progress.', parameters: { type: 'object', properties: { task_id: { type: 'string' }, notes: { type: 'string', description: 'הערות נוספות למשימה' } }, required: ['task_id'] } },
   { name: 'complete_task_step', description: 'כרמן מדווחת על השלמת שלב במשימה ומוסיפה עדכון מסוג agent_action', parameters: { type: 'object', properties: { task_id: { type: 'string' }, step_description: { type: 'string' }, mark_complete: { type: 'boolean', description: 'האם לסמן את המשימה כהושלמה' } }, required: ['task_id', 'step_description'] } },
   { name: 'prioritize_tasks', description: 'ניתוח משימות פתוחות והצעת סדר עדיפויות לפי דדליינים, יעדים ועומס', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
   // FACEBOOK AD ACCOUNTS
@@ -4499,18 +4500,64 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     // AGENT TASK OWNERSHIP
     case 'take_task': {
       const agentName = args.agent_name || 'carmen'
+      const isCursor = String(agentName).toLowerCase().includes('cursor')
       const { data, error } = await supabase.from('tasks')
-        .update({ assigned_agent: agentName, status: 'in_progress' })
+        .update({ assigned_agent: agentName, status: isCursor ? 'open' : 'in_progress' })
         .eq('id', args.task_id).in('tenant_id', accessibleTenantIds)
         .select('id, title, status, assigned_agent').single()
       if (error) throw error
-      // Log the action
       await supabase.from('task_updates').insert({
         task_id: args.task_id, user_id: userId, tenant_id: tenantId,
         content: `הסוכן ${agentName} לקח בעלות על המשימה`,
         update_type: 'agent_action',
       })
+      if (isCursor) {
+        fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/dispatch-cursor-tasks`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ tenant_id: tenantId }),
+        }).catch((e) => console.warn('[take_task] dispatch-cursor-tasks:', e?.message))
+      }
       return { success: true, task: data }
+    }
+    case 'assign_task_to_cursor': {
+      const patch: Record<string, unknown> = {
+        assigned_agent: 'Cursor',
+        status: 'open',
+      }
+      if (args.notes) patch.notes = String(args.notes)
+      const { data, error } = await supabase.from('tasks')
+        .update(patch)
+        .eq('id', args.task_id)
+        .in('tenant_id', accessibleTenantIds)
+        .select('id, title, status, assigned_agent')
+        .single()
+      if (error) throw error
+      await supabase.from('task_updates').insert({
+        task_id: args.task_id,
+        user_id: userId,
+        tenant_id: tenantId,
+        content: 'המשימה הוקצתה ל-Cursor — תור dispatch אוטומטי',
+        update_type: 'agent_action',
+      })
+      let dispatched: unknown = null
+      try {
+        const resp = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/dispatch-cursor-tasks`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ tenant_id: tenantId }),
+        })
+        dispatched = await resp.json()
+      } catch (e: any) {
+        console.warn('[assign_task_to_cursor] dispatch failed:', e?.message)
+      }
+      return { success: true, task: data, dispatch: dispatched }
     }
     case 'complete_task_step': {
       // Add agent_action update

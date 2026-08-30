@@ -44,7 +44,7 @@ jobs:
         id: funcs
         run: |
           set -euo pipefail
-          AGENT_MCP_BUNDLE="mcp-connect cursor-mcp run-ai-agent carmen-health-probe grok-mcp claude-mcp agent-channel-send"
+          AGENT_MCP_BUNDLE="mcp-connect cursor-mcp run-ai-agent carmen-health-probe grok-mcp claude-mcp agent-channel-send dispatch-cursor-tasks"
           if [ -n "${{ github.event.inputs.function_name }}" ]; then
             echo "list=${{ github.event.inputs.function_name }}" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then

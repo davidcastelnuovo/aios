@@ -49,6 +49,9 @@ verify_jwt = false
 [functions.mcp-connect]
 verify_jwt = false
 
+[functions.dispatch-cursor-tasks]
+verify_jwt = false
+
 [functions.run-agent-parliament]
 verify_jwt = false
 

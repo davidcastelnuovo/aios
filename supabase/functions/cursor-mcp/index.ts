@@ -30,6 +30,7 @@ import {
   wantsStreamableHttp,
   type McpRpcMessage,
 } from "../_shared/mcp-streamable-http.ts";
+import { completeHumanCursorTask, extractHumanTaskId } from "../_shared/cursor-task-queue.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -159,6 +160,20 @@ const TOOLS = [
         idempotency_key: { type: "string" },
       },
       required: ["conversation_id", "content"],
+    },
+  },
+  {
+    name: "complete_human_task",
+    description:
+      "Mark a public.tasks row complete after finishing Cursor work from the human task queue. " +
+      "Call when context includes human_task_id. Automatically dispatches the next queued Cursor task.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "UUID from human_task_id in the task context." },
+        summary: { type: "string", description: "Short completion note for the task log." },
+      },
+      required: ["task_id"],
     },
   },
 ];
@@ -510,6 +525,7 @@ async function logDispatch(args: {
   branch: string;
   sessionUrl: string;
   cursorAgentId: string;
+  humanTaskId?: string | null;
 }): Promise<void> {
   const sb = sbClient();
   if (!sb) return;
@@ -523,6 +539,7 @@ async function logDispatch(args: {
       branch: args.branch || null,
       session_url: args.sessionUrl || null,
       cursor_agent_id: args.cursorAgentId || null,
+      human_task_id: args.humanTaskId || null,
     });
   } catch (e) {
     console.error("[cursor-mcp] logDispatch failed:", (e as any)?.message ?? e);
@@ -552,7 +569,8 @@ function teachingBlock(tenantId: string | null): string {
     `B) UPDATE DAVID: when you finish, make sure David is updated with the result. ${callbackLine}\n` +
     `C) FIX-ON-FAIL: if this request says a capability previously taught to Carmen FAILED in practice, that is the priority — ` +
     `diagnose, fix the ai_skills skin and/or underlying code, verify, and report what changed so Carmen can retry.\n` +
-    `D) SAFETY (hard rules — see CLAUDE.md / AGENTS.md "Safety rules for autonomous fixes"): never widen anyone's access beyond their existing role/scope; ` +
+    `D) HUMAN TASK QUEUE: if Context includes human_task_id, call MCP tool complete_human_task when done (before or after the PR).\n` +
+    `E) SAFETY (hard rules — see CLAUDE.md / AGENTS.md "Safety rules for autonomous fixes"): never widen anyone's access beyond their existing role/scope; ` +
     `no destructive or policy-widening SQL live (use a migration + PR); only safe scoped fixes autonomously. Log every autonomous prod change to ` +
     `public.claude_carmen_audit and report it. If a request would breach these, refuse and tell David.`
   );
@@ -591,8 +609,23 @@ async function handleToolCall(
       branch,
       sessionUrl: fired.url,
       cursorAgentId: fired.id,
+      humanTaskId: extractHumanTaskId(context),
     });
     return formatDispatchReply("dev task", fired);
+  }
+
+  if (name === "complete_human_task") {
+    const taskId = String(args?.task_id ?? "").trim();
+    if (!taskId) throw new Error("complete_human_task requires task_id.");
+    const summary = String(args?.summary ?? "").trim();
+    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    if (!tenantId) throw new Error("complete_human_task requires a tenant context.");
+    const sb = sbClient();
+    if (!sb) throw new Error("Supabase not configured.");
+    const result = await completeHumanCursorTask(sb, { tenantId, taskId, summary });
+    return result.advanced
+      ? `✅ משימה ${taskId} הושלמה. המשימה הבאה בתור נשלחה ל-Cursor.`
+      : `✅ משימה ${taskId} הושלמה.`;
   }
 
   if (name === "ask_cursor") {
