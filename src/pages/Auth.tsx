@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Building2 } from "lucide-react";
 import { resolveTenantSlug } from "@/hooks/useResolveTenant";
+import { isNonProduction, resolveFrontendAppEnv } from "@/lib/appEnv";
 
 const buildTenantPath = (slug: string, path: string) => `/t/${slug}/${path}`;
 
@@ -37,6 +38,7 @@ export default function Auth() {
   const [mfaCode, setMfaCode] = useState("");
   const [checkingSession, setCheckingSession] = useState(true);
   const [inviteBanner, setInviteBanner] = useState<string | null>(null);
+  const isDevEnv = isNonProduction(resolveFrontendAppEnv());
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -503,6 +505,13 @@ export default function Auth() {
                 </svg>
                 התחבר עם Google
               </Button>
+
+              {isDevEnv && (
+                <p className="text-xs text-muted-foreground text-center leading-relaxed">
+                  Preview/Staging: קודם התחבר ל-Vercel כשהדפדפן מבקש, ואז Google.
+                  אם Google נכשל עם redirect_uri_mismatch — הוסף ב-Google Cloud את ה-Callback URL של Supabase Staging (ראה docs/ENVIRONMENTS.md).
+                </p>
+              )}
 
               <Button
                 type="button"
