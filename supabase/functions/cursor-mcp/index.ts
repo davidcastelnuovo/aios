@@ -38,6 +38,16 @@ import {
   resolveCursorDirectSession,
   type CursorDirectSession,
 } from "../_shared/cursor-direct-session.ts";
+import {
+  cursorSessionDisplayName,
+  fetchHumanTaskTitle,
+  findCursorSessionForTask,
+  formatCursorSessionsForAgent,
+  listCursorTaskSessions,
+  resolveAppEnv,
+  trackCursorTaskSession,
+  touchCursorTaskSession,
+} from "../_shared/cursor-session-tracker.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -50,7 +60,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.3.2" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.4.0" };
 const CURSOR_MCP_STREAMABLE_URL =
   "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
@@ -184,6 +194,38 @@ const TOOLS = [
         idempotency_key: { type: "string" },
       },
       required: ["conversation_id", "content"],
+    },
+  },
+  {
+    name: "list_cursor_task_sessions",
+    description:
+      "Read-only: list Cursor Cloud Agent sessions tracked by AIOS (bc-… per task). " +
+      "Use to find which session belongs to which task — no fixed session id needed. " +
+      "Does NOT open a new Background Agent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          description: "Optional filter: active | running | completed | busy | failed",
+        },
+        limit: { type: "number", description: "Max rows (default 20)." },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_cursor_task_session",
+    description:
+      "Read-only: look up the Cursor session for a human task id (public.tasks). " +
+      "Returns session_id, url, display name, and status. Does NOT open a new agent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "public.tasks.id (UUID)." },
+      },
+      required: ["task_id"],
+      additionalProperties: false,
     },
   },
   {
@@ -552,6 +594,9 @@ async function logDispatch(args: {
   sessionUrl: string;
   cursorAgentId: string;
   humanTaskId?: string | null;
+  taskTitle?: string | null;
+  displayName?: string | null;
+  reused?: boolean;
 }): Promise<void> {
   const sb = sbClient();
   if (!sb) return;
@@ -567,9 +612,53 @@ async function logDispatch(args: {
       cursor_agent_id: args.cursorAgentId || null,
       human_task_id: args.humanTaskId || null,
     });
+
+    if (!args.tenantId || !args.cursorAgentId?.startsWith("bc-")) return;
+
+    if (args.reused) {
+      await touchCursorTaskSession(sb, args.cursorAgentId, "running");
+      console.log(`[cursor-mcp] session_touch session_id=${args.cursorAgentId} tool=${args.tool}`);
+      return;
+    }
+
+    const displayName = args.displayName || cursorSessionDisplayName({
+      taskTitle: args.taskTitle,
+      requestText: args.requestText,
+      sourceTool: args.tool,
+    });
+    await trackCursorTaskSession(sb, {
+      tenantId: args.tenantId,
+      cursorAgentId: args.cursorAgentId,
+      sessionUrl: args.sessionUrl,
+      displayName,
+      taskTitle: args.taskTitle || args.requestText,
+      humanTaskId: args.humanTaskId || null,
+      sourceTool: args.tool,
+      appEnv: resolveAppEnv(),
+    });
+    console.log(`[cursor-mcp] new_background_agent tracked session_id=${args.cursorAgentId} name="${displayName}"`);
   } catch (e) {
     console.error("[cursor-mcp] logDispatch failed:", (e as any)?.message ?? e);
   }
+}
+
+async function resolveDispatchMeta(
+  tenantId: string | null,
+  context: string,
+  requestText: string,
+  tool: string,
+): Promise<{ humanTaskId: string | null; taskTitle: string | null; displayName: string }> {
+  const humanTaskId = extractHumanTaskId(context);
+  let taskTitle: string | null = null;
+  const sb = sbClient();
+  if (humanTaskId && tenantId && sb) {
+    taskTitle = await fetchHumanTaskTitle(sb, tenantId, humanTaskId);
+  }
+  return {
+    humanTaskId,
+    taskTitle,
+    displayName: cursorSessionDisplayName({ taskTitle, requestText, sourceTool: tool }),
+  };
 }
 
 function teachingBlock(tenantId: string | null): string {
@@ -659,11 +748,17 @@ async function executeDirectSessionReply(args: {
     );
   }
   if (followed.delivered === false) {
+    if (args.tenantId) {
+      await touchCursorTaskSession(sbClient()!, args.session.sessionId, "busy");
+    }
     throw new Error(
       `Cursor Direct session ${args.session.sessionId} is BUSY (only one run at a time). ` +
       `The message was NOT delivered. Retry when that run finishes: ${followed.url}. ` +
       `Do not call ask_cursor or request_dev_task — those open a new Background Agent.`,
     );
+  }
+  if (args.tenantId) {
+    await touchCursorTaskSession(sbClient()!, args.session.sessionId, "running");
   }
   await logDispatch({
     tenantId: args.tenantId,
@@ -700,8 +795,9 @@ async function handleToolCall(
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
+    const meta = await resolveDispatchMeta(ctx.tenantId, context, task, "request_dev_task");
     const fired = await fireCursorAgent(text, {
-      name: `Carmen DEV: ${task.slice(0, 60)}`,
+      name: meta.displayName,
       startingRef: branch || undefined,
       tenantId: ctx.tenantId,
     });
@@ -714,9 +810,42 @@ async function handleToolCall(
       branch,
       sessionUrl: fired.url,
       cursorAgentId: fired.id,
-      humanTaskId: extractHumanTaskId(context),
+      humanTaskId: meta.humanTaskId,
+      taskTitle: meta.taskTitle,
+      displayName: meta.displayName,
+      reused: fired.reused,
     });
     return formatDispatchReply("dev task", fired);
+  }
+
+  if (name === "list_cursor_task_sessions") {
+    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    if (!tenantId) throw new Error("list_cursor_task_sessions requires a tenant context.");
+    const sb = sbClient();
+    if (!sb) throw new Error("Supabase not configured.");
+    const statusRaw = String(args?.status || "active").trim().toLowerCase();
+    const limit = Number(args?.limit || 20);
+    const rows = await listCursorTaskSessions(sb, tenantId, {
+      status: (statusRaw === "active" ? "active" : statusRaw) as any,
+      limit: Number.isFinite(limit) ? limit : 20,
+    });
+    return formatCursorSessionsForAgent(rows);
+  }
+
+  if (name === "get_cursor_task_session") {
+    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    const taskId = String(args?.task_id ?? "").trim();
+    if (!tenantId || !taskId) throw new Error("get_cursor_task_session requires task_id and tenant context.");
+    const sb = sbClient();
+    if (!sb) throw new Error("Supabase not configured.");
+    const row = await findCursorSessionForTask(sb, tenantId, taskId);
+    if (!row) {
+      throw new Error(
+        `No Cursor session tracked for task ${taskId}. ` +
+        `Use list_cursor_task_sessions or assign the task to Cursor and dispatch again.`,
+      );
+    }
+    return formatCursorSessionsForAgent([row]);
   }
 
   if (name === "complete_human_task") {
@@ -744,8 +873,9 @@ async function handleToolCall(
       (context ? `\nContext:\n${context}\n` : ``) +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
+    const meta = await resolveDispatchMeta(ctx.tenantId, context, request, "ask_cursor");
     const fired = await fireCursorAgent(text, {
-      name: `Carmen: ${request.slice(0, 60)}`,
+      name: meta.displayName,
       tenantId: ctx.tenantId,
     });
     await logDispatch({
@@ -757,6 +887,10 @@ async function handleToolCall(
       branch: "",
       sessionUrl: fired.url,
       cursorAgentId: fired.id,
+      humanTaskId: meta.humanTaskId,
+      taskTitle: meta.taskTitle,
+      displayName: meta.displayName,
+      reused: fired.reused,
     });
     return formatDispatchReply("request", fired);
   }

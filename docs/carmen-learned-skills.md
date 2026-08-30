@@ -74,6 +74,12 @@ logged.
 - **How:** Shared resolver `_shared/cursor-direct-session.ts` reads `CURSOR_DIRECT_AGENT_ID` → `cursor_sticky_agents` → `CURSOR_STICKY_AGENT_ID` → latest Command Center cursor session. `cursor-mcp` 1.3.2 adds `get_cursor_direct_session`; `reply_to_cursor_session` accepts optional `session_id`. Logs distinguish `direct_session_reply` vs `new_background_agent`.
 - **Origin:** Carmen escalation — Preview connection test hit billing because she used `ask_cursor` without the fixed session id.
 
+### 2026-08-30 — Cursor task session tracking (bc-… per human task)
+- **Skin slug:** `cursor_task_session_lookup` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`) — add via migration/SQL after deploy
+- **What Carmen can now do:** After dispatching Cursor for a task, look up the bc session with `mcp_Cursor__get_cursor_task_session({ task_id })` or `mcp_Cursor__list_cursor_task_sessions({ status: "active" })`. No fixed bc id in skins.
+- **How:** Table `cursor_task_sessions` + `tasks.cursor_session_id/url`. `cursor-mcp` 1.4.0 tracks on `request_dev_task` / `ask_cursor` / queue dispatch; names agents `AIOS · <task title>`. Command Center Usage panel lists active sessions.
+- **Origin:** Carmen escalation — stop relying on one fixed Cursor chat; map sessions to tasks.
+
 ### 2026-08-28 — Knights round table + Codex seat + QA loop + skill builder
 - **Skin slugs:** `knights_round_table`, `qa_loop`, `skill_builder`, `skill_builder_meta` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`). Also appends Cursor-default note onto `cursor_escalation`.
 - **What Carmen can now do:** Chair a Command Center round table. Default brain is **Cursor Direct**. Seats: Carmen (goals), Cursor, Grok Bot, Codex. After a seat replies she runs `qa_loop` (return with concrete defects, max 3) until the goal is actually met. Missing repeatable work becomes a tenant skin via `skill_builder`; `skill_builder_meta` is the template for building those skins. Session learning catalogs pointers under `process/{task_type}/...`.

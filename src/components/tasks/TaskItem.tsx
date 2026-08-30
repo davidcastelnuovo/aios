@@ -1,7 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Users, GripVertical, Calendar, CalendarClock, Megaphone, Search, Bot } from "lucide-react";
+import { MessageSquare, Users, GripVertical, Calendar, CalendarClock, Megaphone, Search, Bot, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useState, useMemo } from "react";
@@ -17,6 +17,8 @@ interface TaskItemProps {
     client_id: string | null;
     campaigner_id?: string | null;
     assigned_agent?: string | null;
+    cursor_session_url?: string | null;
+    cursor_session_id?: string | null;
     created_at?: string;
     due_date?: string | null;
     clients?: { name: string } | null;
@@ -234,6 +236,21 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
               <Bot className="h-3 w-3" />
               {task.assigned_agent}
             </Badge>
+          )}
+
+          {task.cursor_session_url && (
+            <a
+              href={task.cursor_session_url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex"
+            >
+              <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5 bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-950/30 dark:border-sky-800 dark:text-sky-300">
+                <ExternalLink className="h-3 w-3" />
+                Cursor
+              </Badge>
+            </a>
           )}
         </div>
       </div>
