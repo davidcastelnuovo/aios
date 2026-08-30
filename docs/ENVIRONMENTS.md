@@ -93,6 +93,25 @@ Supabase Staging already allows `https://*.vercel.app/**` as redirect URLs. Goog
 5. Do not merge to `develop` by hand unless the auto-sync failed.
 6. Edge-function or migration work: add files under `supabase/functions` / `supabase/migrations`. Do not apply them to Production from the agent. Staging apply is a later phase.
 
+## Development agents (Preview / Staging)
+
+Vercel Preview is the development environment. It talks to **AIOS Staging**, never Production. Do not “fix” Preview by pointing it at Production.
+
+| Seat | Works on Preview today? | Why |
+| --- | --- | --- |
+| Carmen (internal / `run-ai-agent`) | Yes | Staging has the tenant, agent, and OpenAI path |
+| Cursor / Grok / Codex Cloud seats | Only if Staging `CURSOR_API_KEY` is a **valid Cursor User key** | All three launch via `api.cursor.com` with that secret |
+| Knights Round Table | Same as Cloud seats | Parliament fans out to those three |
+
+How we keep them working:
+
+1. **The database is not the Edge secret store.** A Staging DB clone brings `tenant_integrations` (OpenAI / Carmen). It does **not** bring Edge Function secrets. The Management API only returns SHA-256 hashes, so values cannot be read back from the dashboard/API.
+2. **Copy from Production, do not re-type.** The gated function `copy-edge-secrets-to-staging` runs on Production, reads allowlisted agent secrets from `Deno.env`, and writes them to Staging. WhatsApp / Meta / project keys stay out. David is not asked to paste keys.
+3. **Health probe.** Command Center calls `agent-channel-send` `action=channel_health`. If the key is rejected, the HUD shows a banner. After a copy, hashes of the allowlist should match Production; no function redeploy is required.
+4. **After a copy:** from Preview → Command Center, send a one-word ping on Cursor Direct or the table. Expect `agent_channel_sessions.external_url` and no 401.
+
+Local `pnpm dev` in this Cloud Agent workspace still reads Production `.env`. That is not the development environment — use the Vercel Preview URL.
+
 ## Staging Safe Mode
 
 On Staging (`APP_ENV=staging`, `STAGING_SAFE_MODE=true`):

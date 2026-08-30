@@ -179,16 +179,27 @@ export function buildSynthesisPrompt(state: ParliamentState): string {
   );
 }
 
-export function acceptedMessageFor(kind: ChannelProvider, url?: string | null): string {
+export function acceptedMessageFor(
+  kind: ChannelProvider,
+  url?: string | null,
+  opts?: { reused?: boolean },
+): string {
   switch (kind) {
     case "internal":
       return "כרמן חושבת…";
     case "cursor":
+      if (opts?.reused) {
+        return url
+          ? `נשלח לצ'אט Cursor שכבר פתוח. מעקב: ${url}`
+          : "נשלח לצ'אט Cursor שכבר פתוח. מחכה לתשובה בשיחה הזו.";
+      }
       return url ? `נשלח ל-Cursor Direct. מעקב: ${url}` : "נשלח ל-Cursor Direct. מחכה לתשובה בשיחה הזו.";
     case "grok":
       return url ? `נשלח ל-Grok Bot Direct. מעקב: ${url}` : "נשלח ל-Grok Bot Direct. מחכה לתשובה בשיחה הזו.";
     case "codex":
-      return url ? `נשלח ל-Codex Direct. מעקב: ${url}` : "נשלח ל-Codex Direct. מחכה לתשובה בשיחה הזו.";
+      return url
+        ? `נשלח ל-Codex ב-ChatGPT Workspace / Work Mode. מעקב: ${url}`
+        : "נשלח ל-Codex ב-ChatGPT Workspace / Work Mode. מחכה לתשובה בשיחה הזו.";
     case "claude":
       return url ? `נשלח ל-Claude Direct. מעקב: ${url}` : "נשלח ל-Claude Direct. מחכה לתשובה בשיחה הזו.";
     case "chatgpt":

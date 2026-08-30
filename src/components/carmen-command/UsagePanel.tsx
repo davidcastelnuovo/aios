@@ -85,6 +85,13 @@ export function UsagePanel({ tenantId, className }: { tenantId: string | null; c
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <div className="rounded-md border border-[var(--cc-line)] p-2 text-[11px] leading-snug text-[var(--cc-text-dim)]">
+            <p className="mb-1 font-medium text-[var(--cc-text)]">איפה כל מושב מחויב</p>
+            <p>כרמן פנימית — OpenAI API (מפתח הארגון).</p>
+            <p>Cursor Direct — הצ'אט כרמן ישיר שכבר פתוח.</p>
+            <p>Codex Direct — ChatGPT Workspace / Work Mode (ריפו), לא ה-API של כרמן.</p>
+            <p>Grok Bot — הבוט שכבר פתוח.</p>
+          </div>
           {!data.tracked && (
             <p className="text-[11px] leading-snug text-[var(--cc-text-dim)]">
               ⚠️ מעקב טוקנים מלא עדיין לא פעיל בצ'אט הראשי — הנתונים כאן חלקיים (סוכנים ושיווק בלבד).

@@ -10,6 +10,14 @@ import {
   pickDefaultRoute,
   sendPathForRoute,
   speakerLabel,
+  hudStage,
+  slugForCouncilSeat,
+  councilSeatFromSlug,
+  routeForTableAddress,
+  channelHealthBanner,
+  billingNoteForRoute,
+  initialSelectedRoute,
+  routeForRestoredChat,
 } from "./agentChannelRouting.ts";
 
 test("selecting a direct channel changes the send path", () => {
@@ -34,10 +42,63 @@ test("speaker labels distinguish channels", () => {
   assert.equal(groupLabel("direct_channel"), "ערוץ ישיר");
 });
 
-test("default brain is Cursor Direct", () => {
-  assert.equal(DEFAULT_BRAIN_SLUG, "cursor");
-  assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES).slug, "cursor");
+test("default brain is the knights table; first paint ignores a saved Cursor slug", () => {
+  assert.equal(DEFAULT_BRAIN_SLUG, "parliament");
+  assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES).slug, "parliament");
   assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, "grok").slug, "grok");
+  assert.equal(initialSelectedRoute("tenant-with-saved-cursor").slug, "parliament");
+  assert.equal(hudStage({ routeType: initialSelectedRoute(null).route_type }), "table");
+});
+
+test("restored chat keeps its own brain; empty session stays on the table", () => {
+  const routes = FALLBACK_BRAIN_ROUTES;
+  assert.equal(routeForRestoredChat(routes, { routing_mode: "parliament" }).slug, "parliament");
+  assert.equal(routeForRestoredChat(routes, { routing_mode: "direct_channel", brain_route_id: "fallback-cursor" }).slug, "cursor");
+  assert.equal(routeForRestoredChat(routes, null).slug, "parliament");
+});
+
+test("HUD is solo for Direct Chat tabs, table only for Knights Round Table", () => {
+  assert.equal(hudStage({ routeType: "direct_channel" }), "direct");
+  assert.equal(hudStage({ routeType: "internal" }), "direct");
+  assert.equal(hudStage({ routeType: "parliament" }), "table");
+  assert.equal(hudStage({ debating: true }), "table");
+  assert.equal(slugForCouncilSeat("carmen"), "internal");
+  assert.equal(councilSeatFromSlug("internal"), "carmen");
+  assert.equal(councilSeatFromSlug("parliament"), null);
+});
+
+test("table address picks a seat route without leaving parliament HUD", () => {
+  const routes = FALLBACK_BRAIN_ROUTES;
+  assert.equal(routeForTableAddress(routes, null)?.slug, "parliament");
+  assert.equal(routeForTableAddress(routes, "cursor")?.slug, "cursor");
+  assert.equal(routeForTableAddress(routes, "carmen")?.slug, "internal");
+  assert.equal(hudStage({ routeType: "parliament" }), "table");
+});
+
+test("channel health banner only when Cursor key is rejected", () => {
+  assert.equal(channelHealthBanner(null), null);
+  assert.equal(channelHealthBanner({ ok: true, cursor: { ok: true, status: 200 } }), null);
+  assert.equal(channelHealthBanner({ ok: false }), null);
+  const banner = channelHealthBanner({ ok: false, cursor: { ok: false, status: 401 } });
+  assert.match(banner || "", /CURSOR_API_KEY/);
+  assert.match(banner || "", /Staging/);
+  assert.match(banner || "", /כרמן הפנימית עובדת/);
+});
+
+test("health banner explains a missing open Cursor chat", () => {
+  const banner = channelHealthBanner({
+    ok: true,
+    cursor: { ok: true, status: 200 },
+    seats: { cursor: { open_chat: false } },
+  });
+  assert.match(banner || "", /כרמן ישיר/);
+  assert.match(banner || "", /כבר פתוח/);
+});
+
+test("route notes: Cursor is Carmen Direct, Codex is ChatGPT Workspace", () => {
+  assert.match(billingNoteForRoute("cursor") || "", /כרמן ישיר/);
+  assert.match(billingNoteForRoute("codex") || "", /Workspace/);
+  assert.match(billingNoteForRoute("codex") || "", /Work Mode/);
 });
 
 test("parliament seats are Cursor + Grok + Codex", () => {

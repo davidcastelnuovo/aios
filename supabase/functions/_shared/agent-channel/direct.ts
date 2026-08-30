@@ -1,9 +1,32 @@
 import type { CloudDirectProvider, SendContext, SendResult } from "./types.ts";
 import { acceptedMessageFor, capabilitiesForProvider } from "./logic.ts";
+import { grokUsesExistingWebhook } from "./cloud-errors.ts";
 import { createCloudAgent, followUpCloudAgent, cursorApiKey } from "./cursor-api.ts";
+import { fireGrokBotWebhook } from "./grok-webhook.ts";
 import { mintCallbackToken } from "./hmac.ts";
 import { buildCallbackInstructions, wrapDirectPrompt } from "./prompts.ts";
+import {
+  allowCreateNewCloudAgent,
+  busyOpenChatMessage,
+  collectOpenChatIds,
+  missingOpenChatMessage,
+  type OpenChatProvider,
+} from "./sticky-agent.ts";
+import {
+  missingWorkspaceMessage,
+  workspaceAgentCreds,
+  workspaceConversationKey,
+  type WorkspaceProvider,
+} from "./workspace-agent.ts";
 import { completeSession, logChannelAction, serviceClient, upsertRunningSession } from "./store.ts";
+
+function runtimeEnv(): Record<string, string | undefined> {
+  try {
+    return Deno.env.toObject();
+  } catch {
+    return {};
+  }
+}
 
 const MAX_TEXT = 100_000;
 
@@ -33,8 +56,18 @@ export async function launchCloudDirect(
   extraPrompt?: string,
   parliament?: { runId: string; round: number },
 ): Promise<SendResult> {
+  if (provider === "codex") {
+    return launchWorkspaceAgent(ctx, "codex", extraPrompt, parliament);
+  }
+
+  const grokWebhook = grokUsesExistingWebhook(
+    Deno.env.get("GROK_BOT_WEBHOOK_URL"),
+    Deno.env.get("GROK_BOT_WEBHOOK_KEY"),
+  );
   const apiKey = cursorApiKey();
-  if (!apiKey) throw new Error(`${provider} is not configured (set CURSOR_API_KEY).`);
+  if (!apiKey && !(provider === "grok" && grokWebhook)) {
+    throw new Error(`${provider} is not configured (set CURSOR_API_KEY).`);
+  }
 
   const sb = serviceClient();
   const session = await upsertRunningSession(sb, {
@@ -69,10 +102,27 @@ export async function launchCloudDirect(
   const envName = envNameFor(provider);
 
   let fired: { url: string; id: string; reused: boolean };
-  const stickyId = session.external_session_id;
-  if (stickyId && stickyId.startsWith("bc-")) {
-    const followed = await followUpCloudAgent(apiKey, stickyId, clip(prompt));
-    fired = followed || await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
+  if (provider === "grok" && grokWebhook) {
+    const delivered = await fireGrokBotWebhook({
+      task: ctx.content,
+      context:
+        prompt +
+        "\nYou are Grok Bot Direct in David's Command Center. Reply to David in that chat. " +
+        "Do NOT call ask_carmen. Use reply_to_aios_session or the HTTP callback above.",
+    });
+    fired = { id: delivered.id, url: delivered.url, reused: true };
+  } else if (provider === "cursor") {
+    fired = await deliverToOpenCloudChat({
+      apiKey,
+      sb,
+      tenantId: ctx.tenantId,
+      provider: "cursor",
+      sessionId: session.external_session_id,
+      prompt: clip(prompt),
+      name,
+      modelId,
+      envName,
+    });
   } else {
     fired = await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
   }
@@ -104,10 +154,52 @@ export async function launchCloudDirect(
     session_id: updated.id,
     status: parliament ? "debating" : "waiting_external",
     stream: false,
-    accepted_message: acceptedMessageFor(provider, fired.url),
+    accepted_message: acceptedMessageFor(provider, fired.url, { reused: fired.reused }),
     external_url: fired.url,
     capabilities: capabilitiesForProvider(provider),
   };
+}
+
+async function deliverToOpenCloudChat(args: {
+  apiKey: string;
+  sb: ReturnType<typeof serviceClient>;
+  tenantId: string;
+  provider: OpenChatProvider;
+  sessionId?: string | null;
+  prompt: string;
+  name: string;
+  modelId: string;
+  envName?: string;
+}): Promise<{ url: string; id: string; reused: boolean }> {
+  const env = runtimeEnv();
+  const candidates = await collectOpenChatIds(args.sb, {
+    tenantId: args.tenantId,
+    provider: args.provider,
+    sessionId: args.sessionId,
+    env,
+  });
+
+  for (const agentId of candidates) {
+    const outcome = await followUpCloudAgent(args.apiKey, agentId, args.prompt);
+    if (outcome.kind === "ok") {
+      return { id: outcome.id, url: outcome.url, reused: true };
+    }
+    if (outcome.kind === "busy") {
+      throw new Error(busyOpenChatMessage(args.provider, outcome.url));
+    }
+  }
+
+  if (allowCreateNewCloudAgent(env)) {
+    return await createCloudAgent({
+      apiKey: args.apiKey,
+      promptText: args.prompt,
+      name: args.name,
+      modelId: args.modelId || undefined,
+      envName: args.envName,
+    });
+  }
+
+  throw new Error(missingOpenChatMessage(args.provider));
 }
 
 export async function launchParliamentSeat(
@@ -116,6 +208,7 @@ export async function launchParliamentSeat(
   prompt: string,
   parliament: { runId: string; round: number },
 ): Promise<SendResult> {
+  if (provider === "codex") return launchWorkspaceAgent(ctx, "codex", prompt, parliament);
   return launchCloudDirect(ctx, provider, prompt, parliament);
 }
 
@@ -195,39 +288,48 @@ export async function launchClaude(ctx: SendContext, extraPrompt?: string): Prom
 }
 
 export async function launchChatgpt(ctx: SendContext): Promise<SendResult> {
-  const triggerId = Deno.env.get("CHATGPT_WORK_AGENT_TRIGGER_ID") || Deno.env.get("CHATGPT_WORK_AGENT_WORKFLOW_ID") || "";
-  const accessToken = Deno.env.get("CHATGPT_WORK_AGENT_TOKEN") || Deno.env.get("CHATGPT_WORK_AGENT_ACCESS_TOKEN") || "";
+  return launchWorkspaceAgent(ctx, "chatgpt");
+}
+
+export async function launchWorkspaceAgent(
+  ctx: SendContext,
+  provider: WorkspaceProvider,
+  extraPrompt?: string,
+  parliament?: { runId: string; round: number },
+): Promise<SendResult> {
+  const { triggerId, accessToken } = workspaceAgentCreds(provider, runtimeEnv());
   const sb = serviceClient();
-  const conversationKey = `aios:${ctx.conversationId}`;
+  const conversationKey = workspaceConversationKey(provider, ctx.conversationId);
   const session = await upsertRunningSession(sb, {
     tenant_id: ctx.tenantId,
     conversation_id: ctx.conversationId,
     brain_route_id: ctx.route.id,
-    provider: "chatgpt",
+    provider,
     conversation_key: conversationKey,
     status: "running",
+    parliament_run_id: parliament?.runId ?? null,
+    parliament_round: parliament?.round ?? null,
   });
 
   if (!triggerId || !accessToken) {
     await logChannelAction(sb, {
       tenantId: ctx.tenantId,
       agentId: ctx.agentId,
-      action: "channel_send_chatgpt",
+      action: `channel_send_${provider}`,
       details: { conversation_id: ctx.conversationId, configured: false },
       status: "error",
-      error: "missing CHATGPT_WORK_AGENT_TRIGGER_ID / CHATGPT_WORK_AGENT_TOKEN",
+      error: "missing ChatGPT workspace Work Mode secrets",
     });
     return {
       ok: true,
-      kind: "chatgpt",
+      kind: provider,
       conversation_id: ctx.conversationId,
       session_id: session.id,
-      status: "waiting_external",
+      status: parliament ? "debating" : "waiting_external",
       stream: false,
-      accepted_message:
-        "ChatGPT Work Agent עדיין לא מחובר. צריך סודות CHATGPT_WORK_AGENT_TRIGGER_ID ו-CHATGPT_WORK_AGENT_TOKEN, והסוכן חייב לקרוא ל-reply_to_aios_session.",
+      accepted_message: missingWorkspaceMessage(provider),
       external_url: null,
-      capabilities: capabilitiesForProvider("chatgpt"),
+      capabilities: capabilitiesForProvider(provider),
     };
   }
 
@@ -237,13 +339,15 @@ export async function launchChatgpt(ctx: SendContext): Promise<SendResult> {
     tenantId: ctx.tenantId,
   });
   const input =
-    wrapDirectPrompt({ origin: "chatgpt", userText: ctx.content, history: ctx.history }) +
+    (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history })) +
     buildCallbackInstructions({
-      origin: "chatgpt",
+      origin: provider,
       conversationId: ctx.conversationId,
       sessionId: session.id,
       tenantId: ctx.tenantId,
       token,
+      parliamentRound: parliament?.round,
+      readOnly: !!parliament,
     });
 
   const resp = await fetch(`https://api.chatgpt.com/v1/workspace_agents/${encodeURIComponent(triggerId)}/trigger`, {
@@ -259,7 +363,7 @@ export async function launchChatgpt(ctx: SendContext): Promise<SendResult> {
   const raw = await resp.text();
   if (!resp.ok) {
     await completeSession(sb, session.id, "failed");
-    throw new Error(`ChatGPT Work Agent trigger ${resp.status}: ${raw.slice(0, 300)}`);
+    throw new Error(`ChatGPT Workspace trigger ${resp.status}: ${raw.slice(0, 300)}`);
   }
   let data: any = {};
   try { data = JSON.parse(raw); } catch { /* ignore */ }
@@ -269,27 +373,29 @@ export async function launchChatgpt(ctx: SendContext): Promise<SendResult> {
     tenant_id: ctx.tenantId,
     conversation_id: ctx.conversationId,
     brain_route_id: ctx.route.id,
-    provider: "chatgpt",
+    provider,
     conversation_key: conversationKey,
     external_run_id: runId || null,
     external_url: url || null,
     status: "running",
+    parliament_run_id: parliament?.runId ?? null,
+    parliament_round: parliament?.round ?? null,
   });
   await logChannelAction(sb, {
     tenantId: ctx.tenantId,
     agentId: ctx.agentId,
-    action: "channel_send_chatgpt",
+    action: `channel_send_${provider}`,
     details: { conversation_id: ctx.conversationId, session_id: session.id, run_id: runId, url },
   });
   return {
     ok: true,
-    kind: "chatgpt",
+    kind: provider,
     conversation_id: ctx.conversationId,
     session_id: session.id,
-    status: "waiting_external",
+    status: parliament ? "debating" : "waiting_external",
     stream: false,
-    accepted_message: acceptedMessageFor("chatgpt", url),
+    accepted_message: acceptedMessageFor(provider, url, { reused: true }),
     external_url: url || null,
-    capabilities: capabilitiesForProvider("chatgpt"),
+    capabilities: capabilitiesForProvider(provider),
   };
 }

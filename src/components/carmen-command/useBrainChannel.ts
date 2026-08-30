@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   FALLBACK_BRAIN_ROUTES,
+  channelHealthBanner,
+  initialSelectedRoute,
   isInputLocked,
   pickDefaultRoute,
   sendPathForRoute,
   storageKeyForRoute,
   type BrainRoute,
+  type ChannelHealth,
   type ConversationChannelStatus,
 } from "@/lib/agentChannelRouting";
 
@@ -34,15 +37,15 @@ async function authHeader(): Promise<Record<string, string>> {
 
 export function useBrainChannel(tenantId: string | null) {
   const [routes, setRoutes] = useState<BrainRoute[]>(FALLBACK_BRAIN_ROUTES);
-  const [selected, setSelected] = useState<BrainRoute>(FALLBACK_BRAIN_ROUTES[0]);
+  const [selected, setSelected] = useState<BrainRoute>(() => initialSelectedRoute());
   const [status, setStatus] = useState<ConversationChannelStatus>("idle");
   const [externalUrl, setExternalUrl] = useState<string | null>(null);
+  const [channelHealth, setChannelHealth] = useState<ChannelHealth | null>(null);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
 
   useEffect(() => {
     if (!tenantId) return;
-    const saved = localStorage.getItem(storageKeyForRoute(tenantId));
     (async () => {
       try {
         const headers = await authHeader();
@@ -55,14 +58,26 @@ export function useBrainChannel(tenantId: string | null) {
         const json = await res.json();
         const list = Array.isArray(json.routes) && json.routes.length ? json.routes as BrainRoute[] : FALLBACK_BRAIN_ROUTES;
         setRoutes(list);
-        setSelected(pickDefaultRoute(list, saved));
+        setSelected((prev) => list.find((r) => r.slug === prev.slug) || pickDefaultRoute(list));
       } catch {
-        setSelected(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, saved));
+        setSelected((prev) => pickDefaultRoute(FALLBACK_BRAIN_ROUTES, prev.slug));
       }
+      try {
+        const headers = await authHeader();
+        const res = await fetch(FN, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ action: "channel_health", tenant_id: tenantId }),
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json && typeof json.ok === "boolean") setChannelHealth(json as ChannelHealth);
+      } catch { /* health is advisory */ }
     })();
   }, [tenantId]);
 
   const selectRoute = useCallback(async (route: BrainRoute, conversationId?: string | null) => {
+    selectedRef.current = route;
     setSelected(route);
     setStatus("idle");
     if (tenantId) localStorage.setItem(storageKeyForRoute(tenantId), route.slug);
@@ -89,9 +104,10 @@ export function useBrainChannel(tenantId: string | null) {
     inputMode: string;
     history: Array<{ role: string; content: string }>;
     idempotencyKey: string;
+    route?: BrainRoute;
   }): Promise<ChannelSendResult> => {
     if (!tenantId) throw new Error("missing tenant");
-    const route = selectedRef.current;
+    const route = args.route || selectedRef.current;
     const headers = await authHeader();
     const res = await fetch(FN, {
       method: "POST",
@@ -117,7 +133,7 @@ export function useBrainChannel(tenantId: string | null) {
           conversation_id: args.conversationId || "",
           status: "streaming",
           stream: true,
-          accepted_message: "כרמן חושבת…",
+          accepted_message: "",
         };
       }
       throw new Error(json.error || "שגיאה בשליחה לערוץ");
@@ -190,5 +206,7 @@ export function useBrainChannel(tenantId: string | null) {
     cancelParliament,
     parliamentAction,
     sendPath: sendPathForRoute(selected),
+    channelHealth,
+    healthBanner: channelHealthBanner(channelHealth),
   };
 }

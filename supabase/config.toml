@@ -41,6 +41,10 @@ verify_jwt = false
 [functions.agent-channel-mcp]
 verify_jwt = false
 
+# Prod → Staging copy of allowlisted agent secrets. Management token checked in-function.
+[functions.copy-edge-secrets-to-staging]
+verify_jwt = false
+
 [functions.run-agent-parliament]
 verify_jwt = false
 

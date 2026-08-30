@@ -32,6 +32,24 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-30 — Cursor = כרמן ישיר; Codex = ChatGPT Workspace Work Mode
+- **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
+- **What Carmen can now do:** Cursor Direct follows the already-open Carmen Direct chat. Codex Direct triggers ChatGPT Workspace / Work Mode (`workspace_agents` + sticky `conversation_key`) — repo connections, not Carmen's OpenAI API.
+- **How:** `dispatchSend` → `launchWorkspaceAgent("codex")`. Secrets: `CHATGPT_WORK_AGENT_*` (or `CODEX_WORK_AGENT_*`). Agent must `reply_to_aios_session`.
+- **Origin:** David — "קודקס מחובר לוורקספייס וורק מוד כמו שקרסר מחובר, לא ל-API כמו כרמן".
+
+### 2026-08-29 — סוכנים בסביבת הפיתוח (Preview → Staging)
+- **Skin slug:** `staging_agents_need_cursor_key` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Preview talks to Staging. Carmen internal works from the cloned DB (`tenant_integrations`). Cloud seats use Edge Function secrets — not Postgres. Copy them with `copy-edge-secrets-to-staging`; do not ask David to re-enter keys.
+- **How:** Gated Production function reads allowlisted `Deno.env` names and POSTs them to Staging. Management API only returns hashes (verified MATCH after copy). HUD `channel_health` banners on 401. Never copy WhatsApp/Meta. Never point Preview at Production.
+- **Origin:** David — "למה אני צריך להכניס שוב מפתחות הכל בדאטבייס אתה לא יכול להעביר לסטייג'ינג?"
+
+### 2026-08-28 — פרסום דף נחיתה לאתר PBN קיים (מגזין site-01..site-10)
+- **Skin slug:** `publish_landing_to_pbn` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Publish a Hebrew RTL landing/article onto an existing magazine PBN site without inventing a domain. Look up `publishing_sites` by `site_key`, insert/upsert `publishing_articles` as `published`, return `{base_url}/articles/{slug}` only after GET 200.
+- **How:** Magazine pipeline = published row → `publishing-feed?site_id=` → Vercel `api/article.js` (cache ~60s). Canonical URL is `publishing_sites.base_url`, not `aios-magazine-site-NN.vercel.app`. CTA must be a real `target_url`. Content is a jsonb string array (`## `, `LIST:`, `TIP:`). Unique key `(tenant_id, target_url, primary_keyword, proposed_topic)`. Example: site-03 מרחב עסקי → `https://ai-online.online/articles/level-up-masterclass`.
+- **Origin:** Carmen → Cursor — "Publish LEVEL Up MASTERCLASS to site-03 (מרחב עסקי). Return live HTTPS URL only after 200. Do not invent URL."
+
 ### 2026-08-28 — סטטוס מרכז הבקרה / פרויקט Cursor
 - **Skin slug:** `command_center_cursor_project_status` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** When David asks what happened to the Cursor Command Center project, answer from PR #499 + preview vs live, without opening a new coding task.

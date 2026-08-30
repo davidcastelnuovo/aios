@@ -51,6 +51,35 @@ Deno.serve(async (req) => {
     return json(200, { ok: true, routes, agent_id: agentId });
   }
 
+  if (action === "channel_health") {
+    const { probeCursorApiKey, cursorApiKey } = await import("../_shared/agent-channel/cursor-api.ts");
+    const { collectOpenChatIds } = await import("../_shared/agent-channel/sticky-agent.ts");
+    const { workspaceAgentCreds } = await import("../_shared/agent-channel/workspace-agent.ts");
+    const cursor = await probeCursorApiKey(cursorApiKey());
+    const appEnv = Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "";
+    let env: Record<string, string | undefined> = {};
+    try { env = Deno.env.toObject(); } catch { /* ignore */ }
+    const cursorChats = await collectOpenChatIds(sb, { tenantId, provider: "cursor", env });
+    const workspace = workspaceAgentCreds("codex", env);
+    return json(200, {
+      ok: cursor.ok,
+      cursor,
+      app_env: appEnv || null,
+      seats: {
+        cursor: { bill: "cursor_cloud", open_chat: cursorChats.length > 0, chats: cursorChats.length },
+        codex: { bill: "chatgpt_workspace", open_chat: Boolean(workspace.triggerId && workspace.accessToken) },
+        grok: { bill: "grok_webhook" },
+        carmen: { bill: "openai_api" },
+        chatgpt: { bill: "chatgpt_workspace" },
+      },
+      message: cursor.ok
+        ? (cursorChats.length
+          ? "Cursor Direct מדבר עם צ'אט כרמן ישיר שכבר פתוח."
+          : "מפתח Cursor תקף, אבל אין צ'אט כרמן ישיר פתוח. לא פותחים סוכן רקע חדש.")
+        : "CURSOR_API_KEY on this project is missing or rejected (401). Preview uses Staging — set a valid User key there.",
+    });
+  }
+
   if (action === "cancel_parliament") {
     const conversationId = String(body.conversation_id || "");
     if (!conversationId) return json(400, { error: "conversation_id is required" });

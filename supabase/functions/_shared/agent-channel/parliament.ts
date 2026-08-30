@@ -23,6 +23,7 @@ import {
   serviceClient,
   setConversationStatus,
 } from "./store.ts";
+import { isCursorSpendLimitError } from "./cloud-errors.ts";
 import { launchParliamentSeat } from "./direct.ts";
 
 function stateFromRun(run: { context?: unknown }): ParliamentState | null {
@@ -101,10 +102,30 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
   await sb.from("agent_runs").update({ context: withParliament(parent.context, nextState) }).eq("id", parent.id);
 
   const living = livingSeats(nextState);
+  const failedNotes = Object.values(nextState.seats)
+    .filter((s) => s.failed && s.error)
+    .map((s) => `${s.provider}: ${s.error}`)
+    .join(" · ");
+  if (failedNotes) {
+    await insertMessage(sb, {
+      tenant_id: ctx.tenantId,
+      conversation_id: ctx.conversationId,
+      role: "system",
+      speaker: "carmen",
+      channel: "parliament",
+      content: failedNotes,
+      event_type: "progress",
+      correlation_id: parent.id,
+      metadata: { parliament_run_id: parent.id, seats_failed: true },
+    });
+  }
   if (!living.length) {
+    const firstError = Object.values(nextState.seats).map((s) => s.error).find(Boolean) || "all seats failed to start";
     await setConversationStatus(sb, ctx.conversationId, "error");
-    await sb.from("agent_runs").update({ status: "failed", error_message: "all seats failed to start" }).eq("id", parent.id);
-    throw new Error("Parliament could not start — all seats failed to launch.");
+    await sb.from("agent_runs").update({ status: "failed", error_message: firstError }).eq("id", parent.id);
+    throw new Error(isCursorSpendLimitError(firstError) || firstError.includes("401") || /api key|תקציב|מפתח/i.test(firstError)
+      ? firstError
+      : `Parliament could not start — ${firstError}`);
   }
 
   await logChannelAction(sb, {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  acceptedMessageFor,
   canAdvanceToReview,
   canSynthesize,
   capabilitiesForProvider,
@@ -35,6 +36,11 @@ test("partial failure does not block synthesis", () => {
   state = { ...state, status: "round2", round: 2 };
   state = recordParliamentAnswer(state, "cursor", "still ship it", 2);
   assert.equal(canSynthesize(state), true);
+});
+
+test("reused Cursor Direct copy says the chat was already open", () => {
+  assert.match(acceptedMessageFor("cursor", "https://cursor.com/agents/bc-1", { reused: true }), /שכבר פתוח/);
+  assert.match(acceptedMessageFor("codex", "https://chatgpt.com/workspace/1", { reused: true }), /Workspace/);
 });
 
 test("direct channels require a callback; internal streams", () => {
