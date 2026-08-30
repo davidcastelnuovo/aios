@@ -8,9 +8,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trash2, Filter, Settings2 } from "lucide-react";
+import { Trash2, Filter, Settings2, ChevronDown, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -119,122 +121,194 @@ export function LeadFilterPresetTabs({
 
   const userOwnsPreset = (preset: FilterPreset) => preset.user_id === userId;
 
+  const activePreset = presets.find((p) => p.id === activePresetId) ?? null;
+  const activeStage =
+    activeStageId === "all"
+      ? null
+      : pipelineStages.find((s) => s.id === activeStageId) ?? null;
+
+  const pipelineTriggerLabel =
+    activeStageId === "all" ? "הכל" : activeStage?.label ?? "פייפליין";
+  const pipelineTriggerCount =
+    activeStageId === "all"
+      ? stageCounts?.all
+      : stageCounts?.[activeStageId];
+
   return (
     <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden">
-      {presets.map((preset) => (
-        <div key={preset.id} className="flex shrink-0 items-center">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <Button
             type="button"
-            variant={activePresetId === preset.id ? "default" : "outline"}
+            variant={activePresetId ? "default" : "outline"}
             size="sm"
             className="h-9 shrink-0 gap-1.5"
-            onClick={() => onPresetSelect(activePresetId === preset.id ? null : preset)}
           >
-            {preset.name}
+            {activePreset?.name ?? "פריסט"}
+            <ChevronDown className="h-3.5 w-3.5 opacity-60" />
           </Button>
-          {userOwnsPreset(preset) && activePresetId === preset.id && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-7 shrink-0"
-                  title="עריכת פריסט"
-                >
-                  <Settings2 className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-40 bg-popover">
-                <DropdownMenuItem
-                  onClick={() => handleEditFiltersClick(preset)}
-                  className="gap-2"
-                >
-                  <Settings2 className="h-3.5 w-3.5" />
-                  ערוך
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => handleDeleteClick(preset)}
-                  className="gap-2 text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  מחק
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-52 bg-popover">
+          {presets.length === 0 ? (
+            <DropdownMenuLabel className="font-normal text-muted-foreground">
+              אין פריסטים שמורים
+            </DropdownMenuLabel>
+          ) : (
+            presets.map((preset) => (
+              <DropdownMenuItem
+                key={preset.id}
+                onClick={() =>
+                  onPresetSelect(activePresetId === preset.id ? null : preset)
+                }
+                className="justify-between gap-2"
+              >
+                <span>{preset.name}</span>
+                {activePresetId === preset.id && <Check className="h-4 w-4 shrink-0" />}
+              </DropdownMenuItem>
+            ))
           )}
-        </div>
-      ))}
+          {activePreset && userOwnsPreset(activePreset) && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => handleEditFiltersClick(activePreset)}
+                className="gap-2"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                ערוך פריסט
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(activePreset)}
+                className="gap-2 text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                מחק פריסט
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Button
         variant="outline"
         size="sm"
         onClick={onOpenFiltersDialog}
         className={cn(
-          "h-9 gap-2 shrink-0",
+          "h-9 shrink-0 gap-2",
           hasActiveFilters && "border-primary text-primary",
         )}
       >
         <Filter className="h-4 w-4" />
         פילטרים
         {hasActiveFilters && (
-          <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs">
+          <Badge
+            variant="secondary"
+            className="flex h-5 w-5 items-center justify-center rounded-full p-0 text-xs"
+          >
             ✓
           </Badge>
         )}
       </Button>
 
       {pipelineStages.length > 0 && onStageSelect && (
-        <>
-          <Button
-            type="button"
-            variant={activeStageId === "all" ? "default" : "outline"}
-            size="sm"
-            className="h-9 shrink-0"
-            onClick={() => onStageSelect("all")}
-          >
-            הכל
-            {typeof stageCounts?.all === "number" && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] mr-1">
-                {stageCounts.all.toLocaleString()}
-              </Badge>
-            )}
-          </Button>
-          {pipelineStages.map((stage) => {
-            const count = stageCounts?.[stage.id];
-            const isActive = activeStageId === stage.id;
-            return (
-              <Button
-                key={stage.id}
-                type="button"
-                variant={isActive ? "default" : "outline"}
-                size="sm"
-                className="h-9 shrink-0 gap-1.5"
-                style={
-                  isActive && stage.hexColor
-                    ? { backgroundColor: stage.hexColor, borderColor: stage.hexColor, color: "#fff" }
-                    : stage.hexColor
-                      ? { borderColor: stage.hexColor }
-                      : undefined
-                }
-                onClick={() => onStageSelect(stage.id)}
-              >
-                {stage.label}
-                {typeof count === "number" && (
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "h-5 px-1.5 text-[10px]",
-                      isActive && "bg-white/20 text-inherit hover:bg-white/20",
-                    )}
-                  >
-                    {count.toLocaleString()}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0 gap-1.5"
+              style={
+                activeStage?.hexColor
+                  ? {
+                      backgroundColor: activeStage.hexColor,
+                      borderColor: activeStage.hexColor,
+                      color: "#fff",
+                    }
+                  : undefined
+              }
+            >
+              <span>פייפליין</span>
+              <span className="opacity-90">·</span>
+              <span>{pipelineTriggerLabel}</span>
+              {typeof pipelineTriggerCount === "number" && (
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "h-5 px-1.5 text-[10px]",
+                    activeStage?.hexColor && "bg-white/20 text-inherit hover:bg-white/20",
+                  )}
+                >
+                  {pipelineTriggerCount.toLocaleString()}
+                </Badge>
+              )}
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 opacity-60",
+                  activeStage?.hexColor && "text-inherit",
+                )}
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56 bg-popover p-1.5">
+            <DropdownMenuLabel className="px-2 py-1 text-xs text-muted-foreground">
+              שלבי פייפליין
+            </DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={() => onStageSelect("all")}
+              className={cn(
+                "mb-1 justify-between gap-2 rounded-md",
+                activeStageId === "all" && "bg-accent",
+              )}
+            >
+              <span>הכל</span>
+              <span className="flex items-center gap-2">
+                {typeof stageCounts?.all === "number" && (
+                  <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                    {stageCounts.all.toLocaleString()}
                   </Badge>
                 )}
-              </Button>
-            );
-          })}
-        </>
+                {activeStageId === "all" && <Check className="h-4 w-4 shrink-0" />}
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="my-1" />
+            {pipelineStages.map((stage) => {
+              const count = stageCounts?.[stage.id];
+              const isActive = activeStageId === stage.id;
+              return (
+                <DropdownMenuItem
+                  key={stage.id}
+                  onClick={() => onStageSelect(stage.id)}
+                  className="mb-1 justify-between gap-2 rounded-md border border-transparent px-2.5 py-2 focus:text-inherit"
+                  style={
+                    stage.hexColor
+                      ? {
+                          backgroundColor: stage.hexColor,
+                          color: "#fff",
+                        }
+                      : undefined
+                  }
+                >
+                  <span>{stage.label}</span>
+                  <span className="flex items-center gap-2">
+                    {typeof count === "number" && (
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "h-5 px-1.5 text-[10px]",
+                          stage.hexColor && "bg-white/20 text-inherit hover:bg-white/20",
+                        )}
+                      >
+                        {count.toLocaleString()}
+                      </Badge>
+                    )}
+                    {isActive && <Check className="h-4 w-4 shrink-0" />}
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
