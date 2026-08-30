@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-30 — תור משימות אנושיות → Cursor (auto-claim)
+- **Skin slug:** n/a (edge + tools). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
+- **What Carmen can now do:** Assign human `tasks` to Cursor (`assigned_agent=Cursor`, status `open`). `dispatch-cursor-tasks` claims one task, fires `request_dev_task`, links `cursor_dispatches.human_task_id`. When Cursor finishes, call `mcp_Cursor__complete_human_task` → marks done + dispatches next.
+- **How:** Tool `assign_task_to_cursor`. Context must include `human_task_id: <uuid>`. One in-progress Cursor task at a time.
+- **Origin:** David — "תכניסי לתור… כשהוא מסיים תכניסי את הבאה".
+
 ### 2026-08-30 — Cursor = כרמן ישיר; Codex = ChatGPT Workspace Work Mode
 - **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
 - **What Carmen can now do:** Cursor Direct follows the already-open Carmen Direct chat. Codex Direct triggers ChatGPT Workspace / Work Mode (`workspace_agents` + sticky `conversation_key`) — repo connections, not Carmen's OpenAI API.
