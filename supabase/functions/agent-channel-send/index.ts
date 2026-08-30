@@ -54,21 +54,20 @@ Deno.serve(async (req) => {
   if (action === "channel_health") {
     const { probeCursorApiKey, cursorApiKey } = await import("../_shared/agent-channel/cursor-api.ts");
     const { collectOpenChatIds } = await import("../_shared/agent-channel/sticky-agent.ts");
+    const { workspaceAgentCreds } = await import("../_shared/agent-channel/workspace-agent.ts");
     const cursor = await probeCursorApiKey(cursorApiKey());
     const appEnv = Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "";
     let env: Record<string, string | undefined> = {};
     try { env = Deno.env.toObject(); } catch { /* ignore */ }
-    const [cursorChats, codexChats] = await Promise.all([
-      collectOpenChatIds(sb, { tenantId, provider: "cursor", env }),
-      collectOpenChatIds(sb, { tenantId, provider: "codex", env }),
-    ]);
+    const cursorChats = await collectOpenChatIds(sb, { tenantId, provider: "cursor", env });
+    const workspace = workspaceAgentCreds("codex", env);
     return json(200, {
       ok: cursor.ok,
       cursor,
       app_env: appEnv || null,
       seats: {
         cursor: { bill: "cursor_cloud", open_chat: cursorChats.length > 0, chats: cursorChats.length },
-        codex: { bill: "cursor_cloud", open_chat: codexChats.length > 0, chats: codexChats.length },
+        codex: { bill: "chatgpt_workspace", open_chat: Boolean(workspace.triggerId && workspace.accessToken) },
         grok: { bill: "grok_webhook" },
         carmen: { bill: "openai_api" },
         chatgpt: { bill: "chatgpt_workspace" },

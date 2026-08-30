@@ -11,11 +11,11 @@ Carmen UI
      -> cursor          -> צ'אט כרמן ישיר שכבר פתוח (bc-…). follow-up בלבד
      -> grok            -> webhook של Grok Bot הקיים
      -> claude          -> Routine /fire + callback
-     -> chatgpt         -> Workspace Agent trigger + reply_to_aios_session
+     -> chatgpt / codex -> ChatGPT Workspace / Work Mode (ריפו) + reply_to_aios_session
      -> parliament      -> Cursor+Grok+Codex, 2 rounds, סינתזה של כרמן
 ```
 
-Cursor Direct = הצ'אט כרמן ישיר שכבר פתוח. Codex Direct אמור להיות GPT — החיבור עצמו עדיין לא הוחלט (מנוי ChatGPT מול OpenAI API).
+Cursor Direct = הצ'אט כרמן ישיר שכבר פתוח. Codex Direct = ChatGPT Workspace / Work Mode (חיבורי ריפו), לא OpenAI API של כרמן.
 
 בחירת ערוץ בבורר משנה בפועל את הנתיב (`agent-channel-send`), לא רק את התווית.
 
@@ -55,7 +55,8 @@ JSONB ב-`ai_conversations.messages` נשמר בתקופת המעבר.
 - `CURSOR_DIRECT_AGENT_ID` / `CURSOR_STICKY_AGENT_ID` — `bc-…` של צ'אט כרמן ישיר
 - `AGENT_CHANNEL_CALLBACK_SECRET` — חתימת callback (fallback: `CURSOR_MCP_BEARER`)
 - `AGENT_CHANNEL_MCP_BEARER` — Bearer ל-MCP של הערוץ
-- `CHATGPT_WORK_AGENT_TRIGGER_ID` (`agtch_…`) + `CHATGPT_WORK_AGENT_TOKEN` — ChatGPT Direct
+- `CHATGPT_WORK_AGENT_TRIGGER_ID` (`agtch_…`) + `CHATGPT_WORK_AGENT_TOKEN` — ChatGPT Workspace / Codex Work Mode
+- `CODEX_WORK_AGENT_TRIGGER_ID` + `CODEX_WORK_AGENT_TOKEN` — אופציונלי אם Codex הוא סוכן workspace נפרד
 
 בלי סודות ChatGPT הערוץ נשאר בבורר ומחזיר הודעת "לא מחובר" במקום להעמיד פני מוח פנימי.
 

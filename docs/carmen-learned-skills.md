@@ -32,11 +32,11 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
-### 2026-08-30 — Cursor Direct = כרמן ישיר; Codex = GPT (חיבור עדיין פתוח)
+### 2026-08-30 — Cursor = כרמן ישיר; Codex = ChatGPT Workspace Work Mode
 - **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
-- **What Carmen can now do:** Cursor Direct follows the already-open Carmen Direct chat. Do **not** tell David that Codex is "not GPT" — Codex is supposed to be GPT. Which GPT (ChatGPT subscription vs org OpenAI API) is not decided yet; ask before wiring.
-- **How:** `deliverToOpenCloudChat` for Cursor only as the open `bc-…`. Codex send path not rewired until David answers.
-- **Origin:** David — Cursor = כרמן ישיר; Codex = GPT. "אם משהו לא ברור בהנחיות לשאול".
+- **What Carmen can now do:** Cursor Direct follows the already-open Carmen Direct chat. Codex Direct triggers ChatGPT Workspace / Work Mode (`workspace_agents` + sticky `conversation_key`) — repo connections, not Carmen's OpenAI API.
+- **How:** `dispatchSend` → `launchWorkspaceAgent("codex")`. Secrets: `CHATGPT_WORK_AGENT_*` (or `CODEX_WORK_AGENT_*`). Agent must `reply_to_aios_session`.
+- **Origin:** David — "קודקס מחובר לוורקספייס וורק מוד כמו שקרסר מחובר, לא ל-API כמו כרמן".
 
 ### 2026-08-29 — סוכנים בסביבת הפיתוח (Preview → Staging)
 - **Skin slug:** `staging_agents_need_cursor_key` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)

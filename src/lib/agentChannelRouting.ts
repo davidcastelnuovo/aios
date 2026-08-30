@@ -48,7 +48,7 @@ export const FALLBACK_BRAIN_ROUTES: BrainRoute[] = [
   { id: "fallback-cursor", slug: "cursor", label: "Cursor Direct", route_type: "direct_channel", provider: "cursor" },
   { id: "fallback-internal", slug: "internal", label: "מוח פנימי · כרמן", route_type: "internal", provider: "internal" },
   { id: "fallback-grok", slug: "grok", label: "Grok Bot Direct", route_type: "direct_channel", provider: "grok" },
-  { id: "fallback-codex", slug: "codex", label: "Codex Direct", route_type: "direct_channel", provider: "codex" },
+  { id: "fallback-codex", slug: "codex", label: "Codex Direct · ChatGPT Workspace", route_type: "direct_channel", provider: "codex" },
   { id: "fallback-claude", slug: "claude", label: "Claude Direct", route_type: "direct_channel", provider: "claude" },
   { id: "fallback-chatgpt", slug: "chatgpt", label: "ChatGPT Work Agent", route_type: "direct_channel", provider: "chatgpt" },
   { id: "fallback-parliament", slug: "parliament", label: "שולחן אבירים · Cursor + Grok + Codex", route_type: "parliament", provider: "parliament", config: { seats: ["cursor", "grok", "codex"], rounds: 2, chair: "carmen" } },
@@ -125,9 +125,9 @@ export function billingNoteForRoute(provider?: string | null): string | null {
     case "cursor":
       return "כרמן ישיר · הצ'אט שכבר פתוח";
     case "codex":
-      return "Codex · GPT";
+      return "ChatGPT Workspace · Work Mode (ריפו)";
     case "chatgpt":
-      return "ChatGPT Work Agent";
+      return "ChatGPT Workspace · Work Mode";
     case "internal":
       return "כרמן פנימית";
     case "grok":

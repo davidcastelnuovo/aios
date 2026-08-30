@@ -89,7 +89,7 @@ export function UsagePanel({ tenantId, className }: { tenantId: string | null; c
             <p className="mb-1 font-medium text-[var(--cc-text)]">איפה כל מושב מחויב</p>
             <p>כרמן פנימית — OpenAI API (מפתח הארגון).</p>
             <p>Cursor Direct — הצ'אט כרמן ישיר שכבר פתוח.</p>
-            <p>Codex Direct — GPT.</p>
+            <p>Codex Direct — ChatGPT Workspace / Work Mode (ריפו), לא ה-API של כרמן.</p>
             <p>Grok Bot — הבוט שכבר פתוח.</p>
           </div>
           {!data.tracked && (

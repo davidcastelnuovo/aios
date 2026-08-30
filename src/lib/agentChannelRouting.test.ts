@@ -95,9 +95,10 @@ test("health banner explains a missing open Cursor chat", () => {
   assert.match(banner || "", /כבר פתוח/);
 });
 
-test("route notes: Cursor is Carmen Direct, Codex is GPT", () => {
+test("route notes: Cursor is Carmen Direct, Codex is ChatGPT Workspace", () => {
   assert.match(billingNoteForRoute("cursor") || "", /כרמן ישיר/);
-  assert.match(billingNoteForRoute("codex") || "", /GPT/);
+  assert.match(billingNoteForRoute("codex") || "", /Workspace/);
+  assert.match(billingNoteForRoute("codex") || "", /Work Mode/);
 });
 
 test("parliament seats are Cursor + Grok + Codex", () => {

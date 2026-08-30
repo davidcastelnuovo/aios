@@ -1,6 +1,6 @@
 import type { ChannelProvider, SendContext, SendResult } from "./types.ts";
 import { acceptedMessageFor, capabilitiesForProvider, statusForKind } from "./logic.ts";
-import { launchChatgpt, launchClaude, launchCloudDirect } from "./direct.ts";
+import { launchChatgpt, launchClaude, launchCloudDirect, launchWorkspaceAgent } from "./direct.ts";
 import { startParliament } from "./parliament.ts";
 
 export async function dispatchSend(ctx: SendContext): Promise<SendResult> {
@@ -21,7 +21,8 @@ export async function dispatchSend(ctx: SendContext): Promise<SendResult> {
     };
   }
 
-  if (kind === "cursor" || kind === "grok" || kind === "codex") return launchCloudDirect(ctx, kind);
+  if (kind === "cursor" || kind === "grok") return launchCloudDirect(ctx, kind);
+  if (kind === "codex") return launchWorkspaceAgent(ctx, "codex");
   if (kind === "claude") return launchClaude(ctx);
   if (kind === "chatgpt") return launchChatgpt(ctx);
   if (kind === "parliament") return startParliament(ctx);

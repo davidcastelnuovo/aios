@@ -38,7 +38,7 @@ export function billingNoteForSeat(provider: string): string {
     case "cursor":
       return "כרמן ישיר — הצ'אט שכבר פתוח";
     case "codex":
-      return "Codex · GPT";
+      return "ChatGPT Workspace · Work Mode (ריפו)";
     case "grok":
       return "Grok Bot הקיים (webhook) — בלי סוכן רקע חדש";
     case "internal":
@@ -53,7 +53,7 @@ export function billingNoteForSeat(provider: string): string {
 
 export function missingOpenChatMessage(provider: OpenChatProvider): string {
   if (provider === "codex") {
-    return "Codex Direct עדיין לא מחובר ל-GPT. לא פותחים סוכן Cursor חדש בשבילו.";
+    return "Codex Direct רץ ב-ChatGPT Workspace / Work Mode, לא ב-Cursor Cloud.";
   }
   return (
     "Cursor Direct מדבר עם צ'אט כרמן ישיר שכבר פתוח (bc-…). " +
