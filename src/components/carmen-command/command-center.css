@@ -7,6 +7,10 @@ html:has(.cc-root) {
   height: 100dvh;
   overflow: hidden;
 }
+html:has(.cc-root) body {
+  height: 100%;
+  overflow: hidden;
+}
 html:has([data-staging-banner]) {
   --cc-banner-h: 2.25rem;
 }
@@ -159,7 +163,10 @@ html:has([data-staging-banner]) {
 }
 
 .cc-talkbar-row {
+  position: relative;
+  z-index: 60;
   flex-shrink: 0;
+  pointer-events: auto;
 }
 
 .cc-hud-window {
@@ -169,7 +176,7 @@ html:has([data-staging-banner]) {
   z-index: 40;
   display: flex;
   width: min(24rem, 92vw);
-  max-height: min(70dvh, 36rem);
+  max-height: min(52dvh, calc(100% - 7.5rem));
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--cc-line-strong);

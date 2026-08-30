@@ -26,8 +26,8 @@ test("stream tokens only paint the chat they were sent from", () => {
   assert.equal(streamAppliesToActive(null, "a"), false);
 });
 
-test("composer locks only the live chat so others stay switchable", () => {
+test("composer locks only an in-flight stream, not a debating history row", () => {
   assert.equal(composerLockedForChat({ conversationId: "a", liveStreamIds: ["a"], status: "idle" }), true);
   assert.equal(composerLockedForChat({ conversationId: "b", liveStreamIds: ["a"], status: "idle" }), false);
-  assert.equal(composerLockedForChat({ conversationId: "b", liveStreamIds: [], status: "debating" }), true);
+  assert.equal(composerLockedForChat({ conversationId: "b", liveStreamIds: [], status: "debating" }), false);
 });

@@ -943,7 +943,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             {brain.healthBanner}
           </p>
         )}
-        <div className="cc-talkbar-row mt-auto flex shrink-0 items-center gap-2">
+        <div className="cc-talkbar-row relative z-[60] mt-auto flex shrink-0 items-center gap-2">
           <div className="flex min-w-0 items-center gap-2">
               <BrainRouteSelector
                 routes={brain.routes}
@@ -952,7 +952,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             brain.selectRoute(route, conversationIdRef.current);
             if (route.route_type === "parliament") setAddressedSeat(null);
           }}
-                disabled={thisChatBusy}
                 status={brain.status}
                 externalUrl={brain.externalUrl}
               />
@@ -1016,8 +1015,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             placeholder={isConvMode ? (isRealtime ? "שיחה חיה" : "פותחת…") : hud === "table"
               ? (addressedSeat ? `אל ${speakerLabel(addressedSeat)}` : "מועצה — לחצי על דמות או שלחי לכולם")
               : `אל ${speakerLabel(brain.selected.slug)}`}
-            disabled={thisChatBusy}
-            className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
+            className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)]"
           />
           <button
             onClick={() => sendText(input)}
