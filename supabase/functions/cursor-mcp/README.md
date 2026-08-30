@@ -8,8 +8,10 @@ Carmen already speaks MCP as a client (`agent_mcp_connections`, `mcp-connect`, `
 
 | Tool | What it does |
 | --- | --- |
-| `request_dev_task` | Code/feature/bugfix. Cursor implements on a branch and opens a PR. |
-| `ask_cursor` | Research, analysis, planning, investigation (may still open a PR). |
+| `list_cursor_task_sessions` | Read-only: active/recent bc-… sessions mapped to tasks |
+| `get_cursor_task_session` | Read-only: lookup session for a `public.tasks` id |
+| `request_dev_task` | Code/feature/bugfix. Opens a named agent (`AIOS · <title>`) and tracks bc-… |
+| `ask_cursor` | Research/planning (tracked when a new bc-… is created) |
 
 Both are **asynchronous**: the call returns `https://cursor.com/agents/<bcId>` immediately.
 

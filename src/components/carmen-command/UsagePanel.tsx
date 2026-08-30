@@ -4,6 +4,7 @@ import {
 } from "recharts";
 import { HudPanel } from "./panels";
 import { useUsage, UsageDay } from "./useCommandData";
+import { CursorSessionsPanel } from "./CursorSessionsPanel";
 
 // Series color validated for the dark HUD surface (see command-center.css)
 const SERIES_BLUE = "#3B82F6";
@@ -97,6 +98,7 @@ export function UsagePanel({ tenantId, className }: { tenantId: string | null; c
               ⚠️ מעקב טוקנים מלא עדיין לא פעיל בצ'אט הראשי — הנתונים כאן חלקיים (סוכנים ושיווק בלבד).
             </p>
           )}
+          <CursorSessionsPanel tenantId={tenantId} />
         </div>
       )}
     </HudPanel>

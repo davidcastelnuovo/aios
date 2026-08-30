@@ -31,6 +31,16 @@ import {
   type McpRpcMessage,
 } from "../_shared/mcp-streamable-http.ts";
 import { completeHumanCursorTask, extractHumanTaskId } from "../_shared/cursor-task-queue.ts";
+import {
+  cursorSessionDisplayName,
+  fetchHumanTaskTitle,
+  findCursorSessionForTask,
+  formatCursorSessionsForAgent,
+  listCursorTaskSessions,
+  resolveAppEnv,
+  trackCursorTaskSession,
+  touchCursorTaskSession,
+} from "../_shared/cursor-session-tracker.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -43,7 +53,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.3.1" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.4.0" };
 const CURSOR_MCP_STREAMABLE_URL =
   "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
@@ -160,6 +170,38 @@ const TOOLS = [
         idempotency_key: { type: "string" },
       },
       required: ["conversation_id", "content"],
+    },
+  },
+  {
+    name: "list_cursor_task_sessions",
+    description:
+      "Read-only: list Cursor Cloud Agent sessions tracked by AIOS (bc-… per task). " +
+      "Use to find which session belongs to which task — no fixed session id needed. " +
+      "Does NOT open a new Background Agent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          description: "Optional filter: active | running | completed | busy | failed",
+        },
+        limit: { type: "number", description: "Max rows (default 20)." },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_cursor_task_session",
+    description:
+      "Read-only: look up the Cursor session for a human task id (public.tasks). " +
+      "Returns session_id, url, display name, and status. Does NOT open a new agent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "public.tasks.id (UUID)." },
+      },
+      required: ["task_id"],
+      additionalProperties: false,
     },
   },
   {
@@ -526,6 +568,9 @@ async function logDispatch(args: {
   sessionUrl: string;
   cursorAgentId: string;
   humanTaskId?: string | null;
+  taskTitle?: string | null;
+  displayName?: string | null;
+  reused?: boolean;
 }): Promise<void> {
   const sb = sbClient();
   if (!sb) return;
@@ -541,9 +586,53 @@ async function logDispatch(args: {
       cursor_agent_id: args.cursorAgentId || null,
       human_task_id: args.humanTaskId || null,
     });
+
+    if (!args.tenantId || !args.cursorAgentId?.startsWith("bc-")) return;
+
+    if (args.reused) {
+      await touchCursorTaskSession(sb, args.cursorAgentId, "running");
+      console.log(`[cursor-mcp] session_touch session_id=${args.cursorAgentId} tool=${args.tool}`);
+      return;
+    }
+
+    const displayName = args.displayName || cursorSessionDisplayName({
+      taskTitle: args.taskTitle,
+      requestText: args.requestText,
+      sourceTool: args.tool,
+    });
+    await trackCursorTaskSession(sb, {
+      tenantId: args.tenantId,
+      cursorAgentId: args.cursorAgentId,
+      sessionUrl: args.sessionUrl,
+      displayName,
+      taskTitle: args.taskTitle || args.requestText,
+      humanTaskId: args.humanTaskId || null,
+      sourceTool: args.tool,
+      appEnv: resolveAppEnv(),
+    });
+    console.log(`[cursor-mcp] new_background_agent tracked session_id=${args.cursorAgentId} name="${displayName}"`);
   } catch (e) {
     console.error("[cursor-mcp] logDispatch failed:", (e as any)?.message ?? e);
   }
+}
+
+async function resolveDispatchMeta(
+  tenantId: string | null,
+  context: string,
+  requestText: string,
+  tool: string,
+): Promise<{ humanTaskId: string | null; taskTitle: string | null; displayName: string }> {
+  const humanTaskId = extractHumanTaskId(context);
+  let taskTitle: string | null = null;
+  const sb = sbClient();
+  if (humanTaskId && tenantId && sb) {
+    taskTitle = await fetchHumanTaskTitle(sb, tenantId, humanTaskId);
+  }
+  return {
+    humanTaskId,
+    taskTitle,
+    displayName: cursorSessionDisplayName({ taskTitle, requestText, sourceTool: tool }),
+  };
 }
 
 function teachingBlock(tenantId: string | null): string {
@@ -595,8 +684,9 @@ async function handleToolCall(
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
+    const meta = await resolveDispatchMeta(ctx.tenantId, context, task, "request_dev_task");
     const fired = await fireCursorAgent(text, {
-      name: `Carmen DEV: ${task.slice(0, 60)}`,
+      name: meta.displayName,
       startingRef: branch || undefined,
       tenantId: ctx.tenantId,
     });
@@ -609,9 +699,42 @@ async function handleToolCall(
       branch,
       sessionUrl: fired.url,
       cursorAgentId: fired.id,
-      humanTaskId: extractHumanTaskId(context),
+      humanTaskId: meta.humanTaskId,
+      taskTitle: meta.taskTitle,
+      displayName: meta.displayName,
+      reused: fired.reused,
     });
     return formatDispatchReply("dev task", fired);
+  }
+
+  if (name === "list_cursor_task_sessions") {
+    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    if (!tenantId) throw new Error("list_cursor_task_sessions requires a tenant context.");
+    const sb = sbClient();
+    if (!sb) throw new Error("Supabase not configured.");
+    const statusRaw = String(args?.status || "active").trim().toLowerCase();
+    const limit = Number(args?.limit || 20);
+    const rows = await listCursorTaskSessions(sb, tenantId, {
+      status: (statusRaw === "active" ? "active" : statusRaw) as any,
+      limit: Number.isFinite(limit) ? limit : 20,
+    });
+    return formatCursorSessionsForAgent(rows);
+  }
+
+  if (name === "get_cursor_task_session") {
+    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    const taskId = String(args?.task_id ?? "").trim();
+    if (!tenantId || !taskId) throw new Error("get_cursor_task_session requires task_id and tenant context.");
+    const sb = sbClient();
+    if (!sb) throw new Error("Supabase not configured.");
+    const row = await findCursorSessionForTask(sb, tenantId, taskId);
+    if (!row) {
+      throw new Error(
+        `No Cursor session tracked for task ${taskId}. ` +
+        `Use list_cursor_task_sessions or assign the task to Cursor and dispatch again.`,
+      );
+    }
+    return formatCursorSessionsForAgent([row]);
   }
 
   if (name === "complete_human_task") {
@@ -639,8 +762,9 @@ async function handleToolCall(
       (context ? `\nContext:\n${context}\n` : ``) +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
+    const meta = await resolveDispatchMeta(ctx.tenantId, context, request, "ask_cursor");
     const fired = await fireCursorAgent(text, {
-      name: `Carmen: ${request.slice(0, 60)}`,
+      name: meta.displayName,
       tenantId: ctx.tenantId,
     });
     await logDispatch({
@@ -652,6 +776,10 @@ async function handleToolCall(
       branch: "",
       sessionUrl: fired.url,
       cursorAgentId: fired.id,
+      humanTaskId: meta.humanTaskId,
+      taskTitle: meta.taskTitle,
+      displayName: meta.displayName,
+      reused: fired.reused,
     });
     return formatDispatchReply("request", fired);
   }
@@ -678,12 +806,19 @@ async function handleToolCall(
       throw new Error(`Cursor session ${sessionId} is gone (404/410). Give Cursor a new session_id.`);
     }
     if (followed.delivered === false) {
+      if (ctx.tenantId) {
+        await touchCursorTaskSession(sbClient()!, sessionId, "busy");
+      }
       throw new Error(
         `Cursor session ${sessionId} is BUSY (only one run at a time). ` +
         `The message was NOT delivered. Retry when that run finishes, or ask David to paste it as a follow-up in ${followed.url}. ` +
         `Do not call ask_cursor — that opens a different agent.`,
       );
     }
+    if (ctx.tenantId) {
+      await touchCursorTaskSession(sbClient()!, sessionId, "running");
+    }
+    console.log(`[cursor-mcp] direct_session_reply session_id=${sessionId}`);
     await logDispatch({
       tenantId: ctx.tenantId,
       agentId: ctx.agentId,
@@ -693,6 +828,7 @@ async function handleToolCall(
       branch: "",
       sessionUrl: followed.url,
       cursorAgentId: sessionId,
+      reused: true,
     });
     return `✅ נשלח לצ׳אט Cursor הישיר ${followed.url}`;
   }
@@ -713,92 +849,6 @@ async function handleToolCall(
     return result.duplicate
       ? "Already delivered (idempotent). No duplicate message was created."
       : "Answer delivered to the AIOS Carmen conversation.";
-  }
-
-  if (name === "generate_creative") {
-    const itemId = String(args?.item_id ?? "").trim();
-    if (!itemId) throw new Error("generate_creative requires item_id.");
-    if (!ctx.tenantId) throw new Error("generate_creative needs a tenant on the MCP connection.");
-    const directorNote = String(args?.director_note ?? "").trim();
-    const copyLabel = String(args?.copy_label ?? "").trim();
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/cursor-generate-creative`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        action: "dispatch",
-        tenant_id: ctx.tenantId,
-        item_id: itemId,
-        prompt: [
-          "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
-          `Load APPROVED CONCEPTS from marketing_work_items id=${itemId}. Photograph the concept. Type the copy.`,
-          copyLabel && `Copy variation «${copyLabel}».`,
-          directorNote && `DIRECTOR / REJECT: ${directorNote}`,
-        ].filter(Boolean).join("\n"),
-        lesson: directorNote || undefined,
-        variation: {
-          name: copyLabel || "וריאציה",
-          copy_label: copyLabel || undefined,
-        },
-      }),
-    });
-    const raw = await resp.text();
-    let data: any = {};
-    try { data = JSON.parse(raw); } catch { /* ignore */ }
-    if (!resp.ok || data?.error) {
-      throw new Error(data?.error || `cursor-generate-creative ${resp.status}: ${raw.slice(0, 200)}`);
-    }
-    await logDispatch({
-      tenantId: ctx.tenantId,
-      agentId: ctx.agentId,
-      tool: "ask_cursor",
-      requestText: `${"[CREATIVE AGENT]"} Carmen asked for item ${itemId}`,
-      context: directorNote,
-      branch: "",
-      sessionUrl: String(data.agent_url || ""),
-      cursorAgentId: String(data.cursor_agent_id || ""),
-    });
-    return (
-      `✅ נשלח לקריאייטיב דיירקט (אותו צ׳אט דביק)` +
-      (data.agent_url ? `\nSession: ${data.agent_url}` : "") +
-      `\nהתמונה תופיע על פרויקט הקריאייטיב אחרי שהצ׳אט מעלה אותה.`
-    );
-  }
-
-  if (name === "reply_to_cursor_session") {
-    const sessionId = String(args?.session_id ?? args?.bc_id ?? "").trim();
-    if (!sessionId.startsWith("bc-")) {
-      throw new Error("reply_to_cursor_session requires session_id starting with bc-.");
-    }
-    const message = String(args?.message ?? "").trim();
-    if (!message) throw new Error("reply_to_cursor_session requires a non-empty message.");
-    const context = String(args?.context ?? "").trim();
-    const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
-    if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
-
-    const text =
-      `[Grok Bot Direct → Cursor]\n` +
-      `This is a reply in THIS chat — do not open a new session.\n\n` +
-      `${message}\n` +
-      (context ? `\nContext:\n${context}\n` : ``);
-
-    const followed = await followUpStickyAgent(apiKey, sessionId, text);
-    if (!followed) {
-      throw new Error(`Cursor session ${sessionId} is gone (404/410). Give Cursor a new session_id.`);
-    }
-    await logDispatch({
-      tenantId: ctx.tenantId,
-      agentId: ctx.agentId,
-      tool: "reply_to_cursor_session",
-      requestText: message,
-      context: `${sessionId}${context ? `\n${context}` : ""}`,
-      branch: "",
-      sessionUrl: followed.url,
-      cursorAgentId: sessionId,
-    });
-    return `✅ נשלח לצ׳אט Cursor הישיר ${followed.url}`;
   }
 
   if (name === "generate_creative") {
