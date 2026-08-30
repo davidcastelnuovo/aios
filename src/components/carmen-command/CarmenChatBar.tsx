@@ -860,6 +860,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           />
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="cc-visual-pane">
         <RoundTableBoard
           route={brain.selected}
           messages={messages}
@@ -890,17 +891,19 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               .catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" }));
           } : undefined}
         />
+        </div>
         {hasThread && (
-          <>
+          <div className="cc-chat-pane">
             <button
-              onClick={() => setExpanded(e => !e)}
-              className="flex items-center justify-center gap-1 border-b border-[var(--cc-line)] py-1 text-xs text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
+              type="button"
+              onClick={() => setExpanded((e) => !e)}
+              className="cc-chat-pane-toggle flex shrink-0 items-center justify-center gap-1 border-b border-[var(--cc-line)] py-1 text-xs text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
             >
               {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-              {expanded ? "כווץ" : `שיחה (${messages.filter(m => m.role !== "tool_call").length})`}
+              {expanded ? "כווץ שיחה" : `שיחה (${messages.filter((m) => m.role !== "tool_call").length})`}
             </button>
             {expanded && (
-              <div ref={listRef} className="cc-scroll max-h-[28vh] space-y-2 overflow-y-auto p-3 lg:max-h-[38vh]">
+              <div ref={listRef} className="cc-chat-scroll cc-scroll space-y-2 p-3">
                 {messages.map((m, i) => m.role === "tool_call" ? (
                   <p key={i} className="flex items-center gap-1.5 text-xs text-[var(--cc-text-dim)]">
                     <Wrench className="h-3 w-3" /> {m.tool}
@@ -933,7 +936,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 )}
               </div>
             )}
-          </>
+          </div>
         )}
 
         </div>
