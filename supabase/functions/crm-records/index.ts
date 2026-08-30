@@ -141,6 +141,16 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string, in
   return { startDate, endDate };
 }
 
+/** Push date filtering into Postgres so report views don't scan full table history. */
+function applyJsonDateFilter(query: any, startDate: string, endDate?: string | null) {
+  if (endDate) {
+    return query.or(
+      `and(data->>date.gte.${startDate},data->>date.lte.${endDate}),data->>date.is.null`,
+    );
+  }
+  return query.or(`data->>date.gte.${startDate},data->>date.is.null`);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -237,6 +247,16 @@ Deno.serve(async (req) => {
       // Use the TABLE's tenant_id for filtering records, not the user's tenant_id
       const effectiveTenantId = tableInfo.tenant_id;
 
+      const resolvedDateRange =
+        date_filter && date_filter !== 'all'
+          ? getDateRange(
+            date_filter,
+            date_from || undefined,
+            date_to || undefined,
+            (tableInfo as any).integration_type,
+          )
+          : { startDate: null, endDate: null };
+
       // Check if aggregated data is requested (for dashboards like Search Console)
       if (aggregated === 'search_console') {
         
@@ -244,12 +264,22 @@ Deno.serve(async (req) => {
         const allRecords: any[] = [];
         
         for (let from = 0; ; from += pageSize) {
-          const { data: page, error } = await supabase
+          let pageQuery = supabase
             .from('crm_records')
             .select('id, data')
             .eq('table_id', table_id)
             .eq('tenant_id', effectiveTenantId)
             .range(from, from + pageSize - 1);
+
+          if (resolvedDateRange.startDate) {
+            pageQuery = applyJsonDateFilter(
+              pageQuery,
+              resolvedDateRange.startDate,
+              resolvedDateRange.endDate,
+            );
+          }
+
+          const { data: page, error } = await pageQuery;
 
           if (error) throw error;
           if (!page || page.length === 0) break;
@@ -257,19 +287,7 @@ Deno.serve(async (req) => {
           if (page.length < pageSize) break;
         }
 
-        // Apply date range filter on data.date if provided
-        let scopedRecords = allRecords;
-        if (date_filter && date_filter !== 'all') {
-          const { startDate, endDate } = getDateRange(date_filter, date_from || undefined, date_to || undefined, (tableInfo as any).integration_type);
-          if (startDate) {
-            scopedRecords = scopedRecords.filter((r: any) => {
-              const rd = r.data?.date;
-              if (!rd) return true; // keep aggregated/summary records without a date
-              if (endDate) return rd >= startDate && rd <= endDate;
-              return rd >= startDate;
-            });
-          }
-        }
+        const scopedRecords = allRecords;
 
         // Aggregate by query
         const queryMap = new Map<string, { clicks: number; impressions: number; ctr: number; position: number; count: number }>();
@@ -326,13 +344,23 @@ Deno.serve(async (req) => {
       for (let from = 0; from < maxRows; from += pageSize) {
         const to = from + pageSize - 1;
 
-        const { data: page, error } = await supabase
+        let pageQuery = supabase
           .from('crm_records')
-          .select('*')
+          .select('id, data')
           .eq('table_id', table_id)
           .eq('tenant_id', effectiveTenantId)
           .order('created_at', { ascending: false })
           .range(from, to);
+
+        if (resolvedDateRange.startDate) {
+          pageQuery = applyJsonDateFilter(
+            pageQuery,
+            resolvedDateRange.startDate,
+            resolvedDateRange.endDate,
+          );
+        }
+
+        const { data: page, error } = await pageQuery;
 
         if (error) throw error;
         if (!page || page.length === 0) break;
@@ -341,29 +369,7 @@ Deno.serve(async (req) => {
         if (page.length < pageSize) break;
       }
 
-      const records = allRecords;
-
-
-      // Filter by date in data->'date' field if filter is provided
-      let filteredRecords = records || [];
-      
-      if (date_filter && date_filter !== 'all') {
-        const { startDate, endDate } = getDateRange(date_filter, date_from || undefined, date_to || undefined, (tableInfo as any).integration_type);
-        
-        if (startDate) {
-          filteredRecords = filteredRecords.filter((record: any) => {
-            const recordDate = record.data?.date;
-            // Keep records that don't have a date field (aggregated/summary records)
-            if (!recordDate) return true;
-            
-            // Compare dates as strings (YYYY-MM-DD format)
-            if (endDate) {
-              return recordDate >= startDate && recordDate <= endDate;
-            }
-            return recordDate >= startDate;
-          });
-        }
-      }
+      const filteredRecords = allRecords;
 
       // Sort by date descending (newest first)
       filteredRecords.sort((a: any, b: any) => {
