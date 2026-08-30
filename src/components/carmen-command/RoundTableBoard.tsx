@@ -237,20 +237,25 @@ export function RoundTableBoard({
         </div>
       </div>
       <div className="cc-roundtable-stage cc-orb-stage">
-        <button
-          type="button"
-          className={`cc-orb-sphere ${parliament ? "is-live" : ""}`}
-          title="הפעל שולחן אבירים"
-          onClick={() => onOpenCouncil?.()}
-          aria-label="שולחן אבירים"
-        >
-          <span className="cc-orb-surface" aria-hidden />
-          <span className="cc-orb-glow" aria-hidden />
-          <span className="cc-orb-chair">
+        <div className="cc-orb-stack">
+          <button
+            type="button"
+            className={`cc-orb-sphere ${parliament ? "is-live" : ""}`}
+            title="הפעל שולחן אבירים"
+            onClick={() => onOpenCouncil?.()}
+            aria-label="שולחן אבירים"
+          >
+            <span className="cc-orb-mist" aria-hidden />
+            <span className="cc-orb-glass" aria-hidden />
+            <span className="cc-orb-highlight" aria-hidden />
+            <span className="cc-orb-glow" aria-hidden />
+          </button>
+          <span className="cc-orb-shadow" aria-hidden />
+          <div className="cc-orb-chair" aria-hidden>
             <span className="cc-orb-chair-name">כרמן</span>
             <span className="cc-orb-chair-role">יו&quot;ר</span>
-          </span>
-        </button>
+          </div>
+        </div>
         {ORBIT_AGENTS.map((seat) => {
           const angle = ORBIT_ANGLES[seat.id] ?? 0;
           const pos = orbitPosition(angle);
