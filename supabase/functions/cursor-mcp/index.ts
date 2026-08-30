@@ -32,6 +32,12 @@ import {
 } from "../_shared/mcp-streamable-http.ts";
 import { completeHumanCursorTask, extractHumanTaskId } from "../_shared/cursor-task-queue.ts";
 import { cursorModelBody, resolveCodingCursorModel } from "../_shared/cursorCreativeModel.ts";
+import {
+  cursorSessionUrl,
+  missingCursorDirectSessionError,
+  resolveCursorDirectSession,
+  type CursorDirectSession,
+} from "../_shared/cursor-direct-session.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -44,7 +50,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.3.1" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.3.2" };
 const CURSOR_MCP_STREAMABLE_URL =
   "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
@@ -84,9 +90,10 @@ const TOOLS = [
   {
     name: "ask_cursor",
     description:
-      "Ask Cursor (David's Cloud Agent) to perform ANY task — research, analysis, writing, " +
-      "planning, investigation — with full repo / GitHub / database access. " +
-      "Asynchronous: returns an agent URL; Cursor reports its work in the session and may open a PR.",
+      "Ask Cursor (David's Cloud Agent) to perform a NEW research/analysis/planning task — " +
+      "may create or follow a coding sticky agent and open a PR. " +
+      "Do NOT use for connection tests, pings, or messages into the fixed Cursor Direct chat — " +
+      "use get_cursor_direct_session + reply_to_cursor_session instead (no new Background Agent).",
     inputSchema: {
       type: "object",
       properties: {
@@ -120,29 +127,45 @@ const TOOLS = [
     },
   },
   {
+    name: "get_cursor_direct_session",
+    description:
+      "Read-only: return the fixed Cursor Direct chat (bc-…) configured for this tenant/environment. " +
+      "Does NOT open a new Background Agent or consume usage-based credits. " +
+      "Call before reply_to_cursor_session for connection tests " +
+      '(e.g. "תעבירי לקרסר: בדיקת חיבור מפריוויו", "בדיקת ערוץ ישיר"). ' +
+      "Never use ask_cursor or request_dev_task for those.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+  },
+  {
     name: "reply_to_cursor_session",
     description:
-      "Grok Bot Direct — post a message into a SPECIFIC live Cursor Cloud Agent chat " +
-      "(same pattern as Carmen Direct). Does NOT open a new agent. " +
-      "Use this when Cursor already sent you a webhook with reply_to_bc_id. " +
-      "Required for the Grok↔Cursor direct loop. Never use ask_cursor for replies.",
+      "Post a message into the fixed or specific live Cursor Direct chat (bc-…). " +
+      "Does NOT open a new Background Agent. " +
+      "For Carmen Direct / connection tests: omit session_id to use the configured fixed session " +
+      "(or call get_cursor_direct_session first). " +
+      "For Grok webhooks: pass reply_to_bc_id as session_id. " +
+      "Never use ask_cursor or request_dev_task for pings or replies into the live direct chat.",
     inputSchema: {
       type: "object",
       properties: {
         session_id: {
           type: "string",
-          description: "Cursor Cloud Agent id (bc-…). From webhook context reply_to_bc_id.",
+          description: "Optional bc-… id. Omit to use the configured fixed Cursor Direct session.",
         },
         message: {
           type: "string",
-          description: "What to say in that Cursor chat — the reply Cursor is waiting for.",
+          description: "What to say in that Cursor chat.",
         },
         context: {
           type: "string",
           description: "Optional extra notes (files, links, what you did).",
         },
       },
-      required: ["session_id", "message"],
+      required: ["message"],
       additionalProperties: false,
     },
   },
@@ -425,6 +448,7 @@ async function createCursorAgent(apiKey: string, promptText: string, opts?: {
     throw new Error(`Cursor agent create ${resp.status}: ${detail}`);
   }
   const parsed = parseAgentResponse(raw);
+  console.log(`[cursor-mcp] new_background_agent action=create_agent id=${parsed.id}`);
   return { ...parsed, reused: false };
 }
 
@@ -445,6 +469,7 @@ async function fireCursorAgent(promptText: string, opts?: {
     if (stickyId) {
       const followed = await followUpStickyAgent(apiKey, stickyId, text);
       if (followed?.delivered) {
+        console.log(`[cursor-mcp] coding_sticky_followup session_id=${stickyId}`);
         await saveStickyAgent(opts?.tenantId ?? null, followed.id, followed.url);
         return followed;
       }
@@ -577,6 +602,85 @@ function teachingBlock(tenantId: string | null): string {
   );
 }
 
+function runtimeEnv(): Record<string, string | undefined> {
+  try {
+    return Deno.env.toObject();
+  } catch {
+    return {};
+  }
+}
+
+async function resolveDirectSessionForReply(
+  sessionIdArg: string,
+  tenantId: string | null,
+): Promise<CursorDirectSession> {
+  const explicit = String(sessionIdArg || "").trim();
+  if (explicit.startsWith("bc-")) {
+    return {
+      sessionId: explicit,
+      sessionUrl: cursorSessionUrl(explicit),
+      source: "arg:session_id",
+    };
+  }
+  const fixed = await resolveCursorDirectSession(sbClient(), {
+    tenantId,
+    env: runtimeEnv(),
+  });
+  if (!fixed) throw new Error(missingCursorDirectSessionError());
+  return fixed;
+}
+
+async function executeDirectSessionReply(args: {
+  session: CursorDirectSession;
+  message: string;
+  context: string;
+  originLabel: string;
+  tenantId: string | null;
+  agentId: string | null;
+}): Promise<string> {
+  const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
+  if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
+
+  const text =
+    `${args.originLabel}\n` +
+    `This is a reply in the fixed Cursor Direct chat — do not open a new Background Agent.\n\n` +
+    `${args.message}\n` +
+    (args.context ? `\nContext:\n${args.context}\n` : ``);
+
+  console.log(
+    `[cursor-mcp] direct_session_reply session_id=${args.session.sessionId} source=${args.session.source}`,
+  );
+
+  const followed = await followUpStickyAgent(apiKey, args.session.sessionId, text);
+  if (!followed) {
+    throw new Error(
+      `Cursor Direct session ${args.session.sessionId} is gone (404/410). ` +
+      `Update CURSOR_DIRECT_AGENT_ID or cursor_sticky_agents for this tenant.`,
+    );
+  }
+  if (followed.delivered === false) {
+    throw new Error(
+      `Cursor Direct session ${args.session.sessionId} is BUSY (only one run at a time). ` +
+      `The message was NOT delivered. Retry when that run finishes: ${followed.url}. ` +
+      `Do not call ask_cursor or request_dev_task — those open a new Background Agent.`,
+    );
+  }
+  await logDispatch({
+    tenantId: args.tenantId,
+    agentId: args.agentId,
+    tool: "reply_to_cursor_session",
+    requestText: args.message,
+    context: `direct_session_reply;source=${args.session.source};${args.session.sessionId}` +
+      (args.context ? `\n${args.context}` : ""),
+    branch: "",
+    sessionUrl: followed.url,
+    cursorAgentId: args.session.sessionId,
+  });
+  return (
+    `✅ direct_session_reply — נשלח לצ׳אט Cursor הישיר (${args.session.source}) ${followed.url}`
+  );
+}
+
 async function handleToolCall(
   name: string,
   args: Record<string, any>,
@@ -657,45 +761,41 @@ async function handleToolCall(
     return formatDispatchReply("request", fired);
   }
 
+  if (name === "get_cursor_direct_session") {
+    const fixed = await resolveCursorDirectSession(sbClient(), {
+      tenantId: ctx.tenantId,
+      env: runtimeEnv(),
+    });
+    if (!fixed) throw new Error(missingCursorDirectSessionError());
+    console.log(
+      `[cursor-mcp] get_cursor_direct_session session_id=${fixed.sessionId} source=${fixed.source}`,
+    );
+    return (
+      `Fixed Cursor Direct session (read-only, no new Background Agent):\n` +
+      `session_id: ${fixed.sessionId}\n` +
+      `url: ${fixed.sessionUrl}\n` +
+      `source: ${fixed.source}\n\n` +
+      `For connection tests, call reply_to_cursor_session({ message: "…" }) ` +
+      `or pass session_id explicitly. Do not use ask_cursor.`
+    );
+  }
+
   if (name === "reply_to_cursor_session") {
-    const sessionId = String(args?.session_id ?? args?.bc_id ?? "").trim();
-    if (!sessionId.startsWith("bc-")) {
-      throw new Error("reply_to_cursor_session requires session_id starting with bc-.");
-    }
     const message = String(args?.message ?? "").trim();
     if (!message) throw new Error("reply_to_cursor_session requires a non-empty message.");
     const context = String(args?.context ?? "").trim();
-    const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
-    if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
-
-    const text =
-      `[Grok Bot Direct → Cursor]\n` +
-      `This is a reply in THIS chat — do not open a new session.\n\n` +
-      `${message}\n` +
-      (context ? `\nContext:\n${context}\n` : ``);
-
-    const followed = await followUpStickyAgent(apiKey, sessionId, text);
-    if (!followed) {
-      throw new Error(`Cursor session ${sessionId} is gone (404/410). Give Cursor a new session_id.`);
-    }
-    if (followed.delivered === false) {
-      throw new Error(
-        `Cursor session ${sessionId} is BUSY (only one run at a time). ` +
-        `The message was NOT delivered. Retry when that run finishes, or ask David to paste it as a follow-up in ${followed.url}. ` +
-        `Do not call ask_cursor — that opens a different agent.`,
-      );
-    }
-    await logDispatch({
+    const session = await resolveDirectSessionForReply(
+      String(args?.session_id ?? args?.bc_id ?? ""),
+      ctx.tenantId,
+    );
+    return await executeDirectSessionReply({
+      session,
+      message,
+      context,
+      originLabel: "[Carmen / Grok → Cursor Direct]",
       tenantId: ctx.tenantId,
       agentId: ctx.agentId,
-      tool: "reply_to_cursor_session",
-      requestText: message,
-      context: `${sessionId}${context ? `\n${context}` : ""}`,
-      branch: "",
-      sessionUrl: followed.url,
-      cursorAgentId: sessionId,
     });
-    return `✅ נשלח לצ׳אט Cursor הישיר ${followed.url}`;
   }
 
   if (name === "reply_to_aios_session") {
@@ -714,92 +814,6 @@ async function handleToolCall(
     return result.duplicate
       ? "Already delivered (idempotent). No duplicate message was created."
       : "Answer delivered to the AIOS Carmen conversation.";
-  }
-
-  if (name === "generate_creative") {
-    const itemId = String(args?.item_id ?? "").trim();
-    if (!itemId) throw new Error("generate_creative requires item_id.");
-    if (!ctx.tenantId) throw new Error("generate_creative needs a tenant on the MCP connection.");
-    const directorNote = String(args?.director_note ?? "").trim();
-    const copyLabel = String(args?.copy_label ?? "").trim();
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/cursor-generate-creative`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        action: "dispatch",
-        tenant_id: ctx.tenantId,
-        item_id: itemId,
-        prompt: [
-          "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
-          `Load APPROVED CONCEPTS from marketing_work_items id=${itemId}. Photograph the concept. Type the copy.`,
-          copyLabel && `Copy variation «${copyLabel}».`,
-          directorNote && `DIRECTOR / REJECT: ${directorNote}`,
-        ].filter(Boolean).join("\n"),
-        lesson: directorNote || undefined,
-        variation: {
-          name: copyLabel || "וריאציה",
-          copy_label: copyLabel || undefined,
-        },
-      }),
-    });
-    const raw = await resp.text();
-    let data: any = {};
-    try { data = JSON.parse(raw); } catch { /* ignore */ }
-    if (!resp.ok || data?.error) {
-      throw new Error(data?.error || `cursor-generate-creative ${resp.status}: ${raw.slice(0, 200)}`);
-    }
-    await logDispatch({
-      tenantId: ctx.tenantId,
-      agentId: ctx.agentId,
-      tool: "ask_cursor",
-      requestText: `${"[CREATIVE AGENT]"} Carmen asked for item ${itemId}`,
-      context: directorNote,
-      branch: "",
-      sessionUrl: String(data.agent_url || ""),
-      cursorAgentId: String(data.cursor_agent_id || ""),
-    });
-    return (
-      `✅ נשלח לקריאייטיב דיירקט (אותו צ׳אט דביק)` +
-      (data.agent_url ? `\nSession: ${data.agent_url}` : "") +
-      `\nהתמונה תופיע על פרויקט הקריאייטיב אחרי שהצ׳אט מעלה אותה.`
-    );
-  }
-
-  if (name === "reply_to_cursor_session") {
-    const sessionId = String(args?.session_id ?? args?.bc_id ?? "").trim();
-    if (!sessionId.startsWith("bc-")) {
-      throw new Error("reply_to_cursor_session requires session_id starting with bc-.");
-    }
-    const message = String(args?.message ?? "").trim();
-    if (!message) throw new Error("reply_to_cursor_session requires a non-empty message.");
-    const context = String(args?.context ?? "").trim();
-    const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
-    if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
-
-    const text =
-      `[Grok Bot Direct → Cursor]\n` +
-      `This is a reply in THIS chat — do not open a new session.\n\n` +
-      `${message}\n` +
-      (context ? `\nContext:\n${context}\n` : ``);
-
-    const followed = await followUpStickyAgent(apiKey, sessionId, text);
-    if (!followed) {
-      throw new Error(`Cursor session ${sessionId} is gone (404/410). Give Cursor a new session_id.`);
-    }
-    await logDispatch({
-      tenantId: ctx.tenantId,
-      agentId: ctx.agentId,
-      tool: "reply_to_cursor_session",
-      requestText: message,
-      context: `${sessionId}${context ? `\n${context}` : ""}`,
-      branch: "",
-      sessionUrl: followed.url,
-      cursorAgentId: sessionId,
-    });
-    return `✅ נשלח לצ׳אט Cursor הישיר ${followed.url}`;
   }
 
   if (name === "generate_creative") {
