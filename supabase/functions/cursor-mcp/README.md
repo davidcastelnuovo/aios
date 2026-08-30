@@ -39,7 +39,7 @@ Optional secrets: `CURSOR_STICKY_AGENT_ID` (force a specific `bc-…`), `CURSOR_
 | `CURSOR_CLOUD_ENV_NAME` | recommended | named cloud environment (same VM setup as David) |
 | `CURSOR_REPO_URL` | optional | default `https://github.com/davidcastelnuovo/aios` |
 | `CURSOR_STARTING_REF` | optional | default `main` |
-| `CURSOR_MODEL_ID` | optional | e.g. `composer-2.5` |
+| `CURSOR_MODEL_ID` | optional | default `composer-2.5` (fast). Set explicitly to override; omitting used to fall back to account default (often Grok). |
 | `CURSOR_AUTO_CREATE_PR` | optional | default `true` |
 | `CURSOR_DEFAULT_TENANT_ID` | optional | fallback tenant for teach-back skins |
 
