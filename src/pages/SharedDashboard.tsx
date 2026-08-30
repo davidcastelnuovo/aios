@@ -119,26 +119,45 @@ const getIntegrationIcon = (type: string | null) => {
 
 interface SharedDashboardProps {
   shareTokenOverride?: string;
+  /** Snapshot/report capture — matches the combined dashboard default window. */
+  initialDateFilter?: string;
+  /** Hide refresh/date controls when rendering off-screen for report capture. */
+  snapshotMode?: boolean;
 }
 
-export default function SharedDashboard({ shareTokenOverride }: SharedDashboardProps = {}) {
+export default function SharedDashboard({
+  shareTokenOverride,
+  initialDateFilter = 'last_30_days',
+  snapshotMode = false,
+}: SharedDashboardProps = {}) {
   const params = useParams();
   const shareToken = shareTokenOverride ?? params.shareToken;
   const queryClient = useQueryClient();
-  const [dateFilter, setDateFilter] = useState('last_30_days');
+  const [dateFilter, setDateFilter] = useState(initialDateFilter);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['shared-dashboard', shareToken, dateFilter],
     queryFn: async () => {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      if (!supabaseUrl || !apiKey) {
+        throw new Error('חסרה הגדרת Supabase בסביבת הפיתוח (VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY)');
+      }
       const params = new URLSearchParams({ token: shareToken!, date_filter: dateFilter });
-      const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-dashboard`;
+      const baseUrl = `${supabaseUrl}/functions/v1/public-dashboard`;
       const res = await fetch(`${baseUrl}?${params.toString()}`, {
         method: 'GET',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+        headers: {
+          apikey: apiKey,
+          Authorization: `Bearer ${apiKey}`,
+        },
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(body || `public-dashboard failed (${res.status})`);
+      }
       return res.json();
     },
     enabled: !!shareToken,
@@ -488,7 +507,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
     return { revenue, orderCount, googlePaid };
   }, [wooOrders]);
 
-  const hasWooData = hasWooCommerce && wooSummary.revenue > 0;
+  const hasWooData = hasWooCommerce && (wooSummary.revenue > 0 || wooSummary.orderCount > 0);
 
   // ROAS is computed from WooCommerce revenue when available (real store revenue),
   // falling back to Analytics revenue when there's no WooCommerce data.
@@ -837,12 +856,15 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
   }
 
   if (error || !data?.dashboard) {
+    const detail = error instanceof Error ? error.message : '';
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
+      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl" data-snapshot-error={detail || 'load_failed'}>
         <Card className="max-w-md w-full">
           <CardContent className="p-8 text-center">
-            <h2 className="text-xl font-bold mb-2">הקישור אינו תקין</h2>
-            <p className="text-muted-foreground">קישור השיתוף אינו פעיל או שפג תוקפו.</p>
+            <h2 className="text-xl font-bold mb-2">לא ניתן לטעון את הדוח</h2>
+            <p className="text-muted-foreground">
+              {detail || 'קישור השיתוף אינו פעיל או שפג תוקפו.'}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -877,6 +899,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
             )}
           </div>
         </div>
+        {!snapshotMode && (
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -905,6 +928,7 @@ export default function SharedDashboard({ shareTokenOverride }: SharedDashboardP
             </SelectContent>
           </Select>
         </div>
+        )}
       </div>
 
       {/* Platform Tabs */}

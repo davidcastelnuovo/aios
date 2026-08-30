@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Share2, Copy, Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { buildDefaultShareToken, SLUG_REGEX } from "@/lib/share-slug";
+import { buildSharedDashboardUrl } from "@/lib/appEnv";
 
 interface ShareDashboardDialogProps {
   dashboardId: string;
@@ -150,10 +151,7 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
     },
   });
 
-  const getShareUrl = (token: string) => {
-    const publicAppOrigin = "https://aios.co.il";
-    return `${publicAppOrigin}/shared/dashboard/${token}`;
-  };
+  const getShareUrl = (token: string) => buildSharedDashboardUrl(token);
 
   const copyLink = (token: string) => {
     navigator.clipboard.writeText(getShareUrl(token));

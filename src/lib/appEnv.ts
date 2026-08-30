@@ -19,3 +19,16 @@ export function resolveFrontendAppEnv(): AppEnv {
 export function isNonProduction(env: AppEnv): boolean {
   return env !== "production";
 }
+
+/** Public share links: production uses the canonical domain; preview/staging use the current origin. */
+export function resolvePublicAppOrigin(): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const env = resolveFrontendAppEnv();
+    if (isNonProduction(env)) return window.location.origin;
+  }
+  return "https://aios.co.il";
+}
+
+export function buildSharedDashboardUrl(shareToken: string): string {
+  return `${resolvePublicAppOrigin()}/shared/dashboard/${shareToken}`;
+}

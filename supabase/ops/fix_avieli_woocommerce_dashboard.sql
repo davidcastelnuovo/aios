@@ -8,6 +8,12 @@ VALUES (
 )
 ON CONFLICT (site_id, tenant_id) DO NOTHING;
 
+-- Keep hourly cron syncing fresh orders (was disabled on staging).
+UPDATE public.social_media_wordpress_sites
+SET woo_sync_enabled = true
+WHERE id = '7d15854d-88c8-4361-ac23-6f7caafed00e'
+  AND woocommerce_enabled = true;
+
 DROP POLICY IF EXISTS "Cross-tenant agency access to wp sites" ON public.social_media_wordpress_sites;
 CREATE POLICY "Cross-tenant agency access to wp sites"
 ON public.social_media_wordpress_sites

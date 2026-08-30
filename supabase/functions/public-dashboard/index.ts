@@ -43,22 +43,9 @@ function getDateRange(filter: string, integrationType?: string | null): { startD
       break;
     }
     case "last_7_days": {
-      const rollingSeven = () => {
-        startDate = new Date(Date.UTC(y, m, d - 7)).toISOString().split("T")[0];
-        endDate = yesterdayStr;
-      };
-      // Integration tables (ads + analytics + everything else): rolling 7 days.
-      if (integrationType != null && integrationType !== "") {
-        rollingSeven();
-        break;
-      }
-      // WooCommerce order range (getDateRange called without integrationType).
-      const dow = yesterday.getUTCDay(); // 0=Sun .. 6=Sat
-      const daysSinceSat = (dow + 1) % 7;
-      const sat = new Date(Date.UTC(y, m, d - 1 - daysSinceSat));
-      const sun = new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate() - 6));
-      startDate = sun.toISOString().split("T")[0];
-      endDate = sat.toISOString().split("T")[0];
+      // Rolling 7 full days ending yesterday — matches ads/analytics + combined dashboard.
+      startDate = new Date(Date.UTC(y, m, d - 7)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
       break;
     }
     case "this_month":

@@ -116,6 +116,12 @@ export async function waitForSnapshotReady(
 ): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
+    const errorNode = node.querySelector('[data-snapshot-error]');
+    if (errorNode) {
+      const message = errorNode.textContent?.trim();
+      throw new Error(message || 'הדוח לא נטען');
+    }
+
     const ready =
       node.dataset.snapshotReady === "true" ||
       !!node.querySelector('[data-snapshot-ready="true"]');

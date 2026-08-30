@@ -68,10 +68,21 @@ Gaps (do not touch Production to close these):
 2. Add GitHub secret `SUPABASE_STAGING_PROJECT_ID` so the Staging deploy workflow can run.
 3. LLM keys live in Staging `tenant_integrations` (`llm`). Do **not** copy Production WhatsApp/Meta tokens.
 4. No persistent custom Staging domain yet (`STAGING_DOMAIN=<configured-in-vercel>`). Vercel Authentication is `all_except_custom_domains`, so `*.vercel.app` Preview URLs require a Vercel login. A custom Staging domain would skip that gate.
-7. Google sign-in on Staging: provider is enabled (same OAuth client as Production). In Google Cloud → that OAuth client → **Authorized redirect URIs**, add the Callback URL shown in **Supabase → AIOS Staging → Authentication → Providers → Google**. Do not change Production callback URIs. Google does not accept `*.vercel.app` wildcards; the URI to add is the Staging `…supabase.co/auth/v1/callback` only.
-8. Email / webhooks / cron / automations are not fully on the guard yet (WhatsApp is).
-9. Branch protection on `main` / `develop` is a GitHub settings change.
-10. This Cloud Agent workspace `.env` still points at Production.
+
+### Google login on Preview / Staging
+
+Two gates — both must pass:
+
+1. **Vercel SSO** — opening a `*.vercel.app` Preview URL redirects to Vercel login first. Sign in with the team Vercel account, then you reach `/auth`.
+2. **Google OAuth** — the app talks to **AIOS Staging** Supabase (not Production). In [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → the AIOS OAuth client → **Authorized redirect URIs**, add the Staging callback exactly as shown in **Supabase → AIOS Staging → Authentication → Providers → Google** (format: `https://<SUPABASE_STAGING_PROJECT_ID>.supabase.co/auth/v1/callback`). Keep the Production callback too — add, do not replace.
+
+Supabase Staging already allows `https://*.vercel.app/**` as redirect URLs. Google does **not** accept `*.vercel.app` wildcards — only the Supabase callback URI above.
+
+**Workaround:** email + password on Staging works if Google is not configured yet.
+
+5. Email / webhooks / cron / automations are not fully on the guard yet (WhatsApp is).
+6. Branch protection on `main` / `develop` is a GitHub settings change.
+7. This Cloud Agent workspace `.env` still points at Production.
 
 ## Agent working rules
 

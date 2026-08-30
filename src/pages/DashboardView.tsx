@@ -51,7 +51,7 @@ import {
 import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
-import { fetchWooDashboardSummary, invalidateWooDashboardQueries } from "@/lib/wooDashboardQueries";
+import { fetchWooDashboardSummary, getWooDashboardDateRangeIso, invalidateWooDashboardQueries } from "@/lib/wooDashboardQueries";
 import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -307,16 +307,7 @@ export default function DashboardView() {
     enabled: !!dashboard?.client_id,
   });
 
-  // SEO clients default to "last 30 days" (monthly SEO reports)
-  useEffect(() => {
-    if (didSetSeoDefaultRef.current) return;
-    if (hasSeoReports) {
-      setDateFilter('last_30_days');
-      didSetSeoDefaultRef.current = true;
-    }
-  }, [hasSeoReports]);
-
-
+  // SEO / WooCommerce dashboards default to "last 30 days" (monthly window + store revenue).
   const { data: hasWooCommerce = false } = useQuery({
     queryKey: ['has-woocommerce', dashboard?.client_id],
     queryFn: async () => {
@@ -337,73 +328,22 @@ export default function DashboardView() {
     enabled: !!dashboard?.client_id,
   });
 
-  // WooCommerce summary range — UTC boundaries to match Woo admin & WooCommerceDashboard.
-  // last_7_days = most recent COMPLETED Sunday→Saturday week (UTC).
-  // Other relative ranges end YESTERDAY (UTC).
-  const wooDateRange = useMemo(() => {
-    const now = new Date();
-    const y = now.getUTCFullYear();
-    const m = now.getUTCMonth();
-    const d = now.getUTCDate();
-    let start = new Date(Date.UTC(y, m, d - 1, 0, 0, 0, 0));
-    let end = new Date(Date.UTC(y, m, d - 1, 23, 59, 59, 999));
-    switch (dateFilter) {
-      case 'today':
-        start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
-        end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
-        break;
-      case 'yesterday':
-        break;
-      case 'last_7_days': {
-        const yesterday = new Date(Date.UTC(y, m, d - 1));
-        const dow = yesterday.getUTCDay();
-        const daysSinceSat = (dow + 1) % 7;
-        const sat = new Date(Date.UTC(y, m, d - 1 - daysSinceSat, 23, 59, 59, 999));
-        const sun = new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate() - 6, 0, 0, 0, 0));
-        start = sun; end = sat;
-        break;
-      }
-      case 'last_14_days': start = new Date(Date.UTC(y, m, d - 14, 0, 0, 0, 0)); break;
-      case 'last_30_days': start = new Date(Date.UTC(y, m, d - 30, 0, 0, 0, 0)); break;
-      case 'last_70_days': start = new Date(Date.UTC(y, m, d - 70, 0, 0, 0, 0)); break;
-      case 'this_week': {
-        // Week starts Sunday (locale: he)
-        const dow = now.getUTCDay(); // 0=Sun..6=Sat
-        start = new Date(Date.UTC(y, m, d - dow, 0, 0, 0, 0));
-        end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
-        break;
-      }
-      case 'last_week': {
-        const dow = now.getUTCDay();
-        const lastSun = new Date(Date.UTC(y, m, d - dow - 7, 0, 0, 0, 0));
-        const lastSat = new Date(Date.UTC(y, m, d - dow - 1, 23, 59, 59, 999));
-        start = lastSun; end = lastSat;
-        break;
-      }
-      case 'this_month':
-        start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
-        end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
-        break;
-      case 'last_month':
-        start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
-        end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
-        break;
-      case 'custom':
-        if (customDateRange.from && customDateRange.to) {
-          start = new Date(Date.UTC(
-            customDateRange.from.getFullYear(), customDateRange.from.getMonth(), customDateRange.from.getDate(),
-            0, 0, 0, 0
-          ));
-          end = new Date(Date.UTC(
-            customDateRange.to.getFullYear(), customDateRange.to.getMonth(), customDateRange.to.getDate(),
-            23, 59, 59, 999
-          ));
-        }
-        break;
-      default: start = new Date(Date.UTC(y, m, d - 7, 0, 0, 0, 0));
+  useEffect(() => {
+    if (didSetSeoDefaultRef.current) return;
+    if (hasSeoReports || hasWooCommerce) {
+      setDateFilter('last_30_days');
+      didSetSeoDefaultRef.current = true;
     }
-    return { start: start.toISOString(), end: end.toISOString() };
-  }, [dateFilter, customDateRange.from, customDateRange.to]);
+  }, [hasSeoReports, hasWooCommerce]);
+
+  // WooCommerce summary range — same presets as ads/analytics (crm-records).
+  const wooDateRange = useMemo(
+    () => getWooDashboardDateRangeIso(dateFilter, {
+      customFrom: customDateRange.from,
+      customTo: customDateRange.to,
+    }),
+    [dateFilter, customDateRange.from, customDateRange.to],
+  );
 
   const { data: wooSummary = { revenue: 0, orders: 0, googlePaid: { paidOrders: 0, paidRevenue: 0, organicOrders: 0, organicRevenue: 0 } } } = useQuery({
     queryKey: ['woo-summary-for-totals', dashboard?.client_id, dateFilter, customFromStr, customToStr, wooDateRange.start, wooDateRange.end],

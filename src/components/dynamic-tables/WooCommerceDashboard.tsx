@@ -10,6 +10,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { WooAttributionSection, wooAttributionLabel } from "@/components/dynamic-tables/WooAttributionSection";
+import { fetchWooOrdersInRange, getWooDashboardDateRangeIso } from "@/lib/wooDashboardQueries";
 
 interface Props {
   clientId: string;
@@ -22,83 +23,6 @@ interface Props {
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n);
 const formatNumber = (n: number) => new Intl.NumberFormat('he-IL').format(n);
-
-// Standard (UTC, aligned with WooCommerce admin):
-// - last_7_days = most recent COMPLETED week, Sunday → Saturday (UTC).
-//   e.g. if today is Wed Apr 23, the range is Sun Apr 13 → Sat Apr 19.
-// - Other relative ranges (30/70) end YESTERDAY in UTC.
-// All boundaries computed in UTC so they line up with woocommerce_orders.date_created
-// (which is stored as UTC timestamptz) and match Woo admin reports.
-const getDateRange = (filter: string, customFrom?: string, customTo?: string): { start: Date; end: Date } => {
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = now.getUTCMonth();
-  const d = now.getUTCDate();
-  // Yesterday (UTC) full-day boundaries
-  let start = new Date(Date.UTC(y, m, d - 1, 0, 0, 0, 0));
-  let end = new Date(Date.UTC(y, m, d - 1, 23, 59, 59, 999));
-
-  switch (filter) {
-    case 'today':
-      start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
-      end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
-      break;
-    case 'yesterday':
-      // already set above
-      break;
-    case 'last_7_days': {
-      // Most recent completed Sun→Sat week (UTC).
-      const yesterday = new Date(Date.UTC(y, m, d - 1));
-      const dow = yesterday.getUTCDay();
-      const daysSinceSat = (dow + 1) % 7;
-      const sat = new Date(Date.UTC(y, m, d - 1 - daysSinceSat, 23, 59, 59, 999));
-      const sun = new Date(Date.UTC(sat.getUTCFullYear(), sat.getUTCMonth(), sat.getUTCDate() - 6, 0, 0, 0, 0));
-      start = sun;
-      end = sat;
-      break;
-    }
-    case 'last_14_days':
-      start = new Date(Date.UTC(y, m, d - 14, 0, 0, 0, 0));
-      break;
-    case 'last_30_days':
-      start = new Date(Date.UTC(y, m, d - 30, 0, 0, 0, 0));
-      break;
-    case 'last_70_days':
-      start = new Date(Date.UTC(y, m, d - 70, 0, 0, 0, 0));
-      break;
-    case 'this_week': {
-      const dow = now.getUTCDay();
-      start = new Date(Date.UTC(y, m, d - dow, 0, 0, 0, 0));
-      end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
-      break;
-    }
-    case 'last_week': {
-      const dow = now.getUTCDay();
-      start = new Date(Date.UTC(y, m, d - dow - 7, 0, 0, 0, 0));
-      end = new Date(Date.UTC(y, m, d - dow - 1, 23, 59, 59, 999));
-      break;
-    }
-    case 'this_month':
-      start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
-      end = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
-      break;
-    case 'last_month':
-      start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
-      end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
-      break;
-    case 'custom':
-      if (customFrom && customTo) {
-        const [fy, fm, fd] = customFrom.split('-').map(Number);
-        const [ty, tm, td] = customTo.split('-').map(Number);
-        start = new Date(Date.UTC(fy, fm - 1, fd, 0, 0, 0, 0));
-        end = new Date(Date.UTC(ty, tm - 1, td, 23, 59, 59, 999));
-      }
-      break;
-    default:
-      start = new Date(Date.UTC(y, m, d - 7, 0, 0, 0, 0));
-  }
-  return { start, end };
-};
 
 export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter, customFrom, customTo }: Props) {
   // Find linked WooCommerce sites for the client.
@@ -120,22 +44,17 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
   });
 
   const siteIds = sites.map((s: any) => s.id);
-  const { start, end } = getDateRange(dateFilter, customFrom, customTo);
+  const wooDateRange = getWooDashboardDateRangeIso(dateFilter, { customFrom, customTo });
 
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['woo-orders', siteIds.join(','), dateFilter, customFrom, customTo],
+    queryKey: ['woo-orders', siteIds.join(','), dateFilter, customFrom, customTo, wooDateRange.start, wooDateRange.end],
     queryFn: async () => {
       if (siteIds.length === 0) return [];
-      const { data, error } = await supabase
-        .from('woocommerce_orders' as any)
-        .select('id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution')
-        .in('site_id', siteIds)
-        .gte('date_created', start.toISOString())
-        .lte('date_created', end.toISOString())
-        .order('date_created', { ascending: false })
-        .limit(2000);
-      if (error) throw error;
-      return data as any[];
+      return fetchWooOrdersInRange(
+        siteIds,
+        wooDateRange,
+        'id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution',
+      );
     },
     enabled: siteIds.length > 0,
   });
