@@ -1,4 +1,5 @@
 -- Mirror: supabase/migrations/20260830120000_cursor_human_task_queue.sql
+-- Applied via apply-sql-migration.yml on merge.
 
 ALTER TABLE public.cursor_dispatches
   ADD COLUMN IF NOT EXISTS human_task_id uuid REFERENCES public.tasks(id) ON DELETE SET NULL;
