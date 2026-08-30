@@ -5,11 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { CarmenFaceState } from "./CarmenFace";
 import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
-import { AgentSeatRail } from "./AgentSeatRail";
 import { ChatMessageRow } from "./ChatMessageRow";
 import { ChatTopicRail } from "./ChatTopicRail";
 import { ThinkingGalaxy } from "./ThinkingGalaxy";
-import { useBrainChannel } from "./useBrainChannel";
+import type { BrainChannel } from "./useBrainChannel";
 import { AGENT_SPRITES, filterMessagesForRoute, seatKeyFromRoute } from "@/lib/agentSeats";
 import { hudStage, routeForRestoredChat } from "@/lib/agentChannelRouting";
 import { composerLockedForChat, lastConversationStorageKey, streamAppliesToActive, topicIsLive, type TopicChat } from "@/lib/chatTopics";
@@ -47,6 +46,8 @@ export interface CarmenChatBarHandle {
 
 interface CarmenChatBarProps {
   tenantId: string | null;
+  brain: BrainChannel;
+  onConversationIdChange?: (id: string | null) => void;
   onFaceState: (state: CarmenFaceState) => void;
   audioLevelRef: React.MutableRefObject<number>;
   historyOpen?: boolean;
@@ -75,7 +76,7 @@ const VOICE_STORAGE_KEY = "aios:carmen-voice";
  * Command Center never auto-plays carmen-speak and never falls back to transcribe-voice.
  */
 export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>(
-  function CarmenChatBar({ tenantId, onFaceState, audioLevelRef, historyOpen, onHistoryOpenChange, onHudModeChange }, ref) {
+  function CarmenChatBar({ tenantId, brain, onConversationIdChange, onFaceState, audioLevelRef, historyOpen, onHistoryOpenChange, onHudModeChange }, ref) {
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [streamingText, setStreamingText] = useState("");
@@ -119,7 +120,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const realtimeRef = useRef<RealtimeHandle | null>(null);
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const brain = useBrainChannel(tenantId);
     const [conversationId, setConversationId] = useState<string | null>(null);
     const hud = hudStage({
       routeType: brain.selected.route_type,
@@ -247,6 +247,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       if (!id) return;
       conversationIdRef.current = id;
       setConversationId(id);
+      onConversationIdChange?.(id);
       if (tenantId) localStorage.setItem(lastConversationStorageKey(tenantId), id);
     };
 
@@ -701,6 +702,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       learnFromConversation();
       conversationIdRef.current = null;
       setConversationId(null);
+      onConversationIdChange?.(null);
       setMessages([]);
       setStreamingText("");
       setHistory(false);
@@ -857,17 +859,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           />
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <AgentSeatRail
-            routes={brain.routes}
-            selected={brain.selected}
-            status={brain.status}
-            externalUrl={brain.externalUrl}
-            debating={brain.status === "debating"}
-            onSelect={(route) => brain.selectRoute(route, conversationIdRef.current)}
-            onCancel={conversationId ? () => brain.cancelParliament(conversationId) : undefined}
-            onContinue={conversationId ? () => brain.parliamentAction("parliament_continue", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
-            onSynthesize={conversationId ? () => brain.parliamentAction("parliament_synthesize", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
-          />
           <div ref={listRef} className="cc-chat-scroll cc-scroll min-h-0 flex-1 space-y-3 p-3">
             {visibleMessages.length === 0 && !streamingText && (
               <p className="py-8 text-center text-sm text-[var(--cc-text-dim)]">

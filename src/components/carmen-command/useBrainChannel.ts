@@ -210,3 +210,5 @@ export function useBrainChannel(tenantId: string | null) {
     healthBanner: channelHealthBanner(channelHealth),
   };
 }
+
+export type BrainChannel = ReturnType<typeof useBrainChannel>;

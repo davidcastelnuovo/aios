@@ -169,8 +169,20 @@ html:has([data-staging-banner]) {
 
 /* ---------- Agent seat rail ---------- */
 
+.cc-header-stack {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--cc-line);
+  background: rgba(5, 10, 22, 0.92);
+  backdrop-filter: blur(8px);
+}
+
 .cc-seat-rail {
-  background: rgba(5, 10, 22, 0.45);
+  background: transparent;
+}
+.cc-seat-rail--top {
+  border-bottom: 1px solid var(--cc-line);
+  padding-top: 8px;
+  padding-bottom: 6px;
 }
 
 .cc-seat-btn {

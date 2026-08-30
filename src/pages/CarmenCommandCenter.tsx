@@ -6,8 +6,11 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
 import type { CarmenFaceState } from "@/components/carmen-command/CarmenFace";
 import { HudMenu } from "@/components/carmen-command/HudMenu";
+import { AgentSeatRail } from "@/components/carmen-command/AgentSeatRail";
 import { CarmenChatBar, CarmenChatBarHandle } from "@/components/carmen-command/CarmenChatBar";
 import { useCommandRealtime } from "@/components/carmen-command/useCommandData";
+import { useBrainChannel } from "@/components/carmen-command/useBrainChannel";
+import { useToast } from "@/hooks/use-toast";
 import type { HudStage } from "@/lib/agentChannelRouting";
 import "@/components/carmen-command/command-center.css";
 
@@ -39,6 +42,9 @@ export default function CarmenCommandCenter() {
   const alertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [, setHudMode] = useState<HudStage>("direct");
   const [chatsOpen, setChatsOpen] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const brain = useBrainChannel(tenantId);
+  const { toast } = useToast();
 
   const flashAlert = useCallback(() => {
     setFaceState(prev => {
@@ -61,7 +67,20 @@ export default function CarmenCommandCenter() {
 
   return (
     <div dir="rtl" className="cc-root relative flex flex-col overflow-hidden font-heebo">
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--cc-line)] px-3 py-2 sm:px-4">
+      <div className="cc-header-stack shrink-0">
+        <AgentSeatRail
+          className="cc-seat-rail--top"
+          routes={brain.routes}
+          selected={brain.selected}
+          status={brain.status}
+          externalUrl={brain.externalUrl}
+          debating={brain.status === "debating"}
+          onSelect={(route) => brain.selectRoute(route, conversationId)}
+          onCancel={conversationId ? () => brain.cancelParliament(conversationId) : undefined}
+          onContinue={conversationId ? () => brain.parliamentAction("parliament_continue", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
+          onSynthesize={conversationId ? () => brain.parliamentAction("parliament_synthesize", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
+        />
+        <header className="flex items-center justify-between gap-2 px-3 py-2 sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
           <Link
             to={tenantSlug ? `/t/${tenantSlug}` : "/"}
@@ -91,12 +110,15 @@ export default function CarmenCommandCenter() {
           </button>
         </div>
         <Clock />
-      </header>
+        </header>
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-3">
         <CarmenChatBar
           ref={chatRef}
           tenantId={tenantId}
+          brain={brain}
+          onConversationIdChange={setConversationId}
           onFaceState={setFaceState}
           audioLevelRef={audioLevelRef}
           historyOpen={chatsOpen}

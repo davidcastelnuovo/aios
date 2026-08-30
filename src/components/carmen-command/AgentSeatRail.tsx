@@ -26,6 +26,7 @@ interface AgentSeatRailProps {
   status?: string | null;
   externalUrl?: string | null;
   debating?: boolean;
+  className?: string;
   onSelect: (route: BrainRoute) => void;
   onContinue?: () => void;
   onSynthesize?: () => void;
@@ -52,13 +53,14 @@ export function AgentSeatRail({
   onContinue,
   onSynthesize,
   onCancel,
+  className = "",
 }: AgentSeatRailProps) {
   const activeKey = seatKeyFromRoute(selected);
   const waiting = status === "waiting_external" || status === "debating";
   const note = billingNoteForRoute(selected.provider);
 
   return (
-    <div className="cc-seat-rail shrink-0 border-b border-[var(--cc-line)] px-2 py-2 sm:px-3" dir="rtl">
+    <div className={`cc-seat-rail shrink-0 px-2 py-2 sm:px-3${className ? ` ${className}` : ""}`} dir="rtl">
       <div className="flex items-center justify-center gap-2 sm:gap-3">
         {RAIL_SEAT_ORDER.map((key) => {
           const route = routeForSeatKey(routes, key);
