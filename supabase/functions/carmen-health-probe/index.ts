@@ -20,6 +20,7 @@ import {
   notifyRecallCreditEmpty,
   notifyRecallCreditRecovered,
 } from '../_shared/recall-credit-alert.ts';
+import { probeMcp, resyncInternalMcpBearer } from '../_shared/mcp-bearer.ts';
 
 // Periodic infrastructure health probe for the Carmen Command Center.
 // Invoked by pg_cron (see migration 20260722160000_service_health_checks.sql).
@@ -36,6 +37,7 @@ const RETENTION_DAYS = 7;
 // Alert anchor tenant (claude_notify_david's default tenant is MarketingCaptain;
 // alerts rows anchor to DMM, David's main org)
 const DAVID_TENANT = '6ad8f321-25db-4a04-8e44-e57a7c8961b2';
+const CARMEN_TENANT = Deno.env.get('CURSOR_DEFAULT_TENANT_ID') || '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019';
 
 interface CheckRow {
   tenant_id: string | null;
@@ -184,6 +186,57 @@ Deno.serve(async (req) => {
       status: res.status === null ? 'down' : res.status >= 500 ? 'warn' : 'ok',
       latency_ms: res.latency,
       detail: res.status === null ? (res.error ?? 'no response') : `HTTP ${res.status}`,
+    });
+  }
+
+  // 2b. Carmen → Cursor MCP bearer (stored row must match edge secret)
+  {
+    const t0 = performance.now();
+    let detail = 'no Cursor MCP row';
+    let status: CheckRow['status'] = 'warn';
+    try {
+      const { data: rows } = await supabase
+        .from('agent_mcp_connections')
+        .select('id, name, url, tenant_id, oauth_tokens, state')
+        .eq('tenant_id', CARMEN_TENANT)
+        .eq('name', 'Cursor')
+        .limit(1);
+      const row = rows?.[0];
+      if (!row) {
+        detail = 'Cursor MCP connection missing';
+        status = 'down';
+      } else {
+        const bearer = row.oauth_tokens?.bearer as string | undefined;
+        let probe = await probeMcp(row.url, bearer);
+        if (probe.state !== 'ready') {
+          const resynced = await resyncInternalMcpBearer(supabase, row);
+          if (resynced) {
+            probe = {
+              tools: resynced.tools,
+              state: resynced.state,
+              lastError: resynced.lastError,
+            };
+            detail = resynced.state === 'ready'
+              ? `auto-resynced bearer (${resynced.tools.length} tools)`
+              : `auto-resync failed: ${resynced.lastError || 'unknown'}`;
+          } else {
+            detail = probe.lastError || 'probe failed';
+          }
+        } else {
+          detail = `${probe.tools.length} tools`;
+        }
+        status = probe.state === 'ready' ? 'ok' : 'down';
+      }
+    } catch (e) {
+      detail = e instanceof Error ? e.message : String(e);
+      status = 'down';
+    }
+    rows.push({
+      tenant_id: CARMEN_TENANT,
+      service: 'mcp_carmen_cursor_auth',
+      status,
+      latency_ms: Math.round(performance.now() - t0),
+      detail,
     });
   }
 

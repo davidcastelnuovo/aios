@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plug, Trash2, Plus, CheckCircle2, XCircle, Wrench } from "lucide-react";
+import { Plug, Trash2, Plus, CheckCircle2, XCircle, Wrench, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { mcpPresetFunctionUrl } from "@/lib/mcpPresetUrl";
@@ -47,6 +47,27 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
       toast.success(`חובר! ${d?.tools?.length ?? 0} כלים זמינים`);
       qc.invalidateQueries({ queryKey: ["mcp-connections", agent.id, tenantId] });
       setOpen(false); setName(""); setUrl(""); setBearer("");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const resync = useMutation({
+    mutationFn: async (conn: { id: string; name: string }) => {
+      const { data, error } = await supabase.functions.invoke("mcp-connect", {
+        body: {
+          resync_from_secret: true,
+          tenant_id: tenantId,
+          name: conn.name,
+          connection_id: conn.id,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (d) => {
+      toast.success(`סונכרן מחדש — ${d?.state ?? "ready"}, ${(d?.tools ?? []).length} כלים`);
+      qc.invalidateQueries({ queryKey: ["mcp-connections", agent.id, tenantId] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -159,6 +180,17 @@ export function McpConnectionsTab({ agent }: { agent: any }) {
               </div>
               <Badge variant={c.state === "ready" ? "default" : "destructive"}>{c.state}</Badge>
               <Badge variant="outline"><Wrench className="h-3 w-3 me-1" />{(c.available_tools ?? []).length}</Badge>
+              {c.url?.includes(".supabase.co/functions/v1/") && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="סנכרן bearer מסודות Edge"
+                  disabled={resync.isPending}
+                  onClick={() => resync.mutate({ id: c.id, name: c.name })}
+                >
+                  <RefreshCw className={`h-4 w-4${resync.isPending ? " animate-spin" : ""}`} />
+                </Button>
+              )}
               <Button variant="ghost" size="icon" onClick={() => disconnect.mutate(c.id)}>
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
