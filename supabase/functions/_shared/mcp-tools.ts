@@ -3,6 +3,12 @@
 // AI-Gateway compatible tool definitions plus per-tool executors that call
 // the remote MCP server via JSON-RPC over HTTP.
 
+import {
+  isMcpAuthError,
+  mcpJsonRpc,
+  resyncInternalMcpBearer,
+} from "./mcp-bearer.ts";
+
 export interface McpLoaded {
   toolDefs: Array<{ name: string; description?: string; parameters: any }>
   executors: Map<string, (args: any) => Promise<any>>
@@ -18,28 +24,6 @@ interface McpConnRow {
   available_tools: any
 }
 
-async function mcpJsonRpc(url: string, bearer: string | undefined, method: string, params: any = {}, id = 1) {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json, text/event-stream',
-  }
-  if (bearer) headers['Authorization'] = `Bearer ${bearer}`
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
-    signal: AbortSignal.timeout(12_000),
-  })
-  const text = await resp.text()
-  if (!resp.ok) throw new Error(`MCP ${method} ${resp.status}: ${text.slice(0, 400)}`)
-  const ct = resp.headers.get('content-type') ?? ''
-  if (ct.includes('text/event-stream')) {
-    const m = text.match(/data:\s*(\{[\s\S]+?\})\s*$/m)
-    if (m) return JSON.parse(m[1])
-  }
-  return JSON.parse(text)
-}
-
 function sanitizeToolName(raw: string): string {
   return raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60)
 }
@@ -48,12 +32,44 @@ function toolNames(list: any[]): string {
   return (list || []).map((t) => t?.name).filter(Boolean).sort().join(',')
 }
 
-async function toolsForConnection(conn: McpConnRow): Promise<any[]> {
-  const cached = Array.isArray(conn.available_tools) ? conn.available_tools : []
-  const bearer = conn.oauth_tokens?.bearer as string | undefined
+async function callMcpWithResync(
+  supabase: any,
+  conn: McpConnRow,
+  tenantId: string,
+  method: string,
+  params: any = {},
+  id = 1,
+): Promise<{ resp: any; bearer: string | undefined }> {
+  let bearer = conn.oauth_tokens?.bearer as string | undefined;
   try {
-    const listResp = await mcpJsonRpc(conn.url, bearer, 'tools/list')
-    const live = listResp?.result?.tools
+    return { resp: await mcpJsonRpc(conn.url, bearer, method, params, id), bearer };
+  } catch (e) {
+    if (!isMcpAuthError(e)) throw e;
+    console.warn(`[mcp-tools] ${method} auth failed for ${conn.name}, resyncing bearer from edge secret`);
+    const resynced = await resyncInternalMcpBearer(supabase, {
+      id: conn.id,
+      name: conn.name,
+      url: conn.url,
+      tenant_id: tenantId,
+    });
+    if (!resynced?.bearer) throw e;
+    bearer = resynced.bearer;
+    conn.oauth_tokens = { bearer };
+    conn.available_tools = resynced.tools;
+    conn.state = resynced.state;
+    return { resp: await mcpJsonRpc(conn.url, bearer, method, params, id), bearer };
+  }
+}
+
+async function toolsForConnection(
+  supabase: any,
+  tenantId: string,
+  conn: McpConnRow,
+): Promise<any[]> {
+  const cached = Array.isArray(conn.available_tools) ? conn.available_tools : []
+  try {
+    const { resp } = await callMcpWithResync(supabase, conn, tenantId, 'tools/list')
+    const live = resp?.result?.tools
     if (Array.isArray(live) && live.length > 0) return live
   } catch (e) {
     console.warn(`[mcp-tools] tools/list failed for ${conn.name}:`, (e as any)?.message ?? e)
@@ -91,8 +107,8 @@ export async function loadMcpTools(
   for (const conn of data as McpConnRow[]) {
     // Access control: skip integrations turned OFF for this agent.
     if (disabledSet.has(conn.name)) continue
-    const tools = await toolsForConnection(conn)
-    const bearer = conn.oauth_tokens?.bearer as string | undefined
+    const tools = await toolsForConnection(supabase, tenantId, conn)
+    let bearer = conn.oauth_tokens?.bearer as string | undefined
     const connSlug = sanitizeToolName(conn.name || conn.id.slice(0, 6))
 
     if (toolNames(tools) !== toolNames(Array.isArray(conn.available_tools) ? conn.available_tools : [])) {
@@ -118,7 +134,7 @@ export async function loadMcpTools(
       })
       const remoteName = t.name as string
       executors.set(prefixed, async (args: any) => {
-        const resp = await mcpJsonRpc(conn.url, bearer, 'tools/call', {
+        const { resp } = await callMcpWithResync(supabase, conn, tenantId, 'tools/call', {
           name: remoteName,
           arguments: args ?? {},
         })
