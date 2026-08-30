@@ -131,8 +131,9 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const { site_id, tenant_id: bodyTenantId, backfill_attribution_days } = body || {};
     const manualSiteSync = !!site_id && !bodyTenantId;
-    const attributionBackfillDays = Number(backfill_attribution_days) ||
-      (manualSiteSync ? ATTRIBUTION_BACKFILL_DAYS : 0);
+    const attributionBackfillDays = backfill_attribution_days != null
+      ? Number(backfill_attribution_days)
+      : (manualSiteSync ? ATTRIBUTION_BACKFILL_DAYS : 0);
 
     // Build query — either by site_id or by tenant_id (for cron)
     let sitesQuery = supabase
@@ -216,24 +217,33 @@ serve(async (req) => {
 
         // Manual / single-site sync: backfill attribution on recent orders even if not modified lately.
         if (attributionBackfillDays > 0) {
-          const afterDate = new Date();
-          afterDate.setDate(afterDate.getDate() - attributionBackfillDays);
-          const backfillOrders = await fetchAllPages(
-            site_url,
-            woo_consumer_key,
-            woo_consumer_secret,
-            "orders",
-            {
-              after: afterDate.toISOString().split("T")[0],
-              orderby: "date",
-              order: "desc",
-            },
-            30,
-          );
-          allOrders = mergeOrdersById([...allOrders, ...backfillOrders]);
-          console.log(
-            `[woo-sync] attribution backfill ${attributionBackfillDays}d — ${backfillOrders.length} orders fetched, ${allOrders.length} unique`,
-          );
+          try {
+            const afterDate = new Date();
+            afterDate.setDate(afterDate.getDate() - attributionBackfillDays);
+            // WooCommerce expects ISO8601 date-time for `after`, not YYYY-MM-DD alone.
+            const afterIso = afterDate.toISOString().split(".")[0];
+            const backfillOrders = await fetchAllPages(
+              site_url,
+              woo_consumer_key,
+              woo_consumer_secret,
+              "orders",
+              {
+                after: afterIso,
+                orderby: "date",
+                order: "desc",
+              },
+              30,
+            );
+            allOrders = mergeOrdersById([...allOrders, ...backfillOrders]);
+            console.log(
+              `[woo-sync] attribution backfill ${attributionBackfillDays}d — ${backfillOrders.length} orders fetched, ${allOrders.length} unique`,
+            );
+          } catch (backfillErr: any) {
+            console.warn(
+              `[woo-sync] attribution backfill skipped for ${siteId}:`,
+              backfillErr?.message || backfillErr,
+            );
+          }
         }
 
         const orderRows = allOrders.map((order: any) => mapOrderRow(tenant_id, siteId, order));
