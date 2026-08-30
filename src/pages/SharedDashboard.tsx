@@ -507,7 +507,7 @@ export default function SharedDashboard({
     return { revenue, orderCount, googlePaid };
   }, [wooOrders]);
 
-  const hasWooData = hasWooCommerce && wooSummary.revenue > 0;
+  const hasWooData = hasWooCommerce && (wooSummary.revenue > 0 || wooSummary.orderCount > 0);
 
   // ROAS is computed from WooCommerce revenue when available (real store revenue),
   // falling back to Analytics revenue when there's no WooCommerce data.
@@ -858,7 +858,7 @@ export default function SharedDashboard({
   if (error || !data?.dashboard) {
     const detail = error instanceof Error ? error.message : '';
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
+      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl" data-snapshot-error={detail || 'load_failed'}>
         <Card className="max-w-md w-full">
           <CardContent className="p-8 text-center">
             <h2 className="text-xl font-bold mb-2">לא ניתן לטעון את הדוח</h2>

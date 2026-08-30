@@ -307,16 +307,7 @@ export default function DashboardView() {
     enabled: !!dashboard?.client_id,
   });
 
-  // SEO clients default to "last 30 days" (monthly SEO reports)
-  useEffect(() => {
-    if (didSetSeoDefaultRef.current) return;
-    if (hasSeoReports) {
-      setDateFilter('last_30_days');
-      didSetSeoDefaultRef.current = true;
-    }
-  }, [hasSeoReports]);
-
-
+  // SEO / WooCommerce dashboards default to "last 30 days" (monthly window + store revenue).
   const { data: hasWooCommerce = false } = useQuery({
     queryKey: ['has-woocommerce', dashboard?.client_id],
     queryFn: async () => {
@@ -336,6 +327,14 @@ export default function DashboardView() {
     },
     enabled: !!dashboard?.client_id,
   });
+
+  useEffect(() => {
+    if (didSetSeoDefaultRef.current) return;
+    if (hasSeoReports || hasWooCommerce) {
+      setDateFilter('last_30_days');
+      didSetSeoDefaultRef.current = true;
+    }
+  }, [hasSeoReports, hasWooCommerce]);
 
   // WooCommerce summary range — same presets as ads/analytics (crm-records).
   const wooDateRange = useMemo(
