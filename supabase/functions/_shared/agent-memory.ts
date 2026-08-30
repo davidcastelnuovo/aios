@@ -118,18 +118,42 @@ export async function saveAgentMemory(opts: {
   metadata?: any;
 }) {
   try {
-    if (!opts.summary?.trim()) return;
-    const emb = await embed(`${opts.title}\n${opts.summary}`);
-    await opts.supabase.from('agent_memory').insert({
+    if (!opts.summary?.trim() || !opts.agent_id) return;
+    const category = opts.category || 'fact';
+    const title = String(opts.title || opts.category).slice(0, 200);
+    const summary = String(opts.summary).slice(0, 2000);
+    const emb = await embed(`${title}\n${summary}`);
+    const row = {
       tenant_id: opts.tenant_id,
       agent_id: opts.agent_id,
-      category: opts.category || 'fact',
-      title: String(opts.title || opts.category).slice(0, 200),
-      summary: String(opts.summary).slice(0, 2000),
+      category,
+      title,
+      summary,
       summary_embedding: emb,
       importance: Math.min(100, Math.max(1, opts.importance ?? 70)),
       metadata: opts.metadata || {},
-    });
+      updated_at: new Date().toISOString(),
+    };
+    const isInstruction = category === 'instructions' || category === 'instruction';
+    if (isInstruction) {
+      const { data: existing } = await opts.supabase
+        .from('agent_memory')
+        .select('id')
+        .eq('tenant_id', opts.tenant_id)
+        .eq('agent_id', opts.agent_id)
+        .eq('category', category)
+        .eq('title', title)
+        .maybeSingle();
+      if (existing?.id) {
+        const { error } = await opts.supabase.from('agent_memory').update(row).eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await opts.supabase.from('agent_memory').insert(row);
+        if (error) throw error;
+      }
+      return;
+    }
+    await opts.supabase.from('agent_memory').insert(row);
   } catch (e) {
     console.error('[agent-memory] save error:', (e as any)?.message);
   }
