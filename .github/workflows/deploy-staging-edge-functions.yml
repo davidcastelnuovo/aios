@@ -61,7 +61,8 @@ jobs:
             CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- 'supabase/functions/**' \
               | sed -E 's#supabase/functions/([^/]+)/.*#\1#' \
               | { grep -v '^_shared$' || true; } | sort -u | tr '\n' ' ')
-            if echo " $CHANGED " | grep -qE ' (mcp-connect|cursor-mcp|run-ai-agent|_shared) '; then
+            WORKFLOW_CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- '.github/workflows/deploy-staging-edge-functions.yml')
+            if [ -n "$WORKFLOW_CHANGED" ] || echo " $CHANGED " | grep -qE ' (mcp-connect|cursor-mcp|run-ai-agent|_shared) '; then
               echo "list=$AGENT_MCP_BUNDLE" >> "$GITHUB_OUTPUT"
             else
               echo "list=$CHANGED" >> "$GITHUB_OUTPUT"

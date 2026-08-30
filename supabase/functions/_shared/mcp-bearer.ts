@@ -1,4 +1,5 @@
 // Shared helpers for internal AIOS MCP edge connections (Cursor, Claude, Grok, Manus).
+// Preview/Staging: resync also repoints cloned prod MCP URLs to this project's host.
 // Keeps agent_mcp_connections.oauth_tokens.bearer aligned with Edge secrets when they drift.
 
 export const PRESET_SECRETS: Record<string, string> = {
