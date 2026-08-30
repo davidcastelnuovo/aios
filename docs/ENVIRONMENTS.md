@@ -30,14 +30,15 @@ When a task finishes, **always send David the development environment link**: th
 
 ```
 feature/* or fix/*
-    → Vercel Preview (this branch)
-    → merge to develop
-    → AIOS Staging (persistent)
-    → validate
+    → Vercel Preview (this branch, Staging data)
     → explicit approval
     → merge to main
     → Production
+    → auto-sync develop  (sync-develop-from-main.yml)
+    → persistent Staging stays on the same code
 ```
+
+A merge to `main` also updates `develop`. That keeps the development environment current (frontend on the `develop` Vercel deploy, plus Staging Edge Functions via `deploy-staging-edge-functions.yml`). Do not treat `develop` as a separate release train.
 
 | Git | Deploy | Data |
 | --- | --- | --- |
@@ -63,11 +64,10 @@ Already in place:
 
 Gaps (do not touch Production to close these):
 
-1. Staging schema/function sync: **237 Edge Functions deployed**; **~229 public tables** applied from repo migrations. Production data seeds were skipped on purpose. Some cron jobs need `pg_cron` (optional).
+1. Staging schema/function sync: Edge Functions deployed; public tables applied from repo migrations. Operational data is cloned onto Staging (users, tenants, Carmen, clients, tasks, live integrations). WhatsApp rows are **mocked connected** (no live tokens; `IntegrationGuard` still blocks send). Huge analytics/graph/chat-history tables are skipped.
 2. Add GitHub secret `SUPABASE_STAGING_PROJECT_ID` so the Staging deploy workflow can run.
-3. Copy non-customer secrets the Staging functions need (e.g. `OPENAI_API_KEY`) in the Staging project dashboard — never commit them. Do **not** copy Production WhatsApp/Meta tokens.
+3. LLM keys live in Staging `tenant_integrations` (`llm`). Do **not** copy Production WhatsApp/Meta tokens.
 4. No persistent custom Staging domain yet (`STAGING_DOMAIN=<configured-in-vercel>`). Vercel Authentication is `all_except_custom_domains`, so `*.vercel.app` Preview URLs require a Vercel login. A custom Staging domain would skip that gate.
-5. No dedicated Staging seed/test tenants yet — sign up on the Preview URL to create the first user.
 7. Google sign-in on Staging: provider is enabled (same OAuth client as Production). In Google Cloud → that OAuth client → **Authorized redirect URIs**, add the Callback URL shown in **Supabase → AIOS Staging → Authentication → Providers → Google**. Do not change Production callback URIs. Google does not accept `*.vercel.app` wildcards; the URI to add is the Staging `…supabase.co/auth/v1/callback` only.
 8. Email / webhooks / cron / automations are not fully on the guard yet (WhatsApp is).
 9. Branch protection on `main` / `develop` is a GitHub settings change.
@@ -78,8 +78,8 @@ Gaps (do not touch Production to close these):
 1. Create `feature/*` or `fix/*` from `develop` when Staging work is in flight; from `main` only for hotfixes David asked for.
 2. Implement on the feature branch. Never commit to `main`. Never run unbounded `DELETE`/`UPDATE` on Production.
 3. Open a PR. **Always reply with the Vercel Preview URL** (the development environment link) and the in-app path.
-4. Merge to `develop` only when David asks. That is Staging.
-5. Merge `develop` → `main` only after `מאשר לפרודקשן`.
+4. Merge to `main` only after `מאשר לפרודקשן`. `develop` is then updated automatically from `main`.
+5. Do not merge to `develop` by hand unless the auto-sync failed.
 6. Edge-function or migration work: add files under `supabase/functions` / `supabase/migrations`. Do not apply them to Production from the agent. Staging apply is a later phase.
 
 ## Staging Safe Mode
