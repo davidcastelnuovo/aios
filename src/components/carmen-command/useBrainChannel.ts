@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   FALLBACK_BRAIN_ROUTES,
   channelHealthBanner,
+  initialSelectedRoute,
   isInputLocked,
   pickDefaultRoute,
   sendPathForRoute,
@@ -36,7 +37,7 @@ async function authHeader(): Promise<Record<string, string>> {
 
 export function useBrainChannel(tenantId: string | null) {
   const [routes, setRoutes] = useState<BrainRoute[]>(FALLBACK_BRAIN_ROUTES);
-  const [selected, setSelected] = useState<BrainRoute>(FALLBACK_BRAIN_ROUTES[0]);
+  const [selected, setSelected] = useState<BrainRoute>(() => initialSelectedRoute());
   const [status, setStatus] = useState<ConversationChannelStatus>("idle");
   const [externalUrl, setExternalUrl] = useState<string | null>(null);
   const [channelHealth, setChannelHealth] = useState<ChannelHealth | null>(null);
@@ -45,7 +46,6 @@ export function useBrainChannel(tenantId: string | null) {
 
   useEffect(() => {
     if (!tenantId) return;
-    const saved = localStorage.getItem(storageKeyForRoute(tenantId));
     (async () => {
       try {
         const headers = await authHeader();
@@ -58,9 +58,9 @@ export function useBrainChannel(tenantId: string | null) {
         const json = await res.json();
         const list = Array.isArray(json.routes) && json.routes.length ? json.routes as BrainRoute[] : FALLBACK_BRAIN_ROUTES;
         setRoutes(list);
-        setSelected(pickDefaultRoute(list, saved));
+        setSelected((prev) => list.find((r) => r.slug === prev.slug) || pickDefaultRoute(list));
       } catch {
-        setSelected(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, saved));
+        setSelected((prev) => pickDefaultRoute(FALLBACK_BRAIN_ROUTES, prev.slug));
       }
       try {
         const headers = await authHeader();

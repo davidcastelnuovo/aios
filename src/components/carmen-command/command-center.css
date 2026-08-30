@@ -137,6 +137,51 @@
     inset 0 0 40px rgba(76, 195, 255, 0.04);
 }
 
+.cc-talkbar-shell {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.cc-chat-rail {
+  display: flex;
+  width: 13.25rem;
+  flex-direction: column;
+  border-inline-end: 1px solid var(--cc-line);
+  padding: 8px 8px 6px;
+  background: rgba(5, 10, 22, 0.35);
+}
+.cc-chat-rail.is-overlay {
+  width: 100%;
+  border-inline-end: 0;
+}
+
+.cc-chat-topic {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 7px 8px;
+  text-align: right;
+  color: var(--cc-text);
+}
+.cc-chat-topic:hover { background: rgba(76, 195, 255, 0.08); }
+.cc-chat-topic.is-active { background: rgba(76, 195, 255, 0.14); }
+.cc-chat-topic-dot {
+  margin-top: 6px;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(143, 163, 196, 0.45);
+}
+.cc-chat-topic-dot.is-live {
+  background: var(--cc-ok);
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
+  animation: cc-pulse-dot 2.2s ease-in-out infinite;
+}
+
 .cc-channel-health {
   margin: 0 10px 8px;
   border: 1px solid rgba(251, 191, 36, 0.45);

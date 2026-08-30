@@ -1,6 +1,6 @@
 import { ReactNode, forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Headphones, History, Loader2, Mic, MicOff, Play, Plus, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronUp, Headphones, History, Loader2, Mic, MicOff, Play, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -10,10 +10,12 @@ import type { CarmenFaceState } from "./CarmenFace";
 import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
 import { BrainRouteSelector } from "./BrainRouteSelector";
 import { RoundTableBoard } from "./RoundTableBoard";
+import { ChatTopicRail } from "./ChatTopicRail";
 import { ThinkingGalaxy } from "./ThinkingGalaxy";
 import { useBrainChannel } from "./useBrainChannel";
-import { deriveParliamentView, hudStage, routeForTableAddress, speakerLabel } from "@/lib/agentChannelRouting";
-import type { CouncilSeatId, HudStage } from "@/lib/agentChannelRouting";
+import { deriveParliamentView, hudStage, routeForRestoredChat, routeForTableAddress, speakerLabel } from "@/lib/agentChannelRouting";
+import { composerLockedForChat, lastConversationStorageKey, streamAppliesToActive, topicIsLive, type TopicChat } from "@/lib/chatTopics";
+import type { ConversationChannelStatus, CouncilSeatId, HudStage } from "@/lib/agentChannelRouting";
 import {
   CarmenInputMode,
   onRealtimeUnavailable,
@@ -80,6 +82,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [streamingText, setStreamingText] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
+    const [liveStreamIds, setLiveStreamIds] = useState<string[]>([]);
+    const liveStreamIdsRef = useRef<string[]>([]);
+    liveStreamIdsRef.current = liveStreamIds;
+    const streamBufRef = useRef<Record<string, string>>({});
     const [inputMode, setInputMode] = useState<CarmenInputMode>("typed");
     const [expanded, setExpanded] = useState(false);
     const [isConvMode, setIsConvMode] = useState(false);
@@ -110,6 +116,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     // OpenAI Realtime session — the only Command Center voice path
     const realtimeRef = useRef<RealtimeHandle | null>(null);
     const { toast } = useToast();
+    const queryClient = useQueryClient();
     const brain = useBrainChannel(tenantId);
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [addressedSeat, setAddressedSeat] = useState<CouncilSeatId | null>(null);
@@ -239,9 +246,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       if (!id) return;
       conversationIdRef.current = id;
       setConversationId(id);
+      if (tenantId) localStorage.setItem(lastConversationStorageKey(tenantId), id);
     };
 
-    const streamInternal = useCallback(async (trimmed: string, history: Array<{ role: string; content: string }>) => {
+    const streamInternal = useCallback(async (
+      trimmed: string,
+      history: Array<{ role: string; content: string }>,
+      boundConvId: string,
+    ) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("לא מחוברת");
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`, {
@@ -252,7 +264,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           tenant_id: tenantId,
           surface: "internal_chat",
           stream: true,
-          conversation_id: conversationIdRef.current,
+          conversation_id: boundConvId || conversationIdRef.current,
           conversation_history: history,
         }),
       });
@@ -265,6 +277,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       let gotDone = false;
       let speechBuf = "";
       let firstSegmentSent = false;
+      let boundId = boundConvId;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -280,8 +293,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             const parsed = JSON.parse(payload);
             if (parsed.type === "token") {
               answer += parsed.content;
-              setStreamingText(prev => prev + parsed.content);
-              if (shouldSpeakWithLegacyTts(inputModeRef.current)) {
+              if (boundId) streamBufRef.current[boundId] = (streamBufRef.current[boundId] || "") + parsed.content;
+              if (streamAppliesToActive(boundId, conversationIdRef.current)) {
+                setStreamingText(boundId ? streamBufRef.current[boundId] : answer);
+                scrollDown();
+              }
+              if (shouldSpeakWithLegacyTts(inputModeRef.current) && streamAppliesToActive(boundId, conversationIdRef.current)) {
                 speechBuf += parsed.content;
                 let cut = extractSentence(speechBuf, firstSegmentSent ? 90 : 25);
                 while (cut) {
@@ -291,12 +308,16 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                   cut = extractSentence(speechBuf, 90);
                 }
               }
-              scrollDown();
             } else if (parsed.type === "tool_call") {
-              setMessages(prev => [...prev, { role: "tool_call", tool: parsed.tool }]);
-              scrollDown();
+              if (streamAppliesToActive(boundId, conversationIdRef.current)) {
+                setMessages(prev => [...prev, { role: "tool_call", tool: parsed.tool }]);
+                scrollDown();
+              }
             } else if (parsed.type === "conversation_id" && parsed.id) {
-              rememberConv(parsed.id);
+              boundId = parsed.id;
+              if (streamAppliesToActive(boundConvId, conversationIdRef.current) || !conversationIdRef.current) {
+                rememberConv(parsed.id);
+              }
             } else if (parsed.type === "done") {
               gotDone = true;
             }
@@ -307,20 +328,26 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       if (shouldSpeakWithLegacyTts(inputModeRef.current) && speechBuf.trim()) enqueueSpeech(speechBuf);
       const finalText = answer || (gotDone ? "" : "⚠️ החיבור נותק באמצע — נסי שוב.");
       if (finalText) {
-        setMessages(prev => [...prev, { role: "assistant", content: finalText, speaker: "carmen", channel: "internal", ...tagChatTurn("typed") }]);
-        if (conversationIdRef.current) {
-          brain.persistAssistant(conversationIdRef.current, finalText, crypto.randomUUID());
+        if (streamAppliesToActive(boundId, conversationIdRef.current)) {
+          setMessages(prev => [...prev, { role: "assistant", content: finalText, speaker: "carmen", channel: "internal", ...tagChatTurn("typed") }]);
+          setStreamingText("");
         }
+        if (boundId) {
+          brain.persistAssistant(boundId, finalText, crypto.randomUUID());
+          delete streamBufRef.current[boundId];
+        }
+      } else if (streamAppliesToActive(boundId, conversationIdRef.current)) {
+        setStreamingText("");
       }
-      setStreamingText("");
-      scrollDown();
+      if (streamAppliesToActive(boundId, conversationIdRef.current)) scrollDown();
       return finalText;
     }, [tenantId, enqueueSpeech, brain]);
 
     const sendText = useCallback(async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || isStreaming || !tenantId) return;
-      if (brain.locked) {
+      if (!trimmed || !tenantId) return;
+      const activeId = conversationIdRef.current;
+      if (composerLockedForChat({ conversationId: activeId, liveStreamIds, status: brain.status })) {
         toast({ title: "השיחה נעולה", description: "ממתינים לתשובת הערוץ או לסיום הפרלמנט.", variant: "destructive" });
         return;
       }
@@ -340,6 +367,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setStreamingText("");
       scrollDown();
 
+      let boundId = activeId;
       try {
         const history = messages
           .filter(m => m.role === "user" || m.role === "assistant")
@@ -354,9 +382,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           route,
         });
         rememberConv(routed.conversation_id);
+        boundId = routed.conversation_id || conversationIdRef.current;
+        if (boundId) setLiveStreamIds((prev) => (prev.includes(boundId!) ? prev : [...prev, boundId!]));
         if (routed.stream) {
-          await streamInternal(trimmed, history);
-        } else {
+          await streamInternal(trimmed, history, boundId || "");
+        } else if (streamAppliesToActive(boundId, conversationIdRef.current)) {
           setMessages(prev => [...prev, {
             role: "tool_call",
             tool: routed.accepted_message,
@@ -369,8 +399,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         toast({ title: "שגיאה", description: err.message ?? "שגיאה בשליחה", variant: "destructive" });
       } finally {
         setIsStreaming(false);
+        if (boundId) setLiveStreamIds((prev) => prev.filter((id) => id !== boundId));
+        queryClient.invalidateQueries({ queryKey: ["cc-conversations", tenantId] });
       }
-    }, [isStreaming, tenantId, messages, stopSpeech, toast, brain, streamInternal, hud, addressedSeat]);
+    }, [tenantId, messages, stopSpeech, toast, brain, streamInternal, hud, addressedSeat, queryClient, liveStreamIds]);
 
     const endConversation = useCallback(() => {
       convModeRef.current = false;
@@ -676,13 +708,21 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setMessages([]);
       setStreamingText("");
       setShowHistory(false);
-    }, [learnFromConversation]);
+      setAddressedSeat(null);
+      brain.setStatus("idle");
+      if (tenantId) localStorage.removeItem(lastConversationStorageKey(tenantId));
+    }, [learnFromConversation, tenantId, brain]);
 
-    const loadConversation = useCallback(async (conv: { id: string; messages: unknown }) => {
+    const loadConversation = useCallback(async (conv: TopicChat) => {
       learnFromConversation();
-      conversationIdRef.current = conv.id;
-      setConversationId(conv.id);
-      let msgs = (Array.isArray(conv.messages) ? conv.messages : []) as { role: string; content?: string; speaker?: string; channel?: string }[];
+      rememberConv(conv.id);
+      const nextRoute = routeForRestoredChat(brain.routes, conv);
+      brain.selectRoute(nextRoute, conv.id);
+      if (nextRoute.route_type === "parliament") setAddressedSeat(null);
+      brain.setStatus((topicIsLive(conv.status) ? conv.status : "idle") as ConversationChannelStatus);
+      setStreamingText(streamBufRef.current[conv.id] || "");
+      setIsStreaming(liveStreamIdsRef.current.includes(conv.id));
+      let msgs: Array<{ id?: string; role: string; content?: string; speaker?: string; channel?: string }> = [];
       try {
         const { data } = await (supabase as any)
           .from("ai_conversation_messages")
@@ -690,8 +730,9 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           .eq("conversation_id", conv.id)
           .order("created_at", { ascending: true });
         if (Array.isArray(data) && data.length) msgs = data;
-      } catch { /* jsonb fallback */ }
-      setMessages(msgs
+      } catch { /* empty until messages arrive */ }
+      if (conversationIdRef.current !== conv.id) return;
+      setMessages(msgs)
         .filter(m => m.role === "user" || m.role === "assistant" || m.role === "system")
         .map(m => ({
           id: (m as any).id,
@@ -703,20 +744,33 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setShowHistory(false);
       setExpanded(true);
       scrollDown();
-    }, [learnFromConversation]);
+    }, [learnFromConversation, brain]);
 
     const { data: pastConversations } = useQuery({
       queryKey: ["cc-conversations", tenantId],
-      enabled: showHistory && !!tenantId,
+      enabled: !!tenantId,
       queryFn: async () => {
         const { data } = await (supabase as any)
           .from("ai_conversations")
-          .select("id, title, updated_at, messages")
+          .select("id, title, updated_at, status, routing_mode, brain_route_id")
           .order("updated_at", { ascending: false })
-          .limit(30);
-        return data ?? [];
+          .limit(40);
+        return (data ?? []) as TopicChat[];
       },
     });
+
+    const restoredRef = useRef(false);
+    useEffect(() => {
+      if (!tenantId || restoredRef.current || conversationIdRef.current) return;
+      const last = localStorage.getItem(lastConversationStorageKey(tenantId));
+      const hit = pastConversations?.find((c) => c.id === last);
+      if (hit) {
+        restoredRef.current = true;
+        loadConversation(hit);
+      } else if (pastConversations) {
+        restoredRef.current = true;
+      }
+    }, [tenantId, pastConversations, loadConversation]);
 
     /* ---------- Mute (keep the conversation, stop listening) ---------- */
 
@@ -781,6 +835,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
 
     const hasThread = messages.length > 0 || !!streamingText;
     const parliamentView = deriveParliamentView(messages, brain.selected);
+    const activeTopic = pastConversations?.find((c) => c.id === conversationId);
+    const thisChatBusy = composerLockedForChat({
+      conversationId,
+      liveStreamIds,
+      status: activeTopic?.status ?? (conversationId && liveStreamIds.includes(conversationId) ? "streaming" : brain.status),
+    });
 
     const params = (
       <div className="flex min-w-0 flex-col gap-2">
@@ -792,7 +852,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             brain.selectRoute(route, conversationIdRef.current);
             if (route.route_type === "parliament") setAddressedSeat(null);
           }}
-          disabled={isStreaming || brain.status === "debating"}
+          disabled={thisChatBusy}
           status={brain.status}
           externalUrl={brain.externalUrl}
         />
@@ -840,6 +900,15 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               <div className="mt-4 flex flex-col gap-3">{menuPanels}</div>
             </SheetContent>
           </Sheet>
+        <div className="cc-talkbar-shell min-h-0 flex-1">
+        <ChatTopicRail
+          className="hidden lg:flex"
+          items={pastConversations ?? []}
+          activeId={conversationId}
+          onSelect={(conv) => { loadConversation(conv); }}
+          onNew={startNewConversation}
+        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <RoundTableBoard
           route={brain.selected}
           messages={messages}
@@ -871,26 +940,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           } : undefined}
         />
         {showHistory && (
-          <div className="cc-scroll max-h-[30vh] overflow-y-auto border-b border-[var(--cc-line)] p-2">
-            <div className="mb-1 flex items-center justify-between px-1">
-              <span className="cc-panel-title">שיחות קודמות</span>
-              <button onClick={startNewConversation} className="flex items-center gap-1 text-xs text-[var(--cc-accent)] hover:underline">
-                <Plus className="h-3.5 w-3.5" />שיחה חדשה
-              </button>
-            </div>
-            {!pastConversations?.length && <p className="px-1 py-2 text-sm text-[var(--cc-text-dim)]">אין שיחות שמורות עדיין</p>}
-            {pastConversations?.map((conv: any) => (
-              <button
-                key={conv.id}
-                onClick={() => loadConversation(conv)}
-                className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-right text-sm hover:bg-[rgba(76,195,255,0.08)] ${conversationIdRef.current === conv.id ? "bg-[rgba(76,195,255,0.12)]" : ""}`}
-              >
-                <span className="min-w-0 flex-1 truncate">{conv.title || "שיחה"}</span>
-                <span className="cc-num mr-2 shrink-0 text-[10px] text-[var(--cc-text-dim)]">
-                  {new Date(conv.updated_at).toLocaleDateString("he-IL", { day: "numeric", month: "numeric" })}
-                </span>
-              </button>
-            ))}
+          <div className="max-h-[34vh] border-b border-[var(--cc-line)] lg:hidden">
+            <ChatTopicRail
+              className="is-overlay"
+              items={pastConversations ?? []}
+              activeId={conversationId}
+              onSelect={(conv) => { loadConversation(conv); }}
+              onNew={startNewConversation}
+            />
           </div>
         )}
         {hasThread && (
@@ -931,7 +988,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                     </div>
                   </div>
                 )}
-                {(isStreaming || brain.locked) && !streamingText && (
+                {thisChatBusy && !streamingText && (
                   <ThinkingGalaxy />
                 )}
               </div>
@@ -939,6 +996,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           </>
         )}
 
+        </div>
+        </div>
         {brain.healthBanner && (
           <p className="cc-channel-health" role="status">
             {brain.healthBanner}
@@ -953,7 +1012,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             brain.selectRoute(route, conversationIdRef.current);
             if (route.route_type === "parliament") setAddressedSeat(null);
           }}
-                disabled={isStreaming || brain.status === "debating"}
+                disabled={thisChatBusy}
                 status={brain.status}
                 externalUrl={brain.externalUrl}
               />
@@ -971,14 +1030,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                   {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
                 </button>
               </div>
-              <button
-                onClick={() => setShowHistory(h => !h)}
-                title="שיחות"
-                className={`shrink-0 ${showHistory ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"}`}
-              >
-                <History className="h-5 w-5" />
-              </button>
             </div>
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            title="שיחות"
+            className={`shrink-0 lg:hidden ${showHistory ? "text-[var(--cc-accent)]" : "text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"}`}
+          >
+            <History className="h-5 w-5" />
+          </button>
           <button
             onClick={startVoice}
             title={isConvMode ? "סיים שיחה חיה" : "שיחה חיה"}
@@ -1024,16 +1083,16 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             placeholder={isConvMode ? (isRealtime ? "שיחה חיה" : "פותחת…") : hud === "table"
               ? (addressedSeat ? `אל ${speakerLabel(addressedSeat)}` : "מועצה — לחצי על דמות או שלחי לכולם")
               : `אל ${speakerLabel(brain.selected.slug)}`}
-            disabled={isStreaming || brain.locked}
+            disabled={thisChatBusy}
             className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] disabled:opacity-50"
           />
           <button
             onClick={() => sendText(input)}
-            disabled={!input.trim() || isStreaming || brain.locked}
+            disabled={!input.trim() || thisChatBusy}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--cc-accent-dim)] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             title="שליחה"
           >
-            {isStreaming || brain.locked ? <ThinkingGalaxy size="sm" /> : <Send className="h-4 w-4" />}
+            {thisChatBusy ? <ThinkingGalaxy size="sm" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
       </div>

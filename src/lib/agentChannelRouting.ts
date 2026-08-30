@@ -14,7 +14,35 @@ export type BrainRoute = {
   session_status?: string | null;
 };
 
-export const DEFAULT_BRAIN_SLUG = "cursor";
+export const DEFAULT_BRAIN_SLUG = "parliament";
+
+export function readSavedRouteSlug(tenantId: string | null | undefined): string | null {
+  if (!tenantId) return null;
+  try {
+    return localStorage.getItem(storageKeyForRoute(tenantId));
+  } catch {
+    return null;
+  }
+}
+
+/** First paint is always the knights table. A saved slug must not flash Cursor first. */
+export function initialSelectedRoute(_tenantId?: string | null, routes: BrainRoute[] = FALLBACK_BRAIN_ROUTES): BrainRoute {
+  return pickDefaultRoute(routes);
+}
+
+/** Last chat's brain wins. Saved slug is only for a brand-new empty session — and even then we stay on the table. */
+export function routeForRestoredChat(
+  routes: BrainRoute[],
+  lastChat?: { brain_route_id?: string | null; routing_mode?: string | null } | null,
+): BrainRoute {
+  if (lastChat) {
+    const hit = lastChat.brain_route_id
+      ? routes.find((r) => r.id === lastChat.brain_route_id)
+      : routes.find((r) => r.route_type === lastChat.routing_mode || r.slug === lastChat.routing_mode);
+    if (hit) return hit;
+  }
+  return pickDefaultRoute(routes);
+}
 
 export const FALLBACK_BRAIN_ROUTES: BrainRoute[] = [
   { id: "fallback-cursor", slug: "cursor", label: "Cursor Direct", route_type: "direct_channel", provider: "cursor" },
