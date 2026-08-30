@@ -9,6 +9,7 @@ import {
   envOpenChatId,
   missingOpenChatMessage,
   uniqueCloudAgentIds,
+  FALLBACK_CURSOR_DIRECT_CHAT,
 } from "./sticky-agent.ts";
 
 test("only bc- ids count as an open Cursor chat", () => {
@@ -83,6 +84,36 @@ test("collectOpenChatIds merges session, env, sticky table, then last sessions",
     sessionId: "bc-this-chat",
     env: { CURSOR_DIRECT_AGENT_ID: "bc-direct" },
   });
-  assert.deepEqual(ids, ["bc-this-chat", "bc-direct", "bc-sticky", "bc-dispatch", "bc-session-old"]);
+  assert.deepEqual(ids, [
+    "bc-this-chat",
+    "bc-direct",
+    "bc-sticky",
+    "bc-dispatch",
+    "bc-session-old",
+    FALLBACK_CURSOR_DIRECT_CHAT,
+  ]);
   assert.ok(calls.includes("cursor_sticky_agents"));
+});
+
+test("Cursor Direct always has the already-open Carmen Direct chat as last resort", async () => {
+  const sb = {
+    from() {
+      const chain: any = {
+        select() { return chain; },
+        eq() { return chain; },
+        not() { return chain; },
+        order() { return chain; },
+        limit() { return chain; },
+        maybeSingle: async () => ({ data: null }),
+        then(resolve: (v: { data: unknown }) => unknown) {
+          return Promise.resolve({ data: [] }).then(resolve);
+        },
+      };
+      return chain;
+    },
+  };
+  const ids = await collectOpenChatIds(sb, { tenantId: "t1", provider: "cursor", env: {} });
+  assert.deepEqual(ids, [FALLBACK_CURSOR_DIRECT_CHAT]);
+  const codex = await collectOpenChatIds(sb, { tenantId: "t1", provider: "codex", env: {} });
+  assert.deepEqual(codex, []);
 });

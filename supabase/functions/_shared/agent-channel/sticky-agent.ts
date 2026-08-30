@@ -2,6 +2,9 @@
 
 export type OpenChatProvider = "cursor" | "codex";
 
+/** Live "כרמן - ישיר" Cloud Agent. Last-resort Cursor Direct target — never create a new one. */
+export const FALLBACK_CURSOR_DIRECT_CHAT = "bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c";
+
 export function asCloudAgentId(value?: string | null): string | null {
   const id = String(value || "").trim();
   return id.startsWith("bc-") ? id : null;
@@ -114,6 +117,10 @@ export async function collectOpenChatIds(
       ids.push(...uniqueCloudAgentIds(row?.external_session_id));
     }
   } catch { /* ignore */ }
+
+  if (args.provider === "cursor") {
+    ids.push(...uniqueCloudAgentIds(FALLBACK_CURSOR_DIRECT_CHAT));
+  }
 
   return uniqueCloudAgentIds(...ids);
 }
