@@ -1,6 +1,6 @@
 import { Brain, ChevronDown, ExternalLink, Landmark, Loader2 } from "lucide-react";
 import type { BrainRoute, BrainRouteType } from "@/lib/agentChannelRouting";
-import { FALLBACK_BRAIN_ROUTES, groupLabel } from "@/lib/agentChannelRouting";
+import { FALLBACK_BRAIN_ROUTES, billingNoteForRoute, groupLabel } from "@/lib/agentChannelRouting";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,8 +90,10 @@ export function BrainRouteSelector({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      {(waiting || externalUrl) && (
-        <p className="px-1 text-[10px] text-[var(--cc-text-dim)]">
+      {(waiting || externalUrl || billingNoteForRoute(current?.provider)) && (
+        <p className="px-1 text-[10px] leading-snug text-[var(--cc-text-dim)]">
+          {billingNoteForRoute(current?.provider)}
+          {(waiting || externalUrl) && billingNoteForRoute(current?.provider) ? " · " : null}
           {statusLabel(status)}
           {waiting && <Loader2 className="mr-1 inline h-2.5 w-2.5 animate-spin" />}
           {externalUrl && (

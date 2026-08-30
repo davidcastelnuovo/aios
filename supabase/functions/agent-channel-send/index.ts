@@ -53,14 +53,30 @@ Deno.serve(async (req) => {
 
   if (action === "channel_health") {
     const { probeCursorApiKey, cursorApiKey } = await import("../_shared/agent-channel/cursor-api.ts");
+    const { collectOpenChatIds } = await import("../_shared/agent-channel/sticky-agent.ts");
     const cursor = await probeCursorApiKey(cursorApiKey());
     const appEnv = Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "";
+    let env: Record<string, string | undefined> = {};
+    try { env = Deno.env.toObject(); } catch { /* ignore */ }
+    const [cursorChats, codexChats] = await Promise.all([
+      collectOpenChatIds(sb, { tenantId, provider: "cursor", env }),
+      collectOpenChatIds(sb, { tenantId, provider: "codex", env }),
+    ]);
     return json(200, {
       ok: cursor.ok,
       cursor,
       app_env: appEnv || null,
+      seats: {
+        cursor: { bill: "cursor_cloud", open_chat: cursorChats.length > 0, chats: cursorChats.length },
+        codex: { bill: "cursor_cloud", open_chat: codexChats.length > 0, chats: codexChats.length },
+        grok: { bill: "grok_webhook" },
+        carmen: { bill: "openai_api" },
+        chatgpt: { bill: "chatgpt_workspace" },
+      },
       message: cursor.ok
-        ? "Cursor Cloud seats are reachable."
+        ? (cursorChats.length
+          ? "Cursor Direct מדבר עם הצ'אט שכבר פתוח. Codex = אותו חשבון Cursor Cloud, לא OpenAI ולא מנוי ChatGPT."
+          : "מפתח Cursor תקף, אבל אין צ'אט פתוח (bc-…) ל-Cursor Direct. לא פותחים סוכן רקע חדש.")
         : "CURSOR_API_KEY on this project is missing or rejected (401). Preview uses Staging — set a valid User key there.",
     });
   }

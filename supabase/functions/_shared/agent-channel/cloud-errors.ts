@@ -12,7 +12,12 @@ export function formatCloudAgentError(status: number, detail: string): string {
     return "מפתח Cursor API לא תקף. הפריוויו מדבר עם Staging.";
   }
   if (status === 400 && isCursorSpendLimitError(d)) {
-    return "Cursor Cloud לא פותח סוכני רקע — נגמר התקציב. צריך Usage-based pricing עם לפחות $2 ב-https://www.cursor.com/dashboard?tab=settings";
+    return (
+      "Cursor Cloud סירב לפתוח סוכן רקע חדש (תקציב Usage-based < $2). " +
+      "Cursor Direct ו-Codex Direct אמורים לדבר עם צ'אט שכבר פתוח, בלי סוכן חדש. " +
+      "זה לא קרדיט OpenAI ולא מנוי ChatGPT. " +
+      "פתיחה ראשונה בלבד: https://www.cursor.com/dashboard?tab=settings"
+    );
   }
   return `Cloud agent create ${status}: ${d.slice(0, 280)}`;
 }

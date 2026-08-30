@@ -102,15 +102,39 @@ export type ChannelHealth = {
   cursor?: { ok?: boolean; status?: number };
   app_env?: string | null;
   message?: string;
+  seats?: {
+    cursor?: { bill?: string; open_chat?: boolean; chats?: number };
+    codex?: { bill?: string; open_chat?: boolean; chats?: number };
+  };
 };
 
 /** Preview/Staging HUD copy when Cloud seats cannot launch. Null = hide the banner. */
 export function channelHealthBanner(health: ChannelHealth | null | undefined): string | null {
-  if (!health || health.ok) return null;
+  if (!health) return null;
   if (health.cursor && health.cursor.ok === false) {
     return "מושבי Cursor / Grok / Codex לא מחוברים בסביבת הפיתוח. הפריוויו מדבר עם Staging — צריך מפתח User תקף ב-CURSOR_API_KEY שם. כרמן הפנימית עובדת.";
   }
+  if (health.ok && health.seats?.cursor?.open_chat === false) {
+    return "Cursor Direct מחכה לצ'אט Cursor שכבר פתוח (bc-…). לא פותחים סוכן רקע חדש — אין חיוב $2. Codex = אותו חשבון Cursor, לא OpenAI ולא מנוי ChatGPT.";
+  }
   return null;
+}
+
+export function billingNoteForRoute(provider?: string | null): string | null {
+  switch (provider) {
+    case "cursor":
+      return "צ'אט Cursor פתוח · חיוב Cursor Cloud — לא OpenAI";
+    case "codex":
+      return "אותו חשבון Cursor Cloud כמו Cursor Direct — לא קרדיט OpenAI ולא מנוי ChatGPT";
+    case "chatgpt":
+      return "מנוי ChatGPT / workspace — לא Codex ולא OpenAI API";
+    case "internal":
+      return "כרמן פנימית · OpenAI API (מפתח הארגון)";
+    case "grok":
+      return "Grok Bot הקיים · בלי סוכן רקע חדש";
+    default:
+      return null;
+  }
 }
 
 export type HudStage = "table" | "direct";

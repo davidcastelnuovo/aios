@@ -1,6 +1,10 @@
 import { formatCloudAgentError } from "./cloud-errors.ts";
 
 export type CloudAgentResult = { url: string; id: string; reused: boolean };
+export type FollowUpOutcome =
+  | { kind: "ok"; id: string; url: string; reused: true }
+  | { kind: "busy"; id: string; url: string }
+  | { kind: "gone" };
 
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
 
@@ -41,7 +45,7 @@ export async function followUpCloudAgent(
   apiKey: string,
   agentId: string,
   promptText: string,
-): Promise<CloudAgentResult | null> {
+): Promise<FollowUpOutcome> {
   const url = `https://api.cursor.com/v1/agents/${encodeURIComponent(agentId)}/runs`;
   const sessionUrl = `https://cursor.com/agents/${agentId}`;
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -53,6 +57,7 @@ export async function followUpCloudAgent(
     if (resp.ok) {
       const parsed = parseAgentResponse(raw);
       return {
+        kind: "ok",
         id: agentId,
         url: parsed.url.includes("/agents/") ? parsed.url : sessionUrl,
         reused: true,
@@ -64,15 +69,14 @@ export async function followUpCloudAgent(
     }
     if (resp.status === 404 || resp.status === 410 || resp.status === 400) {
       console.warn(`[agent-channel] follow-up ${resp.status}: ${raw.slice(0, 200)}`);
-      return null;
+      return { kind: "gone" };
     }
     let detail = raw.slice(0, 500);
     try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
     throw new Error(`Cloud agent follow-up ${resp.status}: ${detail}`);
   }
-  // Busy — return null so the caller opens a parallel agent instead of faking success.
-  console.warn(`[agent-channel] follow-up 409 busy on ${agentId}; not delivered`);
-  return null;
+  console.warn(`[agent-channel] follow-up 409 busy on ${agentId}; not creating a new agent`);
+  return { kind: "busy", id: agentId, url: sessionUrl };
 }
 
 export async function createCloudAgent(args: {

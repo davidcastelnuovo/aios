@@ -15,6 +15,7 @@ import {
   councilSeatFromSlug,
   routeForTableAddress,
   channelHealthBanner,
+  billingNoteForRoute,
   initialSelectedRoute,
   routeForRestoredChat,
 } from "./agentChannelRouting.ts";
@@ -82,6 +83,23 @@ test("channel health banner only when Cursor key is rejected", () => {
   assert.match(banner || "", /CURSOR_API_KEY/);
   assert.match(banner || "", /Staging/);
   assert.match(banner || "", /כרמן הפנימית עובדת/);
+});
+
+test("health banner explains a missing open Cursor chat", () => {
+  const banner = channelHealthBanner({
+    ok: true,
+    cursor: { ok: true, status: 200 },
+    seats: { cursor: { open_chat: false } },
+  });
+  assert.match(banner || "", /כבר פתוח/);
+  assert.match(banner || "", /לא מנוי ChatGPT/);
+});
+
+test("Codex billing note is Cursor Cloud, not OpenAI or ChatGPT Plus", () => {
+  assert.match(billingNoteForRoute("codex") || "", /Cursor Cloud/);
+  assert.match(billingNoteForRoute("codex") || "", /לא קרדיט OpenAI/);
+  assert.match(billingNoteForRoute("chatgpt") || "", /לא Codex/);
+  assert.match(billingNoteForRoute("cursor") || "", /צ'אט Cursor פתוח/);
 });
 
 test("parliament seats are Cursor + Grok + Codex", () => {
