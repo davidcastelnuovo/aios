@@ -14,7 +14,7 @@ export function formatCloudAgentError(status: number, detail: string): string {
   if (status === 400 && isCursorSpendLimitError(d)) {
     return (
       "Cursor Cloud סירב לפתוח סוכן רקע חדש (תקציב Usage-based < $2). " +
-      "Cursor Direct אמור לדבר עם צ'אט כרמן ישיר שכבר פתוח, בלי סוכן חדש. " +
+      "בדוק את תקציב Cursor Cloud או שלח שוב מאוחר יותר. " +
       "https://www.cursor.com/dashboard?tab=settings"
     );
   }
