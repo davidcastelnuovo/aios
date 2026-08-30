@@ -1,6 +1,8 @@
 import type { CloudDirectProvider, SendContext, SendResult } from "./types.ts";
 import { acceptedMessageFor, capabilitiesForProvider } from "./logic.ts";
+import { grokUsesExistingWebhook } from "./cloud-errors.ts";
 import { createCloudAgent, followUpCloudAgent, cursorApiKey } from "./cursor-api.ts";
+import { fireGrokBotWebhook } from "./grok-webhook.ts";
 import { mintCallbackToken } from "./hmac.ts";
 import { buildCallbackInstructions, wrapDirectPrompt } from "./prompts.ts";
 import { completeSession, logChannelAction, serviceClient, upsertRunningSession } from "./store.ts";
@@ -33,8 +35,14 @@ export async function launchCloudDirect(
   extraPrompt?: string,
   parliament?: { runId: string; round: number },
 ): Promise<SendResult> {
+  const grokWebhook = grokUsesExistingWebhook(
+    Deno.env.get("GROK_BOT_WEBHOOK_URL"),
+    Deno.env.get("GROK_BOT_WEBHOOK_KEY"),
+  );
   const apiKey = cursorApiKey();
-  if (!apiKey) throw new Error(`${provider} is not configured (set CURSOR_API_KEY).`);
+  if (!apiKey && !(provider === "grok" && grokWebhook)) {
+    throw new Error(`${provider} is not configured (set CURSOR_API_KEY).`);
+  }
 
   const sb = serviceClient();
   const session = await upsertRunningSession(sb, {
@@ -69,12 +77,23 @@ export async function launchCloudDirect(
   const envName = envNameFor(provider);
 
   let fired: { url: string; id: string; reused: boolean };
-  const stickyId = session.external_session_id;
-  if (stickyId && stickyId.startsWith("bc-")) {
-    const followed = await followUpCloudAgent(apiKey, stickyId, clip(prompt));
-    fired = followed || await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
+  if (provider === "grok" && grokWebhook) {
+    const delivered = await fireGrokBotWebhook({
+      task: ctx.content,
+      context:
+        prompt +
+        "\nYou are Grok Bot Direct in David's Command Center. Reply to David in that chat. " +
+        "Do NOT call ask_carmen. Use reply_to_aios_session or the HTTP callback above.",
+    });
+    fired = { id: delivered.id, url: delivered.url, reused: true };
   } else {
-    fired = await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
+    const stickyId = session.external_session_id;
+    if (stickyId && stickyId.startsWith("bc-")) {
+      const followed = await followUpCloudAgent(apiKey, stickyId, clip(prompt));
+      fired = followed || await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
+    } else {
+      fired = await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
+    }
   }
 
   const updated = await upsertRunningSession(sb, {
