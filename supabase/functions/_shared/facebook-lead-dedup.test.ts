@@ -2,13 +2,31 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   claimFacebookLeadAutomationRun,
+  claimFacebookLeadIntake,
   claimFacebookLeadWhatsAppSend,
   facebookFlowEventSource,
+  facebookIntakeEventSource,
   facebookTriggerAutomationSucceeded,
   facebookWhatsAppSendSource,
   releaseFacebookLeadAutomationRun,
   releaseFacebookLeadWhatsAppSend,
 } from "./facebook-lead-dedup.ts";
+
+test("facebookIntakeEventSource is a single shared webhook/poll lock", () => {
+  assert.equal(facebookIntakeEventSource(), "fb-intake");
+});
+
+test("claimFacebookLeadIntake treats unique violations as duplicates", async () => {
+  const result = await claimFacebookLeadIntake({
+    from: () => ({ insert: async () => ({ error: { code: "23505" } }) }),
+  }, {
+    tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
+    leadgenId: "1614307953752490",
+    formId: "2804363709904461",
+  });
+  assert.equal(result.duplicate, true);
+  assert.equal(result.inserted, false);
+});
 
 test("facebookFlowEventSource is unique per automation", () => {
   assert.equal(

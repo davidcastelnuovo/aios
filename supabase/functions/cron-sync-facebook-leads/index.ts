@@ -5,8 +5,10 @@ import {
   resolveLeadClient,
 } from "../_shared/lead-routing.ts";
 import {
+  claimFacebookLeadIntake,
   facebookTriggerAutomationSucceeded,
   wasFacebookLeadAutomationClaimed,
+  wasFacebookLeadIntakeClaimed,
 } from "../_shared/facebook-lead-dedup.ts";
 
 const corsHeaders = {
@@ -661,6 +663,14 @@ serve(async (req) => {
           
           for (const fbLead of leads) {
             const leadgenId = fbLead.id;
+
+            if (await wasFacebookLeadIntakeClaimed(supabase, {
+              tenantId: info.tenantId,
+              leadgenId,
+            })) {
+              totalSkipped++;
+              continue;
+            }
             
             // Dedup check: first check flow_processed_leads table (per-flow dedup)
             const { data: alreadyProcessed } = await supabase
@@ -680,6 +690,16 @@ serve(async (req) => {
               automationId: info.automationId,
               leadgenId,
             })) {
+              totalSkipped++;
+              continue;
+            }
+
+            const intake = await claimFacebookLeadIntake(supabase, {
+              tenantId: info.tenantId,
+              leadgenId,
+              formId: info.formId,
+            });
+            if (intake.duplicate) {
               totalSkipped++;
               continue;
             }

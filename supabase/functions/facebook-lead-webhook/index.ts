@@ -11,6 +11,7 @@ import {
 } from "../_shared/lead-repeat-reopen.ts";
 import { resolveTenantHomeAgencyId } from "../_shared/resolve-tenant-agency.ts";
 import {
+  claimFacebookLeadIntake,
   facebookTriggerAutomationSucceeded,
   findExistingFacebookLead,
   wasFacebookLeadAutomationClaimed,
@@ -209,6 +210,16 @@ serve(async (req) => {
                   if (!flowAccessToken) {
                     continue;
                   }
+
+                  const intake = await claimFacebookLeadIntake(supabase, {
+                    tenantId: flowTenantId,
+                    leadgenId,
+                    formId,
+                  });
+                  if (intake.duplicate) {
+                    processedTenants.add(flowTenantId);
+                    continue;
+                  }
                   
                   const alreadyClaimed = await wasFacebookLeadAutomationClaimed(supabase, {
                     tenantId: flowTenantId,
@@ -366,6 +377,15 @@ serve(async (req) => {
                 continue;
               }
               
+
+              const mappedIntake = await claimFacebookLeadIntake(supabase, {
+                tenantId: integration.tenant_id,
+                leadgenId,
+                formId,
+              });
+              if (mappedIntake.duplicate) {
+                continue;
+              }
 
               let accessToken = integration.api_key;
               const settings = integration.settings as any;
