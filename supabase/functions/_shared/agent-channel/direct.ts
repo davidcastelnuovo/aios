@@ -7,7 +7,6 @@ import { mintCallbackToken } from "./hmac.ts";
 import { buildCallbackInstructions, wrapDirectPrompt } from "./prompts.ts";
 import {
   allowCreateNewCloudAgent,
-  busyOpenChatMessage,
   collectOpenChatIds,
   missingOpenChatMessage,
   type OpenChatProvider,
@@ -184,9 +183,7 @@ async function deliverToOpenCloudChat(args: {
     if (outcome.kind === "ok") {
       return { id: outcome.id, url: outcome.url, reused: true };
     }
-    if (outcome.kind === "busy") {
-      throw new Error(busyOpenChatMessage(args.provider, outcome.url));
-    }
+    // Busy chat — try next candidate, or fall through to a fresh parallel agent.
   }
 
   if (allowCreateNewCloudAgent(env)) {

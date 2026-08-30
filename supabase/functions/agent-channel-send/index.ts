@@ -62,12 +62,13 @@ Deno.serve(async (req) => {
     const cursorChats = await collectOpenChatIds(sb, { tenantId, provider: "cursor", env });
     const workspace = workspaceAgentCreds("codex", env);
     const codexProbe = await probeWorkspaceAgent("codex", env);
+    const canCreate = cursor.ok;
     return json(200, {
       ok: cursor.ok,
       cursor,
       app_env: appEnv || null,
       seats: {
-        cursor: { bill: "cursor_cloud", open_chat: cursorChats.length > 0, chats: cursorChats.length },
+        cursor: { bill: "cursor_cloud", open_chat: canCreate, chats: cursorChats.length },
         codex: {
           bill: "chatgpt_workspace",
           open_chat: Boolean(workspace.triggerId && workspace.accessToken),
@@ -78,9 +79,7 @@ Deno.serve(async (req) => {
         chatgpt: { bill: "chatgpt_workspace" },
       },
       message: cursor.ok
-        ? (cursorChats.length
-          ? "Cursor Direct מדבר עם צ'אט כרמן ישיר שכבר פתוח."
-          : "מפתח Cursor תקף, אבל אין צ'אט כרמן ישיר פתוח. לא פותחים סוכן רקע חדש.")
+        ? "Cursor Direct פותח סוכן Cursor חדש לכל הודעה (סשנים מקבילים מותרים)."
         : "CURSOR_API_KEY on this project is missing or rejected (401). Preview uses Staging — set a valid User key there.",
     });
   }
