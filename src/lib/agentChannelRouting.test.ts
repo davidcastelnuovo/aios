@@ -85,18 +85,17 @@ test("channel health banner only when Cursor key is rejected", () => {
   assert.match(banner || "", /כרמן הפנימית עובדת/);
 });
 
-test("health banner explains a missing open Cursor chat", () => {
+test("health banner explains when Cursor Direct is unavailable", () => {
   const banner = channelHealthBanner({
     ok: true,
     cursor: { ok: true, status: 200 },
     seats: { cursor: { open_chat: false } },
   });
-  assert.match(banner || "", /כרמן ישיר/);
-  assert.match(banner || "", /כבר פתוח/);
+  assert.match(banner || "", /CURSOR_API_KEY/);
 });
 
 test("route notes: Cursor is Carmen Direct, Codex is ChatGPT Workspace", () => {
-  assert.match(billingNoteForRoute("cursor") || "", /כרמן ישיר/);
+  assert.match(billingNoteForRoute("cursor") || "", /סוכן Cursor חדש/);
   assert.match(billingNoteForRoute("codex") || "", /Workspace/);
   assert.match(billingNoteForRoute("codex") || "", /Work Mode/);
 });

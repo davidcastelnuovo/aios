@@ -20,7 +20,7 @@
 //   CURSOR_AUTO_CREATE_PR   "false" to disable auto PR (default true)
 //   CURSOR_DEFAULT_TENANT_ID fallback tenant when bearer can't resolve one
 //   CURSOR_STICKY_AGENT_ID  force one global sticky agent id (bc-…)
-//   CURSOR_STICKY           "false" to disable sticky reuse (default true)
+//   CURSOR_STICKY           "true" to reuse one sticky agent per tenant (default false)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import {
   compactToolsForGrok,
@@ -49,7 +49,7 @@ const CURSOR_MCP_STREAMABLE_URL =
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 100_000;
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
-const STICKY_ENABLED = (Deno.env.get("CURSOR_STICKY") || "true").toLowerCase() !== "false";
+const STICKY_ENABLED = (Deno.env.get("CURSOR_STICKY") || "false").toLowerCase() === "true";
 
 const TOOLS = [
   {
@@ -462,7 +462,7 @@ async function fireCursorAgent(promptText: string, opts?: {
   }
 
   const created = await createCursorAgent(apiKey, text, opts);
-  await saveStickyAgent(opts?.tenantId ?? null, created.id, created.url);
+  if (STICKY_ENABLED) await saveStickyAgent(opts?.tenantId ?? null, created.id, created.url);
   return created;
 }
 
@@ -477,7 +477,7 @@ function formatDispatchReply(kind: string, fired: FireResult): string {
   }
   return (
     `✅ Sent your ${kind} to Cursor` +
-    (fired.reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
+    (fired.reused ? ` (same sticky agent — history preserved)` : ` (new Cursor Cloud Agent)`) +
     `. A Cloud Agent session is now running on it.\n` +
     `Session: ${fired.url}`
   );

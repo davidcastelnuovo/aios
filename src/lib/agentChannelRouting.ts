@@ -116,7 +116,7 @@ export function channelHealthBanner(health: ChannelHealth | null | undefined): s
     return "מושבי Cursor / Grok / Codex לא מחוברים בסביבת הפיתוח. הפריוויו מדבר עם Staging — צריך מפתח User תקף ב-CURSOR_API_KEY שם. כרמן הפנימית עובדת.";
   }
   if (health.ok && health.seats?.cursor?.open_chat === false) {
-    return "Cursor Direct מחכה לצ'אט כרמן ישיר שכבר פתוח. לא פותחים סוכן רקע חדש.";
+    return "Cursor Direct לא זמין — בדוק ש-CURSOR_API_KEY מוגדר בסביבה.";
   }
   return null;
 }
@@ -124,7 +124,7 @@ export function channelHealthBanner(health: ChannelHealth | null | undefined): s
 export function billingNoteForRoute(provider?: string | null): string | null {
   switch (provider) {
     case "cursor":
-      return "כרמן ישיר · הצ'אט שכבר פתוח";
+      return "כרמן ישיר · סוכן Cursor חדש לכל משימה";
     case "codex":
       return "ChatGPT Workspace · Work Mode (ריפו)";
     case "chatgpt":
