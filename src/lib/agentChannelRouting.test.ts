@@ -42,19 +42,19 @@ test("speaker labels distinguish channels", () => {
   assert.equal(groupLabel("direct_channel"), "ערוץ ישיר");
 });
 
-test("default brain is the knights table; first paint ignores a saved Cursor slug", () => {
-  assert.equal(DEFAULT_BRAIN_SLUG, "parliament");
-  assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES).slug, "parliament");
+test("default brain is Carmen Direct; first paint opens solo HUD not knights table", () => {
+  assert.equal(DEFAULT_BRAIN_SLUG, "cursor");
+  assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES).slug, "cursor");
   assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, "grok").slug, "grok");
-  assert.equal(initialSelectedRoute("tenant-with-saved-cursor").slug, "parliament");
-  assert.equal(hudStage({ routeType: initialSelectedRoute(null).route_type }), "table");
+  assert.equal(initialSelectedRoute("tenant-with-saved-parliament").slug, "cursor");
+  assert.equal(hudStage({ routeType: initialSelectedRoute(null).route_type }), "direct");
 });
 
-test("restored chat keeps its own brain; empty session stays on the table", () => {
+test("restored chat keeps its own brain; empty session stays on Carmen Direct", () => {
   const routes = FALLBACK_BRAIN_ROUTES;
   assert.equal(routeForRestoredChat(routes, { routing_mode: "parliament" }).slug, "parliament");
   assert.equal(routeForRestoredChat(routes, { routing_mode: "direct_channel", brain_route_id: "fallback-cursor" }).slug, "cursor");
-  assert.equal(routeForRestoredChat(routes, null).slug, "parliament");
+  assert.equal(routeForRestoredChat(routes, null).slug, "cursor");
 });
 
 test("HUD is solo for Direct Chat tabs, table only for Knights Round Table", () => {

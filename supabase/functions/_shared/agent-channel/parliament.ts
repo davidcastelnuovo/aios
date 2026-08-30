@@ -75,14 +75,14 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
     role: "system",
     speaker: "carmen",
     channel: "parliament",
-    content: `פרלמנט נפתח — סבב 1 מתוך ${maxRounds}. משתתפים: ${seats.join(", ")}. כלים: קריאה בלבד עד הסיכום.`,
+    content: `שואלים את הצוות ⚡ ${seats.join(" · ")}`,
     event_type: "progress",
     correlation_id: parent.id,
     metadata: { parliament_run_id: parent.id, round: 1 },
   });
 
   const round1 = wrapDirectPrompt({ origin: "parliament", userText: ctx.content, history: ctx.history }) +
-    `\nYou are a parliament member. Round 1 of ${maxRounds}: answer independently. You cannot see other seats. Read-only.`;
+    `\nQuick team round (max 5 bullets). Answer David directly. Read-only. You cannot see other seats.`;
 
   const results = await Promise.allSettled(
     seats.map((provider) =>
@@ -237,7 +237,7 @@ async function rebuildCtx(run: any, conversationId: string, state: ParliamentSta
       route_type: "parliament",
       provider: "parliament",
       connection_id: null,
-      config: { seats: ["cursor", "grok", "codex"], rounds: 2 },
+      config: { seats: ["cursor", "grok", "codex"], rounds: 1 },
       active: true,
     },
     content: state.topic || run.goal,

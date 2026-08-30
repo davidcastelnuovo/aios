@@ -121,6 +121,6 @@ export const DEFAULT_BRAIN_ROUTE_SEEDS: Array<{
     label: "שולחן אבירים · Cursor + Grok + Codex",
     route_type: "parliament",
     provider: "parliament",
-    config: { seats: ["cursor", "grok", "codex"], rounds: 2, chair: "carmen", tools: "read_only" },
+    config: { seats: ["cursor", "grok", "codex"], rounds: 1, chair: "carmen", tools: "read_only" },
   },
 ];

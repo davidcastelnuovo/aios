@@ -1,7 +1,8 @@
 import type { CallbackPayload, ChannelProvider } from "./types.ts";
-import { speakerForOrigin } from "./logic.ts";
+import { speakerForOrigin, resolveCallbackOrigin } from "./logic.ts";
 import {
   completeSession,
+  getRunningSession,
   insertMessage,
   loadSession,
   logChannelAction,
@@ -10,16 +11,28 @@ import {
 } from "./store.ts";
 import { onParliamentCallback } from "./parliament.ts";
 
-const ORIGINS = new Set<ChannelProvider>(["cursor", "grok", "codex", "claude", "chatgpt", "internal", "parliament"]);
+async function resolveSession(
+  sb: ReturnType<typeof serviceClient>,
+  payload: CallbackPayload,
+  origin: ChannelProvider,
+) {
+  if (payload.session_id) {
+    const byId = await loadSession(sb, payload.session_id);
+    if (byId) return byId;
+  }
+  if (!payload.conversation_id || origin === "internal" || origin === "parliament") return null;
+  return await getRunningSession(sb, payload.conversation_id, origin);
+}
 
 export async function ingestChannelReply(payload: CallbackPayload): Promise<{ duplicate: boolean; message_id: string }> {
-  const origin = ORIGINS.has(payload.origin) ? payload.origin : "internal";
   const content = String(payload.content || "").trim();
   if (!content) throw new Error("content is required");
   if (!payload.conversation_id) throw new Error("conversation_id is required");
 
   const sb = serviceClient();
-  const session = payload.session_id ? await loadSession(sb, payload.session_id) : null;
+  const hinted = payload.session_id ? await loadSession(sb, payload.session_id) : null;
+  const origin = resolveCallbackOrigin(payload.origin, hinted?.provider);
+  const session = hinted || await resolveSession(sb, payload, origin);
   const tenantId = payload.tenant_id || session?.tenant_id;
   if (!tenantId) throw new Error("tenant_id is required");
   if (session && session.conversation_id !== payload.conversation_id) {

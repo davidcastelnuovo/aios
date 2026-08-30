@@ -76,7 +76,7 @@ export function HudMenu({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-10 items-center gap-1 rounded-md border border-[var(--cc-line)] px-2 text-xs text-[var(--cc-accent)] hover:border-[var(--cc-line-strong)]"
+            className="cc-header-btn flex items-center gap-1 rounded-md border border-[var(--cc-line)] px-2 text-xs text-[var(--cc-accent)] hover:border-[var(--cc-line-strong)]"
           >
             לוח
             <ChevronDown className="h-3.5 w-3.5" />

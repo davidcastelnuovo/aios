@@ -8,6 +8,7 @@ import {
   markParliamentFailed,
   parliamentSeatsFromConfig,
   recordParliamentAnswer,
+  resolveCallbackOrigin,
   type ParliamentState,
 } from "./logic.ts";
 
@@ -49,4 +50,11 @@ test("direct channels require a callback; internal streams", () => {
   assert.equal(capabilitiesForProvider("cursor").callback_required, true);
   assert.equal(capabilitiesForProvider("codex").callback_required, true);
   assert.equal(capabilitiesForProvider("chatgpt").callback_required, true);
+});
+
+test("resolveCallbackOrigin prefers session codex over stated chatgpt", () => {
+  assert.equal(resolveCallbackOrigin("chatgpt", "codex"), "codex");
+  assert.equal(resolveCallbackOrigin("codex", "chatgpt"), "chatgpt");
+  assert.equal(resolveCallbackOrigin(undefined, "codex"), "codex");
+  assert.equal(resolveCallbackOrigin(null, null), "internal");
 });

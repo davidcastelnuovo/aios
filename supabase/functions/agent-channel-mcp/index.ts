@@ -1,5 +1,6 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { ingestChannelReply } from "../_shared/agent-channel/ingest.ts";
+import { resolveCallbackOrigin } from "../_shared/agent-channel/logic.ts";
 import { mcpBearer } from "../_shared/agent-channel/hmac.ts";
 import { loadSession, serviceClient } from "../_shared/agent-channel/store.ts";
 import type { CallbackPayload, ChannelProvider } from "../_shared/agent-channel/types.ts";
@@ -86,7 +87,7 @@ async function handleTool(name: string, args: Record<string, any>): Promise<stri
   const sb = serviceClient();
   const sessionId = String(args?.session_id ?? "").trim();
   const session = sessionId ? await loadSession(sb, sessionId) : null;
-  const origin = (String(args?.origin || session?.provider || "cursor") as ChannelProvider);
+  const origin = resolveCallbackOrigin(args?.origin, session?.provider);
 
   const eventType =
     name === "publish_aios_progress" ? "progress" :

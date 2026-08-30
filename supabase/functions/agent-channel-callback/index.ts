@@ -1,5 +1,6 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { ingestChannelReply } from "../_shared/agent-channel/ingest.ts";
+import { resolveCallbackOrigin } from "../_shared/agent-channel/logic.ts";
 import { verifyCallbackToken } from "../_shared/agent-channel/hmac.ts";
 import { loadSession, serviceClient } from "../_shared/agent-channel/store.ts";
 import type { CallbackPayload, ChannelProvider } from "../_shared/agent-channel/types.ts";
@@ -26,7 +27,6 @@ Deno.serve(async (req) => {
 
   const conversationId = String(body.conversation_id || "").trim();
   const sessionId = String(body.session_id || "").trim();
-  const origin = String(body.origin || "").trim() as ChannelProvider;
   const content = String(body.content || "").trim();
   if (!conversationId || !content) return json(400, { error: "conversation_id and content are required" });
 
@@ -35,6 +35,7 @@ Deno.serve(async (req) => {
 
   const sb = serviceClient();
   const session = sessionId ? await loadSession(sb, sessionId) : null;
+  const origin = resolveCallbackOrigin(body.origin, session?.provider);
   const tenantId = String(body.tenant_id || session?.tenant_id || "").trim();
   if (!tenantId || !sessionId) return json(401, { error: "session_id and tenant_id are required" });
 

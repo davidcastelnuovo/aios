@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { BrainRoute, ChatLike, ParliamentSeatView } from "@/lib/agentChannelRouting";
 import {
   councilSeatFromSlug,
@@ -9,12 +10,28 @@ import {
 
 export type { CouncilSeatId };
 
-const SEATS: Array<{ id: CouncilSeatId; label: string; role: string; place: string; sprite: string }> = [
-  { id: "carmen", label: "כרמן", role: "יו\"ר", place: "south", sprite: "/command-center/ghost-carmen.png" },
-  { id: "cursor", label: "Cursor", role: "מוח", place: "west", sprite: "/command-center/ghost-cursor.png" },
-  { id: "grok", label: "Grok", role: "Grok", place: "east", sprite: "/command-center/ghost-grok.png" },
-  { id: "codex", label: "Codex", role: "Codex", place: "north", sprite: "/command-center/ghost-codex.png" },
+const SEATS: Array<{ id: CouncilSeatId; label: string; role: string; sprite: string }> = [
+  { id: "carmen", label: "כרמן", role: "יו\"ר", sprite: "/command-center/ghost-carmen.png" },
+  { id: "cursor", label: "Cursor", role: "מוח", sprite: "/command-center/ghost-cursor.png" },
+  { id: "grok", label: "Grok", role: "Grok", sprite: "/command-center/ghost-grok.png" },
+  { id: "codex", label: "Codex", role: "Codex", sprite: "/command-center/ghost-codex.png" },
 ];
+
+/** Parliament agents orbit the council sphere at even thirds. */
+const ORBIT_AGENTS = SEATS.filter((s) => s.id !== "carmen");
+const ORBIT_ANGLES: Record<string, number> = {
+  cursor: 210,
+  grok: 330,
+  codex: 90,
+};
+const ORBIT_RADIUS = 44;
+
+function orbitPosition(angleDeg: number): { left: string; top: string } {
+  const rad = ((angleDeg - 90) * Math.PI) / 180;
+  const x = 50 + ORBIT_RADIUS * Math.cos(rad);
+  const y = 50 + ORBIT_RADIUS * Math.sin(rad);
+  return { left: `${x}%`, top: `${y}%` };
+}
 
 interface RoundTableBoardProps {
   route: BrainRoute | null;
@@ -81,6 +98,68 @@ function recentTalk(messages: ChatLike[] | undefined): Array<{ from: string; to:
     .reverse();
 }
 
+function GhostSeat({
+  seat,
+  line,
+  state,
+  selected,
+  debating,
+  parliament,
+  onAddress,
+  onClarify,
+  style,
+  compact,
+}: {
+  seat: (typeof SEATS)[number];
+  line: ReturnType<typeof lastLine>;
+  state: string;
+  selected: boolean;
+  debating?: boolean;
+  parliament: boolean;
+  onAddress?: (seat: CouncilSeatId) => void;
+  onClarify?: (provider: string) => void;
+  style?: CSSProperties;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className={`cc-ghost cc-ghost-orbit is-${state}${selected ? " is-selected" : ""}${compact ? " is-compact" : ""}`}
+      style={style}
+      title={`פנה אל ${seat.label}`}
+      onClick={() => onAddress?.(seat.id)}
+    >
+      <span className="cc-ghost-aura" data-seat={seat.id} />
+      <span
+        className="cc-ghost-sprite"
+        style={{ backgroundImage: `url(${seat.sprite})` }}
+        aria-hidden
+      />
+      <span className="cc-ghost-body">
+        <span className="cc-ghost-name">{seat.label}</span>
+        <span className="cc-ghost-role">{seat.role}</span>
+      </span>
+      {line && (
+        <span className="cc-ghost-bubble">
+          <span className="cc-ghost-bubble-meta">
+            {line.from} → {line.to}
+          </span>
+          {line.text}
+        </span>
+      )}
+      {parliament && debating && onClarify && seat.id !== "carmen" && (
+        <span
+          role="link"
+          className="cc-ghost-clarify"
+          onClick={(e) => { e.stopPropagation(); onClarify(seat.id); }}
+        >
+          בקש הבהרה
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function RoundTableBoard({
   route,
   messages = [],
@@ -113,7 +192,7 @@ export function RoundTableBoard({
           </button>
         </div>
         <button type="button" className="cc-ghost cc-ghost-solo is-selected" tabIndex={-1}>
-          <span className="cc-ghost-aura" />
+          <span className="cc-ghost-aura" data-seat={solo.id} />
           <span
             className="cc-ghost-sprite"
             style={{ backgroundImage: `url(${solo.sprite})` }}
@@ -138,7 +217,7 @@ export function RoundTableBoard({
 
   return (
     <div className="cc-roundtable" dir="rtl">
-      <div className="mb-1 flex items-center justify-between gap-2 px-1">
+      <div className="mb-1 flex shrink-0 items-center justify-between gap-2 px-1">
         <p className="cc-panel-title">שולחן אבירים</p>
         <div className="flex flex-wrap gap-2">
           {onOpenCouncil && (
@@ -157,54 +236,46 @@ export function RoundTableBoard({
           )}
         </div>
       </div>
-      <div className="cc-roundtable-stage">
-        <button
-          type="button"
-          className={`cc-roundtable-table ${parliament ? "is-live" : ""}`}
-          title="הפעל שולחן אבירים"
-          onClick={() => onOpenCouncil?.()}
-          aria-label="שולחן אבירים"
-        />
-        {SEATS.map((seat) => {
+      <div className="cc-roundtable-stage cc-orb-stage">
+        <div className="cc-orb-stack">
+          <button
+            type="button"
+            className={`cc-orb-sphere ${parliament ? "is-live" : ""}`}
+            title="הפעל שולחן אבירים"
+            onClick={() => onOpenCouncil?.()}
+            aria-label="שולחן אבירים"
+          >
+            <span className="cc-orb-mist" aria-hidden />
+            <span className="cc-orb-glass" aria-hidden />
+            <span className="cc-orb-highlight" aria-hidden />
+            <span className="cc-orb-glow" aria-hidden />
+          </button>
+          <span className="cc-orb-shadow" aria-hidden />
+          <div className="cc-orb-chair" aria-hidden>
+            <span className="cc-orb-chair-name">כרמן</span>
+            <span className="cc-orb-chair-role">יו&quot;ר</span>
+          </div>
+        </div>
+        {ORBIT_AGENTS.map((seat) => {
+          const angle = ORBIT_ANGLES[seat.id] ?? 0;
+          const pos = orbitPosition(angle);
           const line = parliament ? lastLine(messages, seat.id, active) : null;
           const state = seatState(seats, seat.id);
           const selected = councilSeatFromSlug(selectedProvider) === seat.id || selectedProvider === seat.id;
           return (
-            <button
+            <GhostSeat
               key={seat.id}
-              type="button"
-              className={`cc-ghost cc-ghost-${seat.place} is-${state}${selected ? " is-selected" : ""}`}
-              title={`פנה אל ${seat.label}`}
-              onClick={() => onAddress?.(seat.id)}
-            >
-              <span className="cc-ghost-aura" />
-              <span
-                className="cc-ghost-sprite"
-                style={{ backgroundImage: `url(${seat.sprite})` }}
-                aria-hidden
-              />
-              <span className="cc-ghost-body">
-                <span className="cc-ghost-name">{seat.label}</span>
-                <span className="cc-ghost-role">{seat.role}</span>
-              </span>
-              {line && (
-                <span className="cc-ghost-bubble">
-                  <span className="cc-ghost-bubble-meta">
-                    {line.from} → {line.to}
-                  </span>
-                  {line.text}
-                </span>
-              )}
-              {parliament && debating && onClarify && seat.id !== "carmen" && (
-                <span
-                  role="link"
-                  className="cc-ghost-clarify"
-                  onClick={(e) => { e.stopPropagation(); onClarify(seat.id); }}
-                >
-                  בקש הבהרה
-                </span>
-              )}
-            </button>
+              seat={seat}
+              line={line}
+              state={state}
+              selected={selected}
+              debating={debating}
+              parliament={parliament}
+              onAddress={onAddress}
+              onClarify={onClarify}
+              style={{ left: pos.left, top: pos.top }}
+              compact
+            />
           );
         })}
       </div>
