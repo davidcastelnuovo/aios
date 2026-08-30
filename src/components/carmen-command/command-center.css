@@ -140,20 +140,43 @@
 .cc-talkbar-shell {
   display: flex;
   min-height: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  overflow: hidden;
+  align-items: stretch;
+}
+
+.cc-talkbar.is-table {
+  max-height: min(48dvh, 520px);
+}
+
+.cc-talkbar-row {
+  flex-shrink: 0;
 }
 
 .cc-chat-rail {
   display: flex;
   width: 13.25rem;
+  flex: 0 0 13.25rem;
   flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
   border-inline-end: 1px solid var(--cc-line);
   padding: 8px 8px 6px;
   background: rgba(5, 10, 22, 0.35);
 }
 .cc-chat-rail.is-overlay {
   width: 100%;
+  flex: 1 1 auto;
+  max-height: 34vh;
   border-inline-end: 0;
+}
+.cc-chat-rail-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .cc-chat-topic {

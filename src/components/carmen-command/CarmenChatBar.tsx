@@ -940,7 +940,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           } : undefined}
         />
         {showHistory && (
-          <div className="max-h-[34vh] border-b border-[var(--cc-line)] lg:hidden">
+          <div className="max-h-[34vh] min-h-0 overflow-hidden border-b border-[var(--cc-line)] lg:hidden">
             <ChatTopicRail
               className="is-overlay"
               items={pastConversations ?? []}
@@ -1003,7 +1003,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             {brain.healthBanner}
           </p>
         )}
-        <div className="cc-talkbar-row mt-auto flex items-center gap-2">
+        <div className="cc-talkbar-row mt-auto flex shrink-0 items-center gap-2">
           <div className="hidden items-center gap-2 lg:flex">
               <BrainRouteSelector
                 routes={brain.routes}

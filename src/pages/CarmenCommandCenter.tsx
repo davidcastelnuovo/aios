@@ -138,7 +138,7 @@ export default function CarmenCommandCenter() {
         </div>
       </main>
 
-      <footer className={`flex min-h-0 flex-1 flex-col p-2 pt-0 sm:p-3 sm:pt-0 ${hudMode === "direct" ? "" : "lg:flex-none"}`}>
+      <footer className={`flex min-h-0 flex-1 flex-col overflow-hidden p-2 pt-0 sm:p-3 sm:pt-0 ${hudMode === "direct" ? "" : "lg:flex-none lg:max-h-[48dvh]"}`}>
         <CarmenChatBar
           ref={chatRef}
           tenantId={tenantId}

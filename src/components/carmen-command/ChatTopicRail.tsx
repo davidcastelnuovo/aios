@@ -12,14 +12,14 @@ interface ChatTopicRailProps {
 export function ChatTopicRail({ items, activeId, onSelect, onNew, className = "" }: ChatTopicRailProps) {
   return (
     <aside className={`cc-chat-rail ${className}`.trim()}>
-      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+      <div className="mb-2 flex shrink-0 items-center justify-between gap-2 px-1">
         <span className="cc-panel-title">צ׳אטים</span>
         <button type="button" onClick={onNew} className="flex items-center gap-1 text-[11px] text-[var(--cc-accent)] hover:underline">
           <Plus className="h-3.5 w-3.5" />
           חדש
         </button>
       </div>
-      <div className="cc-scroll min-h-0 flex-1 overflow-y-auto">
+      <div className="cc-scroll cc-chat-rail-list">
         {!items.length && <p className="px-1 py-2 text-xs text-[var(--cc-text-dim)]">אין שיחות עדיין</p>}
         {items.map((conv) => {
           const live = topicIsLive(conv.status);
