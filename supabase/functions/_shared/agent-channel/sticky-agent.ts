@@ -36,28 +36,28 @@ export function allowCreateNewCloudAgent(env: Record<string, string | undefined>
 export function billingNoteForSeat(provider: string): string {
   switch (provider) {
     case "cursor":
+      return "כרמן ישיר — הצ'אט שכבר פתוח";
     case "codex":
-      return "Cursor Cloud (שימוש בחשבון Cursor) — לא קרדיט OpenAI ולא מנוי ChatGPT";
+      return "Codex · GPT";
     case "grok":
       return "Grok Bot הקיים (webhook) — בלי סוכן רקע חדש";
     case "internal":
     case "carmen":
-      return "OpenAI API (מפתח הארגון) — כרמן פנימית";
+      return "כרמן פנימית · OpenAI API";
     case "chatgpt":
-      return "ChatGPT Work Agent (מנוי/workspace נפרד) — לא Codex";
+      return "ChatGPT Work Agent";
     default:
       return "";
   }
 }
 
 export function missingOpenChatMessage(provider: OpenChatProvider): string {
-  const name = provider === "codex" ? "Codex Direct" : "Cursor Direct";
-  const secret = provider === "codex" ? "CODEX_DIRECT_AGENT_ID" : "CURSOR_DIRECT_AGENT_ID";
+  if (provider === "codex") {
+    return "Codex Direct עדיין לא מחובר ל-GPT. לא פותחים סוכן Cursor חדש בשבילו.";
+  }
   return (
-    `${name} מדבר עם צ'אט Cursor שכבר פתוח (bc-…). ` +
-    `לא פותחים סוכן רקע חדש — אין חיוב $2 על יצירה. ` +
-    `חסר מזהה צ'אט פתוח (${secret} או cursor_sticky_agents). ` +
-    `Codex ו-Cursor Direct הם אותו חשבון Cursor Cloud, לא קרדיט OpenAI ולא מנוי ChatGPT.`
+    "Cursor Direct מדבר עם צ'אט כרמן ישיר שכבר פתוח (bc-…). " +
+    "לא פותחים סוכן רקע חדש. חסר מזהה הצ'אט (CURSOR_DIRECT_AGENT_ID או cursor_sticky_agents)."
   );
 }
 

@@ -8,14 +8,14 @@
 Carmen UI
   -> agent-channel-send
      -> internal        -> run-ai-agent (stream)
-     -> cursor / codex  -> צ'אט Cursor שכבר פתוח (bc-…). follow-up בלבד
+     -> cursor          -> צ'אט כרמן ישיר שכבר פתוח (bc-…). follow-up בלבד
      -> grok            -> webhook של Grok Bot הקיים
      -> claude          -> Routine /fire + callback
      -> chatgpt         -> Workspace Agent trigger + reply_to_aios_session
      -> parliament      -> Cursor+Grok+Codex, 2 rounds, סינתזה של כרמן
 ```
 
-חיוב: Cursor Direct ו-Codex Direct = חשבון Cursor Cloud (לא קרדיט OpenAI, לא מנוי ChatGPT). כרמן פנימית = OpenAI API. ChatGPT Work Agent = מנוי/workspace נפרד.
+Cursor Direct = הצ'אט כרמן ישיר שכבר פתוח. Codex Direct אמור להיות GPT — החיבור עצמו עדיין לא הוחלט (מנוי ChatGPT מול OpenAI API).
 
 בחירת ערוץ בבורר משנה בפועל את הנתיב (`agent-channel-send`), לא רק את התווית.
 
@@ -52,8 +52,7 @@ JSONB ב-`ai_conversations.messages` נשמר בתקופת המעבר.
 
 מומלץ להוסיף:
 
-- `CURSOR_DIRECT_AGENT_ID` / `CURSOR_STICKY_AGENT_ID` — `bc-…` של הצ'אט הפתוח ל-Cursor Direct
-- `CODEX_DIRECT_AGENT_ID` — `bc-…` נפרד ל-Codex (אותו חשבון Cursor, לא OpenAI)
+- `CURSOR_DIRECT_AGENT_ID` / `CURSOR_STICKY_AGENT_ID` — `bc-…` של צ'אט כרמן ישיר
 - `AGENT_CHANNEL_CALLBACK_SECRET` — חתימת callback (fallback: `CURSOR_MCP_BEARER`)
 - `AGENT_CHANNEL_MCP_BEARER` — Bearer ל-MCP של הערוץ
 - `CHATGPT_WORK_AGENT_TRIGGER_ID` (`agtch_…`) + `CHATGPT_WORK_AGENT_TOKEN` — ChatGPT Direct

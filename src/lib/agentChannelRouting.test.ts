@@ -91,15 +91,13 @@ test("health banner explains a missing open Cursor chat", () => {
     cursor: { ok: true, status: 200 },
     seats: { cursor: { open_chat: false } },
   });
+  assert.match(banner || "", /כרמן ישיר/);
   assert.match(banner || "", /כבר פתוח/);
-  assert.match(banner || "", /לא מנוי ChatGPT/);
 });
 
-test("Codex billing note is Cursor Cloud, not OpenAI or ChatGPT Plus", () => {
-  assert.match(billingNoteForRoute("codex") || "", /Cursor Cloud/);
-  assert.match(billingNoteForRoute("codex") || "", /לא קרדיט OpenAI/);
-  assert.match(billingNoteForRoute("chatgpt") || "", /לא Codex/);
-  assert.match(billingNoteForRoute("cursor") || "", /צ'אט Cursor פתוח/);
+test("route notes: Cursor is Carmen Direct, Codex is GPT", () => {
+  assert.match(billingNoteForRoute("cursor") || "", /כרמן ישיר/);
+  assert.match(billingNoteForRoute("codex") || "", /GPT/);
 });
 
 test("parliament seats are Cursor + Grok + Codex", () => {

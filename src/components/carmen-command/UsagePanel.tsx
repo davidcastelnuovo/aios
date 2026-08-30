@@ -87,10 +87,10 @@ export function UsagePanel({ tenantId, className }: { tenantId: string | null; c
           </div>
           <div className="rounded-md border border-[var(--cc-line)] p-2 text-[11px] leading-snug text-[var(--cc-text-dim)]">
             <p className="mb-1 font-medium text-[var(--cc-text)]">איפה כל מושב מחויב</p>
-            <p>כרמן פנימית — OpenAI API (מפתח הארגון). זה הקרדיט של OpenAI, לא של Cursor.</p>
-            <p>Cursor Direct ו-Codex Direct — אותו חשבון Cursor Cloud. לא קרדיט OpenAI ולא מנוי ChatGPT.</p>
-            <p>ChatGPT Work Agent — מנוי/workspace של ChatGPT. נפרד מ-Codex.</p>
-            <p>Grok Bot — הבוט שכבר פתוח. בלי סוכן רקע חדש.</p>
+            <p>כרמן פנימית — OpenAI API (מפתח הארגון).</p>
+            <p>Cursor Direct — הצ'אט כרמן ישיר שכבר פתוח.</p>
+            <p>Codex Direct — GPT.</p>
+            <p>Grok Bot — הבוט שכבר פתוח.</p>
           </div>
           {!data.tracked && (
             <p className="text-[11px] leading-snug text-[var(--cc-text-dim)]">

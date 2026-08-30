@@ -32,11 +32,11 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
-### 2026-08-30 — Cursor Direct = צ'אט פתוח; Codex ≠ OpenAI / ChatGPT
+### 2026-08-30 — Cursor Direct = כרמן ישיר; Codex = GPT (חיבור עדיין פתוח)
 - **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
-- **What Carmen can now do:** Tell David that Cursor Direct and Codex Direct bill **Cursor Cloud**, not OpenAI API and not a ChatGPT subscription. Cursor Direct follows up the already-open `bc-…` chat (`CURSOR_DIRECT_AGENT_ID` / `cursor_sticky_agents` / last session). It does **not** open a new Background Agent (that was the $2 spend-limit error). Codex is the same Cursor Cloud bill, a separate `bc-…` if pinned.
-- **How:** `agent-channel-send` → `deliverToOpenCloudChat`. Create is off unless `CURSOR_DIRECT_ALLOW_CREATE=true`. Carmen internal still uses `OPENAI_API_KEY`. ChatGPT Work Agent is a different route.
-- **Origin:** David — "עדיין עניין הקרידית עם קרסר… קרסר ישיר אמור להיות פתוח עם הצאט… וקודקס זה לא אותו קרדיט של אופן ai? ואם לא של גיפיטי של המנוי"
+- **What Carmen can now do:** Cursor Direct follows the already-open Carmen Direct chat. Do **not** tell David that Codex is "not GPT" — Codex is supposed to be GPT. Which GPT (ChatGPT subscription vs org OpenAI API) is not decided yet; ask before wiring.
+- **How:** `deliverToOpenCloudChat` for Cursor only as the open `bc-…`. Codex send path not rewired until David answers.
+- **Origin:** David — Cursor = כרמן ישיר; Codex = GPT. "אם משהו לא ברור בהנחיות לשאול".
 
 ### 2026-08-29 — סוכנים בסביבת הפיתוח (Preview → Staging)
 - **Skin slug:** `staging_agents_need_cursor_key` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)

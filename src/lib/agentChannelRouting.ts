@@ -115,7 +115,7 @@ export function channelHealthBanner(health: ChannelHealth | null | undefined): s
     return "מושבי Cursor / Grok / Codex לא מחוברים בסביבת הפיתוח. הפריוויו מדבר עם Staging — צריך מפתח User תקף ב-CURSOR_API_KEY שם. כרמן הפנימית עובדת.";
   }
   if (health.ok && health.seats?.cursor?.open_chat === false) {
-    return "Cursor Direct מחכה לצ'אט Cursor שכבר פתוח (bc-…). לא פותחים סוכן רקע חדש — אין חיוב $2. Codex = אותו חשבון Cursor, לא OpenAI ולא מנוי ChatGPT.";
+    return "Cursor Direct מחכה לצ'אט כרמן ישיר שכבר פתוח. לא פותחים סוכן רקע חדש.";
   }
   return null;
 }
@@ -123,15 +123,15 @@ export function channelHealthBanner(health: ChannelHealth | null | undefined): s
 export function billingNoteForRoute(provider?: string | null): string | null {
   switch (provider) {
     case "cursor":
-      return "צ'אט Cursor פתוח · חיוב Cursor Cloud — לא OpenAI";
+      return "כרמן ישיר · הצ'אט שכבר פתוח";
     case "codex":
-      return "אותו חשבון Cursor Cloud כמו Cursor Direct — לא קרדיט OpenAI ולא מנוי ChatGPT";
+      return "Codex · GPT";
     case "chatgpt":
-      return "מנוי ChatGPT / workspace — לא Codex ולא OpenAI API";
+      return "ChatGPT Work Agent";
     case "internal":
-      return "כרמן פנימית · OpenAI API (מפתח הארגון)";
+      return "כרמן פנימית";
     case "grok":
-      return "Grok Bot הקיים · בלי סוכן רקע חדש";
+      return "Grok Bot הקיים";
     default:
       return null;
   }

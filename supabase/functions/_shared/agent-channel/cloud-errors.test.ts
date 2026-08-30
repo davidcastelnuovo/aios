@@ -19,7 +19,7 @@ test("spend-limit 400 becomes Hebrew, not a raw Cursor dump", () => {
   );
   assert.match(msg, /תקציב/);
   assert.match(msg, /cursor\.com\/dashboard/);
-  assert.match(msg, /לא קרדיט OpenAI/);
+  assert.match(msg, /כרמן ישיר/);
   assert.equal(isCursorSpendLimitError(msg), true);
 });
 

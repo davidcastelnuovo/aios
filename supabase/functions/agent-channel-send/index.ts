@@ -75,8 +75,8 @@ Deno.serve(async (req) => {
       },
       message: cursor.ok
         ? (cursorChats.length
-          ? "Cursor Direct מדבר עם הצ'אט שכבר פתוח. Codex = אותו חשבון Cursor Cloud, לא OpenAI ולא מנוי ChatGPT."
-          : "מפתח Cursor תקף, אבל אין צ'אט פתוח (bc-…) ל-Cursor Direct. לא פותחים סוכן רקע חדש.")
+          ? "Cursor Direct מדבר עם צ'אט כרמן ישיר שכבר פתוח."
+          : "מפתח Cursor תקף, אבל אין צ'אט כרמן ישיר פתוח. לא פותחים סוכן רקע חדש.")
         : "CURSOR_API_KEY on this project is missing or rejected (401). Preview uses Staging — set a valid User key there.",
     });
   }

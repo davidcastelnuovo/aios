@@ -14,9 +14,8 @@ export function formatCloudAgentError(status: number, detail: string): string {
   if (status === 400 && isCursorSpendLimitError(d)) {
     return (
       "Cursor Cloud סירב לפתוח סוכן רקע חדש (תקציב Usage-based < $2). " +
-      "Cursor Direct ו-Codex Direct אמורים לדבר עם צ'אט שכבר פתוח, בלי סוכן חדש. " +
-      "זה לא קרדיט OpenAI ולא מנוי ChatGPT. " +
-      "פתיחה ראשונה בלבד: https://www.cursor.com/dashboard?tab=settings"
+      "Cursor Direct אמור לדבר עם צ'אט כרמן ישיר שכבר פתוח, בלי סוכן חדש. " +
+      "https://www.cursor.com/dashboard?tab=settings"
     );
   }
   return `Cloud agent create ${status}: ${d.slice(0, 280)}`;

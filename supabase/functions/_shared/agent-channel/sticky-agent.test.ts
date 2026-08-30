@@ -40,14 +40,12 @@ test("new Background Agents stay off unless explicitly allowed", () => {
   assert.equal(allowCreateNewCloudAgent({ CURSOR_DIRECT_ALLOW_CREATE: "true" }), true);
 });
 
-test("Codex billing copy is Cursor Cloud, not OpenAI or ChatGPT Plus", () => {
-  assert.match(billingNoteForSeat("codex"), /Cursor Cloud/);
-  assert.match(billingNoteForSeat("codex"), /לא קרדיט OpenAI/);
-  assert.match(billingNoteForSeat("codex"), /לא מנוי ChatGPT/);
-  assert.match(billingNoteForSeat("chatgpt"), /לא Codex/);
+test("Cursor is Carmen Direct; Codex is GPT", () => {
+  assert.match(billingNoteForSeat("cursor"), /כרמן ישיר/);
+  assert.match(billingNoteForSeat("codex"), /GPT/);
   assert.match(billingNoteForSeat("internal"), /OpenAI API/);
-  assert.match(missingOpenChatMessage("cursor"), /כבר פתוח/);
-  assert.match(missingOpenChatMessage("codex"), /לא קרדיט OpenAI ולא מנוי ChatGPT/);
+  assert.match(missingOpenChatMessage("cursor"), /כרמן ישיר/);
+  assert.match(missingOpenChatMessage("codex"), /GPT/);
   assert.match(busyOpenChatMessage("cursor", "https://cursor.com/agents/bc-1"), /עדיין רץ/);
 });
 
