@@ -15,6 +15,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { tenantRoutes } from "@/routes/tenantRoutes";
 import { StagingBanner } from "@/components/StagingBanner";
+import { setupReportQueryCachePersistence } from "@/lib/reportQueryCache";
+import { REPORT_QUERY_GC_MS, REPORT_QUERY_STALE_MS } from "@/lib/reportQueryOptions";
 
 import Auth from "./pages/Auth";
 import SignUp from "./pages/SignUp";
@@ -34,8 +36,8 @@ const SignDocument = lazy(() => import("./pages/SignDocument"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,
-      gcTime: 1000 * 60 * 10,
+      staleTime: REPORT_QUERY_STALE_MS,
+      gcTime: REPORT_QUERY_GC_MS,
       refetchOnWindowFocus: false,
       // Re-fetch failed queries on mount so stale error state does not flash.
       refetchOnMount: (query) => query.state.status === "error",
@@ -43,6 +45,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+setupReportQueryCachePersistence(queryClient);
 
 function PageLoader() {
   return (

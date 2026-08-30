@@ -48,6 +48,8 @@ import {
   isFacebookLeadsOnlyTable,
   summarizeFacebookCampaignGroup,
 } from "@/lib/adsMetrics";
+import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
+import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
@@ -191,7 +193,7 @@ export default function DashboardView() {
   }, [isOrganizationDashboard, orgAgencies, selectedOrgAgencyId]);
 
   // Fetch tables for the client
-  const { data: tables = [], isLoading: tablesLoading } = useQuery({
+  const { data: tables = [], isPending: tablesPending } = useQuery({
     queryKey: ['crm-tables-for-dashboard', dashboard?.client_id],
     queryFn: async () => {
       if (!dashboard?.client_id) return [];
@@ -208,7 +210,16 @@ export default function DashboardView() {
       return Array.isArray(response.data) ? response.data : [];
     },
     enabled: !!dashboard?.client_id,
+    ...reportQueryOptions<any[]>(),
   });
+
+  const dashboardLastSyncAt = useMemo(() => {
+    const stamps = tables
+      .map((t: any) => getReportLastSyncAt(t))
+      .filter(Boolean) as string[];
+    if (!stamps.length) return null;
+    return stamps.sort().reverse()[0];
+  }, [tables]);
 
   // Fetch fields for all tables (for raw table display)
   const { data: tableFields = {} } = useQuery({
@@ -232,7 +243,13 @@ export default function DashboardView() {
   });
 
   // Fetch records from all tables
-  const { data: allRecords = [], isLoading: recordsLoading, refetch: refetchRecords } = useQuery({
+  const {
+    data: allRecords,
+    isPending: recordsPending,
+    isFetching: recordsFetching,
+    dataUpdatedAt: recordsUpdatedAt,
+    refetch: refetchRecords,
+  } = useQuery({
     queryKey: ['crm-records-dashboard', tables.map((t: any) => t.id).join(','), dateFilter, customFromStr, customToStr],
     queryFn: async () => {
       if (tables.length === 0) return [];
@@ -288,7 +305,11 @@ export default function DashboardView() {
       return allResults.flat();
     },
     enabled: tables.length > 0 && isCustomReady,
+    ...reportQueryOptions<any[]>(),
   });
+
+  const displayAllRecords = allRecords ?? [];
+  const recordsInitialLoad = recordsPending && tables.length > 0;
 
   // Check if client has SEO (Ahrefs) reports — do NOT filter by UI tenant.
   // Shared-agency clients (DMM-MC) store ahrefs_reports on the home tenant;
@@ -443,7 +464,7 @@ export default function DashboardView() {
   // IMPORTANT: Use only report_type='daily' for aggregation (KPI, charts).
   // report_type='daily_source' breaks down by traffic source and would cause double-counting.
   const filteredRecords = useMemo(() => {
-    return allRecords.filter((record: any) => {
+    return displayAllRecords.filter((record: any) => {
       const source = record._source || 'unknown';
       // Platform filter
       if (!matchesPlatformFilter(source, platformFilter)) return false;
@@ -456,14 +477,14 @@ export default function DashboardView() {
       }
       return true;
     });
-  }, [allRecords, platformFilter]);
+  }, [displayAllRecords, platformFilter]);
 
   // All analytics records (unfiltered by report_type) for GoogleAnalyticsDashboard component
   const allAnalyticsRecords = useMemo(() => {
-    return allRecords
+    return displayAllRecords
       .filter((r: any) => isAnalyticsPlatform(r._source || ''))
       .map((r: any) => ({ id: r.id, data: r.data }));
-  }, [allRecords]);
+  }, [displayAllRecords]);
 
 
   const campaignTypeByPlatform: Record<string, CampaignType> = useMemo(() => {
@@ -493,7 +514,7 @@ export default function DashboardView() {
       }
     });
     // Then override by scanning actual data for ecommerce signals — but ONLY for platforms not explicitly set by user
-    allRecords.forEach((record: any) => {
+    displayAllRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (explicitlySet.has(source)) return; // user explicitly chose — don't override
       if (map[source] === 'ecommerce') return; // already detected
@@ -509,7 +530,7 @@ export default function DashboardView() {
       if (!map[key]) map[key] = 'leads';
     });
     return map;
-  }, [tables, allRecords]);
+  }, [tables, displayAllRecords]);
 
   const facebookMixedMode = useMemo(
     () => tables.some((t: any) => facebookTableUsesMixedRows(t.integration_type, t.integration_settings)),
@@ -606,7 +627,7 @@ export default function DashboardView() {
   // This ensures Analytics tab can still show spend and ROAS
   const globalAdsMetrics = useMemo(() => {
     let spend = 0, impressions = 0;
-    allRecords.forEach((record: any) => {
+    displayAllRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (isAdsPlatform(source)) {
         const data = record.data || {};
@@ -616,7 +637,7 @@ export default function DashboardView() {
       }
     });
     return { spend, impressions };
-  }, [allRecords]);
+  }, [displayAllRecords]);
 
   // Total summary
   const totalSummary = useMemo(() => {
@@ -695,7 +716,7 @@ export default function DashboardView() {
     };
 
     const sources: Record<string, { sessions: number; users: number; purchases: number; revenue: number; addToCart: number }> = {};
-    allRecords.forEach((record: any) => {
+    displayAllRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (!isAnalyticsPlatform(source)) return;
       const data = record.data || {};
@@ -713,12 +734,12 @@ export default function DashboardView() {
     return Object.entries(sources)
       .map(([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.sessions - a.sessions);
-  }, [allRecords]);
+  }, [displayAllRecords]);
 
   // Traffic Acquisition by Channel Group
   const channelGroupBreakdown = useMemo(() => {
     const channels: Record<string, { sessions: number; engagedSessions: number; engagementRate: number; avgDuration: number; eventsPerSession: number; users: number; purchases: number; revenue: number; rateSum: number; durationSum: number; eventsSum: number; count: number }> = {};
-    allRecords.forEach((record: any) => {
+    displayAllRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (!isAnalyticsPlatform(source)) return;
       const data = record.data || {};
@@ -749,7 +770,7 @@ export default function DashboardView() {
         revenue: d.revenue,
       }))
       .sort((a, b) => b.sessions - a.sessions);
-  }, [allRecords]);
+  }, [displayAllRecords]);
 
   // Daily chart data
   const dailyChartData = useMemo(() => {
@@ -793,7 +814,7 @@ export default function DashboardView() {
     
     const campaigns: Record<string, { campaign: string; spend: number; impressions: number; clicks: number; leads: number; revenue: number; purchases: number }> = {};
     
-    allRecords.forEach((record: any) => {
+    displayAllRecords.forEach((record: any) => {
       const source = record._source || 'unknown';
       if (!isAdsPlatform(source)) return;
       const data = record.data || {};
@@ -813,7 +834,7 @@ export default function DashboardView() {
     });
     
     return Object.values(campaigns).sort((a, b) => b.spend - a.spend);
-  }, [allRecords, platformFilter]);
+  }, [displayAllRecords, platformFilter]);
 
   const campaignTotals = useMemo(() => {
     return campaignBreakdown.reduce((acc, c) => ({
@@ -853,17 +874,17 @@ export default function DashboardView() {
     const fields = Array.from(fieldsMap.values()).sort((a: any, b: any) => a.position - b.position);
     
     // Get matching records
-    const records = allRecords.filter((r: any) => tableIds.includes(r._tableId));
+    const records = displayAllRecords.filter((r: any) => tableIds.includes(r._tableId));
     
     return { records, fields, tableIds };
-  }, [platformFilter, tables, tableFields, allRecords]);
+  }, [platformFilter, tables, tableFields, displayAllRecords]);
 
   // Facebook campaign summary — split ecom / leads / traffic when table is mixed (like DynamicTableView).
   const facebookCampaignGroups = useMemo(() => {
     const empty = { ecommerce: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, leads: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, traffic: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords>, all: [] as ReturnType<typeof aggregateFacebookCampaignsFromRecords> };
     if (platformFilter !== 'facebook' && platformFilter !== 'all') return empty;
 
-    const sourceRecords = platformFilter === 'all' ? filteredRecords : allRecords;
+    const sourceRecords = platformFilter === 'all' ? filteredRecords : displayAllRecords;
     const fbRecords = sourceRecords.filter((r: any) => isFacebookPlatform(r._source || ''));
     const all = aggregateFacebookCampaignsFromRecords(fbRecords);
 
@@ -881,7 +902,7 @@ export default function DashboardView() {
 
     const grouped = groupFacebookCampaigns(all, { forceLeadsOnly });
     return { ...grouped, all };
-  }, [platformFilter, allRecords, filteredRecords, tables, facebookMixedMode, campaignTypeByPlatform]);
+  }, [platformFilter, displayAllRecords, filteredRecords, tables, facebookMixedMode, campaignTypeByPlatform]);
 
   type PlatformBreakdownRowKind = 'ecommerce' | 'leads' | 'standard';
 
@@ -1002,7 +1023,7 @@ export default function DashboardView() {
       conversions_value: number;
     }> = {};
 
-    const gaRecords = allRecords.filter((r: any) => r._source === 'google_ads');
+    const gaRecords = displayAllRecords.filter((r: any) => r._source === 'google_ads');
     gaRecords.forEach((r: any) => {
       const d = r.data || {};
       const name = d.campaign_name || 'ללא שם';
@@ -1026,7 +1047,7 @@ export default function DashboardView() {
     });
 
     return Object.values(map).sort((a, b) => b.spend - a.spend);
-  }, [platformFilter, allRecords]);
+  }, [platformFilter, displayAllRecords]);
 
   // Google Ads totals (KPI cards)
   const googleAdsTotals = useMemo(() => {
@@ -1222,7 +1243,7 @@ export default function DashboardView() {
   }
 
   // Detect if there's actual Analytics data (any GA records present)
-  const hasAnalyticsData = allRecords.some((r: any) => isAnalyticsPlatform(r._source));
+  const hasAnalyticsData = displayAllRecords.some((r: any) => isAnalyticsPlatform(r._source));
   const showAnalyticsCards = (platformFilter === 'all' || platformFilter === 'google_analytics') && hasAnalyticsData;
   const showAdsCards = platformFilter === 'all' || platformFilter === 'facebook' || platformFilter === 'google_ads';
   // WooCommerce alone is enough for revenue/ROAS cubes when GA is missing (e.g. Bilby)
@@ -1277,6 +1298,12 @@ export default function DashboardView() {
               </>
             )}
           </div>
+          <ReportDataFreshness
+            lastSyncAt={dashboardLastSyncAt}
+            dataUpdatedAt={recordsUpdatedAt}
+            isFetching={recordsFetching}
+            className="mt-2"
+          />
         </div>
         
         <div className="flex items-center gap-3">
@@ -1426,7 +1453,7 @@ export default function DashboardView() {
             dashboard?.client_id ? (
               <SeoReportTabs clientId={dashboard.client_id} />
             ) : null
-          ) : tablesLoading || recordsLoading ? (
+          ) : recordsInitialLoad ? (
             <div className="grid gap-4 md:grid-cols-4">
               {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
             </div>

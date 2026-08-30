@@ -18,6 +18,7 @@ import { ClientDashboardPanel } from "@/components/clients/ClientDashboardPanel"
 import { ClientReportScheduleSettings } from "@/components/clients/ClientReportScheduleSettings";
 import { getIntegrationIcon } from "@/lib/integrationIcons";
 import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
+import { reportQueryOptions } from "@/lib/reportQueryOptions";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
@@ -53,6 +54,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       return Array.isArray(response.data) ? response.data : [];
     },
     enabled: !!tenantId && !!clientId,
+    ...reportQueryOptions<any[]>(),
   });
 
   // All tenant tables — only for the link-table picker
@@ -67,6 +69,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       return Array.isArray(response.data) ? response.data : [];
     },
     enabled: !!tenantId && showLinkSection,
+    ...reportQueryOptions<any[]>(),
   });
 
   // Available tables not linked to this client

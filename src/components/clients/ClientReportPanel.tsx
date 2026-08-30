@@ -36,6 +36,8 @@ import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
 import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
 import { syncReportTable, waitForSnapshotReady } from "@/lib/reportSync";
 import { downloadReportPdf } from "@/lib/reportPdf";
+import { getReportLastSyncAt } from "@/lib/reportQueryOptions";
+import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import {
   buildDefaultReportRecipientEmails,
   buildReportEmailOptions,
@@ -191,48 +193,43 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     );
   }, [client, table.name]);
 
-  // On every table open: clear stale screenshot, sync data, then capture fresh
+  // On table open: show cached screenshot + DB cache immediately; refresh in background.
   useEffect(() => {
     autoCapturedTableRef.current = null;
     setCaptureReady(false);
-    setScreenshotBlob(null);
 
-    // Always start blank on table/client switch — never show a stale cached image
-    // from a previous client. The placeholder UI handles the "loading" state.
-    setScreenshotUrl(null);
-
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_PREFIX + table.id);
+      if (cached) {
+        setScreenshotUrl(cached);
+        fetch(cached)
+          .then((res) => res.blob())
+          .then((blob) => setScreenshotBlob(blob))
+          .catch(() => setScreenshotBlob(null));
+      } else {
+        setScreenshotUrl(null);
+        setScreenshotBlob(null);
+      }
+    } catch {
+      setScreenshotUrl(null);
+      setScreenshotBlob(null);
+    }
 
     let cancelled = false;
 
     (async () => {
-      // 1. Preserve low-cost ad refresh on open. SEO/analytics sources refresh
-      // only from the explicit button so opening a client does not consume
-      // Ahrefs credits or start several long-running API jobs.
-      const autoSyncTypes = ["facebook_insights", "facebook_ecommerce", "google_ads"];
-      if (autoSyncTypes.includes(table.integration_type)) {
-        setIsSyncing(true);
-        const syncResult = await syncReportTable(table);
-        if (!cancelled) setIsSyncing(false);
-        if (syncResult.status === "failed") {
-          toast.warning("הסנכרון נכשל; מוצגים הנתונים האחרונים שנשמרו");
-        }
-      }
-
-      // 2. Refresh host queries and remount the isolated snapshot QueryClient.
-      await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
-      await queryClient.invalidateQueries({ queryKey: ["seo-combined-snapshot", table.id] });
-      await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
-      await queryClient.invalidateQueries({ queryKey: ["gsc-keywords", tenantId] });
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["crm-records", table.id] }),
+        queryClient.refetchQueries({ queryKey: ["crm-tables", tenantId, table.slug] }),
+        queryClient.refetchQueries({ queryKey: ["crm-fields", table.id] }),
+      ]);
       if (cancelled) return;
       setSnapshotVersion((version) => version + 1);
-
-      // 3. Capture only after the remounted report declares itself ready.
       setCaptureReady(true);
     })();
 
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table.id, table.integration_type, tenantId]);
+  }, [table.id, table.slug, tenantId, queryClient]);
 
   // Auto-capture when ready (always re-shoots, even if a cached image exists)
   useEffect(() => {
@@ -613,6 +610,10 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
   return (
     <div className="space-y-3 min-w-0" dir="rtl">
+      <ReportDataFreshness
+        lastSyncAt={getReportLastSyncAt(table)}
+        className="px-1"
+      />
       {/* Screenshot Preview */}
       <div className="relative border rounded-lg bg-muted/20 overflow-x-auto" style={{ minHeight: 200 }}>
         {screenshotUrl ? (
@@ -628,12 +629,18 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           </div>
         )}
 
-        {(isCapturing || isSyncing) && (
+        {((isCapturing && !screenshotUrl) || isSyncing) && (
           <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
             <div className="flex items-center gap-2 text-sm">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{isSyncing ? "מסנכרן נתונים..." : "מצלם דוח..."}</span>
             </div>
+          </div>
+        )}
+        {isCapturing && screenshotUrl && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 rounded-md bg-background/80 px-2 py-1 text-xs text-muted-foreground shadow-sm">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            מעדכן תצוגה...
           </div>
         )}
       </div>

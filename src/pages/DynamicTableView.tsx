@@ -64,7 +64,8 @@ import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { WooAttributionSection } from "@/components/dynamic-tables/WooAttributionSection";
 import { fetchWooReportAttribution, getDynamicTableDateRangeIso } from "@/lib/wooDashboardQueries";
-import { shouldUseGoogleWooAttributionOverlay } from "@/lib/wooAttribution";
+import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
+import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -250,7 +251,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       return rows[0] ?? null;
     },
     enabled: !!tenantId && !!tableSlug,
-    staleTime: 5 * 60 * 1000,
+    ...reportQueryOptions<CrmTable | null>(),
   });
 
   const reportClientId = table?.client_id
@@ -348,7 +349,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     enabled: !!table?.id,
   });
 
-  const { data: records, isLoading: recordsLoading } = useQuery({
+  const {
+    data: records,
+    isPending: recordsPending,
+    isFetching: recordsFetching,
+    dataUpdatedAt: recordsUpdatedAt,
+  } = useQuery({
     queryKey: ['crm-records', table?.id, dateFilter, customFromStr, customToStr],
     queryFn: async () => {
       if (!table?.id) return [];
@@ -366,19 +372,20 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       return Array.isArray(response.data) ? response.data as CrmRecord[] : [];
     },
     enabled: !!table?.id && isCustomReady,
-    placeholderData: (previousData) => previousData,
-    staleTime: 5 * 60 * 1000,
+    ...reportQueryOptions<CrmRecord[]>(),
   });
+
+  const displayRecords = records ?? [];
 
   // Filter records by campaign name search
   const filteredRecords = useMemo(() => {
-    if (!records || !debouncedCampaignSearch.trim()) return records;
+    if (!displayRecords.length || !debouncedCampaignSearch.trim()) return displayRecords;
     const searchTerm = debouncedCampaignSearch.toLowerCase();
-    return records.filter(record => {
+    return displayRecords.filter(record => {
       const campaignName = String(record.data?.campaign_name || '').toLowerCase();
       return campaignName.includes(searchTerm);
     });
-  }, [records, debouncedCampaignSearch]);
+  }, [displayRecords, debouncedCampaignSearch]);
 
   const addColumnMutation = useMutation({
     mutationFn: async (columnName: string) => {
@@ -548,7 +555,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
-      const record = records?.find(r => r.id === recordId);
+      const record = displayRecords.find(r => r.id === recordId);
       if (!record) throw new Error('Record not found');
       
       const updatedData = { ...record.data, [key]: value };
@@ -712,8 +719,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         const now = new Date();
         let startDate: string;
         
-        if (records && records.length > 0) {
-          const dates = records
+        if (displayRecords.length > 0) {
+          const dates = displayRecords
             .map((r: any) => r.data?.date)
             .filter(Boolean)
             .sort();
@@ -1319,7 +1326,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const handleCellBlur = (recordId: string, fieldKey: string) => {
     const cellKey = `${recordId}-${fieldKey}`;
     const newValue = cellValues[cellKey] || '';
-    const record = records?.find(r => r.id === recordId);
+    const record = displayRecords.find(r => r.id === recordId);
     const oldValue = record?.data[fieldKey] || '';
     
     if (oldValue !== newValue) {
@@ -1473,7 +1480,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       const now = new Date();
       let startDate: string;
       
-      if (records && records.length > 0) {
+      if (displayRecords.length > 0) {
         const dates = records
           .map((r: any) => r.data?.date)
           .filter(Boolean)
@@ -1574,7 +1581,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     );
   }
 
-  const isLoading = fieldsLoading || recordsLoading;
+  const recordsInitialLoad = recordsPending && displayRecords.length === 0;
+  const isLoading = fieldsLoading || recordsInitialLoad;
   
   // Determine which integrations are connected
   const hasFacebook = table?.integration_type === 'facebook_insights';
@@ -1595,19 +1603,19 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   // Check if scenario exists but has no data (might need patching or activation)
   // Don't show alert while loading to prevent UI flash when changing filters
   const hasScenarioButNoData = 
-    !recordsLoading &&
+    !recordsPending &&
     table?.integration_type === 'google_ads' &&
     table?.integration_settings?.data_source === 'make_api' &&
     table?.integration_settings?.make_scenario_id &&
     !table?.integration_settings?.last_sync_at &&
-    (!records || records.length === 0);
+    (displayRecords.length === 0);
   
   // Check if scenario exists and has synced before (no alert needed)
   const scenarioIsWorking = 
     table?.integration_type === 'google_ads' &&
     table?.integration_settings?.data_source === 'make_api' &&
     table?.integration_settings?.make_scenario_id &&
-    (table?.integration_settings?.last_sync_at || (!recordsLoading && records && records.length > 0));
+    (table?.integration_settings?.last_sync_at || (!recordsPending && displayRecords.length > 0));
 
   return (
     <div
@@ -1730,28 +1738,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               Ahrefs
             </Badge>
           )}
-          {hasGoogleAnalytics && table.integration_settings?.last_sync_at && (
-            <p className="text-xs text-muted-foreground">
-              Google Analytics עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
-            </p>
-          )}
         </div>
           {table.description && <p className="text-muted-foreground mt-1">{table.description}</p>}
-          {hasFacebook && table.integration_settings?.last_sync_at && (
-            <p className="text-xs text-muted-foreground">
-              Facebook עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
-            </p>
-          )}
-          {hasGoogleAds && table.integration_settings?.last_sync_at && (
-            <p className="text-xs text-muted-foreground">
-              Google Ads עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
-            </p>
-          )}
-          {hasAhrefs && table.integration_settings?.last_sync_at && (
-            <p className="text-xs text-muted-foreground">
-              Ahrefs עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
-            </p>
-          )}
+          <ReportDataFreshness
+            lastSyncAt={getReportLastSyncAt(table)}
+            dataUpdatedAt={recordsUpdatedAt}
+            isFetching={recordsFetching}
+            className="mt-1"
+          />
         </div>
         
         {/* Controls Row */}
@@ -2457,10 +2451,10 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       )}
 
       {/* Active Alerts for Facebook Insights */}
-      {!isEmbed && hasFacebook && table?.id && records && (
+      {!isEmbed && hasFacebook && table?.id && displayRecords.length > 0 && (
         <ActiveAlerts 
           tableId={table.id} 
-          records={records} 
+          records={displayRecords} 
           integrationSettings={table.integration_settings}
         />
       )}
