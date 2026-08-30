@@ -52,7 +52,7 @@ export const FALLBACK_BRAIN_ROUTES: BrainRoute[] = [
   { id: "fallback-codex", slug: "codex", label: "Codex Direct · ChatGPT Workspace", route_type: "direct_channel", provider: "codex" },
   { id: "fallback-claude", slug: "claude", label: "Claude Direct", route_type: "direct_channel", provider: "claude" },
   { id: "fallback-chatgpt", slug: "chatgpt", label: "ChatGPT Work Agent", route_type: "direct_channel", provider: "chatgpt" },
-  { id: "fallback-parliament", slug: "parliament", label: "שולחן אבירים · Cursor + Grok + Codex", route_type: "parliament", provider: "parliament", config: { seats: ["cursor", "grok", "codex"], rounds: 2, chair: "carmen" } },
+  { id: "fallback-parliament", slug: "parliament", label: "מרחב משותף · צוות", route_type: "parliament", provider: "parliament", config: { seats: ["cursor", "grok", "codex"], rounds: 1, chair: "carmen" } },
 ];
 
 export function storageKeyForRoute(tenantId: string): string {

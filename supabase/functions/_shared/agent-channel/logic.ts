@@ -71,8 +71,8 @@ export function parliamentSeatsFromConfig(config: Record<string, unknown> | null
 }
 
 export function parliamentRounds(config: Record<string, unknown> | null | undefined): number {
-  const n = Number(config?.rounds ?? 2);
-  if (!Number.isFinite(n)) return 2;
+  const n = Number(config?.rounds ?? 1);
+  if (!Number.isFinite(n)) return 1;
   return Math.min(2, Math.max(1, Math.floor(n)));
 }
 
@@ -165,17 +165,17 @@ export function buildReviewPrompt(state: ParliamentState, provider: ChannelProvi
 
 export function buildSynthesisPrompt(state: ParliamentState): string {
   const blocks = Object.values(state.seats).map((s) => {
-    const r1 = s.round1 ? `Round 1:\n${s.round1}` : "(no round-1 answer)";
-    const r2 = s.round2 ? `\n\nRound 2:\n${s.round2}` : s.failed ? `\n\n(failed: ${s.error || "error"})` : "";
-    return `## ${s.provider}\n${r1}${r2}`;
+    const r1 = s.round1 ? s.round1.slice(0, 800) : "(no answer)";
+    const r2 = s.round2 ? `\nCritique: ${s.round2.slice(0, 400)}` : "";
+    return `${s.provider}: ${r1}${r2}`;
   });
   return (
-    `You are Carmen, chair of a short agent parliament. Synthesize ONE decision for David.\n` +
-    `Do not take a majority vote. Weigh evidence. Highlight a material minority view if it exists.\n` +
-    `Return Hebrew unless the topic is clearly English-only.\n` +
-    `Structure:\n` +
-    `1. מה מוסכם\n2. מה שנוי במחלוקת\n3. ההמלצה שלי ולמה\n4. פעולות המשך (approval נפרד לכל כתיבה חיצונית)\n\n` +
-    `Topic:\n${state.topic}\n\n${blocks.join("\n\n")}`
+    `You are Carmen. Synthesize a SHORT answer for David — max 3 lines, Hebrew, fun and direct.\n` +
+    `Format exactly:\n` +
+    `החלטה: <one line>\n` +
+    `מחלוקת: <one line or "אין">\n` +
+    `המשך: <one action>\n\n` +
+    `Topic: ${state.topic}\n\n${blocks.join("\n\n")}`
   );
 }
 
@@ -205,7 +205,7 @@ export function acceptedMessageFor(
     case "chatgpt":
       return url ? `נשלח ל-ChatGPT Work Agent. מעקב: ${url}` : "נשלח ל-ChatGPT Work Agent. מחכה לתשובה בשיחה הזו.";
     case "parliament":
-      return "שולחן אבירים נפתח — Cursor, Grok ו-Codex דנים. השיחה נעולה עד הסיכום של כרמן.";
+      return "שואלים את הצוות ⚡ מחכים לתשובות…";
   }
 }
 
