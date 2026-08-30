@@ -4,6 +4,8 @@ import SharedDashboard from "@/pages/SharedDashboard";
 
 interface Props {
   shareToken: string;
+  /** Match combined dashboard date preset (default: last 7 days). */
+  dateFilter?: string;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * the host app don't bleed in (and vice-versa).
  */
 export const ClientDashboardSnapshot = forwardRef<HTMLDivElement, Props>(
-  ({ shareToken }, ref) => {
+  ({ shareToken, dateFilter = "last_7_days" }, ref) => {
     const [client] = useState(
       () =>
         new QueryClient({
@@ -38,7 +40,11 @@ export const ClientDashboardSnapshot = forwardRef<HTMLDivElement, Props>(
         }}
       >
         <QueryClientProvider client={client}>
-          <SharedDashboard shareTokenOverride={shareToken} />
+          <SharedDashboard
+            shareTokenOverride={shareToken}
+            initialDateFilter={dateFilter}
+            snapshotMode
+          />
         </QueryClientProvider>
       </div>
     );

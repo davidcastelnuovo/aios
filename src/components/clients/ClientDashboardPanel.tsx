@@ -36,6 +36,7 @@ import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
 import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
 import { syncReportTables, waitForSnapshotReady } from "@/lib/reportSync";
 import { downloadReportPdf } from "@/lib/reportPdf";
+import { buildSharedDashboardUrl } from "@/lib/appEnv";
 
 interface ClientDashboardPanelProps {
   dashboard: { id: string; name: string };
@@ -249,7 +250,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [shareLink, dashboard.id, dashboard.name, tenantId, queryClient]);
 
-  const shareUrl = shareLink ? `https://aios.co.il/shared/dashboard/${shareLink}` : null;
+  const shareUrl = shareLink ? buildSharedDashboardUrl(shareLink) : null;
 
   // Keep the local token in sync after a query refresh.
   useEffect(() => {
@@ -455,7 +456,7 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       let effectiveShareUrl = shareUrl;
       if (!effectiveShareUrl) {
         const token = await ensureShareToken();
-        if (token) effectiveShareUrl = `https://aios.co.il/shared/dashboard/${token}`;
+        if (token) effectiveShareUrl = buildSharedDashboardUrl(token);
       }
 
       if (sendWhatsApp) {

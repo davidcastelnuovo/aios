@@ -15,7 +15,7 @@ on:
         required: false
         default: ''
   push:
-    branches: [develop]
+    branches: [develop, 'cursor/**']
     paths:
       - '.github/workflows/deploy-staging-edge-functions.yml'
       - 'supabase/functions/**'
