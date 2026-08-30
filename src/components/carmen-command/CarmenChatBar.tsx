@@ -732,7 +732,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         if (Array.isArray(data) && data.length) msgs = data;
       } catch { /* empty until messages arrive */ }
       if (conversationIdRef.current !== conv.id) return;
-      setMessages(msgs)
+      setMessages(msgs
         .filter(m => m.role === "user" || m.role === "assistant" || m.role === "system")
         .map(m => ({
           id: (m as any).id,
