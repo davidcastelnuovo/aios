@@ -19,6 +19,7 @@ import { ClientReportScheduleSettings } from "@/components/clients/ClientReportS
 import { getIntegrationIcon } from "@/lib/integrationIcons";
 import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
 import { reportQueryOptions } from "@/lib/reportQueryOptions";
+import { prefetchDashboardView, prefetchReportTableView } from "@/lib/prefetchReportChunks";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
@@ -238,6 +239,14 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     }
   }, [items]);
 
+  const activeItem = items.find((i) => i.id === activeTabId) || items[0];
+
+  useEffect(() => {
+    if (!activeItem) return;
+    if (activeItem.kind === "table") prefetchReportTableView();
+    else prefetchDashboardView();
+  }, [activeItem?.id, activeItem?.kind]);
+
   if (isLoading) {
     return (
       <div className="space-y-3" dir="rtl">
@@ -249,9 +258,6 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
   const hasContent = allItems.length > 0;
   const hasActiveKindContent = items.length > 0;
-  const activeItem = items.find((i) => i.id === activeTabId) || items[0];
-
-
   return (
     <div className="space-y-3 min-w-0" dir="rtl">
       {/* Reports and dashboards are independent surfaces. Keeping their

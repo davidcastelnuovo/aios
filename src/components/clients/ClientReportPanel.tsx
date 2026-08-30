@@ -50,6 +50,41 @@ interface ClientReportPanelProps {
 }
 
 const CACHE_KEY_PREFIX = "report-screenshot-";
+const SNAPSHOT_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+interface SnapshotCacheEntry {
+  dataUrl: string;
+  savedAt: number;
+}
+
+function readSnapshotCache(tableId: string): { dataUrl: string; fresh: boolean } | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY_PREFIX + tableId);
+    if (!raw) return null;
+    if (raw.startsWith("{")) {
+      const parsed = JSON.parse(raw) as SnapshotCacheEntry;
+      if (!parsed.dataUrl) return null;
+      return {
+        dataUrl: parsed.dataUrl,
+        fresh: Date.now() - parsed.savedAt < SNAPSHOT_CACHE_MAX_AGE_MS,
+      };
+    }
+    return { dataUrl: raw, fresh: false };
+  } catch {
+    return null;
+  }
+}
+
+function writeSnapshotCache(tableId: string, dataUrl: string) {
+  try {
+    localStorage.setItem(
+      CACHE_KEY_PREFIX + tableId,
+      JSON.stringify({ dataUrl, savedAt: Date.now() } satisfies SnapshotCacheEntry),
+    );
+  } catch {
+    /* localStorage full */
+  }
+}
 
 function getAdAccountUrl(table: any): string | null {
   const settings = table?.integration_settings || {};
@@ -109,6 +144,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pendingManualCapture, setPendingManualCapture] = useState(false);
 
   // Fetch client data
   const { data: client } = useQuery({
@@ -193,50 +229,42 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     );
   }, [client, table.name]);
 
-  // On table open: show cached screenshot + DB cache immediately; refresh in background.
+  // On table open: cached screenshot instantly; skip heavy hidden report when cache is fresh.
   useEffect(() => {
     autoCapturedTableRef.current = null;
     setCaptureReady(false);
+    setPendingManualCapture(false);
 
-    try {
-      const cached = localStorage.getItem(CACHE_KEY_PREFIX + table.id);
-      if (cached) {
-        setScreenshotUrl(cached);
-        fetch(cached)
-          .then((res) => res.blob())
-          .then((blob) => setScreenshotBlob(blob))
-          .catch(() => setScreenshotBlob(null));
-      } else {
-        setScreenshotUrl(null);
-        setScreenshotBlob(null);
-      }
-    } catch {
+    const cached = readSnapshotCache(table.id);
+    if (cached) {
+      setScreenshotUrl(cached.dataUrl);
+      fetch(cached.dataUrl)
+        .then((res) => res.blob())
+        .then((blob) => setScreenshotBlob(blob))
+        .catch(() => setScreenshotBlob(null));
+    } else {
       setScreenshotUrl(null);
       setScreenshotBlob(null);
     }
 
     let cancelled = false;
 
-    (async () => {
+    void (async () => {
       await Promise.all([
         queryClient.refetchQueries({ queryKey: ["crm-records", table.id] }),
         queryClient.refetchQueries({ queryKey: ["crm-tables", tenantId, table.slug] }),
         queryClient.refetchQueries({ queryKey: ["crm-fields", table.id] }),
       ]);
       if (cancelled) return;
-      setSnapshotVersion((version) => version + 1);
-      setCaptureReady(true);
+      // Fresh screenshot: skip mounting full DynamicTableView (major first-load cost).
+      if (!cached?.fresh) {
+        setSnapshotVersion((version) => version + 1);
+        setCaptureReady(true);
+      }
     })();
 
     return () => { cancelled = true; };
   }, [table.id, table.slug, tenantId, queryClient]);
-
-  // Auto-capture when ready (always re-shoots, even if a cached image exists)
-  useEffect(() => {
-    if (!captureReady || isCapturing || autoCapturedTableRef.current === table.id) return;
-    autoCapturedTableRef.current = table.id;
-    captureScreenshot();
-  }, [captureReady, isCapturing, table.id]);
 
   const triggerSync = async () => {
     setIsSyncing(true);
@@ -311,9 +339,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       }
 
       setScreenshotUrl(dataUrl);
-      try {
-        localStorage.setItem(CACHE_KEY_PREFIX + table.id, dataUrl);
-      } catch { /* localStorage full */ }
+      writeSnapshotCache(table.id, dataUrl);
 
       // Create blob for sending
       const res = await fetch(dataUrl);
@@ -326,6 +352,20 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       setIsCapturing(false);
     }
   }, [table.id]);
+
+  // Auto-capture when hidden snapshot mounts (skip when fresh cache already shown).
+  useEffect(() => {
+    if (!captureReady || isCapturing || autoCapturedTableRef.current === table.id) return;
+    autoCapturedTableRef.current = table.id;
+    captureScreenshot();
+  }, [captureReady, isCapturing, table.id, captureScreenshot]);
+
+  useEffect(() => {
+    if (!pendingManualCapture || !captureReady || !snapshotRef.current) return;
+    setPendingManualCapture(false);
+    autoCapturedTableRef.current = null;
+    captureScreenshot();
+  }, [pendingManualCapture, captureReady, captureScreenshot]);
 
   const ensureShareLink = useCallback(async (): Promise<string | null> => {
     if (shareLink) return shareLink;
@@ -661,7 +701,11 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           variant="outline"
           size="sm"
           className="gap-1 text-xs"
-          onClick={() => captureScreenshot()}
+          onClick={() => {
+            setSnapshotVersion((v) => v + 1);
+            setCaptureReady(true);
+            setPendingManualCapture(true);
+          }}
           disabled={isCapturing}
         >
           <Camera className={`h-3 w-3 ${isCapturing ? "animate-spin" : ""}`} />
@@ -800,8 +844,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         </Button>
       </div>
 
-      {/* Hidden snapshot component rendered via portal — no iframe! */}
-      {createPortal(
+      {/* Hidden snapshot — only mount when capture is needed (not on every tab open). */}
+      {captureReady &&
+        createPortal(
         <div
           style={{
             position: "fixed",

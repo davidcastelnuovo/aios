@@ -1481,7 +1481,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       let startDate: string;
       
       if (displayRecords.length > 0) {
-        const dates = records
+        const dates = displayRecords
           .map((r: any) => r.data?.date)
           .filter(Boolean)
           .sort();

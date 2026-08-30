@@ -7,6 +7,7 @@ import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRigh
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { prefetchReportTableView } from "@/lib/prefetchReportChunks";
 import {
   Select,
   SelectContent,
@@ -843,6 +844,7 @@ export default function DynamicTables() {
                     style.gradient,
                     style.border
                   )}
+                  onMouseEnter={() => prefetchReportTableView()}
                   onClick={() => navigate(buildPath(`/table/${table.slug}`))}
                 >
                   <CardHeader dir="rtl" className="text-right">
