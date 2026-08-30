@@ -11,6 +11,7 @@ import {
   computeGoalMetricsFromRecords,
   detectCampaignGoalMode,
   integrationTypeToGoal,
+  isPulseDeliveryExcludedPhone,
   selectPulseCriticalAlerts,
   tableMatchesServices,
   worstPulseStatus,
@@ -127,6 +128,7 @@ async function queuePulseWhatsApp(
   message: string,
   chatId: string | null,
 ): Promise<boolean> {
+  if (isPulseDeliveryExcludedPhone(chatId)) return false
   const delivery = await supabase.rpc('claude_notify_david', {
     p_message: message,
     p_tenant: tenantId,
@@ -195,18 +197,19 @@ async function deliverScopedPulseRecipients(
     if (!scoped.length) continue
 
     const scopedDigest = buildPulseWhatsAppDigest(scoped, dashboardUrl)
-    if (previewPhone) {
+    const previewTarget = isPulseDeliveryExcludedPhone(previewPhone) ? null : previewPhone
+    if (previewTarget) {
       const previewQueued = await queuePulseWhatsApp(
         supabase,
         tenantId,
         buildPulsePreviewMessage(plan.name, scopedDigest),
-        previewPhone,
+        previewTarget,
       )
       deliveries.push({
         type: 'preview',
         recipient: plan.name,
         role: plan.role,
-        preview_phone: previewPhone,
+        preview_phone: previewTarget,
         clients: scoped.length,
         queued: previewQueued,
       })
