@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { shouldShowQueryError } from "@/lib/queryUi";
 import { supabase } from "@/integrations/supabase/client";
 import { Globe, FileText, Calendar, RefreshCw } from "lucide-react";
@@ -17,6 +17,7 @@ import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
+import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
 import { AhrefsProjectPicker } from "./AhrefsProjectPicker";
 import { ListChecks } from "lucide-react";
@@ -83,7 +84,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
             ? `הדוח נטען מ-Ahrefs (${organic} אורגניות). לא נמצאו ביטויים במעקב — בדוק שיש פרויקט Rank Tracker ב-Ahrefs לדומיין.`
             : 'הדוח נטען בהצלחה מ-Ahrefs',
       );
-      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] });
+      await queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
     } catch (err: any) {
       console.error('fetch-ahrefs-snapshot failed:', err);
       toast.error(err?.message || 'שליפת הדוח נכשלה. ודא שהוגדר דומיין ושיש מפתח Ahrefs.');
@@ -132,25 +133,10 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         ? [tenantId]
         : [];
 
-  const { data: reports = [], isLoading, isFetching: reportsFetching, error: reportsError } = useQuery({
-    queryKey: ['seo-dashboard-reports', reportTenants.slice().sort().join(','), clientId],
-    queryFn: async () => {
-      let q = supabase
-        .from('ahrefs_reports')
-        .select('*')
-        .eq('client_id', clientId)
-        .order('received_at', { ascending: false })
-        .order('report_date', { ascending: false });
-      if (reportTenants.length === 1) q = q.eq('tenant_id', reportTenants[0]);
-      else if (reportTenants.length > 1) q = q.in('tenant_id', reportTenants);
-      const { data, error } = await q;
-      if (error) {
-        console.error('[SeoDashboardView] ahrefs_reports fetch failed:', error, { clientId, reportTenants });
-        throw error;
-      }
-      return data || [];
-    },
-    enabled: !!clientId && reportTenants.length > 0,
+  const { data: reports = [], isLoading, isFetching: reportsFetching, error: reportsError } = useAhrefsReports({
+    clientId,
+    tenantIds: reportTenants,
+    limit: 12,
   });
 
   // Domain isolation first, validity second: a report for another site is never
@@ -523,7 +509,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success(`הדוח סונכרן (${(data as any)?.keywords_count ?? 0} אורגניים, ${(data as any)?.tracked_count ?? 0} במעקב)`);
-      await queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] });
+      await queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
     } catch (err: any) {
       console.error('fetch-ahrefs-snapshot failed:', err);
       toast.error(err?.message || 'סנכרון Ahrefs נכשל');
@@ -554,7 +540,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         <h3 className="font-semibold text-lg mb-1">שגיאה בטעינת דוחות SEO</h3>
         <p className="text-muted-foreground text-sm mb-2">לא ניתן לטעון את הדוחות. ייתכן שיש בעיית הרשאה או חיבור.</p>
         <p className="text-xs text-muted-foreground mb-4">{(reportsError as any)?.message || String(reportsError)}</p>
-        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] })}>נסה שוב</Button>
+        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] })}>נסה שוב</Button>
       </Card>
     );
   }
@@ -583,7 +569,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
           open={pickerOpen}
           onOpenChange={setPickerOpen}
           clientId={clientId}
-          onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] })}
+          onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] })}
         />
       </>
     );
@@ -739,7 +725,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         clientId={clientId}
-        onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports'] })}
+        onSyncComplete={() => queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] })}
       />
     </div>
   );

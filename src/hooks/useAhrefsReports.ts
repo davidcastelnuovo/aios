@@ -80,6 +80,6 @@ export function useAhrefsReports(options: UseAhrefsReportsOptions = {}) {
       }
       return (data || []) as unknown as AhrefsReport[];
     },
-    enabled,
+    staleTime: 5 * 60 * 1000,
   });
 }

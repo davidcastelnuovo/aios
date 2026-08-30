@@ -41,8 +41,22 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [contentKind, setContentKind] = useState<"table" | "dashboard">("table");
   const userSelectedRef = useRef(false);
 
-  // All tables for the tenant
-  const { data: allTables = [], isLoading } = useQuery({
+  // Tables linked to this client (server-filtered)
+  const { data: tables = [], isLoading } = useQuery({
+    queryKey: ["client-crm-tables", tenantId, clientId],
+    queryFn: async () => {
+      const response = await supabase.functions.invoke(
+        `crm-tables?tenant_id=${tenantId}&client_id=${clientId}`,
+        { method: "GET" }
+      );
+      if (response.error) throw response.error;
+      return Array.isArray(response.data) ? response.data : [];
+    },
+    enabled: !!tenantId && !!clientId,
+  });
+
+  // All tenant tables — only for the link-table picker
+  const { data: allTables = [] } = useQuery({
     queryKey: ["all-crm-tables", tenantId],
     queryFn: async () => {
       const response = await supabase.functions.invoke(
@@ -52,10 +66,8 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       if (response.error) throw response.error;
       return Array.isArray(response.data) ? response.data : [];
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && showLinkSection,
   });
-
-  const tables = useMemo(() => allTables.filter((t: any) => t.client_id === clientId), [allTables, clientId]);
 
   // Available tables not linked to this client
   const availableTables = useMemo(() => {
@@ -122,6 +134,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     });
     if (error) { toast.error(await serverErrorMessage(error, "שגיאה בשיוך הטבלה")); return; }
     toast.success("טבלה שויכה בהצלחה");
+    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId, clientId] });
     queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
     setTableSearch("");
     setShowTableDropdown(false);
@@ -134,6 +147,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     });
     if (error) { toast.error(await serverErrorMessage(error, "שגיאה בהסרת השיוך")); return; }
     toast.success("שיוך הטבלה הוסר");
+    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId, clientId] });
     queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
   };
 
@@ -150,6 +164,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     toast.success(next
       ? "הקמפיין דלוק — כרמן תכלול אותו בדיווחים"
       : "הקמפיין כבוי — כרמן לא תדווח עליו");
+    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId, clientId] });
     queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
   };
 

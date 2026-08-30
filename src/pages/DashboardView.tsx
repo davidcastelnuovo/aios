@@ -199,12 +199,13 @@ export default function DashboardView() {
       if (!session) throw new Error('Not authenticated');
 
       const response = await supabase.functions.invoke(
-        currentTenantId ? `crm-tables?tenant_id=${currentTenantId}` : 'crm-tables',
+        currentTenantId
+          ? `crm-tables?tenant_id=${currentTenantId}&client_id=${dashboard.client_id}`
+          : `crm-tables?client_id=${dashboard.client_id}`,
         { method: 'GET' }
       );
       if (response.error) throw response.error;
-      const allTables = Array.isArray(response.data) ? response.data : [];
-      return allTables.filter((t: any) => t.client_id === dashboard.client_id);
+      return Array.isArray(response.data) ? response.data : [];
     },
     enabled: !!dashboard?.client_id,
   });
