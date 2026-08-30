@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { format, subDays, startOfWeek } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { getDashboardDateRange } from "@/lib/dashboardDateFilters";
 import {
   aggregateOrdersByAttribution,
   summarizeGoogleAttributedWooOrders,
@@ -14,6 +15,54 @@ export const wooDashboardQueryKeys = {
   wooSites: (clientId?: string | null) => ["woo-sites-for-client", clientId] as const,
   wooOrdersPrefix: ["woo-orders"] as const,
 };
+
+function parseCustomDashboardDate(value?: Date | string | null): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const [y, m, d] = String(value).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * UTC ISO bounds for woocommerce_orders.date_created on combined dashboards.
+ * Uses the same calendar presets as ads/analytics (crm-records / getDashboardDateRange)
+ * so "7 ימים אחרונים" matches Facebook + Google Ads, not a separate Sun→Sat week.
+ */
+export function getWooDashboardDateRangeIso(
+  dateFilter: string,
+  options?: {
+    customFrom?: Date | string | null;
+    customTo?: Date | string | null;
+    now?: Date;
+  },
+): { start: string; end: string } {
+  const now = options?.now ?? new Date();
+  const customFrom = parseCustomDashboardDate(options?.customFrom);
+  const customTo = parseCustomDashboardDate(options?.customTo);
+  const customFromStr = customFrom ? format(customFrom, "yyyy-MM-dd") : null;
+  const customToStr = customTo ? format(customTo, "yyyy-MM-dd") : null;
+  const { startDate, endDate } = getDashboardDateRange(dateFilter, now, customFromStr, customToStr);
+
+  if (!startDate || !endDate) {
+    const yesterday = subDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), 1);
+    const start = format(subDays(yesterday, 6), "yyyy-MM-dd");
+    const end = format(yesterday, "yyyy-MM-dd");
+    const [sy, sm, sd] = start.split("-").map(Number);
+    const [ey, em, ed] = end.split("-").map(Number);
+    return {
+      start: new Date(sy, sm - 1, sd, 0, 0, 0, 0).toISOString(),
+      end: new Date(ey, em - 1, ed, 23, 59, 59, 999).toISOString(),
+    };
+  }
+
+  const [sy, sm, sd] = startDate.split("-").map(Number);
+  const [ey, em, ed] = endDate.split("-").map(Number);
+  return {
+    start: new Date(sy, sm - 1, sd, 0, 0, 0, 0).toISOString(),
+    end: new Date(ey, em - 1, ed, 23, 59, 59, 999).toISOString(),
+  };
+}
 
 /** ISO range aligned with DynamicTableView client-side date filters. */
 export function getDynamicTableDateRangeIso(
@@ -146,12 +195,16 @@ export async function fetchWooOrdersInRange(
 }
 
 export async function fetchWooSiteIdsForClient(clientId: string): Promise<string[]> {
-  const { data: sites } = await supabase
+  const { data: sites, error } = await supabase
     .from('social_media_wordpress_sites' as any)
     .select('id')
     .eq('client_id', clientId)
     .eq('woocommerce_enabled', true)
     .eq('is_active', true);
+  if (error) {
+    console.error('[fetchWooSiteIdsForClient] query failed:', error);
+    throw error;
+  }
   return ((sites as any[]) || []).map((s: any) => s.id);
 }
 

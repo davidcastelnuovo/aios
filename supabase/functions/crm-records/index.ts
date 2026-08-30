@@ -89,8 +89,7 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string, in
     }
     case 'last_7_days': {
       // Rolling 7 full days ending yesterday — matches GA4, Google Ads, Facebook,
-      // DynamicTableView, and GoogleAnalyticsDashboard. (WooCommerce uses its own
-      // Sun→Sat week in wooDashboardQueries / public-dashboard wooRange only.)
+      // DynamicTableView, and WooCommerce combined-dashboard totals.
       startDate = shiftDateString(today, -7);
       endDate = shiftDateString(today, -1);
       break;
