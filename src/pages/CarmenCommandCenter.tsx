@@ -26,9 +26,7 @@ function Clock() {
 }
 
 /**
- * Carmen Command Center — one stage at a time.
- * Knights table = only the table. Direct chat = only that seat.
- * HUD widgets open from the לוח dropdown, not as always-on columns.
+ * Carmen Command Center — chat-first: agent seat rail + full-height thread.
  */
 export default function CarmenCommandCenter() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();

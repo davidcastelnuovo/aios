@@ -1,20 +1,19 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Headphones, Loader2, Mic, MicOff, Play, Send, Square, Volume2, VolumeX, Wrench } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Headphones, Loader2, Mic, MicOff, Play, Send, Square, Volume2, VolumeX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { CarmenFaceState } from "./CarmenFace";
 import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
-import { BrainRouteSelector } from "./BrainRouteSelector";
-import { RoundTableBoard } from "./RoundTableBoard";
+import { AgentSeatRail } from "./AgentSeatRail";
+import { ChatMessageRow } from "./ChatMessageRow";
 import { ChatTopicRail } from "./ChatTopicRail";
 import { ThinkingGalaxy } from "./ThinkingGalaxy";
 import { useBrainChannel } from "./useBrainChannel";
-import { deriveParliamentView, hudStage, routeForRestoredChat, routeForTableAddress, speakerLabel } from "@/lib/agentChannelRouting";
+import { AGENT_SPRITES, filterMessagesForRoute, seatKeyFromRoute } from "@/lib/agentSeats";
+import { hudStage, routeForRestoredChat } from "@/lib/agentChannelRouting";
 import { composerLockedForChat, lastConversationStorageKey, streamAppliesToActive, topicIsLive, type TopicChat } from "@/lib/chatTopics";
-import type { ConversationChannelStatus, CouncilSeatId, HudStage } from "@/lib/agentChannelRouting";
+import type { ConversationChannelStatus, HudStage } from "@/lib/agentChannelRouting";
 import {
   CarmenInputMode,
   onRealtimeUnavailable,
@@ -86,7 +85,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     liveStreamIdsRef.current = liveStreamIds;
     const streamBufRef = useRef<Record<string, string>>({});
     const [inputMode, setInputMode] = useState<CarmenInputMode>("typed");
-    const [expanded, setExpanded] = useState(false);
     const [isConvMode, setIsConvMode] = useState(false);
     const [isRealtime, setIsRealtime] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -123,7 +121,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const queryClient = useQueryClient();
     const brain = useBrainChannel(tenantId);
     const [conversationId, setConversationId] = useState<string | null>(null);
-    const [addressedSeat, setAddressedSeat] = useState<CouncilSeatId | null>(null);
     const hud = hudStage({
       routeType: brain.selected.route_type,
       debating: brain.status === "debating",
@@ -361,12 +358,9 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         setInputMode("typed");
         inputModeRef.current = "typed";
       }
-      const sendRoute = hud === "table"
-        ? (routeForTableAddress(brain.routes, addressedSeat) || brain.selected)
-        : brain.selected;
+      const sendRoute = brain.selected;
       setMessages(prev => [...prev, { role: "user", content: trimmed, speaker: "user", channel: sendRoute.slug, ...turn }]);
       setInput("");
-      setExpanded(true);
       setIsStreaming(true);
       setStreamingText("");
       scrollDown();
@@ -406,7 +400,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         if (boundId) setLiveStreamIds((prev) => prev.filter((id) => id !== boundId));
         queryClient.invalidateQueries({ queryKey: ["cc-conversations", tenantId] });
       }
-    }, [tenantId, messages, stopSpeech, toast, brain, streamInternal, hud, addressedSeat, queryClient, liveStreamIds]);
+    }, [tenantId, messages, stopSpeech, toast, brain, streamInternal, queryClient, liveStreamIds]);
 
     const endConversation = useCallback(() => {
       convModeRef.current = false;
@@ -559,7 +553,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           onUserTranscript: (text) => {
             if (!shouldLogRealtimeTranscript()) return;
             setMessages(prev => [...prev, { role: "user", content: text, ...tagChatTurn("realtime_voice") }]);
-            setExpanded(true);
             scrollDown();
           },
           onAssistantDelta: (delta) => {
@@ -672,7 +665,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             });
             if (row.role === "assistant" && row.channel && row.channel !== "internal") {
               realtimeRef.current?.speakText(row.content);
-              setExpanded(true);
               scrollDown();
             }
           },
@@ -712,7 +704,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setMessages([]);
       setStreamingText("");
       setHistory(false);
-      setAddressedSeat(null);
       brain.setStatus("idle");
       if (tenantId) localStorage.removeItem(lastConversationStorageKey(tenantId));
     }, [learnFromConversation, tenantId, brain]);
@@ -722,7 +713,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       rememberConv(conv.id);
       const nextRoute = routeForRestoredChat(brain.routes, conv);
       brain.selectRoute(nextRoute, conv.id);
-      if (nextRoute.route_type === "parliament") setAddressedSeat(null);
       brain.setStatus((topicIsLive(conv.status) ? conv.status : "idle") as ConversationChannelStatus);
       setStreamingText(streamBufRef.current[conv.id] || "");
       setIsStreaming(liveStreamIdsRef.current.includes(conv.id));
@@ -746,7 +736,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           channel: m.channel,
         })));
       setHistory(false);
-      setExpanded(true);
       scrollDown();
     }, [learnFromConversation, brain]);
 
@@ -838,8 +827,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       toggleHistory: () => setHistory(!historyVisible),
     }), [sendText, startVoice, historyVisible]);
 
-    const hasThread = messages.length > 0 || !!streamingText;
-    const parliamentView = deriveParliamentView(messages, brain.selected);
+    const visibleMessages = filterMessagesForRoute(messages, brain.selected);
+    const streamSeatKey = seatKeyFromRoute(brain.selected);
+    const streamSprite = AGENT_SPRITES[streamSeatKey === "shared" ? "carmen" : streamSeatKey];
+    const isShared = brain.selected.route_type === "parliament";
     const activeTopic = pastConversations?.find((c) => c.id === conversationId);
     const thisChatBusy = composerLockedForChat({
       conversationId,
@@ -847,8 +838,14 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       status: activeTopic?.status ?? (conversationId && liveStreamIds.includes(conversationId) ? "streaming" : brain.status),
     });
 
+    const composerPlaceholder = isConvMode
+      ? (isRealtime ? "שיחה חיה" : "פותחת…")
+      : isShared
+        ? "הודעה למרחב המשותף…"
+        : "הודעה…";
+
     return (
-      <div className={`cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden ${hud === "direct" ? "is-direct" : "is-table"}`}>
+      <div className="cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden">
         <div className="cc-talkbar-shell min-h-0 flex-1">
         {historyVisible && (
           <ChatTopicRail
@@ -860,85 +857,51 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           />
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="cc-visual-pane">
-        <RoundTableBoard
-          route={brain.selected}
-          messages={messages}
-          seats={parliamentView.seats}
-          selectedProvider={addressedSeat || (hud === "table" ? null : brain.selected.slug)}
-          debating={brain.status === "debating"}
-          stage={hud}
-          onAddress={(seat) => {
-            setAddressedSeat((prev) => (prev === seat ? null : seat));
-          }}
-          onOpenCouncil={() => {
-            const next = brain.routes.find((r) => r.slug === "parliament");
-            if (next) brain.selectRoute(next, conversationIdRef.current);
-            setAddressedSeat(null);
-          }}
-          onBackToTable={() => {
-            const next = brain.routes.find((r) => r.slug === "parliament");
-            if (next) brain.selectRoute(next, conversationIdRef.current);
-            setAddressedSeat(null);
-          }}
-          onCancel={conversationId ? () => brain.cancelParliament(conversationId) : undefined}
-          onContinue={conversationId ? () => brain.parliamentAction("parliament_continue", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
-          onSynthesize={conversationId ? () => brain.parliamentAction("parliament_synthesize", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
-          onClarify={conversationId ? (provider) => {
-            const q = input.trim() || "אפשר לפרט את ההמלצה ואת הסיכון העיקרי?";
-            brain.parliamentAction("parliament_clarify", conversationId, { provider, content: q })
-              .then(() => setInput(""))
-              .catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" }));
-          } : undefined}
-        />
-        </div>
-        {hasThread && (
-          <div className="cc-chat-pane">
-            <button
-              type="button"
-              onClick={() => setExpanded((e) => !e)}
-              className="cc-chat-pane-toggle flex shrink-0 items-center justify-center gap-1 border-b border-[var(--cc-line)] py-1 text-xs text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
-            >
-              {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-              {expanded ? "כווץ שיחה" : `שיחה (${messages.filter((m) => m.role !== "tool_call").length})`}
-            </button>
-            {expanded && (
-              <div ref={listRef} className="cc-chat-scroll cc-scroll space-y-2 p-3">
-                {messages.map((m, i) => m.role === "tool_call" ? (
-                  <p key={i} className="flex items-center gap-1.5 text-xs text-[var(--cc-text-dim)]">
-                    <Wrench className="h-3 w-3" /> {m.tool}
-                  </p>
-                ) : (
-                  <div key={m.id || i} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
-                    m.role === "user"
-                      ? "mr-auto bg-[rgba(76,195,255,0.18)]"
-                      : "ml-auto border border-[var(--cc-line)] bg-[rgba(14,20,40,0.8)]"
-                  }`}>
-                    {(m.speaker || m.channel) && m.role !== "user" && (
-                      <p className="mb-1 text-[10px] tracking-wide text-[var(--cc-accent)]">
-                        {speakerLabel(m.speaker, m.channel)}
-                      </p>
-                    )}
-                    <div className="cc-md prose prose-invert prose-sm max-w-none [&_p]:my-1">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content ?? ""}</ReactMarkdown>
-                    </div>
+          <AgentSeatRail
+            routes={brain.routes}
+            selected={brain.selected}
+            status={brain.status}
+            externalUrl={brain.externalUrl}
+            debating={brain.status === "debating"}
+            onSelect={(route) => brain.selectRoute(route, conversationIdRef.current)}
+            onCancel={conversationId ? () => brain.cancelParliament(conversationId) : undefined}
+            onContinue={conversationId ? () => brain.parliamentAction("parliament_continue", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
+            onSynthesize={conversationId ? () => brain.parliamentAction("parliament_synthesize", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
+          />
+          <div ref={listRef} className="cc-chat-scroll cc-scroll min-h-0 flex-1 space-y-3 p-3">
+            {visibleMessages.length === 0 && !streamingText && (
+              <p className="py-8 text-center text-sm text-[var(--cc-text-dim)]">
+                {isShared
+                  ? "מרחב משותף — כולם שומעים, ורואים גם תקשורת בין האייג׳נטים."
+                  : "שיחה ישירה — רק אתה והאייג׳נט שנבחר."}
+              </p>
+            )}
+            {visibleMessages.map((m, i) => (
+              <ChatMessageRow
+                key={m.id || i}
+                role={m.role as "user" | "assistant" | "tool_call"}
+                content={m.content}
+                speaker={m.speaker}
+                channel={m.channel}
+                tool={m.tool}
+              />
+            ))}
+            {streamingText && (
+              <div className="cc-msg-row is-agent">
+                <span className="cc-msg-avatar" style={{ backgroundImage: `url(${streamSprite})` }} aria-hidden />
+                <div className="cc-msg-bubble">
+                  <div className="cc-md prose prose-invert prose-sm max-w-none [&_p]:my-1">
+                    {streamingText}
                   </div>
-                ))}
-                {streamingText && (
-                  <div className="ml-auto max-w-[85%] rounded-lg border border-[var(--cc-line)] bg-[rgba(14,20,40,0.8)] px-3 py-2 text-sm">
-                    <div className="cc-md prose prose-invert prose-sm max-w-none [&_p]:my-1">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingText}</ReactMarkdown>
-                    </div>
-                  </div>
-                )}
-                {thisChatBusy && !streamingText && (
-                  <ThinkingGalaxy />
-                )}
+                </div>
+              </div>
+            )}
+            {thisChatBusy && !streamingText && (
+              <div className="flex justify-center py-2">
+                <ThinkingGalaxy />
               </div>
             )}
           </div>
-        )}
-
         </div>
         </div>
         {brain.healthBanner && (
@@ -947,32 +910,20 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           </p>
         )}
         <div className="cc-talkbar-row relative z-[60] mt-auto flex shrink-0 items-center gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-              <BrainRouteSelector
-                routes={brain.routes}
-                value={brain.selected.id}
-                onChange={(route) => {
-            brain.selectRoute(route, conversationIdRef.current);
-            if (route.route_type === "parliament") setAddressedSeat(null);
-          }}
-                status={brain.status}
-                externalUrl={brain.externalUrl}
-              />
-              <div className="hidden h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:flex">
-                <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />
-                <select
-                  value={selectedVoice}
-                  onChange={e => selectVoice(e.target.value as CarmenVoice)}
-                  title="קול"
-                  className="max-w-[130px] bg-transparent text-xs text-[var(--cc-text)] outline-none"
-                >
-                  {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
-                </select>
-                <button onClick={previewVoice} disabled={isPreviewingVoice} title="דוגמה" className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50">
-                  {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-            </div>
+          <div className="hidden h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:flex">
+            <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />
+            <select
+              value={selectedVoice}
+              onChange={e => selectVoice(e.target.value as CarmenVoice)}
+              title="קול"
+              className="max-w-[130px] bg-transparent text-xs text-[var(--cc-text)] outline-none"
+            >
+              {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
+            </select>
+            <button onClick={previewVoice} disabled={isPreviewingVoice} title="דוגמה" className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50">
+              {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            </button>
+          </div>
           <button
             onClick={startVoice}
             title={isConvMode ? "סיים שיחה חיה" : "שיחה חיה"}
@@ -1015,9 +966,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") sendText(input); }}
-            placeholder={isConvMode ? (isRealtime ? "שיחה חיה" : "פותחת…") : hud === "table"
-              ? (addressedSeat ? `אל ${speakerLabel(addressedSeat)}` : "מועצה — לחצי על דמות או שלחי לכולם")
-              : `אל ${speakerLabel(brain.selected.slug)}`}
+            placeholder={composerPlaceholder}
             className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)]"
           />
           <button

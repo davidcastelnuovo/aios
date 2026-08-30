@@ -162,13 +162,132 @@ html:has([data-staging-banner]) {
   align-items: stretch;
 }
 
-/* Fixed visual stage — chat scrolls below without compressing graphics */
+/* Fixed visual stage — legacy; chat-first layout uses full height below seat rail */
 .cc-visual-pane {
-  flex: 0 0 auto;
-  height: clamp(220px, 38dvh, 400px);
-  min-height: 220px;
-  overflow: hidden;
-  border-bottom: 1px solid var(--cc-line);
+  display: none;
+}
+
+/* ---------- Agent seat rail ---------- */
+
+.cc-seat-rail {
+  background: rgba(5, 10, 22, 0.45);
+}
+
+.cc-seat-btn {
+  position: relative;
+  display: flex;
+  height: 52px;
+  width: 52px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid var(--cc-line);
+  background: rgba(8, 16, 34, 0.75);
+  padding: 0;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.cc-seat-btn:hover {
+  border-color: var(--cc-line-strong);
+  transform: translateY(-1px);
+}
+.cc-seat-btn.is-active {
+  border-color: var(--cc-accent);
+  box-shadow: 0 0 16px rgba(76, 195, 255, 0.35);
+}
+.cc-seat-btn.is-shared.is-active {
+  border-color: rgba(251, 191, 36, 0.65);
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.28);
+}
+
+.cc-seat-sprite {
+  display: block;
+  width: 40px;
+  height: 48px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  filter: drop-shadow(0 0 4px rgba(76, 195, 255, 0.2));
+  opacity: 0.72;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+.cc-seat-btn.is-active .cc-seat-sprite {
+  opacity: 1;
+  filter: drop-shadow(0 0 8px rgba(76, 195, 255, 0.65));
+}
+
+.cc-seat-cluster {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+.cc-seat-cluster-dot {
+  position: absolute;
+  width: 22px;
+  height: 28px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  opacity: 0.8;
+}
+.cc-seat-cluster-dot.is-cursor { left: 0; bottom: 2px; }
+.cc-seat-cluster-dot.is-grok { right: 0; bottom: 2px; }
+.cc-seat-cluster-dot.is-codex { left: 50%; top: 0; transform: translateX(-50%); }
+.cc-seat-btn.is-active .cc-seat-cluster-dot { opacity: 1; }
+
+/* ---------- Chat messages with avatars ---------- */
+
+.cc-msg-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 92%;
+}
+.cc-msg-row.is-user {
+  margin-inline-start: auto;
+  flex-direction: row-reverse;
+}
+.cc-msg-row.is-agent {
+  margin-inline-end: auto;
+}
+
+.cc-msg-avatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 44px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  filter: drop-shadow(0 0 4px rgba(76, 195, 255, 0.25));
+}
+.cc-msg-avatar.is-user {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(76, 195, 255, 0.2);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--cc-accent);
+  filter: none;
+}
+
+.cc-msg-bubble {
+  min-width: 0;
+  flex: 1;
+  border-radius: 10px;
+  border: 1px solid var(--cc-line);
+  background: rgba(14, 20, 40, 0.85);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.cc-msg-bubble.is-user,
+.cc-msg-row.is-user .cc-msg-bubble {
+  border-color: transparent;
+  background: rgba(76, 195, 255, 0.18);
 }
 
 .cc-chat-pane {
