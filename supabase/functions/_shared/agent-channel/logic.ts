@@ -213,3 +213,22 @@ export function speakerForOrigin(origin: ChannelProvider): string {
   if (origin === "internal") return "carmen";
   return origin;
 }
+
+const CALLBACK_ORIGINS = new Set<ChannelProvider>([
+  "cursor", "grok", "codex", "claude", "chatgpt", "internal", "parliament",
+]);
+
+/** Workspace agents often reply with origin chatgpt; the session provider is authoritative. */
+export function resolveCallbackOrigin(
+  stated: string | null | undefined,
+  sessionProvider: string | null | undefined,
+): ChannelProvider {
+  const session = sessionProvider && CALLBACK_ORIGINS.has(sessionProvider as ChannelProvider)
+    ? sessionProvider as ChannelProvider
+    : null;
+  const raw = stated && CALLBACK_ORIGINS.has(stated as ChannelProvider) ? stated as ChannelProvider : null;
+  if (session && raw && raw !== session && (raw === "chatgpt" || raw === "codex") && (session === "chatgpt" || session === "codex")) {
+    return session;
+  }
+  return raw || session || "internal";
+}

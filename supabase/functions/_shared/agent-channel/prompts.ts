@@ -16,10 +16,16 @@ export function buildCallbackInstructions(args: {
   const ro = args.readOnly
     ? `READ-ONLY: do not open PRs, edit production, deploy, or write data. Analysis only.\n`
     : "";
+  const workspaceDelivery =
+    args.origin === "codex" || args.origin === "chatgpt"
+      ? `For Codex/ChatGPT Workspace: deliver via the HTTP POST below (same Supabase project that dispatched you). ` +
+        `Do NOT use MCP reply_to_aios_session unless that MCP server's URL is exactly ${supabaseUrl}.\n`
+      : "";
   return (
     `\n\n--- DELIVER THE ANSWER BACK TO AIOS (required) ---\n` +
     `You are talking to David through Carmen's Command Center. When you finish, ` +
     `return the full answer into the same AIOS conversation. Do NOT call ask_carmen or ask_cursor to deliver it.\n` +
+    workspaceDelivery +
     roundLine +
     ro +
     `conversation_id: ${args.conversationId}\n` +

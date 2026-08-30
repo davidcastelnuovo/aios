@@ -21,6 +21,33 @@ export function workspaceConversationKey(provider: WorkspaceProvider, conversati
   return `aios:${provider}:${conversationId}`;
 }
 
+export async function probeWorkspaceAgent(
+  provider: WorkspaceProvider,
+  env: Record<string, string | undefined> = {},
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  const { triggerId, accessToken } = workspaceAgentCreds(provider, env);
+  if (!triggerId || !accessToken) {
+    return { ok: false, error: "missing trigger id or token" };
+  }
+  try {
+    const resp = await fetch(
+      `https://api.chatgpt.com/v1/workspace_agents/${encodeURIComponent(triggerId)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "OpenAI-Beta": "workspace_agent_runs=v1",
+        },
+      },
+    );
+    if (resp.ok) return { ok: true, status: resp.status };
+    const raw = await resp.text();
+    return { ok: false, status: resp.status, error: raw.slice(0, 200) };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message ?? e) };
+  }
+}
+
 export function missingWorkspaceMessage(provider: WorkspaceProvider): string {
   if (provider === "codex") {
     return (
