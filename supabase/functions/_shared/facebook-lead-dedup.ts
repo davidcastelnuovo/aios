@@ -8,6 +8,7 @@ const asUuid = (value: unknown): string | null => {
 }
 
 export const facebookFlowEventSource = (automationId: string) => `fb-flow:${automationId}`
+export const facebookIntakeEventSource = () => "fb-intake"
 
 /** Stable per-destination lock key so 0546… / 972546… / …@c.us share one receipt. */
 export function facebookWhatsAppSendSource(chatId: string): string {
@@ -23,6 +24,54 @@ function isUniqueViolation(error: { code?: unknown; message?: unknown; details?:
   const code = String(error.code ?? "")
   const text = `${error.message ?? ""} ${error.details ?? ""}`
   return code === "23505" || code === "409" || /duplicate key|unique constraint/i.test(text)
+}
+
+export async function claimFacebookLeadIntake(
+  supabase: { from: (table: string) => any },
+  params: { tenantId: string; leadgenId: unknown; formId?: unknown },
+): Promise<{ duplicate: boolean; inserted: boolean }> {
+  const leadgenId = asId(params.leadgenId)
+  if (!leadgenId || !params.tenantId) return { duplicate: false, inserted: false }
+
+  const { error } = await supabase.from("lead_notification_events").insert({
+    tenant_id: params.tenantId,
+    source: facebookIntakeEventSource(),
+    external_id: leadgenId,
+    form_id: asId(params.formId) || null,
+  })
+
+  if (isUniqueViolation(error)) return { duplicate: true, inserted: false }
+  if (error) {
+    console.error("[facebook-lead-dedup] intake claim failed:", error.message)
+    const { data } = await supabase
+      .from("lead_notification_events")
+      .select("id")
+      .eq("tenant_id", params.tenantId)
+      .eq("source", facebookIntakeEventSource())
+      .eq("external_id", leadgenId)
+      .maybeSingle()
+    if (data?.id) return { duplicate: true, inserted: false }
+    return { duplicate: false, inserted: false }
+  }
+  return { duplicate: false, inserted: true }
+}
+
+export async function wasFacebookLeadIntakeClaimed(
+  supabase: { from: (table: string) => any },
+  params: { tenantId: string; leadgenId: unknown },
+): Promise<boolean> {
+  const leadgenId = asId(params.leadgenId)
+  if (!leadgenId || !params.tenantId) return false
+
+  const { data } = await supabase
+    .from("lead_notification_events")
+    .select("id")
+    .eq("tenant_id", params.tenantId)
+    .eq("source", facebookIntakeEventSource())
+    .eq("external_id", leadgenId)
+    .maybeSingle()
+
+  return Boolean(data?.id)
 }
 
 export async function claimFacebookLeadAutomationRun(
