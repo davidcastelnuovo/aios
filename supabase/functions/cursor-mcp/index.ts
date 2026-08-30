@@ -31,6 +31,7 @@ import {
   type McpRpcMessage,
 } from "../_shared/mcp-streamable-http.ts";
 import { completeHumanCursorTask, extractHumanTaskId } from "../_shared/cursor-task-queue.ts";
+import { cursorModelBody, resolveCodingCursorModel } from "../_shared/cursorCreativeModel.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -405,8 +406,8 @@ async function createCursorAgent(apiKey: string, promptText: string, opts?: {
     prompt: { text: promptText },
     autoCreatePR,
     name: (opts?.name || "Carmen → Cursor").slice(0, 100),
+    model: cursorModelBody(resolveCodingCursorModel(modelId)),
   };
-  if (modelId) body.model = { id: modelId };
   if (envName) {
     body.env = { type: "cloud", name: envName };
   } else {
