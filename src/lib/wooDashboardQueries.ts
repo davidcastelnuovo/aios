@@ -1,12 +1,21 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { format, subDays, startOfWeek } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { getDashboardDateRange } from "@/lib/dashboardDateFilters";
+import {
+  getJerusalemDashboardDateRange,
+  jerusalemDateRangeToIso,
+} from "@/lib/calendarTimeZone";
 import {
   aggregateOrdersByAttribution,
   summarizeGoogleAttributedWooOrders,
   type WooGoogleAttributionSummary,
 } from "@/lib/wooAttribution";
+import {
+  dedupeWooOrdersById,
+  filterWooOrdersForRevenue,
+  sumWooRevenue,
+  type WooOrderRevenueRow,
+} from "@/lib/wooOrderRevenue";
 
 /** React-query keys used by DashboardView + WooCommerceDashboard. */
 export const wooDashboardQueryKeys = {
@@ -25,9 +34,8 @@ function parseCustomDashboardDate(value?: Date | string | null): Date | null {
 }
 
 /**
- * UTC ISO bounds for woocommerce_orders.date_created on combined dashboards.
- * Uses the same calendar presets as ads/analytics (crm-records / getDashboardDateRange)
- * so "7 ימים אחרונים" matches Facebook + Google Ads, not a separate Sun→Sat week.
+ * Jerusalem-calendar ISO bounds for woocommerce_orders revenue filtering.
+ * Uses date_paid → date_completed → date_created (see wooOrderRevenue.ts).
  */
 export function getWooDashboardDateRangeIso(
   dateFilter: string,
@@ -42,26 +50,22 @@ export function getWooDashboardDateRangeIso(
   const customTo = parseCustomDashboardDate(options?.customTo);
   const customFromStr = customFrom ? format(customFrom, "yyyy-MM-dd") : null;
   const customToStr = customTo ? format(customTo, "yyyy-MM-dd") : null;
-  const { startDate, endDate } = getDashboardDateRange(dateFilter, now, customFromStr, customToStr);
+  const { startDate, endDate } = getJerusalemDashboardDateRange(
+    dateFilter,
+    now,
+    customFromStr,
+    customToStr,
+  );
 
   if (!startDate || !endDate) {
+    const todayYmd = format(now, "yyyy-MM-dd");
     const yesterday = subDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), 1);
     const start = format(subDays(yesterday, 6), "yyyy-MM-dd");
     const end = format(yesterday, "yyyy-MM-dd");
-    const [sy, sm, sd] = start.split("-").map(Number);
-    const [ey, em, ed] = end.split("-").map(Number);
-    return {
-      start: new Date(sy, sm - 1, sd, 0, 0, 0, 0).toISOString(),
-      end: new Date(ey, em - 1, ed, 23, 59, 59, 999).toISOString(),
-    };
+    return jerusalemDateRangeToIso(start, end);
   }
 
-  const [sy, sm, sd] = startDate.split("-").map(Number);
-  const [ey, em, ed] = endDate.split("-").map(Number);
-  return {
-    start: new Date(sy, sm - 1, sd, 0, 0, 0, 0).toISOString(),
-    end: new Date(ey, em - 1, ed, 23, 59, 59, 999).toISOString(),
-  };
+  return jerusalemDateRangeToIso(startDate, endDate);
 }
 
 /** ISO range aligned with DynamicTableView client-side date filters. */
@@ -157,41 +161,70 @@ export type WooReportAttributionData = {
   bySource: ReturnType<typeof aggregateOrdersByAttribution>;
 };
 
-const WOO_VALID_STATUSES = ['completed', 'processing', 'on-hold'] as const;
 const WOO_PAGE_SIZE = 1000;
 const WOO_MAX_PAGES = 50; // safety cap — 50k orders per range
 
-/** Paginated fetch — PostgREST caps responses at 1000 rows per request. */
-export async function fetchWooOrdersInRange(
+async function fetchWooOrdersForColumnInRange(
   siteIds: string[],
-  range: { start: string; end: string } | null,
-  select = 'total, status, date_created, attribution',
+  column: "date_created" | "date_paid" | "date_completed",
+  range: { start: string; end: string },
+  select: string,
 ): Promise<any[]> {
-  if (siteIds.length === 0) return [];
-
   const all: any[] = [];
   for (let page = 0; page < WOO_MAX_PAGES; page++) {
     const from = page * WOO_PAGE_SIZE;
-    let query = supabase
-      .from('woocommerce_orders' as any)
+    const { data: orders, error } = await supabase
+      .from("woocommerce_orders" as any)
       .select(select)
-      .in('site_id', siteIds)
-      .order('date_created', { ascending: false })
+      .in("site_id", siteIds)
+      .gte(column, range.start)
+      .lte(column, range.end)
+      .not(column, "is", null)
+      .order(column, { ascending: false })
       .range(from, from + WOO_PAGE_SIZE - 1);
-
-    if (range) {
-      query = query.gte('date_created', range.start).lte('date_created', range.end);
-    }
-
-    const { data: orders, error } = await query;
     if (error) throw error;
     const batch = (orders as any[]) || [];
     if (batch.length === 0) break;
     all.push(...batch);
     if (batch.length < WOO_PAGE_SIZE) break;
   }
-
   return all;
+}
+
+/** Paginated fetch — matches Woo admin by revenue date (paid/completed/created). */
+export async function fetchWooOrdersInRange(
+  siteIds: string[],
+  range: { start: string; end: string } | null,
+  select = "id, total, status, date_created, date_completed, date_paid, attribution",
+): Promise<any[]> {
+  if (siteIds.length === 0) return [];
+  if (!range) {
+    const all: any[] = [];
+    for (let page = 0; page < WOO_MAX_PAGES; page++) {
+      const from = page * WOO_PAGE_SIZE;
+      const { data: orders, error } = await supabase
+        .from("woocommerce_orders" as any)
+        .select(select)
+        .in("site_id", siteIds)
+        .order("date_created", { ascending: false })
+        .range(from, from + WOO_PAGE_SIZE - 1);
+      if (error) throw error;
+      const batch = (orders as any[]) || [];
+      if (batch.length === 0) break;
+      all.push(...batch);
+      if (batch.length < WOO_PAGE_SIZE) break;
+    }
+    return all;
+  }
+
+  const [byCreated, byPaid, byCompleted] = await Promise.all([
+    fetchWooOrdersForColumnInRange(siteIds, "date_created", range, select),
+    fetchWooOrdersForColumnInRange(siteIds, "date_paid", range, select),
+    fetchWooOrdersForColumnInRange(siteIds, "date_completed", range, select),
+  ]);
+
+  const merged = dedupeWooOrdersById([...byCreated, ...byPaid, ...byCompleted]);
+  return filterWooOrdersForRevenue(merged as WooOrderRevenueRow[], range);
 }
 
 export async function fetchWooSiteIdsForClient(clientId: string): Promise<string[]> {
@@ -224,7 +257,7 @@ export async function fetchWooReportAttribution(
   if (siteIds.length === 0) return empty;
 
   const list = await fetchWooOrdersInRange(siteIds, range);
-  const valid = list.filter((o) => WOO_VALID_STATUSES.includes(o.status));
+  const valid = list as WooOrderRevenueRow[];
 
   return {
     orders: valid,
@@ -252,11 +285,10 @@ export async function fetchWooDashboardSummary(
   const siteIds = await fetchWooSiteIdsForClient(clientId);
   if (siteIds.length === 0) return empty;
 
-  const list = await fetchWooOrdersInRange(siteIds, range, 'total, status, attribution');
-  const valid = list.filter((o) => WOO_VALID_STATUSES.includes(o.status));
-  const revenue = valid.reduce((s: number, o: any) => s + Number(o.total || 0), 0);
+  const list = await fetchWooOrdersInRange(siteIds, range, "id, total, status, attribution, date_created, date_completed, date_paid");
+  const valid = list as WooOrderRevenueRow[];
   return {
-    revenue,
+    revenue: sumWooRevenue(valid),
     orders: valid.length,
     googlePaid: summarizeGoogleAttributedWooOrders(valid),
   };
