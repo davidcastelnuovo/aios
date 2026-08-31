@@ -38,7 +38,7 @@ When a task finishes, **always send David the development environment link**: th
 
 `after-lead-aios-crm.vercel.app` is a **Production** alias, not Staging.
 
-The in-app amber banner shows `STAGING` / `PREVIEW`, git branch, and short commit SHA so you can spot a stale build immediately.
+The in-app amber frame (subtle yellow border glow) marks Staging/Preview — no header space taken.
 
 ## Flow
 
@@ -152,5 +152,5 @@ Set `STAGING_ALLOWED_PHONE_NUMBERS` only in Staging secrets / Vercel Preview+`de
 - **No Production env vars changed.**
 - **No Production database changed.**
 - Integration guard is a no-op when `APP_ENV` is unset or `production`.
-- Staging banner is hidden in Production.
+- Staging frame is hidden in Production.
 - Creating GitHub `develop` does not change `main`.
