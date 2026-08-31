@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +31,7 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  SlidersHorizontal,
 } from "lucide-react";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 import { SummaryViewerDialog } from "@/components/recordings/SummaryViewerDialog";
@@ -45,6 +47,7 @@ import { cn } from "@/lib/utils";
 import { fetchRecordingsFeed } from "@/lib/recordingsFeedQuery";
 import { fetchRecordingFolders } from "@/lib/recordingsFeed";
 import { recordingsPollInterval } from "@/lib/recordingsPollInterval";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type SidebarSelection =
   | { kind: "all" }
@@ -57,9 +60,11 @@ export default function Recordings() {
   const { agencies: accessibleAgencies } = useAgency();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selection, setSelection] = useState<SidebarSelection>({ kind: "all" });
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTopic, setUploadTopic] = useState("");
@@ -482,39 +487,203 @@ export default function Recordings() {
       onClick={onClick}
     >
       {icon}
-      <span className="flex-1 truncate">{label}</span>
+      <span className="flex-1 truncate min-w-0">{label}</span>
       {actions}
       {typeof count === "number" && (
-        <span className="text-xs text-muted-foreground">{count}</span>
+        <span className="text-xs text-muted-foreground shrink-0">{count}</span>
       )}
     </div>
   );
 
+  const selectSidebar = (next: SidebarSelection) => {
+    setSelection(next);
+    if (isMobile) setMobileNavOpen(false);
+  };
+
+  const searchInput = (
+    <div className="relative">
+      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        placeholder="חיפוש..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="pr-9"
+      />
+    </div>
+  );
+
+  const sidebarContent = (
+    <div className="space-y-4">
+      {!isMobile && searchInput}
+
+      <div className="space-y-0.5">
+        {sidebarItem(
+          selection.kind === "all",
+          () => selectSidebar({ kind: "all" }),
+          <LayoutGrid className="h-4 w-4 shrink-0" />,
+          "כל ההקלטות",
+          groupedRecordings.length,
+        )}
+        {sidebarItem(
+          selection.kind === "unassigned",
+          () => selectSidebar({ kind: "unassigned" }),
+          <Video className="h-4 w-4 shrink-0" />,
+          "ללא שיוך",
+          groupedRecordings.filter(
+            (r) => !r.client_id && !r.agency_id && (r.campaigner_ids || []).length === 0 && !r.folder_id,
+          ).length,
+        )}
+      </div>
+
+      {clientFolders.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1.5 px-2 mb-1 text-xs font-semibold text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
+            לקוחות
+          </div>
+          <div className="space-y-0.5 max-h-64 overflow-y-auto">
+            {clientFolders.map((cf) => (
+              <div key={cf.clientId}>
+                {sidebarItem(
+                  selection.kind === "client" && selection.clientId === cf.clientId,
+                  () => selectSidebar({ kind: "client", clientId: cf.clientId }),
+                  <Folder className="h-4 w-4 text-blue-500 shrink-0" />,
+                  cf.name,
+                  cf.count,
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="flex items-center justify-between px-2 mb-1">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <Folder className="h-3.5 w-3.5" />
+            תיקיות
+          </div>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCreatingFolder(true)} title="תיקייה חדשה">
+            <FolderPlus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="space-y-0.5">
+          {folders.map((f) => (
+            <div key={f.id}>
+              {renamingFolderId === f.id ? (
+                <div className="flex items-center gap-1 px-2 py-1">
+                  <Input
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    className="h-7 text-sm"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && renameValue.trim()) {
+                        renameFolderMutation.mutate({ id: f.id, name: renameValue.trim() });
+                      }
+                      if (e.key === "Escape") setRenamingFolderId(null);
+                    }}
+                    onBlur={() => setRenamingFolderId(null)}
+                  />
+                </div>
+              ) : (
+                sidebarItem(
+                  selection.kind === "folder" && selection.folderId === f.id,
+                  () => selectSidebar({ kind: "folder", folderId: f.id }),
+                  <Folder className="h-4 w-4 text-amber-500 shrink-0" />,
+                  `${f.icon ? f.icon + " " : ""}${f.name}`,
+                  folderCounts.get(f.id) || 0,
+                  <DropdownMenu dir="rtl">
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-5 w-5 opacity-100 md:opacity-0 md:group-hover/item:opacity-100">
+                        <MoreVertical className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolderId(f.id); setRenameValue(f.name); }}>
+                        <Pencil className="h-3.5 w-3.5 ml-2" />שנה שם
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); deleteFolderMutation.mutate(f.id); }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 ml-2" />מחק תיקייה
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>,
+                )
+              )}
+            </div>
+          ))}
+          {creatingFolder && (
+            <div className="px-2 py-1">
+              <Input
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="שם התיקייה..."
+                className="h-7 text-sm"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newFolderName.trim()) createFolderMutation.mutate(newFolderName.trim());
+                  if (e.key === "Escape") { setCreatingFolder(false); setNewFolderName(""); }
+                }}
+                onBlur={() => { if (!newFolderName.trim()) setCreatingFolder(false); }}
+              />
+            </div>
+          )}
+          {folders.length === 0 && !creatingFolder && (
+            <div className="px-2 py-1 text-xs text-muted-foreground">
+              אין תיקיות עדיין — למשל "הדרכות מערכת"
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const selectionLabel = (() => {
+    if (selection.kind === "all") return "כל ההקלטות";
+    if (selection.kind === "unassigned") return "ללא שיוך";
+    if (selection.kind === "client") {
+      return clientFolders.find((cf) => cf.clientId === selection.clientId)?.name || "לקוח";
+    }
+    const folder = folders.find((f) => f.id === selection.folderId);
+    return folder ? `${folder.icon ? `${folder.icon} ` : ""}${folder.name}` : "תיקייה";
+  })();
+
   return (
-    <div className="container mx-auto p-6 space-y-4">
+    <div className="mx-auto w-full max-w-full overflow-x-hidden px-3 py-4 sm:px-4 md:container md:p-6 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <FileVideo className="h-8 w-8" />
-          הקלטות
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 min-w-0">
+          <FileVideo className="h-7 w-7 sm:h-8 sm:w-8 shrink-0" />
+          <span className="truncate">הקלטות</span>
         </h1>
-        <div className="flex gap-2">
-          {zoomIntegration?.is_active && (
-            <Button variant="outline" onClick={() => setZoomFetchOpen(true)}>
-              <Download className="h-4 w-4 ml-2" />
-              משוך מ-Zoom
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:justify-end">
+          {isMobile && (
+            <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setMobileNavOpen(true)}>
+              <SlidersHorizontal className="h-4 w-4 ml-2" />
+              {selectionLabel}
             </Button>
           )}
-          <Button variant="outline" onClick={() => setJoinBotOpen(true)}>
+          {zoomIntegration?.is_active && (
+            <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setZoomFetchOpen(true)}>
+              <Download className="h-4 w-4 ml-2" />
+              <span className="truncate">משוך מ-Zoom</span>
+            </Button>
+          )}
+          <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setJoinBotOpen(true)}>
             <Bot className="h-4 w-4 ml-2" />
-            שלח את כרמן לפגישה
+            <span className="truncate">שלח את כרמן לפגישה</span>
           </Button>
-          <Button onClick={() => setUploadOpen(true)}>
+          <Button className="flex-1 sm:flex-none" onClick={() => setUploadOpen(true)}>
             <Upload className="h-4 w-4 ml-2" />
             העלה הקלטה
           </Button>
         </div>
       </div>
+
+      {isMobile && searchInput}
 
       {recordingsError && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 flex flex-wrap items-center justify-between gap-3">
@@ -529,134 +698,24 @@ export default function Recordings() {
         </div>
       )}
 
-      <div className="flex gap-5 items-start">
-        {/* Sidebar */}
-        <aside className="w-60 shrink-0 space-y-4 sticky top-4">
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="חיפוש..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pr-9" />
-          </div>
-
-          <div className="space-y-0.5">
-            {sidebarItem(selection.kind === "all", () => setSelection({ kind: "all" }), <LayoutGrid className="h-4 w-4" />, "כל ההקלטות", groupedRecordings.length)}
-            {sidebarItem(
-              selection.kind === "unassigned",
-              () => setSelection({ kind: "unassigned" }),
-              <Video className="h-4 w-4" />,
-              "ללא שיוך",
-              groupedRecordings.filter(
-                (r) => !r.client_id && !r.agency_id && (r.campaigner_ids || []).length === 0 && !r.folder_id,
-              ).length,
-            )}
-          </div>
-
-          {clientFolders.length > 0 && (
-            <div>
-              <div className="flex items-center gap-1.5 px-2 mb-1 text-xs font-semibold text-muted-foreground">
-                <Users className="h-3.5 w-3.5" />
-                לקוחות
-              </div>
-              <div className="space-y-0.5 max-h-64 overflow-y-auto">
-                {clientFolders.map((cf) =>
-                  <div key={cf.clientId}>
-                    {sidebarItem(
-                      selection.kind === "client" && selection.clientId === cf.clientId,
-                      () => setSelection({ kind: "client", clientId: cf.clientId }),
-                      <Folder className="h-4 w-4 text-blue-500" />,
-                      cf.name,
-                      cf.count,
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <div className="flex items-center justify-between px-2 mb-1">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                <Folder className="h-3.5 w-3.5" />
-                תיקיות
-              </div>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCreatingFolder(true)} title="תיקייה חדשה">
-                <FolderPlus className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-            <div className="space-y-0.5">
-              {folders.map((f) => (
-                <div key={f.id}>
-                  {renamingFolderId === f.id ? (
-                    <div className="flex items-center gap-1 px-2 py-1">
-                      <Input
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        className="h-7 text-sm"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && renameValue.trim()) {
-                            renameFolderMutation.mutate({ id: f.id, name: renameValue.trim() });
-                          }
-                          if (e.key === "Escape") setRenamingFolderId(null);
-                        }}
-                        onBlur={() => setRenamingFolderId(null)}
-                      />
-                    </div>
-                  ) : (
-                    sidebarItem(
-                      selection.kind === "folder" && selection.folderId === f.id,
-                      () => setSelection({ kind: "folder", folderId: f.id }),
-                      <Folder className="h-4 w-4 text-amber-500" />,
-                      `${f.icon ? f.icon + " " : ""}${f.name}`,
-                      folderCounts.get(f.id) || 0,
-                      <DropdownMenu dir="rtl">
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover/item:opacity-100">
-                            <MoreVertical className="h-3 w-3" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenamingFolderId(f.id); setRenameValue(f.name); }}>
-                            <Pencil className="h-3.5 w-3.5 ml-2" />שנה שם
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={(e) => { e.stopPropagation(); deleteFolderMutation.mutate(f.id); }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 ml-2" />מחק תיקייה
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>,
-                    )
-                  )}
-                </div>
-              ))}
-              {creatingFolder && (
-                <div className="px-2 py-1">
-                  <Input
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    placeholder="שם התיקייה..."
-                    className="h-7 text-sm"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && newFolderName.trim()) createFolderMutation.mutate(newFolderName.trim());
-                      if (e.key === "Escape") { setCreatingFolder(false); setNewFolderName(""); }
-                    }}
-                    onBlur={() => { if (!newFolderName.trim()) setCreatingFolder(false); }}
-                  />
-                </div>
-              )}
-              {folders.length === 0 && !creatingFolder && (
-                <div className="px-2 py-1 text-xs text-muted-foreground">
-                  אין תיקיות עדיין — למשל "הדרכות מערכת"
-                </div>
-              )}
-            </div>
-          </div>
+      <div className="flex flex-col md:flex-row gap-4 md:gap-5 items-start min-w-0">
+        {/* Desktop sidebar */}
+        <aside className="hidden md:block w-60 shrink-0 space-y-4 sticky top-4">
+          {sidebarContent}
         </aside>
 
+        {/* Mobile navigation sheet */}
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetContent side="right" className="w-[min(100vw-2rem,20rem)] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>תיקיות וסינון</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4">{sidebarContent}</div>
+          </SheetContent>
+        </Sheet>
+
         {/* Feed */}
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 w-full">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground border rounded-xl">
               <Video className="h-10 w-10" />
@@ -664,7 +723,7 @@ export default function Recordings() {
               <div className="text-sm">הקלט פגישה עם התוסף, העלה קובץ, או משוך הקלטות מ-Zoom</div>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {filtered.map((rec) => (
                 <RecordingCard
                   key={rec.id}
@@ -698,7 +757,7 @@ export default function Recordings() {
 
       {/* Upload dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle>העלאת הקלטה</DialogTitle>
           </DialogHeader>
@@ -745,7 +804,7 @@ export default function Recordings() {
 
       {/* Zoom fetch dialog */}
       <Dialog open={zoomFetchOpen} onOpenChange={setZoomFetchOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle>משיכת הקלטות מ-Zoom</DialogTitle>
           </DialogHeader>

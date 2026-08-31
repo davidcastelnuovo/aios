@@ -311,7 +311,7 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg w-[calc(100vw-2rem)]">
         <DialogHeader>
           <DialogTitle>שתף סיכום פגישה</DialogTitle>
           <DialogDescription>

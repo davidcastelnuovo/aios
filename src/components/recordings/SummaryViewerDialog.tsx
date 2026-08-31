@@ -102,7 +102,7 @@ export function SummaryViewerDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col">
+        <DialogContent className="max-w-3xl w-[calc(100vw-2rem)] max-h-[88vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />

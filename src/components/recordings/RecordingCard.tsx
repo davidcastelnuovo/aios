@@ -356,46 +356,50 @@ export function RecordingCard({
 
           {/* AI suggestion: assign only after human confirmation */}
           {suggestedClientName && (
-            <div className="flex items-center gap-1.5 rounded-md bg-primary/5 border border-primary/20 px-2 py-1">
+            <div className="flex flex-wrap items-center gap-1.5 rounded-md bg-primary/5 border border-primary/20 px-2 py-1">
               <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-[11px] flex-1 truncate">הצעה: {suggestedClientName}</span>
-              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[11px] text-green-600" onClick={() => onAcceptSuggestion?.(rec)}>
-                אשר
-              </Button>
-              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[11px] text-muted-foreground" onClick={() => onRejectSuggestion?.(rec)}>
-                דחה
-              </Button>
+              <span className="text-[11px] flex-1 min-w-0 truncate">הצעה: {suggestedClientName}</span>
+              <div className="flex gap-1 shrink-0">
+                <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[11px] text-green-600" onClick={() => onAcceptSuggestion?.(rec)}>
+                  אשר
+                </Button>
+                <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[11px] text-muted-foreground" onClick={() => onRejectSuggestion?.(rec)}>
+                  דחה
+                </Button>
+              </div>
             </div>
           )}
 
           {/* Client chip + actions */}
-          <div className="flex items-center justify-between gap-2">
-            {rec.clients?.name && rec.client_id ? (
-              <Badge variant="secondary" className="text-[11px] max-w-[45%] truncate p-0">
-                <Link
-                  to={buildPath(`/clients?clientId=${rec.client_id}&tab=recordings`)}
-                  className="block truncate px-2.5 py-0.5"
-                  title="פתח בכרטיס הלקוח"
-                >
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              {rec.clients?.name && rec.client_id ? (
+                <Badge variant="secondary" className="text-[11px] max-w-full truncate p-0">
+                  <Link
+                    to={buildPath(`/clients?clientId=${rec.client_id}&tab=recordings`)}
+                    className="block truncate px-2.5 py-0.5"
+                    title="פתח בכרטיס הלקוח"
+                  >
+                    {rec.clients.name}
+                  </Link>
+                </Badge>
+              ) : rec.clients?.name ? (
+                <Badge variant="secondary" className="text-[11px] max-w-full truncate">
                   {rec.clients.name}
-                </Link>
-              </Badge>
-            ) : rec.clients?.name ? (
-              <Badge variant="secondary" className="text-[11px] max-w-[45%] truncate">
-                {rec.clients.name}
-              </Badge>
-            ) : campaignerNames.length > 0 ? (
-              <Badge variant="outline" className="text-[11px] max-w-[55%] truncate" title={campaignerNames.join(", ")}>
-                פנימי · {campaignerNames.join(", ")}
-              </Badge>
-            ) : assignedAgencyName || rec.agencies?.name ? (
-              <Badge variant="outline" className="text-[11px] max-w-[55%] truncate">
-                סוכנות · {assignedAgencyName || rec.agencies?.name}
-              </Badge>
-            ) : (
-              <span className="text-[11px] text-muted-foreground">ללא שיוך</span>
-            )}
-            <div className="flex gap-1">
+                </Badge>
+              ) : campaignerNames.length > 0 ? (
+                <Badge variant="outline" className="text-[11px] max-w-full truncate" title={campaignerNames.join(", ")}>
+                  פנימי · {campaignerNames.join(", ")}
+                </Badge>
+              ) : assignedAgencyName || rec.agencies?.name ? (
+                <Badge variant="outline" className="text-[11px] max-w-full truncate">
+                  סוכנות · {assignedAgencyName || rec.agencies?.name}
+                </Badge>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">ללא שיוך</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1 justify-start sm:justify-end">
               {rec.transcription && (
                 <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onOpenTranscript(rec)}>
                   <Mic className="h-3.5 w-3.5 ml-1" />
@@ -467,7 +471,7 @@ export function RecordingCard({
       />
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle>שינוי שם ההקלטה</DialogTitle>
           </DialogHeader>
@@ -507,7 +511,7 @@ export function RecordingCard({
 
       {/* Player */}
       <Dialog open={playOpen} onOpenChange={setPlayOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{rec.meeting_topic || "הקלטה"}</DialogTitle>
           </DialogHeader>

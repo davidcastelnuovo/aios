@@ -65,7 +65,7 @@ export function TranscriptViewerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl w-[calc(100vw-2rem)] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mic className="h-5 w-5 text-primary" />
@@ -78,7 +78,7 @@ export function TranscriptViewerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => void copyTranscript()} disabled={!transcript}>
             <Copy className="h-4 w-4 ml-1" />
             העתק
