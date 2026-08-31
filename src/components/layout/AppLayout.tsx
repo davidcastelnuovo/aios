@@ -1,6 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { LogOut, Building2 } from "lucide-react";
+import { LogOut, Building2, PanelRightOpen } from "lucide-react";
 import { GlobalApprovalsBell } from "@/components/agents/GlobalApprovalsBell";
 import { HeaderModuleShortcuts } from "./HeaderModuleShortcuts";
 import logo from "@/assets/logo.png";
@@ -18,6 +18,9 @@ import { useTenant } from "@/contexts/TenantContext";
 import { ViewAsProvider } from "@/contexts/ViewAsContext";
 import { ViewAsBanner } from "@/components/ViewAsBanner";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
+import { SystemFixSidebar } from "@/components/carmen-command/SystemFixSidebar";
+import { useSystemFixSidebar } from "@/contexts/SystemFixSidebarContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +59,8 @@ export function AppLayout() {
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
   const commandCenterAccess = useCommandCenterAccess();
+  const systemFixSidebar = useSystemFixSidebar();
+  const isMobile = useIsMobile();
 
   // Fetch available tenants for the user
   const { data: userTenants } = useQuery({
@@ -189,9 +194,10 @@ export function AppLayout() {
   return (
     <ViewAsProvider>
       <SidebarProvider defaultOpen={false}>
-        <div className="flex h-screen max-h-screen w-full overflow-hidden" dir="rtl">
+        <div className={`flex h-screen max-h-screen w-full overflow-hidden sf-sidecar-host${systemFixSidebar.open && !isMobile ? " is-open" : ""}`} dir="rtl">
           <AppSidebar />
-          <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+          <div className="sf-sidecar-host__main flex min-h-0 min-w-0 flex-1 overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <ViewAsBanner />
             <header className="sticky top-0 z-50 h-14 md:h-16 border-b bg-card flex items-center justify-between px-2 sm:px-4 md:px-6 gap-1.5 sm:gap-2 md:gap-4 flex-shrink-0">
               <div className="flex items-center gap-1.5 sm:gap-2 md:gap-4 min-w-0">
@@ -226,22 +232,38 @@ export function AppLayout() {
                 <GlobalApprovalsBell />
                 {/* Carmen button in header — opens the full-screen Command Center (allowlisted users only) */}
                 {commandCenterAccess.allowed && (
-                  <button
-                    onClick={() => {
-                      const slug = currentTenant?.slug;
-                      if (slug) navigate(`/t/${slug}/command-center`);
-                    }}
-                    className="relative group"
-                    title="כרמן — מרכז פיקוד ובקרה"
-                    aria-label="פתח את מרכז הפיקוד של כרמן"
-                  >
-                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-background animate-pulse z-10" />
-                    <img
-                      src={CARMEN_ICON}
-                      alt="כרמן"
-                      className="h-9 w-9 rounded-full object-cover border-2 border-sky-400/70 group-hover:scale-110 group-hover:border-sky-300 transition-all duration-200"
-                    />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={systemFixSidebar.toggle}
+                      className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition-all ${
+                        systemFixSidebar.open
+                          ? "border-sky-300 bg-sky-500/15 text-sky-200"
+                          : "border-sky-400/40 text-sky-300/80 hover:border-sky-300 hover:text-sky-200"
+                      }`}
+                      title="תיקון מערכת — Sidecar (המסך נשאר גלוי)"
+                      aria-label="פתח פאנל תיקון מערכת"
+                      aria-pressed={systemFixSidebar.open}
+                    >
+                      <PanelRightOpen className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        const slug = currentTenant?.slug;
+                        if (slug) navigate(`/t/${slug}/command-center`);
+                      }}
+                      className="relative group"
+                      title="כרמן — מרכז פיקוד ובקרה"
+                      aria-label="פתח את מרכז הפיקוד של כרמן"
+                    >
+                      <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-background animate-pulse z-10" />
+                      <img
+                        src={CARMEN_ICON}
+                        alt="כרמן"
+                        className="h-9 w-9 rounded-full object-cover border-2 border-sky-400/70 group-hover:scale-110 group-hover:border-sky-300 transition-all duration-200"
+                      />
+                    </button>
+                  </>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -265,7 +287,10 @@ export function AppLayout() {
                 </Suspense>
               </RoutedModulePermissionGate>
             </main>
+            </div>
+            {!isMobile && <SystemFixSidebar variant="inline" />}
           </div>
+          {isMobile && <SystemFixSidebar variant="overlay" />}
 
         </div>
       </SidebarProvider>

@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-31 — Sidecar תיקון מערכת (Command Center → Cursor)
+- **Skin slug:** `command_center_system_fix_sidecar` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** While David views any AIOS screen with the system-fix sidecar open, classify dev/system-fix requests using `context_metadata` (route, client/task ids) and route to Cursor via `mcp_Cursor__request_dev_task` when he explicitly asks or the message is clearly a system fix — not every chat line.
+- **How:** Messages include `source=command_center_sidebar` + `system_fix_context`. Explicit triggers: "שלחי לקרסר", "תריצי דרך קרסר", "שלחי לפיתוח".
+- **Origin:** David — Command Center intermediate sidebar for contextual system feedback while the main UI stays visible.
+
 ### 2026-08-30 — תור משימות אנושיות → Cursor (auto-claim)
 - **Skin slug:** n/a (edge + tools). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
 - **What Carmen can now do:** Assign human `tasks` to Cursor (`assigned_agent=Cursor`, status `open`). `dispatch-cursor-tasks` claims one task, fires `request_dev_task`, links `cursor_dispatches.human_task_id`. When Cursor finishes, call `mcp_Cursor__complete_human_task` → marks done + dispatches next.

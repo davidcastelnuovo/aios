@@ -9,6 +9,7 @@ import { TenantProvider } from "./contexts/TenantContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { UIModeProvider } from "./contexts/UIModeContext";
 import { AIOSProvider } from "./contexts/AIOSContext";
+import { SystemFixSidebarProvider } from "./contexts/SystemFixSidebarContext";
 import { Suspense } from "react";
 import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -72,7 +73,9 @@ function TenantAppProviders({ children }: { children: React.ReactNode }) {
       <ThemeProvider>
         <UIModeProvider>
           <AIOSProvider>
-            <AgencyProvider>{children}</AgencyProvider>
+            <SystemFixSidebarProvider>
+              <AgencyProvider>{children}</AgencyProvider>
+            </SystemFixSidebarProvider>
           </AIOSProvider>
         </UIModeProvider>
       </ThemeProvider>

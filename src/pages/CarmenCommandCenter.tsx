@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowRight, History, LayoutDashboard, Users } from "lucide-react";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { ArrowRight, History, LayoutDashboard, PanelRightOpen, Users } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
@@ -12,6 +12,7 @@ import { CarmenChatBar, CarmenChatBarHandle } from "@/components/carmen-command/
 import { useCommandRealtime } from "@/components/carmen-command/useCommandData";
 import { useBrainChannel } from "@/components/carmen-command/useBrainChannel";
 import { useToast } from "@/hooks/use-toast";
+import { useSystemFixSidebar } from "@/contexts/SystemFixSidebarContext";
 import type { HudStage } from "@/lib/agentChannelRouting";
 import "@/components/carmen-command/command-center.css";
 
@@ -55,6 +56,8 @@ function Clock({ compact = false }: { compact?: boolean }) {
  */
 export default function CarmenCommandCenter() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  const navigate = useNavigate();
+  const systemFixSidebar = useSystemFixSidebar();
   const { tenantId } = useCurrentTenant();
   const access = useCommandCenterAccess();
   const qc = useQueryClient();
@@ -181,6 +184,19 @@ export default function CarmenCommandCenter() {
               </button>
             </>
           )}
+
+          <button
+            type="button"
+            title="מצב Sidecar — חזרה לאפליקציה עם פאנל תיקון מערכת"
+            onClick={() => {
+              systemFixSidebar.setOpen(true);
+              navigate(tenantSlug ? `/t/${tenantSlug}/home` : "/");
+            }}
+            className="cc-header-btn flex items-center gap-1 rounded-md border border-[var(--cc-line)] px-2 text-xs text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)] hover:text-[var(--cc-accent)]"
+          >
+            <PanelRightOpen className="h-4 w-4" />
+            <span className="hidden sm:inline">Sidecar</span>
+          </button>
 
           <Clock compact />
         </div>
