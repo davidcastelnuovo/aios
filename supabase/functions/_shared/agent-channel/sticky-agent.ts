@@ -1,10 +1,14 @@
 /** Cursor / Codex Direct — optional reuse of an open Cloud Agent chat (bc-…). */
 
+import {
+  asCursorSessionId,
+  resolveCursorDirectSession,
+} from "../cursor-direct-session.ts";
+
 export type OpenChatProvider = "cursor" | "codex";
 
 export function asCloudAgentId(value?: string | null): string | null {
-  const id = String(value || "").trim();
-  return id.startsWith("bc-") ? id : null;
+  return asCursorSessionId(value);
 }
 
 export function uniqueCloudAgentIds(...values: Array<string | null | undefined>): string[] {
@@ -95,25 +99,11 @@ export async function collectOpenChatIds(
   const ids = uniqueCloudAgentIds(args.sessionId, envOpenChatId(args.provider, env));
 
   if (args.provider === "cursor") {
-    try {
-      const { data } = await sb
-        .from("cursor_sticky_agents")
-        .select("cursor_agent_id")
-        .eq("tenant_id", args.tenantId)
-        .maybeSingle();
-      ids.push(...uniqueCloudAgentIds(data?.cursor_agent_id));
-    } catch { /* table may be missing on a fresh clone */ }
-    try {
-      const { data: last } = await sb
-        .from("cursor_dispatches")
-        .select("cursor_agent_id")
-        .eq("tenant_id", args.tenantId)
-        .not("cursor_agent_id", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      ids.push(...uniqueCloudAgentIds(last?.cursor_agent_id));
-    } catch { /* ignore */ }
+    const fixed = await resolveCursorDirectSession(sb, {
+      tenantId: args.tenantId,
+      env: args.env || {},
+    });
+    if (fixed) ids.push(fixed.sessionId);
   }
 
   try {

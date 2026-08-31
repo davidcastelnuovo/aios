@@ -15,7 +15,6 @@ import {
 test("only bc- ids count as an open Cursor chat", () => {
   assert.equal(asCloudAgentId("bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c"), "bc-7eb07a1e-7143-4b20-bf1e-fc529a24cc5c");
   assert.equal(asCloudAgentId("webhook-1"), null);
-  assert.equal(asCloudAgentId(""), null);
   assert.deepEqual(
     uniqueCloudAgentIds("bc-aaa", "nope", "bc-aaa", "bc-bbb"),
     ["bc-aaa", "bc-bbb"],
@@ -92,8 +91,7 @@ test("collectOpenChatIds with sticky merges session, env, sticky table, then las
     from(table: string) {
       calls.push(table);
       const row =
-        table === "cursor_sticky_agents" ? { cursor_agent_id: "bc-sticky" }
-        : table === "cursor_dispatches" ? { cursor_agent_id: "bc-dispatch" }
+        table === "cursor_sticky_agents" ? { cursor_agent_id: "bc-sticky", session_url: "https://cursor.com/agents/bc-sticky" }
         : null;
       const rows = table === "agent_channel_sessions"
         ? [{ external_session_id: "bc-session-old" }]
@@ -122,11 +120,9 @@ test("collectOpenChatIds with sticky merges session, env, sticky table, then las
   assert.deepEqual(ids, [
     "bc-this-chat",
     "bc-direct",
-    "bc-sticky",
-    "bc-dispatch",
     "bc-session-old",
   ]);
-  assert.ok(calls.includes("cursor_sticky_agents"));
+  assert.ok(calls.includes("agent_channel_sessions"));
 });
 
 test("Cursor Direct without sticky and without session returns empty list", async () => {

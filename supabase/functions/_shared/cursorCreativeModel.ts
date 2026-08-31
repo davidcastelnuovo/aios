@@ -47,3 +47,15 @@ export function pickCreativeModelFromCatalog(
 
 export const isInvalidCursorModelError = (message: string): boolean =>
   /not available or invalid|unknown model|invalid model/i.test(message);
+
+/** Coding / Carmen Direct agents — default Composer, not account default (often Grok). */
+export function resolveCodingCursorModel(raw?: string | null): CursorModelSelection {
+  return resolveCreativeCursorModel(raw);
+}
+
+export function cursorModelBody(selection: CursorModelSelection): Record<string, unknown> {
+  if (selection.params?.length) {
+    return { id: selection.id, params: selection.params };
+  }
+  return { id: selection.id };
+}

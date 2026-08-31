@@ -25,6 +25,7 @@ on:
       - 'supabase/ops/create_cursor_sticky_agents.sql'
       - 'supabase/ops/create_agent_tool_embeddings.sql'
       - 'supabase/ops/fix_woocommerce_client_scoped_select.sql'
+      - 'supabase/ops/fix_4_4_woocommerce_revenue_sync.sql'
       - 'supabase/ops/fix_crm_tables_ecommerce_category.sql'
       - 'supabase/ops/fix_owners_view_shared_agencies.sql'
       - 'supabase/ops/create_meeting_bot_sessions.sql'
@@ -153,6 +154,9 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_woocommerce_client_scoped_select.sql'; then
               FILE="supabase/ops/fix_woocommerce_client_scoped_select.sql"
               NAME="fix_woocommerce_client_scoped_select"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_4_4_woocommerce_revenue_sync.sql'; then
+              FILE="supabase/ops/fix_4_4_woocommerce_revenue_sync.sql"
+              NAME="fix_4_4_woocommerce_revenue_sync"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/create_meeting_bot_sessions.sql'; then
               FILE="supabase/ops/create_meeting_bot_sessions.sql"
               NAME="create_meeting_bot_sessions"

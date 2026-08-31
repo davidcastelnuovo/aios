@@ -1,5 +1,11 @@
 // Human tasks (public.tasks) assigned to Cursor → Cloud Agent dispatch + queue advance.
 
+import {
+  completeCursorSessionsForTask,
+  cursorSessionDisplayName,
+  trackCursorTaskSession,
+} from "./cursor-session-tracker.ts";
+
 export const CURSOR_ASSIGNEE_NAMES = ["cursor", "קרסר", "cursor cloud", "cursor agent"];
 
 export type HumanTaskRow = {
@@ -150,6 +156,8 @@ export async function completeHumanCursorTask(
     .eq("human_task_id", taskId)
     .eq("tenant_id", tenantId);
 
+  await completeCursorSessionsForTask(supabase, tenantId, taskId);
+
   const inProgress = await countInProgressCursorTasks(supabase, tenantId);
   if (inProgress > 0) return { ok: true, advanced: false };
 
@@ -160,7 +168,7 @@ export async function completeHumanCursorTask(
 export async function claimAndDispatchCursorTask(
   supabase: any,
   tenantId: string,
-): Promise<{ taskId: string; sessionUrl: string } | null> {
+): Promise<{ taskId: string; sessionUrl: string; cursorAgentId?: string } | null> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const bearer = Deno.env.get("CURSOR_MCP_BEARER") || "";
   if (!supabaseUrl || !bearer) throw new Error("SUPABASE_URL / CURSOR_MCP_BEARER missing");
@@ -174,5 +182,17 @@ export async function claimAndDispatchCursorTask(
   const { task: prompt, context } = buildCursorTaskPrompt(task);
   const fired = await mcpRequestDevTask(supabaseUrl, bearer, { task: prompt, context, tenantId });
 
-  return { taskId: task.id, sessionUrl: fired.sessionUrl };
+  if (fired.cursorAgentId) {
+    await trackCursorTaskSession(supabase, {
+      tenantId,
+      cursorAgentId: fired.cursorAgentId,
+      sessionUrl: fired.sessionUrl,
+      displayName: cursorSessionDisplayName({ taskTitle: task.title, sourceTool: "dispatch-cursor-tasks" }),
+      taskTitle: task.title,
+      humanTaskId: task.id,
+      sourceTool: "dispatch-cursor-tasks",
+    });
+  }
+
+  return { taskId: task.id, sessionUrl: fired.sessionUrl, cursorAgentId: fired.cursorAgentId };
 }

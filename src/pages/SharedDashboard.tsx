@@ -47,6 +47,7 @@ import {
 
 import { SHARED_COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
 import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
+import { filterWooOrdersForRevenue, sumWooRevenue } from "@/lib/wooOrderRevenue";
 
 const DATE_FILTERS = SHARED_COMBINED_DASHBOARD_DATE_FILTERS;
 
@@ -499,9 +500,8 @@ export default function SharedDashboard({
   // WooCommerce summary — aligns with PublicWooCommerceView so the "All" tab
   // KPI cards match the WooCommerce tab exactly.
   const wooSummary = useMemo(() => {
-    const validStatuses = ["completed", "processing", "on-hold"];
-    const valid = wooOrders.filter((o: any) => validStatuses.includes(o.status));
-    const revenue = valid.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0);
+    const valid = filterWooOrdersForRevenue(wooOrders, null);
+    const revenue = sumWooRevenue(valid);
     const orderCount = valid.length;
     const googlePaid = summarizeGoogleAttributedWooOrders(valid);
     return { revenue, orderCount, googlePaid };

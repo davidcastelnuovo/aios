@@ -11,6 +11,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { WooAttributionSection, wooAttributionLabel } from "@/components/dynamic-tables/WooAttributionSection";
 import { fetchWooOrdersInRange, getWooDashboardDateRangeIso } from "@/lib/wooDashboardQueries";
+import {
+  filterWooOrdersForRevenue,
+  sumWooRevenue,
+  wooOrderRevenueTimestamp,
+} from "@/lib/wooOrderRevenue";
 
 interface Props {
   clientId: string;
@@ -53,39 +58,38 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
       return fetchWooOrdersInRange(
         siteIds,
         wooDateRange,
-        'id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution',
+        'id, total, status, date_created, date_completed, date_paid, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution',
       );
     },
     enabled: siteIds.length > 0,
   });
 
   const summary = useMemo(() => {
-    const validStatuses = ['completed', 'processing', 'on-hold'];
-    const valid = orders.filter((o: any) => validStatuses.includes(o.status));
-    const totalRevenue = valid.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0);
+    const valid = filterWooOrdersForRevenue(orders, wooDateRange);
+    const totalRevenue = sumWooRevenue(valid);
     const orderCount = valid.length;
     const cancelledCount = orders.filter((o: any) => ['cancelled', 'refunded', 'failed'].includes(o.status)).length;
     const aov = orderCount > 0 ? totalRevenue / orderCount : 0;
     const uniqueCustomers = new Set(valid.map((o: any) => o.customer_email).filter(Boolean)).size;
     return { totalRevenue, orderCount, cancelledCount, aov, uniqueCustomers, totalOrders: orders.length };
-  }, [orders]);
+  }, [orders, wooDateRange]);
 
   const dailyData = useMemo(() => {
     const map: Record<string, { date: string; revenue: number; orders: number }> = {};
-    const validStatuses = ['completed', 'processing', 'on-hold'];
-    orders.filter((o: any) => validStatuses.includes(o.status)).forEach((o: any) => {
-      const d = new Date(o.date_created).toISOString().slice(0, 10);
+    filterWooOrdersForRevenue(orders, wooDateRange).forEach((o: any) => {
+      const ts = wooOrderRevenueTimestamp(o);
+      if (!ts) return;
+      const d = new Date(ts).toISOString().slice(0, 10);
       if (!map[d]) map[d] = { date: d, revenue: 0, orders: 0 };
       map[d].revenue += Number(o.total || 0);
       map[d].orders += 1;
     });
     return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
-  }, [orders]);
+  }, [orders, wooDateRange]);
 
   const topProducts = useMemo(() => {
     const map: Record<string, { name: string; quantity: number; revenue: number }> = {};
-    const validStatuses = ['completed', 'processing', 'on-hold'];
-    orders.filter((o: any) => validStatuses.includes(o.status)).forEach((o: any) => {
+    filterWooOrdersForRevenue(orders, wooDateRange).forEach((o: any) => {
       const items = Array.isArray(o.line_items) ? o.line_items : [];
       items.forEach((item: any) => {
         const name = item.name || 'מוצר ללא שם';
@@ -95,7 +99,7 @@ export function WooCommerceDashboard({ clientId, tenantId: _tenantId, dateFilter
       });
     });
     return Object.values(map).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-  }, [orders]);
+  }, [orders, wooDateRange]);
 
   if (sites.length === 0) {
     return (

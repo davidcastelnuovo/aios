@@ -68,6 +68,18 @@ logged.
 - **How:** Repointed `agent_mcp_connections` Cursor URL to `mzjsuvatrzhciojmbbbm`. Deployed staging `mcp-connect` (resync). Copied secret via `{resync_from_secret:true}` — secret never logged. Command Center / Agent Editor Cursor preset now uses `VITE_SUPABASE_URL` instead of hardcoded prod ref, so the preview fills the matching project's token URL.
 - **Origin:** David — "צריך גם בסטייג׳ינג לתקן וגם בפריוויו של מרכז הבקרה לתקן את הטוקן של קרסר".
 
+### 2026-08-30 — Carmen retrieves fixed Cursor Direct session (no hardcoded bc-…)
+- **Skin slug:** `cursor_grok_direct_channel_ping` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** For connection tests ("תעבירי לקרסר: בדיקת חיבור מפריוויו") call `mcp_Cursor__get_cursor_direct_session` (read-only) then `mcp_Cursor__reply_to_cursor_session({ message })` without inventing a bc id. No new Background Agent / no usage-based credits. If unconfigured, get an explicit error — never silent fallback to `ask_cursor`.
+- **How:** Shared resolver `_shared/cursor-direct-session.ts` reads `CURSOR_DIRECT_AGENT_ID` → `cursor_sticky_agents` → `CURSOR_STICKY_AGENT_ID` → latest Command Center cursor session. `cursor-mcp` 1.3.2 adds `get_cursor_direct_session`; `reply_to_cursor_session` accepts optional `session_id`. Logs distinguish `direct_session_reply` vs `new_background_agent`.
+- **Origin:** Carmen escalation — Preview connection test hit billing because she used `ask_cursor` without the fixed session id.
+
+### 2026-08-30 — Cursor task session tracking (bc-… per human task)
+- **Skin slug:** `cursor_task_session_lookup` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`) — add via migration/SQL after deploy
+- **What Carmen can now do:** After dispatching Cursor for a task, look up the bc session with `mcp_Cursor__get_cursor_task_session({ task_id })` or `mcp_Cursor__list_cursor_task_sessions({ status: "active" })`. No fixed bc id in skins.
+- **How:** Table `cursor_task_sessions` + `tasks.cursor_session_id/url`. `cursor-mcp` 1.4.0 tracks on `request_dev_task` / `ask_cursor` / queue dispatch; names agents `AIOS · <task title>`. Command Center Usage panel lists active sessions.
+- **Origin:** Carmen escalation — stop relying on one fixed Cursor chat; map sessions to tasks.
+
 ### 2026-08-28 — Knights round table + Codex seat + QA loop + skill builder
 - **Skin slugs:** `knights_round_table`, `qa_loop`, `skill_builder`, `skill_builder_meta` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`). Also appends Cursor-default note onto `cursor_escalation`.
 - **What Carmen can now do:** Chair a Command Center round table. Default brain is **Cursor Direct**. Seats: Carmen (goals), Cursor, Grok Bot, Codex. After a seat replies she runs `qa_loop` (return with concrete defects, max 3) until the goal is actually met. Missing repeatable work becomes a tenant skin via `skill_builder`; `skill_builder_meta` is the template for building those skins. Session learning catalogs pointers under `process/{task_type}/...`.
@@ -618,3 +630,9 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - **כלי חדש ב-run-ai-agent:** `set_campaign_table_active` — מדליק/מכבה את `crm_tables.campaign_active` לפי client_id/table_id/table_name (מוגבל טננט + הרשאות caller). כשאומרים לכרמן שקמפיין הופסק/חזר — היא מעדכנת את הדגל בעצמה, ובדיקות הדופק מדווחות רק על טבלאות פעילות. יש גם Badge לחיץ בעמוד הטבלאות.
 - **skins "בדיקת דופק" (שני הטננטים) סונכרנו:** סעיף 0 חדש — בידוד טננטים (רק לקוחות הטננט הנוכחי), פטור ללקוחות is_seo_client ללא שירות קמפיינים מדיווחי "חסר חיבור לטבלה", דילוג על טבלאות campaign_active=false, ו-list_clients(status="active") בלבד + סינון תוצאות check_ad_accounts_health לפי הרשימה הפעילה (הבלוק הזה היה חסר ב-MarketingCaptain).
 - **carmen-realtime-session:** ההנחיות מזהות את המתקשר בשמו, מצהירות ש-ask_carmen הוא המוח של כרמן עצמה (scoping אוטומטי לפי הרשאות), ודוחות שיחות לא-עבודה ("אני באמצע ניהול עסק").
+
+### 2026-08-31 — WooCommerce revenue mismatch (dashboard vs store admin)
+- **Skin slug:** `woo_revenue_dashboard_alignment` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When dashboard Woo revenue ≠ WooCommerce admin for the same week, explain the usual causes: (1) AIOS counts by **date_paid → date_completed → date_created** on Asia/Jerusalem calendar days; (2) only statuses completed/processing/on-hold; (3) stale sync when `woo_sync_enabled=false` or incremental sync missed orders — trigger manual sync from WordPress settings; (4) cross-tenant DMM↔MC sites need `wordpress_sites_shared_tenants`.
+- **How:** Code in `wooOrderRevenue.ts` + `calendarTimeZone.ts`; sync backfill last 21d in `sync-woocommerce-data` v1.4.0. For 4/4 ארבע על ארבע ops: `fix_4_4_woocommerce_revenue_sync.sql`.
+- **Origin:** Carmen → Cursor DEV TASK — Ana reported 4/4 last-week ₪3,380 vs Woo ₪6,252.

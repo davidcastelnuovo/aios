@@ -1,4 +1,5 @@
 import { formatCloudAgentError } from "./cloud-errors.ts";
+import { cursorModelBody, resolveCodingCursorModel } from "../cursorCreativeModel.ts";
 
 export type CloudAgentResult = { url: string; id: string; reused: boolean };
 export type FollowUpOutcome =
@@ -95,8 +96,8 @@ export async function createCloudAgent(args: {
     prompt: { text: args.promptText },
     autoCreatePR,
     name: args.name.slice(0, 100),
+    model: cursorModelBody(resolveCodingCursorModel(args.modelId || Deno.env.get("CURSOR_MODEL_ID"))),
   };
-  if (args.modelId) body.model = { id: args.modelId };
   if (envName) body.env = { type: "cloud", name: envName };
   else body.repos = [{ url: repoUrl, startingRef }];
 

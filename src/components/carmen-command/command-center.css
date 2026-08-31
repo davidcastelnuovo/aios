@@ -159,9 +159,25 @@ html:has(.cc-root) body {
   align-items: stretch;
 }
 
-/* Fixed visual stage — legacy; chat-first layout uses full height below seat rail */
+/* Visual stage unused — dashboard mode uses CarmenFace grid instead */
 .cc-visual-pane {
   display: none;
+}
+
+.cc-dashboard-grid {
+  min-height: 0;
+}
+
+.cc-dashboard-core {
+  min-height: 280px;
+}
+
+.cc-dashboard-footer .cc-talkbar {
+  max-height: min(42dvh, 320px);
+}
+
+.cc-root.is-dashboard .cc-talkbar-shell {
+  max-height: min(38dvh, 280px);
 }
 
 /* ---------- Agent seat rail ---------- */
@@ -372,16 +388,49 @@ html:has(.cc-root) body {
   top: 3.6rem;
   inset-inline-start: 0.75rem;
   z-index: 40;
+}
+
+.cc-hud-window--portal {
+  position: fixed;
+  z-index: 100;
   display: flex;
-  width: min(24rem, 92vw);
-  max-height: min(52dvh, calc(100% - 7.5rem));
+  max-height: min(52dvh, calc(100dvh - 8rem));
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--cc-line-strong);
   border-radius: 0.625rem;
-  background: rgba(8, 16, 34, 0.96);
+  background: rgba(8, 16, 34, 0.98);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(76, 195, 255, 0.12);
   padding: 0.7rem 0.75rem;
+  color: var(--cc-text);
+}
+
+/* Portaled HUD inherits cc-root tokens; flatten nested panel chrome inside popup */
+.cc-hud-window--portal .cc-panel {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.cc-hud-window--portal .cc-panel::before,
+.cc-hud-window--portal .cc-panel::after {
+  display: none;
+}
+
+.cc-hud-window--portal .cc-panel > header {
+  display: none;
+}
+
+.cc-hud-window__body {
+  color: var(--cc-text);
+}
+
+.cc-hud-window__body li,
+.cc-hud-window__body span,
+.cc-hud-window__body p,
+.cc-hud-window__body button {
+  color: inherit;
 }
 
 .cc-chat-rail {

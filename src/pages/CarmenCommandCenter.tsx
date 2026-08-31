@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowRight, History } from "lucide-react";
+import { ArrowRight, History, LayoutDashboard, Users } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
 import type { CarmenFaceState } from "@/components/carmen-command/CarmenFace";
+import { CarmenDashboardView } from "@/components/carmen-command/CarmenDashboardView";
 import { HudMenu } from "@/components/carmen-command/HudMenu";
 import { AgentSeatRail, AgentSeatStatus } from "@/components/carmen-command/AgentSeatRail";
 import { CarmenChatBar, CarmenChatBarHandle } from "@/components/carmen-command/CarmenChatBar";
@@ -13,6 +14,19 @@ import { useBrainChannel } from "@/components/carmen-command/useBrainChannel";
 import { useToast } from "@/hooks/use-toast";
 import type { HudStage } from "@/lib/agentChannelRouting";
 import "@/components/carmen-command/command-center.css";
+
+export type CommandCenterViewMode = "agents" | "dashboard";
+
+const VIEW_MODE_KEY = "aios:cc-view-mode";
+
+function readViewMode(): CommandCenterViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY);
+    return v === "dashboard" ? "dashboard" : "agents";
+  } catch {
+    return "agents";
+  }
+}
 
 function Clock({ compact = false }: { compact?: boolean }) {
   const [now, setNow] = useState(new Date());
@@ -35,7 +49,9 @@ function Clock({ compact = false }: { compact?: boolean }) {
 }
 
 /**
- * Carmen Command Center — chat-first: single-row HUD + full-height thread.
+ * Carmen Command Center — two modes:
+ * - dashboard: Carmen only, all HUD panels open, face in center
+ * - agents: multi-agent seat rail + full-height chat
  */
 export default function CarmenCommandCenter() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
@@ -49,6 +65,7 @@ export default function CarmenCommandCenter() {
   const [, setHudMode] = useState<HudStage>("direct");
   const [chatsOpen, setChatsOpen] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<CommandCenterViewMode>(readViewMode);
   const brain = useBrainChannel(tenantId);
   const { toast } = useToast();
 
@@ -68,6 +85,19 @@ export default function CarmenCommandCenter() {
     qc.invalidateQueries({ queryKey: ["cc-feed", tenantId] });
   }, [qc, tenantId]);
 
+  const switchViewMode = useCallback((mode: CommandCenterViewMode) => {
+    setViewMode(mode);
+    try { localStorage.setItem(VIEW_MODE_KEY, mode); } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (viewMode !== "dashboard") return;
+    const internal = brain.routes.find((r) => r.slug === "internal");
+    if (internal && brain.selected.slug !== "internal") {
+      brain.selectRoute(internal, conversationId);
+    }
+  }, [viewMode, brain.routes, brain.selected.slug, brain, conversationId]);
+
   const onCancelParliament = conversationId
     ? () => brain.cancelParliament(conversationId)
     : undefined;
@@ -81,8 +111,10 @@ export default function CarmenCommandCenter() {
   if (access.loading) return <div className="cc-root h-full" />;
   if (!access.allowed) return <Navigate to={tenantSlug ? `/t/${tenantSlug}` : "/"} replace />;
 
+  const isDashboard = viewMode === "dashboard";
+
   return (
-    <div dir="rtl" className="cc-root relative flex flex-col overflow-hidden font-heebo">
+    <div dir="rtl" className={`cc-root relative flex flex-col overflow-hidden font-heebo${isDashboard ? " is-dashboard" : ""}`}>
       <header className="cc-header-bar shrink-0">
         <div className="cc-header-bar__brand flex min-w-0 items-center gap-1.5 sm:gap-2">
           <Link
@@ -94,63 +126,115 @@ export default function CarmenCommandCenter() {
             <span className="hidden sm:inline">חזרה</span>
           </Link>
           <h1 className="cc-title hidden text-sm font-bold text-[var(--cc-accent)] sm:block sm:text-base">CARMEN</h1>
+          {isDashboard && (
+            <span className="hidden text-[10px] tracking-[0.12em] text-[var(--cc-text-dim)] md:inline">
+              מרכז פיקוד · כרמן בלבד
+            </span>
+          )}
         </div>
 
-        <AgentSeatRail
-          embedded
-          routes={brain.routes}
-          selected={brain.selected}
-          status={brain.status}
-          externalUrl={brain.externalUrl}
-          debating={brain.status === "debating"}
-          onSelect={(route) => brain.selectRoute(route, conversationId)}
-        />
+        {!isDashboard && (
+          <AgentSeatRail
+            embedded
+            routes={brain.routes}
+            selected={brain.selected}
+            status={brain.status}
+            externalUrl={brain.externalUrl}
+            debating={brain.status === "debating"}
+            onSelect={(route) => brain.selectRoute(route, conversationId)}
+          />
+        )}
 
         <div className="cc-header-bar__tools flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <HudMenu
-            tenantId={tenantId}
-            faceState={faceState}
-            audioLevelRef={audioLevelRef}
-            onPrefill={(text) => chatRef.current?.prefill(text)}
-            onVoice={() => chatRef.current?.startVoice()}
-            onHealthCheck={healthCheck}
-          />
           <button
             type="button"
-            onClick={() => setChatsOpen((v) => !v)}
-            title="צ׳אטים"
-            className={`cc-header-btn flex items-center gap-1 rounded-md border px-2 text-xs ${chatsOpen ? "border-[var(--cc-line-strong)] text-[var(--cc-accent)]" : "border-[var(--cc-line)] text-[var(--cc-text-dim)]"}`}
+            title={isDashboard ? "מצב סוכנים — Cursor, Grok, מועצה" : "מרכז בקרה — כרמן בלבד, כל הלוחות פתוחים"}
+            onClick={() => switchViewMode(isDashboard ? "agents" : "dashboard")}
+            className={`cc-header-btn flex items-center gap-1 rounded-md border px-2 text-xs ${
+              isDashboard
+                ? "border-[var(--cc-accent)] text-[var(--cc-accent)]"
+                : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)]"
+            }`}
           >
-            <History className="h-4 w-4" />
-            <span className="hidden sm:inline">צ׳אטים</span>
+            {isDashboard ? <Users className="h-4 w-4" /> : <LayoutDashboard className="h-4 w-4" />}
+            <span className="hidden sm:inline">{isDashboard ? "סוכנים" : "מרכז בקרה"}</span>
           </button>
+
+          {!isDashboard && (
+            <>
+              <HudMenu
+                tenantId={tenantId}
+                faceState={faceState}
+                audioLevelRef={audioLevelRef}
+                onPrefill={(text) => chatRef.current?.prefill(text)}
+                onVoice={() => chatRef.current?.startVoice()}
+                onHealthCheck={healthCheck}
+              />
+              <button
+                type="button"
+                onClick={() => setChatsOpen((v) => !v)}
+                title="צ׳אטים"
+                className={`cc-header-btn flex items-center gap-1 rounded-md border px-2 text-xs ${chatsOpen ? "border-[var(--cc-line-strong)] text-[var(--cc-accent)]" : "border-[var(--cc-line)] text-[var(--cc-text-dim)]"}`}
+              >
+                <History className="h-4 w-4" />
+                <span className="hidden sm:inline">צ׳אטים</span>
+              </button>
+            </>
+          )}
+
           <Clock compact />
         </div>
       </header>
 
-      <AgentSeatStatus
-        selected={brain.selected}
-        status={brain.status}
-        externalUrl={brain.externalUrl}
-        debating={brain.status === "debating"}
-        onCancel={onCancelParliament}
-        onContinue={onContinueParliament}
-        onSynthesize={onSynthesizeParliament}
-      />
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-3">
-        <CarmenChatBar
-          ref={chatRef}
-          tenantId={tenantId}
-          brain={brain}
-          onConversationIdChange={setConversationId}
-          onFaceState={setFaceState}
-          audioLevelRef={audioLevelRef}
-          historyOpen={chatsOpen}
-          onHistoryOpenChange={setChatsOpen}
-          onHudModeChange={setHudMode}
+      {!isDashboard && (
+        <AgentSeatStatus
+          selected={brain.selected}
+          status={brain.status}
+          externalUrl={brain.externalUrl}
+          debating={brain.status === "debating"}
+          onCancel={onCancelParliament}
+          onContinue={onContinueParliament}
+          onSynthesize={onSynthesizeParliament}
         />
-      </div>
+      )}
+
+      {isDashboard ? (
+        <CarmenDashboardView
+          tenantId={tenantId}
+          faceState={faceState}
+          audioLevelRef={audioLevelRef}
+          chatRef={chatRef}
+          onHealthCheck={healthCheck}
+        />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-3">
+          <CarmenChatBar
+            ref={chatRef}
+            tenantId={tenantId}
+            brain={brain}
+            onConversationIdChange={setConversationId}
+            onFaceState={setFaceState}
+            audioLevelRef={audioLevelRef}
+            historyOpen={chatsOpen}
+            onHistoryOpenChange={setChatsOpen}
+            onHudModeChange={setHudMode}
+          />
+        </div>
+      )}
+
+      {isDashboard && (
+        <footer className="cc-dashboard-footer shrink-0 p-2 pt-0 sm:p-3 sm:pt-0">
+          <CarmenChatBar
+            ref={chatRef}
+            tenantId={tenantId}
+            brain={brain}
+            onConversationIdChange={setConversationId}
+            onFaceState={setFaceState}
+            audioLevelRef={audioLevelRef}
+            onHudModeChange={setHudMode}
+          />
+        </footer>
+      )}
     </div>
   );
 }

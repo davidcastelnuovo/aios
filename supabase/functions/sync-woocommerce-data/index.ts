@@ -9,9 +9,10 @@ const corsHeaders = {
 
 const PAGE_SIZE = 100;
 const UPSERT_CHUNK = 50;
-const FUNCTION_VERSION = "1.3.0"; // 2026-08-16: order attribution from WC meta_data
+const FUNCTION_VERSION = "1.4.0"; // 2026-08-31: always backfill recent orders by created date
 const USER_AGENT = `AIOS-WooSync/${FUNCTION_VERSION}`;
 const ATTRIBUTION_BACKFILL_DAYS = 90;
+const RECENT_ORDER_BACKFILL_DAYS = 21;
 
 // ---- WooCommerce API helper ----
 async function wooFetch(
@@ -244,6 +245,35 @@ serve(async (req) => {
               backfillErr?.message || backfillErr,
             );
           }
+        }
+
+        // Always merge orders created in the last N days — catches orders missed by
+        // modified_after-only incremental sync (e.g. after a failed/partial run).
+        try {
+          const afterDate = new Date();
+          afterDate.setDate(afterDate.getDate() - RECENT_ORDER_BACKFILL_DAYS);
+          const afterIso = afterDate.toISOString().split(".")[0];
+          const recentOrders = await fetchAllPages(
+            site_url,
+            woo_consumer_key,
+            woo_consumer_secret,
+            "orders",
+            {
+              after: afterIso,
+              orderby: "date",
+              order: "desc",
+            },
+            40,
+          );
+          allOrders = mergeOrdersById([...allOrders, ...recentOrders]);
+          console.log(
+            `[woo-sync] recent-order backfill ${RECENT_ORDER_BACKFILL_DAYS}d — ${recentOrders.length} fetched, ${allOrders.length} unique`,
+          );
+        } catch (recentErr: any) {
+          console.warn(
+            `[woo-sync] recent-order backfill skipped for ${siteId}:`,
+            recentErr?.message || recentErr,
+          );
         }
 
         const orderRows = allOrders.map((order: any) => mapOrderRow(tenant_id, siteId, order));
