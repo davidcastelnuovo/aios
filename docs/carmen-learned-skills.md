@@ -618,3 +618,9 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - **כלי חדש ב-run-ai-agent:** `set_campaign_table_active` — מדליק/מכבה את `crm_tables.campaign_active` לפי client_id/table_id/table_name (מוגבל טננט + הרשאות caller). כשאומרים לכרמן שקמפיין הופסק/חזר — היא מעדכנת את הדגל בעצמה, ובדיקות הדופק מדווחות רק על טבלאות פעילות. יש גם Badge לחיץ בעמוד הטבלאות.
 - **skins "בדיקת דופק" (שני הטננטים) סונכרנו:** סעיף 0 חדש — בידוד טננטים (רק לקוחות הטננט הנוכחי), פטור ללקוחות is_seo_client ללא שירות קמפיינים מדיווחי "חסר חיבור לטבלה", דילוג על טבלאות campaign_active=false, ו-list_clients(status="active") בלבד + סינון תוצאות check_ad_accounts_health לפי הרשימה הפעילה (הבלוק הזה היה חסר ב-MarketingCaptain).
 - **carmen-realtime-session:** ההנחיות מזהות את המתקשר בשמו, מצהירות ש-ask_carmen הוא המוח של כרמן עצמה (scoping אוטומטי לפי הרשאות), ודוחות שיחות לא-עבודה ("אני באמצע ניהול עסק").
+
+### 2026-08-31 — WooCommerce revenue mismatch (dashboard vs store admin)
+- **Skin slug:** `woo_revenue_dashboard_alignment` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When dashboard Woo revenue ≠ WooCommerce admin for the same week, explain the usual causes: (1) AIOS counts by **date_paid → date_completed → date_created** on Asia/Jerusalem calendar days; (2) only statuses completed/processing/on-hold; (3) stale sync when `woo_sync_enabled=false` or incremental sync missed orders — trigger manual sync from WordPress settings; (4) cross-tenant DMM↔MC sites need `wordpress_sites_shared_tenants`.
+- **How:** Code in `wooOrderRevenue.ts` + `calendarTimeZone.ts`; sync backfill last 21d in `sync-woocommerce-data` v1.4.0. For 4/4 ארבע על ארבע ops: `fix_4_4_woocommerce_revenue_sync.sql`.
+- **Origin:** Carmen → Cursor DEV TASK — Ana reported 4/4 last-week ₪3,380 vs Woo ₪6,252.

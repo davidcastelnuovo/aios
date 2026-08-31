@@ -7,6 +7,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { WooAttributionSection, wooAttributionLabel } from "@/components/dynamic-tables/WooAttributionSection";
+import { filterWooOrdersForRevenue, sumWooRevenue, wooOrderRevenueTimestamp } from "@/lib/wooOrderRevenue";
 
 interface PublicWooCommerceViewProps {
   sites: any[];
@@ -19,9 +20,8 @@ const formatNumber = (n: number) => new Intl.NumberFormat("he-IL").format(n);
 
 export function PublicWooCommerceView({ sites, orders }: PublicWooCommerceViewProps) {
   const summary = useMemo(() => {
-    const validStatuses = ["completed", "processing", "on-hold"];
-    const valid = orders.filter((o: any) => validStatuses.includes(o.status));
-    const totalRevenue = valid.reduce((sum: number, o: any) => sum + Number(o.total || 0), 0);
+    const valid = filterWooOrdersForRevenue(orders, null);
+    const totalRevenue = sumWooRevenue(valid);
     const orderCount = valid.length;
     const cancelledCount = orders.filter((o: any) =>
       ["cancelled", "refunded", "failed"].includes(o.status)
@@ -33,9 +33,10 @@ export function PublicWooCommerceView({ sites, orders }: PublicWooCommerceViewPr
 
   const dailyData = useMemo(() => {
     const map: Record<string, { date: string; revenue: number; orders: number }> = {};
-    const validStatuses = ["completed", "processing", "on-hold"];
-    orders.filter((o: any) => validStatuses.includes(o.status)).forEach((o: any) => {
-      const d = new Date(o.date_created).toISOString().slice(0, 10);
+    filterWooOrdersForRevenue(orders, null).forEach((o: any) => {
+      const ts = wooOrderRevenueTimestamp(o);
+      if (!ts) return;
+      const d = new Date(ts).toISOString().slice(0, 10);
       if (!map[d]) map[d] = { date: d, revenue: 0, orders: 0 };
       map[d].revenue += Number(o.total || 0);
       map[d].orders += 1;

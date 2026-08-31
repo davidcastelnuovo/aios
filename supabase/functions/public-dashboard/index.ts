@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getJerusalemDashboardDateRange, jerusalemDateRangeToIso } from "../_shared/calendarTimeZone.ts";
+import { dedupeWooOrdersById, filterWooOrdersForRevenue } from "../_shared/wooRevenue.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -156,7 +158,10 @@ Deno.serve(async (req) => {
 
     const allTables = tables || [];
 
-    const wooRange = getDateRange(dateFilter);
+    const wooCalendar = getJerusalemDashboardDateRange(dateFilter);
+    const wooRange = wooCalendar.startDate && wooCalendar.endDate
+      ? jerusalemDateRangeToIso(wooCalendar.startDate, wooCalendar.endDate)
+      : { start: null as string | null, end: null as string | null };
 
     // Deduplicate Facebook: if both facebook_insights AND facebook_ecommerce exist,
     // skip facebook_insights to avoid double-counting spend/impressions/clicks
@@ -277,32 +282,44 @@ Deno.serve(async (req) => {
       if (siteIds.length === 0) return;
 
       const selectCols =
-        "id, total, status, date_created, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution";
+        "id, total, status, date_created, date_completed, date_paid, customer_email, customer_first_name, customer_last_name, line_items, order_number, currency, attribution";
       const pageSize = 1000;
       const maxPages = 50;
-      const collected: any[] = [];
 
-      for (let page = 0; page < maxPages; page++) {
-        const from = page * pageSize;
-        let q = supabase
-          .from("woocommerce_orders")
-          .select(selectCols)
-          .in("site_id", siteIds)
-          .order("date_created", { ascending: false })
-          .range(from, from + pageSize - 1);
-        if (wooRange.startDate) q = q.gte("date_created", wooRange.startDate + "T00:00:00.000Z");
-        if (wooRange.endDate) q = q.lte("date_created", wooRange.endDate + "T23:59:59.999Z");
-        const { data: batch, error } = await q;
-        if (error) {
-          console.error("Error fetching woocommerce orders:", error);
-          break;
+      const fetchByColumn = async (column: "date_created" | "date_paid" | "date_completed") => {
+        const collected: any[] = [];
+        if (!wooRange.start || !wooRange.end) return collected;
+        for (let page = 0; page < maxPages; page++) {
+          const from = page * pageSize;
+          const { data: batch, error } = await supabase
+            .from("woocommerce_orders")
+            .select(selectCols)
+            .in("site_id", siteIds)
+            .gte(column, wooRange.start)
+            .lte(column, wooRange.end)
+            .not(column, "is", null)
+            .order(column, { ascending: false })
+            .range(from, from + pageSize - 1);
+          if (error) {
+            console.error(`Error fetching woocommerce orders by ${column}:`, error);
+            break;
+          }
+          if (!batch || batch.length === 0) break;
+          collected.push(...batch);
+          if (batch.length < pageSize) break;
         }
-        if (!batch || batch.length === 0) break;
-        collected.push(...batch);
-        if (batch.length < pageSize) break;
-      }
+        return collected;
+      };
 
-      wooOrders = collected;
+      const merged = dedupeWooOrdersById([
+        ...(await fetchByColumn("date_created")),
+        ...(await fetchByColumn("date_paid")),
+        ...(await fetchByColumn("date_completed")),
+      ]);
+
+      wooOrders = wooRange.start && wooRange.end
+        ? filterWooOrdersForRevenue(merged, { start: wooRange.start, end: wooRange.end })
+        : merged;
     };
 
     const loadMaskyoo = async () => {
