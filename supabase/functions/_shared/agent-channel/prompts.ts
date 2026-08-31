@@ -56,7 +56,7 @@ export function wrapDirectPrompt(args: {
   const who =
     args.origin === "cursor" ? "Cursor Direct" :
     args.origin === "grok" ? "Grok Bot Direct" :
-    args.origin === "codex" ? "Codex Direct (ChatGPT Workspace / Work Mode)" :
+    args.origin === "codex" ? "Codex Direct (Cursor Cloud Agent)" :
     args.origin === "claude" ? "Claude Direct" :
     args.origin === "chatgpt" ? "ChatGPT Work Agent" : args.origin;
   return (

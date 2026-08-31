@@ -47,7 +47,7 @@ export function billingNoteForSeat(provider: string): string {
     case "cursor":
       return "כרמן ישיר · סוכן Cursor חדש לכל משימה";
     case "codex":
-      return "ChatGPT Workspace · Work Mode (ריפו)";
+      return "Codex Direct · סוכן Cursor חדש לכל משימה";
     case "grok":
       return "Grok Bot הקיים (webhook) — בלי סוכן רקע חדש";
     case "internal":
@@ -62,7 +62,10 @@ export function billingNoteForSeat(provider: string): string {
 
 export function missingOpenChatMessage(provider: OpenChatProvider): string {
   if (provider === "codex") {
-    return "Codex Direct רץ ב-ChatGPT Workspace / Work Mode, לא ב-Cursor Cloud.";
+    return (
+      "Codex Direct לא הצליח לפתוח סוכן Cursor. " +
+      "בדוק ש-CURSOR_API_KEY תקף וש-CODEX_DIRECT_AGENT_ID / CODEX_CLOUD_ENV_NAME מוגדרים."
+    );
   }
   return (
     "Cursor Direct לא הצליח לפתוח סוכן Cursor. " +
@@ -92,7 +95,7 @@ export async function collectOpenChatIds(
   const env = args.env || {};
   const sticky = args.provider === "cursor" && cursorDirectStickyEnabled(env);
 
-  if (!sticky) {
+  if (!sticky && args.provider === "cursor") {
     return uniqueCloudAgentIds(args.sessionId);
   }
 

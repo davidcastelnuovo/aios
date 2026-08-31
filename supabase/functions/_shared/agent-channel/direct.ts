@@ -55,10 +55,6 @@ export async function launchCloudDirect(
   extraPrompt?: string,
   parliament?: { runId: string; round: number },
 ): Promise<SendResult> {
-  if (provider === "codex") {
-    return launchWorkspaceAgent(ctx, "codex", extraPrompt, parliament);
-  }
-
   const grokWebhook = grokUsesExistingWebhook(
     Deno.env.get("GROK_BOT_WEBHOOK_URL"),
     Deno.env.get("GROK_BOT_WEBHOOK_KEY"),
@@ -110,12 +106,12 @@ export async function launchCloudDirect(
         "Do NOT call ask_carmen. Use reply_to_aios_session or the HTTP callback above.",
     });
     fired = { id: delivered.id, url: delivered.url, reused: true };
-  } else if (provider === "cursor") {
+  } else if (provider === "cursor" || provider === "codex") {
     fired = await deliverToOpenCloudChat({
       apiKey,
       sb,
       tenantId: ctx.tenantId,
-      provider: "cursor",
+      provider,
       sessionId: session.external_session_id,
       prompt: clip(prompt),
       name,
@@ -205,7 +201,6 @@ export async function launchParliamentSeat(
   prompt: string,
   parliament: { runId: string; round: number },
 ): Promise<SendResult> {
-  if (provider === "codex") return launchWorkspaceAgent(ctx, "codex", prompt, parliament);
   return launchCloudDirect(ctx, provider, prompt, parliament);
 }
 
