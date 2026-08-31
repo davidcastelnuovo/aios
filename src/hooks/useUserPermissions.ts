@@ -12,7 +12,7 @@ import { useUserRole } from "./useUserRole";
 export type ModulePermission = string;
 
 export function useUserPermissions() {
-  const { isOwner, isSuperAdmin, isCampaigner, userId } = useUserRole();
+  const { isOwner, isSuperAdmin, isCampaigner, isAgencyOwner, userId } = useUserRole();
 
   const {
     data: permissionsData,
@@ -115,12 +115,12 @@ export function useUserPermissions() {
 
     // ── אם אין הרשאות מוגדרות כלל ────────────────────────────────────
     if (!hasAnyPermissions) {
-      if (isOwner) return true;
+      if (isOwner || isAgencyOwner) return true;
       return false;
     }
 
-    // ── בעלים מקבלים גישה למודולים לא-מוגבלים ────────────────────────
-    if (isOwner && !restrictedModules.includes(module)) return true;
+    // ── בעלים / agency owner מקבלים גישה למודולים לא-מוגבלים ───────────────
+    if ((isOwner || isAgencyOwner) && !restrictedModules.includes(module)) return true;
 
     return permissions?.[module] === true;
   };

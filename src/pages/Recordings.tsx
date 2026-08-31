@@ -42,6 +42,7 @@ import { useAssignableClients } from "@/hooks/useAssignableClients";
 import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
 import type { EntityAssignmentSelection } from "@/components/shared/EntityAssignmentDialog";
 import { cn } from "@/lib/utils";
+import { fetchRecordingsFeed } from "@/lib/recordingsFeedQuery";
 
 type SidebarSelection =
   | { kind: "all" }
@@ -100,38 +101,11 @@ export default function Recordings() {
     enabled: !!currentTenantId,
   });
 
-  const { data: recordings = [] } = useQuery({
+  const { data: recordings = [], isError: recordingsError, error: recordingsQueryError, refetch: refetchRecordings } = useQuery({
     queryKey: ["recordings", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      const { data } = await supabase
-        .from("zoom_recordings")
-        // clients must be disambiguated: zoom_recordings has TWO FKs to clients
-        // (client_id + suggested_client_id) and an unhinted embed 300-errors.
-        .select("*, clients!zoom_recordings_client_id_fkey(name), leads(company_name), agencies!zoom_recordings_agency_id_fkey(name)")
-        .eq("tenant_id", currentTenantId)
-        .order("start_time", { ascending: false, nullsFirst: false });
-      const list = data || [];
-
-      // Auto-cleanup: mark stale "processing" recordings as failed (no update for >10min)
-      const stale = list.filter((r: any) =>
-        r.transcription_status === "processing" &&
-        !r.transcription &&
-        Date.now() - new Date(r.updated_at || r.created_at).getTime() > 10 * 60 * 1000
-      );
-      if (stale.length > 0) {
-        await supabase
-          .from("zoom_recordings")
-          .update({
-            transcription_status: "failed",
-            transcription_error: "תהליך התמלול נתקע (timeout)",
-          } as any)
-          .in("id", stale.map((r: any) => r.id));
-        stale.forEach((r: any) => {
-          r.transcription_status = "failed";
-          r.transcription_error = "תהליך התמלול נתקע (timeout)";
-        });
-      }
+      const { list } = await fetchRecordingsFeed(currentTenantId);
       return list;
     },
     enabled: !!currentTenantId,
@@ -540,6 +514,17 @@ export default function Recordings() {
           </Button>
         </div>
       </div>
+
+      {recordingsError && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
+          <span className="text-destructive">
+            לא הצלחנו לטעון הקלטות{(recordingsQueryError as Error)?.message ? `: ${(recordingsQueryError as Error).message}` : ""}
+          </span>
+          <Button variant="outline" size="sm" onClick={() => refetchRecordings()}>
+            נסה שוב
+          </Button>
+        </div>
+      )}
 
       <div className="flex gap-5 items-start">
         {/* Sidebar */}
