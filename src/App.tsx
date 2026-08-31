@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { AgencyProvider } from "./contexts/AgencyContext";
+import { CommandCenterSidecarProvider } from "./contexts/CommandCenterSidecarContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { UIModeProvider } from "./contexts/UIModeContext";
@@ -72,7 +73,9 @@ function TenantAppProviders({ children }: { children: React.ReactNode }) {
       <ThemeProvider>
         <UIModeProvider>
           <AIOSProvider>
-            <AgencyProvider>{children}</AgencyProvider>
+            <AgencyProvider>
+              <CommandCenterSidecarProvider>{children}</CommandCenterSidecarProvider>
+            </AgencyProvider>
           </AIOSProvider>
         </UIModeProvider>
       </ThemeProvider>

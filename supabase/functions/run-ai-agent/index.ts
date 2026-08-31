@@ -6201,7 +6201,7 @@ import { requireAuth } from "../_shared/security.ts";
 // Surface for which the agent is currently invoked.
 // 'internal_chat' = the in-app chat / dialog / AI Support page (same brain as AIOS,
 // but no dialog progress UI). Default for unspecified callers.
-type Surface = 'whatsapp' | 'aios' | 'task' | 'internal_chat' | 'grok_bot' | 'command_center_sidecar'
+type Surface = 'whatsapp' | 'aios' | 'task' | 'internal_chat' | 'grok_bot'
 
 // Emit function used by the streaming wrapper to push SSE events to the client.
 // In non-streaming mode it's a no-op.
@@ -6209,7 +6209,7 @@ type Emit = ((obj: any) => void) | undefined
 
 async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Promise<Response> {
   try {
-    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history, conversation_id, wa_notify, ui_context } = bodyJson
+    const { agent_id: bodyAgentId, command_text, temperature, automation_id, user_name, lead_data, tenant_id, user_id, task_skills, task_mode, conversation_history, conversation_id, wa_notify } = bodyJson
     const pinSkillsOnly = bodyJson.pin_skills_only === true && Array.isArray(task_skills) && task_skills.length > 0
     console.log(`[AGENT] Starting run: agent=${bodyAgentId}, command="${command_text?.substring(0, 80)}", surface=${surface}, stream=${!!emit}, pin_skills_only=${pinSkillsOnly}`)
 
@@ -6324,7 +6324,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     // the exact same conversation as typed chat.
     let serverConversationId: string | null = null
     let serverConversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
-    if ((surface === 'internal_chat' || surface === 'command_center_sidecar' || surface === 'aios' || surface === 'grok_bot') && callerUserId) {
+    if ((surface === 'internal_chat' || surface === 'aios' || surface === 'grok_bot') && callerUserId) {
       if (conversation_id) {
         const { data: existingConversation } = await supabase
           .from('ai_conversations')
@@ -6949,12 +6949,29 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       systemPrompt += `\n\n=== הקשר סטודיו (משימה מבודדת) ===\n${promptAddon}`
     }
 
+    const ctxMeta = bodyJson.context_metadata
+    if (
+      isCarmen &&
+      surface === 'internal_chat' &&
+      ctxMeta &&
+      typeof ctxMeta === 'object' &&
+      ctxMeta.source === 'command_center_sidebar'
+    ) {
+      systemPrompt +=
+        '\n\n🛠️ === Command Center sidecar (system fix context) ===\n' +
+        'David is chatting from the persistent sidecar while viewing a live AIOS screen.\n' +
+        'Use the screen context in system_prompt_addon / context_metadata to understand what he sees.\n' +
+        'Respond normally. Dispatch Cursor dev tasks (mcp_Cursor__request_dev_task) ONLY when David explicitly asks — e.g. "שלחי לפיתוח", "תריצי דרך קרסר", "פתחי משימת פיתוח".\n' +
+        'Always include path + entity context in any dev task you create.\n' +
+        `context_metadata: ${JSON.stringify(ctxMeta).slice(0, 4000)}`
+    }
+
     // Hard rule for both V1 and V2: only allowlisted requesters may escalate
     // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
     systemPrompt += buildDevEscalationPromptRule(devEscalationTier)
 
     // Voice capability (both prompt versions): answer from 🎤 / explicit failure markers.
-    if (isCarmen && (surface === 'whatsapp' || surface === 'internal_chat' || surface === 'command_center_sidecar' || surface === 'aios')) {
+    if (isCarmen && (surface === 'whatsapp' || surface === 'internal_chat' || surface === 'aios')) {
       systemPrompt += buildVoiceCapabilityPromptRule()
     }
 
@@ -6996,33 +7013,11 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       }
     }
 
-    if (isCarmen && surface === 'command_center_sidecar') {
-      systemPrompt += `\n\n📎 === סיידבר מרכז בקרה (הקשר מסך) ===
-המשתמש פתח את סיידבר כרמן בזמן שהוא רואה את מסך המערכת. בבקשות תיקון/פיתוח — השתמשי ב-mcp_Cursor__request_dev_task (רק למורשים) עם ה-UI context שמגיע בהודעה.
-עני על מה שרואים במסך; אל תמציאי נתונים שלא הגיעו מכלים או מההקשר.`
-      if (ui_context && typeof ui_context === 'object') {
-        try {
-          const ctx = ui_context as Record<string, unknown>
-          const lines = [
-            ctx.pathname ? `pathname: ${ctx.pathname}` : null,
-            ctx.module ? `module: ${ctx.module}` : null,
-            ctx.page_title ? `title: ${ctx.page_title}` : null,
-            ctx.command_center_view ? `cc_view: ${ctx.command_center_view}` : null,
-            ctx.route_params ? `route_params: ${JSON.stringify(ctx.route_params)}` : null,
-          ].filter(Boolean)
-          if (lines.length) {
-            systemPrompt += `\nUI context snapshot:\n${lines.join('\n')}`
-          }
-        } catch { /* best-effort */ }
-      }
-      console.log('[AGENT] command_center_sidecar ui_context', JSON.stringify(ui_context || {}).slice(0, 400))
-    }
-
     // ─── Command Center (internal_chat) rendering layer ───
     // The dashboard chat renders full GitHub-flavored Markdown (ReactMarkdown +
     // remark-gfm), unlike WhatsApp. Placed after the V1/V2 prompt building so it
     // overrides the WhatsApp plain-text + brevity rules on this surface only.
-    if (isCarmen && (surface === 'internal_chat' || surface === 'command_center_sidecar')) {
+    if (isCarmen && surface === 'internal_chat') {
       systemPrompt += `\n\n🖥️ === תצוגת דשבורד (חובה — גובר על כללי WhatsApp) ===
 את עונה עכשיו בצ'אט של ה-Command Center, שמציג Markdown מלא (כולל טבלאות GFM) — לא ב-WhatsApp.
 • כלל "בלי markdown" וכלל "1–3 משפטים" לא חלים כאן. מותר ורצוי Markdown מלא.
@@ -7081,7 +7076,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
     if (surface === 'task') {
       filteredTools = filteredTools.filter(t => t.name !== 'delegate_to_subagent' && t.name !== 'delegate_parallel' && t.name !== 'delegate_to_manus' && t.name !== 'delegate_to_github_agent')
-    } else if (surface === 'aios' || surface === 'whatsapp' || surface === 'internal_chat' || surface === 'command_center_sidecar') {
+    } else if (surface === 'aios' || surface === 'whatsapp' || surface === 'internal_chat') {
       // Same default-direct rule for WhatsApp as for AIOS: hide delegation tools unless
       // the user explicitly asked for background work. On WhatsApp this is even more
       // important — there is no "window" the user can leave open to watch progress, and
@@ -7768,7 +7763,6 @@ Deno.serve(async (req) => {
     : bodyJson.surface === 'task' ? 'task'
     : bodyJson.surface === 'whatsapp' ? 'whatsapp'
     : bodyJson.surface === 'grok_bot' ? 'grok_bot'
-    : bodyJson.surface === 'command_center_sidecar' ? 'command_center_sidecar'
     : 'internal_chat'
 
   if (!wantStream) {

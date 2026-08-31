@@ -1138,40 +1138,24 @@ html:has(.cc-root) body {
   }
 }
 
-/* Sidecar: physical LTR row — main pane left, Carmen panel on the right */
-.cc-body-row {
-  direction: ltr;
-  min-height: 0;
-}
-
-.cc-main-pane {
-  direction: rtl;
-  transition: max-width 0.25s ease;
-}
+/* ---------- Command Center sidecar (system-fix chat alongside live screen) ---------- */
 
 .cc-sidecar {
-  animation: cc-sidecar-in 0.25s ease;
+  --cc-bg: #050a16;
+  background-color: var(--cc-bg);
+  color: var(--cc-text);
 }
 
-@keyframes cc-sidecar-in {
-  from {
-    opacity: 0;
-    transform: translateX(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+.cc-sidecar-header {
+  background: linear-gradient(180deg, rgba(76, 195, 255, 0.08), transparent);
 }
 
-@media (max-width: 767px) {
-  .cc-body-row.is-sidecar-open {
-    flex-direction: column;
-  }
-  .cc-body-row.is-sidecar-open .cc-sidecar {
-    width: 100% !important;
-    max-height: 45dvh;
-    border-inline-start: none;
-    border-top: 1px solid var(--cc-line);
-  }
+.cc-sidecar-sheet {
+  background-color: #050a16 !important;
+  color: #e3ecfa;
+  border-color: rgba(76, 195, 255, 0.16) !important;
+}
+
+.cc-sidecar .cc-talkbar-row {
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
 }
