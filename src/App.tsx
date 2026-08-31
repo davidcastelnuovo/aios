@@ -9,6 +9,7 @@ import { TenantProvider } from "./contexts/TenantContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { UIModeProvider } from "./contexts/UIModeContext";
 import { AIOSProvider } from "./contexts/AIOSContext";
+import { SystemFixSidebarProvider } from "./contexts/SystemFixSidebarContext";
 import { Suspense } from "react";
 import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -80,6 +81,7 @@ const App = () => (
           <ThemeProvider>
             <UIModeProvider>
             <AIOSProvider>
+            <SystemFixSidebarProvider>
             <AgencyProvider>
               <StagingBanner />
               <Suspense fallback={<PageLoader />}>
@@ -103,6 +105,7 @@ const App = () => (
                 </Routes>
               </Suspense>
             </AgencyProvider>
+            </SystemFixSidebarProvider>
             </AIOSProvider>
             </UIModeProvider>
           </ThemeProvider>
