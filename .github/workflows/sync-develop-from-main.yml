@@ -1,13 +1,10 @@
-name: Sync develop from main
+name: Sync develop from main (hotfix only)
 
-# Keeps Staging (`develop`) on the same code as Production (`main`).
-# When David merges a feature to main, develop is updated automatically so
-# the persistent development environment (frontend + Staging function deploy)
-# stays current. This workflow never pushes to main.
+# EMERGENCY / HOTFIX ONLY — normal flow is develop → main, not the reverse.
+# Use when a fix landed on `main` first and must be backported to Staging (`develop`).
+# Do NOT use for regular releases; merge feature branches to `develop` first.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
