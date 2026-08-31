@@ -158,7 +158,7 @@ export function HealthPanel({ tenantId, className }: { tenantId: string | null; 
                 <li key={svc.key} className="rounded-lg border border-[var(--cc-line)] p-2">
                   <div className="flex items-center gap-1.5 text-sm">
                     <span className="text-[var(--cc-accent)]">{SERVICE_ICON[svc.key]}</span>
-                    <span className="font-medium">{svc.label}</span>
+                    <span className="font-medium text-[var(--cc-text)]">{svc.label}</span>
                   </div>
                   <div className="mt-1 flex items-center gap-1 text-xs" style={{ color: m.color }}>
                     {m.icon}<span>{m.label}</span>
@@ -208,7 +208,7 @@ export function TasksPanel({ tenantId, className }: { tenantId: string | null; c
                 <Circle className="h-4 w-4 group-hover:hidden" />
                 <CheckCircle2 className="hidden h-4 w-4 group-hover:block" />
               </button>
-              <span className="min-w-0 flex-1 truncate">{t.title}</span>
+              <span className="min-w-0 flex-1 truncate text-[var(--cc-text)]">{t.title}</span>
               {t.due_date && (
                 <span className={`cc-num shrink-0 text-xs ${overdue ? "text-[var(--cc-crit)]" : "text-[var(--cc-text-dim)]"}`}>
                   {overdue && "⚠ "}{new Date(t.due_date + "T00:00:00").toLocaleDateString("he-IL", { day: "numeric", month: "numeric" })}
@@ -233,7 +233,7 @@ export function TimelinePanel({ tenantId, className }: { tenantId: string | null
         {data?.map((ev) => (
           <li key={ev.id} className={`flex items-center gap-2 border-r-2 py-1 pr-2 text-sm ${ev.done ? "border-[var(--cc-ok)] opacity-60" : "border-[var(--cc-accent-dim)]"}`}>
             <span className="cc-num w-11 shrink-0 text-xs text-[var(--cc-text-dim)]">{ev.time ?? "—"}</span>
-            <span className={`min-w-0 flex-1 truncate ${ev.done ? "line-through" : ""}`}>{ev.title}</span>
+            <span className={`min-w-0 flex-1 truncate text-[var(--cc-text)] ${ev.done ? "line-through" : ""}`}>{ev.title}</span>
           </li>
         ))}
       </ul>
