@@ -38,7 +38,12 @@ logged.
 - **How:** Tool `assign_task_to_cursor`. Context must include `human_task_id: <uuid>`. One in-progress Cursor task at a time.
 - **Origin:** David — "תכניסי לתור… כשהוא מסיים תכניסי את הבאה".
 
-### 2026-08-30 — Cursor = כרמן ישיר; Codex = ChatGPT Workspace Work Mode
+### 2026-08-30 — save_memory upsert ON CONFLICT fix
+- **Skin slug:** n/a (engine + migration). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
+- **What Carmen can now do:** `save_memory` with `category='instructions'` and a snake_case key upserts reliably — re-saving updates the row instead of failing or duplicating. System/Carmen writes (`user_id` NULL) dedupe per tenant/category/key; different tenants stay isolated.
+- **How:** Migration `20260830120000_fix_ai_memory_upsert_on_conflict.sql` replaces the COALESCE expression unique index with `NULLS NOT DISTINCT` on `(user_id, tenant_id, category, key)`. `saveAgentMemory` mirrors via upsert on `path=save_memory/{category}/{key}`.
+- **Origin:** Carmen → Cursor — save_memory failed with "there is no unique or exclusion constraint matching the ON CONFLICT specification".
+
 - **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
 - **What Carmen can now do:** Cursor Direct follows the already-open Carmen Direct chat. Codex Direct triggers ChatGPT Workspace / Work Mode (`workspace_agents` + sticky `conversation_key`) — repo connections, not Carmen's OpenAI API.
 - **How:** `dispatchSend` → `launchWorkspaceAgent("codex")`. Secrets: `CHATGPT_WORK_AGENT_*` (or `CODEX_WORK_AGENT_*`). Agent must `reply_to_aios_session`.

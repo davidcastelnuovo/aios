@@ -104,8 +104,14 @@ export async function recallAgentMemoryFTS(
   }
 }
 
+/** Stable path for save_memory rows — must match migration backfill + unique index. */
+export function saveMemoryAgentPath(category: string, key: string): string {
+  return `save_memory/${category}/${key}`;
+}
+
 /**
  * Save a Carmen memory directly (used by save_memory tool to keep agent_memory in sync).
+ * Upserts on (tenant_id, agent_id, path) so re-saving the same key updates instead of duplicating.
  */
 export async function saveAgentMemory(opts: {
   supabase: any;
@@ -118,18 +124,26 @@ export async function saveAgentMemory(opts: {
   metadata?: any;
 }) {
   try {
-    if (!opts.summary?.trim()) return;
-    const emb = await embed(`${opts.title}\n${opts.summary}`);
-    await opts.supabase.from('agent_memory').insert({
+    if (!opts.summary?.trim() || !opts.agent_id) return;
+    const category = opts.category || 'fact';
+    const title = String(opts.title || category).slice(0, 200);
+    const path = saveMemoryAgentPath(category, title);
+    const emb = await embed(`${title}\n${opts.summary}`);
+    const row = {
       tenant_id: opts.tenant_id,
       agent_id: opts.agent_id,
-      category: opts.category || 'fact',
-      title: String(opts.title || opts.category).slice(0, 200),
+      category,
+      path,
+      title,
       summary: String(opts.summary).slice(0, 2000),
       summary_embedding: emb,
       importance: Math.min(100, Math.max(1, opts.importance ?? 70)),
       metadata: opts.metadata || {},
-    });
+    };
+    const { error } = await opts.supabase
+      .from('agent_memory')
+      .upsert(row, { onConflict: 'tenant_id,agent_id,path', ignoreDuplicates: false });
+    if (error) throw error;
   } catch (e) {
     console.error('[agent-memory] save error:', (e as any)?.message);
   }
