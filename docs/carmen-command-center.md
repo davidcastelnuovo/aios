@@ -51,7 +51,7 @@ src/components/carmen-command/
 3. **שיחה חיה — OpenAI Realtime:** בורר מצב מיקרופון → "שיחה חיה". לחיצה על המיקרופון פותחת session דרך `carmen-realtime-session` → WebRTC דפדפן↔OpenAI. אם Realtime נכשל מוצגת שגיאה ברורה; **אין** fallback ל-`transcribe-voice`.
 4. מתג עוצמת הקול מופיע רק בזמן שיחה חיה פעילה.
 
-`transcribe-voice` משמש גם את הצ'אט הפנימי (`AIOSDialog`) במצב תמלול בלבד, ואת הודעות הקול בוואטסאפ (🎤).
+`transcribe-voice` משמש גם את הצ'אט הפנימי (`AIOSDialog`) ואת הסיידבר — תמלול לקומפוזר, ואת הודעות הקול בוואטסאפ (🎤).
 
 `carmen-speak` משמש כאן רק לתצוגת דוגמת קול בבורר, לא לתשובות מוקלדות או תמלול בלבד.
 
