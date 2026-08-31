@@ -6949,6 +6949,21 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       systemPrompt += `\n\n=== הקשר סטודיו (משימה מבודדת) ===\n${promptAddon}`
     }
 
+    const contextMetadata =
+      bodyJson.context_metadata && typeof bodyJson.context_metadata === 'object' && !Array.isArray(bodyJson.context_metadata)
+        ? bodyJson.context_metadata as Record<string, unknown>
+        : null
+    if (contextMetadata?.source === 'command_center_sidebar' || contextMetadata?.kind === 'system_fix_context') {
+      systemPrompt += `\n\n🛠️ === מצב Sidecar — תיקון מערכת בהקשר מסך (Command Center) ===
+המשתמש רואה את מסך AIOS ומתאר תיקון/שינוי/באג על מה שנvisible.
+מקור הודעה: command_center_sidebar / system_fix_context
+${JSON.stringify(contextMetadata, null, 2)}
+• סיווגי האם מדובר בתיקון מערכת/פיתוח לפני שליחה ל-Cursor.
+• ניסוח מפורש כמו "שלחי לקרסר" / "תריצי דרך קרסר" / "שלחי לפיתוח" → mcp_Cursor__request_dev_task (אם המשתמש מורשה).
+• אל תשלחי כל הודעה אוטומטית ל-Cursor — רק בקשות פיתוח/תיקון מערכת מסווגות או מפורשות.
+• כלול בהקשר ל-Cursor: הנתיב, client/task ids אם יש, ותיאור המסך.`
+    }
+
     // Hard rule for both V1 and V2: only allowlisted requesters may escalate
     // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
     systemPrompt += buildDevEscalationPromptRule(devEscalationTier)
@@ -7675,6 +7690,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           caller_campaigner_id: callerCampaignerId,
           active_skills: matchedSkills,
           instruction_captured: instructionCaptured,
+          context_metadata: contextMetadata,
         },
         user_id: callerUserId,
         tool_calls: toolLog.length,
