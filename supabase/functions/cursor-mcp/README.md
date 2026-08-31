@@ -93,7 +93,7 @@ Repo `.mcp.json` includes **Grok** → `grok-mcp/mcp` with `GROK_MCP_BEARER` (mu
 
 Calls default `reply_via: cursor` + `session_id` so Grok replies via `reply_to_cursor_session` into **this** chat.
 
-### 6. Teach / update / fix-on-fail
+### 7. Teach / update / fix-on-fail
 
 Same loop as Claude: every dispatch asks Cursor to teach a reusable `ai_skills` skin, notify David via `claude_notify_david`, and fix broken skins on fail. Dispatches are logged to `public.cursor_dispatches`.
 
