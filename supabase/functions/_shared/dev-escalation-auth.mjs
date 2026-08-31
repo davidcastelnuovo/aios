@@ -28,6 +28,17 @@ export const BUGFIX_DEV_REQUESTERS = Object.freeze({
 /** @deprecated Use FULL_DEV_REQUESTERS — kept for callers/tests that import the old name. */
 export const AUTHORIZED_DEV_REQUESTERS = FULL_DEV_REQUESTERS;
 
+/** Native Carmen tools for Dev Task Command Center workflow. */
+const NATIVE_DEV_TASK_TOOLS = new Set([
+  "find_dev_task_duplicates",
+  "create_dev_task",
+  "approve_dev_task",
+  "dispatch_dev_task",
+  "list_dev_tasks",
+  "update_dev_task",
+  "attach_dev_task_session",
+]);
+
 export const DEV_ESCALATION_REFUSAL_HE =
   "רק דיוויד (או אנה לתיקוני באגים מוגדרים) יכולים לבקש תיקוני מערכת דרכי. " +
   "אם צריך שינוי בקוד, בקונפיג או ב-DB — תעבירי את הבקשה לדיוויד או לאנה.";
@@ -78,7 +89,8 @@ export function isDevEscalationToolAllowed(toolName, tier) {
   if (!tier || !toolName) return false;
   const n = String(toolName);
   if (tier === "full") return isDevEscalationTool(n);
-  // bugfix: Cursor DEV task only — no ask_cursor, Claude, Manus, or GitHub agent.
+  // bugfix: Cursor DEV task workflow + legacy request_dev_task only.
+  if (NATIVE_DEV_TASK_TOOLS.has(n)) return true;
   return n === "mcp_Cursor__request_dev_task" || n === "request_dev_task";
 }
 
@@ -90,6 +102,7 @@ export function isDevEscalationTool(toolName) {
     return true;
   }
   if (n === "delegate_to_github_agent") return true;
+  if (NATIVE_DEV_TASK_TOOLS.has(n)) return true;
   // Defensive: unprefixed remote names if ever executed without mcp_ prefix.
   if (/^(request_dev_task|ask_cursor|ask_claude|ask_manus|ask_grok)$/i.test(n)) return true;
   return false;
@@ -106,7 +119,9 @@ export function isDevEscalationSkill(slug) {
     s === "grok_escalation" ||
     s.includes("cursor_escalation") ||
     s.includes("claude_escalation") ||
-    s.includes("grok_escalation")
+    s.includes("grok_escalation") ||
+    s === "carmen_dev_task_command_center" ||
+    s.includes("dev_task_command")
   );
 }
 
@@ -114,7 +129,7 @@ export function isDevEscalationSkill(slug) {
 export function isBugfixEscalationSkill(slug) {
   if (!slug) return false;
   const s = String(slug).toLowerCase();
-  return s === "bugfix_escalation_to_cursor" || s.includes("bugfix_escalation");
+  return s === "bugfix_escalation_to_cursor" || s.includes("bugfix_escalation") || s === "carmen_dev_task_command_center";
 }
 
 /**

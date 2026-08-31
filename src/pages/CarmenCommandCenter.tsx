@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowRight, History, LayoutDashboard, Users } from "lucide-react";
+import { ArrowRight, History, LayoutDashboard, Users, Wrench } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
 import type { CarmenFaceState } from "@/components/carmen-command/CarmenFace";
 import { CarmenDashboardView } from "@/components/carmen-command/CarmenDashboardView";
+import { DevTasksCommandCenterView } from "@/components/carmen-command/DevTasksCommandCenterView";
 import { HudMenu } from "@/components/carmen-command/HudMenu";
 import { AgentSeatRail, AgentSeatStatus } from "@/components/carmen-command/AgentSeatRail";
 import { CarmenChatBar, CarmenChatBarHandle } from "@/components/carmen-command/CarmenChatBar";
@@ -16,14 +17,16 @@ import type { HudStage } from "@/lib/agentChannelRouting";
 
 import "@/components/carmen-command/command-center.css";
 
-export type CommandCenterViewMode = "agents" | "dashboard";
+export type CommandCenterViewMode = "agents" | "dashboard" | "dev_tasks";
 
 const VIEW_MODE_KEY = "aios:cc-view-mode";
 
 function readViewMode(): CommandCenterViewMode {
   try {
     const v = localStorage.getItem(VIEW_MODE_KEY);
-    return v === "dashboard" ? "dashboard" : "agents";
+    if (v === "dashboard") return "dashboard";
+    if (v === "dev_tasks") return "dev_tasks";
+    return "agents";
   } catch {
     return "agents";
   }
@@ -115,9 +118,10 @@ export default function CarmenCommandCenter() {
   if (!access.allowed) return <Navigate to={tenantSlug ? `/t/${tenantSlug}` : "/"} replace />;
 
   const isDashboard = viewMode === "dashboard";
+  const isDevTasks = viewMode === "dev_tasks";
 
   return (
-    <div dir="rtl" className={`cc-root relative flex flex-col overflow-hidden font-heebo${isDashboard ? " is-dashboard" : ""}`}>
+    <div dir="rtl" className={`cc-root relative flex flex-col overflow-hidden font-heebo${isDashboard ? " is-dashboard" : ""}${isDevTasks ? " is-dev-tasks" : ""}`}>
       <header className="cc-header-bar shrink-0">
         <div className="cc-header-bar__brand flex min-w-0 items-center gap-1.5 sm:gap-2">
           <Link
@@ -136,7 +140,7 @@ export default function CarmenCommandCenter() {
           )}
         </div>
 
-        {!isDashboard && (
+        {!isDashboard && !isDevTasks && (
           <AgentSeatRail
             embedded
             routes={brain.routes}
@@ -163,7 +167,21 @@ export default function CarmenCommandCenter() {
             <span className="hidden sm:inline">{isDashboard ? "סוכנים" : "מרכז בקרה"}</span>
           </button>
 
-          {!isDashboard && (
+          <button
+            type="button"
+            title="משימות פיתוח — Cursor / Grok / Manus"
+            onClick={() => switchViewMode(isDevTasks ? "agents" : "dev_tasks")}
+            className={`cc-header-btn flex items-center gap-1 rounded-md border px-2 text-xs ${
+              isDevTasks
+                ? "border-[var(--cc-accent)] text-[var(--cc-accent)]"
+                : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)]"
+            }`}
+          >
+            <Wrench className="h-4 w-4" />
+            <span className="hidden sm:inline">{isDevTasks ? "משימות פיתוח" : "פיתוח"}</span>
+          </button>
+
+          {!isDashboard && !isDevTasks && (
             <>
               <HudMenu
                 tenantId={tenantId}
@@ -201,7 +219,9 @@ export default function CarmenCommandCenter() {
         />
       )}
 
-      {isDashboard ? (
+      {isDevTasks ? (
+        <DevTasksCommandCenterView tenantId={tenantId} />
+      ) : isDashboard ? (
         <CarmenDashboardView
           tenantId={tenantId}
           faceState={faceState}

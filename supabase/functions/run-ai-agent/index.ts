@@ -49,6 +49,14 @@ import {
   syncClientCardFromReportTable,
 } from '../_shared/client-report-sync.ts'
 import {
+  approveDevTask,
+  attachDevTaskSession,
+  createDevTask,
+  dispatchDevTask,
+  findDuplicateDevTasks,
+  logDevTaskEvent,
+} from '../_shared/dev-tasks.ts'
+import {
   OPENAI_BILLING_REFUSAL_HE,
   buildOpenAiBillingStatus,
   formatOpenAiBillingWhatsApp,
@@ -869,6 +877,13 @@ const ALL_TOOLS = [
   // AGENT TASK OWNERSHIP
   { name: 'take_task', description: 'כרמן לוקחת בעלות על משימה - מעדכנת assigned_agent וסטטוס ל-agent_working', parameters: { type: 'object', properties: { task_id: { type: 'string' }, agent_name: { type: 'string', description: 'שם הסוכן שלוקח את המשימה (ברירת מחדל: כרמן)' } }, required: ['task_id'] } },
   { name: 'assign_task_to_cursor', description: 'מקצה משימה ל-Cursor (תור פיתוח). מעדכן assigned_agent=Cursor ומפעיל dispatch אוטומטי אם אין משימה אחרת ב-in_progress.', parameters: { type: 'object', properties: { task_id: { type: 'string' }, notes: { type: 'string', description: 'הערות נוספות למשימה' } }, required: ['task_id'] } },
+  { name: 'find_dev_task_duplicates', description: 'חיפוש משימות פיתוח פתוחות דומות לפי כותרת (דדופ לפני יצירה/שליחה).', parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } },
+  { name: 'create_dev_task', description: 'יצירת משימת פיתוח מובנית (טיוטה). כולל brief: title, problem, expected/current behavior, scope, acceptance criteria. תמיד בדקי duplicates קודם.', parameters: { type: 'object', properties: { title: { type: 'string' }, problem: { type: 'string' }, expected_behavior: { type: 'string' }, current_behavior: { type: 'string' }, scope: { type: 'string' }, affected_areas: { type: 'string' }, constraints: { type: 'string' }, acceptance_criteria: { type: 'string' }, base_branch: { type: 'string', description: 'ברירת מחדל develop' }, environment: { type: 'string', description: 'ברירת מחדל staging' }, requested_by: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'normal', 'low'] }, assigned_agent: { type: 'string', enum: ['cursor', 'grok', 'manus', 'claude'] }, dedup_of: { type: 'string', description: 'מזהה משימה קיימת לעדכון במקום חדשה' }, source_message: { type: 'string' } }, required: ['title'] } },
+  { name: 'approve_dev_task', description: 'אישור משימת פיתוח לפני שליחה לסוכן קוד.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' } }, required: ['dev_task_id'] } },
+  { name: 'dispatch_dev_task', description: 'שליחת משימת פיתוח מאושרת ל-Cursor. אם כבר יש סשן — מחזיר אותו בלי כפילות. אם timeout — ניתן לקשר סשן אחר כ attach_dev_task_session.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' } }, required: ['dev_task_id'] } },
+  { name: 'list_dev_tasks', description: 'רשימת משימות פיתוח מה-Dev Task Command Center.', parameters: { type: 'object', properties: { status: { type: 'string' }, priority: { type: 'string' }, limit: { type: 'integer' } } } },
+  { name: 'update_dev_task', description: 'עדכון משימת פיתוח: PR URL, סטטוס, עדיפות, הערות.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' }, pr_url: { type: 'string' }, status: { type: 'string' }, priority: { type: 'string' }, problem: { type: 'string' }, acceptance_criteria: { type: 'string' } }, required: ['dev_task_id'] } },
+  { name: 'attach_dev_task_session', description: 'קישור סשן Cursor קיים למשימת פיתוח (reconcile אחרי timeout).', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' }, cursor_session_id: { type: 'string', description: 'bc-…' }, cursor_session_url: { type: 'string' } }, required: ['dev_task_id', 'cursor_session_id'] } },
   { name: 'complete_task_step', description: 'כרמן מדווחת על השלמת שלב במשימה ומוסיפה עדכון מסוג agent_action', parameters: { type: 'object', properties: { task_id: { type: 'string' }, step_description: { type: 'string' }, mark_complete: { type: 'boolean', description: 'האם לסמן את המשימה כהושלמה' } }, required: ['task_id', 'step_description'] } },
   { name: 'prioritize_tasks', description: 'ניתוח משימות פתוחות והצעת סדר עדיפויות לפי דדליינים, יעדים ועומס', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } },
   // FACEBOOK AD ACCOUNTS
@@ -4559,6 +4574,91 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
       return { success: true, task: data, dispatch: dispatched }
     }
+    case 'find_dev_task_duplicates': {
+      const title = String(args.title || '').trim()
+      if (!title) return { duplicates: [] }
+      const duplicates = await findDuplicateDevTasks(supabase, tenantId, title)
+      return {
+        duplicates: duplicates.map((d) => ({
+          id: d.task.id,
+          title: d.task.title,
+          status: d.task.status,
+          score: d.score,
+          cursor_session_url: d.task.cursor_session_url,
+        })),
+      }
+    }
+    case 'create_dev_task': {
+      const brief = {
+        title: String(args.title || '').trim(),
+        problem: args.problem,
+        expected_behavior: args.expected_behavior,
+        current_behavior: args.current_behavior,
+        scope: args.scope,
+        affected_areas: args.affected_areas,
+        constraints: args.constraints,
+        acceptance_criteria: args.acceptance_criteria,
+        base_branch: args.base_branch || 'develop',
+        environment: args.environment || 'staging',
+        requested_by: args.requested_by,
+      }
+      if (!brief.title) throw new Error('title required')
+      const duplicates = await findDuplicateDevTasks(supabase, tenantId, brief.title)
+      const task = await createDevTask(supabase, {
+        tenantId,
+        brief,
+        priority: args.priority,
+        assignedAgent: args.assigned_agent || 'cursor',
+        requestedByUserId: actorUserId,
+        sourceMessage: args.source_message,
+        dedupOf: args.dedup_of || null,
+        actorUserId,
+      })
+      return { task, possible_duplicates: duplicates.slice(0, 5) }
+    }
+    case 'approve_dev_task': {
+      if (!actorUserId) throw new Error('user auth required')
+      const task = await approveDevTask(supabase, tenantId, String(args.dev_task_id), actorUserId)
+      return { task }
+    }
+    case 'dispatch_dev_task': {
+      const result = await dispatchDevTask(supabase, {
+        tenantId,
+        taskId: String(args.dev_task_id),
+        actorUserId,
+      })
+      return result
+    }
+    case 'list_dev_tasks': {
+      let q = supabase.from('dev_tasks').select('*').eq('tenant_id', tenantId).order('updated_at', { ascending: false })
+      if (args.status) q = q.eq('status', args.status)
+      if (args.priority) q = q.eq('priority', args.priority)
+      const limit = Math.min(Number(args.limit) || 30, 80)
+      const { data, error } = await q.limit(limit)
+      if (error) throw error
+      return { count: data?.length || 0, tasks: data || [] }
+    }
+    case 'update_dev_task': {
+      const id = String(args.dev_task_id || '')
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      for (const key of ['pr_url', 'status', 'priority', 'problem', 'acceptance_criteria', 'title']) {
+        if (args[key] !== undefined) patch[key] = args[key]
+      }
+      const { data, error } = await supabase.from('dev_tasks').update(patch).eq('id', id).eq('tenant_id', tenantId).select('*').single()
+      if (error) throw error
+      await logDevTaskEvent(supabase, { devTaskId: id, tenantId, eventType: 'updated', actorUserId, detail: patch })
+      return { task: data }
+    }
+    case 'attach_dev_task_session': {
+      const task = await attachDevTaskSession(supabase, {
+        tenantId,
+        taskId: String(args.dev_task_id),
+        cursorSessionId: String(args.cursor_session_id),
+        cursorSessionUrl: args.cursor_session_url,
+        actorUserId,
+      })
+      return { task }
+    }
     case 'complete_task_step': {
       // Add agent_action update
       await supabase.from('task_updates').insert({
@@ -6961,7 +7061,10 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         '\n\n🛠️ === Command Center sidecar (system fix context) ===\n' +
         'David is chatting from the persistent sidecar while viewing a live AIOS screen.\n' +
         'Use the screen context in system_prompt_addon / context_metadata to understand what he sees.\n' +
-        'Respond normally. Dispatch Cursor dev tasks (mcp_Cursor__request_dev_task) ONLY when David explicitly asks — e.g. "שלחי לפיתוח", "תריצי דרך קרסר", "פתחי משימת פיתוח".\n' +
+        'Respond normally. For dev/system/code work use the Dev Task Command Center workflow:\n' +
+        '1) find_dev_task_duplicates → 2) create_dev_task (structured brief) → 3) ask David for approval unless he said "תעבירי לפיתוח"/"שלחי לפיתוח" explicitly → 4) approve_dev_task + dispatch_dev_task.\n' +
+        'Never open duplicate Cursor sessions — if dispatch timed out, use attach_dev_task_session with the bc- id.\n' +
+        'Legacy direct mcp_Cursor__request_dev_task only if dev_tasks workflow is unavailable.\n' +
         'Always include path + entity context in any dev task you create.\n' +
         `context_metadata: ${JSON.stringify(ctxMeta).slice(0, 4000)}`
     }
