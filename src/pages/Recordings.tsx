@@ -42,10 +42,8 @@ import { useAssignableClients } from "@/hooks/useAssignableClients";
 import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
 import type { EntityAssignmentSelection } from "@/components/shared/EntityAssignmentDialog";
 import { cn } from "@/lib/utils";
-import {
-  fetchRecordingFolders,
-  fetchRecordingsFeed,
-} from "@/lib/recordingsFeed";
+import { fetchRecordingsFeed } from "@/lib/recordingsFeedQuery";
+import { fetchRecordingFolders } from "@/lib/recordingsFeed";
 import { recordingsPollInterval } from "@/lib/recordingsPollInterval";
 
 type SidebarSelection =
@@ -108,34 +106,14 @@ export default function Recordings() {
   const {
     data: recordings = [],
     isError: recordingsError,
-    error: recordingsLoadError,
+    error: recordingsQueryError,
     refetch: refetchRecordings,
     isFetching: recordingsFetching,
   } = useQuery({
     queryKey: ["recordings", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      const list = await fetchRecordingsFeed(currentTenantId);
-
-      // Auto-cleanup: mark stale "processing" recordings as failed (no update for >10min)
-      const stale = list.filter((r: any) =>
-        r.transcription_status === "processing" &&
-        !r.transcription &&
-        Date.now() - new Date(r.updated_at || r.created_at).getTime() > 10 * 60 * 1000
-      );
-      if (stale.length > 0) {
-        await supabase
-          .from("zoom_recordings")
-          .update({
-            transcription_status: "failed",
-            transcription_error: "תהליך התמלול נתקע (timeout)",
-          } as any)
-          .in("id", stale.map((r: any) => r.id));
-        stale.forEach((r: any) => {
-          r.transcription_status = "failed";
-          r.transcription_error = "תהליך התמלול נתקע (timeout)";
-        });
-      }
+      const { list } = await fetchRecordingsFeed(currentTenantId);
       return list;
     },
     enabled: !!currentTenantId,
@@ -540,12 +518,10 @@ export default function Recordings() {
 
       {recordingsError && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-destructive">
-            לא הצלחנו לטעון את ההקלטות
-            {recordingsLoadError instanceof Error && recordingsLoadError.message
-              ? `: ${recordingsLoadError.message}`
-              : ""}
-          </div>
+          <span className="text-sm text-destructive">
+            לא הצלחנו לטעון הקלטות
+            {(recordingsQueryError as Error)?.message ? `: ${(recordingsQueryError as Error).message}` : ""}
+          </span>
           <Button variant="outline" size="sm" onClick={() => refetchRecordings()} disabled={recordingsFetching}>
             {recordingsFetching ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : null}
             נסה שוב

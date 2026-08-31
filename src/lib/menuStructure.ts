@@ -290,3 +290,23 @@ export function parseParentMenuKey(parentMenuKey: string | null | undefined):
 export function buildParentMenuKey(tabId: MenuTabId, sectionLabel: string): string {
   return `tab:${tabId}:${sectionLabel}`;
 }
+
+/** Resolve which sidebar tab owns a tenant route (e.g. `/recordings` → `marketing`). */
+export function tabIdForRoute(route: string): MenuTabId | undefined {
+  const normalized = route.startsWith("/") ? route : `/${route}`;
+  for (const tab of MENU_TABS) {
+    for (const section of tab.sections) {
+      for (const item of section.items) {
+        if (normalized === item.route || normalized.startsWith(`${item.route}/`)) {
+          return tab.id;
+        }
+      }
+    }
+  }
+  for (const item of ORPHAN_MODULES) {
+    if (normalized === item.route || normalized.startsWith(`${item.route}/`)) {
+      return "admin";
+    }
+  }
+  return undefined;
+}
