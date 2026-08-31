@@ -162,13 +162,25 @@ html:has([data-staging-banner]) {
   align-items: stretch;
 }
 
-/* Command Center visual stage — Carmen / knights table above the chat thread */
+/* Visual stage unused — dashboard mode uses CarmenFace grid instead */
 .cc-visual-pane {
-  flex: 0 0 auto;
-  height: clamp(220px, 38dvh, 400px);
-  min-height: 220px;
-  overflow: hidden;
-  border-bottom: 1px solid var(--cc-line);
+  display: none;
+}
+
+.cc-dashboard-grid {
+  min-height: 0;
+}
+
+.cc-dashboard-core {
+  min-height: 280px;
+}
+
+.cc-dashboard-footer .cc-talkbar {
+  max-height: min(42dvh, 320px);
+}
+
+.cc-root.is-dashboard .cc-talkbar-shell {
+  max-height: min(38dvh, 280px);
 }
 
 /* ---------- Agent seat rail ---------- */

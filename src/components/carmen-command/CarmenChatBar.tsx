@@ -8,12 +8,11 @@ import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
 import { ChatMessageRow } from "./ChatMessageRow";
 import { ChatTopicRail } from "./ChatTopicRail";
 import { ThinkingGalaxy } from "./ThinkingGalaxy";
-import { RoundTableBoard } from "./RoundTableBoard";
 import type { BrainChannel } from "./useBrainChannel";
 import { AGENT_SPRITES, filterMessagesForRoute, seatKeyFromRoute } from "@/lib/agentSeats";
-import { deriveParliamentView, hudStage, routeForRestoredChat } from "@/lib/agentChannelRouting";
+import { hudStage, routeForRestoredChat } from "@/lib/agentChannelRouting";
 import { composerLockedForChat, lastConversationStorageKey, streamAppliesToActive, topicIsLive, type TopicChat } from "@/lib/chatTopics";
-import type { ConversationChannelStatus, CouncilSeatId, HudStage } from "@/lib/agentChannelRouting";
+import type { ConversationChannelStatus, HudStage } from "@/lib/agentChannelRouting";
 import {
   CarmenInputMode,
   onRealtimeUnavailable,
@@ -122,12 +121,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [conversationId, setConversationId] = useState<string | null>(null);
-    const [addressedSeat, setAddressedSeat] = useState<CouncilSeatId | null>(null);
     const hud = hudStage({
       routeType: brain.selected.route_type,
       debating: brain.status === "debating",
     });
-    const visualStage: HudStage = "table";
     useEffect(() => { onHudModeChange?.(hud); }, [hud, onHudModeChange]);
 
     const scrollDown = () => {
@@ -833,7 +830,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     }), [sendText, startVoice, historyVisible]);
 
     const visibleMessages = filterMessagesForRoute(messages, brain.selected);
-    const parliamentView = deriveParliamentView(messages, brain.selected);
     const streamSeatKey = seatKeyFromRoute(brain.selected);
     const streamSprite = AGENT_SPRITES[streamSeatKey === "shared" ? "carmen" : streamSeatKey];
     const isShared = brain.selected.route_type === "parliament";
@@ -851,7 +847,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         : "הודעה…";
 
     return (
-      <div className={`cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden is-table`}>
+      <div className="cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden">
         <div className="cc-talkbar-shell min-h-0 flex-1">
         {historyVisible && (
           <ChatTopicRail
@@ -863,38 +859,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           />
         )}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="cc-visual-pane">
-            <RoundTableBoard
-              route={brain.selected}
-              messages={messages}
-              seats={parliamentView.seats}
-              selectedProvider={addressedSeat || brain.selected.slug}
-              debating={brain.status === "debating"}
-              stage={visualStage}
-              onAddress={(seat) => {
-                setAddressedSeat((prev) => (prev === seat ? null : seat));
-              }}
-              onOpenCouncil={() => {
-                const next = brain.routes.find((r) => r.slug === "parliament");
-                if (next) brain.selectRoute(next, conversationIdRef.current);
-                setAddressedSeat(null);
-              }}
-              onBackToTable={() => {
-                const next = brain.routes.find((r) => r.slug === "parliament");
-                if (next) brain.selectRoute(next, conversationIdRef.current);
-                setAddressedSeat(null);
-              }}
-              onCancel={conversationId ? () => brain.cancelParliament(conversationId) : undefined}
-              onContinue={conversationId ? () => brain.parliamentAction("parliament_continue", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
-              onSynthesize={conversationId ? () => brain.parliamentAction("parliament_synthesize", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" })) : undefined}
-              onClarify={conversationId ? (provider) => {
-                const q = input.trim() || "אפשר לפרט את ההמלצה ואת הסיכון העיקרי?";
-                brain.parliamentAction("parliament_clarify", conversationId, { provider, content: q })
-                  .then(() => setInput(""))
-                  .catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" }));
-              } : undefined}
-            />
-          </div>
           <div ref={listRef} className="cc-chat-scroll cc-scroll min-h-0 flex-1 space-y-3 p-3">
             {visibleMessages.length === 0 && !streamingText && (
               <p className="py-8 text-center text-sm text-[var(--cc-text-dim)]">
