@@ -162,9 +162,13 @@ html:has([data-staging-banner]) {
   align-items: stretch;
 }
 
-/* Fixed visual stage — legacy; chat-first layout uses full height below seat rail */
+/* Command Center visual stage — Carmen / knights table above the chat thread */
 .cc-visual-pane {
-  display: none;
+  flex: 0 0 auto;
+  height: clamp(220px, 38dvh, 400px);
+  min-height: 220px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--cc-line);
 }
 
 /* ---------- Agent seat rail ---------- */
@@ -375,6 +379,13 @@ html:has([data-staging-banner]) {
   top: 3.6rem;
   inset-inline-start: 0.75rem;
   z-index: 40;
+}
+
+.cc-hud-window--portal {
+  position: fixed;
+  top: calc(3.6rem + env(safe-area-inset-top, 0px));
+  inset-inline-start: max(0.75rem, env(safe-area-inset-left, 0px));
+  z-index: 100;
   display: flex;
   width: min(24rem, 92vw);
   max-height: min(52dvh, calc(100% - 7.5rem));

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, X } from "lucide-react";
 import {
   DropdownMenu,
@@ -97,8 +98,8 @@ export function HudMenu({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      {open && (
-        <div className="cc-hud-window" role="dialog" aria-label={current?.label}>
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="cc-hud-window cc-hud-window--portal" role="dialog" aria-label={current?.label}>
           <header className="mb-2 flex items-center justify-between gap-2">
             <h2 className="cc-panel-title">{current?.label}</h2>
             <button type="button" onClick={() => setOpen(null)} className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]" title="סגור">
@@ -106,7 +107,8 @@ export function HudMenu({
             </button>
           </header>
           <div className="cc-scroll min-h-0 flex-1 overflow-y-auto">{body}</div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
