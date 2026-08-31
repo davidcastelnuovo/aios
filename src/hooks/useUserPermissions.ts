@@ -12,7 +12,10 @@ import { useUserRole } from "./useUserRole";
 export type ModulePermission = string;
 
 export function useUserPermissions() {
-  const { isOwner, isSuperAdmin, isCampaigner, userId } = useUserRole();
+  const { isOwner, isSuperAdmin, isCampaigner, isTeamManager, isAgencyOwner, userId } = useUserRole();
+  // Mirror Clients/DynamicTables: team managers and agency owners use daily modules
+  // (recordings, clients, tasks) without a per-module row in user_permissions.
+  const hasManagementAccess = isOwner || isTeamManager || isAgencyOwner;
 
   const {
     data: permissionsData,
@@ -88,7 +91,7 @@ export function useUserPermissions() {
 
     // ── בעלים תמיד רואים מודולי ניהול ────────────────────────────────
     if (
-      isOwner &&
+      hasManagementAccess &&
       (module === "tenants" ||
         module === "menu_management" ||
         module === "fields_management" ||
@@ -115,12 +118,12 @@ export function useUserPermissions() {
 
     // ── אם אין הרשאות מוגדרות כלל ────────────────────────────────────
     if (!hasAnyPermissions) {
-      if (isOwner) return true;
+      if (hasManagementAccess) return true;
       return false;
     }
 
-    // ── בעלים מקבלים גישה למודולים לא-מוגבלים ────────────────────────
-    if (isOwner && !restrictedModules.includes(module)) return true;
+    // ── בעלים / מנהלי צוות / בעלי סוכנות — מודולים לא-מוגבלים ─────────
+    if (hasManagementAccess && !restrictedModules.includes(module)) return true;
 
     return permissions?.[module] === true;
   };

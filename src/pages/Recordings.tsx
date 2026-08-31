@@ -42,6 +42,11 @@ import { useAssignableClients } from "@/hooks/useAssignableClients";
 import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
 import type { EntityAssignmentSelection } from "@/components/shared/EntityAssignmentDialog";
 import { cn } from "@/lib/utils";
+import {
+  fetchRecordingFolders,
+  fetchRecordingsFeed,
+} from "@/lib/recordingsFeed";
+import { recordingsPollInterval } from "@/lib/recordingsPollInterval";
 
 type SidebarSelection =
   | { kind: "all" }
@@ -100,18 +105,17 @@ export default function Recordings() {
     enabled: !!currentTenantId,
   });
 
-  const { data: recordings = [] } = useQuery({
+  const {
+    data: recordings = [],
+    isError: recordingsError,
+    error: recordingsLoadError,
+    refetch: refetchRecordings,
+    isFetching: recordingsFetching,
+  } = useQuery({
     queryKey: ["recordings", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      const { data } = await supabase
-        .from("zoom_recordings")
-        // clients must be disambiguated: zoom_recordings has TWO FKs to clients
-        // (client_id + suggested_client_id) and an unhinted embed 300-errors.
-        .select("*, clients!zoom_recordings_client_id_fkey(name), leads(company_name), agencies!zoom_recordings_agency_id_fkey(name)")
-        .eq("tenant_id", currentTenantId)
-        .order("start_time", { ascending: false, nullsFirst: false });
-      const list = data || [];
+      const list = await fetchRecordingsFeed(currentTenantId);
 
       // Auto-cleanup: mark stale "processing" recordings as failed (no update for >10min)
       const stale = list.filter((r: any) =>
@@ -135,8 +139,7 @@ export default function Recordings() {
       return list;
     },
     enabled: !!currentTenantId,
-    refetchInterval: (query) =>
-      ((query.state.data as any[]) ?? []).some((r) => r.transcription_status === "processing") ? 8000 : false,
+    refetchInterval: (query) => recordingsPollInterval(query.state.data),
   });
 
   const { data: clients = [] } = useAssignableClients();
@@ -147,13 +150,7 @@ export default function Recordings() {
     queryKey: ["recording-folders", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      const { data } = await (supabase as any)
-        .from("recording_folders")
-        .select("id, name, icon, position")
-        .eq("tenant_id", currentTenantId)
-        .order("position")
-        .order("name");
-      return (data || []) as FolderOption[];
+      return (await fetchRecordingFolders(currentTenantId)) as FolderOption[];
     },
     enabled: !!currentTenantId,
   });
@@ -540,6 +537,21 @@ export default function Recordings() {
           </Button>
         </div>
       </div>
+
+      {recordingsError && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-destructive">
+            לא הצלחנו לטעון את ההקלטות
+            {recordingsLoadError instanceof Error && recordingsLoadError.message
+              ? `: ${recordingsLoadError.message}`
+              : ""}
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refetchRecordings()} disabled={recordingsFetching}>
+            {recordingsFetching ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : null}
+            נסה שוב
+          </Button>
+        </div>
+      )}
 
       <div className="flex gap-5 items-start">
         {/* Sidebar */}
