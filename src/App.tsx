@@ -16,12 +16,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { tenantRoutes } from "@/routes/tenantRoutes";
 import { StagingBanner } from "@/components/StagingBanner";
 
-import Auth from "./pages/Auth";
-import SignUp from "./pages/SignUp";
-import Setup from "./pages/Setup";
-import Landing from "./pages/Landing";
-import NotFound from "./pages/NotFound";
-
+const Landing = lazy(() => import("./pages/Landing"));
+const Auth = lazy(() => import("./pages/Auth"));
+const SignUp = lazy(() => import("./pages/SignUp"));
+const Setup = lazy(() => import("./pages/Setup"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 const ChatInvite = lazy(() => import("./pages/ChatInvite"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -37,7 +36,6 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5,
       gcTime: 1000 * 60 * 10,
       refetchOnWindowFocus: false,
-      // Re-fetch failed queries on mount so stale error state does not flash.
       refetchOnMount: (query) => query.state.status === "error",
       retry: 1,
     },
@@ -68,46 +66,86 @@ function RoutedErrorBoundary({ children }: { children: React.ReactNode }) {
   return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
 }
 
+function TenantAppProviders({ children }: { children: React.ReactNode }) {
+  return (
+    <TenantProvider>
+      <ThemeProvider>
+        <UIModeProvider>
+          <AIOSProvider>
+            <AgencyProvider>{children}</AgencyProvider>
+          </AIOSProvider>
+        </UIModeProvider>
+      </ThemeProvider>
+    </TenantProvider>
+  );
+}
+
+/** Tenant routes need the full provider stack; public routes stay lightweight. */
+function RouteScopedProviders({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  const isTenantRoute = pathname.startsWith("/t/");
+
+  if (isTenantRoute) {
+    return (
+      <TenantAppProviders>
+        <StagingBanner />
+        {children}
+      </TenantAppProviders>
+    );
+  }
+
+  return (
+    <>
+      <StagingBanner />
+      {children}
+    </>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <SessionRefreshInitializer />
     <BrowserRouter>
       <RoutedErrorBoundary>
-      <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-        <Toaster />
-        <Sonner />
-        <TenantProvider>
-          <ThemeProvider>
-            <UIModeProvider>
-            <AIOSProvider>
-            <AgencyProvider>
-              <StagingBanner />
-              <Suspense fallback={<PageLoader />}>
-                <Routes>
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/signup" element={<SignUp />} />
-                  <Route path="/setup" element={<Setup />} />
-                  <Route path="/privacy" element={<Privacy />} />
-                  <Route path="/chat-invite/:token" element={<ChatInvite />} />
-                  <Route path="/shared/dashboard/:shareToken" element={<SharedDashboard />} />
-                  <Route path="/shared/table/:shareToken" element={<SharedTable />} />
-                  <Route path="/shared/seo-monthly/:shareToken" element={<SharedSeoMonthly />} />
-                  <Route path="/terms" element={<Terms />} />
+        <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+          <Toaster />
+          <Sonner />
+          <RouteScopedProviders>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/signup" element={<SignUp />} />
+                <Route path="/setup" element={<Setup />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/chat-invite/:token" element={<ChatInvite />} />
+                <Route
+                  path="/shared/dashboard/:shareToken"
+                  element={<SharedDashboard />}
+                />
+                <Route path="/shared/table/:shareToken" element={<SharedTable />} />
+                <Route
+                  path="/shared/seo-monthly/:shareToken"
+                  element={<SharedSeoMonthly />}
+                />
+                <Route path="/terms" element={<Terms />} />
 
-                  {tenantRoutes()}
+                {tenantRoutes()}
 
-                  <Route path="/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
-                  <Route path="/sign/:token" element={<SignDocument />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-            </AgencyProvider>
-            </AIOSProvider>
-            </UIModeProvider>
-          </ThemeProvider>
-        </TenantProvider>
-      </TooltipProvider>
+                <Route
+                  path="/unified-callback"
+                  element={
+                    <Suspense fallback={<div />}>
+                      <UnifiedCallback />
+                    </Suspense>
+                  }
+                />
+                <Route path="/sign/:token" element={<SignDocument />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </RouteScopedProviders>
+        </TooltipProvider>
       </RoutedErrorBoundary>
     </BrowserRouter>
   </QueryClientProvider>

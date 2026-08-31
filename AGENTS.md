@@ -9,7 +9,7 @@ Source of truth: `docs/ENVIRONMENTS.md`. Cursor rule: `.cursor/rules/environment
 - `main` = Production. `develop` = Staging. Feature work = `feature/*` or `fix/*`.
 - This Cloud Agent's local `.env` still points at Production. That is **not** proof Staging is missing.
 - **NEVER MODIFY PRODUCTION DIRECTLY.** No direct commits to `main`, no ad-hoc Production SQL, no Production migrations without Staging + David's `מאשר לפרודקשן`.
-- When a task is done, **always send David the development environment link**: the Vercel Preview URL for this branch (and the in-app path). If the work is on `develop`, also send `STAGING_DOMAIN=<configured-in-vercel>`.
+- When a task is done, **always send David the development environment link**: the Vercel Preview URL for this branch (and the in-app path). If the work is on `develop`, also send `STAGING_DOMAIN=https://staging.aios.co.il`.
 - Do not merge to `main` until he has that preview link **and** explicitly says `מאשר לפרודקשן`.
 - A merge to `main` auto-updates `develop` so the persistent development environment stays current. Do not merge to `develop` by hand unless that sync failed.
 
