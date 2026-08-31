@@ -6949,6 +6949,23 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       systemPrompt += `\n\n=== הקשר סטודיו (משימה מבודדת) ===\n${promptAddon}`
     }
 
+    const ctxMeta = bodyJson.context_metadata
+    if (
+      isCarmen &&
+      surface === 'internal_chat' &&
+      ctxMeta &&
+      typeof ctxMeta === 'object' &&
+      ctxMeta.source === 'command_center_sidebar'
+    ) {
+      systemPrompt +=
+        '\n\n🛠️ === Command Center sidecar (system fix context) ===\n' +
+        'David is chatting from the persistent sidecar while viewing a live AIOS screen.\n' +
+        'Use the screen context in system_prompt_addon / context_metadata to understand what he sees.\n' +
+        'Respond normally. Dispatch Cursor dev tasks (mcp_Cursor__request_dev_task) ONLY when David explicitly asks — e.g. "שלחי לפיתוח", "תריצי דרך קרסר", "פתחי משימת פיתוח".\n' +
+        'Always include path + entity context in any dev task you create.\n' +
+        `context_metadata: ${JSON.stringify(ctxMeta).slice(0, 4000)}`
+    }
+
     // Hard rule for both V1 and V2: only allowlisted requesters may escalate
     // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
     systemPrompt += buildDevEscalationPromptRule(devEscalationTier)

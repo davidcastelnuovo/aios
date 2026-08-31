@@ -186,6 +186,9 @@ Deno.serve(async (req) => {
     metadata: {
       input_mode: body.input_mode || "typed",
       delivery_mode: body.input_mode === "realtime_voice" ? "realtime" : "text",
+      ...(body.context_metadata && typeof body.context_metadata === "object"
+        ? { context: body.context_metadata }
+        : {}),
     },
   });
   if (duplicate) {
