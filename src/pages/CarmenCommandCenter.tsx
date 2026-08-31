@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowRight, History, LayoutDashboard, Users } from "lucide-react";
+import { ArrowRight, History, LayoutDashboard, PanelRightOpen, Users } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
@@ -13,6 +13,8 @@ import { useCommandRealtime } from "@/components/carmen-command/useCommandData";
 import { useBrainChannel } from "@/components/carmen-command/useBrainChannel";
 import { useToast } from "@/hooks/use-toast";
 import type { HudStage } from "@/lib/agentChannelRouting";
+import { CarmenSidecar, readSidecarOpen, writeSidecarOpen } from "@/components/carmen-command/CarmenSidecar";
+
 import "@/components/carmen-command/command-center.css";
 
 export type CommandCenterViewMode = "agents" | "dashboard";
@@ -66,6 +68,7 @@ export default function CarmenCommandCenter() {
   const [chatsOpen, setChatsOpen] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<CommandCenterViewMode>(readViewMode);
+  const [sidecarOpen, setSidecarOpen] = useState(readSidecarOpen);
   const brain = useBrainChannel(tenantId);
   const { toast } = useToast();
 
@@ -88,6 +91,14 @@ export default function CarmenCommandCenter() {
   const switchViewMode = useCallback((mode: CommandCenterViewMode) => {
     setViewMode(mode);
     try { localStorage.setItem(VIEW_MODE_KEY, mode); } catch { /* ignore */ }
+  }, []);
+
+  const toggleSidecar = useCallback((open?: boolean) => {
+    setSidecarOpen((prev) => {
+      const next = open ?? !prev;
+      writeSidecarOpen(next);
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -160,6 +171,20 @@ export default function CarmenCommandCenter() {
             <span className="hidden sm:inline">{isDashboard ? "סוכנים" : "מרכז בקרה"}</span>
           </button>
 
+          <button
+            type="button"
+            title={sidecarOpen ? "סגור סיידבר כרמן" : "פתחי סיידבר כרמן"}
+            onClick={() => toggleSidecar()}
+            className={`cc-header-btn flex items-center gap-1 rounded-md border px-2 text-xs ${
+              sidecarOpen
+                ? "border-[var(--cc-accent)] text-[var(--cc-accent)]"
+                : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)]"
+            }`}
+          >
+            <PanelRightOpen className="h-4 w-4" />
+            <span className="hidden sm:inline">{sidecarOpen ? "סיידבר כרמן" : "פתחי סיידבר"}</span>
+          </button>
+
           {!isDashboard && (
             <>
               <HudMenu
@@ -186,6 +211,8 @@ export default function CarmenCommandCenter() {
         </div>
       </header>
 
+      <div className={`cc-body-row flex min-h-0 flex-1${sidecarOpen ? " is-sidecar-open" : ""}`}>
+        <div className="cc-main-pane flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       {!isDashboard && (
         <AgentSeatStatus
           selected={brain.selected}
@@ -222,7 +249,7 @@ export default function CarmenCommandCenter() {
         </div>
       )}
 
-      {isDashboard && (
+      {isDashboard && !sidecarOpen && (
         <footer className="cc-dashboard-footer shrink-0 p-2 pt-0 sm:p-3 sm:pt-0">
           <CarmenChatBar
             ref={chatRef}
@@ -235,6 +262,16 @@ export default function CarmenCommandCenter() {
           />
         </footer>
       )}
+        </div>
+
+        {sidecarOpen && (
+          <CarmenSidecar
+            tenantId={tenantId}
+            commandCenterView={viewMode}
+            onClose={() => toggleSidecar(false)}
+          />
+        )}
+      </div>
     </div>
   );
 }

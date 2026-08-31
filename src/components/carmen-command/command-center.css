@@ -1137,3 +1137,41 @@ html:has(.cc-root) body {
     padding: 0.5rem 0.6rem calc(0.5rem + env(safe-area-inset-bottom));
   }
 }
+
+/* Sidecar: physical LTR row — main pane left, Carmen panel on the right */
+.cc-body-row {
+  direction: ltr;
+  min-height: 0;
+}
+
+.cc-main-pane {
+  direction: rtl;
+  transition: max-width 0.25s ease;
+}
+
+.cc-sidecar {
+  animation: cc-sidecar-in 0.25s ease;
+}
+
+@keyframes cc-sidecar-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 767px) {
+  .cc-body-row.is-sidecar-open {
+    flex-direction: column;
+  }
+  .cc-body-row.is-sidecar-open .cc-sidecar {
+    width: 100% !important;
+    max-height: 45dvh;
+    border-inline-start: none;
+    border-top: 1px solid var(--cc-line);
+  }
+}

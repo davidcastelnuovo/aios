@@ -44,6 +44,12 @@ logged.
 - **How:** UI selector `MicCaptureMode` in `CarmenChatBar` / `AIOSDialog`. `input_mode=transcribe_only` on send + structured `[carmen:transcribe_only]` client logs. Shared helper `src/lib/carmenTranscribeOnly.ts`.
 - **Origin:** Carmen → Cursor DEV TASK for David — explicit transcribe-only mic without live voice path.
 
+### 2026-08-31 — סיידבר מרכז בקרה (הקשר מסך + Cursor)
+- **Skin slug:** `carmen_command_center_sidecar` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** In Command Center, open right-side sidecar that pushes main HUD/chat left. Messages include `ui_context` (path, module, route IDs). Authorized users get "שלחי תיקון לפיתוח" → `mcp_Cursor__request_dev_task` via Carmen.
+- **How:** `CarmenSidecar` + `surface=command_center_sidecar` in `run-ai-agent`. Dev tier from `devEscalationAccess.ts` (mirrors server allowlist).
+- **Origin:** Carmen → Cursor DEV TASK for David — contextual system-fix chat while keeping the dashboard visible.
+
 ### 2026-08-30 — Cursor / Grok / Codex = Cursor Cloud Direct
 - **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
 - **What Carmen can now do:** Cursor, Grok, and Codex Direct all launch Cursor Cloud background agents (`launchCloudDirect`). Each seat keeps its own sticky `conversation_key` / optional fixed agent id.
