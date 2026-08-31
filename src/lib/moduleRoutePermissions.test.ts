@@ -37,3 +37,11 @@ test("org dashboard module stays gated; client dashboard entity route does not",
     undefined,
   );
 });
+
+test("recordings route maps to recordings permission", () => {
+  assert.equal(permissionForSubpath("recordings"), "recordings");
+  assert.equal(
+    permissionHandleForPathname("/t/acme/recordings")?.permission,
+    "recordings",
+  );
+});

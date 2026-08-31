@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
@@ -101,7 +101,7 @@ const iconMap: Record<string, any> = {
 
 // ─── Menu structure ───────────────────────────────────────────────────────────
 // Imported from a shared module so the Visual Workspace and the sidebar stay in sync.
-import { MENU_TABS as BASE_MENU_TABS, permissionForMenuKey, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
+import { MENU_TABS as BASE_MENU_TABS, permissionForMenuKey, tabIdForRoute, type MenuTab, type MenuSection, type MenuTabId } from "@/lib/menuStructure";
 import { computeSidebarOverlay } from "@/visual-workspace/hooks/useSitemap";
 
 // Permissions are derived from the menu structure itself — see permissionForMenuKey
@@ -114,9 +114,20 @@ export function AppSidebar() {
   const { hasPermission, isLoading } = useUserPermissions();
   const { logoUrl } = useTheme();
   const { buildPath } = useTenantPath();
+  const location = useLocation();
   const { menuItems: dbMenuItems, isLoading: isLoadingMenuItems } = useMenuItems();
   const isCollapsed = !isMobile && state === "collapsed";
   const [activeTab, setActiveTab] = useState<string>("daily");
+
+  // Keep the sidebar tab aligned with the current route (e.g. /recordings lives under marketing).
+  useEffect(() => {
+    const match = location.pathname.match(/^\/t\/[^/]+\/(.+)$/);
+    if (!match) return;
+    const subpath = match[1].replace(/\/+$/, "");
+    const route = `/${subpath.split("/")[0]}`;
+    const tabId = tabIdForRoute(route);
+    if (tabId) setActiveTab(tabId);
+  }, [location.pathname]);
 
   const { userId } = useCurrentUser();
   const { currentTenantId } = useTenant();
