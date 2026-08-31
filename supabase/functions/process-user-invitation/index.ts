@@ -99,6 +99,36 @@ serve(async (req: Request) => {
     const metadata = invitation.metadata as any;
     const { fullName, role, agencyIds, modulePermissions, campaignerId, salesPersonId } = metadata;
 
+    // Auto-create campaigner if role is campaigner and no campaignerId in metadata
+    let effectiveCampaignerId = campaignerId;
+    if (role === "campaigner" && !campaignerId && (fullName || user.email)) {
+      const displayName = fullName || user.email?.split("@")[0] || "קמפיינר חדש";
+      const { data: newCampaigner, error: cError } = await supabase
+        .from("campaigners")
+        .insert({
+          full_name: displayName,
+          email: user.email,
+          active: true,
+          tenant_id: invitation.tenant_id,
+        })
+        .select()
+        .single();
+
+      if (cError) {
+        console.error("Error creating campaigner record:", cError);
+      } else if (newCampaigner) {
+        effectiveCampaignerId = newCampaigner.id;
+
+        if (agencyIds && agencyIds.length > 0) {
+          const rows = agencyIds.map((agencyId: string) => ({
+            campaigner_id: newCampaigner.id,
+            agency_id: agencyId,
+          }));
+          await supabase.from("campaigner_agencies").insert(rows);
+        }
+      }
+    }
+
     // Auto-create sales_people record if role is sales_person, no salesPersonId provided, and fullName is available
     let effectiveSalesPersonId = salesPersonId;
     if (role === 'sales_person' && !salesPersonId && (fullName || user.email)) {
@@ -139,10 +169,10 @@ serve(async (req: Request) => {
         .eq("id", user.id);
     }
 
-    if (campaignerId) {
+    if (effectiveCampaignerId) {
       await supabase
         .from("profiles")
-        .update({ campaigner_id: campaignerId })
+        .update({ campaigner_id: effectiveCampaignerId })
         .eq("id", user.id);
     }
 
@@ -160,18 +190,17 @@ serve(async (req: Request) => {
       .update({ status: 'active' })
       .eq("id", user.id);
 
-    // Set user role
+    // Set user role (tenant-scoped)
     if (role) {
-      // Delete existing roles
       await supabase
         .from("user_roles")
         .delete()
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("tenant_id", invitation.tenant_id);
 
-      // Insert new role
       await supabase
         .from("user_roles")
-        .insert({ user_id: user.id, role });
+        .insert({ user_id: user.id, role, tenant_id: invitation.tenant_id });
     }
 
     // Set module permissions
@@ -195,9 +224,9 @@ serve(async (req: Request) => {
     }
 
     // Link campaigner to agencies
-    if (campaignerId && agencyIds && agencyIds.length > 0) {
+    if (effectiveCampaignerId && agencyIds && agencyIds.length > 0) {
       const campaignerAgenciesToInsert = agencyIds.map((agencyId: string) => ({
-        campaigner_id: campaignerId,
+        campaigner_id: effectiveCampaignerId,
         agency_id: agencyId,
       }));
 

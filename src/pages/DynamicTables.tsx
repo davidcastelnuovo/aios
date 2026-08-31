@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,6 @@ import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRigh
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { prefetchReportTableView } from "@/lib/prefetchReportChunks";
 import {
   Select,
   SelectContent,
@@ -29,7 +28,6 @@ import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncControl";
 
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
-import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -37,8 +35,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { isSeoTaggedClient } from "@/lib/seoClients";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,12 +68,6 @@ import { toast } from "sonner";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useUserRole } from "@/hooks/useUserRole";
-import { resolveListCategory } from "@/lib/crmTableCategories";
-import { isSeoTaggedClient } from "@/lib/seoClients";
-import {
-  clearLegacyDynamicTablesCategory,
-  DYNAMIC_TABLES_CATEGORY_PARAM,
-} from "@/lib/dynamicTablesHub";
 
 interface CrmTable {
   id: string;
@@ -92,9 +85,7 @@ interface CrmTable {
 
 export default function DynamicTables() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { buildPath } = useTenantPath();
-  const selectedCategory = searchParams.get(DYNAMIC_TABLES_CATEGORY_PARAM);
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
@@ -119,6 +110,10 @@ export default function DynamicTables() {
   const [editAgencyId, setEditAgencyId] = useState<string>("");
   const [editClientId, setEditClientId] = useState<string>("");
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return sessionStorage.getItem('dynamicTables.selectedCategory');
+  });
   const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
   const [mainTab, setMainTab] = useState<string>("tables");
   const [editAdAccountId, setEditAdAccountId] = useState<string>("");
@@ -142,7 +137,7 @@ export default function DynamicTables() {
     enabled: !!campaignerId && isRestrictedCampaignerViewer,
   });
 
-  const canManageTables = isOwner || isTeamManager || isSuperAdmin || isCampaigner || isSeo;
+  const canManageTables = isOwner || isTeamManager || isSuperAdmin || isCampaigner;
 
   // Fetch agencies and clients for displaying names
   const { data: agencies = [] } = useQuery({
@@ -184,10 +179,10 @@ export default function DynamicTables() {
       if (!tenantId) return [];
       const agencyIds = agencies.map(a => a.id);
       if (agencyIds.length === 0) {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, name, agency_id, website, is_seo_client, services')
-        .eq('tenant_id', tenantId);
+        const { data, error } = await supabase
+          .from('clients')
+          .select('id, name, agency_id, website, is_seo_client, services')
+          .eq('tenant_id', tenantId);
         if (error) throw error;
         return data || [];
       }
@@ -215,25 +210,28 @@ export default function DynamicTables() {
   });
   const editAdAccounts: { id: string; name: string; currency: string }[] = editAdAccountsData?.ad_accounts || [];
 
-  const scopedClientIds = useMemo(() => {
-    if (isSeoOnlyViewer) {
-      return clients.filter((client) => isSeoTaggedClient(client)).map((client) => client.id);
-    }
-    if (isRestrictedCampaignerViewer && assignedClientIds) {
-      return assignedClientIds;
-    }
-    return undefined;
-  }, [clients, isSeoOnlyViewer, isRestrictedCampaignerViewer, assignedClientIds]);
+  const seoClientIds = useMemo(
+    () => clients.filter((c) => isSeoTaggedClient(c)).map((c) => c.id),
+    [clients],
+  );
+
+  const dialogClientScopeIds = isRestrictedCampaignerViewer
+    ? assignedClientIds
+    : isSeoOnlyViewer
+      ? seoClientIds
+      : undefined;
 
   // Filter clients by selected agency in edit dialog
   const editFilteredClients = useMemo(() => {
     if (!editAgencyId) return [];
-    let filtered = clients.filter(c => c.agency_id === editAgencyId);
-    if (scopedClientIds) {
-      filtered = filtered.filter(c => scopedClientIds.includes(c.id));
+    let filtered = clients.filter((c) => c.agency_id === editAgencyId);
+    if (isRestrictedCampaignerViewer && assignedClientIds) {
+      filtered = filtered.filter((c) => assignedClientIds.includes(c.id));
+    } else if (isSeoOnlyViewer) {
+      filtered = filtered.filter((c) => isSeoTaggedClient(c));
     }
     return filtered;
-  }, [clients, editAgencyId, scopedClientIds]);
+  }, [clients, editAgencyId, isRestrictedCampaignerViewer, isSeoOnlyViewer, assignedClientIds]);
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables', tenantId],
@@ -255,12 +253,20 @@ export default function DynamicTables() {
     enabled: !!tenantId,
   });
 
-  // Fetch dashboards across own tenant + shared agencies (e.g. DMM-MC under DMM).
+  // Fetch dashboards
   const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery({
     queryKey: ['crm-dashboards', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      return fetchAccessibleDashboards(tenantId);
+      const { data, error } = await supabase
+        .from('crm_dashboards')
+        // include the client's agency_id so dashboards that have no explicit
+        // agency_id but belong to a client in an agency still scope correctly.
+        .select('*, clients(name, agency_id), agencies(name)')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!tenantId,
   });
@@ -271,10 +277,14 @@ export default function DynamicTables() {
     
     let result = tables;
 
-    // Campaigners see assigned clients; SEO staff see all SEO-tagged clients.
-    if (scopedClientIds) {
-      result = result.filter(table =>
-        table.client_id && scopedClientIds.includes(table.client_id)
+    // Campaigners: assigned clients only. SEO: all SEO-tagged clients.
+    if (isRestrictedCampaignerViewer && assignedClientIds) {
+      result = result.filter((table) =>
+        table.client_id && assignedClientIds.includes(table.client_id),
+      );
+    } else if (isSeoOnlyViewer) {
+      result = result.filter(
+        (table) => table.client_id && seoClientIds.includes(table.client_id),
       );
     }
     
@@ -308,7 +318,7 @@ export default function DynamicTables() {
     }
 
     return result;
-  }, [tables, selectedAgency, scopedClientIds, clientSearch, clients, reportStatusFilter]);
+  }, [tables, selectedAgency, isRestrictedCampaignerViewer, isSeoOnlyViewer, assignedClientIds, seoClientIds, clientSearch, clients, reportStatusFilter]);
 
   // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
@@ -501,18 +511,16 @@ export default function DynamicTables() {
 
   const groupedTables = useMemo(() => {
     if (!filteredTables) return {};
-
+    
     const groups: Record<string, CrmTable[]> = {};
-    filteredTables.forEach((table) => {
-      // Derive from integration_type so Facebook Ecommerce / Google Ads ecommerce
-      // never sit under "Facebook Insights" just because category was mis-set.
-      const category = resolveListCategory(table);
+    filteredTables.forEach(table => {
+      const category = table.category || 'ללא קבוצה';
       if (!groups[category]) {
         groups[category] = [];
       }
       groups[category].push(table);
     });
-
+    
     return groups;
   }, [filteredTables]);
 
@@ -521,44 +529,19 @@ export default function DynamicTables() {
     return Object.keys(groupedTables);
   }, [groupedTables]);
 
-  const selectCategory = (category: string) => {
-    setSearchParams((previous) => {
-      const next = new URLSearchParams(previous);
-      next.set(DYNAMIC_TABLES_CATEGORY_PARAM, category);
-      return next;
-    }, { replace: true });
-  };
-
-  const clearSelectedCategory = () => {
-    setSearchParams((previous) => {
-      const next = new URLSearchParams(previous);
-      next.delete(DYNAMIC_TABLES_CATEGORY_PARAM);
-      return next;
-    }, { replace: true });
-  };
-
-  useEffect(() => {
-    clearLegacyDynamicTablesCategory();
-  }, []);
-
-  // Drop stale category params; hub navigation must not auto-open the last category.
-  useEffect(() => {
-    if (categories.length === 0 || !selectedCategory) return;
-    if (!categories.includes(selectedCategory)) {
-      clearSelectedCategory();
+  // Clear selectedCategory if it no longer exists in categories (don't auto-select first)
+  useMemo(() => {
+    if (categories.length === 0) return;
+    if (selectedCategory && !categories.includes(selectedCategory)) {
+      setSelectedCategory(null);
+      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
     }
   }, [categories, selectedCategory]);
 
   // Soft branded color scheme per category
   const getCategoryStyle = (category: string): { gradient: string; iconBg: string; iconColor: string; border: string; icon: any } => {
     const c = category.toLowerCase();
-    // Canonical ecommerce bucket (Hebrew) + legacy "Facebook Ecommerce" labels
-    if (
-      c.includes('איקומרס') ||
-      c === 'ecommerce' ||
-      c.includes('ecom') ||
-      (c.includes('facebook') && c.includes('ecom'))
-    ) {
+    if (c.includes('facebook') && c.includes('ecom')) {
       return {
         gradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30',
         iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
@@ -751,7 +734,10 @@ export default function DynamicTables() {
                   return (
                     <Card
                       key={category}
-                      onClick={() => selectCategory(category)}
+                      onClick={() => {
+                        setSelectedCategory(category);
+                        try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
+                      }}
                       className={cn(
                         "cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5",
                         "bg-gradient-to-br border-2",
@@ -786,7 +772,10 @@ export default function DynamicTables() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={clearSelectedCategory}
+                    onClick={() => {
+                      setSelectedCategory(null);
+                      try { sessionStorage.removeItem('dynamicTables.selectedCategory'); } catch {}
+                    }}
                     className="gap-1"
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -820,7 +809,10 @@ export default function DynamicTables() {
                         key={category}
                         variant={isActive ? "default" : "outline"}
                         size="sm"
-                        onClick={() => selectCategory(category)}
+                        onClick={() => {
+                          setSelectedCategory(category);
+                          try { sessionStorage.setItem('dynamicTables.selectedCategory', category); } catch {}
+                        }}
                         className={cn("gap-1.5 h-8 text-xs", !isActive && style.border)}
                       >
                         <span className="capitalize">{category}</span>
@@ -844,7 +836,6 @@ export default function DynamicTables() {
                     style.gradient,
                     style.border
                   )}
-                  onMouseEnter={() => prefetchReportTableView()}
                   onClick={() => navigate(buildPath(`/table/${table.slug}`))}
                 >
                   <CardHeader dir="rtl" className="text-right">
@@ -1026,17 +1017,7 @@ export default function DynamicTables() {
                   // specific agency is selected, show ONLY dashboards of that agency
                   // — previously null-agency dashboards leaked into every agency.
                   if (selectedAgency && selectedAgency !== 'all') {
-                    // Prefer the dashboard's agency, then the linked client's agency.
-                    // Also accept client.agency_id from the local clients list when the
-                    // PostgREST embed is null (cross-tenant rows).
-                    const clientFromList = dashboard.client_id
-                      ? clients.find((c) => c.id === dashboard.client_id)
-                      : null;
-                    const effectiveAgencyId =
-                      dashboard.agency_id ||
-                      dashboard.clients?.agency_id ||
-                      clientFromList?.agency_id ||
-                      null;
+                    const effectiveAgencyId = dashboard.agency_id || dashboard.clients?.agency_id || null;
                     if (effectiveAgencyId !== selectedAgency) {
                       return false;
                     }
@@ -1044,27 +1025,17 @@ export default function DynamicTables() {
                   // Search by dashboard name, client name, or agency name
                   if (dashboardSearch.trim()) {
                     const search = dashboardSearch.trim().toLowerCase();
-                    const clientFromList = dashboard.client_id
-                      ? clients.find((c) => c.id === dashboard.client_id)
-                      : null;
                     const nameMatch = dashboard.name?.toLowerCase().includes(search);
-                    const clientMatch =
-                      dashboard.clients?.name?.toLowerCase().includes(search) ||
-                      clientFromList?.name?.toLowerCase().includes(search);
-                    const agencyName =
-                      dashboard.agencies?.name ||
-                      getAgencyName(
-                        dashboard.agency_id ||
-                          dashboard.clients?.agency_id ||
-                          clientFromList?.agency_id ||
-                          null,
-                      );
-                    const agencyMatch = agencyName?.toLowerCase().includes(search);
+                    const clientMatch = dashboard.clients?.name?.toLowerCase().includes(search);
+                    const agencyMatch = dashboard.agencies?.name?.toLowerCase().includes(search);
                     if (!nameMatch && !clientMatch && !agencyMatch) return false;
                   }
                   // Campaigners can only see dashboards linked to their assigned clients
-                  if (scopedClientIds) {
-                    return dashboard.client_id && scopedClientIds.includes(dashboard.client_id);
+                  if (isRestrictedCampaignerViewer && assignedClientIds) {
+                    return dashboard.client_id && assignedClientIds.includes(dashboard.client_id);
+                  }
+                  if (isSeoOnlyViewer) {
+                    return dashboard.client_id && seoClientIds.includes(dashboard.client_id);
                   }
                   return true;
                 })
@@ -1127,36 +1098,18 @@ export default function DynamicTables() {
                           </>
                         )}
                       </Badge>
-                      {(() => {
-                        const clientFromList = dashboard.client_id
-                          ? clients.find((c) => c.id === dashboard.client_id)
-                          : null;
-                        const clientName = dashboard.clients?.name || clientFromList?.name;
-                        const agencyName =
-                          dashboard.agencies?.name ||
-                          getAgencyName(
-                            dashboard.agency_id ||
-                              dashboard.clients?.agency_id ||
-                              clientFromList?.agency_id ||
-                              null,
-                          );
-                        return (
-                          <>
-                            {clientName && dashboard.dashboard_type !== 'agency' && (
-                              <Badge variant="outline" className="text-xs">
-                                <User className="h-3 w-3 ml-1" />
-                                {clientName}
-                              </Badge>
-                            )}
-                            {agencyName && (
-                              <Badge variant="outline" className="text-xs">
-                                <Building2 className="h-3 w-3 ml-1" />
-                                {agencyName}
-                              </Badge>
-                            )}
-                          </>
-                        );
-                      })()}
+                      {dashboard.clients?.name && dashboard.dashboard_type !== 'agency' && (
+                        <Badge variant="outline" className="text-xs">
+                          <User className="h-3 w-3 ml-1" />
+                          {dashboard.clients.name}
+                        </Badge>
+                      )}
+                      {dashboard.agencies?.name && (
+                        <Badge variant="outline" className="text-xs">
+                          <Building2 className="h-3 w-3 ml-1" />
+                          {dashboard.agencies.name}
+                        </Badge>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -1174,31 +1127,31 @@ export default function DynamicTables() {
       <SimpleTableDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <FacebookTableDialog
         open={showFacebookDialog}
         onOpenChange={setShowFacebookDialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <GoogleAdsTableDialog
         open={showGoogleAdsDialog}
         onOpenChange={setShowGoogleAdsDialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <GoogleAnalyticsTableDialog
         open={showGADialog}
         onOpenChange={setShowGADialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <GoogleSearchConsoleTableDialog
         open={showGSCDialog}
         onOpenChange={setShowGSCDialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       {/* Edit Dashboard Name Dialog */}
@@ -1462,31 +1415,31 @@ export default function DynamicTables() {
       <AhrefsTableDialog 
         open={showAhrefsDialog} 
         onOpenChange={setShowAhrefsDialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <FacebookEcommerceTableDialog
         open={showFacebookEcommerceDialog}
         onOpenChange={setShowFacebookEcommerceDialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <CreateDashboardDialog
         open={showCreateDashboardDialog}
         onOpenChange={setShowCreateDashboardDialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <SeoReportDialog
         open={showSeoReportDialog}
         onOpenChange={setShowSeoReportDialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
 
       <TikTokTableDialog
         open={showTikTokDialog}
         onOpenChange={setShowTikTokDialog}
-        assignedClientIds={scopedClientIds}
+        assignedClientIds={dialogClientScopeIds}
       />
     </div>
   );

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload, Copy, Wand2, CheckCircle2, XCircle, Loader2 as Loader2Icon, Menu } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload, Copy, Wand2, CheckCircle2, XCircle, Loader2 as Loader2Icon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
@@ -15,7 +15,6 @@ import { CampaignerAssignmentPicker } from "@/components/clients/CampaignerAssig
 import { useAssignableCampaigners } from "@/hooks/useAssignableCampaigners";
 import { ClientsChatView } from "@/components/clients/ClientsChatView";
 import { ClientsMultiSelectToolbar } from "@/components/clients/ClientsMultiSelectToolbar";
-import { ClientFollowUpDatePicker } from "@/components/clients/ClientFollowUpDatePicker";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -58,18 +57,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { cn } from "@/lib/utils";
+import { isSeoTaggedClient } from "@/lib/seoClients";
+
+// Session-scoped: owners and SEO viewers get organization-wide starting view on first
+// visit to Clients. Must NOT re-run on every remount — that was wiping the global
+// agency filter whenever anyone navigated back to this module.
+let clientsAgencyDefaultApplied = false;
 
 export default function Clients() {
-  const { selectedAgency } = useAgency();
+  const { selectedAgency, setSelectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isSeo, isTeamManager, isOwner, isSuperAdmin } = useUserRole();
@@ -78,27 +74,16 @@ export default function Clients() {
   const isSeoOnlyViewer = isSeo && !isTeamManager && !isOwner && !isSuperAdmin;
   // Restricted viewer: pure campaigner (no SEO / team_manager / owner / super_admin)
   const isRestrictedClientViewer = isCampaigner && !isSeoOnlyViewer && !isTeamManager && !isOwner && !isSuperAdmin;
-  // Deep-link support: ?clientId=xxx&tab=updates|recordings (from DMM / recordings)
-  const CLIENT_DEEP_LINK_TABS = new Set([
-    "details",
-    "connections",
-    "business",
-    "docs",
-    "credentials",
-    "meeting",
-    "recordings",
-    "report",
-    "updates",
-    "calls",
-    "wordpress",
-    "whatsapp",
-  ]);
+  useEffect(() => {
+    if ((isOwner || isSuperAdmin || isSeoOnlyViewer) && !clientsAgencyDefaultApplied) {
+      clientsAgencyDefaultApplied = true;
+      setSelectedAgency("all");
+    }
+  }, [isOwner, isSuperAdmin, isSeoOnlyViewer, setSelectedAgency]);
+  // Deep-link support: ?clientId=xxx&tab=updates (from DMMDashboard navigation)
   const [searchParams] = useSearchParams();
   const deepLinkClientId = searchParams.get("clientId") ?? undefined;
-  const rawDeepLinkTab = searchParams.get("tab");
-  const deepLinkTab = rawDeepLinkTab && CLIENT_DEEP_LINK_TABS.has(rawDeepLinkTab)
-    ? rawDeepLinkTab
-    : undefined;
+  const deepLinkTab = (searchParams.get("tab") as "updates" | "details" | undefined) ?? undefined;
   const [viewMode, setViewMode] = useState<"grid" | "table" | "chat">("chat");
   const [pendingChatClientId, setPendingChatClientId] = useState<string | null>(null);
 
@@ -123,10 +108,6 @@ export default function Clients() {
   const [showImportCSV, setShowImportCSV] = useState(false);
   const [showImportSheet, setShowImportSheet] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
-  const isMobile = useIsMobile();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [chatSelectedClientId, setChatSelectedClientId] = useState<string | null>(null);
-  const hideMobilePageHeader = isMobile && viewMode === "chat" && !!chatSelectedClientId;
 
   // Bulk Meta page sync
   const [showBulkMetaSync, setShowBulkMetaSync] = useState(false);
@@ -453,15 +434,11 @@ export default function Clients() {
 
   const deleteClientMutation = useMutation({
     mutationFn: async (clientId: string) => {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("clients")
         .delete()
-        .eq("id", clientId)
-        .select("id");
+        .eq("id", clientId);
       if (error) throw error;
-      if (!data?.length) {
-        throw new Error("לא ניתן למחוק לקוח — אין הרשאה או שהלקוח כבר נמחק");
-      }
     },
     onSuccess: () => {
       toast.success("הלקוח נמחק בהצלחה");
@@ -503,11 +480,7 @@ export default function Clients() {
       const ids = Array.isArray(campaignerClientIds) ? campaignerClientIds : [];
       accessibleClients = clients?.filter(client => ids.includes(client.id));
     } else if (isSeoOnlyViewer) {
-      // SEO users see all SEO-tagged clients (RLS already enforces tenant scope)
-      accessibleClients = clients?.filter((client: any) =>
-        client.is_seo_client === true ||
-        (Array.isArray(client.services) && client.services.includes("seo"))
-      );
+      accessibleClients = clients?.filter((client: any) => isSeoTaggedClient(client));
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all clients in their agencies
       accessibleClients = clients?.filter(client =>
@@ -545,7 +518,7 @@ export default function Clients() {
     ? moodFilteredClients?.filter((client: any) => {
         const services: string[] = Array.isArray(client.services) ? client.services : [];
         if (selectedService === "seo") {
-          return client.is_seo_client === true || services.includes("seo");
+          return isSeoTaggedClient(client);
         }
         return services.includes(selectedService);
       })
@@ -639,18 +612,12 @@ export default function Clients() {
   };
 
   return (
-    <div className={cn(
-      "flex h-full min-h-0 max-h-full flex-col overflow-hidden",
-      isMobile && viewMode === "chat" ? "p-0 gap-0" : "gap-2 md:gap-4 p-2 md:p-4",
-    )}>
-      {!hideMobilePageHeader && (
-      <div className="flex items-center justify-between gap-2 shrink-0">
-        <h2 className="text-xl md:text-2xl font-bold">לקוחות</h2>
+    <div className="flex h-full min-h-0 max-h-full flex-col gap-4 overflow-hidden p-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <h2 className="text-2xl font-bold">לקוחות</h2>
 
-        {/* Desktop toolbar */}
-        <div className="hidden md:flex items-center gap-2 flex-wrap flex-1 justify-end">
           {/* Inline quick filters — visible next to the page title */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap ml-auto">
             {(isTeamManager || isOwner) && (
               <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
                 <SelectTrigger className="h-9 w-[150px]">
@@ -781,115 +748,7 @@ export default function Clients() {
 
           {/* Add client */}
           <AddClientForm />
-        </div>
-
-        {/* Mobile: compact header menu — view modes, filters, add client, import/export */}
-        <div className="md:hidden flex items-center gap-2">
-          {activeFilterCount > 0 && (
-            <Badge variant="secondary" className="h-5 min-w-5 px-1.5">
-              {activeFilterCount}
-            </Badge>
-          )}
-          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" aria-label="תפריט לקוחות">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" dir="rtl" className="w-[min(88vw,22rem)] p-4 flex flex-col gap-4">
-              <SheetHeader className="text-right space-y-1">
-                <SheetTitle>לקוחות</SheetTitle>
-              </SheetHeader>
-
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">תצוגה</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    variant={viewMode === "chat" ? "default" : "outline"}
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => { setViewMode("chat"); setMobileMenuOpen(false); }}
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    צ&apos;אט
-                  </Button>
-                  <Button
-                    variant={viewMode === "grid" ? "default" : "outline"}
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => { setViewMode("grid"); setMobileMenuOpen(false); }}
-                  >
-                    <LayoutGrid className="h-4 w-4" />
-                    כרטיסים
-                  </Button>
-                  <Button
-                    variant={viewMode === "table" ? "default" : "outline"}
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => { setViewMode("table"); setMobileMenuOpen(false); }}
-                  >
-                    <TableIcon className="h-4 w-4" />
-                    טבלה
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">פעולות</p>
-                {viewMode !== "chat" && (
-                  <div className="relative">
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder="חפש לקוח..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pr-9 h-9"
-                    />
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-2"
-                  onClick={() => { setShowFiltersDialog(true); setMobileMenuOpen(false); }}
-                >
-                  <Filter className="h-4 w-4" />
-                  סינון
-                  {activeFilterCount > 0 && (
-                    <Badge className="mr-auto h-5 min-w-5 px-1.5">{activeFilterCount}</Badge>
-                  )}
-                </Button>
-                <div className="w-full [&>button]:w-full [&>button]:justify-start">
-                  <AddClientForm />
-                </div>
-                <Button variant="outline" className="w-full justify-start gap-2" onClick={() => { handleExportToExcel(); setMobileMenuOpen(false); }}>
-                  <Download className="h-4 w-4" />
-                  ייצוא לאקסל
-                </Button>
-                <Button variant="outline" className="w-full justify-start gap-2" onClick={() => { setShowImportCSV(true); setMobileMenuOpen(false); }}>
-                  <Upload className="h-4 w-4" />
-                  ייבוא מ-CSV
-                </Button>
-                <Button variant="outline" className="w-full justify-start gap-2" onClick={() => { setShowImportSheet(true); setMobileMenuOpen(false); }}>
-                  <FileSpreadsheet className="h-4 w-4" />
-                  ייבוא מגוגל שיטס
-                </Button>
-                {(isOwner || isSuperAdmin || isTeamManager) && (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2"
-                    onClick={() => { setBulkMetaSyncResults([]); setShowBulkMetaSync(true); setMobileMenuOpen(false); }}
-                  >
-                    <Wand2 className="h-4 w-4" />
-                    שייך עמודי Meta
-                  </Button>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
       </div>
-      )}
 
       {/* Import dialogs opened from dropdown */}
       {showImportCSV && <ImportClientsCSV externalOpen={showImportCSV} onExternalOpenChange={setShowImportCSV} />}
@@ -1028,7 +887,7 @@ export default function Clients() {
         </DialogContent>
       </Dialog>
 
-      <div className={cn("flex-1 min-h-0", viewMode === "chat" ? "overflow-hidden" : "overflow-y-auto")}>
+      <div className={viewMode === "chat" ? "flex-1 min-h-0 overflow-hidden" : "flex-1 min-h-0 overflow-y-auto"}>
       {viewMode === "chat" ? (
         <ClientsChatView
           key={pendingChatClientId ?? deepLinkClientId ?? "chat"}
@@ -1038,7 +897,6 @@ export default function Clients() {
           getClientFinancialData={getClientFinancialData}
           initialClientId={pendingChatClientId ?? deepLinkClientId}
           initialTab={deepLinkTab}
-          onSelectedClientChange={setChatSelectedClientId}
         />
       ) : viewMode === "grid" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1097,10 +955,6 @@ export default function Clients() {
                   <Badge variant="outline" className={getMoodStatusDisplay(client.mood_status).color}>
                     {getMoodStatusDisplay(client.mood_status).emoji} {getMoodStatusDisplay(client.mood_status).text}
                   </Badge>
-                  <ClientFollowUpDatePicker
-                    clientId={client.id}
-                    currentDate={client.follow_up_date ?? null}
-                  />
                 </div>
               </div>
             </CardHeader>
