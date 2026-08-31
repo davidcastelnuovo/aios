@@ -11,7 +11,7 @@ export const MIC_CAPTURE_MODE_KEY = "aios:carmen-mic-capture-mode";
 
 export const MIC_CAPTURE_MODE_LABELS: Record<MicCaptureMode, string> = {
   realtime_voice: "שיחה חיה",
-  transcribe_only: "תמלול בלבד",
+  transcribe_only: "תמלול לקומפוזר",
 };
 
 export function isMicCaptureMode(value: string | null | undefined): value is MicCaptureMode {

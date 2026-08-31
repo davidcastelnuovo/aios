@@ -8,7 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, Mic, MicOff, Square, PlayCircle, CheckCircle2, XCircle, Clock, Volume2, VolumeX } from "lucide-react";
+import { Bot, Send, Plus, Loader2, Wrench, Menu, Sparkles, Zap, MessageSquare, Users, Target, PlayCircle, CheckCircle2, XCircle, Clock, Volume2, VolumeX } from "lucide-react";
+import { CarmenComposerMicButton } from "@/components/carmen-shared/CarmenComposerMicButton";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -18,11 +19,9 @@ import remarkGfm from "remark-gfm";
 import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
 import {
   loadMicCaptureMode,
-  logTranscribeOnlyEvent,
   MIC_CAPTURE_MODE_LABELS,
   saveMicCaptureMode,
   shouldAllowTtsResponse,
-  transcribeAudioBlob,
   type MicCaptureMode,
 } from "@/lib/carmenTranscribeOnly";
 
@@ -66,15 +65,10 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
   const [micCaptureMode, setMicCaptureMode] = useState<MicCaptureMode>(() => loadMicCaptureMode());
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const speakAudioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const { userId } = useCurrentUser();
@@ -359,87 +353,6 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     }
   };
 
-  const startRecording = useCallback(async () => {
-    if (micCaptureMode !== "transcribe_only") {
-      toast({
-        title: "שיחה חיה זמינה במרכז הבקרה",
-        description: "בצ'אט הפנימי המיקרופון עובד רק במצב תמלול בלבד.",
-      });
-      return;
-    }
-    try {
-      logTranscribeOnlyEvent("record_start");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        if (recordingTimerRef.current) {
-          clearInterval(recordingTimerRef.current);
-          recordingTimerRef.current = null;
-        }
-        setRecordingDuration(0);
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        if (audioBlob.size < 1000) return; // too short
-
-        setIsTranscribing(true);
-        logTranscribeOnlyEvent("record_stop");
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) throw new Error('Not authenticated');
-
-          const text = await transcribeAudioBlob(audioBlob, session.access_token, {
-            inputMode: "transcribe_only",
-            filename: "voice.webm",
-          });
-
-          if (text) {
-            logTranscribeOnlyEvent("transcribe_ok", { chars: text.length });
-            logTranscribeOnlyEvent("send_text", { chars: text.length });
-            sendMessageWithText(text);
-          }
-        } catch (err: any) {
-          logTranscribeOnlyEvent("transcribe_fail", { error: err?.message || String(err) });
-          console.error('Transcription error:', err);
-          toast({
-            title: "שגיאה בתמלול",
-            description: "לא הצלחנו לתמלל את ההקלטה. נסה שוב.",
-            variant: "destructive",
-          });
-        } finally {
-          setIsTranscribing(false);
-        }
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingDuration(0);
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
-      }, 1000);
-    } catch (err) {
-      toast({
-        title: "אין גישה למיקרופון",
-        description: "יש לאפשר גישה למיקרופון בדפדפן",
-        variant: "destructive",
-      });
-    }
-  }, [micCaptureMode, toast]);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  }, []);
-
   // Carmen voice-OUT: play an assistant message as speech (toggle on/off).
   const speakMessage = useCallback(async (idx: number, text: string) => {
     // Clicking the speaker on the message that's already playing stops it.
@@ -502,123 +415,6 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
       setSpeakingIdx(null);
     }
   }, [open]);
-
-  const sendMessageWithText = async (text: string) => {
-    if (!text.trim() || isStreaming) return;
-
-    const userMessage: Message = {
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setIsStreaming(true);
-    setStreamingMessage("");
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-
-      const followUpHistory = messages
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role, content: m.content || '' }));
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            command_text: text,
-            tenant_id: tenantId,
-            surface: 'internal_chat',
-            stream: true,
-            conversation_history: followUpHistory,
-          }),
-        }
-      );
-
-
-      if (!response.ok) {
-        if (response.status === 429) throw new Error('חריגה ממגבלת הקצב. אנא נסה שוב מאוחר יותר.');
-        if (response.status === 402) throw new Error('נדרש תשלום. אנא הוסף יתרה ל-workspace שלך.');
-        throw new Error('שגיאה בתקשורת עם השרת');
-      }
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let assistantContent = '';
-
-      let receivedDone = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.trim() || line.startsWith(':')) continue;
-          if (!line.startsWith('data: ')) continue;
-
-          const data = line.slice(6);
-          if (data === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === 'token') {
-              assistantContent += parsed.content;
-              setStreamingMessage(prev => prev + parsed.content);
-            } else if (parsed.type === 'tool_call') {
-              setMessages(prev => [...prev, {
-                role: 'tool_call', tool: parsed.tool, args: parsed.args, timestamp: new Date().toISOString(),
-              }]);
-            } else if (parsed.type === 'conversation_id') {
-              setCurrentConversationId(parsed.id);
-            } else if (parsed.type === 'invalidate') {
-              invalidateAIEntityQueries(queryClient, parsed.entity);
-            } else if (parsed.type === 'done') {
-              receivedDone = true;
-              if (assistantContent) {
-                setMessages(prev => [...prev, { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() }]);
-                setStreamingMessage("");
-              }
-              setIsStreaming(false);
-              queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
-            }
-          } catch (e) { console.error('Parse error:', e); }
-        }
-      }
-
-      if (!receivedDone) {
-        if (assistantContent) {
-          setMessages(prev => [...prev, { role: 'assistant', content: assistantContent + "\n\n⚠️ _החיבור נותק — ייתכן שהפעולה הופסקה באמצע._", timestamp: new Date().toISOString() }]);
-        } else {
-          setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ הפעולה הופסקה — ייתכן שהמשימה ארוכה מדי. נסה לפרק אותה לחלקים קטנים יותר.", timestamp: new Date().toISOString() }]);
-        }
-        setStreamingMessage("");
-        setIsStreaming(false);
-        queryClient.invalidateQueries({ queryKey: ['ai-conversations', tenantId] });
-      }
-    } catch (error: any) {
-      console.error('Error sending message:', error);
-      toast({ title: "שגיאה", description: error.message || "שגיאה בשליחת ההודעה", variant: "destructive" });
-      setIsStreaming(false);
-    }
-  };
-
-  const formatDuration = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
 
   const toolLabelMap: Record<string, string> = {
     create_task: "יוצר משימה",
@@ -894,7 +690,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                     saveMicCaptureMode(mode);
                   }}
                   className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-                  disabled={isRecording || isTranscribing || isStreaming}
+                  disabled={isStreaming}
                 >
                   {(Object.keys(MIC_CAPTURE_MODE_LABELS) as MicCaptureMode[]).map((mode) => (
                     <option key={mode} value={mode}>{MIC_CAPTURE_MODE_LABELS[mode]}</option>
@@ -902,65 +698,39 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                 </select>
               </label>
               {micCaptureMode === "transcribe_only" && (
-                <span>תמלול → טקסט בלבד, בלי הקראה</span>
+                <span>תמלול לקומפוזר → עריכה לפני שליחה, בלי הקראה</span>
               )}
             </div>
-            <div className="flex gap-2">
-            {isRecording ? (
-              <div className="flex-1 flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-md px-4 py-2">
-                <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
-                <span className="text-sm font-medium text-destructive">מקליט... {formatDuration(recordingDuration)}</span>
-                <div className="flex-1" />
-                <Button
-                  onClick={stopRecording}
-                  size="icon"
-                  variant="destructive"
-                  className="h-[36px] w-[36px]"
-                >
-                  <Square className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : isTranscribing ? (
-              <div className="flex-1 flex items-center gap-3 bg-muted rounded-md px-4 py-2">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">ממלל את ההקלטה...</span>
-              </div>
-            ) : (
-              <>
+            <div className="flex gap-2 items-end">
                 <Textarea
+                  ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyPress}
                   placeholder="בקש ממני לבצע פעולה... (Enter לשליחה)"
-                  className="min-h-[44px] max-h-[120px] resize-none text-sm"
+                  className="min-h-[44px] max-h-[120px] resize-none text-sm flex-1"
                   disabled={isStreaming}
                 />
-                <div className="flex flex-col gap-1">
-                  <Button
-                    onClick={sendMessage}
-                    disabled={!input.trim() || isStreaming}
-                    size="icon"
-                    className="h-[44px] w-[44px] flex-shrink-0"
-                  >
-                    {isStreaming ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
+                <CarmenComposerMicButton
+                  value={input}
+                  onChange={setInput}
+                  onFocus={() => inputRef.current?.focus()}
+                  disabled={isStreaming}
+                  title="הקלטה לתיבת ההודעה"
+                  className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md border border-border text-primary hover:bg-primary/10 disabled:opacity-40"
+                />
                 <Button
-                  onClick={startRecording}
-                  disabled={isStreaming || micCaptureMode !== "transcribe_only"}
+                  onClick={sendMessage}
+                  disabled={!input.trim() || isStreaming}
                   size="icon"
-                  variant="outline"
-                  className="h-[44px] w-[44px] flex-shrink-0 hover:bg-primary/10 hover:text-primary hover:border-primary"
-                  title={micCaptureMode === "transcribe_only" ? "מיקרופון לתמלול בלבד" : "שיחה חיה — במרכז הבקרה"}
+                  className="h-[44px] w-[44px] flex-shrink-0"
                 >
-                  <Mic className="h-4 w-4" />
+                  {isStreaming ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
                 </Button>
-              </>
-            )}
             </div>
           </div>
         </div>

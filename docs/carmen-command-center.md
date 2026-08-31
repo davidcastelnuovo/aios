@@ -47,7 +47,7 @@ src/components/carmen-command/
 שלוש שכבות נפרדות — אין ערבוב:
 
 1. **הקלדה:** שליחת טקסט מחזירה טקסט על המסך בלבד. אין `carmen-speak`, אין הקראה, ואין תמלול.
-2. **תמלול בלבד (`transcribe_only`):** בורר מצב מיקרופון → "תמלול בלבד". הקלטה → `transcribe-voice` → שליחה כטקסט רגיל לכרמן. תשובה **טקסט בלבד** — בלי Realtime, בלי TTS, בלי voice-direct.
+2. **תמלול לקומפוזר (`transcribe_only`):** בורר מצב מיקרופון → "תמלול לקומפוזר". הקלטה → `transcribe-voice` → הטקסט נכנס לתיבת ההודעה לעריכה לפני שליחה. תשובה **טקסט בלבד** — בלי Realtime, בלי TTS. בסיידבר: כפתור `CarmenComposerMicButton` תמיד זמין.
 3. **שיחה חיה — OpenAI Realtime:** בורר מצב מיקרופון → "שיחה חיה". לחיצה על המיקרופון פותחת session דרך `carmen-realtime-session` → WebRTC דפדפן↔OpenAI. אם Realtime נכשל מוצגת שגיאה ברורה; **אין** fallback ל-`transcribe-voice`.
 4. מתג עוצמת הקול מופיע רק בזמן שיחה חיה פעילה.
 

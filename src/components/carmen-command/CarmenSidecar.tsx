@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { Loader2, PanelRightClose, Send, Wrench } from "lucide-react";
+import { CarmenComposerMicButton } from "@/components/carmen-shared/CarmenComposerMicButton";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -237,6 +238,14 @@ export function CarmenSidecar({ tenantId, commandCenterView, onClose }: CarmenSi
           </button>
         )}
         <div className="flex gap-2">
+          <CarmenComposerMicButton
+            value={input}
+            onChange={setInput}
+            onFocus={() => inputRef.current?.focus()}
+            disabled={isStreaming}
+            title="הקלטה לתיבת ההודעה"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--cc-line)] text-[var(--cc-accent)] hover:border-[var(--cc-line-strong)] disabled:opacity-40"
+          />
           <textarea
             ref={inputRef}
             value={input}

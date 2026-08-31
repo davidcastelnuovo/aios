@@ -38,7 +38,13 @@ logged.
 - **How:** Tool `assign_task_to_cursor`. Context must include `human_task_id: <uuid>`. One in-progress Cursor task at a time.
 - **Origin:** David — "תכניסי לתור… כשהוא מסיים תכניסי את הבאה".
 
-### 2026-08-31 — מיקרופון לתמלול בלבד (transcribe_only)
+### 2026-08-31 — תמלול לקומפוזר (composer dictation)
+- **Skin slug:** `carmen_transcribe_only_mic` (updated, tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** In every Carmen chat (Command Center, sidecar, AIOSDialog), user can record → existing `transcribe-voice` → text lands in the composer for edit before send. No auto-send, no backend change.
+- **How:** Shared `CarmenComposerMicButton` + `useCarmenComposerDictation`. Sidecar (`CommandCenterSidecar` / `CarmenSidecar`) + `CarmenChatBar` transcribe_only mode + `AIOSDialog`.
+- **Origin:** David via sidecar — transcribe into composer system-wide, reuse existing Whisper path.
+
+### 2026-08-31 — מיקרופון לתמלול בלבד (transcribe_only — superseded by composer dictation)
 - **Skin slug:** `carmen_transcribe_only_mic` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** In Command Center and in-app chat, user can pick mic mode "תמלול בלבד": record → Whisper (`transcribe-voice`) → normal text prompt → text-only reply. No OpenAI Realtime, no carmen-speak/TTS, no voice-direct. WhatsApp 🎤 voice notes unchanged.
 - **How:** UI selector `MicCaptureMode` in `CarmenChatBar` / `AIOSDialog`. `input_mode=transcribe_only` on send + structured `[carmen:transcribe_only]` client logs. Shared helper `src/lib/carmenTranscribeOnly.ts`.

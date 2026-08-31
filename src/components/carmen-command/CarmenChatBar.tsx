@@ -30,6 +30,8 @@ import {
   transcribeAudioBlob,
   type MicCaptureMode,
 } from "@/lib/carmenTranscribeOnly";
+import { mergeTranscriptionIntoComposer, logComposerDictationEvent } from "@/lib/carmenComposerDictation";
+import { CarmenComposerMicButton } from "@/components/carmen-shared/CarmenComposerMicButton";
 import type { SystemFixContextMetadata } from "@/lib/systemFixContext";
 import { systemFixPromptAddon } from "@/lib/systemFixContext";
 
@@ -694,7 +696,9 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             });
             if (!text) throw new Error("תמלול ריק");
             logTranscribeOnlyEvent("transcribe_ok", { chars: text.length });
-            await sendText(text, { inputMode: "transcribe_only" });
+            logComposerDictationEvent("inserted_composer", { chars: text.length });
+            setInput((prev) => mergeTranscriptionIntoComposer(prev, text));
+            inputRef.current?.focus();
           } catch (err: unknown) {
             logTranscribeOnlyEvent("transcribe_fail", {
               error: err instanceof Error ? err.message : String(err),
@@ -720,7 +724,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           variant: "destructive",
         });
       }
-    }, [isConvMode, isTranscribeRecording, isTranscribing, onFaceState, sendText, toast]);
+    }, [isConvMode, isTranscribeRecording, isTranscribing, onFaceState, toast]);
 
     const handleMicClick = useCallback(() => {
       if (micCaptureMode === "transcribe_only") {
@@ -1092,7 +1096,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             disabled={isTranscribing}
             title={
               micCaptureMode === "transcribe_only"
-                ? (isTranscribeRecording ? "עצור הקלטה" : "מיקרופון לתמלול בלבד")
+                ? (isTranscribeRecording ? "עצור הקלטה" : "הקלטה לתיבת ההודעה")
                 : (isConvMode ? "סיים שיחה חיה" : "שיחה חיה")
             }
             className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
@@ -1140,6 +1144,16 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             </>
           )}
             </>
+          )}
+          {isSidecar && (
+            <CarmenComposerMicButton
+              value={input}
+              onChange={setInput}
+              onFocus={() => inputRef.current?.focus()}
+              disabled={thisChatBusy || isConvMode}
+              title="הקלטה לתיבת ההודעה"
+              className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--cc-line-strong)] text-[var(--cc-accent)] transition-all hover:bg-[rgba(76,195,255,0.15)] disabled:opacity-40`}
+            />
           )}
           <input
             ref={inputRef}
