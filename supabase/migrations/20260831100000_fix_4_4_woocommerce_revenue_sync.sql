@@ -25,9 +25,10 @@ WHERE (
   AND s.is_active = true
 ON CONFLICT (site_id, tenant_id) DO NOTHING;
 
-INSERT INTO public.claude_carmen_audit (actor, action, target, details)
+INSERT INTO public.claude_carmen_audit (tenant_id, actor, action, target, details)
 SELECT
-  'cursor',
+  '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019'::uuid,
+  'carmen',
   'woo_4_4_revenue_sync_enable',
   'social_media_wordpress_sites:' || s.id::text,
   jsonb_build_object(

@@ -7,7 +7,7 @@ alwaysApply: true
 
 There **is** a development environment. Never tell David or Carmen that it does not exist.
 
-- **Development environment** = the Vercel Preview URL of the current branch. It talks to AIOS Staging.
+- **Development environment** = Vercel Preview URL of the current branch (Staging data). **Persistent Staging** = `https://staging.aios.co.il` (`develop`).
 - **Staging** = git branch `develop` → persistent Staging Supabase + Vercel `develop` deploy.
 - **Production** = `main` only. Never use Production as a development environment.
 - A merge to `main` auto-updates `develop` (`sync-develop-from-main.yml`) so Staging stays on the same published code.

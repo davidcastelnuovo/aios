@@ -48,10 +48,10 @@ test("new Background Agents are allowed by default; sticky is opt-in", () => {
 
 test("Cursor is Carmen Direct; Codex is ChatGPT Workspace", () => {
   assert.match(billingNoteForSeat("cursor"), /סוכן Cursor חדש/);
-  assert.match(billingNoteForSeat("codex"), /Workspace/);
+  assert.match(billingNoteForSeat("codex"), /Codex Direct/);
   assert.match(billingNoteForSeat("internal"), /OpenAI API/);
   assert.match(missingOpenChatMessage("cursor"), /Cursor Direct/);
-  assert.match(missingOpenChatMessage("codex"), /Workspace/);
+  assert.match(missingOpenChatMessage("codex"), /Cursor/);
   assert.match(busyOpenChatMessage("cursor", "https://cursor.com/agents/bc-1"), /מקביל/);
 });
 

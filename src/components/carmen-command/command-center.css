@@ -11,9 +11,6 @@ html:has(.cc-root) body {
   height: 100%;
   overflow: hidden;
 }
-html:has([data-staging-banner]) {
-  --cc-banner-h: 2.25rem;
-}
 
 .cc-root {
   height: calc(100dvh - var(--cc-banner-h, 0px));

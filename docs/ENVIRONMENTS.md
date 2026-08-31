@@ -24,7 +24,35 @@ STAGING_DOMAIN=<configured-in-vercel>
 PRODUCTION_DOMAIN=<configured-in-vercel>
 ```
 
-When a task finishes, **always send David the development environment link**: the Vercel Preview URL for the feature branch. If the work is on `develop`, also send `STAGING_DOMAIN`. Never merge to `main` without an explicit `מאשר לפרודקשן`.
+When a task finishes, **always send David the development environment link**: the Vercel Preview URL for the feature branch. If the work is on `develop`, also send `STAGING_DOMAIN=https://staging.aios.co.il`. Never merge to `main` without an explicit `מאשר לפרודקשן`.
+
+## Canonical URLs
+
+| Environment | Git | Frontend URL | When it updates |
+| --- | --- | --- | --- |
+| **Production** | `main` | `https://aios.co.il` | merge to `main` |
+| **Staging (persistent dev)** | `develop` | `https://staging.aios.co.il` (alias: `after-lead-git-develop-aios-crm.vercel.app`) | push to `develop` + auto-sync from `main` |
+
+### `staging.aios.co.il` DNS (one-time, Cloudflare)
+
+`aios.co.il` nameservers are **Cloudflare** (`elsa` / `todd`), not Vercel — so Vercel cannot create the subdomain record automatically. Until this exists, `staging.aios.co.il` returns `NXDOMAIN`.
+
+In **Cloudflare → aios.co.il → DNS**, add:
+
+| Type | Name | Target | Proxy |
+| --- | --- | --- | --- |
+| CNAME | `staging` | `90c25ae61a2299f0.vercel-dns-017.com` | DNS only (grey cloud) |
+
+Vercel project domain is already assigned (`gitBranch: develop`, verified). After the CNAME propagates (usually minutes), `https://staging.aios.co.il` goes live.
+
+**Until then**, use: `https://after-lead-git-develop-aios-crm.vercel.app`
+| **Feature Preview** | `feature/*`, `cursor/*`, etc. | `https://after-lead-git-{branch}-aios-crm.vercel.app` | **only** when that branch is pushed |
+
+**Important:** A feature-branch Preview does **not** update when you merge to `main`. After merge, use **Staging** (`staging.aios.co.il`) or Production — not an old branch URL.
+
+`after-lead-aios-crm.vercel.app` is a **Production** alias, not Staging.
+
+The in-app amber frame (subtle yellow border glow) marks Staging/Preview — no header space taken.
 
 ## Flow
 
@@ -67,7 +95,7 @@ Gaps (do not touch Production to close these):
 1. Staging schema/function sync: Edge Functions deployed; public tables applied from repo migrations. Operational data is cloned onto Staging (users, tenants, Carmen, clients, tasks, live integrations). WhatsApp rows are **mocked connected** (no live tokens; `IntegrationGuard` still blocks send). Huge analytics/graph/chat-history tables are skipped.
 2. Add GitHub secret `SUPABASE_STAGING_PROJECT_ID` so the Staging deploy workflow can run.
 3. LLM keys live in Staging `tenant_integrations` (`llm`). Do **not** copy Production WhatsApp/Meta tokens.
-4. No persistent custom Staging domain yet (`STAGING_DOMAIN=<configured-in-vercel>`). Vercel Authentication is `all_except_custom_domains`, so `*.vercel.app` Preview URLs require a Vercel login. A custom Staging domain would skip that gate.
+4. No persistent custom Staging domain yet (`STAGING_DOMAIN=<configured-in-vercel>`). Vercel Authentication is `all_except_custom_domains`, so `*.vercel.app` Preview URLs require a Vercel login. **Resolved:** `https://staging.aios.co.il` → `develop` (custom domain, no SSO gate).
 
 ### Google login on Preview / Staging
 
@@ -138,5 +166,5 @@ Set `STAGING_ALLOWED_PHONE_NUMBERS` only in Staging secrets / Vercel Preview+`de
 - **No Production env vars changed.**
 - **No Production database changed.**
 - Integration guard is a no-op when `APP_ENV` is unset or `production`.
-- Staging banner is hidden in Production.
+- Staging frame is hidden in Production.
 - Creating GitHub `develop` does not change `main`.
