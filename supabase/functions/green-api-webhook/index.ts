@@ -10,6 +10,7 @@ import {
   buildVoiceMeta,
   formatVoiceMessageText,
 } from '../_shared/wa-voice-resolve.ts';
+import { propagateWhatsappGroupInviteLink, resolveWhatsappGroupInviteLink } from '../_shared/whatsapp-groups.ts';
 
 
 const corsHeaders = {
@@ -491,6 +492,9 @@ Deno.serve(async (req) => {
           }
           
           groupId = newGroup.id;
+          if (realInviteLink) {
+            await propagateWhatsappGroupInviteLink(supabaseClient, groupChatId, realInviteLink);
+          }
         }
         
         // Check if blocked
@@ -993,6 +997,9 @@ Deno.serve(async (req) => {
         }
 
         groupId = newGroup.id;
+        if (groupApiData.inviteLink) {
+          await propagateWhatsappGroupInviteLink(supabaseClient, groupChatId, groupApiData.inviteLink);
+        }
       } else if (existingGroup) {
         const currentName = existingGroup.group_name || '';
         const looksLikePlaceholder = currentName.startsWith('קבוצה ');
@@ -1014,6 +1021,9 @@ Deno.serve(async (req) => {
               .from('whatsapp_groups')
               .update(updateFields)
               .eq('id', groupId);
+            if (updateFields.invite_link) {
+              await propagateWhatsappGroupInviteLink(supabaseClient, groupChatId, updateFields.invite_link);
+            }
           }
         }
       }
@@ -1147,7 +1157,11 @@ Deno.serve(async (req) => {
             .single();
 
           // Try to get invite link: first from DB cache, then from getGroupData, then from getGroupInviteLink
-          let groupInviteLink = groupRecord?.invite_link || null;
+          let groupInviteLink = await resolveWhatsappGroupInviteLink(
+            supabaseClient,
+            groupRecord?.group_chat_id,
+            groupRecord?.invite_link,
+          );
           if (!groupInviteLink && instanceId && apiToken && groupRecord?.group_chat_id) {
             // Try getGroupData first (returns invite link along with other data)
             try {
@@ -1184,6 +1198,11 @@ Deno.serve(async (req) => {
                 .from('whatsapp_groups')
                 .update({ invite_link: groupInviteLink })
                 .eq('id', groupId);
+              await propagateWhatsappGroupInviteLink(
+                supabaseClient,
+                groupRecord?.group_chat_id,
+                groupInviteLink,
+              );
             } else {
             }
           }
