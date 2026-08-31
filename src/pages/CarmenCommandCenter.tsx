@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowRight, History, LayoutDashboard, Users } from "lucide-react";
+import { ArrowRight, History, LayoutDashboard, PanelRightOpen, Users } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
@@ -11,6 +11,8 @@ import { AgentSeatRail, AgentSeatStatus } from "@/components/carmen-command/Agen
 import { CarmenChatBar, CarmenChatBarHandle } from "@/components/carmen-command/CarmenChatBar";
 import { useCommandRealtime } from "@/components/carmen-command/useCommandData";
 import { useBrainChannel } from "@/components/carmen-command/useBrainChannel";
+import { CommandCenterSidecarShell } from "@/components/carmen-command/CommandCenterSidecarShell";
+import { useCommandCenterSidecar } from "@/contexts/CommandCenterSidecarContext";
 import { useToast } from "@/hooks/use-toast";
 import type { HudStage } from "@/lib/agentChannelRouting";
 import "@/components/carmen-command/command-center.css";
@@ -67,6 +69,7 @@ export default function CarmenCommandCenter() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<CommandCenterViewMode>(readViewMode);
   const brain = useBrainChannel(tenantId);
+  const sidecar = useCommandCenterSidecar();
   const { toast } = useToast();
 
   const flashAlert = useCallback(() => {
@@ -160,6 +163,20 @@ export default function CarmenCommandCenter() {
             <span className="hidden sm:inline">{isDashboard ? "סוכנים" : "מרכז בקרה"}</span>
           </button>
 
+          <button
+            type="button"
+            title={sidecar.open ? "סגור סיידבר תיקון" : "סיידבר תיקון — כרמן + הקשר מסך"}
+            onClick={sidecar.toggle}
+            className={`cc-header-btn flex items-center gap-1 rounded-md border px-2 text-xs ${
+              sidecar.open
+                ? "border-[var(--cc-accent)] text-[var(--cc-accent)]"
+                : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)]"
+            }`}
+          >
+            <PanelRightOpen className="h-4 w-4" />
+            <span className="hidden sm:inline">תיקון</span>
+          </button>
+
           {!isDashboard && (
             <>
               <HudMenu
@@ -199,13 +216,15 @@ export default function CarmenCommandCenter() {
       )}
 
       {isDashboard ? (
-        <CarmenDashboardView
-          tenantId={tenantId}
-          faceState={faceState}
-          audioLevelRef={audioLevelRef}
-          chatRef={chatRef}
-          onHealthCheck={healthCheck}
-        />
+        <CommandCenterSidecarShell embedded open={sidecar.open} onOpenChange={sidecar.setOpen}>
+          <CarmenDashboardView
+            tenantId={tenantId}
+            faceState={faceState}
+            audioLevelRef={audioLevelRef}
+            chatRef={chatRef}
+            onHealthCheck={healthCheck}
+          />
+        </CommandCenterSidecarShell>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-3">
           <CarmenChatBar
@@ -222,7 +241,7 @@ export default function CarmenCommandCenter() {
         </div>
       )}
 
-      {isDashboard && (
+      {isDashboard && !sidecar.open && (
         <footer className="cc-dashboard-footer shrink-0 p-2 pt-0 sm:p-3 sm:pt-0">
           <CarmenChatBar
             ref={chatRef}

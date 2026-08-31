@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-08-31 — סיידבר תיקון מערכת (Command Center sidecar)
+- **Skin slug:** `command_center_system_fix_sidecar` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** David opens the sidecar while keeping AIOS visible; messages include `command_center_sidebar` / `system_fix_context` + path/entities. Carmen answers normally; `request_dev_task` only on explicit "שלחי לפיתוח" / "תריצי דרך קרסר".
+- **How:** UI toggle in header + CC dashboard; `CarmenChatBar` mode=sidecar → `run-ai-agent` with `context_metadata` + `system_prompt_addon`.
+- **Origin:** David — Command Center intermediate sidebar for contextual system-fix chat → Cursor.
+
 ### 2026-08-30 — תור משימות אנושיות → Cursor (auto-claim)
 - **Skin slug:** n/a (edge + tools). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
 - **What Carmen can now do:** Assign human `tasks` to Cursor (`assigned_agent=Cursor`, status `open`). `dispatch-cursor-tasks` claims one task, fires `request_dev_task`, links `cursor_dispatches.human_task_id`. When Cursor finishes, call `mcp_Cursor__complete_human_task` → marks done + dispatches next.

@@ -1137,3 +1137,25 @@ html:has(.cc-root) body {
     padding: 0.5rem 0.6rem calc(0.5rem + env(safe-area-inset-bottom));
   }
 }
+
+/* ---------- Command Center sidecar (system-fix chat alongside live screen) ---------- */
+
+.cc-sidecar {
+  --cc-bg: #050a16;
+  background-color: var(--cc-bg);
+  color: var(--cc-text);
+}
+
+.cc-sidecar-header {
+  background: linear-gradient(180deg, rgba(76, 195, 255, 0.08), transparent);
+}
+
+.cc-sidecar-sheet {
+  background-color: #050a16 !important;
+  color: #e3ecfa;
+  border-color: rgba(76, 195, 255, 0.16) !important;
+}
+
+.cc-sidecar .cc-talkbar-row {
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+}

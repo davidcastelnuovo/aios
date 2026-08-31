@@ -1,6 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { LogOut, Building2 } from "lucide-react";
+import { LogOut, Building2, PanelRightOpen } from "lucide-react";
 import { GlobalApprovalsBell } from "@/components/agents/GlobalApprovalsBell";
 import { HeaderModuleShortcuts } from "./HeaderModuleShortcuts";
 import logo from "@/assets/logo.png";
@@ -18,6 +18,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { ViewAsProvider } from "@/contexts/ViewAsContext";
 import { ViewAsBanner } from "@/components/ViewAsBanner";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
+import { CommandCenterSidecarShell } from "@/components/carmen-command/CommandCenterSidecarShell";
+import { useCommandCenterSidecar } from "@/contexts/CommandCenterSidecarContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +58,7 @@ export function AppLayout() {
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
   const commandCenterAccess = useCommandCenterAccess();
+  const sidecar = useCommandCenterSidecar();
 
   // Fetch available tenants for the user
   const { data: userTenants } = useQuery({
@@ -226,22 +229,38 @@ export function AppLayout() {
                 <GlobalApprovalsBell />
                 {/* Carmen button in header — opens the full-screen Command Center (allowlisted users only) */}
                 {commandCenterAccess.allowed && (
-                  <button
-                    onClick={() => {
-                      const slug = currentTenant?.slug;
-                      if (slug) navigate(`/t/${slug}/command-center`);
-                    }}
-                    className="relative group"
-                    title="כרמן — מרכז פיקוד ובקרה"
-                    aria-label="פתח את מרכז הפיקוד של כרמן"
-                  >
-                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-background animate-pulse z-10" />
-                    <img
-                      src={CARMEN_ICON}
-                      alt="כרמן"
-                      className="h-9 w-9 rounded-full object-cover border-2 border-sky-400/70 group-hover:scale-110 group-hover:border-sky-300 transition-all duration-200"
-                    />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={sidecar.toggle}
+                      className={`flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${
+                        sidecar.open
+                          ? "border-sky-400 bg-sky-400/15 text-sky-300"
+                          : "border-border text-muted-foreground hover:border-sky-400/70 hover:text-sky-400"
+                      }`}
+                      title="כרמן — סיידבר תיקון מערכת (המסך נשאר גלוי)"
+                      aria-label="פתח/סגור סיידבר תיקון מערכת של כרמן"
+                      aria-pressed={sidecar.open}
+                    >
+                      <PanelRightOpen className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        const slug = currentTenant?.slug;
+                        if (slug) navigate(`/t/${slug}/command-center`);
+                      }}
+                      className="relative group"
+                      title="כרמן — מרכז פיקוד ובקרה"
+                      aria-label="פתח את מרכז הפיקוד של כרמן"
+                    >
+                      <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-background animate-pulse z-10" />
+                      <img
+                        src={CARMEN_ICON}
+                        alt="כרמן"
+                        className="h-9 w-9 rounded-full object-cover border-2 border-sky-400/70 group-hover:scale-110 group-hover:border-sky-300 transition-all duration-200"
+                      />
+                    </button>
+                  </>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -258,12 +277,16 @@ export function AppLayout() {
                 </DropdownMenu>
               </div>
             </header>
-            <main className="flex-1 min-h-0 overflow-y-auto">
-              <RoutedModulePermissionGate>
-                <Suspense fallback={<RouteContentLoader />}>
-                  <Outlet />
-                </Suspense>
-              </RoutedModulePermissionGate>
+            <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <CommandCenterSidecarShell>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <RoutedModulePermissionGate>
+                    <Suspense fallback={<RouteContentLoader />}>
+                      <Outlet />
+                    </Suspense>
+                  </RoutedModulePermissionGate>
+                </div>
+              </CommandCenterSidecarShell>
             </main>
           </div>
 

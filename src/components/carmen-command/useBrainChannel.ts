@@ -12,6 +12,7 @@ import {
   type ChannelHealth,
   type ConversationChannelStatus,
 } from "@/lib/agentChannelRouting";
+import type { SystemFixContextMetadata } from "@/lib/systemFixContext";
 
 export type ChannelSendResult = {
   ok: boolean;
@@ -105,6 +106,7 @@ export function useBrainChannel(tenantId: string | null) {
     history: Array<{ role: string; content: string }>;
     idempotencyKey: string;
     route?: BrainRoute;
+    contextMetadata?: SystemFixContextMetadata | null;
   }): Promise<ChannelSendResult> => {
     if (!tenantId) throw new Error("missing tenant");
     const route = args.route || selectedRef.current;
@@ -122,6 +124,7 @@ export function useBrainChannel(tenantId: string | null) {
         input_mode: args.inputMode,
         conversation_history: args.history,
         idempotency_key: args.idempotencyKey,
+        context_metadata: args.contextMetadata ?? undefined,
       }),
     });
     const json = await res.json().catch(() => ({}));
