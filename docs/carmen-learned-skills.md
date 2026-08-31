@@ -38,11 +38,11 @@ logged.
 - **How:** Tool `assign_task_to_cursor`. Context must include `human_task_id: <uuid>`. One in-progress Cursor task at a time.
 - **Origin:** David — "תכניסי לתור… כשהוא מסיים תכניסי את הבאה".
 
-### 2026-08-30 — Cursor = כרמן ישיר; Codex = ChatGPT Workspace Work Mode
+### 2026-08-30 — Cursor / Grok / Codex = Cursor Cloud Direct
 - **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
-- **What Carmen can now do:** Cursor Direct follows the already-open Carmen Direct chat. Codex Direct triggers ChatGPT Workspace / Work Mode (`workspace_agents` + sticky `conversation_key`) — repo connections, not Carmen's OpenAI API.
-- **How:** `dispatchSend` → `launchWorkspaceAgent("codex")`. Secrets: `CHATGPT_WORK_AGENT_*` (or `CODEX_WORK_AGENT_*`). Agent must `reply_to_aios_session`.
-- **Origin:** David — "קודקס מחובר לוורקספייס וורק מוד כמו שקרסר מחובר, לא ל-API כמו כרמן".
+- **What Carmen can now do:** Cursor, Grok, and Codex Direct all launch Cursor Cloud background agents (`launchCloudDirect`). Each seat keeps its own sticky `conversation_key` / optional fixed agent id.
+- **How:** `dispatchSend` → `launchCloudDirect` for `cursor|grok|codex`. Secrets: `CURSOR_API_KEY`; optional `CODEX_DIRECT_AGENT_ID`, `CODEX_CLOUD_ENV_NAME`, `CODEX_MODEL_ID`. Agent must `reply_to_aios_session`.
+- **Origin:** David — Codex on main was routing to ChatGPT Workspace instead of Cursor Cloud; aligned with Cursor/Grok direct seats.
 
 ### 2026-08-29 — סוכנים בסביבת הפיתוח (Preview → Staging)
 - **Skin slug:** `staging_agents_need_cursor_key` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
