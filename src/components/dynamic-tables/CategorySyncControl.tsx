@@ -411,7 +411,7 @@ export function CategorySyncControl({ category, tables }: Props) {
     queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
     queryClient.invalidateQueries({ queryKey: ["dynamic-tables", tenantId] });
     queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
-    queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports", tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
   };
 
   const handleSyncTrackedOnly = async () => {
@@ -449,7 +449,7 @@ export function CategorySyncControl({ category, tables }: Props) {
     queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
     queryClient.invalidateQueries({ queryKey: ["dynamic-tables", tenantId] });
     queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
-    queryClient.invalidateQueries({ queryKey: ["seo-dashboard-reports", tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["ahrefs-reports"] });
   };
 
   let lastSyncLabel: string;

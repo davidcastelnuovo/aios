@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle, Play, ShoppingCart } from "lucide-react";
 import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
-import { format, subDays, startOfWeek, endOfWeek, subWeeks } from "date-fns";
+import { format, subDays } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { shouldShowQueryError } from "@/lib/queryUi";
@@ -64,7 +64,8 @@ import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { WooAttributionSection } from "@/components/dynamic-tables/WooAttributionSection";
 import { fetchWooReportAttribution, getDynamicTableDateRangeIso } from "@/lib/wooDashboardQueries";
-import { shouldUseGoogleWooAttributionOverlay } from "@/lib/wooAttribution";
+import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
+import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -149,6 +150,10 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
   const debouncedCampaignSearch = useDebouncedValue(campaignSearch, 300);
 
+  const customFromStr = customDateRange.from ? format(customDateRange.from, 'yyyy-MM-dd') : '';
+  const customToStr = customDateRange.to ? format(customDateRange.to, 'yyyy-MM-dd') : '';
+  const isCustomReady = dateFilter !== 'custom' || (!!customFromStr && !!customToStr);
+
   const dateFilterOptions = [
     { value: "all", label: "כל התאריכים" },
     { value: "today", label: "היום" },
@@ -228,26 +233,26 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     }
   };
 
-  const { data: tables, isLoading: tablesLoading, isFetching: tablesFetching, error: tablesError } = useQuery({
-    queryKey: ['crm-tables', tenantId],
+  const { data: table, isLoading: tablesLoading, isFetching: tablesFetching, error: tablesError } = useQuery({
+    queryKey: ['crm-tables', tenantId, tableSlug],
     queryFn: async () => {
+      if (!tableSlug) return null;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const response = await supabase.functions.invoke(
-        `crm-tables?tenant_id=${tenantId}`,
+        `crm-tables?tenant_id=${tenantId}&slug=${encodeURIComponent(tableSlug)}`,
         { method: 'GET' }
       );
       if (response.error) {
         console.error('[DynamicTableView] crm-tables fetch failed:', response.error);
         throw response.error;
       }
-      return Array.isArray(response.data) ? response.data as CrmTable[] : [];
+      const rows = Array.isArray(response.data) ? response.data as CrmTable[] : [];
+      return rows[0] ?? null;
     },
-    enabled: !!tenantId,
-    refetchOnMount: 'always',
+    enabled: !!tenantId && !!tableSlug,
+    ...reportQueryOptions<CrmTable | null>(),
   });
-
-  const table = tables?.find((t) => t.slug === tableSlug);
 
   const reportClientId = table?.client_id
     || table?.integration_settings?.clientId
@@ -344,116 +349,43 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     enabled: !!table?.id,
   });
 
-  // Fetch ALL records once - no date filter sent to server
-  const { data: allRecords, isLoading: recordsLoading } = useQuery({
-    queryKey: ['crm-records', table?.id],
+  const {
+    data: records,
+    isPending: recordsPending,
+    isFetching: recordsFetching,
+    dataUpdatedAt: recordsUpdatedAt,
+  } = useQuery({
+    queryKey: ['crm-records', table?.id, dateFilter, customFromStr, customToStr],
     queryFn: async () => {
       if (!table?.id) return [];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const params = new URLSearchParams({ table_id: table.id });
+      const params = new URLSearchParams({ table_id: table.id, date_filter: dateFilter });
+      if (dateFilter === 'custom' && customFromStr && customToStr) {
+        params.set('date_from', customFromStr);
+        params.set('date_to', customToStr);
+      }
       const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
         method: 'GET',
       });
       if (response.error) throw response.error;
       return Array.isArray(response.data) ? response.data as CrmRecord[] : [];
     },
-    enabled: !!table?.id,
-    placeholderData: (previousData) => previousData,
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    enabled: !!table?.id && isCustomReady,
+    ...reportQueryOptions<CrmRecord[]>(),
   });
 
-  // Client-side date filtering
-  const records = useMemo(() => {
-    if (!allRecords) return allRecords;
-    if (dateFilter === 'all') return allRecords;
-
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    let startDate: string | null = null;
-    let endDate: string | null = null;
-
-    switch (dateFilter) {
-      case 'today':
-        startDate = endDate = format(today, 'yyyy-MM-dd');
-        break;
-      case 'yesterday': {
-        const d = subDays(today, 1);
-        startDate = endDate = format(d, 'yyyy-MM-dd');
-        break;
-      }
-      case 'this_week':
-        startDate = format(startOfWeek(today, { weekStartsOn: 0 }), 'yyyy-MM-dd');
-        endDate = format(today, 'yyyy-MM-dd');
-        break;
-      case 'last_week': {
-        const endLW = subDays(startOfWeek(today, { weekStartsOn: 0 }), 1);
-        startDate = format(subDays(endLW, 6), 'yyyy-MM-dd');
-        endDate = format(endLW, 'yyyy-MM-dd');
-        break;
-      }
-      case 'last_7_days':
-        // Match Facebook's "Last 7 days": 7 full days ending yesterday.
-        startDate = format(subDays(today, 7), 'yyyy-MM-dd');
-        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-        break;
-      case 'last_14_days':
-        startDate = format(subDays(today, 14), 'yyyy-MM-dd');
-        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-        break;
-      case 'last_30_days':
-        startDate = format(subDays(today, 30), 'yyyy-MM-dd');
-        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-        break;
-      case 'this_month':
-        startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
-        endDate = format(today, 'yyyy-MM-dd');
-        break;
-      case 'last_month': {
-        const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        startDate = format(lm, 'yyyy-MM-dd');
-        endDate = format(new Date(now.getFullYear(), now.getMonth(), 0), 'yyyy-MM-dd');
-        break;
-      }
-      case 'last_90_days':
-        startDate = format(subDays(today, 90), 'yyyy-MM-dd');
-        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-        break;
-      case 'last_180_days':
-        startDate = format(subDays(today, 180), 'yyyy-MM-dd');
-        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-        break;
-      case 'last_365_days':
-        startDate = format(subDays(today, 365), 'yyyy-MM-dd');
-        endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-        break;
-      case 'custom':
-        if (customDateRange.from && customDateRange.to) {
-          startDate = format(customDateRange.from, 'yyyy-MM-dd');
-          endDate = format(customDateRange.to, 'yyyy-MM-dd');
-        }
-        break;
-    }
-
-    if (!startDate) return allRecords;
-
-    return allRecords.filter(record => {
-      const recordDate = record.data?.date;
-      if (!recordDate) return true; // Keep non-dated records
-      if (endDate) return recordDate >= startDate! && recordDate <= endDate;
-      return recordDate >= startDate!;
-    });
-  }, [allRecords, dateFilter, customDateRange.from, customDateRange.to]);
+  const displayRecords = records ?? [];
 
   // Filter records by campaign name search
   const filteredRecords = useMemo(() => {
-    if (!records || !debouncedCampaignSearch.trim()) return records;
+    if (!displayRecords.length || !debouncedCampaignSearch.trim()) return displayRecords;
     const searchTerm = debouncedCampaignSearch.toLowerCase();
-    return records.filter(record => {
+    return displayRecords.filter(record => {
       const campaignName = String(record.data?.campaign_name || '').toLowerCase();
       return campaignName.includes(searchTerm);
     });
-  }, [records, debouncedCampaignSearch]);
+  }, [displayRecords, debouncedCampaignSearch]);
 
   const addColumnMutation = useMutation({
     mutationFn: async (columnName: string) => {
@@ -623,7 +555,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
-      const record = records?.find(r => r.id === recordId);
+      const record = displayRecords.find(r => r.id === recordId);
       if (!record) throw new Error('Record not found');
       
       const updatedData = { ...record.data, [key]: value };
@@ -787,8 +719,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         const now = new Date();
         let startDate: string;
         
-        if (records && records.length > 0) {
-          const dates = records
+        if (displayRecords.length > 0) {
+          const dates = displayRecords
             .map((r: any) => r.data?.date)
             .filter(Boolean)
             .sort();
@@ -1271,7 +1203,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['seo-dashboard-reports', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports'] });
       queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', tenantId] });
       const tracked = data?.trackedCount;
       const organic = data?.organicCount;
@@ -1337,21 +1269,17 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       return { adAccountId, currency };
     },
     onSuccess: (result) => {
-      queryClient.setQueryData(['crm-tables', tenantId], (old: CrmTable[] | undefined) => {
+      queryClient.setQueryData(['crm-tables', tenantId, tableSlug], (old: CrmTable | null | undefined) => {
         if (!old || !table?.id) return old;
-        return old.map((t) =>
-          t.id === table.id
-            ? {
-                ...t,
-                integration_settings: {
-                  ...(t.integration_settings || {}),
-                  currency: result.currency,
-                  date_range: selectedSyncDateRange,
-                  ad_account_id: result.adAccountId,
-                },
-              }
-            : t,
-        );
+        return {
+          ...old,
+          integration_settings: {
+            ...(old.integration_settings || {}),
+            currency: result.currency,
+            date_range: selectedSyncDateRange,
+            ad_account_id: result.adAccountId,
+          },
+        };
       });
       queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       setShowSettingsDialog(false);
@@ -1398,7 +1326,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const handleCellBlur = (recordId: string, fieldKey: string) => {
     const cellKey = `${recordId}-${fieldKey}`;
     const newValue = cellValues[cellKey] || '';
-    const record = records?.find(r => r.id === recordId);
+    const record = displayRecords.find(r => r.id === recordId);
     const oldValue = record?.data[fieldKey] || '';
     
     if (oldValue !== newValue) {
@@ -1552,8 +1480,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       const now = new Date();
       let startDate: string;
       
-      if (records && records.length > 0) {
-        const dates = records
+      if (displayRecords.length > 0) {
+        const dates = displayRecords
           .map((r: any) => r.data?.date)
           .filter(Boolean)
           .sort();
@@ -1605,7 +1533,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   // Only block on the first load. Background refetches (refetchOnMount: always,
   // window focus, invalidations) must keep showing the cached table — otherwise
   // SEO/client reports blank out to a skeleton and look "gone".
-  const resolvingTables = tables == null && (tablesLoading || tablesFetching);
+  const resolvingTables = table == null && (tablesLoading || tablesFetching);
 
   if (resolvingTables) {
     return (
@@ -1653,7 +1581,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     );
   }
 
-  const isLoading = fieldsLoading || recordsLoading;
+  const recordsInitialLoad = recordsPending && displayRecords.length === 0;
+  const isLoading = fieldsLoading || recordsInitialLoad;
   
   // Determine which integrations are connected
   const hasFacebook = table?.integration_type === 'facebook_insights';
@@ -1674,19 +1603,19 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   // Check if scenario exists but has no data (might need patching or activation)
   // Don't show alert while loading to prevent UI flash when changing filters
   const hasScenarioButNoData = 
-    !recordsLoading &&
+    !recordsPending &&
     table?.integration_type === 'google_ads' &&
     table?.integration_settings?.data_source === 'make_api' &&
     table?.integration_settings?.make_scenario_id &&
     !table?.integration_settings?.last_sync_at &&
-    (!records || records.length === 0);
+    (displayRecords.length === 0);
   
   // Check if scenario exists and has synced before (no alert needed)
   const scenarioIsWorking = 
     table?.integration_type === 'google_ads' &&
     table?.integration_settings?.data_source === 'make_api' &&
     table?.integration_settings?.make_scenario_id &&
-    (table?.integration_settings?.last_sync_at || (!recordsLoading && records && records.length > 0));
+    (table?.integration_settings?.last_sync_at || (!recordsPending && displayRecords.length > 0));
 
   return (
     <div
@@ -1809,28 +1738,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               Ahrefs
             </Badge>
           )}
-          {hasGoogleAnalytics && table.integration_settings?.last_sync_at && (
-            <p className="text-xs text-muted-foreground">
-              Google Analytics עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
-            </p>
-          )}
         </div>
           {table.description && <p className="text-muted-foreground mt-1">{table.description}</p>}
-          {hasFacebook && table.integration_settings?.last_sync_at && (
-            <p className="text-xs text-muted-foreground">
-              Facebook עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
-            </p>
-          )}
-          {hasGoogleAds && table.integration_settings?.last_sync_at && (
-            <p className="text-xs text-muted-foreground">
-              Google Ads עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
-            </p>
-          )}
-          {hasAhrefs && table.integration_settings?.last_sync_at && (
-            <p className="text-xs text-muted-foreground">
-              Ahrefs עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
-            </p>
-          )}
+          <ReportDataFreshness
+            lastSyncAt={getReportLastSyncAt(table)}
+            dataUpdatedAt={recordsUpdatedAt}
+            isFetching={recordsFetching}
+            className="mt-1"
+          />
         </div>
         
         {/* Controls Row */}
@@ -2466,21 +2381,17 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                         }
                       }
 
-                      queryClient.setQueryData(['crm-tables', tenantId], (old: CrmTable[] | undefined) => {
+                      queryClient.setQueryData(['crm-tables', tenantId, tableSlug], (old: CrmTable | null | undefined) => {
                         if (!old) return old;
-                        return old.map((t) =>
-                          t.id === table.id
-                            ? {
-                                ...t,
-                                integration_settings: {
-                                  ...(t.integration_settings || {}),
-                                  customer_id: cleanId,
-                                  date_range: selectedSyncDateRange,
-                                  currency,
-                                },
-                              }
-                            : t,
-                        );
+                        return {
+                          ...old,
+                          integration_settings: {
+                            ...(old.integration_settings || {}),
+                            customer_id: cleanId,
+                            date_range: selectedSyncDateRange,
+                            currency,
+                          },
+                        };
                       });
                       setSelectedCurrency(currency);
                       queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
@@ -2540,10 +2451,10 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       )}
 
       {/* Active Alerts for Facebook Insights */}
-      {!isEmbed && hasFacebook && table?.id && records && (
+      {!isEmbed && hasFacebook && table?.id && displayRecords.length > 0 && (
         <ActiveAlerts 
           tableId={table.id} 
-          records={records} 
+          records={displayRecords} 
           integrationSettings={table.integration_settings}
         />
       )}

@@ -60,6 +60,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const { data: ahrefsReports } = useAhrefsReports({
     clientId,
     tenantIds: accessibleTenantIds,
+    limit: 12,
   });
 
   /** The one domain this client's SEO artifacts may come from. */

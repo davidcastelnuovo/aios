@@ -122,6 +122,8 @@ serve(async (req) => {
 
     const url = new URL(req.url);
     const agencyIdFilter = url.searchParams.get('agency_id');
+    const slugFilter = url.searchParams.get('slug');
+    const clientIdFilter = url.searchParams.get('client_id');
 
     switch (req.method) {
       case 'GET': {
@@ -175,6 +177,8 @@ serve(async (req) => {
         if (agencyIdFilter && agencyIdFilter !== 'all') {
           ownQuery = ownQuery.or(`agency_id.eq.${agencyIdFilter},agency_id.is.null`);
         }
+        if (slugFilter) ownQuery = ownQuery.eq('slug', slugFilter);
+        if (clientIdFilter) ownQuery = ownQuery.eq('client_id', clientIdFilter);
 
         const { data: ownTables, error: ownError } = await ownQuery;
         if (ownError) throw ownError;
@@ -193,6 +197,8 @@ serve(async (req) => {
           if (agencyIdFilter && agencyIdFilter !== 'all') {
             sharedQuery = sharedQuery.eq('agency_id', agencyIdFilter);
           }
+          if (slugFilter) sharedQuery = sharedQuery.eq('slug', slugFilter);
+          if (clientIdFilter) sharedQuery = sharedQuery.eq('client_id', clientIdFilter);
 
           const { data: sharedTables, error: sharedError } = await sharedQuery;
           if (sharedError) {
@@ -215,6 +221,8 @@ serve(async (req) => {
           if (agencyIdFilter && agencyIdFilter !== 'all') {
             ownedForeignQuery = ownedForeignQuery.eq('agency_id', agencyIdFilter);
           }
+          if (slugFilter) ownedForeignQuery = ownedForeignQuery.eq('slug', slugFilter);
+          if (clientIdFilter) ownedForeignQuery = ownedForeignQuery.eq('client_id', clientIdFilter);
 
           const { data: ownedForeignTables, error: ownedForeignError } = await ownedForeignQuery;
           if (ownedForeignError) {
@@ -245,6 +253,9 @@ serve(async (req) => {
                 .in('client_id', clientIds)
                 .order('category', { ascending: true, nullsFirst: false })
                 .order('created_at', { ascending: false });
+
+              if (slugFilter) foreignByClientQuery = foreignByClientQuery.eq('slug', slugFilter);
+              if (clientIdFilter) foreignByClientQuery = foreignByClientQuery.eq('client_id', clientIdFilter);
 
               const { data: foreignByClient, error: foreignByClientErr } = await foreignByClientQuery;
               if (foreignByClientErr) {

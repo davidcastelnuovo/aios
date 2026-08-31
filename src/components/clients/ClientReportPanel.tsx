@@ -36,6 +36,8 @@ import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
 import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
 import { syncReportTable, waitForSnapshotReady } from "@/lib/reportSync";
 import { downloadReportPdf } from "@/lib/reportPdf";
+import { getReportLastSyncAt } from "@/lib/reportQueryOptions";
+import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import {
   buildDefaultReportRecipientEmails,
   buildReportEmailOptions,
@@ -48,6 +50,41 @@ interface ClientReportPanelProps {
 }
 
 const CACHE_KEY_PREFIX = "report-screenshot-";
+const SNAPSHOT_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+interface SnapshotCacheEntry {
+  dataUrl: string;
+  savedAt: number;
+}
+
+function readSnapshotCache(tableId: string): { dataUrl: string; fresh: boolean } | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY_PREFIX + tableId);
+    if (!raw) return null;
+    if (raw.startsWith("{")) {
+      const parsed = JSON.parse(raw) as SnapshotCacheEntry;
+      if (!parsed.dataUrl) return null;
+      return {
+        dataUrl: parsed.dataUrl,
+        fresh: Date.now() - parsed.savedAt < SNAPSHOT_CACHE_MAX_AGE_MS,
+      };
+    }
+    return { dataUrl: raw, fresh: false };
+  } catch {
+    return null;
+  }
+}
+
+function writeSnapshotCache(tableId: string, dataUrl: string) {
+  try {
+    localStorage.setItem(
+      CACHE_KEY_PREFIX + tableId,
+      JSON.stringify({ dataUrl, savedAt: Date.now() } satisfies SnapshotCacheEntry),
+    );
+  } catch {
+    /* localStorage full */
+  }
+}
 
 function getAdAccountUrl(table: any): string | null {
   const settings = table?.integration_settings || {};
@@ -107,6 +144,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pendingManualCapture, setPendingManualCapture] = useState(false);
 
   // Fetch client data
   const { data: client } = useQuery({
@@ -191,55 +229,42 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
     );
   }, [client, table.name]);
 
-  // On every table open: clear stale screenshot, sync data, then capture fresh
+  // On table open: cached screenshot instantly; skip heavy hidden report when cache is fresh.
   useEffect(() => {
     autoCapturedTableRef.current = null;
     setCaptureReady(false);
-    setScreenshotBlob(null);
+    setPendingManualCapture(false);
 
-    // Always start blank on table/client switch — never show a stale cached image
-    // from a previous client. The placeholder UI handles the "loading" state.
-    setScreenshotUrl(null);
-
+    const cached = readSnapshotCache(table.id);
+    if (cached) {
+      setScreenshotUrl(cached.dataUrl);
+      fetch(cached.dataUrl)
+        .then((res) => res.blob())
+        .then((blob) => setScreenshotBlob(blob))
+        .catch(() => setScreenshotBlob(null));
+    } else {
+      setScreenshotUrl(null);
+      setScreenshotBlob(null);
+    }
 
     let cancelled = false;
 
-    (async () => {
-      // 1. Preserve low-cost ad refresh on open. SEO/analytics sources refresh
-      // only from the explicit button so opening a client does not consume
-      // Ahrefs credits or start several long-running API jobs.
-      const autoSyncTypes = ["facebook_insights", "facebook_ecommerce", "google_ads"];
-      if (autoSyncTypes.includes(table.integration_type)) {
-        setIsSyncing(true);
-        const syncResult = await syncReportTable(table);
-        if (!cancelled) setIsSyncing(false);
-        if (syncResult.status === "failed") {
-          toast.warning("הסנכרון נכשל; מוצגים הנתונים האחרונים שנשמרו");
-        }
-      }
-
-      // 2. Refresh host queries and remount the isolated snapshot QueryClient.
-      await queryClient.invalidateQueries({ queryKey: ["client-report-data", table.id] });
-      await queryClient.invalidateQueries({ queryKey: ["seo-combined-snapshot", table.id] });
-      await queryClient.invalidateQueries({ queryKey: ["ahrefs-reports", tenantId] });
-      await queryClient.invalidateQueries({ queryKey: ["gsc-keywords", tenantId] });
+    void (async () => {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["crm-records", table.id] }),
+        queryClient.refetchQueries({ queryKey: ["crm-tables", tenantId, table.slug] }),
+        queryClient.refetchQueries({ queryKey: ["crm-fields", table.id] }),
+      ]);
       if (cancelled) return;
-      setSnapshotVersion((version) => version + 1);
-
-      // 3. Capture only after the remounted report declares itself ready.
-      setCaptureReady(true);
+      // Fresh screenshot: skip mounting full DynamicTableView (major first-load cost).
+      if (!cached?.fresh) {
+        setSnapshotVersion((version) => version + 1);
+        setCaptureReady(true);
+      }
     })();
 
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table.id, table.integration_type, tenantId]);
-
-  // Auto-capture when ready (always re-shoots, even if a cached image exists)
-  useEffect(() => {
-    if (!captureReady || isCapturing || autoCapturedTableRef.current === table.id) return;
-    autoCapturedTableRef.current = table.id;
-    captureScreenshot();
-  }, [captureReady, isCapturing, table.id]);
+  }, [table.id, table.slug, tenantId, queryClient]);
 
   const triggerSync = async () => {
     setIsSyncing(true);
@@ -314,9 +339,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       }
 
       setScreenshotUrl(dataUrl);
-      try {
-        localStorage.setItem(CACHE_KEY_PREFIX + table.id, dataUrl);
-      } catch { /* localStorage full */ }
+      writeSnapshotCache(table.id, dataUrl);
 
       // Create blob for sending
       const res = await fetch(dataUrl);
@@ -329,6 +352,20 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
       setIsCapturing(false);
     }
   }, [table.id]);
+
+  // Auto-capture when hidden snapshot mounts (skip when fresh cache already shown).
+  useEffect(() => {
+    if (!captureReady || isCapturing || autoCapturedTableRef.current === table.id) return;
+    autoCapturedTableRef.current = table.id;
+    captureScreenshot();
+  }, [captureReady, isCapturing, table.id, captureScreenshot]);
+
+  useEffect(() => {
+    if (!pendingManualCapture || !captureReady || !snapshotRef.current) return;
+    setPendingManualCapture(false);
+    autoCapturedTableRef.current = null;
+    captureScreenshot();
+  }, [pendingManualCapture, captureReady, captureScreenshot]);
 
   const ensureShareLink = useCallback(async (): Promise<string | null> => {
     if (shareLink) return shareLink;
@@ -613,6 +650,10 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
   return (
     <div className="space-y-3 min-w-0" dir="rtl">
+      <ReportDataFreshness
+        lastSyncAt={getReportLastSyncAt(table)}
+        className="px-1"
+      />
       {/* Screenshot Preview */}
       <div className="relative border rounded-lg bg-muted/20 overflow-x-auto" style={{ minHeight: 200 }}>
         {screenshotUrl ? (
@@ -628,12 +669,18 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           </div>
         )}
 
-        {(isCapturing || isSyncing) && (
+        {((isCapturing && !screenshotUrl) || isSyncing) && (
           <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
             <div className="flex items-center gap-2 text-sm">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{isSyncing ? "מסנכרן נתונים..." : "מצלם דוח..."}</span>
             </div>
+          </div>
+        )}
+        {isCapturing && screenshotUrl && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 rounded-md bg-background/80 px-2 py-1 text-xs text-muted-foreground shadow-sm">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            מעדכן תצוגה...
           </div>
         )}
       </div>
@@ -654,7 +701,11 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           variant="outline"
           size="sm"
           className="gap-1 text-xs"
-          onClick={() => captureScreenshot()}
+          onClick={() => {
+            setSnapshotVersion((v) => v + 1);
+            setCaptureReady(true);
+            setPendingManualCapture(true);
+          }}
           disabled={isCapturing}
         >
           <Camera className={`h-3 w-3 ${isCapturing ? "animate-spin" : ""}`} />
@@ -793,8 +844,9 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
         </Button>
       </div>
 
-      {/* Hidden snapshot component rendered via portal — no iframe! */}
-      {createPortal(
+      {/* Hidden snapshot — only mount when capture is needed (not on every tab open). */}
+      {captureReady &&
+        createPortal(
         <div
           style={{
             position: "fixed",

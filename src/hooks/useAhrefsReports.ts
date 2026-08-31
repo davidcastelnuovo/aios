@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { reportQueryOptions } from "@/lib/reportQueryOptions";
 
 export interface AhrefsReport {
   id: string;
@@ -81,5 +82,6 @@ export function useAhrefsReports(options: UseAhrefsReportsOptions = {}) {
       return (data || []) as unknown as AhrefsReport[];
     },
     enabled,
+    ...reportQueryOptions<AhrefsReport[]>(),
   });
 }

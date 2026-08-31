@@ -16,6 +16,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { tenantRoutes } from "@/routes/tenantRoutes";
 import { StagingBanner } from "@/components/StagingBanner";
+import { setupReportQueryCachePersistence } from "@/lib/reportQueryCache";
+import { REPORT_QUERY_GC_MS, REPORT_QUERY_STALE_MS } from "@/lib/reportQueryOptions";
 
 const Landing = lazy(() => import("./pages/Landing"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -34,14 +36,16 @@ const SignDocument = lazy(() => import("./pages/SignDocument"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,
-      gcTime: 1000 * 60 * 10,
+      staleTime: REPORT_QUERY_STALE_MS,
+      gcTime: REPORT_QUERY_GC_MS,
       refetchOnWindowFocus: false,
       refetchOnMount: (query) => query.state.status === "error",
       retry: 1,
     },
   },
 });
+
+setupReportQueryCachePersistence(queryClient);
 
 function PageLoader() {
   return (
