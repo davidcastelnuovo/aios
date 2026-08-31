@@ -4,7 +4,7 @@
 - **There IS a development environment. Never tell David or Carmen that it does not exist.**
 - Source of truth: `docs/ENVIRONMENTS.md`. Cursor rule: `.cursor/rules/environments.mdc`.
 - Development environment = Vercel Preview URL of the branch (talks to Staging). `develop` = Staging. `main` = Production.
-- A merge to `main` auto-updates `develop` so the persistent Staging frontend/functions stay current.
+- Normal flow: feature → `develop` (verify on Staging) → `מאשר לפרודקשן` → `main`. Hotfix backport only via manual `sync-develop-from-main`.
 - A Cloud Agent local `.env` pointing at Production is expected — it is not proof that Staging is missing.
 - **NEVER MODIFY PRODUCTION DIRECTLY.** Every completed task must include the Vercel Preview URL. Merge to `main` only after David says `מאשר לפרודקשן`.
 
@@ -15,7 +15,7 @@
 - Never commit Graphify output, `graph.json`, generated reports, summaries, reflections, or work-memory files. Keep changes to Carmen and other critical monolithic functions small and additive.
 
 ## Working mode / autonomy (David's standing preference)
-- **Default to action — do not ask for confirmation on obvious, low-risk fixes or clearly-requested work.** Implement → commit → open PR → send David the Vercel preview URL → wait for an explicit merge ask.
+- **Default to action** — implement → PR to **`develop`** → Staging verify → `מאשר לפרודקשן` → merge to `main`.
 - **Never merge to `main` until David has the preview link and explicitly asks to merge.** This applies to every Cloud Agent / coding session (copy, creative, and anything else).
 - At the end of every completed change that has a frontend preview, include the Vercel preview URL in the reply (and the in-app path when known). Send it again whenever you finish a follow-up that pushed to the PR.
 - After merging an edge-function change (only when David asked to merge), confirm the `deploy-edge-function.yml` run went green.

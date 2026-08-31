@@ -10,7 +10,7 @@ There **is** a development environment. Never tell David or Carmen that it does 
 - **Development environment** = Vercel Preview URL of the current branch (Staging data). **Persistent Staging** = `https://staging.aios.co.il` (`develop`).
 - **Staging** = git branch `develop` → persistent Staging Supabase + Vercel `develop` deploy.
 - **Production** = `main` only. Never use Production as a development environment.
-- A merge to `main` auto-updates `develop` (`sync-develop-from-main.yml`) so Staging stays on the same published code.
+- Normal flow: merge to `develop` → verify on Staging → `מאשר לפרודקשן` → merge `develop` → `main`.
 - This Cloud Agent's local `.env` still points at Production. That is **not** proof that Staging is missing.
 - Always send David the Vercel Preview URL when work finishes.
 - Merge to `main` only after he has that link and says `מאשר לפרודקשן`.

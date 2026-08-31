@@ -31,7 +31,8 @@ When a task finishes, **always send David the development environment link**: th
 | Environment | Git | Frontend URL | When it updates |
 | --- | --- | --- | --- |
 | **Production** | `main` | `https://aios.co.il` | merge to `main` |
-| **Staging (persistent dev)** | `develop` | `https://staging.aios.co.il` (alias: `after-lead-git-develop-aios-crm.vercel.app`) | push to `develop` + auto-sync from `main` |
+| **Staging (persistent dev)** | `develop` | `https://staging.aios.co.il` (alias: `after-lead-git-develop-aios-crm.vercel.app`) | merge to `develop` |
+| **Feature Preview** | `feature/*`, `cursor/*`, etc. | `https://after-lead-git-{branch}-aios-crm.vercel.app` | push to that branch only |
 
 ### `staging.aios.co.il` DNS (one-time, Cloudflare)
 
@@ -46,27 +47,26 @@ In **Cloudflare → aios.co.il → DNS**, add:
 Vercel project domain is already assigned (`gitBranch: develop`, verified). After the CNAME propagates (usually minutes), `https://staging.aios.co.il` goes live.
 
 **Until then**, use: `https://after-lead-git-develop-aios-crm.vercel.app`
-| **Feature Preview** | `feature/*`, `cursor/*`, etc. | `https://after-lead-git-{branch}-aios-crm.vercel.app` | **only** when that branch is pushed |
 
-**Important:** A feature-branch Preview does **not** update when you merge to `main`. After merge, use **Staging** (`staging.aios.co.il`) or Production — not an old branch URL.
+**Important:** A feature-branch Preview does **not** update when you merge elsewhere. After merge to `develop`, use **Staging** — not an old branch URL.
 
 `after-lead-aios-crm.vercel.app` is a **Production** alias, not Staging.
 
 The in-app amber frame (subtle yellow border glow) marks Staging/Preview — no header space taken.
 
-## Flow
+## Flow (staging-first)
 
 ```
 feature/* or fix/*
-    → Vercel Preview (this branch, Staging data)
-    → explicit approval
-    → merge to main
-    → Production
-    → auto-sync develop  (sync-develop-from-main.yml)
-    → persistent Staging stays on the same code
+    → Vercel Preview (optional — quick check on this branch)
+    → merge to develop
+    → Staging (after-lead-git-develop / staging.aios.co.il) — verify full picture
+    → מאשר לפרודקשן
+    → merge develop → main
+    → Production (aios.co.il)
 ```
 
-A merge to `main` also updates `develop`. That keeps the development environment current (frontend on the `develop` Vercel deploy, plus Staging Edge Functions via `deploy-staging-edge-functions.yml`). Do not treat `develop` as a separate release train.
+**`develop` is the release candidate.** `main` only moves after Staging is verified. There is no auto-sync from `main` back to `develop` (hotfix backport: manual `sync-develop-from-main` workflow only).
 
 | Git | Deploy | Data |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ Already in place:
 - Staging auth allows `http://localhost:8080` and `https://*.vercel.app`; email signup autoconfirm is on
 - WhatsApp send paths go through `IntegrationGuard`
 - Staging / Preview / Dev visual banner via `VITE_APP_ENV`
-- `deploy-staging-edge-functions.yml` deploys functions on `develop` only, using GitHub secret `SUPABASE_STAGING_PROJECT_ID` (never a hardcoded ref)
+- `deploy-staging-edge-functions.yml` deploys functions on **`develop` push** only
 
 Gaps (do not touch Production to close these):
 
@@ -114,12 +114,12 @@ Supabase Staging already allows `https://*.vercel.app/**` as redirect URLs. Goog
 
 ## Agent working rules
 
-1. Create `feature/*` or `fix/*` from `develop` when Staging work is in flight; from `main` only for hotfixes David asked for.
-2. Implement on the feature branch. Never commit to `main`. Never run unbounded `DELETE`/`UPDATE` on Production.
-3. Open a PR. **Always reply with the Vercel Preview URL** (the development environment link) and the in-app path.
-4. Merge to `main` only after `מאשר לפרודקשן`. `develop` is then updated automatically from `main`.
-5. Do not merge to `develop` by hand unless the auto-sync failed.
-6. Edge-function or migration work: add files under `supabase/functions` / `supabase/migrations`. Do not apply them to Production from the agent. Staging apply is a later phase.
+1. Branch from `develop`. Hotfixes David asked for on Production may branch from `main`.
+2. Implement on the feature branch. Never commit to `main` directly.
+3. Open a PR **to `develop`**. Send the Vercel Preview URL and in-app path.
+4. After merge to `develop`, verify on Staging (`after-lead-git-develop` or `staging.aios.co.il`).
+5. Merge **`develop` → `main`** only after `מאשר לפרודקשן` (Production deploy + `deploy-edge-function.yml`).
+6. Do **not** use `sync-develop-from-main` except to backport an emergency hotfix that landed on `main` first.
 
 ## Development agents (Preview / Staging)
 
