@@ -44,15 +44,16 @@ src/components/carmen-command/
 
 ## קול
 
-שתי שכבות נפרדות — אין ערבוב:
+שלוש שכבות נפרדות — אין ערבוב:
 
 1. **הקלדה:** שליחת טקסט מחזירה טקסט על המסך בלבד. אין `carmen-speak`, אין הקראה, ואין תמלול.
-2. **שיחה חיה — OpenAI Realtime:** לחיצה על המיקרופון פותחת session דרך `carmen-realtime-session` → WebRTC דפדפן↔OpenAI. אם Realtime נכשל מוצגת שגיאה ברורה; **אין** fallback ל-`transcribe-voice`.
-3. מתג עוצמת הקול מופיע רק בזמן שיחה חיה פעילה.
+2. **תמלול בלבד (`transcribe_only`):** בורר מצב מיקרופון → "תמלול בלבד". הקלטה → `transcribe-voice` → שליחה כטקסט רגיל לכרמן. תשובה **טקסט בלבד** — בלי Realtime, בלי TTS, בלי voice-direct.
+3. **שיחה חיה — OpenAI Realtime:** בורר מצב מיקרופון → "שיחה חיה". לחיצה על המיקרופון פותחת session דרך `carmen-realtime-session` → WebRTC דפדפן↔OpenAI. אם Realtime נכשל מוצגת שגיאה ברורה; **אין** fallback ל-`transcribe-voice`.
+4. מתג עוצמת הקול מופיע רק בזמן שיחה חיה פעילה.
 
-`transcribe-voice` נשאר במערכת לשימושים אחרים (למשל הצ'אט הפנימי ב-`AIOSDialog`) אך יצא מנתיב ה-Command Center.
+`transcribe-voice` משמש גם את הצ'אט הפנימי (`AIOSDialog`) במצב תמלול בלבד, ואת הודעות הקול בוואטסאפ (🎤).
 
-`carmen-speak` משמש כאן רק לתצוגת דוגמת קול בבורר, לא לתשובות מוקלדות.
+`carmen-speak` משמש כאן רק לתצוגת דוגמת קול בבורר, לא לתשובות מוקלדות או תמלול בלבד.
 
 ## בורר מוח
 

@@ -16,6 +16,15 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { invalidateAIEntityQueries } from "@/lib/aiInvalidation";
+import {
+  loadMicCaptureMode,
+  logTranscribeOnlyEvent,
+  MIC_CAPTURE_MODE_LABELS,
+  saveMicCaptureMode,
+  shouldAllowTtsResponse,
+  transcribeAudioBlob,
+  type MicCaptureMode,
+} from "@/lib/carmenTranscribeOnly";
 
 interface BackgroundTask {
   id: string;
@@ -61,6 +70,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+  const [micCaptureMode, setMicCaptureMode] = useState<MicCaptureMode>(() => loadMicCaptureMode());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -350,7 +360,15 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
   };
 
   const startRecording = useCallback(async () => {
+    if (micCaptureMode !== "transcribe_only") {
+      toast({
+        title: "שיחה חיה זמינה במרכז הבקרה",
+        description: "בצ'אט הפנימי המיקרופון עובד רק במצב תמלול בלבד.",
+      });
+      return;
+    }
     try {
+      logTranscribeOnlyEvent("record_start");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
@@ -372,37 +390,23 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
         if (audioBlob.size < 1000) return; // too short
 
         setIsTranscribing(true);
+        logTranscribeOnlyEvent("record_stop");
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) throw new Error('Not authenticated');
 
-          const formData = new FormData();
-          formData.append('audio', audioBlob, 'voice.webm');
+          const text = await transcribeAudioBlob(audioBlob, session.access_token, {
+            inputMode: "transcribe_only",
+            filename: "voice.webm",
+          });
 
-          const res = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-voice`,
-            {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${session.access_token}` },
-              body: formData,
-            }
-          );
-
-          if (!res.ok) throw new Error('Transcription failed');
-          const { text } = await res.json();
-
-          if (text && text.trim()) {
-            // Auto-send the transcribed text to Carmen
-            setInput(text.trim());
-            // Use a slight delay to let state update, then trigger send
-            setTimeout(() => {
-              const fakeInput = text.trim();
-              setInput("");
-              // Directly invoke the send logic with the transcribed text
-              sendMessageWithText(fakeInput);
-            }, 100);
+          if (text) {
+            logTranscribeOnlyEvent("transcribe_ok", { chars: text.length });
+            logTranscribeOnlyEvent("send_text", { chars: text.length });
+            sendMessageWithText(text);
           }
         } catch (err: any) {
+          logTranscribeOnlyEvent("transcribe_fail", { error: err?.message || String(err) });
           console.error('Transcription error:', err);
           toast({
             title: "שגיאה בתמלול",
@@ -427,7 +431,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [micCaptureMode, toast]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -841,7 +845,7 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                         <div dir="rtl" className="prose prose-sm dark:prose-invert max-w-none text-sm text-right [&>p]:mb-1 [&>ul]:my-1 [&>ol]:my-1 [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1 [&_th]:bg-muted [&_th]:font-semibold [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content || ''}</ReactMarkdown>
                         </div>
-                        {(msg.content || '').trim() && (
+                        {(msg.content || '').trim() && micCaptureMode !== "transcribe_only" && (
                           <button
                             onClick={() => speakMessage(idx, msg.content || '')}
                             className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
@@ -878,7 +882,30 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
 
         {/* Input */}
         <div className="border-t border-border p-3 bg-card flex-shrink-0">
-          <div className="max-w-2xl mx-auto flex gap-2">
+          <div className="max-w-2xl mx-auto flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <label className="flex items-center gap-2">
+                <span>מצב מיקרופון:</span>
+                <select
+                  value={micCaptureMode}
+                  onChange={(e) => {
+                    const mode = e.target.value as MicCaptureMode;
+                    setMicCaptureMode(mode);
+                    saveMicCaptureMode(mode);
+                  }}
+                  className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                  disabled={isRecording || isTranscribing || isStreaming}
+                >
+                  {(Object.keys(MIC_CAPTURE_MODE_LABELS) as MicCaptureMode[]).map((mode) => (
+                    <option key={mode} value={mode}>{MIC_CAPTURE_MODE_LABELS[mode]}</option>
+                  ))}
+                </select>
+              </label>
+              {micCaptureMode === "transcribe_only" && (
+                <span>תמלול → טקסט בלבד, בלי הקראה</span>
+              )}
+            </div>
+            <div className="flex gap-2">
             {isRecording ? (
               <div className="flex-1 flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-md px-4 py-2">
                 <div className="h-3 w-3 rounded-full bg-destructive animate-pulse" />
@@ -924,16 +951,17 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
                 </div>
                 <Button
                   onClick={startRecording}
-                  disabled={isStreaming}
+                  disabled={isStreaming || micCaptureMode !== "transcribe_only"}
                   size="icon"
                   variant="outline"
                   className="h-[44px] w-[44px] flex-shrink-0 hover:bg-primary/10 hover:text-primary hover:border-primary"
-                  title="הקלט הודעה קולית"
+                  title={micCaptureMode === "transcribe_only" ? "מיקרופון לתמלול בלבד" : "שיחה חיה — במרכז הבקרה"}
                 >
                   <Mic className="h-4 w-4" />
                 </Button>
               </>
             )}
+            </div>
           </div>
         </div>
       </DialogContent>

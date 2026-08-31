@@ -6,7 +6,7 @@
  * fell back to transcribe-voice.
  */
 
-export type CarmenInputMode = "typed" | "realtime_voice" | "external_channel_callback";
+export type CarmenInputMode = "typed" | "realtime_voice" | "transcribe_only" | "external_channel_callback";
 export type CarmenDeliveryMode = "text" | "realtime";
 
 export type ChatTurnTag = {

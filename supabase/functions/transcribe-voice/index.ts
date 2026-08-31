@@ -19,6 +19,7 @@ serve(async (req) => {
   try {
     const formData = await req.formData();
     const audioFile = formData.get('audio') as File;
+    const inputMode = String(formData.get('input_mode') || '');
 
     if (!audioFile) {
       return new Response(JSON.stringify({ error: 'No audio file provided' }), {
@@ -61,6 +62,13 @@ serve(async (req) => {
     // Rewrite garbled Whisper output into clean Hebrew. The cleanup runs on the
     // org key, so personal-key users get the raw transcript (still good).
     const cleaned = userKey ? text : await aiCleanTranscript(text);
+
+    if (inputMode === 'transcribe_only') {
+      console.log('[transcribe-voice] transcribe_only ok', {
+        bytes: audioFile.size,
+        chars: cleaned.length,
+      });
+    }
 
     return new Response(JSON.stringify({ text: cleaned }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Headphones, Loader2, Mic, MicOff, Play, Send, Square, Volume2, VolumeX } from "lucide-react";
+import { Headphones, Loader2, Mic, MicOff, Play, Send, Square, Volume2, VolumeX, AudioLines } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { CarmenFaceState } from "./CarmenFace";
@@ -22,6 +22,14 @@ import {
   tagChatTurn,
   volumeControlsLiveSession,
 } from "./carmenCommandInput";
+import {
+  loadMicCaptureMode,
+  logTranscribeOnlyEvent,
+  MIC_CAPTURE_MODE_LABELS,
+  saveMicCaptureMode,
+  transcribeAudioBlob,
+  type MicCaptureMode,
+} from "@/lib/carmenTranscribeOnly";
 
 interface ChatMessage {
   id?: string;
@@ -86,6 +94,9 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     liveStreamIdsRef.current = liveStreamIds;
     const streamBufRef = useRef<Record<string, string>>({});
     const [inputMode, setInputMode] = useState<CarmenInputMode>("typed");
+    const [micCaptureMode, setMicCaptureMode] = useState<MicCaptureMode>(() => loadMicCaptureMode());
+    const [isTranscribeRecording, setIsTranscribeRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
     const [isConvMode, setIsConvMode] = useState(false);
     const [isRealtime, setIsRealtime] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -116,6 +127,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const convModeRef = useRef(false);
     const inputModeRef = useRef<CarmenInputMode>("typed");
     const micStreamRef = useRef<MediaStream | null>(null);
+    const transcribeRecorderRef = useRef<MediaRecorder | null>(null);
+    const transcribeChunksRef = useRef<Blob[]>([]);
     // OpenAI Realtime session — the only Command Center voice path
     const realtimeRef = useRef<RealtimeHandle | null>(null);
     const { toast } = useToast();
@@ -345,7 +358,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       return finalText;
     }, [tenantId, enqueueSpeech, brain]);
 
-    const sendText = useCallback(async (text: string) => {
+    const sendText = useCallback(async (text: string, opts?: { inputMode?: CarmenInputMode }) => {
       const trimmed = text.trim();
       if (!trimmed || !tenantId) return;
       const activeId = conversationIdRef.current;
@@ -354,10 +367,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         return;
       }
       stopSpeech();
-      const turn = tagChatTurn("typed");
-      if (!convModeRef.current) {
-        setInputMode("typed");
-        inputModeRef.current = "typed";
+      const mode: CarmenInputMode = opts?.inputMode ?? (convModeRef.current ? inputModeRef.current : "typed");
+      const turn = tagChatTurn(mode);
+      setInputMode(mode);
+      inputModeRef.current = mode;
+      if (mode === "transcribe_only") {
+        logTranscribeOnlyEvent("send_text", { chars: trimmed.length });
       }
       const sendRoute = brain.selected;
       setMessages(prev => [...prev, { role: "user", content: trimmed, speaker: "user", channel: sendRoute.slug, ...turn }]);
@@ -375,7 +390,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         const routed = await brain.send({
           content: trimmed,
           conversationId: conversationIdRef.current,
-          inputMode: inputModeRef.current,
+          inputMode: mode,
           history,
           idempotencyKey: crypto.randomUUID(),
           route,
@@ -385,6 +400,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         if (boundId) setLiveStreamIds((prev) => (prev.includes(boundId!) ? prev : [...prev, boundId!]));
         if (routed.stream) {
           await streamInternal(trimmed, history, boundId || "");
+          if (mode === "transcribe_only") logTranscribeOnlyEvent("text_response", { stream: true });
         } else if (streamAppliesToActive(boundId, conversationIdRef.current)) {
           setMessages(prev => [...prev, {
             role: "tool_call",
@@ -413,6 +429,13 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setIsRealtime(false);
       micStreamRef.current?.getTracks().forEach(t => t.stop());
       micStreamRef.current = null;
+      if (transcribeRecorderRef.current?.state === "recording") {
+        transcribeRecorderRef.current.stop();
+      }
+      transcribeRecorderRef.current = null;
+      transcribeChunksRef.current = [];
+      setIsTranscribeRecording(false);
+      setIsTranscribing(false);
       muteRef.current = false;
       setIsMuted(false);
       stopSpeech();
@@ -602,6 +625,94 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         onFaceState("idle");
       }
     }, [beginRealtime, endConversation, onFaceState, stopSpeech, toast]);
+
+    const stopTranscribeRecording = useCallback(() => {
+      if (transcribeRecorderRef.current?.state === "recording") {
+        transcribeRecorderRef.current.stop();
+      }
+    }, []);
+
+    const startTranscribeRecording = useCallback(async () => {
+      if (isTranscribeRecording || isTranscribing || isConvMode) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStreamRef.current = stream;
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+        const recorder = new MediaRecorder(stream, { mimeType });
+        transcribeRecorderRef.current = recorder;
+        transcribeChunksRef.current = [];
+        logTranscribeOnlyEvent("record_start");
+
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) transcribeChunksRef.current.push(e.data);
+        };
+
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());
+          micStreamRef.current = null;
+          transcribeRecorderRef.current = null;
+          setIsTranscribeRecording(false);
+          logTranscribeOnlyEvent("record_stop");
+
+          const audioBlob = new Blob(transcribeChunksRef.current, { type: mimeType });
+          transcribeChunksRef.current = [];
+          if (audioBlob.size < 1000) return;
+
+          setIsTranscribing(true);
+          onFaceState("listening");
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error("לא מחוברת");
+            const text = await transcribeAudioBlob(audioBlob, session.access_token, {
+              inputMode: "transcribe_only",
+              filename: "voice.webm",
+            });
+            if (!text) throw new Error("תמלול ריק");
+            logTranscribeOnlyEvent("transcribe_ok", { chars: text.length });
+            await sendText(text, { inputMode: "transcribe_only" });
+          } catch (err: unknown) {
+            logTranscribeOnlyEvent("transcribe_fail", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+            toast({
+              title: "שגיאה בתמלול",
+              description: "לא הצלחנו לתמלל את ההקלטה. נסי שוב או כתבי במקלדת.",
+              variant: "destructive",
+            });
+          } finally {
+            setIsTranscribing(false);
+            onFaceState("idle");
+          }
+        };
+
+        recorder.start();
+        setIsTranscribeRecording(true);
+        onFaceState("listening");
+      } catch {
+        toast({
+          title: "אין גישה למיקרופון",
+          description: "יש לאפשר גישה למיקרופון בדפדפן",
+          variant: "destructive",
+        });
+      }
+    }, [isConvMode, isTranscribeRecording, isTranscribing, onFaceState, sendText, toast]);
+
+    const handleMicClick = useCallback(() => {
+      if (micCaptureMode === "transcribe_only") {
+        if (isTranscribeRecording) stopTranscribeRecording();
+        else startTranscribeRecording();
+        return;
+      }
+      void startVoice();
+    }, [isTranscribeRecording, micCaptureMode, startTranscribeRecording, startVoice, stopTranscribeRecording]);
+
+    const selectMicCaptureMode = useCallback((mode: MicCaptureMode) => {
+      if (mode === micCaptureMode) return;
+      if (isConvMode) endConversation();
+      if (isTranscribeRecording) stopTranscribeRecording();
+      setMicCaptureMode(mode);
+      saveMicCaptureMode(mode);
+    }, [endConversation, isConvMode, isTranscribeRecording, micCaptureMode, stopTranscribeRecording]);
 
     /* ---------- Conversation persistence + Carmen's memory ---------- */
 
@@ -840,11 +951,15 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       status: activeTopic?.status ?? (conversationId && liveStreamIds.includes(conversationId) ? "streaming" : brain.status),
     });
 
-    const composerPlaceholder = isConvMode
-      ? (isRealtime ? "שיחה חיה" : "פותחת…")
-      : isShared
-        ? "הודעה למרחב המשותף…"
-        : "הודעה…";
+    const composerPlaceholder = isTranscribing
+      ? "ממללת…"
+      : isTranscribeRecording
+        ? "מקליטה לתמלול…"
+        : isConvMode
+          ? (isRealtime ? "שיחה חיה" : "פותחת…")
+          : isShared
+            ? "הודעה למרחב המשותף…"
+            : "הודעה…";
 
     return (
       <div className="cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden">
@@ -901,6 +1016,32 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           </p>
         )}
         <div className="cc-talkbar-row relative z-[60] mt-auto flex shrink-0 items-center gap-2">
+          <div className="flex h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:hidden">
+            <select
+              value={micCaptureMode}
+              onChange={(e) => selectMicCaptureMode(e.target.value as MicCaptureMode)}
+              title="מצב מיקרופון"
+              className="max-w-[96px] bg-transparent text-[11px] text-[var(--cc-text)] outline-none"
+              disabled={isConvMode || isTranscribeRecording || isTranscribing}
+            >
+              {(Object.keys(MIC_CAPTURE_MODE_LABELS) as MicCaptureMode[]).map((mode) => (
+                <option key={mode} value={mode}>{MIC_CAPTURE_MODE_LABELS[mode]}</option>
+              ))}
+            </select>
+          </div>
+          <div className="hidden h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:flex">
+            <select
+              value={micCaptureMode}
+              onChange={(e) => selectMicCaptureMode(e.target.value as MicCaptureMode)}
+              title="מצב מיקרופון"
+              className="max-w-[120px] bg-transparent text-xs text-[var(--cc-text)] outline-none"
+              disabled={isConvMode || isTranscribeRecording || isTranscribing}
+            >
+              {(Object.keys(MIC_CAPTURE_MODE_LABELS) as MicCaptureMode[]).map((mode) => (
+                <option key={mode} value={mode}>{MIC_CAPTURE_MODE_LABELS[mode]}</option>
+              ))}
+            </select>
+          </div>
           <div className="hidden h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:flex">
             <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />
             <select
@@ -916,15 +1057,30 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             </button>
           </div>
           <button
-            onClick={startVoice}
-            title={isConvMode ? "סיים שיחה חיה" : "שיחה חיה"}
+            onClick={handleMicClick}
+            disabled={isTranscribing}
+            title={
+              micCaptureMode === "transcribe_only"
+                ? (isTranscribeRecording ? "עצור הקלטה" : "מיקרופון לתמלול בלבד")
+                : (isConvMode ? "סיים שיחה חיה" : "שיחה חיה")
+            }
             className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
-              isConvMode
+              isConvMode || isTranscribeRecording
                 ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
-                : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(76,195,255,0.15)]"
+                : isTranscribing
+                  ? "border-[var(--cc-line)] opacity-60"
+                  : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(76,195,255,0.15)]"
             }`}
           >
-            {isConvMode ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
+            {isTranscribing ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : isConvMode || isTranscribeRecording ? (
+              <Square className="h-4 w-4" />
+            ) : micCaptureMode === "transcribe_only" ? (
+              <AudioLines className="h-5 w-5" />
+            ) : (
+              <Mic className="h-5 w-5" />
+            )}
           </button>
           {isConvMode && (
             <>
@@ -958,11 +1114,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") sendText(input); }}
             placeholder={composerPlaceholder}
+            disabled={isTranscribeRecording || isTranscribing || isConvMode}
             className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)]"
           />
           <button
             onClick={() => sendText(input)}
-            disabled={!input.trim() || thisChatBusy}
+            disabled={!input.trim() || thisChatBusy || isTranscribeRecording || isTranscribing || isConvMode}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--cc-accent-dim)] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             title="שליחה"
           >

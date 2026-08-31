@@ -38,6 +38,12 @@ logged.
 - **How:** Tool `assign_task_to_cursor`. Context must include `human_task_id: <uuid>`. One in-progress Cursor task at a time.
 - **Origin:** David — "תכניסי לתור… כשהוא מסיים תכניסי את הבאה".
 
+### 2026-08-31 — מיקרופון לתמלול בלבד (transcribe_only)
+- **Skin slug:** `carmen_transcribe_only_mic` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** In Command Center and in-app chat, user can pick mic mode "תמלול בלבד": record → Whisper (`transcribe-voice`) → normal text prompt → text-only reply. No OpenAI Realtime, no carmen-speak/TTS, no voice-direct. WhatsApp 🎤 voice notes unchanged.
+- **How:** UI selector `MicCaptureMode` in `CarmenChatBar` / `AIOSDialog`. `input_mode=transcribe_only` on send + structured `[carmen:transcribe_only]` client logs. Shared helper `src/lib/carmenTranscribeOnly.ts`.
+- **Origin:** Carmen → Cursor DEV TASK for David — explicit transcribe-only mic without live voice path.
+
 ### 2026-08-30 — Cursor / Grok / Codex = Cursor Cloud Direct
 - **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
 - **What Carmen can now do:** Cursor, Grok, and Codex Direct all launch Cursor Cloud background agents (`launchCloudDirect`). Each seat keeps its own sticky `conversation_key` / optional fixed agent id.
