@@ -197,9 +197,12 @@ export function acceptedMessageFor(
     case "grok":
       return url ? `נשלח ל-Grok Bot Direct. מעקב: ${url}` : "נשלח ל-Grok Bot Direct. מחכה לתשובה בשיחה הזו.";
     case "codex":
-      return url
-        ? `נשלח ל-Codex ב-ChatGPT Workspace / Work Mode. מעקב: ${url}`
-        : "נשלח ל-Codex ב-ChatGPT Workspace / Work Mode. מחכה לתשובה בשיחה הזו.";
+      if (opts?.reused) {
+        return url
+          ? `נשלח לצ'אט Codex שכבר פתוח. מעקב: ${url}`
+          : "נשלח לצ'אט Codex שכבר פתוח. מחכה לתשובה בשיחה הזו.";
+      }
+      return url ? `נשלח ל-Codex Direct. מעקב: ${url}` : "נשלח ל-Codex Direct. מחכה לתשובה בשיחה הזו.";
     case "claude":
       return url ? `נשלח ל-Claude Direct. מעקב: ${url}` : "נשלח ל-Claude Direct. מחכה לתשובה בשיחה הזו.";
     case "chatgpt":
