@@ -32,6 +32,20 @@ When a task finishes, **always send David the development environment link**: th
 | --- | --- | --- | --- |
 | **Production** | `main` | `https://aios.co.il` | merge to `main` |
 | **Staging (persistent dev)** | `develop` | `https://staging.aios.co.il` (alias: `after-lead-git-develop-aios-crm.vercel.app`) | push to `develop` + auto-sync from `main` |
+
+### `staging.aios.co.il` DNS (one-time, Cloudflare)
+
+`aios.co.il` nameservers are **Cloudflare** (`elsa` / `todd`), not Vercel — so Vercel cannot create the subdomain record automatically. Until this exists, `staging.aios.co.il` returns `NXDOMAIN`.
+
+In **Cloudflare → aios.co.il → DNS**, add:
+
+| Type | Name | Target | Proxy |
+| --- | --- | --- | --- |
+| CNAME | `staging` | `90c25ae61a2299f0.vercel-dns-017.com` | DNS only (grey cloud) |
+
+Vercel project domain is already assigned (`gitBranch: develop`, verified). After the CNAME propagates (usually minutes), `https://staging.aios.co.il` goes live.
+
+**Until then**, use: `https://after-lead-git-develop-aios-crm.vercel.app`
 | **Feature Preview** | `feature/*`, `cursor/*`, etc. | `https://after-lead-git-{branch}-aios-crm.vercel.app` | **only** when that branch is pushed |
 
 **Important:** A feature-branch Preview does **not** update when you merge to `main`. After merge, use **Staging** (`staging.aios.co.il`) or Production — not an old branch URL.
