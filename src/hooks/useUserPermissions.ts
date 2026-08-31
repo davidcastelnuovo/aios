@@ -13,8 +13,6 @@ export type ModulePermission = string;
 
 export function useUserPermissions() {
   const { isOwner, isSuperAdmin, isCampaigner, isTeamManager, isAgencyOwner, userId } = useUserRole();
-  // Mirror Clients/DynamicTables: team managers and agency owners use daily modules
-  // (recordings, clients, tasks) without a per-module row in user_permissions.
   const hasManagementAccess = isOwner || isTeamManager || isAgencyOwner;
 
   const {
