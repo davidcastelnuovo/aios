@@ -22,6 +22,8 @@ import {
   tagChatTurn,
   volumeControlsLiveSession,
 } from "./carmenCommandInput";
+import type { SystemFixContextMetadata } from "@/lib/systemFixContext";
+import { systemFixPromptAddon } from "@/lib/systemFixContext";
 
 interface ChatMessage {
   id?: string;
@@ -53,6 +55,10 @@ interface CarmenChatBarProps {
   historyOpen?: boolean;
   onHistoryOpenChange?: (open: boolean) => void;
   onHudModeChange?: (mode: HudStage) => void;
+  /** sidecar = text-only system-fix panel with screen context */
+  mode?: "default" | "sidecar";
+  contextMetadata?: SystemFixContextMetadata | null;
+  sidecarPlaceholder?: string;
 }
 
 const CARMEN_VOICES = [
@@ -76,7 +82,20 @@ const VOICE_STORAGE_KEY = "aios:carmen-voice";
  * Command Center never auto-plays carmen-speak and never falls back to transcribe-voice.
  */
 export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>(
-  function CarmenChatBar({ tenantId, brain, onConversationIdChange, onFaceState, audioLevelRef, historyOpen, onHistoryOpenChange, onHudModeChange }, ref) {
+  function CarmenChatBar({
+    tenantId,
+    brain,
+    onConversationIdChange,
+    onFaceState,
+    audioLevelRef,
+    historyOpen,
+    onHistoryOpenChange,
+    onHudModeChange,
+    mode = "default",
+    contextMetadata = null,
+    sidecarPlaceholder,
+  }, ref) {
+    const isSidecar = mode === "sidecar";
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [streamingText, setStreamingText] = useState("");
@@ -255,9 +274,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       trimmed: string,
       history: Array<{ role: string; content: string }>,
       boundConvId: string,
+      ctxMeta: SystemFixContextMetadata | null,
     ) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("לא מחוברת");
+      const promptAddon = ctxMeta ? systemFixPromptAddon(ctxMeta) : undefined;
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-ai-agent`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
@@ -268,6 +289,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           stream: true,
           conversation_id: boundConvId || conversationIdRef.current,
           conversation_history: history,
+          system_prompt_addon: promptAddon || undefined,
+          context_metadata: ctxMeta ?? undefined,
         }),
       });
       if (!res.ok) throw new Error(res.status === 429 ? "חריגה ממגבלת הקצב — נסי שוב עוד רגע" : "שגיאה בתקשורת עם כרמן");
@@ -372,6 +395,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           .filter(m => m.role === "user" || m.role === "assistant")
           .map(m => ({ role: m.role, content: m.content ?? "" }));
         const route = sendRoute;
+        const ctxMeta = isSidecar ? contextMetadata : null;
         const routed = await brain.send({
           content: trimmed,
           conversationId: conversationIdRef.current,
@@ -379,12 +403,13 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           history,
           idempotencyKey: crypto.randomUUID(),
           route,
+          contextMetadata: ctxMeta,
         });
         rememberConv(routed.conversation_id);
         boundId = routed.conversation_id || conversationIdRef.current;
         if (boundId) setLiveStreamIds((prev) => (prev.includes(boundId!) ? prev : [...prev, boundId!]));
         if (routed.stream) {
-          await streamInternal(trimmed, history, boundId || "");
+          await streamInternal(trimmed, history, boundId || "", ctxMeta);
         } else if (streamAppliesToActive(boundId, conversationIdRef.current)) {
           setMessages(prev => [...prev, {
             role: "tool_call",
@@ -401,7 +426,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         if (boundId) setLiveStreamIds((prev) => prev.filter((id) => id !== boundId));
         queryClient.invalidateQueries({ queryKey: ["cc-conversations", tenantId] });
       }
-    }, [tenantId, messages, stopSpeech, toast, brain, streamInternal, queryClient, liveStreamIds]);
+    }, [tenantId, messages, stopSpeech, toast, brain, streamInternal, queryClient, liveStreamIds, isSidecar, contextMetadata]);
 
     const endConversation = useCallback(() => {
       convModeRef.current = false;
@@ -840,11 +865,13 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       status: activeTopic?.status ?? (conversationId && liveStreamIds.includes(conversationId) ? "streaming" : brain.status),
     });
 
-    const composerPlaceholder = isConvMode
-      ? (isRealtime ? "שיחה חיה" : "פותחת…")
-      : isShared
-        ? "הודעה למרחב המשותף…"
-        : "הודעה…";
+    const composerPlaceholder = isSidecar
+      ? (sidecarPlaceholder ?? "תיאור תיקון / בקשה למסך הנוכחי…")
+      : isConvMode
+        ? (isRealtime ? "שיחה חיה" : "פותחת…")
+        : isShared
+          ? "הודעה למרחב המשותף…"
+          : "הודעה…";
 
     return (
       <div className="cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden">
@@ -862,9 +889,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           <div ref={listRef} className="cc-chat-scroll cc-scroll min-h-0 flex-1 space-y-3 p-3">
             {visibleMessages.length === 0 && !streamingText && (
               <p className="py-8 text-center text-sm text-[var(--cc-text-dim)]">
-                {isShared
-                  ? "מרחב משותף — כולם שומעים, ורואים גם תקשורת בין האייג׳נטים."
-                  : "שיחה ישירה — רק אתה והאייג׳נט שנבחר."}
+                {isSidecar
+                  ? "תיאורי מה לתקן במסך שאתה רואה. כרמן מקבלת את הנתיב וההקשר. 'שלחי לפיתוח' / 'תריצי דרך קרסר' → Cursor."
+                  : isShared
+                    ? "מרחב משותף — כולם שומעים, ורואים גם תקשורת בין האייג׳נטים."
+                    : "שיחה ישירה — רק אתה והאייג׳נט שנבחר."}
               </p>
             )}
             {visibleMessages.map((m, i) => (
@@ -901,55 +930,59 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           </p>
         )}
         <div className="cc-talkbar-row relative z-[60] mt-auto flex shrink-0 items-center gap-2">
-          <div className="hidden h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:flex">
-            <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />
-            <select
-              value={selectedVoice}
-              onChange={e => selectVoice(e.target.value as CarmenVoice)}
-              title="קול"
-              className="max-w-[130px] bg-transparent text-xs text-[var(--cc-text)] outline-none"
-            >
-              {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
-            </select>
-            <button onClick={previewVoice} disabled={isPreviewingVoice} title="דוגמה" className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50">
-              {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-            </button>
-          </div>
-          <button
-            onClick={startVoice}
-            title={isConvMode ? "סיים שיחה חיה" : "שיחה חיה"}
-            className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
-              isConvMode
-                ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
-                : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(76,195,255,0.15)]"
-            }`}
-          >
-            {isConvMode ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
-          </button>
-          {isConvMode && (
+          {!isSidecar && (
             <>
+              <div className="hidden h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:flex">
+                <Headphones className="h-4 w-4 text-[var(--cc-accent)]" />
+                <select
+                  value={selectedVoice}
+                  onChange={e => selectVoice(e.target.value as CarmenVoice)}
+                  title="קול"
+                  className="max-w-[130px] bg-transparent text-xs text-[var(--cc-text)] outline-none"
+                >
+                  {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
+                </select>
+                <button onClick={previewVoice} disabled={isPreviewingVoice} title="דוגמה" className="text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50">
+                  {isPreviewingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                </button>
+              </div>
               <button
-                onClick={toggleMute}
-                title={isMuted ? "מיקרופון" : "השתק מיקרופון"}
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
-                  isMuted
-                    ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
-                    : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
+                onClick={startVoice}
+                title={isConvMode ? "סיים שיחה חיה" : "שיחה חיה"}
+                className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
+                  isConvMode
+                    ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
+                    : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(76,195,255,0.15)]"
                 }`}
               >
-                {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                {isConvMode ? <Square className="h-4 w-4" /> : <Mic className="h-5 w-5" />}
               </button>
-              <button
-                onClick={toggleOutputMute}
-                title={isOutputMuted ? "השמע" : "השתק כרמן"}
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
-                  isOutputMuted
-                    ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
-                    : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
-                }`}
-              >
-                {isOutputMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </button>
+              {isConvMode && (
+                <>
+                  <button
+                    onClick={toggleMute}
+                    title={isMuted ? "מיקרופון" : "השתק מיקרופון"}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
+                      isMuted
+                        ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
+                        : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
+                    }`}
+                  >
+                    {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={toggleOutputMute}
+                    title={isOutputMuted ? "השמע" : "השתק כרמן"}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
+                      isOutputMuted
+                        ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
+                        : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
+                    }`}
+                  >
+                    {isOutputMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  </button>
+                </>
+              )}
             </>
           )}
           <input
