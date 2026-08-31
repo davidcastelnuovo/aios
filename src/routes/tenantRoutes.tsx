@@ -3,7 +3,7 @@ import { Route, Navigate } from "react-router-dom";
 import { TenantAppShell } from "@/components/layout/TenantAppShell";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
-import DashboardRouter from "@/pages/DashboardRouter";
+const DashboardRouter = lazy(() => import("@/pages/DashboardRouter"));
 
 const CarmenCommandCenter = lazy(() => import("@/pages/CarmenCommandCenter"));
 const Home = lazy(() => import("@/pages/Home"));
@@ -98,7 +98,7 @@ export function tenantRoutes() {
       <Route path="/t/:tenantSlug" element={<TenantAppShell />}>
         <Route index element={<Home />} />
         <Route path="home" element={<Home />} />
-        <Route path="dashboard" element={<DashboardRouter />} />
+        <Route path="dashboard" element={<Suspense fallback={<div />}><DashboardRouter /></Suspense>} />
         <Route path="agencies" element={<Agencies />} />
         <Route path="clients" element={<Clients />} />
         <Route path="campaigners" element={<Campaigners />} />
@@ -123,7 +123,7 @@ export function tenantRoutes() {
         <Route path="branding" element={<Branding />} />
         <Route path="accounting-integrations" element={<AccountingIntegrations />} />
         <Route path="accounting-settings" element={<AccountingSettings />} />
-        <Route path="ai-support" element={<DashboardRouter />} />
+        <Route path="ai-support" element={<Suspense fallback={<div />}><DashboardRouter /></Suspense>} />
         <Route path="menu-management" element={<MenuManagement />} />
         <Route path="fields-management" element={<FieldsManagement />} />
         <Route path="dynamic-tables" element={<DynamicTables />} />

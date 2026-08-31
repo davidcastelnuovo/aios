@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import "react-big-calendar/lib/css/react-big-calendar.css";
 import { Calendar, dateFnsLocalizer, Event as BigCalendarEvent } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
 import { he } from "date-fns/locale";
