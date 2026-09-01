@@ -18,6 +18,8 @@ import {
   type WorkspaceProvider,
 } from "./workspace-agent.ts";
 import { completeSession, logChannelAction, serviceClient, upsertRunningSession } from "./store.ts";
+import { codexOpenAiApiEnabled, runtimeEnv } from "../carmen-brain-flags.ts";
+import { launchCodexViaOpenAiApi } from "./codex-api.ts";
 
 function runtimeEnv(): Record<string, string | undefined> {
   try {
@@ -55,6 +57,10 @@ export async function launchCloudDirect(
   extraPrompt?: string,
   parliament?: { runId: string; round: number },
 ): Promise<SendResult> {
+  if (provider === "codex" && codexOpenAiApiEnabled(runtimeEnv()) && !parliament) {
+    return launchCodexViaOpenAiApi(ctx);
+  }
+
   const grokWebhook = grokUsesExistingWebhook(
     Deno.env.get("GROK_BOT_WEBHOOK_URL"),
     Deno.env.get("GROK_BOT_WEBHOOK_KEY"),

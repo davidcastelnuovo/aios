@@ -96,6 +96,8 @@ export type SendResult = {
   accepted_message: string;
   external_url?: string | null;
   capabilities: AdapterCapabilities;
+  /** Sync Codex OpenAI API path — answer already persisted server-side. */
+  inline_reply?: string;
 };
 
 export type CallbackPayload = {

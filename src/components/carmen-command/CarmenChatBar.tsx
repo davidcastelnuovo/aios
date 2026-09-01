@@ -457,6 +457,15 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         if (routed.stream) {
           await streamInternal(agentText, history, boundId || "", ctxMeta);
           if (mode === "transcribe_only") logTranscribeOnlyEvent("text_response", { stream: true });
+        } else if (routed.inline_reply && streamAppliesToActive(boundId, conversationIdRef.current)) {
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: routed.inline_reply,
+            speaker: routed.kind,
+            channel: routed.kind,
+            ...tagChatTurn("typed"),
+          }]);
+          scrollDown();
         } else if (streamAppliesToActive(boundId, conversationIdRef.current)) {
           setMessages(prev => [...prev, {
             role: "tool_call",
