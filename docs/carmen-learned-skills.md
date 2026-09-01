@@ -648,3 +648,9 @@ Claude Code health-check skill written to `ai_skills` (scope=tenant, created_by_
 - **What Carmen can now do:** When dashboard Woo revenue ≠ WooCommerce admin for the same week, explain the usual causes: (1) AIOS counts by **date_paid → date_completed → date_created** on Asia/Jerusalem calendar days; (2) only statuses completed/processing/on-hold; (3) stale sync when `woo_sync_enabled=false` or incremental sync missed orders — trigger manual sync from WordPress settings; (4) cross-tenant DMM↔MC sites need `wordpress_sites_shared_tenants`.
 - **How:** Code in `wooOrderRevenue.ts` + `calendarTimeZone.ts`; sync backfill last 21d in `sync-woocommerce-data` v1.4.0. For 4/4 ארבע על ארבע ops: `fix_4_4_woocommerce_revenue_sync.sql`.
 - **Origin:** Carmen → Cursor DEV TASK — Ana reported 4/4 last-week ₪3,380 vs Woo ₪6,252.
+
+### 2026-09-01 — Command Center access settings (granular tiers)
+- **Skin slug:** `command_center_access_settings` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`) — optional; owners use ⚙ Settings in CC/sidecar header.
+- **Tiers in `user_permissions`:** `command_center_full` | `command_center_sidecar` | `command_center_bugfix` (mutually exclusive).
+- **Enforcement:** Frontend `useCommandCenterAccess` gates /command-center vs sidecar; `run-ai-agent` reads same rows for dev-escalation tier (full vs bugfix).
+- **How:** Owner opens Command Center or sidecar → ⚙ הגדרות → pick tier per tenant user → Save.

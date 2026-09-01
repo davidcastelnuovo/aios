@@ -123,6 +123,9 @@ export const EXTRA_PERMISSIONS: ModuleConfig[] = [
   { id: "green_api_settings", label: "הגדרות Green API", description: DESCRIPTIONS.green_api_settings, category: "marketing" },
   { id: "manus_wa_settings", label: "הגדרות Manus WA", description: DESCRIPTIONS.manus_wa_settings, category: "marketing" },
   { id: "finance_view", label: "צפייה בנתונים פיננסיים", description: DESCRIPTIONS.finance_view, category: "special" },
+  { id: "command_center_full", label: "מרכז בקרה — גישה מלאה", description: "מרכז הפיקוד + סיידבר + שליחת משימות פיתוח", category: "special" },
+  { id: "command_center_sidecar", label: "מרכז בקרה — סיידבר בלבד", description: "סיידבר תיקון מערכת ללא /command-center", category: "special" },
+  { id: "command_center_bugfix", label: "מרכז בקרה — תיקוני באגים", description: "סיידבר + שליחת באגים ל-Cursor בלבד", category: "special" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

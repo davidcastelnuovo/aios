@@ -27,6 +27,7 @@ import {
   isDevEscalationToolAllowed,
   isBugfixEscalationSkill,
 } from '../_shared/dev-escalation-auth.ts'
+import { loadCommandCenterPermissionRows } from '../_shared/command-center-access.mjs'
 import {
   buildApprovalConfirmPromptRule,
   buildNoPendingRecovery,
@@ -1798,11 +1799,11 @@ async function tryCreateCalendarEventForTask(
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any, surface?: string | null): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any, surface?: string | null, ccPermissionRows?: Array<{ module?: string; can_access?: boolean }> | null): Promise<any> {
   // WhatsApp / automations often pass the sentinel "system". Never write that into uuid columns.
   const actorUserId = asUuidOrNull(userId)
-  // Coding-agent escalations are identity-allowlisted (David=full, Ana=bugfix-only).
-  const devEscalationTier = getDevEscalationTier({ campaignerId: callerCampaignerId, userId: actorUserId, phone: callerPhone })
+  // Coding-agent escalations are identity-allowlisted (David=full, Ana=bugfix-only) + CC permissions.
+  const devEscalationTier = getDevEscalationTier({ campaignerId: callerCampaignerId, userId: actorUserId, phone: callerPhone }, ccPermissionRows ?? null)
   if (isDevEscalationTool(name) && !isDevEscalationToolAllowed(name, devEscalationTier)) {
     return {
       error: 'dev_escalation_forbidden',
@@ -6308,12 +6309,15 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const isTeamManagerCaller = callerRole === 'team_manager'
 
     // System/dev-fix escalations (Cursor/Claude/Manus MCP + GitHub agent) —
-    // tiered allowlist: David=full, Ana=bugfix→Cursor only. Role alone is not enough.
+    // tiered allowlist: David=full, Ana=bugfix→Cursor only + command_center_* permissions.
+    const ccPermissionRows = callerUserId
+      ? await loadCommandCenterPermissionRows(supabase, callerUserId)
+      : []
     const devEscalationTier = getDevEscalationTier({
       campaignerId: callerCampaignerId,
       userId: callerUserId || asUuidOrNull(resolvedUserId),
       phone: callerPhone,
-    })
+    }, ccPermissionRows)
     const canEscalateDevFixes = devEscalationTier !== null
     console.log(`[AGENT] Dev-escalation tier=${devEscalationTier ?? 'none'} (campaigner=${callerCampaignerId || 'none'}, phone=${callerPhone || 'none'})`)
 
@@ -7282,8 +7286,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         callerPhone,
         wa_notify,
         surface,
+        ccPermissionRows,
       )
-      const finalOutput = formatApprovalExecutionReply(execResult, pendingForConfirm)
       const executionTime = Date.now() - autoStart
       if (serverConversationId && callerUserId) {
         const persistedMessages = [
@@ -7351,6 +7355,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         callerPhone,
         wa_notify,
         surface,
+        ccPermissionRows,
       )
       const finalOutput = execResult?.success
         ? String(execResult.message || 'כרמן מצטרפת לפגישה. אשרו אותי בחדר ההמתנה אם נדרש.')
@@ -7398,6 +7403,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         callerPhone,
         wa_notify,
         surface,
+        ccPermissionRows,
       )
       const digest = typeof pulseResult?.whatsapp_digest === 'string' ? pulseResult.whatsapp_digest.trim() : ''
       const finalOutput = digest || 'אין בדיקת דופק זמינה כרגע — נסה שוב אחרי הסנכרון הבא.'
@@ -7587,7 +7593,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
             // Prefer profile UUID resolved from WhatsApp phone; never pass literal "system" into uuid columns.
-            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify, surface)
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify, surface, ccPermissionRows)
           }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {

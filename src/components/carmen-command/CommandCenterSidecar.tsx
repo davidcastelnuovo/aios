@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { History, PanelRightClose, X } from "lucide-react";
 import { CarmenChatBar, CarmenChatBarHandle } from "./CarmenChatBar";
+import { CommandCenterSettingsButton } from "./CommandCenterSettingsDialog";
+import { useCommandCenterAccess } from "./access";
 import { useBrainChannel } from "./useBrainChannel";
 import { useSystemFixContext } from "@/hooks/useSystemFixContext";
 import type { CarmenFaceState } from "./CarmenFace";
@@ -17,6 +19,7 @@ interface CommandCenterSidecarProps {
 export function CommandCenterSidecar({ onClose, className }: CommandCenterSidecarProps) {
   const contextMetadata = useSystemFixContext();
   const tenantId = contextMetadata.tenant_id ?? null;
+  const access = useCommandCenterAccess();
   const brain = useBrainChannel(tenantId);
   const chatRef = useRef<CarmenChatBarHandle>(null);
   const [faceState, setFaceState] = useState<CarmenFaceState>("idle");
@@ -42,6 +45,9 @@ export function CommandCenterSidecar({ onClose, className }: CommandCenterSideca
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {access.canManageSettings && (
+            <CommandCenterSettingsButton className="cc-header-btn flex h-8 w-8 items-center justify-center rounded-md border border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)] hover:text-[var(--cc-accent)]" />
+          )}
           <button
             type="button"
             title="שיחה חדשה"

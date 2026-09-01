@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { ArrowRight, History, LayoutDashboard, Users } from "lucide-react";
+import { CommandCenterSettingsButton } from "@/components/carmen-command/CommandCenterSettingsDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
@@ -112,7 +113,7 @@ export default function CarmenCommandCenter() {
     : undefined;
 
   if (access.loading) return <div className="cc-root h-full" />;
-  if (!access.allowed) return <Navigate to={tenantSlug ? `/t/${tenantSlug}` : "/"} replace />;
+  if (!access.canCommandCenterPage) return <Navigate to={tenantSlug ? `/t/${tenantSlug}` : "/"} replace />;
 
   const isDashboard = viewMode === "dashboard";
 
@@ -149,6 +150,9 @@ export default function CarmenCommandCenter() {
         )}
 
         <div className="cc-header-bar__tools flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {access.canManageSettings && (
+            <CommandCenterSettingsButton className="cc-header-btn flex h-9 w-9 items-center justify-center rounded-md border border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)] hover:text-[var(--cc-accent)]" />
+          )}
           <button
             type="button"
             title={isDashboard ? "מצב סוכנים — Cursor, Grok, מועצה" : "מרכז בקרה — כרמן בלבד, כל הלוחות פתוחים"}

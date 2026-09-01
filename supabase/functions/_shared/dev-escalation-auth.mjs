@@ -7,8 +7,13 @@
  * - bugfix: Ana — Cursor `request_dev_task` for reproducible bugs only
  * - null: everyone else — polite refusal; CRM tools unchanged
  *
- * Role alone is never enough — must match an allowlisted identity.
+ * Role alone is never enough — must match an allowlisted identity OR command_center_* permission.
  */
+
+import {
+  commandCenterTierFromPermissionRows,
+  devEscalationTierFromCommandCenter,
+} from "./command-center-access.mjs";
 
 /** David — full system-fix requester. */
 export const FULL_DEV_REQUESTERS = Object.freeze({
@@ -55,12 +60,14 @@ function matchesAllowlist(identity, allowlist) {
 
 /**
  * @param {{ campaignerId?: string|null, userId?: string|null, phone?: string|null }} identity
+ * @param {Array<{ module?: string, can_access?: boolean }>|null|undefined} [permissionRows]
  * @returns {'full'|'bugfix'|null}
  */
-export function getDevEscalationTier(identity = {}) {
+export function getDevEscalationTier(identity = {}, permissionRows = null) {
   if (matchesAllowlist(identity, FULL_DEV_REQUESTERS)) return "full";
   if (matchesAllowlist(identity, BUGFIX_DEV_REQUESTERS)) return "bugfix";
-  return null;
+  const ccTier = commandCenterTierFromPermissionRows(permissionRows);
+  return devEscalationTierFromCommandCenter(ccTier);
 }
 
 /**

@@ -228,8 +228,7 @@ export function AppLayout() {
                 )}
                 <GlobalApprovalsBell />
                 {/* Carmen button in header — opens the full-screen Command Center (allowlisted users only) */}
-                {commandCenterAccess.allowed && (
-                  <>
+                {commandCenterAccess.canSidecar && (
                     <button
                       type="button"
                       onClick={sidecar.toggle}
@@ -244,6 +243,8 @@ export function AppLayout() {
                     >
                       <PanelRightOpen className="h-4 w-4" />
                     </button>
+                )}
+                {commandCenterAccess.canCommandCenterPage && (
                     <button
                       onClick={() => {
                         const slug = currentTenant?.slug;
@@ -260,7 +261,6 @@ export function AppLayout() {
                         className="h-9 w-9 rounded-full object-cover border-2 border-sky-400/70 group-hover:scale-110 group-hover:border-sky-300 transition-all duration-200"
                       />
                     </button>
-                  </>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
