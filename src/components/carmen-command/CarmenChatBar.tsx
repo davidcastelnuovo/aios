@@ -72,7 +72,7 @@ interface CarmenChatBarProps {
   historyOpen?: boolean;
   onHistoryOpenChange?: (open: boolean) => void;
   onHudModeChange?: (mode: HudStage) => void;
-  /** sidecar = text-only system-fix panel with screen context */
+  /** sidecar = system-fix panel with screen context (text + attachments + transcribe) */
   mode?: "default" | "sidecar";
   contextMetadata?: SystemFixContextMetadata | null;
   sidecarPlaceholder?: string;
@@ -113,6 +113,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     sidecarPlaceholder,
   }, ref) {
     const isSidecar = mode === "sidecar";
+    useEffect(() => {
+      if (!isSidecar) return;
+      setMicCaptureMode("transcribe_only");
+    }, [isSidecar]);
     const [input, setInput] = useState("");
     const [attachments, setAttachments] = useState<CommandCenterAttachment[]>([]);
     const [uploadingAttachments, setUploadingAttachments] = useState(false);
@@ -1143,7 +1147,28 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           >
             {uploadingAttachments ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
           </button>
-          {!isSidecar && (
+          {isSidecar ? (
+            <button
+              onClick={handleMicClick}
+              disabled={isTranscribing}
+              title={isTranscribeRecording ? "עצור הקלטה" : "מיקרופון לתמלול"}
+              className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
+                isTranscribeRecording
+                  ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
+                  : isTranscribing
+                    ? "border-[var(--cc-line)] opacity-60"
+                    : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(76,195,255,0.15)]"
+              }`}
+            >
+              {isTranscribing ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : isTranscribeRecording ? (
+                <Square className="h-4 w-4" />
+              ) : (
+                <AudioLines className="h-5 w-5" />
+              )}
+            </button>
+          ) : (
             <>
           <div className="flex h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:hidden">
             <select
@@ -1245,7 +1270,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") sendText(input); }}
             placeholder={composerPlaceholder}
-            disabled={isTranscribeRecording || isTranscribing || isConvMode}
+            disabled={isTranscribeRecording || isTranscribing || (!isSidecar && isConvMode)}
             className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)]"
           />
           <button
