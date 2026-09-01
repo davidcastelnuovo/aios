@@ -88,6 +88,7 @@ export function buildDevTaskPrompt(task: DevTaskRow): { task: string; context: s
     task: task.title,
     context: [
       `dev_task_id: ${task.id}`,
+      task.source_conversation_id ? `conversation_id: ${task.source_conversation_id}` : "",
       `Base branch: ${task.base_branch || "develop"}`,
       `Environment: ${task.environment || "staging"}`,
       `Requested by: ${task.requested_by || "Carmen"}`,

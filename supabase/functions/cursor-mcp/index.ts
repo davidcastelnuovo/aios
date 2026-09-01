@@ -60,7 +60,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.4.1" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.4.2" };
 const CURSOR_MCP_STREAMABLE_URL =
   "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
@@ -740,30 +740,14 @@ async function executeDirectSessionReply(args: {
   let callbackBlock = "";
   const sb = sbClient();
   if (args.tenantId && sb) {
-    const { extractConversationId } = await import("../_shared/agent-channel/logic.ts");
-    const { resolveCallbackSessionForTenant } = await import("../_shared/agent-channel/store.ts");
-    const { mintCallbackToken } = await import("../_shared/agent-channel/hmac.ts");
-    const { buildCallbackInstructions } = await import("../_shared/agent-channel/prompts.ts");
-    const conversationId =
-      String(args.conversationIdHint || "").trim() ||
-      extractConversationId(args.context) ||
-      extractConversationId(args.message) ||
-      "";
-    const channelSession = await resolveCallbackSessionForTenant(sb, args.tenantId, conversationId || null);
-    if (channelSession) {
-      const token = await mintCallbackToken({
-        sessionId: channelSession.id,
-        conversationId: channelSession.conversation_id,
-        tenantId: args.tenantId,
-      });
-      callbackBlock = buildCallbackInstructions({
-        origin: (channelSession.provider || "cursor") as "cursor",
-        conversationId: channelSession.conversation_id,
-        sessionId: channelSession.id,
-        tenantId: args.tenantId,
-        token,
-      });
-    }
+    const { buildAiosCallbackBlock } = await import("../_shared/agent-channel/callback-block.ts");
+    callbackBlock = await buildAiosCallbackBlock(sb, {
+      tenantId: args.tenantId,
+      conversationIdHint: args.conversationIdHint,
+      messageHint: args.message,
+      contextHint: args.context,
+      origin: "cursor",
+    });
   }
 
   const text =
@@ -823,6 +807,18 @@ async function handleToolCall(
     if (!task) throw new Error("request_dev_task requires a non-empty 'task'.");
     const branch = String(args?.branch ?? "").trim();
     const context = String(args?.context ?? "").trim();
+    let callbackBlock = "";
+    const sb = sbClient();
+    if (ctx.tenantId && sb) {
+      const { buildAiosCallbackBlock } = await import("../_shared/agent-channel/callback-block.ts");
+      callbackBlock = await buildAiosCallbackBlock(sb, {
+        tenantId: ctx.tenantId,
+        conversationIdHint: String(args?.conversation_id ?? "").trim() || undefined,
+        messageHint: task,
+        contextHint: context,
+        origin: "cursor",
+      });
+    }
     const text =
       `[Carmen → Cursor · DEV TASK]\n` +
       `Requested by Carmen (AIOS agent), on behalf of David.\n\n` +
@@ -831,7 +827,8 @@ async function handleToolCall(
       (context ? `\nContext:\n${context}\n` : ``) +
       `\nPlease implement this in the AIOS codebase and open a pull request when done.` +
       (await recentDispatchContext(ctx.tenantId)) +
-      teachingBlock(ctx.tenantId);
+      teachingBlock(ctx.tenantId) +
+      callbackBlock;
     const meta = await resolveDispatchMeta(ctx.tenantId, context, task, "request_dev_task");
     const fired = await fireCursorAgent(text, {
       name: meta.displayName,
