@@ -54,6 +54,45 @@ export function normalizeMetaAdAccountId(raw) {
   return `act_${digits}`;
 }
 
+/** Validate Carmen/admin input for Meta ad account IDs. */
+export function parseMetaAdAccountIdInput(raw) {
+  const normalized = normalizeMetaAdAccountId(raw);
+  if (!normalized) {
+    return { ok: false, error: 'ad_account_id ריק או לא תקין' };
+  }
+  const digits = normalized.replace(/^act_/i, '');
+  if (!/^\d{5,20}$/.test(digits)) {
+    return {
+      ok: false,
+      error: 'ad_account_id חייב להיות act_<ספרות> או מספר ספרות תקין (5–20 ספרות)',
+    };
+  }
+  return { ok: true, accountId: normalized, digits };
+}
+
+/** Compare two Meta ad account ids after normalization (act_ prefix tolerant). */
+export function metaAdAccountsEqual(a, b) {
+  const left = normalizeMetaAdAccountId(a);
+  const right = normalizeMetaAdAccountId(b);
+  if (!left || !right) return false;
+  return left === right;
+}
+
+const META_PLATFORM_ALIASES = new Set(['facebook', 'meta', 'facebook/meta', 'fb']);
+
+/** Optional platform guard for connect_client_meta_ad_account. */
+export function validateMetaAdPlatform(platform) {
+  if (platform == null || platform === '') return { ok: true, platform: 'facebook/meta' };
+  const value = String(platform).trim().toLowerCase();
+  if (!META_PLATFORM_ALIASES.has(value)) {
+    return {
+      ok: false,
+      error: `platform לא נתמך: ${platform}. השתמשי ב-facebook/meta`,
+    };
+  }
+  return { ok: true, platform: value };
+}
+
 /**
  * @param {string|null|undefined} integrationType
  * @param {Record<string, unknown>|null|undefined} settings

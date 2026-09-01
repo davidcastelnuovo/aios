@@ -46,7 +46,11 @@ import {
 import {
   buildGoogleCustomerClientMap,
   googleResolveClientCustomerId,
+  metaAdAccountsEqual,
+  normalizeMetaAdAccountId,
+  parseMetaAdAccountIdInput,
   syncClientCardFromReportTable,
+  validateMetaAdPlatform,
 } from '../_shared/client-report-sync.ts'
 import {
   OPENAI_BILLING_REFUSAL_HE,
@@ -480,6 +484,7 @@ const PRIORITY_TOOLS = new Set([
   'send_whatsapp_to_staff', 'lookup_staff_whatsapp', 'send_message_to_campaigner',
   'list_campaigners', 'list_sales_people',
   'get_openai_billing_status',
+  'connect_client_meta_ad_account',
 ])
 
 function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
@@ -947,6 +952,7 @@ const ALL_TOOLS = [
   { name: 'sync_google_ads_report', description: 'סנכרון נתוני Google Ads לטבלת CRM. זהה לפי table_id או client_id (טבלת google_ads של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
   { name: 'sync_facebook_insights', description: 'סנכרון נתוני Facebook Insights לטבלת CRM. זהה לפי table_id או client_id (טבלת facebook_insights של הלקוח).', parameters: { type: 'object', properties: { table_id: { type: 'string' }, client_id: { type: 'string' } } } },
   { name: 'connect_google_ads_account', description: 'שיוך חשבון Google Ads (customer_id) ללקוח ב-CRM. שומר את המזהה ב-clients.google_ads_account_id.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח' }, customer_id: { type: 'string', description: 'מזהה חשבון Google Ads (ספרות בלבד, ללא מקפים)' } }, required: ['client_id', 'customer_id'] } },
+  { name: 'connect_client_meta_ad_account', description: 'שיוך חשבון מודעות Meta/Facebook (act_...) ללקוח ב-CRM. מעדכן clients.meta_ads_account_id (מקור האמת ל-analyze_campaign/get_client_info) ומסנכרן טבלת facebook_insights אם קיימת. אם כבר מחובר חשבון אחר — דורש confirm_replace=true אחרי אזהרה מפורשת.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה הלקוח (UUID)' }, ad_account_id: { type: 'string', description: 'מזהה חשבון מודעות Meta (act_XXXXX או ספרות)' }, account_name: { type: 'string', description: 'שם חשבון המודעות (אופציונלי, לעדכון טבלת facebook_insights)' }, platform: { type: 'string', enum: ['facebook', 'meta', 'facebook/meta'], description: 'ברירת מחדל facebook/meta' }, confirm_replace: { type: 'boolean', description: 'חובה true כדי להחליף חשבון Meta קיים אחר' } }, required: ['client_id', 'ad_account_id'] } },
   // ===========================
   // SCHEDULED PAUSE/RESUME
   // ===========================
@@ -5595,6 +5601,185 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }).then(() => {}, () => {})
 
       return { success: true, client_id, client_name: client.name, customer_id: cleanId }
+    }
+
+    case 'connect_client_meta_ad_account': {
+      const { client_id, ad_account_id, account_name, platform, confirm_replace } = args
+      const clientId = asUuidOrNull(client_id)
+      if (!clientId) return { error: 'client_id חייב להיות UUID תקין' }
+      if (!ad_account_id) return { error: 'ad_account_id נדרש' }
+
+      const platformCheck = validateMetaAdPlatform(platform)
+      if (!platformCheck.ok) return { error: platformCheck.error }
+
+      const parsed = parseMetaAdAccountIdInput(ad_account_id)
+      if (!parsed.ok) return { error: parsed.error }
+      const normalizedAccountId = parsed.accountId
+
+      await assertCallerCanAccessClient(supabase, clientId, callerScope)
+
+      const { data: client, error: clientErr } = await supabase
+        .from('clients')
+        .select('id, name, meta_ads_account_id, agency_id, tenant_id')
+        .eq('id', clientId)
+        .in('tenant_id', accessibleTenantIds)
+        .maybeSingle()
+      if (clientErr) throw clientErr
+      if (!client) return { error: 'לקוח לא נמצא או מחוץ להרשאות' }
+
+      const { data: fbTables } = await supabase
+        .from('crm_tables')
+        .select('id, name, integration_settings')
+        .eq('client_id', clientId)
+        .in('integration_type', ['facebook_insights', 'facebook_ecommerce'])
+        .order('last_sync_at', { ascending: false, nullsFirst: false })
+
+      const existingClientAccount = client.meta_ads_account_id
+        ? normalizeMetaAdAccountId(client.meta_ads_account_id)
+        : null
+      const existingTableAccount = (fbTables || [])
+        .map((t: any) => normalizeMetaAdAccountId(t?.integration_settings?.ad_account_id))
+        .find((id: string | null) => !!id) || null
+
+      const conflicts = [existingClientAccount, existingTableAccount]
+        .filter((id): id is string => !!id)
+        .filter((id) => !metaAdAccountsEqual(id, normalizedAccountId))
+      const uniqueConflicts = [...new Set(conflicts)]
+
+      if (uniqueConflicts.length > 0 && !confirm_replace) {
+        return {
+          requires_confirmation: true,
+          warning: 'ללקוח כבר מחובר חשבון Meta אחר. אסור להחליף בלי אישור מפורש.',
+          client_id: clientId,
+          client_name: client.name,
+          existing_accounts: {
+            client_meta_ads_account_id: existingClientAccount,
+            crm_table_ad_account_id: existingTableAccount,
+          },
+          proposed_ad_account_id: normalizedAccountId,
+          instruction_for_carmen:
+            'הציגי לדוד את החשבון הקיים מול המבוקש. רק אחרי אישור מפורש — קראי שוב עם confirm_replace=true.',
+        }
+      }
+
+      if (
+        existingClientAccount &&
+        metaAdAccountsEqual(existingClientAccount, normalizedAccountId) &&
+        (!existingTableAccount || metaAdAccountsEqual(existingTableAccount, normalizedAccountId))
+      ) {
+        return {
+          success: true,
+          already_connected: true,
+          client_id: clientId,
+          client_name: client.name,
+          ad_account_id: normalizedAccountId,
+          before: { meta_ads_account_id: existingClientAccount },
+          after: { meta_ads_account_id: normalizedAccountId },
+        }
+      }
+
+      let effectiveUserId = userId !== 'system' ? userId : null
+      if (!effectiveUserId) {
+        const { data: ownerRole } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('tenant_id', accessibleTenantIds)
+          .eq('role', 'owner')
+          .limit(1)
+          .maybeSingle()
+        effectiveUserId = ownerRole?.user_id || null
+      }
+
+      const { error: updateErr } = await supabase
+        .from('clients')
+        .update({ meta_ads_account_id: normalizedAccountId })
+        .eq('id', clientId)
+        .in('tenant_id', accessibleTenantIds)
+      if (updateErr) throw updateErr
+
+      const updatedTables: Array<{ table_id: string; name: string; previous_ad_account_id: string | null }> = []
+      for (const table of fbTables || []) {
+        const prev = table?.integration_settings?.ad_account_id
+          ? normalizeMetaAdAccountId(table.integration_settings.ad_account_id)
+          : null
+        const nextSettings = {
+          ...(table.integration_settings || {}),
+          ad_account_id: normalizedAccountId,
+          ...(account_name ? { ad_account_name: account_name } : {}),
+        }
+        const { error: tableErr } = await supabase
+          .from('crm_tables')
+          .update({ integration_settings: nextSettings })
+          .eq('id', table.id)
+        if (tableErr) throw tableErr
+        updatedTables.push({
+          table_id: table.id,
+          name: table.name,
+          previous_ad_account_id: prev,
+        })
+      }
+
+      const note =
+        `[כרמן] חיבור חשבון Meta ${normalizedAccountId}` +
+        (account_name ? ` (${account_name})` : '') +
+        ` ללקוח ${client.name}` +
+        (uniqueConflicts.length > 0
+          ? ` — הוחלף מ-${uniqueConflicts.join(', ')}`
+          : existingClientAccount
+            ? ''
+            : ' (חדש)')
+
+      await supabase.from('agent_action_log').insert({
+        tenant_id: tenantId,
+        action_type: 'connect_client_meta_ad_account',
+        status: 'success',
+        action_details: {
+          client_id: clientId,
+          client_name: client.name,
+          ad_account_id: normalizedAccountId,
+          account_name: account_name ?? null,
+          platform: platformCheck.platform,
+          previous_client_account: existingClientAccount,
+          previous_table_account: existingTableAccount,
+          updated_tables: updatedTables,
+          confirm_replace: !!confirm_replace,
+        },
+      }).then(() => {}, () => {})
+
+      await supabase.from('communication_logs').insert({
+        client_id: clientId,
+        tenant_id: tenantId,
+        status: 'normal',
+        interaction_type: 'system_alert',
+        note,
+        updated_by: effectiveUserId,
+      }).then(() => {}, () => {})
+
+      if (effectiveUserId) {
+        await supabase.from('client_updates').insert({
+          client_id: clientId,
+          tenant_id: tenantId,
+          user_id: effectiveUserId,
+          content: note,
+        }).then(() => {}, () => {})
+      }
+
+      return {
+        success: true,
+        client_id: clientId,
+        client_name: client.name,
+        ad_account_id: normalizedAccountId,
+        platform: platformCheck.platform,
+        before: {
+          meta_ads_account_id: existingClientAccount,
+          crm_table_ad_account_id: existingTableAccount,
+        },
+        after: {
+          meta_ads_account_id: normalizedAccountId,
+          crm_tables_updated: updatedTables,
+        },
+        replaced_existing: uniqueConflicts.length > 0,
+      }
     }
 
     // ============ SCHEDULES ============

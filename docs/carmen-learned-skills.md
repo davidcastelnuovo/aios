@@ -400,6 +400,15 @@ logged.
 - **How:** `analyze_campaign_performance` per client → `delegate_to_background` when >5 clients → `add_client_update` + `batch_update_client_health`. Output sorted worst-first (churn\_risk → wavering → happy).
 - **Origin:** Carmen asked Claude "how to do a proper pulse check for clients" after David reported the Campaigner skin references `pulse_check` by slug but the skill had `slug=null`. Fix: set `slug='pulse_check'`, added `system_prompt` and `triggers` to the existing `בדיקת דופק` ai_skill (`id: 007384e7-c62c-42f8-b0d8-0187eb378eaa`).
 
+### 2026-09-01 — connect_client_meta_ad_account
+
+- **Skin slug:** `connect_client_meta_ad_account` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Safely connect/update a client's Meta/Facebook ad account (`act_...`) on `clients.meta_ads_account_id` — the canonical field used by `get_client_info`, `analyze_campaign`, and `fbResolveClientAdAccount`. Syncs existing `facebook_insights` CRM table settings when present.
+- **How:** `connect_client_meta_ad_account(client_id, ad_account_id, account_name?, confirm_replace?)` in `run-ai-agent`. Validates UUID + ad account format, enforces caller scope, refuses replacement without `confirm_replace=true`, logs to `agent_action_log`, `communication_logs`, and `client_updates`.
+- **Triggers:** "חברי חשבון פייסבוק ללקוח", "connect meta ad account", "act_..."
+- **Origin:** David asked Carmen to connect `act_561430705400571` to client M&M — no mutating tool existed (only `create_facebook_report_table` for new CRM tables).
+- **Ops SQL:** `supabase/ops/apply_connect_client_meta_ad_account_skin.sql` (apply on Staging after merge).
+
 ---
 
 ## 2026-06-26 — Agent routing: position-aware keyword matching + session switching

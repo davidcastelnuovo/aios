@@ -3,8 +3,11 @@ import test from "node:test";
 
 import {
   extractAccountIdFromReportTable,
+  metaAdAccountsEqual,
   normalizeGoogleCustomerId,
   normalizeMetaAdAccountId,
+  parseMetaAdAccountIdInput,
+  validateMetaAdPlatform,
   validateReportTableAccountId,
 } from "./client-report-sync.mjs";
 
@@ -43,4 +46,29 @@ test("validateReportTableAccountId passes with account id", () => {
   const v = validateReportTableAccountId("google_ads", { customer_id: "123" });
   assert.equal(v.ok, true);
   assert.equal(v.accountId, "123");
+});
+
+test("parseMetaAdAccountIdInput accepts act_ prefix and digits", () => {
+  const withPrefix = parseMetaAdAccountIdInput("act_561430705400571");
+  assert.equal(withPrefix.ok, true);
+  assert.equal(withPrefix.accountId, "act_561430705400571");
+
+  const digitsOnly = parseMetaAdAccountIdInput("561430705400571");
+  assert.equal(digitsOnly.ok, true);
+  assert.equal(digitsOnly.accountId, "act_561430705400571");
+});
+
+test("parseMetaAdAccountIdInput rejects invalid ids", () => {
+  assert.equal(parseMetaAdAccountIdInput("").ok, false);
+  assert.equal(parseMetaAdAccountIdInput("act_abc").ok, false);
+});
+
+test("metaAdAccountsEqual compares normalized ids", () => {
+  assert.equal(metaAdAccountsEqual("561430705400571", "act_561430705400571"), true);
+  assert.equal(metaAdAccountsEqual("act_111", "act_222"), false);
+});
+
+test("validateMetaAdPlatform accepts facebook/meta aliases", () => {
+  assert.equal(validateMetaAdPlatform("meta").ok, true);
+  assert.equal(validateMetaAdPlatform("tiktok").ok, false);
 });
