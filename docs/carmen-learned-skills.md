@@ -50,11 +50,11 @@ logged.
 - **How:** `CarmenSidecar` + `surface=command_center_sidecar` in `run-ai-agent`. Dev tier from `devEscalationAccess.ts` (mirrors server allowlist).
 - **Origin:** Carmen → Cursor DEV TASK for David — contextual system-fix chat while keeping the dashboard visible.
 
-### 2026-08-30 — Cursor / Grok / Codex = Cursor Cloud Direct
+### 2026-08-30 — Codex Direct = ChatGPT Workspace (not Cursor Cloud)
 - **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
-- **What Carmen can now do:** Cursor, Grok, and Codex Direct all launch Cursor Cloud background agents (`launchCloudDirect`). Each seat keeps its own sticky `conversation_key` / optional fixed agent id.
-- **How:** `dispatchSend` → `launchCloudDirect` for `cursor|grok|codex`. Secrets: `CURSOR_API_KEY`; optional `CODEX_DIRECT_AGENT_ID`, `CODEX_CLOUD_ENV_NAME`, `CODEX_MODEL_ID`. Agent must `reply_to_aios_session`.
-- **Origin:** David — Codex on main was routing to ChatGPT Workspace instead of Cursor Cloud; aligned with Cursor/Grok direct seats.
+- **What Carmen can now do:** Codex Direct triggers ChatGPT Workspace / Work Mode (`launchWorkspaceAgent`), same stack as ChatGPT Direct but with its own `conversation_key` (`aios:codex:<id>`). Cursor and Grok stay on Cursor Cloud / webhook.
+- **How:** `dispatchSend` → `launchWorkspaceAgent(ctx, "codex")`. Secrets: `CHATGPT_WORK_AGENT_TRIGGER_ID` + `CHATGPT_WORK_AGENT_TOKEN` (or `CODEX_WORK_AGENT_*`). Agent must `reply_to_aios_session` or HTTP callback.
+- **Origin:** David — Codex must talk to ChatGPT, not Cursor Cloud agents.
 
 ### 2026-08-29 — סוכנים בסביבת הפיתוח (Preview → Staging)
 - **Skin slug:** `staging_agents_need_cursor_key` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)

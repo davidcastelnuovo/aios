@@ -41,7 +41,7 @@ test("partial failure does not block synthesis", () => {
 
 test("reused Cursor Direct copy says the chat was already open", () => {
   assert.match(acceptedMessageFor("cursor", "https://cursor.com/agents/bc-1", { reused: true }), /שכבר פתוח/);
-  assert.match(acceptedMessageFor("codex", "https://cursor.com/agents/bc-1", { reused: true }), /Codex/);
+  assert.match(acceptedMessageFor("codex", "https://chatgpt.com/c/abc", { reused: true }), /ChatGPT Workspace/);
 });
 
 test("direct channels require a callback; internal streams", () => {

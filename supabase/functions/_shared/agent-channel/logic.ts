@@ -1,9 +1,25 @@
-import type { AdapterCapabilities, ChannelProvider, CloudDirectProvider, ConversationStatus } from "./types.ts";
+import type {
+  AdapterCapabilities,
+  ChannelProvider,
+  CloudDirectProvider,
+  ConversationStatus,
+  WorkspaceProvider,
+} from "./types.ts";
 
-export const CLOUD_DIRECT_PROVIDERS: CloudDirectProvider[] = ["cursor", "grok", "codex"];
+export const CLOUD_DIRECT_PROVIDERS: CloudDirectProvider[] = ["cursor", "grok"];
 
 export function isCloudDirect(provider: string): provider is CloudDirectProvider {
-  return provider === "cursor" || provider === "grok" || provider === "codex";
+  return provider === "cursor" || provider === "grok";
+}
+
+export function isWorkspaceProvider(provider: string): provider is WorkspaceProvider {
+  return provider === "chatgpt" || provider === "codex";
+}
+
+export function isParliamentSeat(
+  provider: string,
+): provider is CloudDirectProvider | WorkspaceProvider {
+  return isCloudDirect(provider) || isWorkspaceProvider(provider);
 }
 
 export function capabilitiesForProvider(provider: ChannelProvider): AdapterCapabilities {
@@ -20,7 +36,6 @@ export function capabilitiesForProvider(provider: ChannelProvider): AdapterCapab
       };
     case "cursor":
     case "grok":
-    case "codex":
       return {
         streaming_reply: false,
         async_reply: true,
@@ -30,6 +45,7 @@ export function capabilitiesForProvider(provider: ChannelProvider): AdapterCapab
         callback_required: true,
         supports_cancel: true,
       };
+    case "codex":
     case "claude":
     case "chatgpt":
       return {
@@ -197,12 +213,9 @@ export function acceptedMessageFor(
     case "grok":
       return url ? `נשלח ל-Grok Bot Direct. מעקב: ${url}` : "נשלח ל-Grok Bot Direct. מחכה לתשובה בשיחה הזו.";
     case "codex":
-      if (opts?.reused) {
-        return url
-          ? `נשלח לצ'אט Codex שכבר פתוח. מעקב: ${url}`
-          : "נשלח לצ'אט Codex שכבר פתוח. מחכה לתשובה בשיחה הזו.";
-      }
-      return url ? `נשלח ל-Codex Direct. מעקב: ${url}` : "נשלח ל-Codex Direct. מחכה לתשובה בשיחה הזו.";
+      return url
+        ? `נשלח ל-Codex (ChatGPT Workspace). מעקב: ${url}`
+        : "נשלח ל-Codex Direct (ChatGPT Workspace). מחכה לתשובה בשיחה הזו.";
     case "claude":
       return url ? `נשלח ל-Claude Direct. מעקב: ${url}` : "נשלח ל-Claude Direct. מחכה לתשובה בשיחה הזו.";
     case "chatgpt":

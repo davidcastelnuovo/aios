@@ -30,8 +30,6 @@ test("Cursor Direct prefers CURSOR_DIRECT_AGENT_ID over the coding sticky", () =
     "bc-direct",
   );
   assert.equal(envOpenChatId("cursor", { CURSOR_STICKY_AGENT_ID: "bc-coding" }), "bc-coding");
-  assert.equal(envOpenChatId("codex", { CODEX_DIRECT_AGENT_ID: "bc-codex" }), "bc-codex");
-  assert.equal(envOpenChatId("codex", { CURSOR_DIRECT_AGENT_ID: "bc-direct" }), null);
 });
 
 test("new Background Agents are allowed by default; sticky is opt-in", () => {
@@ -48,10 +46,9 @@ test("new Background Agents are allowed by default; sticky is opt-in", () => {
 
 test("Cursor is Carmen Direct; Codex is ChatGPT Workspace", () => {
   assert.match(billingNoteForSeat("cursor"), /סוכן Cursor חדש/);
-  assert.match(billingNoteForSeat("codex"), /Codex Direct/);
+  assert.match(billingNoteForSeat("codex"), /ChatGPT Workspace/);
   assert.match(billingNoteForSeat("internal"), /OpenAI API/);
   assert.match(missingOpenChatMessage("cursor"), /Cursor Direct/);
-  assert.match(missingOpenChatMessage("codex"), /Cursor/);
   assert.match(busyOpenChatMessage("cursor", "https://cursor.com/agents/bc-1"), /מקביל/);
 });
 
@@ -144,6 +141,4 @@ test("Cursor Direct without sticky and without session returns empty list", asyn
   };
   const ids = await collectOpenChatIds(sb, { tenantId: "t1", provider: "cursor", env: {} });
   assert.deepEqual(ids, []);
-  const codex = await collectOpenChatIds(sb, { tenantId: "t1", provider: "codex", env: {} });
-  assert.deepEqual(codex, []);
 });
