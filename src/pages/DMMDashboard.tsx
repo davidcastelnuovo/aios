@@ -52,11 +52,9 @@ import {
   type PulseClientCallTarget,
 } from "@/components/clients/PulseClientCallDialog";
 import {
-  aggregatePulseMetricsFromRecords,
-  applyPeriodMetricsToSnapshot,
   buildPulseDashboardUrl,
   clientHasCampaignService,
-  expandPulseSnapshotToGoalRows,
+  expandPulseToPlatformGoalRows,
   applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
   formatGoalChange,
@@ -69,11 +67,14 @@ import {
   goalLabel,
   metaChangeSummary,
   overallStatusLabel,
+  platformGoalLabel,
   PULSE_PERIOD_OPTIONS,
   pulseSpendColumnLabel,
   pulseStatusLabel,
   pulseStatusToOverall,
-  type PulseGoalDisplayRow,
+  type PulseCampaignTable,
+  type PulseCrmRecord,
+  type PulsePlatformDisplayRow,
   type PulseOverrideRow,
   type PulsePeriod,
   type PulseSnapshotRow,
@@ -92,7 +93,7 @@ type ClientBase = {
 type PulseRow = ClientBase & {
   clientId: string;
   pulse: PulseSnapshotRow | null;
-  goalRow: PulseGoalDisplayRow | null;
+  goalRow: PulsePlatformDisplayRow | null;
   algorithmOverall: OverallStatus;
   overall: OverallStatus;
   manualOverride: PulseOverrideRow | null;
@@ -214,7 +215,7 @@ function PulseMobileCard({
           </div>
           {goalRow ? (
             <Badge variant="outline" className="text-[10px] shrink-0 max-w-[40%] truncate">
-              {goalLabel(goalRow.goal)}
+              {platformGoalLabel(goalRow)}
             </Badge>
           ) : null}
         </div>
@@ -514,12 +515,10 @@ export default function DMMDashboard() {
     return map;
   }, [pulseOverrides]);
 
-  // Calendar periods (השבוע / שבוע שעבר) re-aggregate from crm_records.
-  // last_7_days keeps the deterministic snapshot (matches WA digest).
-  const needsPeriodOverride = period !== "last_7_days";
-  const { data: periodMetricsByClient = new Map<string, ReturnType<typeof aggregatePulseMetricsFromRecords>>(), refetch: refetchPeriod } = useQuery({
+  // Campaign tables + CRM records for per-platform metrics (all periods).
+  const { data: campaignData, refetch: refetchCampaignData } = useQuery({
     queryKey: [
-      "pulse-dash-period",
+      "pulse-dash-campaign-data",
       tenantId,
       clientIds.join(","),
       period,
@@ -528,18 +527,24 @@ export default function DMMDashboard() {
       periodBounds.prevStartDate,
     ],
     queryFn: async () => {
-      const empty = new Map<string, ReturnType<typeof aggregatePulseMetricsFromRecords>>();
-      if (!tenantId || !clientIds.length || !needsPeriodOverride) return empty;
+      const empty = {
+        tables: [] as PulseCampaignTable[],
+        records: [] as PulseCrmRecord[],
+        tableToType: new Map<string, string | null>(),
+        tableToClient: new Map<string, string>(),
+      };
+      if (!tenantId || !clientIds.length) return empty;
 
       const { data: tables, error: tablesError } = await supabase
         .from("crm_tables")
-        .select("id, client_id")
+        .select("id, client_id, integration_type, campaign_active, last_sync_at, integration_settings")
         .in("client_id", clientIds)
         .in("integration_type", ["facebook_insights", "facebook_ecommerce", "google_ads"]);
       if (tablesError) throw tablesError;
       if (!tables?.length) return empty;
 
       const tableIds = tables.map((t) => t.id);
+      const tableToType = new Map(tables.map((t) => [t.id, t.integration_type as string | null]));
       const tableToClient = new Map(tables.map((t) => [t.id, t.client_id as string]));
 
       const { data: records, error: recordsError } = await supabase
@@ -551,36 +556,40 @@ export default function DMMDashboard() {
         .limit(20000);
       if (recordsError) throw recordsError;
 
-      const byClient = new Map<string, { data?: Record<string, unknown> | null }[]>();
-      for (const row of records ?? []) {
-        const clientId = tableToClient.get(row.table_id);
-        if (!clientId) continue;
-        const list = byClient.get(clientId) || [];
-        list.push({ data: (row.data as Record<string, unknown>) ?? null });
-        byClient.set(clientId, list);
-      }
-
-      const ecommerceByClient = new Map<string, boolean>();
-      for (const snap of pulseRows) {
-        ecommerceByClient.set(snap.client_id, !!snap.is_ecommerce);
-      }
-
-      const out = new Map<string, ReturnType<typeof aggregatePulseMetricsFromRecords>>();
-      for (const [clientId, clientRecords] of byClient) {
-        out.set(
-          clientId,
-          aggregatePulseMetricsFromRecords(
-            clientRecords,
-            periodBounds,
-            ecommerceByClient.get(clientId) ?? false,
-          ),
-        );
-      }
-      return out;
+      return {
+        tables: tables as PulseCampaignTable[],
+        records: (records ?? []) as PulseCrmRecord[],
+        tableToType,
+        tableToClient,
+      };
     },
-    enabled: !!tenantId && clientIds.length > 0 && needsPeriodOverride,
+    enabled: !!tenantId && clientIds.length > 0,
     staleTime: 30_000,
   });
+
+  const tablesByClient = useMemo(() => {
+    const map = new Map<string, PulseCampaignTable[]>();
+    for (const table of campaignData?.tables ?? []) {
+      const list = map.get(table.client_id) || [];
+      list.push(table);
+      map.set(table.client_id, list);
+    }
+    return map;
+  }, [campaignData?.tables]);
+
+  const recordsByClient = useMemo(() => {
+    const map = new Map<string, PulseCrmRecord[]>();
+    const tableToClient = campaignData?.tableToClient;
+    if (!tableToClient) return map;
+    for (const record of campaignData?.records ?? []) {
+      const clientId = tableToClient.get(record.table_id);
+      if (!clientId) continue;
+      const list = map.get(clientId) || [];
+      list.push(record);
+      map.set(clientId, list);
+    }
+    return map;
+  }, [campaignData?.records, campaignData?.tableToClient]);
 
   const pulseByClient = useMemo(() => {
     const map = new Map<string, PulseSnapshotRow>();
@@ -590,24 +599,8 @@ export default function DMMDashboard() {
         map.set(row.client_id, row);
       }
     }
-    if (needsPeriodOverride) {
-      for (const [clientId, base] of map) {
-        const metrics = periodMetricsByClient.get(clientId) ?? {
-          spend_7d: 0,
-          leads_7d: 0,
-          cpl_7d: null,
-          cpl_change_pct: null,
-          purchases_7d: 0,
-          revenue_7d: 0,
-          roas_7d: null,
-          data_fresh_through: null,
-          record_count: 0,
-        };
-        map.set(clientId, applyPeriodMetricsToSnapshot(base, metrics));
-      }
-    }
     return map;
-  }, [pulseRows, periodMetricsByClient, needsPeriodOverride]);
+  }, [pulseRows]);
 
   const rows: PulseRow[] = useMemo(() => {
     const expanded: PulseRow[] = [];
@@ -617,8 +610,19 @@ export default function DMMDashboard() {
       const pulse = pulseByClient.get(c.id) ?? null;
       const hasCampaign = clientHasCampaignService(services);
       const manualOverride = activeOverrideByClient.get(c.id) ?? null;
-      const goalRows = pulse ? expandPulseSnapshotToGoalRows(pulse) : [null];
-      for (const goalRow of goalRows) {
+      const clientTables = tablesByClient.get(c.id) ?? [];
+      const clientRecords = recordsByClient.get(c.id) ?? [];
+      const platformRows = hasCampaign
+        ? expandPulseToPlatformGoalRows({
+            snapshot: pulse,
+            services,
+            tables: clientTables,
+            records: clientRecords,
+            bounds: periodBounds,
+          })
+        : [];
+      const displayRows = platformRows.length ? platformRows : [null];
+      for (const goalRow of displayRows) {
         const algorithmOverall = goalRow
           ? pulseStatusToOverall(goalRow.status)
           : hasCampaign
@@ -648,7 +652,7 @@ export default function DMMDashboard() {
       }
     }
     return expanded;
-  }, [filteredByRole, pulseByClient, activeOverrideByClient]);
+  }, [filteredByRole, pulseByClient, activeOverrideByClient, tablesByClient, recordsByClient, periodBounds]);
 
   const filtered = useMemo(() => {
     return rows
@@ -656,7 +660,9 @@ export default function DMMDashboard() {
         if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
         if (filterStatus !== "all" && c.overall !== filterStatus) return false;
         if (filterService === "campaign" && !clientHasCampaignService(c.services)) return false;
-        if (filterService !== "all" && filterService !== "campaign" && !c.services.includes(filterService)) {
+        if (filterService === "ppc_meta" && c.goalRow?.platform !== "meta") return false;
+        if (filterService === "ppc_google" && c.goalRow?.platform !== "google") return false;
+        if (filterService !== "all" && filterService !== "campaign" && filterService !== "ppc_meta" && filterService !== "ppc_google" && !c.services.includes(filterService)) {
           return false;
         }
         return true;
@@ -770,7 +776,7 @@ export default function DMMDashboard() {
               refetchClients();
               refetchPulse();
               refetchOverrides();
-              if (needsPeriodOverride) refetchPeriod();
+              refetchCampaignData();
             }}
           >
             <RefreshCw className="h-4 w-4 ml-1 shrink-0" />
@@ -1046,6 +1052,7 @@ export default function DMMDashboard() {
                 <TableHead className="text-right w-8">סטטוס</TableHead>
                 <TableHead className="text-right">סוכנות</TableHead>
                 <TableHead className="text-right">לקוח</TableHead>
+                <TableHead className="text-right">פלטפורמה</TableHead>
                 <TableHead className="text-right">יעד</TableHead>
                 <TableHead className="text-right">קמפיינר</TableHead>
                 <TableHead className="text-right">{pulseSpendColumnLabel(period)}</TableHead>
@@ -1061,7 +1068,7 @@ export default function DMMDashboard() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="text-center text-muted-foreground py-10">
+                  <TableCell colSpan={14} className="text-center text-muted-foreground py-10">
                     אין לקוחות להצגה
                   </TableCell>
                 </TableRow>
@@ -1105,6 +1112,15 @@ export default function DMMDashboard() {
                                 ? pulseStatusLabel(pulse.status)
                                 : "🟡 ממתין לבדיקה"}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {goalRow ? (
+                          <Badge variant="secondary" className="text-xs font-medium">
+                            {goalRow.platformLabel}
+                          </Badge>
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {goalRow ? (
