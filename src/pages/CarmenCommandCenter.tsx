@@ -185,7 +185,9 @@ export default function CarmenCommandCenter() {
             </>
           )}
 
-          <Clock compact />
+          <div className="hidden sm:block">
+            <Clock compact />
+          </div>
         </div>
       </header>
 
