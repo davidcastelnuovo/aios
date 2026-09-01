@@ -83,14 +83,14 @@ export function AgentSeatSelect({
     >
       <SelectTrigger
         aria-label="בחירת סוכן"
-        className={`cc-seat-select-trigger${className ? ` ${className}` : ""}`}
+        className={`cc-seat-select-trigger border-[var(--cc-line)] bg-[rgba(8,16,34,0.85)] text-[var(--cc-text)] shadow-none ring-0 ring-offset-0 focus:ring-0 focus:ring-offset-0${className ? ` ${className}` : ""}`}
       >
         <span className="cc-seat-select-value flex min-w-0 items-center gap-2">
           <SeatOptionIcon seatKey={activeKey} />
           <span className="truncate">{SEAT_ARIA[activeKey]}</span>
         </span>
       </SelectTrigger>
-      <SelectContent className="cc-seat-select-content">
+      <SelectContent className="cc-seat-select-content border-[var(--cc-line-strong)] bg-[rgba(8,16,34,0.98)] text-[var(--cc-text)]">
         {options.map((key) => (
           <SelectItem key={key} value={key} textValue={SEAT_ARIA[key]} className="cc-seat-select-item">
             <span className="flex items-center gap-2">
