@@ -98,18 +98,172 @@ type PulseRow = ClientBase & {
   flags: string[];
 };
 
-function StatusDot({ status }: { status: OverallStatus }) {
+function StatusDot({ status, compact = false }: { status: OverallStatus; compact?: boolean }) {
   const label = status === "red" ? "דורש טיפול" : status === "yellow" ? "לתשומת לב" : "תקין";
   const dot = status === "red" ? "🔴" : status === "yellow" ? "🟡" : "🟢";
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="text-xl cursor-default">{dot}</span>
+          <span className={`${compact ? "text-base leading-none" : "text-lg md:text-xl"} cursor-default`}>
+            {dot}
+          </span>
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+type PulseClientRowProps = {
+  client: PulseRow;
+  period: PulsePeriod;
+  onOverride: () => void;
+  onOpenCard: () => void;
+  onLogCall: () => void;
+};
+
+function PulseClientMobileCard({
+  client,
+  period,
+  onOverride,
+  onOpenCard,
+  onLogCall,
+}: PulseClientRowProps) {
+  const pulse = client.pulse;
+  const goalRow = client.goalRow;
+  const metaSource = goalRow || pulse;
+  const statusText = client.manualOverride
+    ? `${goalRow ? pulseStatusLabel(goalRow.status) : pulse ? pulseStatusLabel(pulse.status) : overallStatusLabel(client.algorithmOverall)} → ${overallStatusLabel(client.overall)}`
+    : goalRow
+      ? pulseStatusLabel(goalRow.status)
+      : pulse
+        ? pulseStatusLabel(pulse.status)
+        : "🟡 ממתין לבדיקה";
+
+  return (
+    <Card
+      className={
+        client.overall === "red"
+          ? "border-red-200 bg-red-50/40"
+          : client.overall === "yellow"
+            ? "border-yellow-200 bg-yellow-50/30"
+            : undefined
+      }
+    >
+      <CardContent className="p-3 space-y-2 min-w-0">
+        <div className="flex items-start gap-2 min-w-0">
+          <StatusDot status={client.overall} compact />
+          <div className="min-w-0 flex-1">
+            <div className="font-medium truncate">{client.name}</div>
+            <div className="text-xs text-muted-foreground truncate">
+              {client.agencyName} · {client.campaignerName}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">{statusText}</div>
+          </div>
+          {client.manualOverride ? (
+            <Badge variant="secondary" className="text-[10px] px-1 py-0 shrink-0">
+              ידני
+            </Badge>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+          <div>
+            <span className="text-muted-foreground">יעד: </span>
+            {goalRow ? (
+              <Badge variant="outline" className="text-[10px] px-1 py-0">
+                {goalLabel(goalRow.goal)}
+              </Badge>
+            ) : (
+              "—"
+            )}
+          </div>
+          <div className="tabular-nums">
+            <span className="text-muted-foreground">{pulseSpendColumnLabel(period)}: </span>
+            {goalRow ? formatPulseMoney(goalRow.spend_7d) : pulse ? formatPulseMoney(pulse.spend_7d) : "—"}
+          </div>
+          <div className="tabular-nums">
+            <span className="text-muted-foreground">לידים/רכישות: </span>
+            {goalRow ? formatGoalOutcomes(goalRow) : "—"}
+          </div>
+          <div className="tabular-nums">
+            <span className="text-muted-foreground">CPL/ROAS: </span>
+            {goalRow ? formatGoalEfficiency(goalRow) : "—"}
+          </div>
+          <div className="tabular-nums">
+            <span className="text-muted-foreground">שינוי: </span>
+            {goalRow ? formatGoalChange(goalRow) : "—"}
+          </div>
+          <div className="min-w-0">
+            <span className="text-muted-foreground">שיחה: </span>
+            {pulse ? (
+              <button
+                type="button"
+                className={`hover:text-primary ${
+                  pulse.last_client_call_at
+                    ? "underline decoration-dotted underline-offset-2"
+                    : "text-amber-700 underline decoration-dotted underline-offset-2 font-medium"
+                }`}
+                onClick={onLogCall}
+              >
+                {formatLastClientCall(pulse)}
+              </button>
+            ) : (
+              "—"
+            )}
+          </div>
+        </div>
+
+        {metaSource?.last_meta_change_at ? (
+          <div className="text-xs min-w-0">
+            <span className="text-muted-foreground">שינוי במטה: </span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="underline decoration-dotted underline-offset-2 hover:text-primary text-right"
+                >
+                  {metaChangeSummary(metaSource)}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 text-sm whitespace-pre-wrap" align="start">
+                {formatMetaChangeDetails(metaSource)}
+              </PopoverContent>
+            </Popover>
+          </div>
+        ) : null}
+
+        {client.flags.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {client.flags.slice(0, 3).map((flag) => (
+              <Badge
+                key={flag}
+                variant="outline"
+                className={`text-[10px] px-1 py-0 ${
+                  flag.includes("אין טבלת") || flag.includes("ממתין")
+                    ? "bg-amber-100 text-amber-900 border-amber-300"
+                    : ""
+                }`}
+              >
+                {flag}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="flex gap-2 pt-1">
+          <Button variant="outline" size="sm" className="h-8 flex-1 gap-1" onClick={onOverride}>
+            <Pencil className="h-3.5 w-3.5" />
+            <span className="text-xs">ערוך צבע</span>
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 flex-1 gap-1" onClick={onOpenCard}>
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span className="text-xs">פתח כרטיס</span>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -496,11 +650,11 @@ export default function DMMDashboard() {
   }
 
   return (
-    <div className="p-4 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">דשבורד בדיקת דופק</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
+    <div className="p-3 md:p-4 space-y-3 md:space-y-4 overflow-x-hidden max-w-full min-w-0" dir="rtl">
+      <div className="flex items-start md:items-center justify-between flex-wrap gap-2 md:gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl md:text-2xl font-bold">דשבורד בדיקת דופק</h1>
+          <p className="text-muted-foreground text-xs md:text-sm mt-0.5">
             {summary.total} לקוחות קמפיין פעילים
             {` · ${periodBounds.label}`}
             {period !== "last_7_days"
@@ -510,15 +664,19 @@ export default function DMMDashboard() {
             {summary.missingPulse > 0 ? ` · ${summary.missingPulse} ממתינים לחישוב` : ""}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => copyShareLink()}>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => copyShareLink()} className="h-8">
             <Link2 className="h-4 w-4 ml-1" />
-            העתק קישור
-            {selectedAgency && selectedAgency !== "all" ? " לסוכנות" : ""}
+            <span className="hidden sm:inline">
+              העתק קישור
+              {selectedAgency && selectedAgency !== "all" ? " לסוכנות" : ""}
+            </span>
+            <span className="sm:hidden">קישור</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
+            className="h-8"
             onClick={() => {
               refetchClients();
               refetchPulse();
@@ -527,21 +685,21 @@ export default function DMMDashboard() {
             }}
           >
             <RefreshCw className="h-4 w-4 ml-1" />
-            רענן
+            <span className="hidden sm:inline">רענן</span>
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 md:gap-3">
         <Card
           className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-red-50"
           onClick={() => setFilterStatus(filterStatus === "red" ? "all" : "red")}
         >
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-3xl">🔴</span>
-            <div>
-              <p className="text-2xl font-bold text-red-700">{summary.red}</p>
-              <p className="text-sm text-red-600">דורשים טיפול</p>
+          <CardContent className="p-2 md:p-4 flex items-center gap-2 md:gap-3">
+            <span className="text-lg md:text-3xl leading-none shrink-0">🔴</span>
+            <div className="min-w-0">
+              <p className="text-lg md:text-2xl font-bold text-red-700">{summary.red}</p>
+              <p className="text-[11px] md:text-sm text-red-600 truncate">דורשים טיפול</p>
             </div>
           </CardContent>
         </Card>
@@ -549,11 +707,11 @@ export default function DMMDashboard() {
           className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-yellow-50"
           onClick={() => setFilterStatus(filterStatus === "yellow" ? "all" : "yellow")}
         >
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-3xl">🟡</span>
-            <div>
-              <p className="text-2xl font-bold text-yellow-700">{summary.yellow}</p>
-              <p className="text-sm text-yellow-600">לתשומת לב</p>
+          <CardContent className="p-2 md:p-4 flex items-center gap-2 md:gap-3">
+            <span className="text-lg md:text-3xl leading-none shrink-0">🟡</span>
+            <div className="min-w-0">
+              <p className="text-lg md:text-2xl font-bold text-yellow-700">{summary.yellow}</p>
+              <p className="text-[11px] md:text-sm text-yellow-600 truncate">לתשומת לב</p>
             </div>
           </CardContent>
         </Card>
@@ -561,90 +719,197 @@ export default function DMMDashboard() {
           className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-green-50"
           onClick={() => setFilterStatus(filterStatus === "green" ? "all" : "green")}
         >
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-3xl">🟢</span>
-            <div>
-              <p className="text-2xl font-bold text-green-700">{summary.green}</p>
-              <p className="text-sm text-green-600">תקינים</p>
+          <CardContent className="p-2 md:p-4 flex items-center gap-2 md:gap-3">
+            <span className="text-lg md:text-3xl leading-none shrink-0">🟢</span>
+            <div className="min-w-0">
+              <p className="text-lg md:text-2xl font-bold text-green-700">{summary.green}</p>
+              <p className="text-[11px] md:text-sm text-green-600 truncate">תקינים</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center">
-        {agencies && agencies.length > 1 && (
-          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="כל הסוכנויות" />
+      <div className="block md:hidden space-y-2 min-w-0">
+          <div className="relative w-full min-w-0">
+            <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="חפש לקוח..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pr-9 w-full"
+            />
+          </div>
+          <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="טווח זמן" />
             </SelectTrigger>
             <SelectContent className="bg-background">
-              <SelectItem value="all">כל הסוכנויות</SelectItem>
-              {agencies.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              {PULSE_PERIOD_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        )}
-        <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
-          <SelectTrigger className="w-[170px]">
-            <SelectValue placeholder="טווח זמן" />
-          </SelectTrigger>
-          <SelectContent className="bg-background">
-            {PULSE_PERIOD_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="חפש לקוח..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pr-9"
-          />
+          {agencies && agencies.length > 1 && (
+            <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="כל הסוכנויות" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="all">כל הסוכנויות</SelectItem>
+                {agencies.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="כל הסטטוסים" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל הסטטוסים</SelectItem>
+              <SelectItem value="red">🔴 דורש טיפול</SelectItem>
+              <SelectItem value="yellow">🟡 לתשומת לב</SelectItem>
+              <SelectItem value="green">🟢 תקין</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="שירותים" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
+              <SelectItem value="all">כל השירותים</SelectItem>
+              <SelectItem value="ppc_google">PPC Google</SelectItem>
+              <SelectItem value="ppc_meta">PPC Meta</SelectItem>
+              <SelectItem value="seo">SEO</SelectItem>
+            </SelectContent>
+          </Select>
+          {showCampaignerPicker && (
+            <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="קמפיינר" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                {campaigners.map((campaigner) => (
+                  <SelectItem key={campaigner.id} value={campaigner.id}>
+                    {campaigner.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
-        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="כל הסטטוסים" />
-          </SelectTrigger>
-          <SelectContent className="bg-background">
-            <SelectItem value="all">כל הסטטוסים</SelectItem>
-            <SelectItem value="red">🔴 דורש טיפול</SelectItem>
-            <SelectItem value="yellow">🟡 לתשומת לב</SelectItem>
-            <SelectItem value="green">🟢 תקין</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="שירותים" />
-          </SelectTrigger>
-          <SelectContent className="bg-background">
-            <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
-            <SelectItem value="all">כל השירותים</SelectItem>
-            <SelectItem value="ppc_google">PPC Google</SelectItem>
-            <SelectItem value="ppc_meta">PPC Meta</SelectItem>
-            <SelectItem value="seo">SEO</SelectItem>
-          </SelectContent>
-        </Select>
-        {showCampaignerPicker && (
-          <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+      <div className="hidden md:flex flex-wrap gap-2 items-center">
+          {agencies && agencies.length > 1 && (
+            <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="כל הסוכנויות" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="all">כל הסוכנויות</SelectItem>
+                {agencies.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
             <SelectTrigger className="w-[170px]">
-              <SelectValue placeholder="קמפיינר" />
+              <SelectValue placeholder="טווח זמן" />
             </SelectTrigger>
             <SelectContent className="bg-background">
-              <SelectItem value="all">כל הקמפיינרים</SelectItem>
-              {campaigners.map((campaigner) => (
-                <SelectItem key={campaigner.id} value={campaigner.id}>
-                  {campaigner.full_name}
-                </SelectItem>
+              {PULSE_PERIOD_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        )}
-      </div>
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="חפש לקוח..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pr-9"
+            />
+          </div>
+          <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="כל הסטטוסים" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל הסטטוסים</SelectItem>
+              <SelectItem value="red">🔴 דורש טיפול</SelectItem>
+              <SelectItem value="yellow">🟡 לתשומת לב</SelectItem>
+              <SelectItem value="green">🟢 תקין</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="שירותים" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
+              <SelectItem value="all">כל השירותים</SelectItem>
+              <SelectItem value="ppc_google">PPC Google</SelectItem>
+              <SelectItem value="ppc_meta">PPC Meta</SelectItem>
+              <SelectItem value="seo">SEO</SelectItem>
+            </SelectContent>
+          </Select>
+          {showCampaignerPicker && (
+            <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+              <SelectTrigger className="w-[170px]">
+                <SelectValue placeholder="קמפיינר" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                {campaigners.map((campaigner) => (
+                  <SelectItem key={campaigner.id} value={campaigner.id}>
+                    {campaigner.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
 
-      <Card>
+      <div className="block md:hidden space-y-2 min-w-0">
+          {filtered.length === 0 ? (
+            <Card>
+              <CardContent className="text-center text-muted-foreground py-10">
+                אין לקוחות להצגה
+              </CardContent>
+            </Card>
+          ) : (
+            filtered.map((client) => (
+              <PulseClientMobileCard
+                key={client.id}
+                client={client}
+                period={period}
+                onOverride={() =>
+                  setOverrideTarget({
+                    clientId: client.clientId,
+                    clientName: client.name,
+                    algorithmOverall: client.algorithmOverall,
+                    pulse: client.pulse,
+                    flags: client.flags,
+                    activeOverride: client.manualOverride,
+                  })
+                }
+                onOpenCard={() => openClientCard(client.clientId)}
+                onLogCall={() =>
+                  setCallLogTarget({
+                    clientId: client.clientId,
+                    clientName: client.name,
+                    pulse: client.pulse!,
+                  })
+                }
+              />
+            ))
+          )}
+        </div>
+      <Card className="hidden md:block">
         <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
