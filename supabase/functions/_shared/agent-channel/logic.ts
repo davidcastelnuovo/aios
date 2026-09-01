@@ -6,6 +6,23 @@ export function isCloudDirect(provider: string): provider is CloudDirectProvider
   return provider === "cursor" || provider === "grok" || provider === "codex";
 }
 
+const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/** Pull conversation_id from Carmen context or callback instruction blocks. */
+export function extractConversationId(text: string): string | null {
+  const raw = String(text || "");
+  const labeled = raw.match(/conversation_id:\s*([0-9a-f-]{36})/i);
+  if (labeled?.[1]) return labeled[1].toLowerCase();
+  const jsonish = raw.match(/"conversation_id"\s*:\s*"([0-9a-f-]{36})"/i);
+  if (jsonish?.[1]) return jsonish[1].toLowerCase();
+  return null;
+}
+
+export function extractUuid(text: string): string | null {
+  const m = String(text || "").match(UUID_RE);
+  return m ? m[0].toLowerCase() : null;
+}
+
 export function capabilitiesForProvider(provider: ChannelProvider): AdapterCapabilities {
   switch (provider) {
     case "internal":

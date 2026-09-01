@@ -32,6 +32,8 @@ export function buildCallbackInstructions(args: {
     `session_id: ${args.sessionId}\n` +
     `origin: ${args.origin}\n` +
     `tenant_id: ${args.tenantId}\n\n` +
+    `Your answer MUST include the Vercel Preview URL for this branch and the PR (or merge) link ` +
+    `so David/Carmen can verify before production publish.\n\n` +
     `Preferred: call MCP tool reply_to_aios_session with those ids and content=<your full answer>, ` +
     `plus a one-time idempotency_key.\n\n` +
     `Fallback HTTP POST ${supabaseUrl}/functions/v1/agent-channel-callback\n` +

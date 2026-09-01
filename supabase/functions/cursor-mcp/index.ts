@@ -60,7 +60,7 @@ const corsHeaders = {
   "Access-Control-Expose-Headers": "Mcp-Session-Id",
 };
 
-const SERVER_INFO = { name: "cursor-mcp", version: "1.4.0" };
+const SERVER_INFO = { name: "cursor-mcp", version: "1.4.1" };
 const CURSOR_MCP_STREAMABLE_URL =
   "https://zvoijyneresvkadpprel.supabase.co/functions/v1/cursor-mcp/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
@@ -172,7 +172,13 @@ const TOOLS = [
         },
         context: {
           type: "string",
-          description: "Optional extra notes (files, links, what you did).",
+          description: "Optional extra notes (files, links, what you did). May include conversation_id.",
+        },
+        conversation_id: {
+          type: "string",
+          description:
+            "AIOS Carmen conversation to deliver the finished answer into (Command Center thread). " +
+            "Pass when dispatching from Carmen so Cursor reports back with Preview + PR links.",
         },
       },
       required: ["message"],
@@ -666,10 +672,10 @@ function teachingBlock(tenantId: string | null): string {
     ? `Target tenant_id for the skin: ${tenantId}`
     : `Target tenant: UNKNOWN — skip the ai_skills write and only record to the repo doc.`;
   const callbackLine = tenantId
-    ? `To update David directly on WhatsApp, run via Supabase (execute_sql / Management API): ` +
-      `select public.claude_notify_david('<your concise update for David>', '${tenantId}'::uuid); ` +
-      `— same guaranteed WhatsApp path as Claude. Also keep a clear summary + PR link in your PR description.`
-    : `Make sure David ends up informed — put a clear summary + PR link in your PR description.`;
+    ? `When you finish, deliver the full answer back into the same AIOS Carmen conversation via MCP tool ` +
+      `reply_to_aios_session (include Vercel Preview URL + PR/merge link). ` +
+      `Fallback: select public.claude_notify_david('<concise update>', '${tenantId}'::uuid);`
+    : `Make sure David ends up informed — put a clear summary + Preview + PR link in your PR description.`;
   return (
     `\n\n--- TEACH CARMEN, KEEP DAVID UPDATED & FIX-ON-FAIL ---\n` +
     `This came from Carmen, an autonomous agent, because she could not do it herself.\n` +
@@ -726,15 +732,46 @@ async function executeDirectSessionReply(args: {
   originLabel: string;
   tenantId: string | null;
   agentId: string | null;
+  conversationIdHint?: string | null;
 }): Promise<string> {
   const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
   if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
+
+  let callbackBlock = "";
+  const sb = sbClient();
+  if (args.tenantId && sb) {
+    const { extractConversationId } = await import("../_shared/agent-channel/logic.ts");
+    const { resolveCallbackSessionForTenant } = await import("../_shared/agent-channel/store.ts");
+    const { mintCallbackToken } = await import("../_shared/agent-channel/hmac.ts");
+    const { buildCallbackInstructions } = await import("../_shared/agent-channel/prompts.ts");
+    const conversationId =
+      String(args.conversationIdHint || "").trim() ||
+      extractConversationId(args.context) ||
+      extractConversationId(args.message) ||
+      "";
+    const channelSession = await resolveCallbackSessionForTenant(sb, args.tenantId, conversationId || null);
+    if (channelSession) {
+      const token = await mintCallbackToken({
+        sessionId: channelSession.id,
+        conversationId: channelSession.conversation_id,
+        tenantId: args.tenantId,
+      });
+      callbackBlock = buildCallbackInstructions({
+        origin: (channelSession.provider || "cursor") as "cursor",
+        conversationId: channelSession.conversation_id,
+        sessionId: channelSession.id,
+        tenantId: args.tenantId,
+        token,
+      });
+    }
+  }
 
   const text =
     `${args.originLabel}\n` +
     `This is a reply in the fixed Cursor Direct chat — do not open a new Background Agent.\n\n` +
     `${args.message}\n` +
-    (args.context ? `\nContext:\n${args.context}\n` : ``);
+    (args.context ? `\nContext:\n${args.context}\n` : ``) +
+    callbackBlock;
 
   console.log(
     `[cursor-mcp] direct_session_reply session_id=${args.session.sessionId} source=${args.session.source}`,
@@ -929,6 +966,7 @@ async function handleToolCall(
       originLabel: "[Carmen / Grok → Cursor Direct]",
       tenantId: ctx.tenantId,
       agentId: ctx.agentId,
+      conversationIdHint: String(args?.conversation_id ?? "").trim() || undefined,
     });
   }
 
