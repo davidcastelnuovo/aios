@@ -16,6 +16,27 @@ import {
   userHasTenantAccess,
 } from "../_shared/agent-channel/store.ts";
 
+function parseAttachments(raw: unknown) {
+  if (!Array.isArray(raw)) return [] as Array<{ name: string; url: string; type: "image" | "file"; size?: number; path?: string }>;
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const name = String((item as any).name || "").trim();
+      const url = String((item as any).url || "").trim();
+      const type = (item as any).type === "image" ? "image" : "file";
+      if (!name || !url.startsWith("http")) return null;
+      return {
+        name,
+        url,
+        type,
+        size: typeof (item as any).size === "number" ? (item as any).size : undefined,
+        path: typeof (item as any).path === "string" ? (item as any).path : undefined,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 6) as Array<{ name: string; url: string; type: "image" | "file"; size?: number; path?: string }>;
+}
+
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
@@ -132,7 +153,10 @@ Deno.serve(async (req) => {
   }
 
   const content = String(body.content || body.command_text || "").trim();
-  if (action === "send" && !content) return json(400, { error: "content is required" });
+  const attachments = parseAttachments(body.attachments);
+  if (action === "send" && !content && attachments.length === 0) {
+    return json(400, { error: "content or attachments are required" });
+  }
 
   const route = await loadRoute(sb, tenantId, {
     routeId: body.brain_route_id ? String(body.brain_route_id) : null,
@@ -186,6 +210,7 @@ Deno.serve(async (req) => {
     metadata: {
       input_mode: body.input_mode || "typed",
       delivery_mode: body.input_mode === "realtime_voice" ? "realtime" : "text",
+      ...(attachments.length ? { attachments } : {}),
       ...(body.context_metadata && typeof body.context_metadata === "object"
         ? { context: body.context_metadata }
         : {}),
@@ -205,6 +230,7 @@ Deno.serve(async (req) => {
       conversationId: conv.id,
       route,
       content,
+      attachments,
       inputMode: (body.input_mode || "typed") as InputMode,
       idempotencyKey,
       history: Array.isArray(body.conversation_history) ? body.conversation_history : [],

@@ -1,4 +1,13 @@
-import type { ChannelProvider } from "./types.ts";
+import type { ChannelAttachment, ChannelProvider } from "./types.ts";
+
+function attachmentBlock(attachments: ChannelAttachment[] | undefined): string {
+  if (!attachments?.length) return "";
+  const lines = attachments.map((a) => {
+    const label = a.type === "image" ? "image" : "file";
+    return `- ${label}: ${a.name} → ${a.url}`;
+  });
+  return `\n\nAttached files (${attachments.length}):\n${lines.join("\n")}\n`;
+}
 
 export function buildCallbackInstructions(args: {
   origin: ChannelProvider;
@@ -50,6 +59,7 @@ export function wrapDirectPrompt(args: {
   origin: ChannelProvider;
   userText: string;
   history: Array<{ role: string; content: string }>;
+  attachments?: ChannelAttachment[];
 }): string {
   const hist = args.history
     .slice(-12)
@@ -66,6 +76,7 @@ export function wrapDirectPrompt(args: {
     `You are the selected brain for this Carmen conversation. Answer David directly.\n` +
     `Reply in the user's language. Be concrete.\n\n` +
     (hist ? `Recent thread:\n${hist}\n\n` : "") +
-    `User:\n${args.userText}\n`
+    `User:\n${args.userText}\n` +
+    attachmentBlock(args.attachments)
   );
 }

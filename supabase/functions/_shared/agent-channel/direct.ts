@@ -81,7 +81,7 @@ export async function launchCloudDirect(
     tenantId: ctx.tenantId,
   });
   const prompt =
-    (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history })) +
+    (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments })) +
     buildCallbackInstructions({
       origin: provider,
       conversationId: ctx.conversationId,
@@ -223,7 +223,7 @@ export async function launchClaude(ctx: SendContext, extraPrompt?: string): Prom
     tenantId: ctx.tenantId,
   });
   const prompt =
-    (extraPrompt || wrapDirectPrompt({ origin: "claude", userText: ctx.content, history: ctx.history })) +
+    (extraPrompt || wrapDirectPrompt({ origin: "claude", userText: ctx.content, history: ctx.history, attachments: ctx.attachments })) +
     buildCallbackInstructions({
       origin: "claude",
       conversationId: ctx.conversationId,
@@ -331,7 +331,7 @@ export async function launchWorkspaceAgent(
     tenantId: ctx.tenantId,
   });
   const input =
-    (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history })) +
+    (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments })) +
     buildCallbackInstructions({
       origin: provider,
       conversationId: ctx.conversationId,
