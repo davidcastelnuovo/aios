@@ -107,6 +107,7 @@ export function useBrainChannel(tenantId: string | null) {
     idempotencyKey: string;
     route?: BrainRoute;
     contextMetadata?: SystemFixContextMetadata | null;
+    attachments?: Array<{ name: string; url: string; type: "image" | "file"; size?: number; path?: string }>;
   }): Promise<ChannelSendResult> => {
     if (!tenantId) throw new Error("missing tenant");
     const route = args.route || selectedRef.current;
@@ -125,6 +126,7 @@ export function useBrainChannel(tenantId: string | null) {
         conversation_history: args.history,
         idempotency_key: args.idempotencyKey,
         context_metadata: args.contextMetadata ?? undefined,
+        attachments: args.attachments?.length ? args.attachments : undefined,
       }),
     });
     const json = await res.json().catch(() => ({}));

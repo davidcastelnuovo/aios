@@ -13,7 +13,7 @@ export function capabilitiesForProvider(provider: ChannelProvider): AdapterCapab
         streaming_reply: true,
         async_reply: false,
         persistent_thread: true,
-        attachments: false,
+        attachments: true,
         tool_calls: true,
         callback_required: false,
         supports_cancel: true,
