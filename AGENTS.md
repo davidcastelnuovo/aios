@@ -54,3 +54,4 @@ Verification / token budget:
 Preview / merge (standing rule for every Cloud Agent):
 - **Always send David the Vercel preview URL** (the development environment link) when you finish work on a branch, and again after every follow-up that pushes new commits. Include the in-app path when known (e.g. `/t/<tenant>/marketing/department/copy`).
 - **Do not merge to `main` until he has that preview link and explicitly says `מאשר לפרודקשן`.** Coordinate with other open agents the same way — each agent sends its own branch preview; nobody merges on another agent's behalf.
+- **Exception — safe bugfix auto-merge:** PRs to `main` from `fix/*` or `cursor/fix-*` branches may carry label `safe-bugfix` (≤8 files, no migrations/ops/workflow edits). After `CI — frontend build` passes, GitHub auto-merges. Postmortems: `docs/postmortems/`. See `docs/postmortems/2026-09-01-clients-dialog-import.md` for the Clients Dialog incident.
