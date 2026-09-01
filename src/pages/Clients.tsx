@@ -57,6 +57,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { isSeoTaggedClient } from "@/lib/seoClients";
 
 // Session-scoped: owners and SEO viewers get organization-wide starting view on first
