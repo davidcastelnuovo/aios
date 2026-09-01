@@ -1065,6 +1065,19 @@ export function ClientsChatView({
                                 initialFocus
                                 className={cn("p-3 pointer-events-auto")}
                               />
+                              {selectedClient.start_date && (
+                                <div className="p-2 border-t">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => updateClientField(selectedClient.id, "start_date", null)}
+                                  >
+                                    <X className="h-4 w-4 ml-2" />
+                                    נקה תאריך
+                                  </Button>
+                                </div>
+                              )}
                             </PopoverContent>
                           </Popover>
                           <span className="text-muted-foreground">:תחילת פעילות</span>
@@ -1089,6 +1102,19 @@ export function ClientsChatView({
                                 initialFocus
                                 className={cn("p-3 pointer-events-auto")}
                               />
+                              {(selectedClient as any).end_date && (
+                                <div className="p-2 border-t">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => updateClientField(selectedClient.id, "end_date", null)}
+                                  >
+                                    <X className="h-4 w-4 ml-2" />
+                                    נקה תאריך
+                                  </Button>
+                                </div>
+                              )}
                             </PopoverContent>
                           </Popover>
                           <span className="text-muted-foreground">:סיום פעילות</span>
