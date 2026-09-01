@@ -220,6 +220,79 @@ html:has(.cc-root) body {
 .cc-header-clock--compact .cc-num {
   font-size: 0.875rem;
 }
+.cc-seat-picker {
+  min-width: 0;
+}
+@media (max-width: 639px) {
+  .cc-seat-picker .cc-seat-select-trigger {
+    width: 100%;
+    max-width: none;
+  }
+}
+.cc-root .cc-seat-select-trigger {
+  flex: 1;
+  min-width: 0;
+  max-width: min(100%, 220px);
+  height: 40px;
+  border-color: var(--cc-line) !important;
+  background:
+    linear-gradient(180deg, rgba(76, 195, 255, 0.06), transparent 40%),
+    rgba(8, 16, 34, 0.92) !important;
+  color: var(--cc-text) !important;
+  font-size: 0.8125rem;
+  padding-inline: 0.65rem;
+  box-shadow:
+    0 0 12px rgba(76, 195, 255, 0.08),
+    inset 0 1px 0 rgba(76, 195, 255, 0.1);
+}
+.cc-root .cc-seat-select-trigger:hover,
+.cc-root .cc-seat-select-trigger:focus,
+.cc-root .cc-seat-select-trigger[data-state="open"] {
+  border-color: var(--cc-line-strong) !important;
+  box-shadow:
+    0 0 16px rgba(76, 195, 255, 0.18),
+    inset 0 1px 0 rgba(76, 195, 255, 0.14);
+}
+.cc-root .cc-seat-select-trigger svg {
+  color: var(--cc-text-dim);
+}
+.cc-seat-select-value {
+  overflow: hidden;
+}
+.cc-seat-select-icon {
+  display: block;
+  width: 28px;
+  height: 32px;
+  flex-shrink: 0;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  filter: drop-shadow(0 0 4px rgba(76, 195, 255, 0.25));
+}
+.cc-seat-select-trigger .cc-seat-cluster {
+  width: 32px;
+  height: 32px;
+}
+.cc-seat-select-trigger .cc-seat-cluster-dot {
+  width: 16px;
+  height: 20px;
+}
+.cc-root .cc-seat-select-content {
+  border-color: var(--cc-line-strong) !important;
+  background: rgba(8, 16, 34, 0.98) !important;
+  color: var(--cc-text) !important;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    0 0 24px rgba(76, 195, 255, 0.12);
+}
+.cc-root .cc-seat-select-item {
+  color: var(--cc-text) !important;
+}
+.cc-root .cc-seat-select-item:focus,
+.cc-root .cc-seat-select-item[data-highlighted] {
+  background: rgba(76, 195, 255, 0.12) !important;
+  color: var(--cc-text) !important;
+}
 .cc-seat-buttons {
   flex: 1;
   min-width: 0;

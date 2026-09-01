@@ -7,6 +7,12 @@ import {
   routeForSeatKey,
   seatKeyFromRoute,
 } from "@/lib/agentSeats";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 
 const SEAT_ARIA: Record<AgentSeatKey, string> = {
@@ -47,6 +53,57 @@ function SharedCluster() {
   );
 }
 
+function SeatOptionIcon({ seatKey }: { seatKey: AgentSeatKey }) {
+  if (seatKey === "shared") return <SharedCluster />;
+  return (
+    <span
+      className="cc-seat-select-icon"
+      style={{ backgroundImage: `url(${AGENT_SPRITES[seatKey]})` }}
+      aria-hidden
+    />
+  );
+}
+
+export function AgentSeatSelect({
+  routes,
+  selected,
+  onSelect,
+  className = "",
+}: Pick<AgentSeatRailProps, "routes" | "selected" | "onSelect" | "className">) {
+  const activeKey = seatKeyFromRoute(selected);
+  const options = RAIL_SEAT_ORDER.filter((key) => key === "shared" || routeForSeatKey(routes, key));
+
+  return (
+    <Select
+      value={activeKey}
+      onValueChange={(key) => {
+        const route = routeForSeatKey(routes, key as AgentSeatKey);
+        if (route) onSelect(route);
+      }}
+    >
+      <SelectTrigger
+        aria-label="בחירת סוכן"
+        className={`cc-seat-select-trigger border-[var(--cc-line)] bg-[rgba(8,16,34,0.85)] text-[var(--cc-text)] shadow-none ring-0 ring-offset-0 focus:ring-0 focus:ring-offset-0${className ? ` ${className}` : ""}`}
+      >
+        <span className="cc-seat-select-value flex min-w-0 items-center gap-2">
+          <SeatOptionIcon seatKey={activeKey} />
+          <span className="truncate">{SEAT_ARIA[activeKey]}</span>
+        </span>
+      </SelectTrigger>
+      <SelectContent className="cc-seat-select-content border-[var(--cc-line-strong)] bg-[rgba(8,16,34,0.98)] text-[var(--cc-text)]">
+        {options.map((key) => (
+          <SelectItem key={key} value={key} textValue={SEAT_ARIA[key]} className="cc-seat-select-item">
+            <span className="flex items-center gap-2">
+              <SeatOptionIcon seatKey={key} />
+              <span>{SEAT_ARIA[key]}</span>
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function AgentSeatButtons({
   routes,
   selected,
@@ -55,7 +112,7 @@ export function AgentSeatButtons({
 }: Pick<AgentSeatRailProps, "routes" | "selected" | "onSelect" | "className">) {
   const activeKey = seatKeyFromRoute(selected);
   return (
-    <div className={`cc-seat-buttons flex items-center justify-center gap-1.5 sm:gap-2${className ? ` ${className}` : ""}`} dir="rtl">
+    <div className={`cc-seat-buttons hidden items-center justify-center gap-1.5 sm:flex sm:gap-2${className ? ` ${className}` : ""}`} dir="rtl">
       {RAIL_SEAT_ORDER.map((key) => {
         const route = routeForSeatKey(routes, key);
         if (!route && key !== "shared") return null;
@@ -159,17 +216,20 @@ export function AgentSeatRail({
   embedded = false,
   hideStatus = false,
 }: AgentSeatRailProps) {
-  const buttons = (
-    <AgentSeatButtons routes={routes} selected={selected} onSelect={onSelect} />
+  const picker = (
+    <>
+      <AgentSeatSelect routes={routes} selected={selected} onSelect={onSelect} className="sm:hidden" />
+      <AgentSeatButtons routes={routes} selected={selected} onSelect={onSelect} />
+    </>
   );
 
   if (embedded) {
-    return buttons;
+    return <div className="cc-seat-picker flex min-w-0 flex-1 justify-center">{picker}</div>;
   }
 
   return (
     <div className={`cc-seat-rail shrink-0 px-2 py-2 sm:px-3${className ? ` ${className}` : ""}`} dir="rtl">
-      {buttons}
+      {picker}
       {!hideStatus && (
         <AgentSeatStatus
           selected={selected}
