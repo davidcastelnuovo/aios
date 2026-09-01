@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-09-01 — Command Center OpenAI billing widget + brain flags
+- **Skin slug:** `openai_billing_status` (existing — unchanged)
+- **What Carmen can now do:** Point David to Command Center **שימוש** panel for live OpenAI Admin costs (month spend, daily trend, line items, tokens). Same data as `get_openai_billing_status` tool. Never invent credit balance.
+- **How:** Edge `openai-billing-status` + `OPENAI_ADMIN_KEY`. Feature flags (Staging): `CARMEN_LIGHTWEIGHT_BRAIN` (sticky Cursor Direct), `CODEX_USE_OPENAI_API` (sync Codex via OpenAI). See `docs/ai-cost-and-brain-architecture.md`.
+- **Origin:** Carmen → Cursor DEV TASK — David: cost visibility in Command Center + token-saving brain/Codex architecture.
+
 ### 2026-08-31 — מצב ביצוע יעדים (Goal Execution Mode)
 - **Skin slug:** `carmen_goal_execution_mode` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Manage execution goals in Command Center: dedup, milestones, blockers, link tasks/dev tasks/PRs, report progress, delegate to Cursor without concurrency caps. Approval-gated mutations use existing queue.
