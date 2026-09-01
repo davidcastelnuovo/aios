@@ -283,6 +283,74 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       if (tenantId) localStorage.setItem(lastConversationStorageKey(tenantId), id);
     };
 
+    const mapDbMessage = useCallback((m: {
+      id?: string;
+      role: string;
+      content?: string;
+      speaker?: string;
+      channel?: string;
+      event_type?: string;
+    }): ChatMessage => ({
+      id: m.id,
+      role: (m.role === "system" ? "assistant" : m.role) as ChatMessage["role"],
+      content: m.content ?? "",
+      speaker: m.speaker,
+      channel: m.channel,
+      tool: m.event_type === "progress" || m.event_type === "system" ? m.content : undefined,
+      ...(m.channel && m.channel !== "internal" ? tagChatTurn("external_channel_callback") : {}),
+    }), []);
+
+    const fetchConversationMessages = useCallback(async (convId: string) => {
+      const { data } = await (supabase as any)
+        .from("ai_conversation_messages")
+        .select("id, role, content, speaker, channel, event_type, created_at")
+        .eq("conversation_id", convId)
+        .order("created_at", { ascending: true });
+      if (!Array.isArray(data)) return [] as ChatMessage[];
+      return data
+        .filter((m: { role: string }) => m.role === "user" || m.role === "assistant" || m.role === "system")
+        .map(mapDbMessage);
+    }, [mapDbMessage]);
+
+    const appendRemoteMessage = useCallback((row: {
+      id?: string;
+      role?: string;
+      content?: string;
+      speaker?: string;
+      channel?: string;
+      event_type?: string;
+    }) => {
+      if (!row?.content || row.role === "user") return;
+      setMessages((prev) => {
+        if (row.id && prev.some((m) => m.id === row.id)) return prev;
+        if (row.role === "assistant" && prev.some((m) => m.role === "assistant" && m.content === row.content && m.channel === row.channel)) {
+          return prev;
+        }
+        return [...prev, mapDbMessage(row)];
+      });
+      if (row.role === "assistant" && row.channel && row.channel !== "internal") {
+        realtimeRef.current?.speakText(row.content);
+      }
+      scrollDown();
+    }, [mapDbMessage]);
+
+    const syncConversationMessages = useCallback(async (convId: string) => {
+      if (conversationIdRef.current !== convId) return;
+      try {
+        const remote = await fetchConversationMessages(convId);
+        if (conversationIdRef.current !== convId || !remote.length) return;
+        setMessages((prev) => {
+          const known = new Set(prev.filter((m) => m.id).map((m) => m.id));
+          const additions = remote.filter((m) => m.id && !known.has(m.id) && m.role !== "user");
+          if (!additions.length) return prev;
+          return [...prev, ...additions];
+        });
+        scrollDown();
+      } catch { /* best-effort */ }
+    }, [fetchConversationMessages]);
+
+    const setBrainStatus = brain.setStatus;
+
     const streamInternal = useCallback(async (
       trimmed: string,
       history: Array<{ role: string; content: string }>,
@@ -784,38 +852,32 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "ai_conversation_messages", filter: `conversation_id=eq.${conversationId}` },
           (payload: { new: any }) => {
-            const row = payload.new;
-            if (!row?.content) return;
-            if (row.role === "user") return;
-            setMessages((prev) => {
-              if (row.id && prev.some((m) => m.id === row.id)) return prev;
-              if (row.role === "assistant" && prev.some((m) => m.role === "assistant" && m.content === row.content)) return prev;
-              return [...prev, {
-                id: row.id,
-                role: row.role === "assistant" ? "assistant" : row.event_type === "progress" ? "tool_call" : "assistant",
-                content: row.content,
-                tool: row.event_type === "progress" || row.event_type === "system" ? row.content : undefined,
-                speaker: row.speaker,
-                channel: row.channel,
-                ...tagChatTurn(row.channel && row.channel !== "internal" ? "external_channel_callback" : "typed"),
-              }];
-            });
-            if (row.role === "assistant" && row.channel && row.channel !== "internal") {
-              realtimeRef.current?.speakText(row.content);
-              scrollDown();
-            }
+            appendRemoteMessage(payload.new);
           },
         )
         .on(
           "postgres_changes",
           { event: "UPDATE", schema: "public", table: "ai_conversations", filter: `id=eq.${conversationId}` },
           (payload: { new: any }) => {
-            if (payload.new?.status) brain.setStatus(payload.new.status);
+            const nextStatus = payload.new?.status;
+            if (nextStatus) setBrainStatus(nextStatus);
+            if (nextStatus === "idle") void syncConversationMessages(conversationId);
           },
         )
-        .subscribe();
+        .subscribe((status: string) => {
+          if (status === "SUBSCRIBED") void syncConversationMessages(conversationId);
+        });
       return () => { (supabase as any).removeChannel(channel); };
-    }, [conversationId, brain]);
+    }, [conversationId, appendRemoteMessage, setBrainStatus, syncConversationMessages]);
+
+    useEffect(() => {
+      if (!conversationId || brain.status !== "waiting_external") return;
+      void syncConversationMessages(conversationId);
+      const pollId = window.setInterval(() => {
+        void syncConversationMessages(conversationId);
+      }, 4000);
+      return () => window.clearInterval(pollId);
+    }, [conversationId, brain.status, syncConversationMessages]);
 
     /** Send a finished conversation to Carmen's memory (importance-graded extraction). */
     const learnFromConversation = useCallback(async () => {
@@ -854,28 +916,15 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       brain.setStatus((topicIsLive(conv.status) ? conv.status : "idle") as ConversationChannelStatus);
       setStreamingText(streamBufRef.current[conv.id] || "");
       setIsStreaming(liveStreamIdsRef.current.includes(conv.id));
-      let msgs: Array<{ id?: string; role: string; content?: string; speaker?: string; channel?: string }> = [];
+      let msgs: ChatMessage[] = [];
       try {
-        const { data } = await (supabase as any)
-          .from("ai_conversation_messages")
-          .select("id, role, content, speaker, channel, created_at")
-          .eq("conversation_id", conv.id)
-          .order("created_at", { ascending: true });
-        if (Array.isArray(data) && data.length) msgs = data;
+        msgs = await fetchConversationMessages(conv.id);
       } catch { /* empty until messages arrive */ }
       if (conversationIdRef.current !== conv.id) return;
-      setMessages(msgs
-        .filter(m => m.role === "user" || m.role === "assistant" || m.role === "system")
-        .map(m => ({
-          id: (m as any).id,
-          role: (m.role === "system" ? "assistant" : m.role) as "user" | "assistant",
-          content: m.content ?? "",
-          speaker: m.speaker,
-          channel: m.channel,
-        })));
+      setMessages(msgs);
       setHistory(false);
       scrollDown();
-    }, [learnFromConversation, brain]);
+    }, [learnFromConversation, brain, fetchConversationMessages]);
 
     const { data: pastConversations } = useQuery({
       queryKey: ["cc-conversations", tenantId],
