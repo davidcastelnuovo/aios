@@ -39,8 +39,9 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ExternalLink, Link2, Pencil, RefreshCw, Search } from "lucide-react";
+import { ExternalLink, Link2, Pencil, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { type OverallStatus } from "@/lib/healthScore";
 import {
   PulseStatusOverrideDialog,
@@ -105,7 +106,7 @@ function StatusDot({ status }: { status: OverallStatus }) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="text-xl cursor-default">{dot}</span>
+          <span className="text-base md:text-xl cursor-default">{dot}</span>
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
@@ -128,6 +129,7 @@ export default function DMMDashboard() {
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
   const [filterCampaigner, setFilterCampaigner] = useState("all");
   const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [overrideTarget, setOverrideTarget] = useState<PulseStatusOverrideTarget | null>(null);
   const [callLogTarget, setCallLogTarget] = useState<PulseClientCallTarget | null>(null);
   const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
@@ -495,12 +497,96 @@ export default function DMMDashboard() {
     return <div className="flex justify-center p-12 text-muted-foreground">טוען בדיקת דופק...</div>;
   }
 
+  const activeFilterCount = [
+    selectedAgency && selectedAgency !== "all",
+    period !== "last_7_days",
+    search.trim().length > 0,
+    filterStatus !== "all",
+    filterService !== "campaign",
+    showCampaignerPicker && filterCampaigner !== "all",
+  ].filter(Boolean).length;
+
+  const filtersContent = (
+    <div className="flex flex-col md:flex-row md:flex-wrap gap-2 md:items-center w-full">
+      {agencies && agencies.length > 1 && (
+        <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+          <SelectTrigger className="w-full md:w-[180px]">
+            <SelectValue placeholder="כל הסוכנויות" />
+          </SelectTrigger>
+          <SelectContent className="bg-background">
+            <SelectItem value="all">כל הסוכנויות</SelectItem>
+            {agencies.map((a) => (
+              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
+        <SelectTrigger className="w-full md:w-[170px]">
+          <SelectValue placeholder="טווח זמן" />
+        </SelectTrigger>
+        <SelectContent className="bg-background">
+          {PULSE_PERIOD_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="relative w-full md:flex-1 md:min-w-[200px]">
+        <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="חפש לקוח..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pr-9"
+        />
+      </div>
+      <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+        <SelectTrigger className="w-full md:w-[150px]">
+          <SelectValue placeholder="כל הסטטוסים" />
+        </SelectTrigger>
+        <SelectContent className="bg-background">
+          <SelectItem value="all">כל הסטטוסים</SelectItem>
+          <SelectItem value="red">🔴 דורש טיפול</SelectItem>
+          <SelectItem value="yellow">🟡 לתשומת לב</SelectItem>
+          <SelectItem value="green">🟢 תקין</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
+        <SelectTrigger className="w-full md:w-[160px]">
+          <SelectValue placeholder="שירותים" />
+        </SelectTrigger>
+        <SelectContent className="bg-background">
+          <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
+          <SelectItem value="all">כל השירותים</SelectItem>
+          <SelectItem value="ppc_google">PPC Google</SelectItem>
+          <SelectItem value="ppc_meta">PPC Meta</SelectItem>
+          <SelectItem value="seo">SEO</SelectItem>
+        </SelectContent>
+      </Select>
+      {showCampaignerPicker && (
+        <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+          <SelectTrigger className="w-full md:w-[170px]">
+            <SelectValue placeholder="קמפיינר" />
+          </SelectTrigger>
+          <SelectContent className="bg-background">
+            <SelectItem value="all">כל הקמפיינרים</SelectItem>
+            {campaigners.map((campaigner) => (
+              <SelectItem key={campaigner.id} value={campaigner.id}>
+                {campaigner.full_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+
   return (
-    <div className="p-4 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">דשבורד בדיקת דופק</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
+    <div className="p-3 sm:p-4 max-w-full overflow-x-hidden space-y-3 md:space-y-4" dir="rtl">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold">דשבורד בדיקת דופק</h1>
+          <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
             {summary.total} לקוחות קמפיין פעילים
             {` · ${periodBounds.label}`}
             {period !== "last_7_days"
@@ -510,8 +596,8 @@ export default function DMMDashboard() {
             {summary.missingPulse > 0 ? ` · ${summary.missingPulse} ממתינים לחישוב` : ""}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => copyShareLink()}>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => copyShareLink()}>
             <Link2 className="h-4 w-4 ml-1" />
             העתק קישור
             {selectedAgency && selectedAgency !== "all" ? " לסוכנות" : ""}
@@ -519,6 +605,7 @@ export default function DMMDashboard() {
           <Button
             variant="outline"
             size="sm"
+            className="flex-1 sm:flex-none"
             onClick={() => {
               refetchClients();
               refetchPulse();
@@ -532,117 +619,73 @@ export default function DMMDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 md:gap-3 min-w-0">
         <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-red-50"
+          className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-red-50 min-w-0"
           onClick={() => setFilterStatus(filterStatus === "red" ? "all" : "red")}
         >
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-3xl">🔴</span>
-            <div>
-              <p className="text-2xl font-bold text-red-700">{summary.red}</p>
-              <p className="text-sm text-red-600">דורשים טיפול</p>
+          <CardContent className="p-2 sm:p-3 md:p-4 flex items-center gap-1.5 sm:gap-3 min-w-0">
+            <span className="text-lg sm:text-2xl md:text-3xl shrink-0 leading-none">🔴</span>
+            <div className="min-w-0">
+              <p className="text-base sm:text-xl md:text-2xl font-bold text-red-700 leading-tight">{summary.red}</p>
+              <p className="text-[10px] sm:text-xs md:text-sm text-red-600 truncate">דורשים טיפול</p>
             </div>
           </CardContent>
         </Card>
         <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-yellow-50"
+          className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-yellow-50 min-w-0"
           onClick={() => setFilterStatus(filterStatus === "yellow" ? "all" : "yellow")}
         >
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-3xl">🟡</span>
-            <div>
-              <p className="text-2xl font-bold text-yellow-700">{summary.yellow}</p>
-              <p className="text-sm text-yellow-600">לתשומת לב</p>
+          <CardContent className="p-2 sm:p-3 md:p-4 flex items-center gap-1.5 sm:gap-3 min-w-0">
+            <span className="text-lg sm:text-2xl md:text-3xl shrink-0 leading-none">🟡</span>
+            <div className="min-w-0">
+              <p className="text-base sm:text-xl md:text-2xl font-bold text-yellow-700 leading-tight">{summary.yellow}</p>
+              <p className="text-[10px] sm:text-xs md:text-sm text-yellow-600 truncate">לתשומת לב</p>
             </div>
           </CardContent>
         </Card>
         <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-green-50"
+          className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-green-50 min-w-0"
           onClick={() => setFilterStatus(filterStatus === "green" ? "all" : "green")}
         >
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-3xl">🟢</span>
-            <div>
-              <p className="text-2xl font-bold text-green-700">{summary.green}</p>
-              <p className="text-sm text-green-600">תקינים</p>
+          <CardContent className="p-2 sm:p-3 md:p-4 flex items-center gap-1.5 sm:gap-3 min-w-0">
+            <span className="text-lg sm:text-2xl md:text-3xl shrink-0 leading-none">🟢</span>
+            <div className="min-w-0">
+              <p className="text-base sm:text-xl md:text-2xl font-bold text-green-700 leading-tight">{summary.green}</p>
+              <p className="text-[10px] sm:text-xs md:text-sm text-green-600 truncate">תקינים</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center">
-        {agencies && agencies.length > 1 && (
-          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="כל הסוכנויות" />
-            </SelectTrigger>
-            <SelectContent className="bg-background">
-              <SelectItem value="all">כל הסוכנויות</SelectItem>
-              {agencies.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
-          <SelectTrigger className="w-[170px]">
-            <SelectValue placeholder="טווח זמן" />
-          </SelectTrigger>
-          <SelectContent className="bg-background">
-            {PULSE_PERIOD_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="חפש לקוח..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pr-9"
-          />
-        </div>
-        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="כל הסטטוסים" />
-          </SelectTrigger>
-          <SelectContent className="bg-background">
-            <SelectItem value="all">כל הסטטוסים</SelectItem>
-            <SelectItem value="red">🔴 דורש טיפול</SelectItem>
-            <SelectItem value="yellow">🟡 לתשומת לב</SelectItem>
-            <SelectItem value="green">🟢 תקין</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="שירותים" />
-          </SelectTrigger>
-          <SelectContent className="bg-background">
-            <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
-            <SelectItem value="all">כל השירותים</SelectItem>
-            <SelectItem value="ppc_google">PPC Google</SelectItem>
-            <SelectItem value="ppc_meta">PPC Meta</SelectItem>
-            <SelectItem value="seo">SEO</SelectItem>
-          </SelectContent>
-        </Select>
-        {showCampaignerPicker && (
-          <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
-            <SelectTrigger className="w-[170px]">
-              <SelectValue placeholder="קמפיינר" />
-            </SelectTrigger>
-            <SelectContent className="bg-background">
-              <SelectItem value="all">כל הקמפיינרים</SelectItem>
-              {campaigners.map((campaigner) => (
-                <SelectItem key={campaigner.id} value={campaigner.id}>
-                  {campaigner.full_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+      {/* Mobile: filters in sheet */}
+      <div className="md:hidden">
+        <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="w-full justify-between">
+              <span className="flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4" />
+                סינון וחיפוש
+              </span>
+              {activeFilterCount > 0 ? (
+                <Badge variant="secondary" className="text-xs">{activeFilterCount} פעילים</Badge>
+              ) : null}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>סינון וחיפוש</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4 space-y-3">{filtersContent}</div>
+            <Button className="w-full mt-4" onClick={() => setMobileFiltersOpen(false)}>
+              הצג תוצאות
+            </Button>
+          </SheetContent>
+        </Sheet>
       </div>
+
+      {/* Desktop: inline filters */}
+      <div className="hidden md:block">{filtersContent}</div>
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
