@@ -390,6 +390,42 @@ export async function loadSession(
   return (data as ChannelSessionRow) || null;
 }
 
+/** Resolve the Command Center session to deliver async replies back into AIOS. */
+export async function resolveCallbackSessionForTenant(
+  sb: SupabaseClient,
+  tenantId: string,
+  conversationIdHint?: string | null,
+): Promise<ChannelSessionRow | null> {
+  const hint = String(conversationIdHint || "").trim();
+  if (hint) {
+    for (const provider of ["cursor", "grok", "codex"] as ChannelProvider[]) {
+      const running = await getRunningSession(sb, hint, provider);
+      if (running) return running;
+      const latest = await getLatestSession(sb, hint, provider);
+      if (latest) return latest;
+    }
+  }
+  const { data } = await sb
+    .from("agent_channel_sessions")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .in("provider", ["cursor", "grok", "codex"])
+    .in("status", ["running", "waiting"])
+    .order("last_activity_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (data) return data as ChannelSessionRow;
+  const { data: recent } = await sb
+    .from("agent_channel_sessions")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .in("provider", ["cursor", "grok", "codex"])
+    .order("last_activity_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (recent as ChannelSessionRow) || null;
+}
+
 export async function logChannelAction(
   sb: SupabaseClient,
   args: {

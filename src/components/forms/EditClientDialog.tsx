@@ -70,6 +70,8 @@ const formSchema = z.object({
   services: z.array(z.string()).default([]),
   meta_ads_account_id: z.string().optional(),
   google_ads_account_id: z.string().optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional(),
 });
 
 interface EditClientDialogProps {
@@ -321,6 +323,8 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
       services: client.services || [],
       meta_ads_account_id: client.meta_ads_account_id || "",
       google_ads_account_id: client.google_ads_account_id || "",
+      start_date: client.start_date || "",
+      end_date: client.end_date || "",
     },
   });
   
@@ -407,6 +411,13 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [financialData?.retainer, financialData?.monthly_budget, client.id]);
 
+  useEffect(() => {
+    if (!open) return;
+    form.setValue("start_date", client.start_date || "");
+    form.setValue("end_date", client.end_date || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, client.id, client.start_date, client.end_date]);
+
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       if (!tenantId) throw new Error("Tenant ID not found");
@@ -433,6 +444,8 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
           services: values.services || [],
           meta_ads_account_id: values.meta_ads_account_id || null,
           google_ads_account_id: values.google_ads_account_id || null,
+          start_date: values.start_date || null,
+          end_date: values.end_date || null,
         })
         .eq("id", client.id)
         .select("id");
@@ -793,6 +806,36 @@ export function EditClientDialog({ client, open, onOpenChange, onDuplicate, fina
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="start_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{getFieldLabel('start_date', 'תאריך התחלת עבודה')}</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} value={field.value || ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="end_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{getFieldLabel('end_date', 'תאריך סיום עבודה')}</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} value={field.value || ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
