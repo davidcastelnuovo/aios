@@ -46,6 +46,7 @@ on:
       - 'supabase/ops/fix_team_member_report_dashboard_access.sql'
       - 'supabase/ops/apply_client_dashboard_entity_route_skin.sql'
       - 'supabase/ops/fix_owner_campaigner_rls.sql'
+      - 'supabase/ops/fix_campaign_pulse_snapshots_owner_read.sql'
       - 'supabase/ops/apply_cursor_human_task_queue.sql'
 
 jobs:
