@@ -4,6 +4,7 @@ import {
   asCursorSessionId,
   resolveCursorDirectSession,
 } from "../cursor-direct-session.ts";
+import { lightweightBrainEnabled } from "../carmen-brain-flags.ts";
 
 export type OpenChatProvider = "cursor" | "codex";
 
@@ -32,10 +33,14 @@ export function envOpenChatId(
 
 /** Opt-in sticky reuse for Command Center Cursor Direct (default: new agent per message). */
 export function cursorDirectStickyEnabled(env: Record<string, string | undefined> = {}): boolean {
+  if (lightweightBrainEnabled(env)) return true;
   return String(env.CURSOR_DIRECT_STICKY || "").toLowerCase() === "true";
 }
 
 export function allowCreateNewCloudAgent(env: Record<string, string | undefined> = {}): boolean {
+  if (lightweightBrainEnabled(env)) {
+    return String(env.CURSOR_DIRECT_ALLOW_CREATE || "").toLowerCase() === "true";
+  }
   if (cursorDirectStickyEnabled(env)) {
     return String(env.CURSOR_DIRECT_ALLOW_CREATE || "").toLowerCase() === "true";
   }

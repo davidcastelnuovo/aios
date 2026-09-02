@@ -32,6 +32,24 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-09-01 — Command Center OpenAI billing widget + brain flags
+- **Skin slug:** `openai_billing_status` (existing — unchanged)
+- **What Carmen can now do:** Point David to Command Center **שימוש** panel for live OpenAI Admin costs (month spend, daily trend, line items, tokens). Same data as `get_openai_billing_status` tool. Never invent credit balance.
+- **How:** Edge `openai-billing-status` + `OPENAI_ADMIN_KEY`. Feature flags (Staging): `CARMEN_LIGHTWEIGHT_BRAIN` (sticky Cursor Direct), `CODEX_USE_OPENAI_API` (sync Codex via OpenAI). See `docs/ai-cost-and-brain-architecture.md`.
+- **Origin:** Carmen → Cursor DEV TASK — David: cost visibility in Command Center + token-saving brain/Codex architecture.
+
+### 2026-08-31 — מצב ביצוע יעדים (Goal Execution Mode)
+- **Skin slug:** `carmen_goal_execution_mode` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Manage execution goals in Command Center: dedup, milestones, blockers, link tasks/dev tasks/PRs, report progress, delegate to Cursor without concurrency caps. Approval-gated mutations use existing queue.
+- **How:** Tools `create_execution_goal`, `get_execution_goal_report`, `add_goal_milestone`, `add_goal_blocker`, `link_task_to_execution_goal` + dev task tools with `goal_id`. UI: CC **יעדים** view. Tables `goal_milestones`, `goal_blockers`, `goal_events`.
+- **Origin:** Carmen → Cursor DEV TASK for David — Goal Execution Mode in Command Center.
+
+### 2026-08-31 — מרכז משימות פיתוח (Dev Task Command Center)
+- **Skin slug:** `carmen_dev_task_command_center` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Intake dev/system requests with structured brief, dedup against open tasks, approve, dispatch to Cursor, track session/PR links, reconcile after timeout — without opening duplicate sessions. Command Center **פיתוח** view lists all tasks.
+- **How:** Tools `find_dev_task_duplicates`, `create_dev_task`, `approve_dev_task`, `dispatch_dev_task`, `list_dev_tasks`, `update_dev_task`, `attach_dev_task_session`. Tables `dev_tasks` / `dev_task_events`. Edge `dev-task-center`. No concurrency caps.
+- **Origin:** Carmen → Cursor DEV TASK for David — structured multi-task dev workflow in Command Center.
+
 ### 2026-08-30 — תור משימות אנושיות → Cursor (auto-claim)
 - **Skin slug:** n/a (edge + tools). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
 - **What Carmen can now do:** Assign human `tasks` to Cursor (`assigned_agent=Cursor`, status `open`). `dispatch-cursor-tasks` claims one task, fires `request_dev_task`, links `cursor_dispatches.human_task_id`. When Cursor finishes, call `mcp_Cursor__complete_human_task` → marks done + dispatches next.

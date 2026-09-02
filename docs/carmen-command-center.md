@@ -23,7 +23,7 @@ src/components/carmen-command/
   ParliamentBoard.tsx
   useBrainChannel.ts    # gateway agent-channel-send
   panels.tsx            # HudPanel + פאנלים: Core, פיד, דופק, משימות, ציר זמן, פקודות
-  UsagePanel.tsx        # גרף שימוש ב-API (recharts)
+  UsagePanel.tsx        # גרף שימוש + OpenAI Admin billing (recharts)
   useCommandData.ts     # כל שאילתות הנתונים (react-query) + Realtime
   command-center.css    # שפת העיצוב (משתני CSS, גריד, אנימציות)
 ```
@@ -60,7 +60,18 @@ src/components/carmen-command/
 כפתור **פתחי סיידבר** בכותרת פותח פאנל מימין — דוחף את תוכן מרכז הבקרה שמאלה (לא overlay). במצב מרכז בקרה, כשהסיידבר פתוח הצ'אט התחתון מוסתר; במצב סוכנים — הצ'אט המלא נשאר לצד הסיידבר.
 
 - כל הודעה מהסיידבר נשלחת עם `ui_context` (מסלול, מודול, מזהים מה-URL).
-- **שלחי תיקון לפיתוח** — רק למורשים → כרמן מנתבת ל-Cursor דרך `request_dev_task`.
+- **שלחי תיקון לפיתוח** — רק למורשים → כרמן מנתבת דרך workflow משימות פיתוח (ראו למטה).
+
+## משימות פיתוח (Dev Task Command Center)
+
+כפתור **פיתוח** בכותרת פותח מצב `dev_tasks` — רשימת משימות פיתוח מובנות ל-Cursor/Grok/Manus.
+
+- **טבלאות:** `dev_tasks` + `dev_task_events` (מיגרציה `20260831170000`).
+- **API:** edge function `dev-task-center` (JWT).
+- **כלי כרמן:** `find_dev_task_duplicates`, `create_dev_task`, `approve_dev_task`, `dispatch_dev_task`, `list_dev_tasks`, `update_dev_task`, `attach_dev_task_session`.
+- **דדופ:** חיפוש כותרות דומות במשימות פתוחות לפני יצירה/שליחה.
+- **reconcile:** אם dispatch נכשל ב-timeout אבל נפתח סשן — קישור ידני או `attach_dev_task_session`.
+- **אין הגבלת מקביליות** — ניהול לפי עדיפות, סטטוס, דדופ וקישורים בלבד.
 
 ## בורר מוח
 

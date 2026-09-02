@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   OPENAI_CREDIT_BALANCE_UNAVAILABLE_REASON,
   buildOpenAiBillingStatus,
+  extractDailyCostBuckets,
+  extractDailyUsageBuckets,
   formatOpenAiBillingWhatsApp,
   isSuperAdminRole,
   monthUtcBounds,
@@ -88,6 +90,30 @@ test("WhatsApp summary is concise and mentions unavailable credit", () => {
   assert.doesNotMatch(text, /sk-/);
   assert.ok(text.length < 800);
   assert.ok(OPENAI_CREDIT_BALANCE_UNAVAILABLE_REASON.includes("billing"));
+});
+
+test("extractDailyCostBuckets preserves dates and sums", () => {
+  const payload = {
+    data: [
+      { start_time: 1756684800, results: [{ amount: { value: 1.5 }, line_item: "gpt-4o-mini" }] },
+      { start_time: 1756771200, results: [{ amount: { value: 2.0 }, line_item: "gpt-4o-mini" }] },
+    ],
+  };
+  const days = extractDailyCostBuckets(payload);
+  assert.equal(days.length, 2);
+  assert.equal(days[0].cost, 1.5);
+  assert.equal(days[1].cost, 2);
+});
+
+test("extractDailyUsageBuckets aggregates per day", () => {
+  const payload = {
+    data: [
+      { start_time: 1756684800, results: [{ input_tokens: 100, output_tokens: 50, num_model_requests: 2 }] },
+    ],
+  };
+  const days = extractDailyUsageBuckets(payload);
+  assert.equal(days[0].total_tokens, 150);
+  assert.equal(days[0].num_model_requests, 2);
 });
 
 test("redactSecretsFromText strips API keys", () => {

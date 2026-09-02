@@ -10,4 +10,6 @@ export {
   buildOpenAiBillingStatus,
   formatOpenAiBillingWhatsApp,
   redactSecretsFromText,
+  extractDailyCostBuckets,
+  extractDailyUsageBuckets,
 } from './openai-billing.mjs'
