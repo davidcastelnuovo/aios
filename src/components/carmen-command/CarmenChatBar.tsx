@@ -1,8 +1,9 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Headphones, Loader2, Mic, MicOff, Play, Send, Square, Volume2, VolumeX, AudioLines } from "lucide-react";
+import { Headphones, Loader2, Mic, MicOff, Paperclip, Play, Send, Square, Volume2, VolumeX, AudioLines, X, File as FileIcon, Image as ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { CarmenFaceState } from "./CarmenFace";
 import { startRealtimeVoice, RealtimeHandle } from "./realtimeVoice";
 import { ChatMessageRow } from "./ChatMessageRow";
@@ -32,11 +33,19 @@ import {
 } from "@/lib/carmenTranscribeOnly";
 import type { SystemFixContextMetadata } from "@/lib/systemFixContext";
 import { systemFixPromptAddon } from "@/lib/systemFixContext";
+import {
+  COMMAND_CENTER_FILE_ACCEPT,
+  COMMAND_CENTER_MAX_FILES,
+  formatAttachmentsForPrompt,
+  uploadCommandCenterAttachments,
+  type CommandCenterAttachment,
+} from "@/lib/commandCenterAttachments";
 
 interface ChatMessage {
   id?: string;
   role: "user" | "assistant" | "tool_call";
   content?: string;
+  attachments?: CommandCenterAttachment[];
   tool?: string;
   speaker?: string;
   channel?: string;
@@ -63,7 +72,7 @@ interface CarmenChatBarProps {
   historyOpen?: boolean;
   onHistoryOpenChange?: (open: boolean) => void;
   onHudModeChange?: (mode: HudStage) => void;
-  /** sidecar = text-only system-fix panel with screen context */
+  /** sidecar = system-fix panel with screen context (text + attachments + transcribe) */
   mode?: "default" | "sidecar";
   contextMetadata?: SystemFixContextMetadata | null;
   sidecarPlaceholder?: string;
@@ -104,7 +113,13 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     sidecarPlaceholder,
   }, ref) {
     const isSidecar = mode === "sidecar";
+    useEffect(() => {
+      if (!isSidecar) return;
+      setMicCaptureMode("transcribe_only");
+    }, [isSidecar]);
     const [input, setInput] = useState("");
+    const [attachments, setAttachments] = useState<CommandCenterAttachment[]>([]);
+    const [uploadingAttachments, setUploadingAttachments] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [streamingText, setStreamingText] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
@@ -135,6 +150,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     const outputMutedRef = useRef(false);
     const conversationIdRef = useRef<string | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const playingRef = useRef<HTMLAudioElement | null>(null);
@@ -151,6 +167,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     // OpenAI Realtime session — the only Command Center voice path
     const realtimeRef = useRef<RealtimeHandle | null>(null);
     const { toast } = useToast();
+    const { userId } = useCurrentUser();
     const queryClient = useQueryClient();
     const [conversationId, setConversationId] = useState<string | null>(null);
     const hud = hudStage({
@@ -381,9 +398,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       return finalText;
     }, [tenantId, enqueueSpeech, brain]);
 
-    const sendText = useCallback(async (text: string, opts?: { inputMode?: CarmenInputMode }) => {
+    const sendText = useCallback(async (text: string, opts?: { inputMode?: CarmenInputMode; attachments?: CommandCenterAttachment[] }) => {
       const trimmed = text.trim();
-      if (!trimmed || !tenantId) return;
+      const pendingAttachments = opts?.attachments ?? attachments;
+      if ((!trimmed && pendingAttachments.length === 0) || !tenantId) return;
       const activeId = conversationIdRef.current;
       if (composerLockedForChat({ conversationId: activeId, liveStreamIds, status: brain.status })) {
         toast({ title: "השיחה נעולה", description: "ממתינים לתשובת הערוץ או לסיום הפרלמנט.", variant: "destructive" });
@@ -398,8 +416,20 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         logTranscribeOnlyEvent("send_text", { chars: trimmed.length });
       }
       const sendRoute = brain.selected;
-      setMessages(prev => [...prev, { role: "user", content: trimmed, speaker: "user", channel: sendRoute.slug, ...turn }]);
+      const displayText = trimmed || (pendingAttachments.length ? "📎 קבצים מצורפים" : "");
+      const agentText = pendingAttachments.length
+        ? formatAttachmentsForPrompt(pendingAttachments, trimmed)
+        : trimmed;
+      setMessages(prev => [...prev, {
+        role: "user",
+        content: displayText,
+        attachments: pendingAttachments.length ? pendingAttachments : undefined,
+        speaker: "user",
+        channel: sendRoute.slug,
+        ...turn,
+      }]);
       setInput("");
+      setAttachments([]);
       setIsStreaming(true);
       setStreamingText("");
       scrollDown();
@@ -412,19 +442,20 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         const route = sendRoute;
         const ctxMeta = isSidecar ? contextMetadata : null;
         const routed = await brain.send({
-          content: trimmed,
+          content: trimmed || displayText,
           conversationId: conversationIdRef.current,
           inputMode: mode,
           history,
           idempotencyKey: crypto.randomUUID(),
           route,
           contextMetadata: ctxMeta,
+          attachments: pendingAttachments.length ? pendingAttachments : undefined,
         });
         rememberConv(routed.conversation_id);
         boundId = routed.conversation_id || conversationIdRef.current;
         if (boundId) setLiveStreamIds((prev) => (prev.includes(boundId!) ? prev : [...prev, boundId!]));
         if (routed.stream) {
-          await streamInternal(trimmed, history, boundId || "", ctxMeta);
+          await streamInternal(agentText, history, boundId || "", ctxMeta);
           if (mode === "transcribe_only") logTranscribeOnlyEvent("text_response", { stream: true });
         } else if (streamAppliesToActive(boundId, conversationIdRef.current)) {
           setMessages(prev => [...prev, {
@@ -442,7 +473,36 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         if (boundId) setLiveStreamIds((prev) => prev.filter((id) => id !== boundId));
         queryClient.invalidateQueries({ queryKey: ["cc-conversations", tenantId] });
       }
-    }, [tenantId, messages, stopSpeech, toast, brain, streamInternal, queryClient, liveStreamIds, isSidecar, contextMetadata]);
+    }, [tenantId, messages, attachments, stopSpeech, toast, brain, streamInternal, queryClient, liveStreamIds, isSidecar, contextMetadata]);
+
+    const handleAttachmentPick = useCallback(async (files: FileList | null) => {
+      if (!files?.length || !userId) {
+        if (!userId) toast({ title: "לא מחובר", description: "רענן את הדף ונסה שוב.", variant: "destructive" });
+        return;
+      }
+      if (attachments.length >= COMMAND_CENTER_MAX_FILES) {
+        toast({ title: "מגבלה", description: `עד ${COMMAND_CENTER_MAX_FILES} קבצים בהודעה.`, variant: "destructive" });
+        return;
+      }
+      setUploadingAttachments(true);
+      try {
+        const uploaded = await uploadCommandCenterAttachments(files, userId);
+        setAttachments((prev) => [...prev, ...uploaded].slice(0, COMMAND_CENTER_MAX_FILES));
+      } catch (err: unknown) {
+        toast({
+          title: "שגיאה בהעלאה",
+          description: err instanceof Error ? err.message : "לא הצלחנו להעלות את הקובץ",
+          variant: "destructive",
+        });
+      } finally {
+        setUploadingAttachments(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    }, [attachments.length, toast, userId]);
+
+    const removePendingAttachment = useCallback((idx: number) => {
+      setAttachments((prev) => prev.filter((_, i) => i !== idx));
+    }, []);
 
     const endConversation = useCallback(() => {
       convModeRef.current = false;
@@ -858,7 +918,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       try {
         const { data } = await (supabase as any)
           .from("ai_conversation_messages")
-          .select("id, role, content, speaker, channel, created_at")
+          .select("id, role, content, speaker, channel, metadata, created_at")
           .eq("conversation_id", conv.id)
           .order("created_at", { ascending: true });
         if (Array.isArray(data) && data.length) msgs = data;
@@ -872,6 +932,9 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
           content: m.content ?? "",
           speaker: m.speaker,
           channel: m.channel,
+          attachments: Array.isArray((m as any).metadata?.attachments)
+            ? (m as any).metadata.attachments
+            : undefined,
         })));
       setHistory(false);
       scrollDown();
@@ -975,6 +1038,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       liveStreamIds,
       status: activeTopic?.status ?? (conversationId && liveStreamIds.includes(conversationId) ? "streaming" : brain.status),
     });
+    const canSend = !!input.trim() || attachments.length > 0;
+    const composerBusy = thisChatBusy || isTranscribeRecording || isTranscribing || isConvMode || uploadingAttachments;
 
     const composerPlaceholder = isSidecar
       ? (sidecarPlaceholder ?? "תיאור תיקון / בקשה למסך הנוכחי…")
@@ -1016,6 +1081,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 key={m.id || i}
                 role={m.role as "user" | "assistant" | "tool_call"}
                 content={m.content}
+                attachments={m.attachments}
                 speaker={m.speaker}
                 channel={m.channel}
                 tool={m.tool}
@@ -1044,8 +1110,65 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             {brain.healthBanner}
           </p>
         )}
+        {(attachments.length > 0 || uploadingAttachments) && (
+          <div className="cc-attach-preview flex shrink-0 flex-wrap gap-2 border-t border-[var(--cc-line)] px-3 py-2">
+            {attachments.map((att, idx) => (
+              <div key={`${att.url}-${idx}`} className="inline-flex max-w-full items-center gap-1 rounded-md border border-[var(--cc-line)] bg-[rgba(5,10,22,0.5)] px-2 py-1 text-xs text-[var(--cc-text)]">
+                {att.type === "image" ? <ImageIcon className="h-3.5 w-3.5 shrink-0" /> : <FileIcon className="h-3.5 w-3.5 shrink-0" />}
+                <span className="max-w-[140px] truncate">{att.name}</span>
+                <button type="button" onClick={() => removePendingAttachment(idx)} className="text-[var(--cc-text-dim)] hover:text-[var(--cc-crit)]" title="הסר">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+            {uploadingAttachments && (
+              <span className="inline-flex items-center gap-1 text-xs text-[var(--cc-text-dim)]">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                מעלה…
+              </span>
+            )}
+          </div>
+        )}
         <div className="cc-talkbar-row relative z-[60] mt-auto flex shrink-0 items-center gap-2">
-          {!isSidecar && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={COMMAND_CENTER_FILE_ACCEPT}
+            className="hidden"
+            onChange={(e) => { void handleAttachmentPick(e.target.files); }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={composerBusy || attachments.length >= COMMAND_CENTER_MAX_FILES}
+            title="צרף קובץ או תמונה"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--cc-line)] text-[var(--cc-text-dim)] transition-colors hover:border-[var(--cc-line-strong)] hover:text-[var(--cc-accent)] disabled:opacity-40"
+          >
+            {uploadingAttachments ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          </button>
+          {isSidecar ? (
+            <button
+              onClick={handleMicClick}
+              disabled={isTranscribing}
+              title={isTranscribeRecording ? "עצור הקלטה" : "מיקרופון לתמלול"}
+              className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
+                isTranscribeRecording
+                  ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
+                  : isTranscribing
+                    ? "border-[var(--cc-line)] opacity-60"
+                    : "border-[var(--cc-line-strong)] text-[var(--cc-accent)] hover:bg-[rgba(76,195,255,0.15)]"
+              }`}
+            >
+              {isTranscribing ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : isTranscribeRecording ? (
+                <Square className="h-4 w-4" />
+              ) : (
+                <AudioLines className="h-5 w-5" />
+              )}
+            </button>
+          ) : (
             <>
           <div className="flex h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:hidden">
             <select
@@ -1147,12 +1270,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") sendText(input); }}
             placeholder={composerPlaceholder}
-            disabled={isTranscribeRecording || isTranscribing || isConvMode}
+            disabled={isTranscribeRecording || isTranscribing || (!isSidecar && isConvMode)}
             className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)]"
           />
           <button
             onClick={() => sendText(input)}
-            disabled={!input.trim() || thisChatBusy || isTranscribeRecording || isTranscribing || isConvMode}
+            disabled={!canSend || composerBusy}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--cc-accent-dim)] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             title="שליחה"
           >

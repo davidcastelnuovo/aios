@@ -64,6 +64,14 @@ export type ConversationMessageRow = {
   created_at: string;
 };
 
+export type ChannelAttachment = {
+  name: string;
+  url: string;
+  type: "image" | "file";
+  size?: number;
+  path?: string;
+};
+
 export type SendContext = {
   tenantId: string;
   userId: string;
@@ -71,6 +79,7 @@ export type SendContext = {
   conversationId: string;
   route: BrainRouteRow;
   content: string;
+  attachments?: ChannelAttachment[];
   inputMode: InputMode;
   idempotencyKey: string;
   history: Array<{ role: string; content: string }>;
