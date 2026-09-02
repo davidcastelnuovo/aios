@@ -7,9 +7,11 @@ import {
   applyPeriodMetricsToSnapshot,
   buildPulseDashboardUrl,
   clientHasCampaignService,
+  expandPulseToPlatformGoalRows,
   filterPulseCallFlags,
   formatPulseChange,
   getPulsePeriodBounds,
+  platformGoalLabel,
   pulseSpendColumnLabel,
   pulseStatusToOverall,
 } from "./pulseDashboard.ts";
@@ -191,4 +193,54 @@ test("applyPeriodMetricsToSnapshot keeps meta fields", () => {
   assert.equal(next.spend_7d, 99);
   assert.equal(next.last_meta_change_actor, "David");
   assert.equal(next.status, "healthy");
+});
+
+test("expands pulse rows per platform when Meta and Google tables exist", () => {
+  const bounds = getPulsePeriodBounds("last_7_days", new Date("2026-08-05T12:00:00+03:00"));
+  const snapshot = {
+    client_id: "c1",
+    agency_id: null,
+    status: "healthy",
+    campaign_goal_mode: "leads",
+    is_ecommerce: false,
+    spend_7d: 300,
+    lead_spend_7d: 300,
+    ecommerce_spend_7d: 0,
+    leads_7d: 10,
+    cpl_7d: 30,
+    cpl_change_pct: 0,
+    purchases_7d: 0,
+    revenue_7d: 0,
+    roas_7d: null,
+    lead_goal_status: "healthy",
+    ecommerce_goal_status: null,
+    flags: [],
+    data_fresh_through: "2026-08-05",
+    calculated_at: "2026-08-05T10:00:00Z",
+    last_meta_change_at: null,
+    last_meta_change_type: null,
+    last_meta_change_actor: null,
+    last_meta_change_object: null,
+    meta_change_availability: "not_applicable",
+    last_client_call_at: null,
+    last_client_call_by: null,
+  };
+  const tables = [
+    { id: "t-meta", client_id: "c1", integration_type: "facebook_insights", campaign_active: true },
+    { id: "t-google", client_id: "c1", integration_type: "google_ads", campaign_active: true },
+  ];
+  const records = [
+    { table_id: "t-meta", data: { date: "2026-08-04", spend: 100, leads: 4 } },
+    { table_id: "t-google", data: { date: "2026-08-04", spend: 200, leads: 6 } },
+  ];
+  const rows = expandPulseToPlatformGoalRows({
+    snapshot,
+    services: ["ppc_meta", "ppc_google"],
+    tables,
+    records,
+    bounds,
+  });
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => row.platformLabel).sort(), ["Google", "Meta"]);
+  assert.equal(platformGoalLabel(rows[0]), rows[0].platformLabel + " · " + (rows[0].goal === "ecommerce" ? "איקומרס" : "לידים"));
 });
