@@ -56,6 +56,7 @@ import {
   findDuplicateDevTasks,
   logDevTaskEvent,
 } from '../_shared/dev-tasks.ts'
+import { assertNoInFlightCursorDevWork, findInFlightCursorDevWork } from '../_shared/cursor-dev-task-dedup.ts'
 import {
   addGoalBlocker,
   addGoalMilestone,
@@ -4643,14 +4644,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'find_dev_task_duplicates': {
       const title = String(args.title || '').trim()
       if (!title) return { duplicates: [] }
-      const duplicates = await findDuplicateDevTasks(supabase, tenantId, title)
+      const inFlight = await findInFlightCursorDevWork(supabase, tenantId, title)
       return {
-        duplicates: duplicates.map((d) => ({
-          id: d.task.id,
-          title: d.task.title,
-          status: d.task.status,
+        duplicates: inFlight.map((d) => ({
+          id: d.id,
+          title: d.title,
+          status: d.status,
           score: d.score,
-          cursor_session_url: d.task.cursor_session_url,
+          source: d.source,
+          cursor_session_url: d.session_url,
+          cursor_agent_id: d.cursor_agent_id,
         })),
       }
     }
@@ -4669,7 +4672,10 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         requested_by: args.requested_by,
       }
       if (!brief.title) throw new Error('title required')
-      const duplicates = await findDuplicateDevTasks(supabase, tenantId, brief.title)
+      if (!args.dedup_of) {
+        await assertNoInFlightCursorDevWork(supabase, tenantId, brief.title)
+      }
+      const duplicates = await findInFlightCursorDevWork(supabase, tenantId, brief.title)
       const task = await createDevTask(supabase, {
         tenantId,
         brief,
@@ -4681,7 +4687,14 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         actorUserId,
         goalId: args.goal_id || null,
       })
-      return { task, possible_duplicates: duplicates.slice(0, 5) }
+      return { task, possible_duplicates: duplicates.slice(0, 5).map((d) => ({
+        id: d.id,
+        title: d.title,
+        status: d.status,
+        score: d.score,
+        source: d.source,
+        cursor_session_url: d.session_url,
+      })) }
     }
     case 'approve_dev_task': {
       if (!actorUserId) throw new Error('user auth required')
@@ -7130,8 +7143,9 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         'Use the screen context in system_prompt_addon / context_metadata to understand what he sees.\n' +
         'Respond normally. For dev/system/code work use the Dev Task Command Center workflow:\n' +
         '1) find_dev_task_duplicates → 2) create_dev_task (structured brief) → 3) ask David for approval unless he said "תעבירי לפיתוח"/"שלחי לפיתוח" explicitly → 4) approve_dev_task + dispatch_dev_task.\n' +
+        'Hard rule: duplicate in-flight dev work is blocked (dev_tasks + cursor_dispatches + active sessions). Never open a parallel Cursor agent for the same fix.\n' +
         'Never open duplicate Cursor sessions — if dispatch timed out, use attach_dev_task_session with the bc- id.\n' +
-        'Legacy direct mcp_Cursor__request_dev_task only if dev_tasks workflow is unavailable.\n' +
+        'Legacy direct mcp_Cursor__request_dev_task is also dedup-gated; prefer dev_tasks workflow.\n' +
         'Always include path + entity context in any dev task you create.\n' +
         `context_metadata: ${JSON.stringify(ctxMeta).slice(0, 4000)}`
     }

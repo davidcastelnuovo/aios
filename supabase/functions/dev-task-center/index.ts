@@ -76,13 +76,18 @@ serve(async (req) => {
     if (action === "find_duplicates") {
       const title = String(body.title || "").trim();
       if (!title) return json({ duplicates: [] });
-      const duplicates = await findDuplicateDevTasks(supabase, tenantId, title);
+      const { findInFlightCursorDevWork } = await import("../_shared/cursor-dev-task-dedup.ts");
+      const duplicates = await findInFlightCursorDevWork(supabase, tenantId, title);
       return json({ duplicates });
     }
 
     if (action === "create") {
       const brief = body.brief as DevTaskBrief;
       if (!brief?.title?.trim()) throw new Error("brief.title required");
+      if (!body.dedup_of) {
+        const { assertNoInFlightCursorDevWork } = await import("../_shared/cursor-dev-task-dedup.ts");
+        await assertNoInFlightCursorDevWork(supabase, tenantId, brief.title.trim());
+      }
       const duplicates = await findDuplicateDevTasks(supabase, tenantId, brief.title);
       const task = await createDevTask(supabase, {
         tenantId,

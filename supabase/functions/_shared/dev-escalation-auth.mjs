@@ -145,8 +145,12 @@ export function buildDevEscalationPromptRule(tier) {
   if (tier === "bugfix") {
     return (
       "\n\n🐛 **תיקוני באגים (מורשה — אנה):** המשתמש הנוכחי מורשה לשלוח **תיקוני באגים בלבד** ל-Cursor " +
-      "דרך `mcp_Cursor__request_dev_task`. לפני השליחה: ודאי שיש באג ברור, צעדי שחזור, התנהגות צפויה מול בפועל, " +
-      "ולקוח/מסך רלוונטי. אסור: פיצ'רים חדשים, שינויי הרשאות/roles, שינויי סכמת DB, שינויי קונפיג רחבים, " +
+      "דרך `find_dev_task_duplicates` ואז `mcp_Cursor__request_dev_task` (או dev_tasks workflow). " +
+      "לפני כל שליחה — חובה `find_dev_task_duplicates`; אם יש משימה דומה בתהליך — אל תפתחי agent חדש, " +
+      "המשיכי/עדכני את הקיים (`update_dev_task` / `reply_to_cursor_session`). " +
+      "המערכת גם חוסמת אוטומטית כפילויות ב-request_dev_task. " +
+      "ודאי שיש באג ברור, צעדי שחזור, התנהגות צפויה מול בפועל, ולקוח/מסך רלוונטי. " +
+      "אסור: פיצ'רים חדשים, שינויי הרשאות/roles, שינויי סכמת DB, שינויי קונפיג רחבים, " +
       "או ask_cursor / Claude / Manus / Grok / delegate_to_github_agent. " +
       "ב-task/context צייני במפורש: «Requested by Ana — BUG FIX ONLY» + צעדי שחזור. " +
       "אחרי שליחה — עדכני ש-Cursor יפתח PR ודיוויד יאשר לפני מיזוג."

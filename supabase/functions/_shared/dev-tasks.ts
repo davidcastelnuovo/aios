@@ -4,6 +4,7 @@
  */
 
 import { mcpRequestDevTask } from "./cursor-task-queue.ts";
+import { assertNoInFlightCursorDevWork } from "./cursor-dev-task-dedup.ts";
 import { trackCursorTaskSession, cursorSessionDisplayName } from "./cursor-session-tracker.ts";
 
 export const DEV_TASK_STATUSES = [
@@ -241,6 +242,10 @@ export async function dispatchDevTask(
       timedOut: false,
     };
   }
+
+  await assertNoInFlightCursorDevWork(supabase, args.tenantId, task.title, {
+    excludeDevTaskId: args.taskId,
+  });
 
   const agent = String(task.assigned_agent || "cursor").toLowerCase();
   if (agent !== "cursor") {

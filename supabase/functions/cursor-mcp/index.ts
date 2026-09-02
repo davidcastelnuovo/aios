@@ -48,6 +48,7 @@ import {
   trackCursorTaskSession,
   touchCursorTaskSession,
 } from "../_shared/cursor-session-tracker.ts";
+import { assertNoInFlightCursorDevWork } from "../_shared/cursor-dev-task-dedup.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -830,6 +831,9 @@ async function handleToolCall(
       teachingBlock(ctx.tenantId) +
       callbackBlock;
     const meta = await resolveDispatchMeta(ctx.tenantId, context, task, "request_dev_task");
+    if (ctx.tenantId && sb) {
+      await assertNoInFlightCursorDevWork(sb, ctx.tenantId, task);
+    }
     const fired = await fireCursorAgent(text, {
       name: meta.displayName,
       startingRef: branch || undefined,
