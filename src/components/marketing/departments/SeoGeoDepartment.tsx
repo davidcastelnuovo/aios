@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { BookOpen, Brain, FilePlus2, Gauge, Loader2, Plus, Search, Sparkles, WandSparkles } from "lucide-react";
 import { ALL_CLIENTS_FILTER, applyClientFilter, type MarketingClientFilter } from "@/components/marketing/clientFilter";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
+import { PublishingStudio } from "@/components/marketing/publishing/PublishingStudio";
 
 interface Props { clientFilter: MarketingClientFilter; tenantId: string; }
 interface SeoItem { id: string; title: string | null; status: string; payload: Record<string, unknown> | null; current_stage_id: string | null; updated_at: string }
