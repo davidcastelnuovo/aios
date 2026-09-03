@@ -6,7 +6,11 @@
 //   { source: 'clients'|'leads'|'campaigners'|'list'|'wa_groups',
 //     statuses?: string[],        // clients: client_status enum
 //     serviceTags?: string[],     // clients: services[] overlap
-//     statusKeys?: string[],      // leads: leads.status
+//     statusKeys?: string[],      // leads: response_status
+//     stageKeys?: string[],       // leads: pipeline stage (leads.status)
+//     statusMode?: 'include'|'exclude',
+//     stageMode?: 'include'|'exclude',
+//     tagMode?: 'include'|'exclude',
 //     salesPersonIds?: string[],  // leads: sales_person_id
 //     tagIds?: string[],          // clients/leads: chat_contact_tags
 //     roles?: string[],           // campaigners: role[] overlap
@@ -136,6 +140,7 @@ Deno.serve(async (req) => {
     }
 
     // ── Tag prefilter (chat_contact_tags maps tags → client_id / lead_id) ──
+    const tagMode: string = filter.tagMode === 'exclude' ? 'exclude' : 'include';
     let tagEntityIds: Set<string> | null = null;
     if (Array.isArray(filter.tagIds) && filter.tagIds.length > 0 && (source === 'clients' || source === 'leads')) {
       const col = source === 'clients' ? 'client_id' : 'lead_id';
@@ -146,20 +151,44 @@ Deno.serve(async (req) => {
         .in('tag_id', filter.tagIds)
         .not(col, 'is', null);
       tagEntityIds = new Set((tagged || []).map((r: any) => r[col]).filter(Boolean));
-      if (tagEntityIds.size === 0) {
-        // tag filter matches nothing → empty audience
+      if (tagMode === 'include' && tagEntityIds.size === 0) {
         return finalize([], { dryRun, broadcastId, db, tenantId, channel });
       }
     }
 
+    const applyStatusFilter = (
+      rows: any[],
+      values: string[] | undefined,
+      mode: string | undefined,
+      field: string,
+    ) => {
+      if (!Array.isArray(values) || values.length === 0) return rows;
+      const m = mode === 'exclude' ? 'exclude' : 'include';
+      return rows.filter((row: any) => {
+        const current = row[field] ?? null;
+        const matches = values.includes(current);
+        return m === 'include' ? matches : !matches;
+      });
+    };
+
     if (source === 'clients') {
       let q = db.from('clients').select('id, contact_name, name, phone, email, status, services').eq('tenant_id', tenantId);
-      if (Array.isArray(filter.statuses) && filter.statuses.length > 0) q = q.in('status', filter.statuses);
-      if (Array.isArray(filter.serviceTags) && filter.serviceTags.length > 0) q = q.overlaps('services', filter.serviceTags);
       const { data, error } = await q;
       if (error) throw error;
-      recipients = (data || [])
-        .filter((c: any) => !tagEntityIds || tagEntityIds.has(c.id))
+      let rows = data || [];
+      rows = applyStatusFilter(rows, filter.statuses, filter.statusMode, 'status');
+      if (Array.isArray(filter.serviceTags) && filter.serviceTags.length > 0) {
+        rows = rows.filter((c: any) => {
+          const services: string[] = Array.isArray(c.services) ? c.services : [];
+          return services.some((s) => filter.serviceTags.includes(s));
+        });
+      }
+      recipients = rows
+        .filter((c: any) => {
+          if (!tagEntityIds) return true;
+          const hasTag = tagEntityIds.has(c.id);
+          return tagMode === 'include' ? hasTag : !hasTag;
+        })
         .map((c: any) => ({
           entity_type: 'client' as const,
           entity_id: c.id,
@@ -168,13 +197,19 @@ Deno.serve(async (req) => {
           contact_name: c.contact_name || c.name || null,
         }));
     } else if (source === 'leads') {
-      let q = db.from('leads').select('id, contact_name, company_name, phone, email, status, sales_person_id').eq('tenant_id', tenantId);
-      if (Array.isArray(filter.statusKeys) && filter.statusKeys.length > 0) q = q.in('status', filter.statusKeys);
+      let q = db.from('leads').select('id, contact_name, company_name, phone, email, status, response_status, sales_person_id').eq('tenant_id', tenantId).is('archived_at', null);
       if (Array.isArray(filter.salesPersonIds) && filter.salesPersonIds.length > 0) q = q.in('sales_person_id', filter.salesPersonIds);
       const { data, error } = await q;
       if (error) throw error;
-      recipients = (data || [])
-        .filter((l: any) => !tagEntityIds || tagEntityIds.has(l.id))
+      let rows = data || [];
+      rows = applyStatusFilter(rows, filter.stageKeys, filter.stageMode, 'status');
+      rows = applyStatusFilter(rows, filter.statusKeys, filter.statusMode, 'response_status');
+      recipients = rows
+        .filter((l: any) => {
+          if (!tagEntityIds) return true;
+          const hasTag = tagEntityIds.has(l.id);
+          return tagMode === 'include' ? hasTag : !hasTag;
+        })
         .map((l: any) => ({
           entity_type: 'lead' as const,
           entity_id: l.id,
