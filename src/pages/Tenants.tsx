@@ -50,6 +50,7 @@ export default function Tenants() {
   const [selectedTenantForEdit, setSelectedTenantForEdit] = useState<{
     id: string;
     name: string;
+    slug?: string | null;
   } | null>(null);
   const { isSuperAdmin, isOwner } = useUserRole();
   const canManageTenants = isSuperAdmin || isOwner;
@@ -225,10 +226,11 @@ export default function Tenants() {
               setSelectedTenantForEdit({
                 id: org.id,
                 name: org.name,
+                slug: org.slug,
               });
               setEditNameDialogOpen(true);
             }}
-            title="ערוך שם"
+            title="ערוך ארגון"
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -322,10 +324,11 @@ export default function Tenants() {
               setSelectedTenantForEdit({
                 id: sub.id,
                 name: sub.name,
+                slug: sub.slug,
               });
               setEditNameDialogOpen(true);
             }}
-            title="ערוך שם"
+            title="ערוך ארגון"
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -451,7 +454,14 @@ export default function Tenants() {
                         <TableCell className="text-right">
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 flex-shrink-0" />
-                            <span className="font-medium">{org.name}</span>
+                            <div className="min-w-0">
+                              <span className="font-medium">{org.name}</span>
+                              {org.slug && (
+                                <p className="text-xs text-muted-foreground font-mono" dir="ltr">
+                                  /t/{org.slug}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
@@ -517,7 +527,14 @@ export default function Tenants() {
                               <div className="flex items-center gap-2 pr-8">
                                 <Building className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                                 <span className="text-muted-foreground">└─</span>
-                                <span className="font-medium">{sub.name}</span>
+                                <div className="min-w-0">
+                                  <span className="font-medium">{sub.name}</span>
+                                  {sub.slug && (
+                                    <p className="text-xs text-muted-foreground font-mono" dir="ltr">
+                                      /t/{sub.slug}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
                             </TableCell>
                             <TableCell className="text-right">
