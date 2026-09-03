@@ -3,6 +3,13 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { clientFilterToParam, entryClientFilter, parseClientFilter } from "@/components/marketing/clientFilter";
+import {
+  copyDepartmentItemStorageKey,
+  isLegacyDepartmentClientSlug,
+  isMarketingDepartmentId,
+  marketingDepartmentPath,
+  type MarketingDepartmentId,
+} from "@/components/marketing/marketingRoutes";
 import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,10 +35,8 @@ const SeoGeoDepartment = lazy(() =>
   import("@/components/marketing/departments/SeoGeoDepartment").then((module) => ({ default: module.SeoGeoDepartment })),
 );
 
-type DepartmentId = "copy" | "creative" | "seo" | "campaigns" | "analytics";
-
 const DEPARTMENTS: Array<{
-  id: DepartmentId;
+  id: MarketingDepartmentId;
   label: string;
   tab: string;
   description: string;
@@ -90,21 +95,41 @@ export default function MarketingDepartment() {
   const { tenantSlug, clientId, department } = useParams<{
     tenantSlug: string;
     clientId?: string;
-    department?: DepartmentId;
+    department?: MarketingDepartmentId;
   }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
-  const selectedClientId = searchParams.get("client") ?? clientId;
-  const clientFilter = parseClientFilter(selectedClientId === clientId ? clientId : searchParams.get("client"));
+  const clientFilter = parseClientFilter(searchParams.get("client") ?? clientId);
 
   useEffect(() => {
-    if (clientId && department) {
-      const param = clientFilterToParam(entryClientFilter(department, parseClientFilter(clientId)));
-      navigate(`/t/${tenantSlug}/marketing/department/${department}${param ? `?client=${param}` : ""}`, { replace: true });
+    if (!tenantSlug) return;
+
+    if (clientId === "department" && !department) {
+      const next = new URLSearchParams(searchParams);
+      const qs = next.toString();
+      navigate(`/t/${tenantSlug}/marketing${qs ? `?${qs}` : ""}`, { replace: true });
+      return;
     }
-  }, [clientId, department, navigate, tenantSlug]);
+
+    if (clientId && !department && isLegacyDepartmentClientSlug(clientId)) {
+      const next = new URLSearchParams(searchParams);
+      const param = clientFilterToParam(entryClientFilter(clientId, clientFilter));
+      if (param) next.set("client", param);
+      else next.delete("client");
+      navigate(marketingDepartmentPath(tenantSlug, clientId, next), { replace: true });
+      return;
+    }
+
+    if (clientId && department && !isLegacyDepartmentClientSlug(clientId)) {
+      const next = new URLSearchParams(searchParams);
+      const param = clientFilterToParam(entryClientFilter(department, parseClientFilter(clientId)));
+      if (param) next.set("client", param);
+      else next.delete("client");
+      navigate(marketingDepartmentPath(tenantSlug, department, next), { replace: true });
+    }
+  }, [clientFilter, clientId, department, navigate, searchParams, tenantSlug]);
 
   useEffect(() => {
     if (department !== "creative") return;
@@ -114,18 +139,49 @@ export default function MarketingDepartment() {
   }, [clientId, department, navigate, searchParams, tenantSlug]);
 
   const selectClient = (id: string | null) => {
+    const next = new URLSearchParams(searchParams);
     const param = clientFilterToParam(id);
-    const suffix = param ? `?client=${param}` : "";
-    if (department) navigate(`/t/${tenantSlug}/marketing/department/${department}${suffix}`);
-    else navigate(`/t/${tenantSlug}/marketing${suffix}`);
+    if (param) next.set("client", param);
+    else next.delete("client");
+    const qs = next.toString();
+    if (department && isMarketingDepartmentId(department)) {
+      navigate(marketingDepartmentPath(tenantSlug!, department, next));
+      return;
+    }
+    navigate(`/t/${tenantSlug}/marketing${qs ? `?${qs}` : ""}`);
   };
-  const selectDepartment = (id: DepartmentId) => {
+  const selectDepartment = (id: MarketingDepartmentId) => {
     if (id === "analytics") {
       navigate(`/t/${tenantSlug}/dynamic-tables`);
       return;
     }
+    const next = new URLSearchParams(searchParams);
     const param = clientFilterToParam(entryClientFilter(id, clientFilter));
-    navigate(`/t/${tenantSlug}/marketing/department/${id}${param ? `?client=${param}` : ""}`);
+    if (param) next.set("client", param);
+    else next.delete("client");
+
+    if (department === "copy" && id !== "copy" && tenantId) {
+      const item = searchParams.get("item");
+      if (item) {
+        try {
+          sessionStorage.setItem(copyDepartmentItemStorageKey(tenantId), item);
+        } catch {
+          // ignore
+        }
+      }
+      next.delete("item");
+    }
+
+    if (id === "copy" && tenantId && !next.get("item")) {
+      try {
+        const saved = sessionStorage.getItem(copyDepartmentItemStorageKey(tenantId));
+        if (saved) next.set("item", saved);
+      } catch {
+        // ignore
+      }
+    }
+
+    navigate(marketingDepartmentPath(tenantSlug!, id, next));
   };
 
   return (
@@ -214,7 +270,7 @@ export default function MarketingDepartment() {
   );
 }
 
-function DepartmentLanding({ onSelect }: { onSelect: (id: DepartmentId) => void }) {
+function DepartmentLanding({ onSelect }: { onSelect: (id: MarketingDepartmentId) => void }) {
   return (
     <main className="flex flex-1 flex-col items-center justify-center overflow-auto p-6 md:p-10">
       <div className="mb-8 text-center">
@@ -259,7 +315,7 @@ function DepartmentLanding({ onSelect }: { onSelect: (id: DepartmentId) => void 
   );
 }
 
-function ComingSoon({ department, onBack }: { department: DepartmentId; onBack: () => void }) {
+function ComingSoon({ department, onBack }: { department: MarketingDepartmentId; onBack: () => void }) {
   const config = DEPARTMENTS.find((item) => item.id === department);
   const Icon = config?.icon ?? Sparkles;
   return (
