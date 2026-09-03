@@ -6,13 +6,19 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 export type BroadcastStatus =
   | "draft" | "scheduled" | "sending" | "sent" | "paused" | "failed" | "canceled";
 
+export type AudienceFilterMode = "include" | "exclude";
+
 export interface AudienceFilter {
   source: "clients" | "leads" | "campaigners" | "list" | "wa_groups";
   statuses?: string[];       // clients
+  statusMode?: AudienceFilterMode;
   serviceTags?: string[];    // clients
-  statusKeys?: string[];     // leads
+  statusKeys?: string[];     // leads: response_status (lead_statuses)
+  stageKeys?: string[];      // leads: pipeline stage (leads.status)
+  stageMode?: AudienceFilterMode;
   salesPersonIds?: string[]; // leads
   tagIds?: string[];         // clients/leads
+  tagMode?: AudienceFilterMode;
   roles?: string[];          // campaigners
   activeOnly?: boolean;      // campaigners
   listId?: string;           // source = list

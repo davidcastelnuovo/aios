@@ -3,10 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
-import { useBroadcasts, type AudienceFilter } from "@/hooks/useBroadcasts";
+import { useLeadPipelineStages } from "@/hooks/useLeadPipelineStages";
+import { useBroadcasts, type AudienceFilter, type AudienceFilterMode } from "@/hooks/useBroadcasts";
 import { useBroadcastLists } from "@/hooks/useBroadcastLists";
 import { useBroadcastDomains } from "@/hooks/useBroadcastDomains";
 import { WaProviderConnectionPicker } from "@/components/forms/WaProviderConnectionPicker";
+import { BroadcastAudienceMultiSelect } from "@/components/broadcast/BroadcastAudienceMultiSelect";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -40,6 +42,7 @@ interface Props {
 export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const { tenantId } = useCurrentTenant();
   const { statuses: leadStatuses } = useLeadStatuses();
+  const { activeStages: pipelineStages } = useLeadPipelineStages();
   const { create, update, previewAudience, launch } = useBroadcasts();
   const { lists } = useBroadcastLists();
   const { list: domainsQ } = useBroadcastDomains();
@@ -58,8 +61,13 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
   const [integrationId, setIntegrationId] = useState<string | undefined>();
   const [source, setSource] = useState<AudienceFilter["source"]>("leads");
   const [clientStatuses, setClientStatuses] = useState<string[]>([]);
+  const [clientStatusMode, setClientStatusMode] = useState<AudienceFilterMode>("include");
+  const [leadStageKeys, setLeadStageKeys] = useState<string[]>([]);
+  const [leadStageMode, setLeadStageMode] = useState<AudienceFilterMode>("include");
   const [leadStatusKeys, setLeadStatusKeys] = useState<string[]>([]);
+  const [leadStatusMode, setLeadStatusMode] = useState<AudienceFilterMode>("include");
   const [tagIds, setTagIds] = useState<string[]>([]);
+  const [tagMode, setTagMode] = useState<AudienceFilterMode>("include");
   const [activeOnly, setActiveOnly] = useState(true);
   const [listId, setListId] = useState<string | undefined>();
   const [pickMode, setPickMode] = useState(false);
@@ -82,7 +90,10 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
       setStep(0); setName("דיוור חדש"); setChannel("whatsapp"); setSubject("");
       setFromMode("default"); setFromName(""); setFromLocal(""); setFromDomain(defaultDomain?.domain || ""); setReplyTo("");
       setIntegrationId(undefined); setSource("leads");
-      setClientStatuses([]); setLeadStatusKeys([]); setTagIds([]); setActiveOnly(true);
+      setClientStatuses([]); setClientStatusMode("include");
+      setLeadStageKeys([]); setLeadStageMode("include");
+      setLeadStatusKeys([]); setLeadStatusMode("include");
+      setTagIds([]); setTagMode("include"); setActiveOnly(true);
       setListId(undefined); setPickMode(false); setSelectedIds([]); setCandidateSearch("");
       setSelectedGroupIds([]); setGroupSearch("");
       setBodyText(""); setMediaFile(null); setAudienceCount(null);
@@ -148,27 +159,56 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
     if (source === "wa_groups") return { source: "wa_groups", groupIds: selectedGroupIds };
     if (source === "list") return { source: "list", listId };
     const include = pickMode ? { includeIds: selectedIds } : {};
-    if (source === "clients") return { source, statuses: clientStatuses, tagIds, ...include };
-    if (source === "leads") return { source, statusKeys: leadStatusKeys, tagIds, ...include };
+    if (source === "clients") return { source, statuses: clientStatuses, statusMode: clientStatusMode, tagIds, tagMode, ...include };
+    if (source === "leads") {
+      return {
+        source,
+        stageKeys: leadStageKeys,
+        stageMode: leadStageMode,
+        statusKeys: leadStatusKeys,
+        statusMode: leadStatusMode,
+        tagIds,
+        tagMode,
+        ...include,
+      };
+    }
     return { source: "campaigners", activeOnly, ...include };
   };
 
   // Candidate contacts for manual selection (base-table filters; tags applied server-side otherwise)
   const candidates = useQuery({
-    queryKey: ["broadcast-candidates", tenantId, source, clientStatuses, leadStatusKeys, activeOnly],
+    queryKey: ["broadcast-candidates", tenantId, source, clientStatuses, clientStatusMode, leadStageKeys, leadStageMode, leadStatusKeys, leadStatusMode, activeOnly],
     enabled: !!tenantId && open && pickMode && source !== "list" && source !== "wa_groups",
     queryFn: async () => {
       if (source === "clients") {
-        let q = supabase.from("clients").select("id, contact_name, name, phone, email").eq("tenant_id", tenantId);
-        if (clientStatuses.length) q = q.in("status", clientStatuses);
+        let q = supabase.from("clients").select("id, contact_name, name, phone, email, status").eq("tenant_id", tenantId);
         const { data } = await q.limit(1000);
-        return (data || []).map((c: any) => ({ id: c.id, label: c.contact_name || c.name || c.phone, phone: c.phone, email: c.email }));
+        let rows = data || [];
+        if (clientStatuses.length) {
+          rows = rows.filter((c: any) => {
+            const matches = clientStatuses.includes(c.status);
+            return clientStatusMode === "include" ? matches : !matches;
+          });
+        }
+        return rows.map((c: any) => ({ id: c.id, label: c.contact_name || c.name || c.phone, phone: c.phone, email: c.email }));
       }
       if (source === "leads") {
-        let q = supabase.from("leads").select("id, contact_name, company_name, phone, email").eq("tenant_id", tenantId).is("archived_at", null);
-        if (leadStatusKeys.length) q = q.in("status", leadStatusKeys);
+        let q = supabase.from("leads").select("id, contact_name, company_name, phone, email, status, response_status").eq("tenant_id", tenantId).is("archived_at", null);
         const { data } = await q.limit(1000);
-        return (data || []).map((l: any) => ({ id: l.id, label: l.contact_name || l.company_name || l.phone, phone: l.phone, email: l.email }));
+        let rows = data || [];
+        if (leadStageKeys.length) {
+          rows = rows.filter((l: any) => {
+            const matches = leadStageKeys.includes(l.status);
+            return leadStageMode === "include" ? matches : !matches;
+          });
+        }
+        if (leadStatusKeys.length) {
+          rows = rows.filter((l: any) => {
+            const matches = leadStatusKeys.includes(l.response_status);
+            return leadStatusMode === "include" ? matches : !matches;
+          });
+        }
+        return rows.map((l: any) => ({ id: l.id, label: l.contact_name || l.company_name || l.phone, phone: l.phone, email: l.email }));
       }
       let q = supabase.from("campaigners").select("id, full_name, phone, email").eq("tenant_id", tenantId);
       if (activeOnly) q = q.eq("active", true);
@@ -205,7 +245,7 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, source, clientStatuses, leadStatusKeys, tagIds, activeOnly, listId, pickMode, selectedIds, selectedGroupIds]);
+  }, [step, source, clientStatuses, clientStatusMode, leadStageKeys, leadStageMode, leadStatusKeys, leadStatusMode, tagIds, tagMode, activeOnly, listId, pickMode, selectedIds, selectedGroupIds]);
 
   const toggle = (arr: string[], v: string, set: (x: string[]) => void) =>
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
@@ -463,30 +503,43 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             )}
 
             {source === "clients" && (
-              <div>
-                <Label className="mb-1 block">סטטוס לקוח</Label>
-                <div className="flex flex-wrap gap-3">
-                  {CLIENT_STATUSES.map((s) => (
-                    <label key={s.key} className="flex items-center gap-1 text-sm">
-                      <Checkbox checked={clientStatuses.includes(s.key)} onCheckedChange={() => toggle(clientStatuses, s.key, setClientStatuses)} />
-                      {s.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <BroadcastAudienceMultiSelect
+                label="סטטוס לקוח"
+                options={CLIENT_STATUSES.map((s) => ({ value: s.key, label: s.label }))}
+                selected={clientStatuses}
+                onSelectedChange={setClientStatuses}
+                mode={clientStatusMode}
+                onModeChange={setClientStatusMode}
+                emptyLabel="כל הסטטוסים"
+              />
             )}
 
             {source === "leads" && (
-              <div>
-                <Label className="mb-1 block">סטטוס ליד</Label>
-                <div className="flex flex-wrap gap-3">
-                  {(leadStatuses || []).map((s: any) => (
-                    <label key={s.status_key} className="flex items-center gap-1 text-sm">
-                      <Checkbox checked={leadStatusKeys.includes(s.status_key)} onCheckedChange={() => toggle(leadStatusKeys, s.status_key, setLeadStatusKeys)} />
-                      {s.label || s.status_key}
-                    </label>
-                  ))}
-                </div>
+              <div className="space-y-3">
+                <BroadcastAudienceMultiSelect
+                  label="שלב במשפך"
+                  options={(pipelineStages || []).map((s) => ({
+                    value: s.stage_key,
+                    label: s.label || s.stage_key,
+                  }))}
+                  selected={leadStageKeys}
+                  onSelectedChange={setLeadStageKeys}
+                  mode={leadStageMode}
+                  onModeChange={setLeadStageMode}
+                  emptyLabel="כל השלבים"
+                />
+                <BroadcastAudienceMultiSelect
+                  label="סטטוס מענה"
+                  options={(leadStatuses || []).map((s: any) => ({
+                    value: s.status_key,
+                    label: s.label || s.status_key,
+                  }))}
+                  selected={leadStatusKeys}
+                  onSelectedChange={setLeadStatusKeys}
+                  mode={leadStatusMode}
+                  onModeChange={setLeadStatusMode}
+                  emptyLabel="כל הסטטוסים"
+                />
               </div>
             )}
 
@@ -497,17 +550,15 @@ export function BroadcastWizard({ open, onOpenChange, onDone }: Props) {
             )}
 
             {(source === "clients" || source === "leads") && (chatTags || []).length > 0 && (
-              <div>
-                <Label className="mb-1 block">תגיות (אופציונלי)</Label>
-                <div className="flex flex-wrap gap-2">
-                  {(chatTags || []).map((t: any) => (
-                    <button key={t.id} type="button" onClick={() => toggle(tagIds, t.id, setTagIds)}
-                      className={`rounded-full border px-2 py-0.5 text-xs ${tagIds.includes(t.id) ? "bg-primary text-primary-foreground" : ""}`}>
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <BroadcastAudienceMultiSelect
+                label="תגיות (אופציונלי)"
+                options={(chatTags || []).map((t: any) => ({ value: t.id, label: t.name }))}
+                selected={tagIds}
+                onSelectedChange={setTagIds}
+                mode={tagMode}
+                onModeChange={setTagMode}
+                emptyLabel="כל התגיות"
+              />
             )}
 
             {source !== "list" && source !== "wa_groups" && (
