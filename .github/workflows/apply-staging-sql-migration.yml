@@ -1,0 +1,79 @@
+name: Apply SQL migration — Staging
+
+# Applies supabase/ops/*.sql to the STAGING Supabase project only.
+# Production stays in apply-sql-migration.yml (main).
+
+on:
+  workflow_dispatch:
+    inputs:
+      sql_file:
+        description: 'Path to SQL file under the repo'
+        required: true
+        default: 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'
+      migration_name:
+        description: 'Migration name recorded in Supabase'
+        required: true
+        default: 'apply_connect_client_meta_ad_account_skin'
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/apply-staging-sql-migration.yml'
+      - 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve SQL file
+        id: sql
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            FILE="${{ github.event.inputs.sql_file }}"
+            NAME="${{ github.event.inputs.migration_name }}"
+          else
+            FILE="supabase/ops/apply_connect_client_meta_ad_account_skin.sql"
+            NAME="apply_connect_client_meta_ad_account_skin"
+          fi
+          test -f "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Apply via /database/migrations (Staging)
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib, sys, urllib.error, urllib.request
+
+          path = os.environ["SQL_FILE"]
+          name = os.environ["MIG_NAME"]
+          query = pathlib.Path(path).read_text()
+          body = json.dumps({"query": query, "name": name}).encode()
+          url = f"https://api.supabase.com/v1/projects/{os.environ['PROJECT_REF']}/database/migrations"
+          headers = {
+              "Authorization": f"Bearer {os.environ['SUPABASE_ACCESS_TOKEN']}",
+              "Content-Type": "application/json",
+              "User-Agent": "aios-apply-staging-sql-migration/1.0",
+              "Accept": "application/json",
+          }
+          req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+          try:
+              with urllib.request.urlopen(req, timeout=180) as resp:
+                  raw = resp.read().decode()
+                  print(f"HTTP {resp.status}")
+                  print(raw[:4000])
+          except urllib.error.HTTPError as e:
+              raw = e.read().decode()
+              print(f"HTTP {e.code}", file=sys.stderr)
+              print(raw[:4000], file=sys.stderr)
+              sys.exit(1)
+          PY
+        env:
+          SQL_FILE: ${{ steps.sql.outputs.file }}
+          MIG_NAME: ${{ steps.sql.outputs.name }}
