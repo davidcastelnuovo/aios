@@ -1,4 +1,5 @@
 -- Carmen skin: connect Meta/Facebook ad account to a client (clients.meta_ads_account_id).
+-- Staging apply: triggered by apply-staging-sql-migration.yml on develop.
 INSERT INTO public.ai_skills (
   tenant_id, scope, is_active, created_by_agent, slug, name, description,
   trigger_phrases, triggers, steps, system_prompt, constraints

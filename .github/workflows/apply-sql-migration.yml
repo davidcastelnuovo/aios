@@ -46,6 +46,8 @@ on:
       - 'supabase/ops/fix_team_member_report_dashboard_access.sql'
       - 'supabase/ops/apply_client_dashboard_entity_route_skin.sql'
       - 'supabase/ops/fix_owner_campaigner_rls.sql'
+      - 'supabase/ops/fix_campaign_pulse_snapshots_owner_read.sql'
+      - 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'
       - 'supabase/ops/apply_cursor_human_task_queue.sql'
 
 jobs:
@@ -82,7 +84,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_cursor_human_task_queue.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'; then
+              FILE="supabase/ops/apply_connect_client_meta_ad_account_skin.sql"
+              NAME="apply_connect_client_meta_ad_account_skin"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_cursor_human_task_queue.sql'; then
               FILE="supabase/ops/apply_cursor_human_task_queue.sql"
               NAME="apply_cursor_human_task_queue"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_owner_campaigner_rls.sql'; then
