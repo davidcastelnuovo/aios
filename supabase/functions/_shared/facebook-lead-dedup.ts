@@ -19,6 +19,23 @@ export function facebookWhatsAppSendSource(chatId: string): string {
   return `fb-wa:${last9 ? `972${last9}@c.us` : raw}`
 }
 
+/** Same destination key, but for identical message-body locks that do not need a leadgen id. */
+export function whatsAppBodyEventSource(chatId: string): string {
+  return facebookWhatsAppSendSource(chatId).replace(/^fb-wa:/, "wa-body:")
+}
+
+export function shouldLockWhatsAppBody(message: unknown, leadgenId?: unknown): boolean {
+  if (asId(leadgenId)) return true
+  return /^\s*ליד חדש/.test(String(message ?? ""))
+}
+
+export async function hashWhatsAppBody(message: unknown): Promise<string> {
+  const text = asId(message)
+  if (!text) return ""
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")
+}
+
 function isUniqueViolation(error: { code?: unknown; message?: unknown; details?: unknown } | null | undefined): boolean {
   if (!error) return false
   const code = String(error.code ?? "")
@@ -130,6 +147,39 @@ export async function claimFacebookLeadWhatsAppSend(
       .eq("tenant_id", params.tenantId)
       .eq("source", facebookWhatsAppSendSource(chatId))
       .eq("external_id", leadgenId)
+      .maybeSingle()
+    if (data?.id) return { duplicate: true, inserted: false }
+    return { duplicate: false, inserted: false }
+  }
+  return { duplicate: false, inserted: true }
+}
+
+export async function claimIdenticalWhatsAppSend(
+  supabase: { from: (table: string) => any },
+  params: { tenantId: string; chatId: string; message: unknown; leadgenId?: unknown },
+): Promise<{ duplicate: boolean; inserted: boolean }> {
+  const chatId = asId(params.chatId)
+  const bodyHash = await hashWhatsAppBody(params.message)
+  if (!bodyHash || !chatId || !params.tenantId) return { duplicate: false, inserted: false }
+  if (!shouldLockWhatsAppBody(params.message, params.leadgenId)) {
+    return { duplicate: false, inserted: false }
+  }
+
+  const { error } = await supabase.from("lead_notification_events").insert({
+    tenant_id: params.tenantId,
+    source: whatsAppBodyEventSource(chatId),
+    external_id: bodyHash,
+  })
+
+  if (isUniqueViolation(error)) return { duplicate: true, inserted: false }
+  if (error) {
+    console.error("[facebook-lead-dedup] identical whatsapp send claim failed:", error.message)
+    const { data } = await supabase
+      .from("lead_notification_events")
+      .select("id")
+      .eq("tenant_id", params.tenantId)
+      .eq("source", whatsAppBodyEventSource(chatId))
+      .eq("external_id", bodyHash)
       .maybeSingle()
     if (data?.id) return { duplicate: true, inserted: false }
     return { duplicate: false, inserted: false }
