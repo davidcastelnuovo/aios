@@ -12,7 +12,7 @@ import {
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
 import { formatTaskNotificationMessage } from '../_shared/task-notification-message.ts'
 import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
-import { claimFacebookLeadAutomationRun, claimFacebookLeadWhatsAppSend, releaseFacebookLeadAutomationRun, releaseFacebookLeadWhatsAppSend } from '../_shared/facebook-lead-dedup.ts'
+import { claimFacebookLeadAutomationRun, claimFacebookLeadWhatsAppSend, claimIdenticalWhatsAppSend, releaseFacebookLeadAutomationRun, releaseFacebookLeadWhatsAppSend } from '../_shared/facebook-lead-dedup.ts'
 // clearer error when ManyChat wa_id ghost on deleted contact — 2026-08-09
 
 const corsHeaders = {
@@ -3813,8 +3813,21 @@ async function sendWaMessage(opts: {
   config: any,
   data: any,
   tenantSlug?: string,
+  supabase?: any,
+  tenantId?: string,
 }) {
-  const { providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug } = opts
+  const { providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug, supabase, tenantId } = opts
+  if (supabase && tenantId) {
+    const bodyClaim = await claimIdenticalWhatsAppSend(supabase, {
+      tenantId,
+      chatId,
+      message,
+      leadgenId: data?.facebook_leadgen_id,
+    })
+    if (bodyClaim.duplicate) {
+      return { skipped: 'duplicate_identical_whatsapp' }
+    }
+  }
   const mediaType = config.media_type
   const mediaUrl = config.media_url
 
@@ -4064,9 +4077,13 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
         }
         try {
           const r = await sendWaMessage({
-            providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug,
+            providerType, idInstance, apiTokenInstance, chatId, message, config, data, tenantSlug, supabase, tenantId,
           })
-          results.push({ chatId, status: 'sent', result: r })
+          if (r?.skipped) {
+            results.push({ chatId, status: 'skipped', result: r })
+          } else {
+            results.push({ chatId, status: 'sent', result: r })
+          }
         } catch (sendErr) {
           if (sendClaimInserted) {
             await releaseFacebookLeadWhatsAppSend(supabase, {
@@ -4281,6 +4298,21 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
       }
     }
     sendClaimInserted = sendClaim.inserted
+  }
+
+  const bodyClaim = await claimIdenticalWhatsAppSend(supabase, {
+    tenantId,
+    chatId,
+    message,
+    leadgenId: data?.facebook_leadgen_id,
+  })
+  if (bodyClaim.duplicate) {
+    return {
+      success: true,
+      skipped: 'duplicate_identical_whatsapp',
+      message_sent: message,
+      chat_id: chatId,
+    }
   }
 
   let sendResult: any

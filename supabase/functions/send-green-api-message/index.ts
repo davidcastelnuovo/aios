@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { checkWhatsAppSend } from '../_shared/integration-guard.ts';
+import { claimIdenticalWhatsAppSend } from '../_shared/facebook-lead-dedup.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -257,6 +258,22 @@ Deno.serve(async (req) => {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    if (tenantId) {
+      const bodyClaim = await claimIdenticalWhatsAppSend(admin, {
+        tenantId,
+        chatId,
+        message,
+      });
+      if (bodyClaim.duplicate) {
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: 'duplicate_identical_whatsapp',
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Send message via Green API
