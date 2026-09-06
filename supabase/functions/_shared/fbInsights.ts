@@ -18,10 +18,18 @@ export interface CampaignStatus {
   updated_time?: string | null;
 }
 
+export type AdsEntityLevel = 'campaign' | 'adset' | 'ad';
+
 export interface InsightRecord {
   date: string;
+  /** Granularity of this row — defaults to campaign for legacy rows. */
+  entity_level?: AdsEntityLevel;
   campaign_id: string;
   campaign_name: string;
+  adset_id?: string;
+  adset_name?: string;
+  ad_id?: string;
+  ad_name?: string;
   impressions: number;
   clicks: number;
   lp_or_form_views: number;
@@ -417,10 +425,21 @@ export function buildInsightRecord(
                   ? 'ecommerce'
                   : 'other';
 
+  const entityLevel: AdsEntityLevel = insight.ad_id
+    ? 'ad'
+    : insight.adset_id
+      ? 'adset'
+      : 'campaign';
+
   return {
     date: insight.date_start,
+    entity_level: entityLevel,
     campaign_id: insight.campaign_id,
     campaign_name: insight.campaign_name,
+    adset_id: insight.adset_id || undefined,
+    adset_name: insight.adset_name || undefined,
+    ad_id: insight.ad_id || undefined,
+    ad_name: insight.ad_name || undefined,
     impressions: parseInt(insight.impressions) || 0,
     clicks: parseInt(insight.clicks) || 0,
     lp_or_form_views: lpOrFormViews,
@@ -440,4 +459,61 @@ export function buildInsightRecord(
     configured_status: campaignStatus?.configured_status || null,
     updated_time: campaignStatus?.updated_time || null,
   };
+}
+
+const FB_INSIGHTS_BASE_FIELDS =
+  'impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend';
+
+/** Paginate Facebook account insights for one hierarchy level. */
+export async function fetchFacebookInsightsAtLevel(
+  adAccountId: string,
+  level: AdsEntityLevel,
+  sinceStr: string,
+  untilStr: string,
+  accessToken: string,
+): Promise<any[]> {
+  const levelFields: Record<AdsEntityLevel, string> = {
+    campaign: `campaign_id,campaign_name,${FB_INSIGHTS_BASE_FIELDS}`,
+    adset: `campaign_id,campaign_name,adset_id,adset_name,${FB_INSIGHTS_BASE_FIELDS}`,
+    ad: `campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,${FB_INSIGHTS_BASE_FIELDS}`,
+  };
+  const firstUrl =
+    `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=${level}` +
+    `&fields=${levelFields[level]}` +
+    `&time_range={"since":"${sinceStr}","until":"${untilStr}"}` +
+    '&time_increment=1&use_unified_attribution_setting=true&limit=500' +
+    `&access_token=${accessToken}`;
+
+  const rows: any[] = [];
+  let next: string | null = firstUrl;
+  while (next) {
+    const r = await fetch(next);
+    const d: any = await r.json();
+    if (d.error) throw new Error(d.error.message || JSON.stringify(d.error));
+    if (Array.isArray(d.data)) rows.push(...d.data);
+    next = d.paging?.next || null;
+  }
+  return rows;
+}
+
+/** Build CRM insight rows for campaign + ad set + ad levels (shared by manual + cron sync). */
+export function buildAllLevelInsightRecords(
+  adAccountId: string,
+  sinceStr: string,
+  untilStr: string,
+  accessToken: string,
+  campaignStatuses: Record<string, CampaignStatus>,
+  resultLeadTypesByCampaign: Record<string, string[]> = {},
+): Promise<InsightRecord[]> {
+  return (async () => {
+    const levels: AdsEntityLevel[] = ['campaign', 'adset', 'ad'];
+    const allRows: InsightRecord[] = [];
+    for (const level of levels) {
+      const raw = await fetchFacebookInsightsAtLevel(adAccountId, level, sinceStr, untilStr, accessToken);
+      for (const insight of raw) {
+        allRows.push(buildInsightRecord(insight, campaignStatuses, resultLeadTypesByCampaign));
+      }
+    }
+    return allRows;
+  })();
 }

@@ -12,8 +12,13 @@ const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET') || '';
 
 interface GoogleAdsRecord {
   date: string;
+  entity_level?: 'campaign' | 'adset' | 'ad';
   campaign_id: string;
   campaign_name: string;
+  adset_id?: string;
+  adset_name?: string;
+  ad_id?: string;
+  ad_name?: string;
   impressions: number;
   clicks: number;
   ctr: number;
@@ -367,21 +372,17 @@ Deno.serve(async (req) => {
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
     }
 
-    const startDateStr = startDate.toISOString().split('T')[0].replace(/-/g, '');
-    const endDateStr = endDate.toISOString().split('T')[0].replace(/-/g, '');
+    const startIso = startDate.toISOString().split('T')[0];
+    const endIso = endDate.toISOString().split('T')[0];
 
+    const detectGAError = (data: any): any | null => {
+      if (!data) return null;
+      if (data.error) return data.error;
+      if (Array.isArray(data) && data.length > 0 && data[0]?.error) return data[0].error;
+      return null;
+    };
 
-    // Use Google Ads Query Language to fetch campaign performance.
-    // Primary KPIs use `metrics.conversions` / `conversions_value` to match the Google Ads
-    // UI "Conversions" / "Conv. value" columns (primary-for-goal actions only).
-    // We ALSO pull all_conversions* for diagnostics: when purchase value is on a secondary
-    // action, primary conv. value can look absurdly low (e.g. ₪7 for 13 conversions) while
-    // all_conversions_value still holds the real revenue.
-    const query = `
-      SELECT
-        segments.date,
-        campaign.id,
-        campaign.name,
+    const gaqlMetrics = `
         metrics.impressions,
         metrics.clicks,
         metrics.ctr,
@@ -391,9 +392,109 @@ Deno.serve(async (req) => {
         metrics.conversions_value,
         metrics.all_conversions,
         metrics.all_conversions_value,
-        metrics.cost_per_conversion
+        metrics.cost_per_conversion`;
+
+    const parseGaqlResults = (
+      batchesArr: any[],
+      entityLevel: 'campaign' | 'adset' | 'ad',
+    ): GoogleAdsRecord[] => {
+      const parsed: GoogleAdsRecord[] = [];
+      for (const batch of batchesArr) {
+        for (const result of batch.results || []) {
+          const costMicros = parseInt(result.metrics?.costMicros || '0');
+          const cost = costMicros / 1000000;
+          const conversions = parseFloat(result.metrics?.conversions || '0');
+          const conversionsValue = parseFloat(result.metrics?.conversionsValue || '0');
+          const allConversions = parseFloat(result.metrics?.allConversions || '0');
+          const allConversionsValue = parseFloat(result.metrics?.allConversionsValue || '0');
+          const finalConversions = conversions;
+          const roas = cost > 0 ? conversionsValue / cost : 0;
+          parsed.push({
+            entity_level: entityLevel,
+            date: result.segments?.date || '',
+            campaign_id: result.campaign?.id || '',
+            campaign_name: result.campaign?.name || '',
+            adset_id: result.adGroup?.id || undefined,
+            adset_name: result.adGroup?.name || undefined,
+            ad_id: result.adGroupAd?.ad?.id || undefined,
+            ad_name: result.adGroupAd?.ad?.name || undefined,
+            impressions: parseInt(result.metrics?.impressions || '0'),
+            clicks: parseInt(result.metrics?.clicks || '0'),
+            ctr: parseFloat(result.metrics?.ctr || '0') * 100,
+            cpc: parseInt(result.metrics?.averageCpc || '0') / 1000000,
+            cost,
+            conversions: finalConversions,
+            conversions_value: conversionsValue,
+            all_conversions: allConversions,
+            all_conversions_value: allConversionsValue,
+            cost_per_conversion: parseInt(result.metrics?.costPerConversion || '0') / 1000000,
+            roas: Math.round(roas * 100) / 100,
+          });
+        }
+      }
+      return parsed;
+    };
+
+    const runGaqlSearch = async (query: string) => {
+      const response = await adsFetch(
+        `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
+        {
+          method: 'POST',
+          headers: {
+            'developer-token': DEVELOPER_TOKEN,
+            'login-customer-id': loginCustomerId,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query }),
+        },
+      );
+      const rawText = await response.text();
+      let data: any = null;
+      try { data = JSON.parse(rawText); } catch { data = null; }
+      const err = detectGAError(data);
+      if (err) throw err;
+      return Array.isArray(data) ? data : (data?.results ? [data] : []);
+    };
+
+    // Use Google Ads Query Language to fetch campaign performance.
+    // Primary KPIs use `metrics.conversions` / `conversions_value` to match the Google Ads
+    // UI "Conversions" / "Conv. value" columns (primary-for-goal actions only).
+    const campaignQuery = `
+      SELECT
+        segments.date,
+        campaign.id,
+        campaign.name,
+        ${gaqlMetrics}
       FROM campaign
-      WHERE segments.date BETWEEN '${startDate.toISOString().split('T')[0]}' AND '${endDate.toISOString().split('T')[0]}'
+      WHERE segments.date BETWEEN '${startIso}' AND '${endIso}'
+      ORDER BY segments.date DESC
+    `;
+
+    const adGroupQuery = `
+      SELECT
+        segments.date,
+        campaign.id,
+        campaign.name,
+        ad_group.id,
+        ad_group.name,
+        ${gaqlMetrics}
+      FROM ad_group
+      WHERE segments.date BETWEEN '${startIso}' AND '${endIso}'
+      ORDER BY segments.date DESC
+    `;
+
+    const adQuery = `
+      SELECT
+        segments.date,
+        campaign.id,
+        campaign.name,
+        ad_group.id,
+        ad_group.name,
+        ad_group_ad.ad.id,
+        ad_group_ad.ad.name,
+        ${gaqlMetrics}
+      FROM ad_group_ad
+      WHERE segments.date BETWEEN '${startIso}' AND '${endIso}'
       ORDER BY segments.date DESC
     `;
 
@@ -409,7 +510,7 @@ Deno.serve(async (req) => {
           'login-customer-id': loginCustomerId,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query: campaignQuery }),
       }
     );
 
@@ -447,14 +548,6 @@ Deno.serve(async (req) => {
     }
 
 
-    // Helper: detect Google Ads error in any response shape (object, array, or wrapped)
-    const detectGAError = (data: any): any | null => {
-      if (!data) return null;
-      if (data.error) return data.error;
-      if (Array.isArray(data) && data.length > 0 && data[0]?.error) return data[0].error;
-      return null;
-    };
-
     // Helper: try a list of candidate MCCs and return the first that works
     const tryMccCandidates = async (candidates: string[]): Promise<{ data: any; mcc: string } | null> => {
       for (const mcc of candidates) {
@@ -468,7 +561,7 @@ Deno.serve(async (req) => {
               'login-customer-id': mcc,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ query }),
+            body: JSON.stringify({ query: campaignQuery }),
           }
         );
         const retryData = await retryResponse.json().catch(() => null);
@@ -552,48 +645,27 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Process results
-    const records: GoogleAdsRecord[] = [];
+    // Process results — campaign + ad group + ad levels (like Ads Manager tabs)
     const batchesArr = Array.isArray(searchData) ? searchData : (searchData?.results ? [searchData] : []);
-    console.log(`[sync-google-ads] batches received: ${batchesArr.length}`);
+    console.log(`[sync-google-ads] campaign batches received: ${batchesArr.length}`);
+    const records: GoogleAdsRecord[] = parseGaqlResults(batchesArr, 'campaign');
 
-    for (const batch of batchesArr) {
-      const results = batch.results || [];
-      console.log(`[sync-google-ads] batch results: ${results.length}`);
-      for (const result of results) {
-        const costMicros = parseInt(result.metrics?.costMicros || '0');
-        const cost = costMicros / 1000000; // Convert micros to actual currency
-        const conversions = parseFloat(result.metrics?.conversions || '0');
-        // conversions_value is already in account currency (NOT micros) — do not divide by 1e6.
-        const conversionsValue = parseFloat(result.metrics?.conversionsValue || '0');
-        const allConversions = parseFloat(result.metrics?.allConversions || '0');
-        const allConversionsValue = parseFloat(result.metrics?.allConversionsValue || '0');
-        // ALWAYS use `metrics.conversions` to match the Google Ads UI's "Conversions" column.
-        // Previously we fell back to `all_conversions` when conversions==0, but that includes
-        // secondary actions (cross-device, store visits, view-through) and over-counted vs UI.
-        // If a campaign tracks conversions only via `all_conversions`, the user should see 0
-        // here — same as Google Ads UI shows in the primary Conversions column.
-        const finalConversions = conversions;
-        const roas = cost > 0 ? conversionsValue / cost : 0;
-
-        records.push({
-          date: result.segments?.date || '',
-          campaign_id: result.campaign?.id || '',
-          campaign_name: result.campaign?.name || '',
-          impressions: parseInt(result.metrics?.impressions || '0'),
-          clicks: parseInt(result.metrics?.clicks || '0'),
-          ctr: parseFloat(result.metrics?.ctr || '0') * 100, // Convert to percentage
-          cpc: parseInt(result.metrics?.averageCpc || '0') / 1000000,
-          cost: cost,
-          conversions: finalConversions,
-          conversions_value: conversionsValue,
-          all_conversions: allConversions,
-          all_conversions_value: allConversionsValue,
-          cost_per_conversion: parseInt(result.metrics?.costPerConversion || '0') / 1000000,
-          roas: Math.round(roas * 100) / 100,
-        });
-      }
+    try {
+      const adGroupBatches = await runGaqlSearch(adGroupQuery);
+      records.push(...parseGaqlResults(adGroupBatches, 'adset'));
+      console.log(`[sync-google-ads] ad group rows: ${records.filter((r) => r.entity_level === 'adset').length}`);
+    } catch (adGroupErr) {
+      console.warn('[sync-google-ads] ad group query failed (non-fatal):', adGroupErr instanceof Error ? adGroupErr.message : adGroupErr);
     }
+
+    try {
+      const adBatches = await runGaqlSearch(adQuery);
+      records.push(...parseGaqlResults(adBatches, 'ad'));
+      console.log(`[sync-google-ads] ad rows: ${records.filter((r) => r.entity_level === 'ad').length}`);
+    } catch (adErr) {
+      console.warn('[sync-google-ads] ad query failed (non-fatal):', adErr instanceof Error ? adErr.message : adErr);
+    }
+
     console.log(`[sync-google-ads] total records parsed: ${records.length}`);
 
     // ============================================================
@@ -614,7 +686,7 @@ Deno.serve(async (req) => {
             segments.conversion_action_category,
             metrics.all_conversions
           FROM campaign
-          WHERE segments.date BETWEEN '${startDate.toISOString().split('T')[0]}' AND '${endDate.toISOString().split('T')[0]}'
+          WHERE segments.date BETWEEN '${startIso}' AND '${endIso}'
         `;
         const categoryResponse = await adsFetch(
           `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
@@ -647,6 +719,7 @@ Deno.serve(async (req) => {
           // field out keeps the report showing the column as unavailable.
           if (addToCartByCampaignDay.size > 0) {
             for (const rec of records) {
+              if ((rec.entity_level || 'campaign') !== 'campaign') continue;
               rec.add_to_cart = addToCartByCampaignDay.get(`${rec.campaign_id}|${rec.date}`) || 0;
             }
           }
@@ -784,6 +857,7 @@ Deno.serve(async (req) => {
             const slugEntries = Array.from(bySlug.keys()).map((s) => ({ slug: s, tokens: normalize(s).split(' ').filter((t) => t.length > 1) }));
 
             for (const rec of records) {
+              if ((rec.entity_level || 'campaign') !== 'campaign') continue;
               // Strategy 1: manual FORM mapping (PRIMARY)
               const mappedForms = campaignIdToForms.get(rec.campaign_id) || [];
               if (mappedForms.length > 0) {

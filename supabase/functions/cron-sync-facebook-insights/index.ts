@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
 import {
-  buildInsightRecord,
+  buildAllLevelInsightRecords,
   buildResultLeadTypeMap,
   type CampaignStatus,
   type InsightRecord,
@@ -256,40 +256,15 @@ Deno.serve(async (req) => {
           accountDisableReason = accountData.disable_reason || null;
         }
 
-        // Fetch insights from Facebook.
-        // use_unified_attribution_setting=true makes FB return numbers that match
-        // the Ads Manager UI; we must NOT pass action_attribution_windows (that
-        // makes `value` the SUM across windows and double/triple counts results).
-        const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
-
-        // Paginate through ALL pages. A single page caps at 500 rows; busy accounts
-        // (many campaign×day rows) would otherwise be truncated, dropping the most
-        // recent dates (Facebook returns rows oldest-first).
-        const data: any = { data: [] };
-        {
-          let next: string | null = insightsUrl;
-          while (next) {
-            const r = await fetch(next);
-            const d: any = await r.json();
-            if (d.error) { data.error = d.error; break; }
-            if (Array.isArray(d.data)) data.data.push(...d.data);
-            next = d.paging?.next || null;
-          }
-        }
-
-        if (data.error) {
-          console.error(`❌ Facebook API error for ${table.name}:`, data.error.message);
-          results.failed++;
-          results.errors.push(`${table.name}: ${data.error.message}`);
-          continue;
-        }
-
-        // Build CRM records via the shared helper so the cron and the manual
-        // `sync-facebook-insights` function count leads identically (incl.
-        // `offsite_conversion.fb_pixel_custom.*` custom conversions like NewLead).
-        const insights: InsightRecord[] = (data.data || []).map((insight: any) =>
-          buildInsightRecord(insight, campaignStatuses, resultLeadTypes)
+        const insights: InsightRecord[] = await buildAllLevelInsightRecords(
+          adAccountId,
+          sinceStr,
+          untilStr,
+          accessToken,
+          campaignStatuses,
+          resultLeadTypes,
         );
+        const campaignInsights = insights.filter((row) => (row.entity_level || 'campaign') === 'campaign');
 
 
         // Ensure fields exist (shared schema, identical to the manual sync)
@@ -519,7 +494,7 @@ Deno.serve(async (req) => {
           );
 
           const perCampaign: Record<string, { name: string; recent: number; prior: number }> = {};
-          for (const ins of insights) {
+          for (const ins of campaignInsights) {
             if (!activeCampaignIds.has(ins.campaign_id)) continue;
             const c = perCampaign[ins.campaign_id] ||= { name: ins.campaign_name, recent: 0, prior: 0 };
             if (ins.date >= recentStart && ins.date <= recentEnd) c.recent += ins.spend;
@@ -582,7 +557,7 @@ Deno.serve(async (req) => {
 
             // Aggregate campaign data for alert evaluation
             const campaignAggregates: Record<string, { spend: number; leads: number; cost_per_lead: number; impressions: number; clicks: number; effective_status: string; campaign_name: string }> = {};
-            for (const insight of insights) {
+            for (const insight of campaignInsights) {
               if (!campaignAggregates[insight.campaign_id]) {
                 campaignAggregates[insight.campaign_id] = { spend: 0, leads: 0, cost_per_lead: 0, impressions: 0, clicks: 0, effective_status: insight.effective_status || '', campaign_name: insight.campaign_name };
               }
