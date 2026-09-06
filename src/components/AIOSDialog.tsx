@@ -290,6 +290,8 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             if (parsed.type === 'token') {
               assistantContent += parsed.content;
               setStreamingMessage(prev => prev + parsed.content);
+            } else if (parsed.type === 'status' && parsed.content) {
+              setStreamingMessage(parsed.content);
             } else if (parsed.type === 'tool_call') {
               const toolMessage: Message = {
                 role: 'tool_call',
@@ -576,6 +578,8 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
             if (parsed.type === 'token') {
               assistantContent += parsed.content;
               setStreamingMessage(prev => prev + parsed.content);
+            } else if (parsed.type === 'status' && parsed.content) {
+              setStreamingMessage(parsed.content);
             } else if (parsed.type === 'tool_call') {
               setMessages(prev => [...prev, {
                 role: 'tool_call', tool: parsed.tool, args: parsed.args, timestamp: new Date().toISOString(),

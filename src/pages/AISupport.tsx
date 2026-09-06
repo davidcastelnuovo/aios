@@ -192,6 +192,8 @@ export default function AISupport() {
             if (parsed.type === 'token') {
               assistantContent += parsed.content;
               setStreamingMessage(prev => prev + parsed.content);
+            } else if (parsed.type === 'status' && parsed.content) {
+              setStreamingMessage(parsed.content);
             } else if (parsed.type === 'tool_call') {
               const toolMessage: Message = {
                 role: 'tool_call',
