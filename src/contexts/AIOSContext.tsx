@@ -116,6 +116,11 @@ export function AIOSProvider({ children }: { children: React.ReactNode }) {
               continue;
             }
 
+            if (parsed.type === "status" && parsed.content) {
+              setStatusText(parsed.content);
+              continue;
+            }
+
             if (parsed.type === "done") {
               receivedDone = true;
             }

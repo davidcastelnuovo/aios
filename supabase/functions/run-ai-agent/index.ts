@@ -14,6 +14,15 @@ import { loadMcpTools } from '../_shared/mcp-tools.ts'
 import { spawnSubagent, getSubagentResult, spawnSubagentBatch, getBatchResults } from '../_shared/subagent.ts'
 import { resolveActiveSkills, buildSkillsBlockBySlug, resolveSkillsBySlug } from '../_shared/skills/registry.ts'
 import { DEV_ENVIRONMENT_STANDING } from '../_shared/environments-standing.ts'
+import {
+  applyToolForceIncludes,
+  buildQuickAck,
+  fetchRelevantMemoryPointers,
+  searchToolsFromIndex,
+  selectRelevantToolsForMessage,
+  shouldLoadMcpConnection,
+  shouldUseTokenOptimize,
+} from '../_shared/carmen-token-optimizer.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 import { asUuidOrNull } from '../_shared/uuid.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
@@ -549,10 +558,9 @@ async function recordProviderFailover(supabase: any, tenantId: string, fromLabel
 // always-on core set, so each request carries a small, focused toolset. Fully
 // best-effort: any failure falls back to the full set (capToolsForTarget stays
 // as the final backstop for OpenAI's limit).
-const ROUTER_ACTIVATE_MIN = 90   // only route when the agent actually has a large toolset
-const ROUTER_MATCH_COUNT = 55    // relevant tools to pull by similarity
 // Reflex tools Carmen must always be able to reach regardless of the message.
 const CORE_TOOLS = new Set([
+  'search_agent_tools',
   'save_memory', 'recall_memory', 'recall_memory_fts', 'delete_memory',
   'kb_search', 'kb_open', 'kb_list_folder', 'kb_recall_conversation', 'kb_learn',
   'list_clients', 'get_client_info', 'list_leads', 'search_entities',
@@ -570,96 +578,6 @@ const CORE_TOOLS = new Set([
   'join_meeting_for_client', 'get_meeting_bot_status',
   'get_latest_campaign_pulse',
 ])
-
-// Cheap, stable signature of a tool description so embeddings refresh when the
-// description changes (djb2 — deterministic, no async crypto needed).
-function toolSig(s: string): string {
-  let h = 5381
-  const str = s || ''
-  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0
-  return (h >>> 0).toString(36)
-}
-
-// Lazily populate/refresh tool embeddings. First call after deploy embeds the
-// whole set in one batch (~1-2s, one-time); later calls embed only tools whose
-// description signature changed.
-async function ensureToolEmbeddings(supabase: any, toolDefs: any[]): Promise<void> {
-  const { data: existing } = await supabase.from('agent_tool_embeddings').select('tool_name, sig')
-  const have = new Map<string, string>((existing || []).map((r: any) => [r.tool_name, r.sig]))
-  const missing = toolDefs.filter((t) => have.get(t.name) !== toolSig(t.description || ''))
-  if (missing.length === 0) return
-  const vectors = await aiEmbedBatch(missing.map((t) => `${t.name}: ${t.description || ''}`))
-  if (!vectors) return
-  const rows = missing.map((t, i) => ({
-    tool_name: t.name, sig: toolSig(t.description || ''), embedding: vectors[i], updated_at: new Date().toISOString(),
-  }))
-  await supabase.from('agent_tool_embeddings').upsert(rows, { onConflict: 'tool_name' })
-}
-
-// Focused subset of toolDefs relevant to userText, unioned with the always-on
-// core set. Returns the full list unchanged on any failure or small toolset.
-async function selectRelevantTools(supabase: any, userText: string, toolDefs: any[]): Promise<any[]> {
-  try {
-    if (!userText?.trim() || toolDefs.length <= ROUTER_ACTIVATE_MIN) return toolDefs
-    await ensureToolEmbeddings(supabase, toolDefs)
-    const qvec = await aiEmbed(userText)
-    if (!qvec) return toolDefs
-    const { data } = await supabase.rpc('match_agent_tools', { query_embedding: qvec, match_count: ROUTER_MATCH_COUNT })
-    if (!data?.length) return toolDefs
-    const picked = new Set<string>(data.map((r: any) => r.tool_name))
-    for (const c of CORE_TOOLS) picked.add(c)
-    for (const p of PRIORITY_TOOLS) picked.add(p)
-    // Keyword force-include for Meta ad duplication (Hebrew + English).
-    if (/(שכפל|שכפול|וריאצ|קופי|duplicate\s*ad|copy\s*variant|ad\s*variant|inspect.?ad)/i.test(userText)) {
-      picked.add('inspect_facebook_ad')
-      picked.add('fb_duplicate_ad_variants')
-      picked.add('duplicate_facebook_ad_variants')
-      picked.add('list_facebook_ads')
-      picked.add('analyze_facebook_campaign')
-      picked.add('execute_pending_approval')
-      picked.add('reject_pending_approval')
-      picked.add('list_pending_approvals')
-    }
-    // Explicit WhatsApp confirms ("כן" / "מאשר") must always reach approval tools.
-    if (isExplicitApprovalPhrase(userText) || isExplicitRejectionPhrase(userText)) {
-      picked.add('execute_pending_approval')
-      picked.add('reject_pending_approval')
-      picked.add('list_pending_approvals')
-      picked.add('fb_duplicate_ad_variants')
-      picked.add('duplicate_facebook_ad_variants')
-      picked.add('toggle_facebook_campaign')
-      picked.add('inspect_facebook_ad')
-    }
-    // Meeting join link pasted (Zoom / Meet / Teams) — must reach the Recall bot tool.
-    if (extractMeetingUrl(userText)) {
-      picked.add('join_meeting_for_client')
-      picked.add('get_meeting_bot_status')
-    }
-    // Staff / team WhatsApp send (Hebrew + English).
-    if (/(שלח.*(וואטסאפ|whatsapp|הודע).*(קמפיינר|איש מכירות|צוות|עובד|אנה)|whatsapp.*(staff|campaigner|sales|team)|שלח.*(לאנה|לקמפיינר|לאיש מכירות)|lookup_staff|send_whatsapp_to_staff)/i.test(userText)) {
-      picked.add('send_whatsapp_to_staff')
-      picked.add('lookup_staff_whatsapp')
-      picked.add('send_message_to_campaigner')
-      picked.add('list_campaigners')
-      picked.add('list_sales_people')
-      picked.add('search_entities')
-    }
-    // Pulse check — must always reach the cached snapshot tool on WhatsApp.
-    if (/\bדופק\b|\bpulse\s*check\b|בדיקת\s*דוח|מצב\s*קמפיינים|סיכום\s*קמפיינים/i.test(userText)) {
-      picked.add('get_latest_campaign_pulse')
-    }
-    if (/(openai|open ai|קרדיט|יתרת|billing|usage|חיוב|כמה.*(נשאר|עולה|הוצא)|api.*(cost|credit|balance))/i.test(userText)) {
-      picked.add('get_openai_billing_status')
-    }
-    const result = toolDefs.filter((t) => picked.has(t.name))
-    if (result.length < 10) return toolDefs // guard against an empty/bad match wiping the toolset
-    console.log(`[AGENT] tool router: ${toolDefs.length} → ${result.length} relevant tools`)
-    return result
-  } catch (e: any) {
-    console.error('[AGENT] tool router failed, using full set:', e?.message)
-    return toolDefs
-  }
-}
 
 // Rough per-model pricing (USD per 1M tokens in/out) for the usage panel.
 // Unknown models log tokens with a null cost rather than a wrong one.
@@ -853,6 +771,7 @@ const ALL_TOOLS = [
   // MEMORY
   { name: 'save_memory', description: 'שמירת מידע לזיכרון מתמשך (העדפות, פרויקטים, הוראות)', parameters: { type: 'object', properties: { key: { type: 'string', description: 'מפתח זיהוי' }, content: { type: 'string', description: 'התוכן לשמירה' }, category: { type: 'string', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal', 'instructions'] } }, required: ['key', 'content'] } },
   { name: 'recall_memory', description: 'שליפת זיכרונות שנשמרו (key/value, מהיר)', parameters: { type: 'object', properties: { category: { type: 'string' }, search: { type: 'string' } } } },
+  { name: 'search_agent_tools', description: 'חיפוש כלים רלוונטיים למשימה מתוך קטלוג הכלים (אינדקס embedding). השתמשי כשחסר כלי לביצוע המשימה — הכלים שיימצאו יתווספו ויהיו זמינים מסבב הבא.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'תיאור קצר של מה צריך לבצע' }, limit: { type: 'integer', description: 'ברירת מחדל 12' } }, required: ['query'] } },
   { name: 'recall_memory_fts', description: 'חיפוש זיכרונות חוצה-שיחות עם Full-Text Search ודירוג לפי importance. השתמשי כדי למצוא הקשר רלוונטי משיחות עבר על נושא, לקוח, או הוראה. שונה מ-recall_memory: זה מחפש בכל ה-agent_memory (זיכרונות שנוצרו אוטומטית מסיכומי ריצות + זיכרונות ידניים) ומדורג לפי חשיבות.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'טקסט חיפוש (מילות מפתח, שם לקוח, נושא)' }, limit: { type: 'integer', description: 'ברירת מחדל 5' }, min_importance: { type: 'integer', description: 'סף חשיבות מינימלי 0-100' } }, required: ['query'] } },
   { name: 'delete_memory', description: 'מחיקת זיכרון', parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } },
   // KNOWLEDGE BASE (Carmen Memory Pointers + Episodes — ממלכת הידע)
@@ -6595,6 +6514,12 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       console.log(`[AGENT] Resolved default Carmen agent: ${agent.name} (${agent_id})`)
     }
 
+    const isCarmenAgent = agent.name?.toLowerCase().includes('carmen') || agent.name?.includes('כרמן')
+    const tokenOptimize = shouldUseTokenOptimize(agent, isCarmenAgent)
+    if (emit && tokenOptimize && !pinSkillsOnly) {
+      emit({ type: 'status', content: buildQuickAck(String(command_text || '')) })
+    }
+    console.log(`[AGENT] token_optimize=${tokenOptimize} for ${agent.name}`)
 
 
     // 2. Resolve tenant
@@ -6778,8 +6703,12 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         supabase.from('clients').select('id', { count: 'exact', head: true }).eq('tenant_id', resolvedTenantId),
         supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('tenant_id', resolvedTenantId).eq('status', 'open'),
       ]),
-      supabase.from('ai_memory').select('key, content, category').eq('tenant_id', resolvedTenantId).order('updated_at', { ascending: false }).limit(30),
-      supabase.from('campaigners').select('id, full_name, phone, email, role').eq('tenant_id', resolvedTenantId).order('full_name').limit(50),
+      tokenOptimize
+        ? supabase.from('ai_memory').select('key, content, category').eq('tenant_id', resolvedTenantId).eq('category', 'instructions').order('updated_at', { ascending: false }).limit(25)
+        : supabase.from('ai_memory').select('key, content, category').eq('tenant_id', resolvedTenantId).order('updated_at', { ascending: false }).limit(30),
+      tokenOptimize
+        ? Promise.resolve({ data: [] as any[] })
+        : supabase.from('campaigners').select('id, full_name, phone, email, role').eq('tenant_id', resolvedTenantId).order('full_name').limit(50),
     ])
     const tenantName = tenantRes.data?.name || 'הארגון'
     // Resolve shared agencies from other tenants accessible to us
@@ -6797,43 +6726,49 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       resolvedTenantId,
       ...sharedAgencies.map((agency: any) => agency.source_tenant_id),
     ]))
-    const [pointerMemoryRes, episodeMemoryRes] = await Promise.all([
-      supabase.from('carmen_memory_pointers')
-        .select('title, summary, category, subcategory, importance, ref_date')
-        .in('tenant_id', memoryTenantIds)
-        .is('valid_until', null)
-        .order('importance', { ascending: false })
-        .order('ref_date', { ascending: false })
-        .limit(80),
-      supabase.from('carmen_memory_episodes')
-        .select('topic, summary, topic_tags, importance, ref_date')
-        .in('tenant_id', memoryTenantIds)
-        .order('importance', { ascending: false })
-        .order('ref_date', { ascending: false })
-        .limit(50),
-    ])
-    const memoryTerms = String(command_text || '')
-      .toLocaleLowerCase('he')
-      .split(/[^\p{L}\p{N}]+/u)
-      .filter((term: string) => term.length >= 3)
-    const scoreMemory = (text: string, importance: number) =>
-      memoryTerms.reduce((score: number, term: string) =>
-        score + (text.toLocaleLowerCase('he').includes(term) ? 20 : 0), importance / 10)
-    const relevantLongTermMemory = [
-      ...(pointerMemoryRes.data || []).map((row: any) => ({
-        label: [row.category, row.subcategory].filter(Boolean).join('/'),
-        text: [row.title, row.summary].filter(Boolean).join(': '),
-        score: scoreMemory(`${row.title || ''} ${row.summary || ''}`, row.importance || 0),
-      })),
-      ...(episodeMemoryRes.data || []).map((row: any) => ({
-        label: 'episode',
-        text: [row.topic, row.summary].filter(Boolean).join(': '),
-        score: scoreMemory(`${row.topic || ''} ${row.summary || ''} ${(row.topic_tags || []).join(' ')}`, row.importance || 0),
-      })),
-    ]
-      .filter((item: any) => item.text)
-      .sort((a: any, b: any) => b.score - a.score)
-      .slice(0, 12)
+    let relevantLongTermMemory: Array<{ label: string; text: string }> = []
+    if (tokenOptimize) {
+      relevantLongTermMemory = await fetchRelevantMemoryPointers(supabase, memoryTenantIds, String(command_text || ''), 8)
+    } else {
+      const [pointerMemoryRes, episodeMemoryRes] = await Promise.all([
+        supabase.from('carmen_memory_pointers')
+          .select('title, summary, category, subcategory, importance, ref_date')
+          .in('tenant_id', memoryTenantIds)
+          .is('valid_until', null)
+          .order('importance', { ascending: false })
+          .order('ref_date', { ascending: false })
+          .limit(80),
+        supabase.from('carmen_memory_episodes')
+          .select('topic, summary, topic_tags, importance, ref_date')
+          .in('tenant_id', memoryTenantIds)
+          .order('importance', { ascending: false })
+          .order('ref_date', { ascending: false })
+          .limit(50),
+      ])
+      const memoryTerms = String(command_text || '')
+        .toLocaleLowerCase('he')
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((term: string) => term.length >= 3)
+      const scoreMemory = (text: string, importance: number) =>
+        memoryTerms.reduce((score: number, term: string) =>
+          score + (text.toLocaleLowerCase('he').includes(term) ? 20 : 0), importance / 10)
+      relevantLongTermMemory = [
+        ...(pointerMemoryRes.data || []).map((row: any) => ({
+          label: [row.category, row.subcategory].filter(Boolean).join('/'),
+          text: [row.title, row.summary].filter(Boolean).join(': '),
+          score: scoreMemory(`${row.title || ''} ${row.summary || ''}`, row.importance || 0),
+        })),
+        ...(episodeMemoryRes.data || []).map((row: any) => ({
+          label: 'episode',
+          text: [row.topic, row.summary].filter(Boolean).join(': '),
+          score: scoreMemory(`${row.topic || ''} ${row.summary || ''} ${(row.topic_tags || []).join(' ')}`, row.importance || 0),
+        })),
+      ]
+        .filter((item: any) => item.text)
+        .sort((a: any, b: any) => b.score - a.score)
+        .slice(0, 12)
+        .map((item: any) => ({ label: item.label, text: item.text }))
+    }
     const ownAgencyList = (agenciesRes.data || []).map((a: any) => `${a.name} (${a.id})`).join(', ')
     const sharedAgencyList = sharedAgencies.map((a: any) => `${a.name} [משותפת מ-${a.source_tenant_name}] (${a.id})`).join(', ')
     const [leadsData, clientsData, tasksData] = statsRes
@@ -6857,7 +6792,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
       `משימות פתוחות: ${tasksData.count ?? 0}`,
       teamRosterLine,
     ].filter(Boolean).join('\n')
-    const isCarmen = agent.name?.toLowerCase().includes('carmen') || agent.name?.includes('כרמן')
+    const isCarmen = isCarmenAgent
     // ─── PROMPT VERSION SWITCH ───
     // V2 prompt is opt-in per agent via metadata.prompt_version === 'v2'
     // Keeps V1 behavior as default; zero risk to existing agents
@@ -7396,6 +7331,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     let filteredTools = allowedTools.length > 0
       ? ALL_TOOLS.filter(t => allowedTools.includes(t.name))
       : ALL_TOOLS
+    const toolPoolBeforeRouting = filteredTools
 
     // Access control (denylist): subtract tools turned OFF in settings. Default
     // (empty) = no change, so Carmen keeps access to everything by default.
@@ -7461,10 +7397,28 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       filteredTools = []
       console.log('[AGENT] pin_skills_only: exposing no tools (isolated copy session)')
     } else if (isCarmen) {
-      filteredTools = await selectRelevantTools(supabase, String(command_text || ''), filteredTools)
+      filteredTools = await selectRelevantToolsForMessage(supabase, String(command_text || ''), filteredTools, {
+        lazy: tokenOptimize,
+        priorityTools: PRIORITY_TOOLS,
+        legacyCoreTools: CORE_TOOLS,
+        forceInclude: (userText, picked) => applyToolForceIncludes(userText, picked, {
+          isExplicitApprovalPhrase,
+          isExplicitRejectionPhrase,
+          extractMeetingUrl,
+        }),
+      })
     }
 
     const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
+    const expandAgentTools = (extra: Array<{ name: string; description?: string; parameters?: any }>) => {
+      const present = new Set(toolsForAPI.map((t: any) => t.function?.name))
+      for (const t of extra) {
+        if (!t?.name || present.has(t.name)) continue
+        toolsForAPI.push({ type: 'function', function: t })
+        if (!filteredTools.some((ft) => ft.name === t.name)) filteredTools.push(t as any)
+        present.add(t.name)
+      }
+    }
 
     // Unauthorized callers must not see native GitHub-agent delegation either.
     if (!canEscalateDevFixes) {
@@ -7504,7 +7458,12 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         const escalationAgent: string = (agent as any).metadata?.escalation_agent || 'all'
         const isEscalationMcp = (n: string) =>
           n.startsWith('mcp_Claude__') || n.startsWith('mcp_Manus__') || n.startsWith('mcp_Cursor__') || n.startsWith('mcp_Grok__')
+        const forceLoadAllMcp = !tokenOptimize || canEscalateDevFixes || userAskedBackground || userAskedManus || userAskedGithubAgent
         for (const t of mcp.toolDefs) {
+          if (tokenOptimize && !forceLoadAllMcp) {
+            const connSlug = String(t.name || '').replace(/^mcp_/, '').split('__')[0] || ''
+            if (!shouldLoadMcpConnection(connSlug, cmd, false)) continue
+          }
           // Grok Bot is calling Carmen — do not expose Grok MCP back (ping-pong loop).
           if (surface === 'grok_bot' && t.name.startsWith('mcp_Grok__')) continue
           if (escalationAgent === 'cursor' && (t.name.startsWith('mcp_Claude__') || t.name.startsWith('mcp_Manus__') || t.name.startsWith('mcp_Grok__'))) continue
@@ -7532,6 +7491,12 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
 
     if (isCarmen) {
       systemPrompt += `\n\n=== סביבת פיתוח (חובה) ===\n${DEV_ENVIRONMENT_STANDING}`
+    }
+    if (tokenOptimize) {
+      systemPrompt += `\n\n=== אופטימיזציית טוקנים (פעילה) ===
+נטענו רק הנחיות קבועות, זיכרון רלוונטי למשימה, וכלים שעברו אינדקס embedding.
+אם חסר כלי — קראי ל-search_agent_tools עם תיאור קצר; הכלים יתווספו מסבב הבא.
+לזיכרון נוסף: recall_memory / kb_search / recall_memory_fts.`
     }
 
     // ─── Skill resolver: detect active skills from the user message and append their prompts (DB-backed) ───
@@ -7933,6 +7898,22 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           // coding-agent escalations outside the caller's tier (full vs bugfix).
           if (pinSkillsOnly) {
             result = { error: 'isolated_session', message: 'סשן מבודד — כלים כבויים.' }
+          } else if (toolName === 'search_agent_tools') {
+            const discovered = await searchToolsFromIndex(
+              supabase,
+              String(toolArgs.query || command_text || ''),
+              toolPoolBeforeRouting,
+              typeof toolArgs.limit === 'number' ? toolArgs.limit : 12,
+            )
+            expandAgentTools(discovered)
+            result = {
+              success: true,
+              count: discovered.length,
+              tools: discovered.map((t) => ({ name: t.name, description: (t.description || '').slice(0, 160) })),
+              message: discovered.length > 0
+                ? 'הכלים זמינים מסבב הבא — המשיכי לבצע.'
+                : 'לא נמצאו כלים תואמים — נסי ניסוח אחר.',
+            }
           } else if (isDevEscalationTool(toolName) && !isDevEscalationToolAllowed(toolName, devEscalationTier)) {
             result = {
               error: 'dev_escalation_forbidden',
