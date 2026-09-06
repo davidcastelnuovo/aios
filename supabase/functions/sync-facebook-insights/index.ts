@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import {
-  buildInsightRecord,
+  buildAllLevelInsightRecords,
   buildResultLeadTypeMap,
   type CampaignStatus,
   type InsightRecord,
@@ -263,46 +263,18 @@ Deno.serve(async (req) => {
       accountDisableReason = accountData.disable_reason || null;
     }
 
-    // Fetch insights from Facebook with time_increment=1 for daily breakdown.
-    // IMPORTANT: We rely ONLY on use_unified_attribution_setting=true to match the
-    // numbers shown in Ads Manager UI. We must NOT pass action_attribution_windows,
-    // because doing so makes Facebook return `value` as the SUM across the requested
-    // windows (e.g. 7d_click + 1d_view), which double/triple counts the same user
-    // and inflates purchases/leads by 2x-3x vs. what Ads Manager displays.
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&use_unified_attribution_setting=true&limit=500&access_token=${accessToken}`;
+    console.log(`[sync-facebook-insights] Fetching campaign/adset/ad insights from FB`);
 
-    // Paginate through ALL pages. A single page caps at 500 rows; busy accounts
-    // (many campaign×day rows) would otherwise be truncated, dropping the most
-    // recent dates (Facebook returns rows oldest-first).
-    const data: any = { data: [] };
-    {
-      let next: string | null = insightsUrl;
-      while (next) {
-        const r = await fetch(next);
-        const d: any = await r.json();
-        if (d.error) { data.error = d.error; break; }
-        if (Array.isArray(d.data)) data.data.push(...d.data);
-        next = d.paging?.next || null;
-      }
-    }
-
-    if (data.error) {
-      console.error('Facebook API error:', data.error);
-      return new Response(JSON.stringify({ 
-        error: 'Facebook API error',
-        details: data.error.message
-      }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    console.log(`[sync-facebook-insights] Got ${(data.data || []).length} insight rows from FB`);
-
-    // Build CRM records via the shared helper (single source of truth for lead
-    // counting, shared with cron-sync-facebook-insights).
-    const insights: InsightRecord[] = (data.data || []).map((insight: any) =>
-      buildInsightRecord(insight, campaignStatuses, resultLeadTypes)
+    const { records: insights, levelCounts } = await buildAllLevelInsightRecords(
+      adAccountId,
+      sinceStr,
+      untilStr,
+      accessToken,
+      campaignStatuses,
+      resultLeadTypes,
     );
+
+    console.log(`[sync-facebook-insights] Got ${insights.length} insight rows from FB`, levelCounts);
 
     // Make sure fields exist for Facebook Insights table (shared schema)
     const fieldKeys = FB_INSIGHTS_FIELD_KEYS;
@@ -375,6 +347,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true,
       records_synced: insights.length,
+      by_level: levelCounts,
       account_status: accountStatus,
       last_sync_at: new Date().toISOString()
     }), {

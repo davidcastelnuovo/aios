@@ -66,6 +66,16 @@ import { WooAttributionSection } from "@/components/dynamic-tables/WooAttributio
 import { fetchWooReportAttribution, getDynamicTableDateRangeIso } from "@/lib/wooDashboardQueries";
 import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
+import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
+import {
+  ADS_ENTITY_LEVEL_LABELS,
+  ADS_ENTITY_SEARCH_PLACEHOLDERS,
+  filterRecordsByEntityLevel,
+  getEntityDisplayName,
+  getEntityGroupKey,
+  recordMatchesEntitySearch,
+  type AdsEntityLevel,
+} from "@/lib/adsEntityLevel";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -145,6 +155,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const [showDeleteTableDialog, setShowDeleteTableDialog] = useState(false);
   const [showLinkClientDialog, setShowLinkClientDialog] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
+  const [adsEntityLevel, setAdsEntityLevel] = useState<AdsEntityLevel>("campaign");
   const [isCloning, setIsCloning] = useState(false);
   const cellInputRef = useRef<HTMLInputElement>(null);
 
@@ -377,15 +388,24 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
   const displayRecords = records ?? [];
 
-  // Filter records by campaign name search
+  const isAdsReportTable =
+    table?.integration_type === 'facebook_insights'
+    || table?.integration_type === 'facebook_ecommerce'
+    || table?.integration_type === 'google_ads';
+
+  const entityLevelRecords = useMemo(() => {
+    if (!isAdsReportTable) return displayRecords;
+    return filterRecordsByEntityLevel(displayRecords, adsEntityLevel);
+  }, [displayRecords, adsEntityLevel, isAdsReportTable]);
+
+  // Filter records by entity search (campaign / ad set / ad name)
   const filteredRecords = useMemo(() => {
-    if (!displayRecords.length || !debouncedCampaignSearch.trim()) return displayRecords;
-    const searchTerm = debouncedCampaignSearch.toLowerCase();
-    return displayRecords.filter(record => {
-      const campaignName = String(record.data?.campaign_name || '').toLowerCase();
-      return campaignName.includes(searchTerm);
-    });
-  }, [displayRecords, debouncedCampaignSearch]);
+    if (!entityLevelRecords.length) return entityLevelRecords;
+    if (!debouncedCampaignSearch.trim()) return entityLevelRecords;
+    return entityLevelRecords.filter((record) =>
+      recordMatchesEntitySearch(record.data, adsEntityLevel, debouncedCampaignSearch),
+    );
+  }, [entityLevelRecords, debouncedCampaignSearch, adsEntityLevel]);
 
   const addColumnMutation = useMutation({
     mutationFn: async (columnName: string) => {
@@ -659,7 +679,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       const typeLabel = table?.integration_type === 'facebook_ecommerce' ? 'נתוני מכירות מפייסבוק' : 'נתוני פייסבוק';
-      toast.success(`${typeLabel} סונכרנו בהצלחה (${data.records_synced} שורות)`);
+      const byLevel = data?.by_level;
+      const levelNote = byLevel
+        ? ` — קמפיינים: ${byLevel.campaign ?? 0}, ad sets: ${byLevel.adset ?? 0}, מודעות: ${byLevel.ad ?? 0}`
+        : '';
+      toast.success(`${typeLabel} סונכרנו (${data.records_synced} שורות${levelNote})`);
+      if (byLevel && (!byLevel.adset || !byLevel.ad)) {
+        toast.message('אם ad set / מודעות ריקים — ודא שה-edge functions עודכנו ב-Staging');
+      }
     },
     onError: (error: any) => {
       toast.error('שגיאה בסנכרון מפייסבוק: ' + error.message);
@@ -1987,7 +2014,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 <SearchIcon className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <Input
                   type="text"
-                  placeholder="חפש קמפיין..."
+                  placeholder={ADS_ENTITY_SEARCH_PLACEHOLDERS[adsEntityLevel]}
                   value={campaignSearch}
                   onChange={(e) => setCampaignSearch(e.target.value)}
                   className="w-full md:w-[200px] pr-9 h-9"
@@ -2454,7 +2481,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       {!isEmbed && hasFacebook && table?.id && displayRecords.length > 0 && (
         <ActiveAlerts 
           tableId={table.id} 
-          records={displayRecords} 
+          records={filterRecordsByEntityLevel(displayRecords, 'campaign')} 
           integrationSettings={table.integration_settings}
         />
       )}
@@ -2469,13 +2496,38 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       )}
 
       <div ref={summaryTablesRef}>
+      {(hasAnyFacebook || hasGoogleAds) && displayRecords.length > 0 && (
+        <div className="mb-3">
+          <AdsEntityLevelTabs
+            value={adsEntityLevel}
+            onChange={setAdsEntityLevel}
+          />
+        </div>
+      )}
+      {(hasAnyFacebook || hasGoogleAds) && adsEntityLevel !== 'campaign' && entityLevelRecords.length === 0 && displayRecords.length > 0 && (
+        <Card className="mb-4 border-dashed">
+          <div className="p-6 text-center text-sm text-muted-foreground" dir="rtl">
+            אין עדיין נתונים ברמת {ADS_ENTITY_LEVEL_LABELS[adsEntityLevel]}.
+            {' '}הרץ <strong>סנכרן</strong> {hasGoogleAds ? 'Google Ads' : 'Facebook'} כדי לטעון את הרמה הזו.
+          </div>
+        </Card>
+      )}
       {/* Summary Stats for Facebook Insights (split by campaign type) */}
       {hasFacebook && filteredRecords && filteredRecords.length > 0 && (
         (() => {
+          const entityColumnLabel = adsEntityLevel === 'ad'
+            ? 'מודעה'
+            : adsEntityLevel === 'adset'
+              ? 'קבוצת מודעות'
+              : 'קמפיין';
+          const entityHeader = (suffix: string) =>
+            adsEntityLevel === 'campaign' ? `קמפיין ${suffix}` : entityColumnLabel;
           const campaignGroups = filteredRecords.reduce((acc, record) => {
-            const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
-            if (!acc[campaignName]) {
-              acc[campaignName] = {
+            const groupKey = getEntityGroupKey(record.data, adsEntityLevel);
+            const campaignName = getEntityDisplayName(record.data, adsEntityLevel);
+            if (!acc[groupKey]) {
+              acc[groupKey] = {
+                name: campaignName,
                 impressions: 0,
                 clicks: 0,
                 leads: 0,
@@ -2489,20 +2541,21 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
 
             const rowType = String(record.data?.campaign_type || '').toLowerCase();
             if (rowType === 'ecommerce' || rowType === 'lead' || rowType === 'traffic') {
-              acc[campaignName].campaign_type = rowType as 'lead' | 'ecommerce' | 'traffic';
+              acc[groupKey].campaign_type = rowType as 'lead' | 'ecommerce' | 'traffic';
             }
 
-            acc[campaignName].impressions += Number(record.data?.impressions) || 0;
-            acc[campaignName].clicks += Number(record.data?.clicks) || 0;
+            acc[groupKey].impressions += Number(record.data?.impressions) || 0;
+            acc[groupKey].clicks += Number(record.data?.clicks) || 0;
             const effectiveLeads = getLeadsFromData(record.data || {});
-            acc[campaignName].leads += effectiveLeads;
-            acc[campaignName].spend += Number(record.data?.spend) || 0;
-            acc[campaignName].purchases += Number(record.data?.purchases) || 0;
-            acc[campaignName].purchase_value += Number(record.data?.purchase_value) || 0;
-            acc[campaignName].add_to_cart += Number(record.data?.add_to_cart) || 0;
+            acc[groupKey].leads += effectiveLeads;
+            acc[groupKey].spend += Number(record.data?.spend) || 0;
+            acc[groupKey].purchases += Number(record.data?.purchases) || 0;
+            acc[groupKey].purchase_value += Number(record.data?.purchase_value) || 0;
+            acc[groupKey].add_to_cart += Number(record.data?.add_to_cart) || 0;
 
             return acc;
           }, {} as Record<string, {
+            name: string;
             impressions: number;
             clicks: number;
             leads: number;
@@ -2513,7 +2566,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
             campaign_type: 'lead' | 'ecommerce' | 'traffic' | 'other';
           }>);
 
-          const entries = Object.entries(campaignGroups);
+          const entries = Object.entries(campaignGroups).map(([key, data]) => [data.name, data] as const);
           // Respect table-level campaign_type setting: if 'leads', NEVER show ecommerce table
           // (even if Facebook reports stray purchase events from a tracking pixel)
           const tableCampaignType = String(table?.integration_settings?.campaign_type || '').toLowerCase();
@@ -2570,7 +2623,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                     <table className="w-full text-sm" dir="rtl">
                       <thead className="bg-muted/50 border-b">
                         <tr>
-                          <th className="p-2 text-right font-medium">קמפיין איקומרס</th>
+                          <th className="p-2 text-right font-medium">{entityHeader('איקומרס')}</th>
                           <th className="p-2 text-center font-medium">חשיפות</th>
                           <th className="p-2 text-center font-medium">קליקים</th>
                           <th className="p-2 text-center font-medium">הוצאה</th>
@@ -2625,7 +2678,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                     <table className="w-full text-sm" dir="rtl">
                       <thead className="bg-muted/50 border-b">
                         <tr>
-                          <th className="p-2 text-right font-medium">קמפיין לידים</th>
+                          <th className="p-2 text-right font-medium">{entityHeader('לידים')}</th>
                           <th className="p-2 text-center font-medium">חשיפות</th>
                           <th className="p-2 text-center font-medium">קליקים</th>
                           <th className="p-2 text-center font-medium">לידים</th>
@@ -2675,7 +2728,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                     <table className="w-full text-sm" dir="rtl">
                       <thead className="bg-muted/50 border-b">
                         <tr>
-                          <th className="p-2 text-right font-medium">קמפיין טראפיק</th>
+                          <th className="p-2 text-right font-medium">{entityHeader('טראפיק')}</th>
                           <th className="p-2 text-center font-medium">חשיפות</th>
                           <th className="p-2 text-center font-medium">קליקים</th>
                           <th className="p-2 text-center font-medium">הוצאה</th>
@@ -2736,27 +2789,33 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       {hasFacebookEcommerce && filteredRecords && filteredRecords.length > 0 && (
         <Card className="mb-4 overflow-hidden">
           {(() => {
-            // Group records by campaign_name
+            const entityColumnLabel = adsEntityLevel === 'ad'
+              ? 'מודעה'
+              : adsEntityLevel === 'adset'
+                ? 'קבוצת מודעות'
+                : 'קמפיין';
             const campaignGroups = filteredRecords.reduce((acc, record) => {
-              const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
-              if (!acc[campaignName]) {
-                acc[campaignName] = { 
-                  impressions: 0, 
-                  clicks: 0, 
-                  spend: 0, 
-                  purchases: 0, 
+              const groupKey = getEntityGroupKey(record.data, adsEntityLevel);
+              const campaignName = getEntityDisplayName(record.data, adsEntityLevel);
+              if (!acc[groupKey]) {
+                acc[groupKey] = {
+                  name: campaignName,
+                  impressions: 0,
+                  clicks: 0,
+                  spend: 0,
+                  purchases: 0,
                   purchase_value: 0,
                   add_to_cart: 0,
                 };
               }
-              acc[campaignName].impressions += Number(record.data?.impressions) || 0;
-              acc[campaignName].clicks += Number(record.data?.clicks) || 0;
-              acc[campaignName].spend += Number(record.data?.spend) || 0;
-              acc[campaignName].purchases += Number(record.data?.purchases) || 0;
-              acc[campaignName].purchase_value += Number(record.data?.purchase_value) || 0;
-              acc[campaignName].add_to_cart += Number(record.data?.add_to_cart) || 0;
+              acc[groupKey].impressions += Number(record.data?.impressions) || 0;
+              acc[groupKey].clicks += Number(record.data?.clicks) || 0;
+              acc[groupKey].spend += Number(record.data?.spend) || 0;
+              acc[groupKey].purchases += Number(record.data?.purchases) || 0;
+              acc[groupKey].purchase_value += Number(record.data?.purchase_value) || 0;
+              acc[groupKey].add_to_cart += Number(record.data?.add_to_cart) || 0;
               return acc;
-            }, {} as Record<string, { impressions: number; clicks: number; spend: number; purchases: number; purchase_value: number; add_to_cart: number }>);
+            }, {} as Record<string, { name: string; impressions: number; clicks: number; spend: number; purchases: number; purchase_value: number; add_to_cart: number }>);
 
             const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
               impressions: acc.impressions + campaign.impressions,
@@ -2772,7 +2831,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 <table className="w-full text-sm" dir="rtl">
                   <thead className="bg-muted/50 border-b">
                     <tr>
-                      <th className="p-2 text-right font-medium">קמפיין</th>
+                      <th className="p-2 text-right font-medium">{entityColumnLabel}</th>
                       <th className="p-2 text-center font-medium">חשיפות</th>
                       <th className="p-2 text-center font-medium">קליקים</th>
                       <th className="p-2 text-center font-medium">הוצאה</th>
@@ -2785,11 +2844,11 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   <tbody>
                     {(() => {
                       const currency = getCurrencySymbol(table.integration_settings?.currency);
-                      return Object.entries(campaignGroups).map(([campaignName, data]) => {
+                      return Object.values(campaignGroups).map((data) => {
                         const roas = data.spend > 0 ? data.purchase_value / data.spend : 0;
                         return (
-                          <tr key={campaignName} className="border-b hover:bg-muted/30">
-                            <td className="p-2 text-right font-medium">{campaignName}</td>
+                          <tr key={data.name} className="border-b hover:bg-muted/30">
+                            <td className="p-2 text-right font-medium">{data.name}</td>
                             <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                             <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
                             <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
@@ -2842,14 +2901,21 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         <Card className="mb-4 overflow-hidden">
           {(() => {
             const isEcommerce = table?.integration_settings?.campaign_type === 'ecommerce';
-            
+            const entityColumnLabel = adsEntityLevel === 'ad'
+              ? 'מודעה'
+              : adsEntityLevel === 'adset'
+                ? 'קבוצת מודעות'
+                : 'קמפיין';
+
             const campaignGroups = filteredRecords.reduce((acc, record) => {
-              const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
-              if (!acc[campaignName]) {
-                acc[campaignName] = { 
-                  impressions: 0, 
-                  clicks: 0, 
-                  conversions: 0, 
+              const groupKey = getEntityGroupKey(record.data, adsEntityLevel);
+              const campaignName = getEntityDisplayName(record.data, adsEntityLevel);
+              if (!acc[groupKey]) {
+                acc[groupKey] = {
+                  name: campaignName,
+                  impressions: 0,
+                  clicks: 0,
+                  conversions: 0,
                   cost: 0,
                   conversions_value: 0,
                   all_conversions: 0,
@@ -2859,23 +2925,20 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                   verified_leads: 0,
                 };
               }
-              acc[campaignName].impressions += Number(record.data?.impressions) || 0;
-              acc[campaignName].clicks += Number(record.data?.clicks) || 0;
-              // Support both standard Google Ads fields and Make.com ecommerce fields
-              acc[campaignName].conversions += Number(record.data?.conversions) || Number(record.data?.purchases) || 0;
-              acc[campaignName].cost += Number(record.data?.cost) || 0;
-              // Support both conversions_value and purchase_value (from Make.com)
-              acc[campaignName].conversions_value += Number(record.data?.conversions_value) || Number(record.data?.purchase_value) || 0;
-              acc[campaignName].all_conversions += Number(record.data?.all_conversions) || 0;
-              acc[campaignName].all_conversions_value += Number(record.data?.all_conversions_value) || 0;
-              acc[campaignName].verified_leads += Number(record.data?.verified_leads) || 0;
-              // Track ROAS if it's pre-calculated in the data
+              acc[groupKey].impressions += Number(record.data?.impressions) || 0;
+              acc[groupKey].clicks += Number(record.data?.clicks) || 0;
+              acc[groupKey].conversions += Number(record.data?.conversions) || Number(record.data?.purchases) || 0;
+              acc[groupKey].cost += Number(record.data?.cost) || 0;
+              acc[groupKey].conversions_value += Number(record.data?.conversions_value) || Number(record.data?.purchase_value) || 0;
+              acc[groupKey].all_conversions += Number(record.data?.all_conversions) || 0;
+              acc[groupKey].all_conversions_value += Number(record.data?.all_conversions_value) || 0;
+              acc[groupKey].verified_leads += Number(record.data?.verified_leads) || 0;
               if (record.data?.roas) {
-                acc[campaignName].roas_sum += Number(record.data.roas) || 0;
-                acc[campaignName].roas_count += 1;
+                acc[groupKey].roas_sum += Number(record.data.roas) || 0;
+                acc[groupKey].roas_count += 1;
               }
               return acc;
-            }, {} as Record<string, { impressions: number; clicks: number; conversions: number; cost: number; conversions_value: number; all_conversions: number; all_conversions_value: number; roas_sum: number; roas_count: number; verified_leads: number }>);
+            }, {} as Record<string, { name: string; impressions: number; clicks: number; conversions: number; cost: number; conversions_value: number; all_conversions: number; all_conversions_value: number; roas_sum: number; roas_count: number; verified_leads: number }>);
 
             const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
               impressions: acc.impressions + campaign.impressions,
@@ -2949,7 +3012,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 <table className="w-full text-sm" dir="rtl">
                   <thead className="bg-muted/50 border-b">
                     <tr>
-                      <th className="p-2 text-right font-medium">קמפיין</th>
+                      <th className="p-2 text-right font-medium">{entityColumnLabel}</th>
                       <th className="p-2 text-center font-medium">חשיפות</th>
                       <th className="p-2 text-center font-medium">קליקים</th>
                       <th className="p-2 text-center font-medium">
@@ -2972,9 +3035,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                     </tr>
                   </thead>
                    <tbody>
-                    {Object.entries(campaignGroups).map(([campaignName, data]) => {
+                    {Object.values(campaignGroups).map((data) => {
                       const costPerConversion = data.conversions > 0 ? data.cost / data.conversions : 0;
-                      // Calculate ROAS as conversions value / cost
                       const roas = data.cost > 0 ? data.conversions_value / data.cost : 0;
                       const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
                       const convInt = Math.round(data.conversions);
@@ -2982,8 +3044,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       const diff = verified - convInt;
                       const hasDiscrepancy = hasVerifiedData && Math.abs(diff) >= 1;
                       return (
-                        <tr key={campaignName} className="border-b hover:bg-muted/30">
-                          <td className="p-2 text-right font-medium">{campaignName}</td>
+                        <tr key={data.name} className="border-b hover:bg-muted/30">
+                          <td className="p-2 text-right font-medium">{data.name}</td>
                           <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center text-green-600 font-medium">{convInt.toLocaleString('he-IL')}</td>
@@ -2993,7 +3055,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                                 className="font-medium text-foreground"
                                 title={(() => {
                                   const sources = filteredRecords
-                                    .filter((r) => r.data?.campaign_name === campaignName && r.data?.verified_source)
+                                    .filter((r) => getEntityDisplayName(r.data, adsEntityLevel) === data.name && r.data?.verified_source)
                                     .map((r) => r.data?.verified_source as string);
                                   const uniqueSources = Array.from(new Set(sources));
                                   return uniqueSources.length > 0 ? `מקור: ${uniqueSources.join(' | ')}` : '';
