@@ -4,12 +4,16 @@ import {
   claimFacebookLeadAutomationRun,
   claimFacebookLeadIntake,
   claimFacebookLeadWhatsAppSend,
+  claimIdenticalWhatsAppSend,
   facebookFlowEventSource,
   facebookIntakeEventSource,
   facebookTriggerAutomationSucceeded,
   facebookWhatsAppSendSource,
+  hashWhatsAppBody,
   releaseFacebookLeadAutomationRun,
   releaseFacebookLeadWhatsAppSend,
+  shouldLockWhatsAppBody,
+  whatsAppBodyEventSource,
 } from "./facebook-lead-dedup.ts";
 
 test("facebookIntakeEventSource is a single shared webhook/poll lock", () => {
@@ -230,6 +234,44 @@ test("releaseFacebookLeadAutomationRun deletes the owned claim row", async () =>
     ["source", "fb-flow:82858e4b-3daa-41ed-9b50-5045769b2115"],
     ["external_id", "874979795580881"],
   ]);
+});
+
+test("whatsAppBodyEventSource follows the same chat normalization as send locks", () => {
+  assert.equal(
+    whatsAppBodyEventSource("0546684466"),
+    "wa-body:972546684466@c.us",
+  );
+  assert.equal(
+    whatsAppBodyEventSource("972546684466@c.us"),
+    "wa-body:972546684466@c.us",
+  );
+});
+
+test("shouldLockWhatsAppBody locks Facebook leads and ליד חדש templates", () => {
+  assert.equal(shouldLockWhatsAppBody("שלום", null), false);
+  assert.equal(shouldLockWhatsAppBody("שלום", "1384758217138329"), true);
+  assert.equal(shouldLockWhatsAppBody("ליד חדש סקווש:\nשם:Gabriela", null), true);
+});
+
+test("hashWhatsAppBody is stable for the same text", async () => {
+  const first = await hashWhatsAppBody("ליד חדש סקווש:\nשם:Gabriela");
+  const second = await hashWhatsAppBody("ליד חדש סקווש:\nשם:Gabriela");
+  const other = await hashWhatsAppBody("ליד חדש סקווש:\nשם:שירה");
+  assert.equal(first.length, 64);
+  assert.equal(first, second);
+  assert.notEqual(first, other);
+});
+
+test("claimIdenticalWhatsAppSend treats unique violations as duplicates", async () => {
+  const result = await claimIdenticalWhatsAppSend({
+    from: () => ({ insert: async () => ({ error: { code: "23505" } }) }),
+  }, {
+    tenantId: "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
+    chatId: "972546684466@c.us",
+    message: "ליד חדש סקווש:\nשם:Gabriela Tajch\nטלפון:+972547905458",
+  });
+  assert.equal(result.duplicate, true);
+  assert.equal(result.inserted, false);
 });
 
 test("facebookTriggerAutomationSucceeded requires a successful inner result", () => {
