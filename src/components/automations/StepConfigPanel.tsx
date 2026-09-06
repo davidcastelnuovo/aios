@@ -312,6 +312,7 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
   const { tenant } = useCurrentTenant();
   const { toast } = useToast();
   const tenantId = tenant?.id;
+  const [showTriggerTest, setShowTriggerTest] = useState(false);
   const { data: webhookClients = [] } = useQuery({
     queryKey: ["clients-for-flow-only-webhook", tenantId],
     enabled: Boolean(tenantId && node?.action_type === "inbound_webhook_lead"),
@@ -336,7 +337,6 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
 
   const isLeadCreatedTrigger = node.step_type === "trigger" && node.action_type === "lead_created";
   const leadSource = node.configuration?.lead_source || "any";
-  const [showTriggerTest, setShowTriggerTest] = useState(false);
 
   const handleActionTypeChange = (value: string) => {
     onUpdate(node.id, { action_type: value });

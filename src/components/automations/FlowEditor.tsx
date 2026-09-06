@@ -44,6 +44,23 @@ const edgeTypes = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function normalizeStepConfiguration(config: unknown): Record<string, any> {
+  if (config && typeof config === "object" && !Array.isArray(config)) {
+    return config as Record<string, any>;
+  }
+  if (typeof config === "string") {
+    try {
+      const parsed = JSON.parse(config);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, any>;
+      }
+    } catch {
+      // ignore malformed JSON from legacy/AI-created steps
+    }
+  }
+  return {};
+}
+
 function toRFNode(nd: FlowNodeData, onDelete: (id: string) => void, onSelect: (id: string) => void): Node {
   return {
     id: nd.id,
@@ -199,18 +216,19 @@ export default function FlowEditor() {
       const edges: Edge[] = [];
 
       steps.forEach((s: any) => {
+        const configuration = normalizeStepConfiguration(s.configuration);
         const nd: FlowNodeData = {
           id: s.id,
           step_type: s.step_type,
           action_type: s.action_type,
           label: s.label,
-          configuration: s.configuration || {},
-          position_x: s.position_x,
-          position_y: s.position_y,
-          sort_order: s.sort_order,
+          configuration,
+          position_x: Number.isFinite(s.position_x) ? s.position_x : 400,
+          position_y: Number.isFinite(s.position_y) ? s.position_y : 80,
+          sort_order: s.sort_order ?? 0,
           parent_step_id: s.parent_step_id,
           condition_branch: s.condition_branch,
-          switch_branches: s.configuration?.switch_branches,
+          switch_branches: configuration.switch_branches,
         };
         dataMap[s.id] = nd;
       });

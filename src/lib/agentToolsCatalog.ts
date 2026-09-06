@@ -44,6 +44,7 @@ export const AGENT_TOOLS_CATALOG: AgentToolEntry[] = [
   { name: "delegate_to_github_agent", label: "האצלה ל-GitHub Agent", group: "ניהול AI" },
   { name: "save_memory", label: "שמירת זיכרון", group: "זיכרון" },
   { name: "recall_memory", label: "שליפת זיכרון", group: "זיכרון" },
+  { name: "search_agent_tools", label: "חיפוש כלים רלוונטיים", group: "זיכרון" },
   { name: "kb_search", label: "חיפוש בידע", group: "ידע" },
   { name: "kb_open", label: "פתיחת ידע", group: "ידע" },
   { name: "kb_learn", label: "למידה לזיכרון ארוך", group: "ידע" },
