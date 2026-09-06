@@ -68,6 +68,7 @@ import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOption
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
 import {
+  ADS_ENTITY_LEVEL_LABELS,
   ADS_ENTITY_SEARCH_PLACEHOLDERS,
   filterRecordsByEntityLevel,
   getEntityDisplayName,
@@ -2493,9 +2494,16 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
           <AdsEntityLevelTabs
             value={adsEntityLevel}
             onChange={setAdsEntityLevel}
-            records={displayRecords}
           />
         </div>
+      )}
+      {(hasAnyFacebook || hasGoogleAds) && adsEntityLevel !== 'campaign' && entityLevelRecords.length === 0 && displayRecords.length > 0 && (
+        <Card className="mb-4 border-dashed">
+          <div className="p-6 text-center text-sm text-muted-foreground" dir="rtl">
+            אין עדיין נתונים ברמת {ADS_ENTITY_LEVEL_LABELS[adsEntityLevel]}.
+            {' '}הרץ <strong>סנכרן</strong> {hasGoogleAds ? 'Google Ads' : 'Facebook'} כדי לטעון את הרמה הזו.
+          </div>
+        </Card>
       )}
       {/* Summary Stats for Facebook Insights (split by campaign type) */}
       {hasFacebook && filteredRecords && filteredRecords.length > 0 && (

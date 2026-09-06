@@ -41,6 +41,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { SHARED_TABLE_DATE_FILTERS } from "@/lib/dashboardDateFilters";
 import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
 import {
+  ADS_ENTITY_LEVEL_LABELS,
   aggregateFacebookRecordsAtLevel,
   aggregateGoogleRecordsAtLevel,
   filterRecordsByEntityLevel,
@@ -669,9 +670,16 @@ export default function SharedTable() {
             <AdsEntityLevelTabs
               value={adsEntityLevel}
               onChange={setAdsEntityLevel}
-              records={data?.records || []}
             />
           </div>
+        )}
+
+        {isAdsPlatform(integrationType || '') && adsEntityLevel !== 'campaign' && filteredRecords.length === 0 && (data?.records?.length ?? 0) > 0 && (
+          <Card className="mb-4 border-dashed">
+            <CardContent className="py-8 text-center text-sm text-muted-foreground" dir="rtl">
+              אין עדיין נתונים ברמת {ADS_ENTITY_LEVEL_LABELS[adsEntityLevel]} בקישור זה.
+            </CardContent>
+          </Card>
         )}
 
         {/* Campaign Breakdown for Ads platforms - Ecommerce */}
