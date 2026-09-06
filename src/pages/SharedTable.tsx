@@ -39,6 +39,14 @@ import {
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { useQueryClient } from "@tanstack/react-query";
 import { SHARED_TABLE_DATE_FILTERS } from "@/lib/dashboardDateFilters";
+import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
+import {
+  ADS_ENTITY_LEVEL_LABELS,
+  aggregateFacebookRecordsAtLevel,
+  aggregateGoogleRecordsAtLevel,
+  filterRecordsByEntityLevel,
+  type AdsEntityLevel,
+} from "@/lib/adsEntityLevel";
 
 // Date filter options — shared with DynamicTableView week windows via dashboardDateFilters.
 const DATE_FILTERS = SHARED_TABLE_DATE_FILTERS;
@@ -98,6 +106,7 @@ export default function SharedTable() {
   const [customEnd, setCustomEnd] = useState<Date | undefined>();
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [seoShareLocked, setSeoShareLocked] = useState(false);
+  const [adsEntityLevel, setAdsEntityLevel] = useState<AdsEntityLevel>('campaign');
   const queryClient = useQueryClient();
 
   const dateQueryKey = seoShareLocked
@@ -193,8 +202,10 @@ export default function SharedTable() {
   // report_type either). The edge function already applies the date
   // window using the same logic as the internal view.
   const filteredRecords = useMemo(() => {
-    return data?.records || [];
-  }, [data]);
+    const records = data?.records || [];
+    if (!isAdsPlatform(integrationType || '')) return records;
+    return filterRecordsByEntityLevel(records, adsEntityLevel);
+  }, [data, integrationType, adsEntityLevel]);
 
   // Summary for integration tables
   const summary = useMemo(() => {
@@ -244,51 +255,50 @@ export default function SharedTable() {
     return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl, hasEcommerce, hasLeads };
   }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
 
-  // Campaign-level aggregation for Facebook / Google Ads
+  // Campaign/adset/ad aggregation for Facebook / Google Ads
   const campaignSummary = useMemo(() => {
     if (!isAdsPlatform(integrationType || '')) return { ecommerce: [] as any[], leads: [] as any[], all: [] as any[] };
-    const map: Record<string, any> = {};
-    filteredRecords.forEach((r: any) => {
-      const d = r.data || {};
-      const name = d.campaign_name || d.campaign || 'ללא שם';
-      if (!map[name]) {
-        map[name] = { name, spend: 0, impressions: 0, clicks: 0, leads: 0, purchases: 0, revenue: 0, addToCart: 0 };
-      }
-      map[name].spend += getSpendFromData(d);
-      map[name].impressions += Number(d.impressions) || 0;
-      map[name].clicks += Number(d.clicks) || 0;
-      if (!(forceLeadsOnly && isGoogleAds)) {
-        map[name].purchases += getAdsPurchasesFromData(d);
-        map[name].revenue += getRevenueFromData(d);
-        map[name].addToCart += getAddToCartFromData(d);
-      }
-      map[name].leads += getLeadsFromData(d);
-    });
-    // Round leads
-    Object.values(map).forEach((c: any) => { c.leads = Math.round(c.leads); });
-    const allCampaigns = Object.values(map).sort((a: any, b: any) => b.spend - a.spend);
 
-    // Strict mode: table type determines layout (no auto-classification)
+    const entityColumnLabel = adsEntityLevel === 'ad'
+      ? 'מודעה'
+      : adsEntityLevel === 'adset'
+        ? 'קבוצת מודעות'
+        : 'קמפיין';
+
+    if (isFacebookPlatform(integrationType || '')) {
+      const rows = aggregateFacebookRecordsAtLevel(filteredRecords, adsEntityLevel).map((c) => ({
+        name: c.name,
+        spend: c.spend,
+        impressions: c.impressions,
+        clicks: c.clicks,
+        leads: Math.round(c.leads),
+        purchases: c.purchases,
+        revenue: c.purchase_value,
+        addToCart: c.add_to_cart,
+      }));
+
+      if (forceEcommerceOnly) {
+        return { ecommerce: rows, leads: [], all: rows, entityColumnLabel };
+      }
+      return { ecommerce: [], leads: rows, all: rows, entityColumnLabel };
+    }
+
+    const rows = aggregateGoogleRecordsAtLevel(filteredRecords, adsEntityLevel).map((c) => ({
+      name: c.name,
+      spend: c.cost || c.spend,
+      impressions: c.impressions,
+      clicks: c.clicks,
+      leads: c.leads,
+      purchases: c.purchases,
+      revenue: c.conversions_value || c.purchase_value,
+      addToCart: c.add_to_cart,
+    }));
+
     if (forceEcommerceOnly) {
-      return { ecommerce: allCampaigns, leads: [], all: allCampaigns };
+      return { ecommerce: rows, leads: [], all: rows, entityColumnLabel };
     }
-    return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
-
-    // Legacy auto-classify (disabled)
-    // eslint-disable-next-line no-unreachable
-    const ecommerceCampaigns = allCampaigns.filter((c: any) =>
-      (c.purchases > 0 || c.revenue > 0) ||
-      (c.addToCart > 0 && !(c.leads > 0 && c.purchases === 0 && c.revenue === 0))
-    );
-    const leadCampaigns = allCampaigns.filter((c: any) =>
-      (c.leads > 0 && c.purchases === 0 && c.revenue === 0) ||
-      (c.leads === 0 && c.purchases === 0 && c.revenue === 0 && c.addToCart === 0)
-    );
-    if (ecommerceCampaigns.length === 0 && leadCampaigns.length === 0) {
-      return { ecommerce: [], leads: allCampaigns, all: allCampaigns };
-    }
-    return { ecommerce: ecommerceCampaigns, leads: leadCampaigns, all: allCampaigns };
-  }, [filteredRecords, integrationType, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
+    return { ecommerce: [], leads: rows, all: rows, entityColumnLabel };
+  }, [filteredRecords, integrationType, forceLeadsOnly, forceEcommerceOnly, isGoogleAds, adsEntityLevel]);
 
   // Generic table columns from fields or data keys
   const genericColumns = useMemo(() => {
@@ -655,6 +665,23 @@ export default function SharedTable() {
           </div>
         )}
 
+        {isAdsPlatform(integrationType || '') && (data?.records?.length ?? 0) > 0 && (
+          <div className="mb-4">
+            <AdsEntityLevelTabs
+              value={adsEntityLevel}
+              onChange={setAdsEntityLevel}
+            />
+          </div>
+        )}
+
+        {isAdsPlatform(integrationType || '') && adsEntityLevel !== 'campaign' && filteredRecords.length === 0 && (data?.records?.length ?? 0) > 0 && (
+          <Card className="mb-4 border-dashed">
+            <CardContent className="py-8 text-center text-sm text-muted-foreground" dir="rtl">
+              אין עדיין נתונים ברמת {ADS_ENTITY_LEVEL_LABELS[adsEntityLevel]} בקישור זה.
+            </CardContent>
+          </Card>
+        )}
+
         {/* Campaign Breakdown for Ads platforms - Ecommerce */}
         {isAdsPlatform(integrationType || '') && campaignSummary.ecommerce?.length > 0 && (
           <Card>
@@ -666,7 +693,7 @@ export default function SharedTable() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-right">קמפיין</TableHead>
+                      <TableHead className="text-right">{campaignSummary.entityColumnLabel || 'קמפיין'}</TableHead>
                       <TableHead className="text-right">הוצאה</TableHead>
                       <TableHead className="text-right">חשיפות</TableHead>
                       <TableHead className="text-right">קליקים</TableHead>
@@ -731,7 +758,7 @@ export default function SharedTable() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-right">קמפיין</TableHead>
+                      <TableHead className="text-right">{campaignSummary.entityColumnLabel || 'קמפיין'}</TableHead>
                       <TableHead className="text-right">הוצאה</TableHead>
                       <TableHead className="text-right">חשיפות</TableHead>
                       <TableHead className="text-right">קליקים</TableHead>
