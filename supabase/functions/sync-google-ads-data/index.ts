@@ -1002,9 +1002,17 @@ Deno.serve(async (req) => {
       console.error('[sync-google-ads] last_sync_at column update failed:', lastSyncColErr.message);
     }
 
+    const byLevel = {
+      campaign: records.filter((r) => (r.entity_level || 'campaign') === 'campaign').length,
+      adset: records.filter((r) => r.entity_level === 'adset').length,
+      ad: records.filter((r) => r.entity_level === 'ad').length,
+    };
+    console.log(`[sync-google-ads] by_level`, byLevel);
+
     return new Response(JSON.stringify({
       success: true,
       records_synced: inserted,
+      by_level: byLevel,
       last_sync_at: syncedAt,
       verified_against: verifiedSiteUrl,
     }), {

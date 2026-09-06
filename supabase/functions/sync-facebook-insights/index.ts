@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
 
     console.log(`[sync-facebook-insights] Fetching campaign/adset/ad insights from FB`);
 
-    const insights: InsightRecord[] = await buildAllLevelInsightRecords(
+    const { records: insights, levelCounts } = await buildAllLevelInsightRecords(
       adAccountId,
       sinceStr,
       untilStr,
@@ -274,7 +274,7 @@ Deno.serve(async (req) => {
       resultLeadTypes,
     );
 
-    console.log(`[sync-facebook-insights] Got ${insights.length} insight rows from FB`);
+    console.log(`[sync-facebook-insights] Got ${insights.length} insight rows from FB`, levelCounts);
 
     // Make sure fields exist for Facebook Insights table (shared schema)
     const fieldKeys = FB_INSIGHTS_FIELD_KEYS;
@@ -347,6 +347,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true,
       records_synced: insights.length,
+      by_level: levelCounts,
       account_status: accountStatus,
       last_sync_at: new Date().toISOString()
     }), {

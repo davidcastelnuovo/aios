@@ -679,7 +679,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       const typeLabel = table?.integration_type === 'facebook_ecommerce' ? 'נתוני מכירות מפייסבוק' : 'נתוני פייסבוק';
-      toast.success(`${typeLabel} סונכרנו בהצלחה (${data.records_synced} שורות)`);
+      const byLevel = data?.by_level;
+      const levelNote = byLevel
+        ? ` — קמפיינים: ${byLevel.campaign ?? 0}, ad sets: ${byLevel.adset ?? 0}, מודעות: ${byLevel.ad ?? 0}`
+        : '';
+      toast.success(`${typeLabel} סונכרנו (${data.records_synced} שורות${levelNote})`);
+      if (byLevel && (!byLevel.adset || !byLevel.ad)) {
+        toast.message('אם ad set / מודעות ריקים — ודא שה-edge functions עודכנו ב-Staging');
+      }
     },
     onError: (error: any) => {
       toast.error('שגיאה בסנכרון מפייסבוק: ' + error.message);

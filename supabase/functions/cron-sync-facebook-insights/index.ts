@@ -256,7 +256,7 @@ Deno.serve(async (req) => {
           accountDisableReason = accountData.disable_reason || null;
         }
 
-        const insights: InsightRecord[] = await buildAllLevelInsightRecords(
+        const { records: insights, levelCounts } = await buildAllLevelInsightRecords(
           adAccountId,
           sinceStr,
           untilStr,
@@ -265,6 +265,7 @@ Deno.serve(async (req) => {
           resultLeadTypes,
         );
         const campaignInsights = insights.filter((row) => (row.entity_level || 'campaign') === 'campaign');
+        console.log(`[cron-sync-facebook-insights] ${table.name}: synced ${insights.length} rows`, levelCounts);
 
 
         // Ensure fields exist (shared schema, identical to the manual sync)

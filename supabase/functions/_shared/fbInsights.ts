@@ -497,23 +497,30 @@ export async function fetchFacebookInsightsAtLevel(
 }
 
 /** Build CRM insight rows for campaign + ad set + ad levels (shared by manual + cron sync). */
-export function buildAllLevelInsightRecords(
+export async function buildAllLevelInsightRecords(
   adAccountId: string,
   sinceStr: string,
   untilStr: string,
   accessToken: string,
   campaignStatuses: Record<string, CampaignStatus>,
   resultLeadTypesByCampaign: Record<string, string[]> = {},
-): Promise<InsightRecord[]> {
-  return (async () => {
-    const levels: AdsEntityLevel[] = ['campaign', 'adset', 'ad'];
-    const allRows: InsightRecord[] = [];
-    for (const level of levels) {
+): Promise<{ records: InsightRecord[]; levelCounts: Record<AdsEntityLevel, number> }> {
+  const levels: AdsEntityLevel[] = ['campaign', 'adset', 'ad'];
+  const allRows: InsightRecord[] = [];
+  const levelCounts: Record<AdsEntityLevel, number> = { campaign: 0, adset: 0, ad: 0 };
+
+  for (const level of levels) {
+    try {
       const raw = await fetchFacebookInsightsAtLevel(adAccountId, level, sinceStr, untilStr, accessToken);
       for (const insight of raw) {
         allRows.push(buildInsightRecord(insight, campaignStatuses, resultLeadTypesByCampaign));
       }
+      levelCounts[level] = raw.length;
+      console.log(`[fbInsights] level=${level} rows=${raw.length}`);
+    } catch (err) {
+      console.error(`[fbInsights] level=${level} fetch failed:`, err instanceof Error ? err.message : err);
     }
-    return allRows;
-  })();
+  }
+
+  return { records: allRows, levelCounts };
 }
