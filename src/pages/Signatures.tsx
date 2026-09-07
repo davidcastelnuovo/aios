@@ -208,6 +208,7 @@ export default function Signatures() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
       toast.success("המסמך נוצר בהצלחה");
+      setShowPlacement(false);
       resetForm();
       setIsCreateOpen(false);
     },
@@ -308,21 +309,43 @@ export default function Signatures() {
 
   // Full-screen placement overlay
   if (showPlacement && previewUrl) {
+    const placementCanCreate =
+      !!title.trim() &&
+      !createMutation.isPending &&
+      (createTab === "upload" ? !!uploadFile : createTab === "url" ? !!documentUrl : !!content);
+
     return (
       <div className="fixed inset-0 z-50 bg-background flex flex-col" dir="rtl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-background">
-          <h2 className="text-lg font-bold text-foreground">הגדרת שדות וחתימות — {title}</h2>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => { setShowPlacement(false); setIsCreateOpen(true); }}>
-              חזור
-            </Button>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={!title || createMutation.isPending}
-            >
-              {createMutation.isPending ? "יוצר..." : "צור מסמך"}
-            </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-border bg-background">
+          <div className="flex flex-col gap-2 min-w-[200px] flex-1">
+            <h2 className="text-lg font-bold text-foreground">הגדרת שדות וחתימות</h2>
+            <div className="flex items-center gap-2 max-w-md">
+              <Label htmlFor="placement-title" className="shrink-0 text-sm">שם המסמך</Label>
+              <Input
+                id="placement-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="הזן שם למסמך..."
+                className="h-9"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setShowPlacement(false); setIsCreateOpen(true); }}>
+                חזור
+              </Button>
+              <Button
+                onClick={() => createMutation.mutate()}
+                disabled={!placementCanCreate}
+              >
+                {createMutation.isPending ? "יוצר..." : "צור מסמך"}
+              </Button>
+            </div>
+            {!title.trim() && (
+              <p className="text-xs text-destructive">נא למלא שם מסמך כדי להמשיך</p>
+            )}
           </div>
         </div>
         {/* Placer content */}
@@ -480,7 +503,11 @@ export default function Signatures() {
               <div className="flex gap-2 justify-end pt-4">
                 <Button variant="outline" onClick={() => setIsCreateOpen(false)}>ביטול</Button>
                 {canShowPlacement && (
-                  <Button variant="secondary" onClick={() => { setIsCreateOpen(false); setShowPlacement(true); }}>
+                  <Button
+                    variant="secondary"
+                    disabled={!title.trim()}
+                    onClick={() => { setIsCreateOpen(false); setShowPlacement(true); }}
+                  >
                     הגדר שדות וחתימות
                   </Button>
                 )}
