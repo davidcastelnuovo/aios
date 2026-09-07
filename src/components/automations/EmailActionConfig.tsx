@@ -7,15 +7,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useBroadcastDomains } from "@/hooks/useBroadcastDomains";
 import { formatSenderEmail } from "@/lib/senderEmailDomain";
 import { EmailRecipientsListEditor, migrateLegacyEmailRecipients } from "./EmailRecipientsListEditor";
+import { EmailWebhookMappingPanel } from "./EmailWebhookMappingPanel";
 
 interface Props {
   configuration: Record<string, any>;
   availableFields: { key: string; label: string }[];
   tenantId: string | undefined;
+  triggerType?: string;
+  automationId?: string;
   onConfigChange: (key: string, value: any) => void;
 }
 
-export function EmailActionConfig({ configuration, availableFields, tenantId, onConfigChange }: Props) {
+export function EmailActionConfig({
+  configuration,
+  availableFields,
+  tenantId,
+  triggerType,
+  automationId,
+  onConfigChange,
+}: Props) {
   const { list: domainsQuery } = useBroadcastDomains();
   const domains = domainsQuery.data || [];
   const defaultDomain = domains.find((d) => d.is_default) || domains[0];
@@ -222,7 +232,10 @@ export function EmailActionConfig({ configuration, availableFields, tenantId, on
       />
 
       <div className="space-y-2">
-        <Label className="text-right block">נושא האימייל</Label>
+        <Label className="text-right block">נושא האימייל (דינמי)</Label>
+        <p className="text-[11px] text-muted-foreground text-right">
+          השתמש ב-<span dir="ltr">{'{{field_name}}'}</span> — לחץ על שדה למטה כדי להוסיף לנושא.
+        </p>
         <Input
           ref={subjectRef}
           value={configuration?.subject_template || ""}
@@ -247,6 +260,13 @@ export function EmailActionConfig({ configuration, availableFields, tenantId, on
         />
         <VariableButtons target="body" />
       </div>
+
+      <EmailWebhookMappingPanel
+        configuration={configuration}
+        availableFields={availableFields}
+        triggerType={triggerType}
+        automationId={automationId}
+      />
     </div>
   );
 }
