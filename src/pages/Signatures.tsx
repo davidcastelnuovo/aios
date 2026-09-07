@@ -20,6 +20,7 @@ import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from 
 import { type DocumentField, parseDocumentFields } from "@/components/signatures/signatureFieldTypes";
 import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
 import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
+import { sanitizeFileName } from "@/lib/sanitizeFileName";
 
 interface Recipient {
   name: string;
@@ -153,7 +154,8 @@ export default function Signatures() {
 
       if (createTab === "upload" && uploadFile) {
         docType = "uploaded";
-        const filePath = `${tenantId}/${Date.now()}_${uploadFile.name}`;
+        const safeName = sanitizeFileName(uploadFile.name);
+        const filePath = `${tenantId}/${Date.now()}_${safeName}`;
         const { error: uploadError } = await supabase.storage
           .from("signature-documents")
           .upload(filePath, uploadFile);
