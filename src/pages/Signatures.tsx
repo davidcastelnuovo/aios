@@ -24,7 +24,7 @@ import SignatureContactPicker from "@/components/signatures/SignatureContactPick
 import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
 import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
-import { syncSignatureRecipientPosition, updateSignatureDocumentFields } from "@/lib/updateSignatureDocumentFields";
+import { updateSignatureDocumentFields } from "@/lib/updateSignatureDocumentFields";
 import { signatureDocumentStoragePath } from "@/lib/resolveSignatureDocumentUrl";
 import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureDocumentFieldEditor";
 import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
