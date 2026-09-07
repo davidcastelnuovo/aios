@@ -353,7 +353,10 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
   const leadSource = node.configuration?.lead_source || "any";
 
   const handleActionTypeChange = (value: string) => {
-    onUpdate(node.id, { action_type: value });
+    onUpdate(node.id, {
+      action_type: value,
+      configuration: {},
+    });
   };
 
   const handleLabelChange = (value: string) => {

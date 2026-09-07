@@ -619,12 +619,14 @@ export default function Automations() {
   const createFlowMutation = useMutation({
     mutationFn: async () => {
       if (!tenantId) throw new Error("No tenant");
+      const triggerStepId = crypto.randomUUID();
       const { data, error } = await supabase
         .from("automations")
         .insert({
           name: "פלוו חדש",
           tenant_id: tenantId,
-          trigger_type: "lead_created",
+          // Placeholder until the user picks a trigger in the flow builder and saves.
+          trigger_type: "manual_command",
           action_type: "notification",
           configuration: {},
           is_flow: true,
@@ -632,6 +634,24 @@ export default function Automations() {
         .select()
         .single();
       if (error) throw error;
+
+      const { error: stepError } = await supabase
+        .from("automation_flow_steps" as any)
+        .insert({
+          id: triggerStepId,
+          automation_id: data.id,
+          tenant_id: tenantId,
+          step_type: "trigger",
+          action_type: null,
+          configuration: {},
+          position_x: 400,
+          position_y: 80,
+          sort_order: 0,
+          parent_step_id: null,
+          condition_branch: null,
+        });
+      if (stepError) throw stepError;
+
       return data;
     },
     onSuccess: (data) => {

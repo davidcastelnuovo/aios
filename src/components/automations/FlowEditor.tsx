@@ -201,6 +201,14 @@ export default function FlowEditor() {
   const initializedMetaRef = useRef(false);
 
   useEffect(() => {
+    initializedRef.current = false;
+    initializedMetaRef.current = false;
+    setNodeDataMap({});
+    setRfEdges([]);
+    setSelectedNodeId(null);
+  }, [automationId, setRfEdges]);
+
+  useEffect(() => {
     if (automation && !initializedMetaRef.current) {
       setAutomationName(automation.name);
       setAutomationActive(automation.active ?? true);
@@ -271,12 +279,12 @@ export default function FlowEditor() {
       syncRFNodes(dataMap);
       initializedRef.current = true;
     } else if (automation) {
-      // New flow – create default trigger node
+      // New flow with no saved steps yet — empty trigger, user must choose manually.
       const triggerId = crypto.randomUUID();
       const defaultTrigger: FlowNodeData = {
         id: triggerId,
         step_type: "trigger",
-        action_type: automation.trigger_type || undefined,
+        action_type: undefined,
         label: undefined,
         configuration: {},
         position_x: 400,
@@ -523,6 +531,10 @@ export default function FlowEditor() {
       const triggerNode = allNodes.find((n) => n.step_type === "trigger");
       const flowTriggerType = triggerNode?.action_type || undefined;
 
+      if (!triggerNode?.action_type) {
+        throw new Error("בחר סוג טריגר לפני שמירה");
+      }
+
       // Sync positions from React Flow
       const rfNodePositions: Record<string, { x: number; y: number }> = {};
       rfNodes.forEach((n) => {
@@ -555,7 +567,7 @@ export default function FlowEditor() {
           name: automationName,
           active: automationActive,
           is_flow: true,
-          ...(flowTriggerType ? { trigger_type: flowTriggerType } : {}),
+          trigger_type: flowTriggerType,
         } as any)
         .eq("id", automationId)
         .eq("tenant_id", tenantId)
@@ -582,10 +594,11 @@ export default function FlowEditor() {
         }
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["automation-flow-steps", automationId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["automation", automationId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
+    onSuccess: async () => {
+      initializedRef.current = false;
+      await queryClient.invalidateQueries({ queryKey: ["automation-flow-steps", automationId] });
+      await queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
+      await queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast({ title: "הפלוו נשמר בהצלחה!" });
     },
     onError: (err: any) => {
@@ -614,7 +627,7 @@ export default function FlowEditor() {
       return { previous };
     },
     onSuccess: (_, nextActive) => {
-      queryClient.invalidateQueries({ queryKey: ["automation", automationId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
       queryClient.invalidateQueries({ queryKey: ["automations", tenantId] });
       toast({ title: nextActive ? "אוטומציה הופעלה" : "אוטומציה הושהתה" });
     },
