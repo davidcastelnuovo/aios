@@ -18,6 +18,7 @@ import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLink
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
 import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
 import { Pencil } from "lucide-react";
+import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
 
 interface LeadContact {
   id: string;
@@ -48,11 +49,11 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
   const [lastLinks, setLastLinks] = useState<Array<{ name: string; email: string; url: string }>>([]);
   const [newDocTitle, setNewDocTitle] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
 
   const recipientName = lead.contact_name || lead.company_name || "";
   const recipientEmail = lead.email || "";
-  const signingEmail = recipientEmail || `${lead.id.replace(/-/g, "")}@sign.aios.local`;
-  const canSend = !!sourceDocId && (!!recipientEmail || !!lead.phone);
+  const canSend = !!sourceDocId;
   const { firstName, lastName } = splitContactName(recipientName);
 
   const { data: sourceDocuments = [], isLoading: loadingSources, refetch: refetchSources } = useQuery({
@@ -70,6 +71,8 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
     },
     enabled: !!tenantId,
   });
+
+  const selectedSourceDoc = sourceDocuments.find((d) => d.id === sourceDocId);
 
   const { data: leadDocuments = [], refetch: refetchDocs } = useQuery({
     queryKey: ["lead-signature-documents", tenantId, lead.id],
@@ -124,40 +127,6 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
       toast.success("המסמך נשמר — בחר אותו ושלח לחתימה");
     },
     onError: (err: Error) => toast.error(err.message || "שגיאה בשמירה"),
-  });
-
-  const sendMutation = useMutation({
-    mutationFn: async () => {
-      if (!sourceDocId) throw new Error("בחר מסמך לשליחה");
-      if (!recipientEmail && !lead.phone) throw new Error("לליד חסר אימייל או טלפון");
-
-      const { data, error } = await supabase.functions.invoke("send-signature-from-template", {
-        body: {
-          templateDocumentId: sourceDocId,
-          recipientName: recipientName || "חותם",
-          recipientEmail: signingEmail,
-          documentTitle: documentTitle.trim() || undefined,
-          baseUrl: window.location.origin,
-          leadId: lead.id,
-          contactDetails: {
-            firstName,
-            lastName: lastName || lead.company_name || undefined,
-            phone: lead.phone || undefined,
-          },
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
-    onSuccess: (data) => {
-      setLastLinks(data?.signingLinks || []);
-      refetchDocs();
-      queryClient.invalidateQueries({ queryKey: ["lead-detail", tenantId, lead.id] });
-      toast.success("נשלח לחתימה — המסמך החתום יישמר כאן אוטומטית אחרי החתימה");
-      if (data?.partial) toast.warning("חלק מהמיילים לא נשלחו");
-    },
-    onError: (err: Error) => toast.error(err.message || "שגיאה בשליחה"),
   });
 
   const getSigningUrl = (token: string) => `${window.location.origin}/sign/${token}`;
@@ -258,11 +227,11 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
 
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={() => sendMutation.mutate()}
-              disabled={!canSend || sendMutation.isPending}
+              onClick={() => setSendDialogOpen(true)}
+              disabled={!canSend}
             >
               <Send className="h-4 w-4 ml-2" />
-              {sendMutation.isPending ? "שולח..." : "שלח לחתימה"}
+              שלח לחתימה
             </Button>
             {sourceDocId && (
               <Button variant="secondary" asChild>
@@ -353,6 +322,31 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           </CardContent>
         </Card>
       )}
+      <SendSignatureDialog
+        open={sendDialogOpen && !!selectedSourceDoc}
+        onOpenChange={setSendDialogOpen}
+        document={
+          selectedSourceDoc
+            ? { id: selectedSourceDoc.id, title: selectedSourceDoc.title, is_template: true }
+            : null
+        }
+        tenantId={tenantId}
+        mode="template"
+        leadId={lead.id}
+        documentTitleOverride={documentTitle.trim() || undefined}
+        defaultRecipient={{
+          name: recipientName || "חותם",
+          email: recipientEmail || undefined,
+          phone: lead.phone || undefined,
+          firstName,
+          lastName: lastName || lead.company_name || undefined,
+        }}
+        onSuccess={(result) => {
+          setLastLinks(result.signingLinks);
+          refetchDocs();
+          queryClient.invalidateQueries({ queryKey: ["lead-detail", tenantId, lead.id] });
+        }}
+      />
     </div>
   );
 }

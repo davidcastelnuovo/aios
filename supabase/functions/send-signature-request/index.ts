@@ -1,10 +1,28 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { corsHeaders } from '../_shared/cors.ts';
-import { sendSignatureDocumentEmails } from '../_shared/signature-automation.ts';
+import {
+  prepareSignatureDocumentForSigning,
+  sendSignatureDocumentEmails,
+} from '../_shared/signature-automation.ts';
 
 interface SendSignatureRequest {
   documentId: string;
   baseUrl?: string;
+  sendEmail?: boolean;
+  recipient?: {
+    name: string;
+    email: string;
+    phone?: string;
+  };
+  contactDetails?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    address?: string;
+    idNumber?: string;
+  };
+  leadId?: string;
+  clientId?: string;
 }
 
 Deno.serve(async (req) => {
@@ -27,7 +45,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
     }
 
-    const { documentId, baseUrl }: SendSignatureRequest = await req.json();
+    const body: SendSignatureRequest = await req.json();
+    const { documentId, baseUrl, sendEmail = false, recipient, contactDetails, leadId, clientId } = body;
     if (!documentId) {
       return new Response(JSON.stringify({ error: 'missing_document_id' }), { status: 400, headers: corsHeaders });
     }
@@ -37,53 +56,54 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'no_tenant' }), { status: 403, headers: corsHeaders });
     }
 
-    const { data: doc, error: docError } = await supabase
-      .from('signature_documents')
-      .select('id')
-      .eq('id', documentId)
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
-    if (docError || !doc) {
-      return new Response(JSON.stringify({ error: 'document_not_found' }), { status: 404, headers: corsHeaders });
-    }
-
-    let senderName: string | undefined;
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.id)
-      .maybeSingle();
-    senderName = profile?.full_name || undefined;
-
     const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    const { sent, results } = await sendSignatureDocumentEmails(serviceClient, {
+    const { documentId: targetDocId, signingLinks } = await prepareSignatureDocumentForSigning(serviceClient, {
       documentId,
       tenantId,
+      createdBy: user.id,
       baseUrl,
-      senderName,
+      recipient,
+      contactDetails,
+      leadId,
+      clientId,
     });
 
-    const { data: recipients } = await serviceClient
-      .from('signature_recipients')
-      .select('name, email, sign_token')
-      .eq('document_id', documentId);
+    let emails: Array<{ email: string; ok: boolean; error?: string }> = [];
+    let sent = 0;
 
-    const origin = baseUrl?.split('/').slice(0, 3).join('/') || 'https://aios.co.il';
+    if (sendEmail) {
+      let senderName: string | undefined;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      senderName = profile?.full_name || undefined;
+
+      const emailResult = await sendSignatureDocumentEmails(serviceClient, {
+        documentId: targetDocId,
+        tenantId,
+        baseUrl,
+        senderName,
+        sendEmail: true,
+        requireEmailSuccess: false,
+      });
+      emails = emailResult.results;
+      sent = emailResult.sent;
+    }
 
     return new Response(
       JSON.stringify({
-        success: sent > 0,
-        partial: sent > 0 && sent < results.length,
-        emails: results,
-        signingLinks: (recipients || []).map((r) => ({
-          name: r.name,
-          email: r.email,
-          url: `${origin}/sign/${r.sign_token}`,
-        })),
+        success: true,
+        documentId: targetDocId,
+        signingLinks,
+        emails,
+        emailSent: sent > 0,
+        partial: sendEmail && sent > 0 && sent < emails.length,
       }),
       { status: 200, headers: corsHeaders },
     );

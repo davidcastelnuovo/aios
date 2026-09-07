@@ -75,9 +75,11 @@ export async function sendSignatureDocumentEmails(
     tenantId: string;
     baseUrl?: string;
     senderName?: string;
+    sendEmail?: boolean;
+    requireEmailSuccess?: boolean;
   },
 ): Promise<{ sent: number; results: Array<{ email: string; ok: boolean; error?: string }> }> {
-  const { documentId, tenantId, baseUrl, senderName } = opts;
+  const { documentId, tenantId, baseUrl, senderName, sendEmail = true, requireEmailSuccess = true } = opts;
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
@@ -114,8 +116,13 @@ export async function sendSignatureDocumentEmails(
       _recipient_id: recipient.id,
       _event_type: 'sent',
       _ip: null,
-      _metadata: { email: recipient.email, channel: 'email' },
+      _metadata: { email: recipient.email, channel: sendEmail ? 'email' : 'link' },
     });
+
+    if (!sendEmail) {
+      results.push({ email: recipient.email, ok: false, error: 'skipped' });
+      continue;
+    }
 
     if (!RESEND_API_KEY) {
       results.push({ email: recipient.email, ok: false, error: 'resend_not_configured' });
@@ -150,11 +157,128 @@ export async function sendSignatureDocumentEmails(
   }
 
   const sent = results.filter((r) => r.ok).length;
-  if (sent === 0 && results.length > 0) {
+  if (sendEmail && requireEmailSuccess && sent === 0 && results.length > 0) {
     throw new Error(`שליחת מייל חתימה נכשלה: ${results[0].error || 'unknown'}`);
   }
 
   return { sent, results };
+}
+
+export interface SignatureSigningLink {
+  name: string;
+  email: string;
+  url: string;
+  phone?: string;
+}
+
+export async function prepareSignatureDocumentForSigning(
+  supabase: SupabaseClient,
+  opts: {
+    documentId: string;
+    tenantId: string;
+    createdBy: string;
+    baseUrl?: string;
+    recipient?: { name: string; email: string; phone?: string };
+    leadId?: string;
+    clientId?: string;
+    contactDetails?: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      address?: string;
+      idNumber?: string;
+    };
+  },
+): Promise<{ documentId: string; signingLinks: SignatureSigningLink[] }> {
+  const { documentId, tenantId, createdBy, baseUrl, recipient, leadId, clientId, contactDetails } = opts;
+
+  const { data: doc, error: docError } = await supabase
+    .from('signature_documents')
+    .select('*')
+    .eq('id', documentId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (docError || !doc) throw new Error('מסמך לא נמצא');
+
+  let targetDocId = documentId;
+
+  if (doc.is_template) {
+    if (!recipient?.name?.trim() || !recipient?.email?.trim()) {
+      throw new Error('יש להזין שם ואימייל לחותם');
+    }
+    targetDocId = await cloneSignatureFromTemplate(supabase, {
+      templateDocumentId: documentId,
+      tenantId,
+      createdBy,
+      recipientName: recipient.name.trim(),
+      recipientEmail: recipient.email.trim(),
+      leadId,
+      clientId,
+      contactDetails: contactDetails ?? { phone: recipient.phone },
+    });
+  } else {
+    const { data: existingRecipients, error: recError } = await supabase
+      .from('signature_recipients')
+      .select('id')
+      .eq('document_id', targetDocId);
+    if (recError) throw recError;
+
+    if (!existingRecipients?.length) {
+      if (!recipient?.name?.trim() || !recipient?.email?.trim()) {
+        throw new Error('אין חותמים במסמך — הזן שם ואימייל לחותם');
+      }
+      const sigField = Array.isArray(doc.document_fields)
+        ? doc.document_fields.find((f: { type?: string }) => f.type === 'signature')
+        : null;
+      const position = sigField?.position ?? null;
+      const fieldPrefill = buildFieldPrefillFromContact(
+        doc.document_fields,
+        contactDetails ?? { phone: recipient.phone },
+        0,
+      );
+
+      const { error: insertError } = await supabase.from('signature_recipients').insert({
+        document_id: targetDocId,
+        tenant_id: tenantId,
+        name: recipient.name.trim(),
+        email: recipient.email.trim(),
+        sign_order: 1,
+        signature_position: position,
+        role: 'signer',
+        field_values: fieldPrefill,
+      });
+      if (insertError) throw insertError;
+    }
+  }
+
+  await sendSignatureDocumentEmails(supabase, {
+    documentId: targetDocId,
+    tenantId,
+    baseUrl,
+    sendEmail: false,
+    requireEmailSuccess: false,
+  });
+
+  const { data: recipients, error: fetchError } = await supabase
+    .from('signature_recipients')
+    .select('name, email, sign_token')
+    .eq('document_id', targetDocId)
+    .order('sign_order');
+  if (fetchError) throw fetchError;
+  if (!recipients?.length) throw new Error('אין חותמים במסמך');
+
+  const origin = safeOrigin(baseUrl);
+  const phone = recipient?.phone ?? contactDetails?.phone;
+
+  return {
+    documentId: targetDocId,
+    signingLinks: recipients.map((r) => ({
+      name: r.name,
+      email: r.email,
+      url: `${origin}/sign/${r.sign_token}`,
+      phone,
+    })),
+  };
 }
 
 function buildFieldPrefillFromContact(

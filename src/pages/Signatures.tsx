@@ -25,6 +25,7 @@ import { buildFieldPrefill, type SignatureContactDetails } from "@/components/si
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
 import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
 import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureDocumentFieldEditor";
+import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
 
 interface Recipient {
   name: string;
@@ -84,6 +85,14 @@ export default function Signatures() {
   const skipDialogResetRef = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [editingDoc, setEditingDoc] = useState<any>(null);
+  const [sendDialogDoc, setSendDialogDoc] = useState<any>(null);
+  const [sendDialogRecipient, setSendDialogRecipient] = useState<{
+    name?: string;
+    email?: string;
+    phone?: string;
+    firstName?: string;
+    lastName?: string;
+  } | undefined>();
 
   const canEditDocFields = (doc: { status: string; file_url?: string | null }) =>
     doc.status === "draft" && !!doc.file_url;
@@ -262,15 +271,20 @@ export default function Signatures() {
   const handleSaveOrSend = async () => {
     try {
       const result = await createMutation.mutateAsync();
-      const docId = result.doc.id;
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
 
       if (result.isTemplate) {
         toast.success("התבנית נשמרה");
-      } else if (recipients.some((r) => r.name && r.email)) {
-        await sendMutation.mutateAsync(docId);
       } else {
-        toast.success("נשמר כטיוטה");
+        setShowPlacement(false);
+        resetForm();
+        setIsCreateOpen(false);
+        openSendDialog({
+          id: result.doc.id,
+          title,
+          is_template: false,
+        }, recipients.find((r) => r.name || r.email));
+        return;
       }
 
       setShowPlacement(false);
@@ -281,27 +295,17 @@ export default function Signatures() {
     }
   };
 
-  // Send for signing via edge function (email + audit)
-  const sendMutation = useMutation({
-    mutationFn: async (docId: string) => {
-      const { data, error } = await supabase.functions.invoke("send-signature-request", {
-        body: { documentId: docId, baseUrl: window.location.origin },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (data?.partial) {
-        toast.warning("חלק מהמיילים לא נשלחו — בדוק את כתובות האימייל");
-      }
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["signature-events", selectedDoc?.id] });
-      if (data?.signingLinks?.length) setLastSentLinks(data.signingLinks);
-      toast.success("המסמך נשלח לחתימה");
-    },
-    onError: (err: any) => toast.error("שגיאה בשליחה: " + err.message),
-  });
+  const openSendDialog = (
+    doc: any,
+    recipient?: { name?: string; email?: string; phone?: string; firstName?: string; lastName?: string },
+  ) => {
+    setSelectedDoc(doc);
+    setSendDialogDoc(doc);
+    setSendDialogRecipient(
+      recipient ??
+      recipients.find((r) => r.name || r.email) ?? undefined,
+    );
+  };
 
   // Delete document
   const deleteMutation = useMutation({
@@ -448,13 +452,12 @@ export default function Signatures() {
     const placementCanCreate =
       !!title.trim() &&
       !createMutation.isPending &&
-      !sendMutation.isPending &&
       (createTab === "upload" ? !!uploadFile : createTab === "url" ? !!documentUrl : !!content) &&
       (isTemplate || hasValidRecipients);
 
     const placementActionLabel = isTemplate
       ? (createMutation.isPending ? "שומר..." : "שמור תבנית")
-      : (createMutation.isPending || sendMutation.isPending ? "שולח..." : "שלח לחתימה");
+      : (createMutation.isPending ? "שולח..." : "שלח לחתימה");
 
     return (
       <div className="fixed inset-0 z-50 bg-background flex flex-col" dir="rtl">
@@ -720,26 +723,24 @@ export default function Signatures() {
                   onClick={async () => {
                     try {
                       const result = await createMutation.mutateAsync();
-                      if (recipients.some((r) => r.name && r.email)) {
-                        await sendMutation.mutateAsync(result.doc.id);
-                      } else {
-                        toast.success("נשמר כטיוטה");
-                      }
                       resetForm();
                       setIsCreateOpen(false);
+                      openSendDialog({
+                        id: result.doc.id,
+                        title,
+                        is_template: false,
+                      }, recipients.find((r) => r.name || r.email));
                     } catch { /* toast in mutation */ }
                   }}
                   disabled={
                     !title ||
                     createMutation.isPending ||
-                    sendMutation.isPending ||
                     (createTab === "create" && !content) ||
                     (createTab === "upload" && !uploadFile) ||
-                    (createTab === "url" && !documentUrl) ||
-                    !hasValidRecipients
+                    (createTab === "url" && !documentUrl)
                   }
                 >
-                  {createMutation.isPending || sendMutation.isPending ? "שולח..." : "שלח לחתימה"}
+                  {createMutation.isPending ? "שומר..." : "שלח לחתימה"}
                 </Button>
                 )}
               </div>
@@ -838,11 +839,12 @@ export default function Signatures() {
                               <Pencil className="h-4 w-4 text-primary" />
                             </Button>
                           )}
-                          {doc.status === "draft" && !doc.is_template && (
+                          {doc.status === "draft" && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => sendMutation.mutate(doc.id)}
+                              title="שלח לחתימה"
+                              onClick={() => openSendDialog(doc)}
                             >
                               <Send className="h-4 w-4 text-primary" />
                             </Button>
@@ -1022,9 +1024,15 @@ export default function Signatures() {
                     ערוך שדות
                   </Button>
                   {!selectedDoc.is_template && (
-                    <Button onClick={() => { sendMutation.mutate(selectedDoc.id); setIsViewOpen(false); }}>
+                    <Button onClick={() => { openSendDialog(selectedDoc); setIsViewOpen(false); }}>
                       <Send className="h-4 w-4 ml-2" />
                       שלח לחתימה
+                    </Button>
+                  )}
+                  {selectedDoc.is_template && (
+                    <Button onClick={() => { openSendDialog(selectedDoc); setIsViewOpen(false); }}>
+                      <Send className="h-4 w-4 ml-2" />
+                      שלח לחתימה מתבנית
                     </Button>
                   )}
                 </div>
@@ -1033,6 +1041,25 @@ export default function Signatures() {
           )}
         </DialogContent>
       </Dialog>
+
+      <SendSignatureDialog
+        open={!!sendDialogDoc}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSendDialogDoc(null);
+            setSendDialogRecipient(undefined);
+          }
+        }}
+        document={sendDialogDoc}
+        tenantId={tenantId}
+        defaultRecipient={sendDialogRecipient}
+        mode={sendDialogDoc?.is_template ? "template" : "direct"}
+        onSuccess={(result) => {
+          setLastSentLinks(result.signingLinks);
+          queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+          queryClient.invalidateQueries({ queryKey: ["signature-events", result.documentId] });
+        }}
+      />
     </div>
   );
 }

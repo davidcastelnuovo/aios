@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import {
   cloneSignatureFromTemplate,
+  prepareSignatureDocumentForSigning,
   sendSignatureDocumentEmails,
 } from '../_shared/signature-automation.ts';
 
@@ -11,6 +12,7 @@ interface SendSignatureFromTemplateBody {
   recipientEmail: string;
   documentTitle?: string;
   baseUrl?: string;
+  sendEmail?: boolean;
   contactDetails?: {
     firstName?: string;
     lastName?: string;
@@ -49,6 +51,7 @@ Deno.serve(async (req) => {
       recipientEmail,
       documentTitle,
       baseUrl,
+      sendEmail = false,
       contactDetails,
       leadId,
       clientId,
@@ -80,39 +83,53 @@ Deno.serve(async (req) => {
       clientId,
     });
 
-    let senderName: string | undefined;
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.id)
-      .maybeSingle();
-    senderName = profile?.full_name || undefined;
-
-    const { sent, results } = await sendSignatureDocumentEmails(serviceClient, {
+    const { signingLinks } = await prepareSignatureDocumentForSigning(serviceClient, {
       documentId,
       tenantId,
+      createdBy: user.id,
       baseUrl,
-      senderName,
+      recipient: {
+        name: recipientName.trim(),
+        email: recipientEmail.trim(),
+        phone: contactDetails?.phone,
+      },
+      contactDetails,
+      leadId,
+      clientId,
     });
 
-    const { data: recipients } = await serviceClient
-      .from('signature_recipients')
-      .select('name, email, sign_token')
-      .eq('document_id', documentId);
+    let emails: Array<{ email: string; ok: boolean; error?: string }> = [];
+    let sent = 0;
 
-    const origin = baseUrl?.split('/').slice(0, 3).join('/') || 'https://aios.co.il';
+    if (sendEmail) {
+      let senderName: string | undefined;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      senderName = profile?.full_name || undefined;
+
+      const emailResult = await sendSignatureDocumentEmails(serviceClient, {
+        documentId,
+        tenantId,
+        baseUrl,
+        senderName,
+        sendEmail: true,
+        requireEmailSuccess: false,
+      });
+      emails = emailResult.results;
+      sent = emailResult.sent;
+    }
 
     return new Response(
       JSON.stringify({
-        success: sent > 0,
-        partial: sent > 0 && sent < results.length,
+        success: true,
         documentId,
-        emails: results,
-        signingLinks: (recipients || []).map((r) => ({
-          name: r.name,
-          email: r.email,
-          url: `${origin}/sign/${r.sign_token}`,
-        })),
+        emails,
+        emailSent: sent > 0,
+        partial: sendEmail && sent > 0 && sent < emails.length,
+        signingLinks,
       }),
       { status: 200, headers: corsHeaders },
     );
