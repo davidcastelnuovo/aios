@@ -334,3 +334,8 @@ export function useTenant() {
   }
   return context;
 }
+
+/** Safe outside `/t/...` routes (e.g. NotFound on `/automations`). */
+export function useOptionalTenant() {
+  return useContext(TenantContext);
+}

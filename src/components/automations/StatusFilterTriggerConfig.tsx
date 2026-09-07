@@ -1,6 +1,7 @@
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useLeadStatuses } from "@/hooks/useLeadStatuses";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const TASK_STATUS_OPTIONS = [
   { value: "open", label: "פתוחה" },
@@ -11,20 +12,31 @@ const TASK_STATUS_OPTIONS = [
 
 interface StatusFilterTriggerConfigProps {
   triggerType: string;
+  tenantId: string;
   configuration: Record<string, any>;
   onConfigChange: (key: string, value: any) => void;
 }
 
 export default function StatusFilterTriggerConfig({
   triggerType,
+  tenantId,
   configuration,
   onConfigChange,
 }: StatusFilterTriggerConfigProps) {
-  const { statuses: leadStatuses } = useLeadStatuses();
-
-  if (triggerType !== "lead_status_changed" && triggerType !== "task_status_changed") {
-    return null;
-  }
+  const { data: leadStatuses = [] } = useQuery({
+    queryKey: ["lead-statuses", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("lead_statuses")
+        .select("status_key, label")
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .order("sort_order");
+      if (error) throw error;
+      return data;
+    },
+    enabled: triggerType === "lead_status_changed" && !!tenantId,
+  });
 
   return (
     <div className="space-y-2 bg-muted/40 border rounded-lg p-3" dir="rtl">

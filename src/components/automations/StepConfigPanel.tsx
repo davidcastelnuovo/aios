@@ -493,9 +493,10 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
             />
           )}
 
-          {node.step_type === "trigger" && (
+          {node.step_type === "trigger" && (node.action_type === "lead_status_changed" || node.action_type === "task_status_changed") && (
             <StatusFilterTriggerConfig
               triggerType={node.action_type || ""}
+              tenantId={tenantId}
               configuration={node.configuration}
               onConfigChange={handleConfigChange}
             />
