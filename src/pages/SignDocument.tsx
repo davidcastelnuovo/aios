@@ -120,18 +120,17 @@ export default function SignDocument() {
     setHasSignature(false);
   };
 
-  // Sign mutation - via secured RPC
+  // Sign mutation - via edge function (captures real IP server-side)
   const signMutation = useMutation({
     mutationFn: async () => {
       const canvas = getActiveCanvas();
       if (!canvas || !recipient || !token) throw new Error("Missing data");
       const signatureData = canvas.toDataURL("image/png");
-      const { error } = await supabase.rpc("submit_signature_by_token", {
-        _token: token,
-        _signature_data: signatureData,
-        _ip: null,
+      const { data, error } = await supabase.functions.invoke("submit-signature", {
+        body: { token, signatureData, action: "sign" },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       setSigned(true);
@@ -143,8 +142,11 @@ export default function SignDocument() {
   const declineMutation = useMutation({
     mutationFn: async () => {
       if (!token) throw new Error("Missing data");
-      const { error } = await supabase.rpc("decline_signature_by_token", { _token: token });
+      const { data, error } = await supabase.functions.invoke("submit-signature", {
+        body: { token, action: "decline" },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       setSigned(true);

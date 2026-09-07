@@ -7037,6 +7037,7 @@ export type Database = {
           document_type: string
           file_url: string | null
           id: string
+          signed_file_url: string | null
           status: string
           tenant_id: string
           title: string
@@ -7050,6 +7051,7 @@ export type Database = {
           document_type?: string
           file_url?: string | null
           id?: string
+          signed_file_url?: string | null
           status?: string
           tenant_id: string
           title: string
@@ -7063,6 +7065,7 @@ export type Database = {
           document_type?: string
           file_url?: string | null
           id?: string
+          signed_file_url?: string | null
           status?: string
           tenant_id?: string
           title?: string
@@ -7094,6 +7097,7 @@ export type Database = {
           signed_at: string | null
           status: string
           tenant_id: string
+          viewed_at: string | null
         }
         Insert: {
           created_at?: string | null
@@ -7110,6 +7114,7 @@ export type Database = {
           signed_at?: string | null
           status?: string
           tenant_id: string
+          viewed_at?: string | null
         }
         Update: {
           created_at?: string | null
@@ -7126,6 +7131,7 @@ export type Database = {
           signed_at?: string | null
           status?: string
           tenant_id?: string
+          viewed_at?: string | null
         }
         Relationships: [
           {
@@ -7137,6 +7143,61 @@ export type Database = {
           },
           {
             foreignKeyName: "signature_recipients_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_events: {
+        Row: {
+          created_at: string
+          document_id: string
+          event_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          recipient_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          recipient_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          recipient_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_events_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "signature_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_events_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "signature_recipients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_events_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -10534,7 +10595,7 @@ export type Database = {
         }
         Returns: string
       }
-      decline_signature_by_token: { Args: { _token: string }; Returns: Json }
+      decline_signature_by_token: { Args: { _ip?: string; _token: string }; Returns: Json }
       enqueue_job: {
         Args: {
           p_job_type: string

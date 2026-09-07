@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link } from "lucide-react";
+import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link, Download, History } from "lucide-react";
 import { format } from "date-fns";
 import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
 
@@ -37,6 +37,14 @@ const statusIcons: Record<string, any> = {
   partially_signed: Clock,
   completed: CheckCircle,
   cancelled: XCircle,
+};
+
+const eventLabels: Record<string, string> = {
+  sent: "נשלח במייל",
+  viewed: "נצפה",
+  signed: "חתם",
+  declined: "סירב",
+  pdf_generated: "PDF חתום נוצר",
 };
 
 export default function Signatures() {
@@ -86,6 +94,41 @@ export default function Signatures() {
     },
     enabled: !!selectedDoc?.id,
   });
+
+  // Fetch audit events for selected doc
+  const { data: docEvents } = useQuery({
+    queryKey: ["signature-events", selectedDoc?.id],
+    queryFn: async () => {
+      if (!selectedDoc?.id) return [];
+      const { data, error } = await supabase
+        .from("signature_events")
+        .select("*, signature_recipients(name, email)")
+        .eq("document_id", selectedDoc.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedDoc?.id,
+  });
+
+  const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
+
+  // Resolve signed PDF download URL
+  useEffect(() => {
+    if (!selectedDoc?.signed_file_url) {
+      setSignedPdfUrl(null);
+      return;
+    }
+    const path = selectedDoc.signed_file_url;
+    if (path.startsWith("http")) {
+      setSignedPdfUrl(path);
+      return;
+    }
+    supabase.storage
+      .from("signature-documents")
+      .createSignedUrl(path, 3600)
+      .then(({ data }) => setSignedPdfUrl(data?.signedUrl ?? null));
+  }, [selectedDoc?.signed_file_url]);
 
   // Create document mutation
   const createMutation = useMutation({
@@ -157,19 +200,25 @@ export default function Signatures() {
     onError: (err: any) => toast.error("שגיאה ביצירת מסמך: " + err.message),
   });
 
-  // Send for signing
+  // Send for signing via edge function (email + audit)
   const sendMutation = useMutation({
     mutationFn: async (docId: string) => {
-      const { error } = await supabase
-        .from("signature_documents")
-        .update({ status: "pending" })
-        .eq("id", docId);
+      const { data, error } = await supabase.functions.invoke("send-signature-request", {
+        body: { documentId: docId, baseUrl: window.location.origin },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.partial) {
+        toast.warning("חלק מהמיילים לא נשלחו — בדוק את כתובות האימייל");
+      }
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["signature-events", selectedDoc?.id] });
       toast.success("המסמך נשלח לחתימה");
     },
+    onError: (err: any) => toast.error("שגיאה בשליחה: " + err.message),
   });
 
   // Delete document
@@ -560,6 +609,17 @@ export default function Signatures() {
                 </Card>
               )}
 
+              {selectedDoc.status === "completed" && signedPdfUrl && (
+                <Card>
+                  <CardContent className="p-4">
+                    <a href={signedPdfUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
+                      <Download className="h-4 w-4" />
+                      הורד מסמך חתום (PDF)
+                    </a>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Recipients */}
               <Card>
                 <CardHeader>
@@ -591,6 +651,37 @@ export default function Signatures() {
                               </Button>
                             )}
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Audit trail */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <History className="h-4 w-4" />
+                    יומן פעילות
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {!docEvents?.length ? (
+                    <p className="text-sm text-muted-foreground">אין אירועים עדיין</p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {docEvents.map((ev: any) => (
+                        <div key={ev.id} className="flex items-center justify-between text-sm border-b pb-2 last:border-0">
+                          <div>
+                            <span className="font-medium">{eventLabels[ev.event_type] || ev.event_type}</span>
+                            {ev.signature_recipients?.name && (
+                              <span className="text-muted-foreground"> — {ev.signature_recipients.name}</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(ev.created_at), "dd/MM/yy HH:mm")}
+                          </span>
                         </div>
                       ))}
                     </div>
