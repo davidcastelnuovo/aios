@@ -9,7 +9,9 @@ interface SignatureDocumentFieldEditorProps {
   fileUrl: string;
   initialFields: DocumentField[];
   saving?: boolean;
+  isTemplate?: boolean;
   onSave: (fields: DocumentField[]) => void | Promise<void>;
+  onSaveAndSend?: (fields: DocumentField[]) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -18,7 +20,9 @@ export function SignatureDocumentFieldEditor({
   fileUrl,
   initialFields,
   saving,
+  isTemplate,
   onSave,
+  onSaveAndSend,
   onClose,
 }: SignatureDocumentFieldEditorProps) {
   const [fields, setFields] = useState<DocumentField[]>(initialFields);
@@ -37,9 +41,18 @@ export function SignatureDocumentFieldEditor({
           <Button variant="outline" onClick={onClose} disabled={saving}>
             ביטול
           </Button>
-          <Button onClick={() => onSave(fields)} disabled={saving}>
-            {saving ? "שומר..." : "שמור שדות"}
+          <Button
+            variant={isTemplate ? "default" : "secondary"}
+            onClick={() => onSave(fields)}
+            disabled={saving}
+          >
+            {saving ? "שומר..." : isTemplate ? "שמור תבנית" : "שמור מסמך"}
           </Button>
+          {!isTemplate && onSaveAndSend && (
+            <Button onClick={() => onSaveAndSend(fields)} disabled={saving}>
+              {saving ? "שומר..." : "שמור ושלח"}
+            </Button>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-auto p-4">

@@ -24,6 +24,7 @@ import SignatureContactPicker from "@/components/signatures/SignatureContactPick
 import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
 import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
+import { syncSignatureRecipientPosition, updateSignatureDocumentFields } from "@/lib/updateSignatureDocumentFields";
 import { signatureDocumentStoragePath } from "@/lib/resolveSignatureDocumentUrl";
 import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureDocumentFieldEditor";
 import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
@@ -320,35 +321,75 @@ export default function Signatures() {
   });
 
   const updateFieldsMutation = useMutation({
-    mutationFn: async ({ docId, fields }: { docId: string; fields: DocumentField[] }) => {
-      const { error } = await supabase
-        .from("signature_documents")
-        .update({
-          document_fields: fields as any,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", docId);
-      if (error?.message?.includes("document_fields")) {
-        throw new Error("עמודת שדות לא זמינה — יש להריץ migration");
-      }
-      if (error) throw error;
-
-      const sigField = fields.find((f) => f.type === "signature");
-      if (sigField) {
-        await supabase
-          .from("signature_recipients")
-          .update({ signature_position: sigField.position as any })
-          .eq("document_id", docId);
-      }
+    mutationFn: async ({
+      doc,
+      fields,
+      thenSend,
+    }: {
+      doc: { id: string; title: string; is_template?: boolean };
+      fields: DocumentField[];
+      thenSend?: boolean;
+    }) => {
+      await updateSignatureDocumentFields(doc.id, fields);
+      await syncSignatureRecipientPosition(doc.id, fields);
+      return { doc, thenSend: !!thenSend };
     },
-    onSuccess: () => {
+    onSuccess: async ({ doc, thenSend }) => {
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["signature-source-documents", tenantId] });
-      toast.success("השדות נשמרו");
+      toast.success(doc.is_template ? "התבנית נשמרה" : "המסמך נשמר — מוכן לשליחה");
       closeFieldEditor();
+
+      if (thenSend && !doc.is_template) {
+        const { data: recipients } = await supabase
+          .from("signature_recipients")
+          .select("name, email, phone")
+          .eq("document_id", doc.id)
+          .order("sign_order")
+          .limit(1);
+
+        openSendDialog(
+          { id: doc.id, title: doc.title, is_template: false },
+          recipients?.[0] ?? undefined,
+        );
+      }
     },
     onError: (err: Error) => toast.error(err.message || "שגיאה בשמירת שדות"),
   });
+
+  const handleEditSaveOnly = async (fields: DocumentField[]) => {
+    if (!editingDoc) return;
+    try {
+      await updateFieldsMutation.mutateAsync({
+        doc: {
+          id: editingDoc.id,
+          title: editingDoc.title,
+          is_template: editingDoc.is_template,
+        },
+        fields,
+        thenSend: false,
+      });
+    } catch {
+      // errors handled in mutation
+    }
+  };
+
+  const handleEditSaveOrSend = async (fields: DocumentField[]) => {
+    if (!editingDoc) return;
+    try {
+      await updateFieldsMutation.mutateAsync({
+        doc: {
+          id: editingDoc.id,
+          title: editingDoc.title,
+          is_template: editingDoc.is_template,
+        },
+        fields,
+        thenSend: true,
+      });
+    } catch {
+      // errors handled in mutation
+    }
+  };
 
   useEffect(() => {
     const editId = searchParams.get("edit");
@@ -431,16 +472,42 @@ export default function Signatures() {
     return `${window.location.origin}/sign/${token}`;
   };
 
+  const sendDialog = (
+    <SendSignatureDialog
+      open={!!sendDialogDoc}
+      onOpenChange={(open) => {
+        if (!open) {
+          setSendDialogDoc(null);
+          setSendDialogRecipient(undefined);
+        }
+      }}
+      document={sendDialogDoc}
+      tenantId={tenantId}
+      defaultRecipient={sendDialogRecipient}
+      mode={sendDialogDoc?.is_template ? "template" : "direct"}
+      onSuccess={(result) => {
+        setLastSentLinks(result.signingLinks);
+        queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["signature-events", result.documentId] });
+      }}
+    />
+  );
+
   if (editingDoc?.file_url) {
     return (
-      <SignatureDocumentFieldEditor
-        title={editingDoc.title}
-        fileUrl={editingDoc.file_url}
-        initialFields={parseDocumentFields(editingDoc.document_fields)}
-        saving={updateFieldsMutation.isPending}
-        onClose={closeFieldEditor}
-        onSave={(fields) => updateFieldsMutation.mutate({ docId: editingDoc.id, fields })}
-      />
+      <>
+        <SignatureDocumentFieldEditor
+          title={editingDoc.title}
+          fileUrl={editingDoc.file_url}
+          initialFields={parseDocumentFields(editingDoc.document_fields)}
+          isTemplate={editingDoc.is_template}
+          saving={updateFieldsMutation.isPending}
+          onClose={closeFieldEditor}
+          onSave={handleEditSaveOnly}
+          onSaveAndSend={handleEditSaveOrSend}
+        />
+        {sendDialog}
+      </>
     );
   }
 
@@ -1039,24 +1106,7 @@ export default function Signatures() {
         </DialogContent>
       </Dialog>
 
-      <SendSignatureDialog
-        open={!!sendDialogDoc}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSendDialogDoc(null);
-            setSendDialogRecipient(undefined);
-          }
-        }}
-        document={sendDialogDoc}
-        tenantId={tenantId}
-        defaultRecipient={sendDialogRecipient}
-        mode={sendDialogDoc?.is_template ? "template" : "direct"}
-        onSuccess={(result) => {
-          setLastSentLinks(result.signingLinks);
-          queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
-          queryClient.invalidateQueries({ queryKey: ["signature-events", result.documentId] });
-        }}
-      />
+      {sendDialog}
     </div>
   );
 }
