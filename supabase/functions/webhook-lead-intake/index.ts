@@ -661,6 +661,7 @@ Deno.serve(async (req) => {
             contact_name: lead.contact_name,
             phone: lead.phone,
             email: lead.email,
+            notes: lead.notes,
             status: lead.status,
             source: lead.source,
             campaign_name: lead.campaign_name,
