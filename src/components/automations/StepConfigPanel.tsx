@@ -1142,6 +1142,8 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
               tenantId={tenantId}
               configuration={node.configuration}
               availableFields={availableFields}
+              triggerType={triggerType}
+              automationId={automationId}
               onConfigChange={handleConfigChange}
             />
           )}
