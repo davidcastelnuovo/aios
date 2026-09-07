@@ -42,14 +42,29 @@ Deno.serve(async (req) => {
       if (!signatureData) {
         return new Response(JSON.stringify({ error: 'missing_signature' }), { status: 400, headers: corsHeaders });
       }
-      const { data, error } = await supabase.rpc('submit_signature_by_token', {
+
+      let rpcResult: Record<string, unknown> | null = null;
+      const withFields = await supabase.rpc('submit_signature_by_token', {
         _token: token,
         _signature_data: signatureData,
         _ip: ip,
         _field_values: fieldValues ?? {},
       });
-      if (error) throw error;
-      result = data as Record<string, unknown>;
+
+      if (withFields.error?.message?.includes('field_values')) {
+        const legacy = await supabase.rpc('submit_signature_by_token', {
+          _token: token,
+          _signature_data: signatureData,
+          _ip: ip,
+        });
+        if (legacy.error) throw legacy.error;
+        rpcResult = legacy.data as Record<string, unknown>;
+      } else {
+        if (withFields.error) throw withFields.error;
+        rpcResult = withFields.data as Record<string, unknown>;
+      }
+
+      result = rpcResult!;
 
       if (result.document_status === 'completed' && result.document_id) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';

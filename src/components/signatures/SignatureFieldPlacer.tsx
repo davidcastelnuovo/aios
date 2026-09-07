@@ -9,6 +9,7 @@ import {
   getFieldLabel,
   getFieldFontSizePx,
 } from "./signatureFieldTypes";
+import { SignatureDocumentViewer } from "./SignatureDocumentViewer";
 
 export interface SignaturePosition {
   x: number;
@@ -64,7 +65,6 @@ export default function SignatureFieldPlacer({
   const resizeStartRef = useRef<{ x: number; y: number; w: number; h: number; fieldX: number; fieldY: number } | null>(null);
   const placePointerRef = useRef<{ x: number; y: number } | null>(null);
 
-  const isImage = /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(fileUrl);
   const isPlacing = selectedType !== null;
 
   useEffect(() => {
@@ -255,8 +255,6 @@ export default function SignatureFieldPlacer({
     if (selectedFieldId === id) setSelectedFieldId(null);
   };
 
-  const docHeight = fullScreen ? "min(1200px, 150vh)" : "600px";
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border bg-muted/40">
@@ -327,25 +325,16 @@ export default function SignatureFieldPlacer({
         </div>
       )}
 
-      <div
+      <SignatureDocumentViewer
         ref={containerRef}
-        className={`relative border-2 border-dashed border-border rounded-lg bg-white select-none touch-none ${
-          isPlacing ? "cursor-crosshair" : ""
-        }`}
+        fileUrl={fileUrl}
+        onHeightChange={setContainerHeight}
         onPointerDown={handleContainerPointerDown}
         onPointerUp={handleContainerPointerUp}
+        className={`border-2 border-dashed border-border rounded-lg bg-white select-none touch-none ${
+          isPlacing ? "cursor-crosshair" : ""
+        }`}
       >
-        {isImage ? (
-          <img src={fileUrl} alt="Document" className="w-full h-auto block pointer-events-none" draggable={false} />
-        ) : (
-          <iframe
-            src={fileUrl}
-            className="w-full border-0 block pointer-events-none"
-            style={{ height: docHeight }}
-            title="Document preview"
-          />
-        )}
-
         {fields.map((f) => {
           const color = getRecipientColorForField(f.recipient_index);
           const fontSize = getFieldFontSizePx(f.position, containerHeight);
@@ -406,7 +395,7 @@ export default function SignatureFieldPlacer({
             </div>
           );
         })}
-      </div>
+      </SignatureDocumentViewer>
     </div>
   );
 }

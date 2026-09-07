@@ -15,6 +15,7 @@ import {
   getFieldFontSizePx,
 } from "@/components/signatures/signatureFieldTypes";
 import { useSignatureDocumentUrl } from "@/hooks/useSignatureDocumentUrl";
+import { SignatureDocumentViewer } from "@/components/signatures/SignatureDocumentViewer";
 
 interface SignaturePosition {
   x: number;
@@ -27,7 +28,6 @@ interface SignaturePosition {
 export default function SignDocument() {
   const { token } = useParams<{ token: string }>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const docContainerRef = useRef<HTMLDivElement>(null);
   const [docContainerHeight, setDocContainerHeight] = useState(700);
   const signatureCanvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const [isDrawing, setIsDrawing] = useState<string | null>(null);
@@ -90,17 +90,7 @@ export default function SignDocument() {
     for (const field of myFields.filter((f) => f.type === "signature")) {
       setupCanvas(signatureCanvasRefs.current[field.id]);
     }
-  }, [useOverlay, hasDocumentFields, myFields, setupCanvas]);
-
-  useEffect(() => {
-    const el = docContainerRef.current;
-    if (!el) return;
-    const update = () => setDocContainerHeight(el.getBoundingClientRect().height);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [docFileUrl, useOverlay]);
+  }, [useOverlay, hasDocumentFields, myFields, setupCanvas, docContainerHeight]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
@@ -370,17 +360,12 @@ export default function SignDocument() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="relative" ref={docContainerRef}>
-                {loadingDocFile ? (
-                  <p className="text-center text-muted-foreground py-12">טוען מסמך...</p>
-                ) : !docFileUrl ? (
-                  <p className="text-center text-destructive py-12">לא ניתן לטעון את המסמך</p>
-                ) : /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(docFileUrl) ? (
-                  <img src={docFileUrl} alt="Document" className="w-full h-auto rounded" />
-                ) : (
-                  <iframe src={docFileUrl} className="w-full border-0 rounded" style={{ height: 700 }} title="Document" />
-                )}
-
+              <SignatureDocumentViewer
+                fileUrl={docFileUrl}
+                loading={loadingDocFile}
+                error={!docFileUrl && !loadingDocFile ? "לא ניתן לטעון את המסמך" : null}
+                onHeightChange={setDocContainerHeight}
+              >
                 {hasDocumentFields
                   ? myFields.map(renderFieldOverlay)
                   : signaturePosition && (
@@ -409,7 +394,7 @@ export default function SignDocument() {
                       />
                     </div>
                   )}
-              </div>
+              </SignatureDocumentViewer>
 
               <div className="flex justify-end mt-2 gap-2">
                 {hasDocumentFields && myFields.some((f) => f.type === "signature") && (

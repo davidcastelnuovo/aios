@@ -40,18 +40,31 @@ function decodeBase64Png(dataUrl: string): Uint8Array {
   return bytes;
 }
 
-function isImageUrl(url: string): boolean {
-  return /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(url);
-}
-
-function isPdfUrl(url: string): boolean {
-  return /\.pdf(\?|$)/i.test(url);
-}
-
 async function fetchFileBytes(url: string): Promise<Uint8Array> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`failed_to_fetch_document: ${res.status}`);
   return new Uint8Array(await res.arrayBuffer());
+}
+
+async function fetchDocumentBytes(
+  supabase: ReturnType<typeof createClient>,
+  fileUrl: string,
+): Promise<Uint8Array> {
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+    return fetchFileBytes(fileUrl);
+  }
+
+  const { data, error } = await supabase.storage.from('signature-documents').download(fileUrl);
+  if (error || !data) throw error || new Error('failed_to_download_document');
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+function isPdfFile(fileUrl: string): boolean {
+  return /\.pdf(\?|$)/i.test(fileUrl);
+}
+
+function isImageFile(fileUrl: string): boolean {
+  return /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(fileUrl);
 }
 
 async function drawSignatureOnPage(
@@ -111,15 +124,15 @@ async function buildSignedPdf(doc: {
   file_url: string | null;
   document_type: string;
   document_fields?: DocumentField[] | null;
-}, recipients: RecipientRow[]): Promise<Uint8Array> {
+}, recipients: RecipientRow[], supabase: ReturnType<typeof createClient>): Promise<Uint8Array> {
   const signedRecipients = recipients.filter((r) => r.status === 'signed');
   let pdfDoc: PDFDocument;
 
-  if (doc.file_url && isPdfUrl(doc.file_url)) {
-    const pdfBytes = await fetchFileBytes(doc.file_url);
+  if (doc.file_url && isPdfFile(doc.file_url)) {
+    const pdfBytes = await fetchDocumentBytes(supabase, doc.file_url);
     pdfDoc = await PDFDocument.load(pdfBytes);
-  } else if (doc.file_url && isImageUrl(doc.file_url)) {
-    const imageBytes = await fetchFileBytes(doc.file_url);
+  } else if (doc.file_url && isImageFile(doc.file_url)) {
+    const imageBytes = await fetchDocumentBytes(supabase, doc.file_url);
     pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([595, 842]);
     const { width, height } = page.getSize();
@@ -136,12 +149,12 @@ async function buildSignedPdf(doc: {
         embedded = await pdfDoc.embedJpg(imageBytes);
       }
     }
-    const scale = Math.min(width / embedded.width, height / embedded.height);
-    const imgW = embedded.width * scale;
+    const scale = width / embedded.width;
+    const imgW = width;
     const imgH = embedded.height * scale;
     page.drawImage(embedded, {
-      x: (width - imgW) / 2,
-      y: (height - imgH) / 2,
+      x: 0,
+      y: height - imgH,
       width: imgW,
       height: imgH,
     });
@@ -250,7 +263,7 @@ Deno.serve(async (req) => {
 
     if (recError) throw recError;
 
-    const pdfBytes = await buildSignedPdf(doc, recipients as RecipientRow[]);
+    const pdfBytes = await buildSignedPdf(doc, recipients as RecipientRow[], supabase);
     const storagePath = `${doc.tenant_id}/signed/${documentId}.pdf`;
 
     const { error: uploadError } = await supabase.storage
