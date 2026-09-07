@@ -1,6 +1,9 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
 import * as pdfjs from "pdfjs-dist";
-import { isImageUrl, isPdfUrl } from "./signatureDocumentMedia";
+import {
+  detectMediaKind,
+  type SignatureMediaKind,
+} from "./signatureDocumentMedia";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -9,6 +12,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 interface SignatureDocumentViewerProps {
   fileUrl: string | null;
+  mediaKind?: SignatureMediaKind | null;
   loading?: boolean;
   error?: string | null;
   className?: string;
@@ -21,6 +25,7 @@ interface SignatureDocumentViewerProps {
 export const SignatureDocumentViewer = forwardRef<HTMLDivElement, SignatureDocumentViewerProps>(
 function SignatureDocumentViewer({
   fileUrl,
+  mediaKind,
   loading,
   error,
   className = "",
@@ -38,6 +43,8 @@ function SignatureDocumentViewer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [pdfReady, setPdfReady] = useState(false);
+  const kind = detectMediaKind(fileUrl, mediaKind);
 
   useEffect(() => {
     const el = internalRef.current;
@@ -47,14 +54,18 @@ function SignatureDocumentViewer({
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [onHeightChange, fileUrl, rendering]);
+  }, [onHeightChange, fileUrl, pdfReady, kind]);
 
   useEffect(() => {
-    if (!fileUrl || !isPdfUrl(fileUrl)) return;
+    if (!fileUrl || kind !== "pdf") {
+      setPdfReady(false);
+      return;
+    }
 
     let cancelled = false;
     setRendering(true);
     setRenderError(null);
+    setPdfReady(false);
 
     (async () => {
       try {
@@ -78,6 +89,12 @@ function SignatureDocumentViewer({
         canvas.style.display = "block";
 
         await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+        if (!cancelled) {
+          setPdfReady(true);
+          if (onHeightChange && internalRef.current) {
+            onHeightChange(internalRef.current.getBoundingClientRect().height);
+          }
+        }
       } catch (err) {
         if (!cancelled) {
           setRenderError(err instanceof Error ? err.message : "שגיאה בטעינת PDF");
@@ -90,7 +107,7 @@ function SignatureDocumentViewer({
     return () => {
       cancelled = true;
     };
-  }, [fileUrl]);
+  }, [fileUrl, kind, onHeightChange]);
 
   if (loading) {
     return <p className="text-center text-muted-foreground py-12">טוען מסמך...</p>;
@@ -104,9 +121,6 @@ function SignatureDocumentViewer({
     return <p className="text-center text-destructive py-12">לא ניתן לטעון את המסמך</p>;
   }
 
-  const showPdf = isPdfUrl(fileUrl);
-  const showImage = isImageUrl(fileUrl);
-
   return (
     <div
       ref={containerRef}
@@ -114,16 +128,20 @@ function SignatureDocumentViewer({
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
-      {showPdf ? (
+      {kind === "pdf" ? (
         <>
+          <canvas
+            ref={canvasRef}
+            className="w-full h-auto block rounded"
+            style={{ visibility: pdfReady ? "visible" : "hidden", minHeight: rendering ? 400 : undefined }}
+          />
           {(rendering || renderError) && (
-            <p className="text-center text-muted-foreground py-8">
-              {renderError || "מעבד PDF..."}
-            </p>
+            <div className="absolute inset-0 flex items-center justify-center bg-background/60 pointer-events-none z-[5]">
+              <p className="text-muted-foreground text-sm">{renderError || "מעבד PDF..."}</p>
+            </div>
           )}
-          <canvas ref={canvasRef} className="w-full h-auto block rounded" />
         </>
-      ) : showImage ? (
+      ) : kind === "image" ? (
         <img src={fileUrl} alt="Document" className="w-full h-auto block rounded" draggable={false} />
       ) : (
         <iframe
@@ -133,7 +151,8 @@ function SignatureDocumentViewer({
           title="Document"
         />
       )}
-      {children}
+      {/* Overlay fields only after PDF page metrics are stable */}
+      {(kind !== "pdf" || pdfReady) && children}
     </div>
   );
 });

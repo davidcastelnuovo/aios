@@ -4,14 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Copy, Link2, Mail } from "lucide-react";
 import {
@@ -57,6 +55,8 @@ export interface SendSignatureDialogProps {
   onSuccess?: (result: { signingLinks: SigningLinkResult[]; documentId: string }) => void;
 }
 
+type SendAction = "link" | "email" | "whatsapp";
+
 export function SendSignatureDialog({
   open,
   onOpenChange,
@@ -74,11 +74,9 @@ export function SendSignatureDialog({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [sendEmail, setSendEmail] = useState(true);
-  const [sendWhatsApp, setSendWhatsApp] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [busy, setBusy] = useState<SendAction | null>(null);
   const [links, setLinks] = useState<SigningLinkResult[]>([]);
-  const [done, setDone] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const { data: existingRecipients = [] } = useQuery({
     queryKey: ["signature-recipients-for-send", doc?.id],
@@ -94,31 +92,26 @@ export function SendSignatureDialog({
     enabled: open && !!doc?.id && resolvedMode === "direct" && !doc?.is_template,
   });
 
-  const needsRecipientForm =
-    resolvedMode === "template" ||
-    !!doc?.is_template ||
-    (resolvedMode === "direct" && existingRecipients.length === 0);
-
   useEffect(() => {
     if (!open) {
       setLinks([]);
-      setDone(false);
-      setSending(false);
+      setBusy(null);
+      setEmailSent(false);
       return;
     }
     const existing = existingRecipients[0];
     setName(defaultRecipient?.name || existing?.name || "");
     setEmail(defaultRecipient?.email || existing?.email || "");
     setPhone(defaultRecipient?.phone || "");
-    setSendEmail(!!(defaultRecipient?.email || existing?.email));
-    setSendWhatsApp(!!defaultRecipient?.phone && !defaultRecipient?.email);
     setLinks([]);
-    setDone(false);
+    setEmailSent(false);
   }, [open, doc?.id, defaultRecipient, existingRecipients]);
 
-  const canSubmit = !!doc && name.trim() && (email.trim() || phone.trim());
+  const canAct = !!doc && name.trim() && (email.trim() || phone.trim());
+  const canEmail = !!email.trim() || !!existingRecipients[0]?.email;
+  const canWhatsApp = !!phone.trim();
 
-  const handlePrepareLink = async () => {
+  const runAction = async (action: SendAction) => {
     if (!doc) return;
     if (!name.trim()) {
       toast.error("הזן שם חותם");
@@ -128,18 +121,26 @@ export function SendSignatureDialog({
       toast.error("הזן אימייל או טלפון");
       return;
     }
+    if (action === "email" && !canEmail) {
+      toast.error("הזן אימייל לשליחה");
+      return;
+    }
+    if (action === "whatsapp" && !canWhatsApp) {
+      toast.error("הזן טלפון לוואטסאפ");
+      return;
+    }
 
     const signingEmail =
-      email.trim() || `${doc.id.replace(/-/g, "").slice(0, 12)}@sign.aios.local`;
+      email.trim() || existingRecipients[0]?.email || `${doc.id.replace(/-/g, "").slice(0, 12)}@sign.aios.local`;
 
-    setSending(true);
+    setBusy(action);
     try {
       const result = await sendSignatureDocument({
         documentId: doc.id,
         documentTitle: doc.title,
         isTemplate: doc.is_template,
         mode: resolvedMode,
-        sendEmail,
+        sendEmail: action === "email",
         tenantId,
         recipient: { name: name.trim(), email: signingEmail, phone: phone.trim() || undefined },
         contactDetails: {
@@ -153,129 +154,123 @@ export function SendSignatureDialog({
       });
 
       setLinks(result.signingLinks);
-      setDone(true);
 
-      if (sendWhatsApp) {
-        const { opened, skipped } = openWhatsAppForLinks(
+      if (action === "whatsapp") {
+        const { opened } = openWhatsAppForLinks(
           result.signingLinks,
           documentTitleOverride || doc.title,
         );
         if (opened === 0) toast.warning("לא נמצא מספר טלפון תקין לוואטסאפ");
-        else if (skipped > 0) toast.warning("חלק מהחותמים ללא טלפון לוואטסאפ");
-      }
-
-      if (sendEmail && result.emailSent) toast.success("המייל נשלח");
-      else if (sendEmail && !result.emailSent) {
-        toast.warning("הקישור מוכן — שליחת המייל נכשלה (אפשר וואטסאפ/העתקה)");
+        else toast.success("נפתח וואטסאפ עם קישור לחתימה");
+      } else if (action === "email") {
+        if (result.emailSent) {
+          setEmailSent(true);
+          toast.success("המייל נשלח");
+        } else {
+          toast.warning("הקישור מוכן — שליחת המייל נכשלה (אפשר להעתיק)");
+        }
       } else {
         toast.success("קישור לחתימה מוכן");
       }
 
-      if (result.partial) toast.warning("חלק מהמיילים לא נשלחו");
-
       onSuccess?.({ signingLinks: result.signingLinks, documentId: result.documentId });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "שגיאה בהכנת קישור");
+      toast.error(err instanceof Error ? err.message : "שגיאה בשליחה");
     } finally {
-      setSending(false);
+      setBusy(null);
     }
-  };
-
-  const handleCopy = async (url: string) => {
-    await copySigningUrl(url);
-    toast.success("הקישור הועתק");
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" dir="rtl">
+      <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
-          <DialogTitle>שליחה לחתימה — {doc?.title}</DialogTitle>
+          <DialogTitle className="truncate">שליחה לחתימה — {doc?.title}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {needsRecipientForm && (
-            <div className="space-y-3 rounded-lg border p-3">
-              <p className="text-sm font-medium">פרטי החותם</p>
-              <div className="space-y-2">
-                <Label>שם</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="שם החותם" />
-              </div>
-              <div className="space-y-2">
-                <Label>אימייל</Label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@example.com"
-                  dir="ltr"
-                  className="text-left"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>טלפון (לוואטסאפ)</Label>
-                <Input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="05..."
-                  dir="ltr"
-                  className="text-left"
-                />
-              </div>
+        <div className="space-y-4 min-w-0">
+          <div className="space-y-3 rounded-lg border p-3">
+            <p className="text-sm font-medium">פרטי החותם</p>
+            <div className="space-y-2">
+              <Label>שם</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="שם החותם" />
             </div>
-          )}
-
-          {!needsRecipientForm && existingRecipients.length > 0 && (
-            <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
-              <p>
-                <span className="text-muted-foreground">חותם:</span>{" "}
-                {existingRecipients.map((r) => r.name).join(", ")}
-              </p>
-              <p dir="ltr" className="text-left text-muted-foreground">
-                {existingRecipients.map((r) => r.email).join(", ")}
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <p className="text-sm font-medium">אופן שליחה</p>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="send-email"
-                checked={sendEmail}
-                onCheckedChange={(v) => setSendEmail(!!v)}
-                disabled={!email.trim() && !existingRecipients[0]?.email}
+            <div className="space-y-2">
+              <Label>אימייל</Label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="email@example.com"
+                dir="ltr"
+                className="text-left"
               />
-              <Label htmlFor="send-email" className="cursor-pointer flex items-center gap-1">
-                <Mail className="h-4 w-4" />
-                שלח באימייל
-              </Label>
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="send-wa"
-                checked={sendWhatsApp}
-                onCheckedChange={(v) => setSendWhatsApp(!!v)}
-                disabled={!phone.trim()}
+            <div className="space-y-2">
+              <Label>טלפון (לוואטסאפ)</Label>
+              <Input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="05..."
+                dir="ltr"
+                className="text-left"
               />
-              <Label htmlFor="send-wa" className="cursor-pointer flex items-center gap-1">
-                <WhatsAppIcon className="h-4 w-4 text-green-600" />
-                שלח בוואטסאפ
-              </Label>
             </div>
-            <p className="text-xs text-muted-foreground">
-              לחץ "קבל קישור" כדי לקבל קישור לחתימה. אפשר אחר כך לשלוח במייל או וואטסאפ.
-            </p>
           </div>
 
-          {done && links.length > 0 && (
-            <div className="rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-2">
+          <div className="grid gap-2">
+            <Button
+              type="button"
+              onClick={() => runAction("link")}
+              disabled={!canAct || !!busy}
+              className="w-full justify-center"
+            >
+              <Link2 className="h-4 w-4 ml-2" />
+              {busy === "link" ? "מכין קישור..." : "קבל קישור לחתימה"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => runAction("email")}
+              disabled={!canAct || !canEmail || !!busy}
+              className="w-full justify-center"
+            >
+              <Mail className="h-4 w-4 ml-2" />
+              {busy === "email" ? "שולח מייל..." : emailSent ? "שלח מייל שוב" : "שלח במייל"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => runAction("whatsapp")}
+              disabled={!canAct || !canWhatsApp || !!busy}
+              className="w-full justify-center text-green-700 border-green-200"
+            >
+              <WhatsAppIcon className="h-4 w-4 ml-2" />
+              {busy === "whatsapp" ? "פותח וואטסאפ..." : "שלח בוואטסאפ"}
+            </Button>
+          </div>
+
+          {links.length > 0 && (
+            <div className="rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-3 min-w-0 overflow-hidden">
               <p className="text-sm font-medium text-green-800">קישור לחתימה</p>
               {links.map((link) => (
-                <div key={link.url} className="space-y-2">
-                  <p className="text-xs truncate text-muted-foreground" dir="ltr">{link.url}</p>
+                <div key={link.url} className="space-y-2 min-w-0">
+                  <p
+                    className="text-xs text-muted-foreground break-all whitespace-pre-wrap"
+                    dir="ltr"
+                  >
+                    {link.url}
+                  </p>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => handleCopy(link.url)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        await copySigningUrl(link.url);
+                        toast.success("הקישור הועתק");
+                      }}
+                    >
                       <Copy className="h-4 w-4 ml-1" />
                       העתק קישור
                     </Button>
@@ -307,33 +302,25 @@ export function SendSignatureDialog({
                   </div>
                 </div>
               ))}
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={async () => {
+                  await copyFirstSigningLink(links);
+                  toast.success("הקישור הועתק");
+                }}
+              >
+                <Copy className="h-4 w-4 ml-2" />
+                העתק קישור
+              </Button>
             </div>
           )}
-        </div>
 
-        <DialogFooter className="gap-2 sm:gap-0 flex-wrap">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {done ? "סגור" : "ביטול"}
+          <Button type="button" variant="ghost" className="w-full" onClick={() => onOpenChange(false)}>
+            סגור
           </Button>
-          {!done && (
-            <Button onClick={handlePrepareLink} disabled={!canSubmit || sending}>
-              <Link2 className="h-4 w-4 ml-2" />
-              {sending ? "מכין קישור..." : "קבל קישור לחתימה"}
-            </Button>
-          )}
-          {done && links[0] && (
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                await copyFirstSigningLink(links);
-                toast.success("הקישור הועתק");
-              }}
-            >
-              <Copy className="h-4 w-4 ml-2" />
-              העתק קישור
-            </Button>
-          )}
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -10,6 +10,7 @@ import {
   getFieldFontSizePx,
 } from "./signatureFieldTypes";
 import { SignatureDocumentViewer } from "./SignatureDocumentViewer";
+import type { SignatureMediaKind } from "./signatureDocumentMedia";
 
 export interface SignaturePosition {
   x: number;
@@ -27,6 +28,7 @@ interface RecipientInfo {
 
 interface SignatureFieldPlacerProps {
   fileUrl: string;
+  mediaKind?: SignatureMediaKind | null;
   recipients: RecipientInfo[];
   fields: DocumentField[];
   onFieldsChange: (fields: DocumentField[]) => void;
@@ -44,6 +46,7 @@ export function getRecipientColor(index: number) {
 
 export default function SignatureFieldPlacer({
   fileUrl,
+  mediaKind,
   recipients,
   fields,
   onFieldsChange,
@@ -136,9 +139,6 @@ export default function SignatureFieldPlacer({
     activeDragIdRef.current = fieldId;
     activeResizeIdRef.current = null;
     resizeStartRef.current = null;
-
-    const el = (e.currentTarget as HTMLElement);
-    el.setPointerCapture(e.pointerId);
   };
 
   const startResize = (e: React.PointerEvent, fieldId: string) => {
@@ -159,8 +159,6 @@ export default function SignatureFieldPlacer({
       fieldX: field.position.x,
       fieldY: field.position.y,
     };
-
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
 
   const handleContainerPointerDown = (e: React.PointerEvent) => {
@@ -190,16 +188,13 @@ export default function SignatureFieldPlacer({
       const rect = container.getBoundingClientRect();
 
       if (activeResizeIdRef.current && resizeStartRef.current) {
-        const dx = ((e.clientX - resizeStartRef.current.x) / rect.width) * 100;
-        const dy = ((e.clientY - resizeStartRef.current.y) / rect.height) * 100;
-        const newW = Math.max(
-          MIN_FIELD_WIDTH,
-          Math.min(95 - resizeStartRef.current.fieldX, resizeStartRef.current.w + dx),
-        );
-        const newH = Math.max(
-          MIN_FIELD_HEIGHT,
-          Math.min(50 - resizeStartRef.current.fieldY, resizeStartRef.current.h + dy),
-        );
+        const start = resizeStartRef.current;
+        const dx = ((e.clientX - start.x) / rect.width) * 100;
+        const dy = ((e.clientY - start.y) / rect.height) * 100;
+        const maxW = Math.max(MIN_FIELD_WIDTH, 100 - start.fieldX);
+        const maxH = Math.max(MIN_FIELD_HEIGHT, 100 - start.fieldY);
+        const newW = Math.max(MIN_FIELD_WIDTH, Math.min(maxW, start.w + dx));
+        const newH = Math.max(MIN_FIELD_HEIGHT, Math.min(maxH, start.h + dy));
 
         onFieldsChange(
           fieldsRef.current.map((f) =>
@@ -328,6 +323,7 @@ export default function SignatureFieldPlacer({
       <SignatureDocumentViewer
         ref={containerRef}
         fileUrl={fileUrl}
+        mediaKind={mediaKind}
         onHeightChange={setContainerHeight}
         onPointerDown={handleContainerPointerDown}
         onPointerUp={handleContainerPointerUp}
@@ -375,7 +371,7 @@ export default function SignatureFieldPlacer({
                   data-resize-handle
                   role="button"
                   aria-label="שינוי גודל"
-                  className="absolute -bottom-1.5 -right-1.5 w-5 h-5 bg-white border-2 rounded-sm cursor-se-resize z-40 shadow-sm hover:scale-110 transition-transform"
+                  className="absolute bottom-0 left-0 w-5 h-5 bg-white border-2 rounded-sm cursor-nesw-resize z-40 shadow-sm hover:scale-110 transition-transform translate-y-1/2 -translate-x-1/2"
                   style={{ borderColor: color }}
                   onPointerDown={(e) => startResize(e, f.id)}
                 />

@@ -83,9 +83,8 @@ export async function sendSignatureDocumentEmails(
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
-    .select('id, title, status')
+    .select('id, title, status, tenant_id')
     .eq('id', documentId)
-    .eq('tenant_id', tenantId)
     .maybeSingle();
   if (docError || !doc) throw new Error('מסמך חתימה לא נמצא');
 

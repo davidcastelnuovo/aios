@@ -16,6 +16,7 @@ import {
 } from "@/components/signatures/signatureFieldTypes";
 import { useSignatureDocumentUrl } from "@/hooks/useSignatureDocumentUrl";
 import { SignatureDocumentViewer } from "@/components/signatures/SignatureDocumentViewer";
+import { detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
 
 interface SignaturePosition {
   x: number;
@@ -70,10 +71,20 @@ export default function SignDocument() {
     if (!ctx) return;
     const rect = canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(2, 2);
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const nextW = Math.round(rect.width * dpr);
+    const nextH = Math.round(rect.height * dpr);
+    if (canvas.width === nextW && canvas.height === nextH) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 2;
+      return;
+    }
+    canvas.width = nextW;
+    canvas.height = nextH;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#000";
@@ -86,37 +97,71 @@ export default function SignDocument() {
   }, [recipient, useOverlay, setupCanvas]);
 
   useEffect(() => {
-    if (!useOverlay || !hasDocumentFields) return;
-    for (const field of myFields.filter((f) => f.type === "signature")) {
-      setupCanvas(signatureCanvasRefs.current[field.id]);
+    if (!useOverlay) return;
+    const ids = hasDocumentFields
+      ? myFields.filter((f) => f.type === "signature").map((f) => f.id)
+      : signaturePosition
+        ? ["legacy"]
+        : [];
+    for (const id of ids) {
+      const canvas = id === "legacy" ? canvasRef.current : signatureCanvasRefs.current[id];
+      setupCanvas(canvas);
     }
-  }, [useOverlay, hasDocumentFields, myFields, setupCanvas, docContainerHeight]);
 
-  const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
-    const rect = canvas.getBoundingClientRect();
-    if ("touches" in e) {
-      return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top,
-      };
+    const observers: ResizeObserver[] = [];
+    for (const id of ids) {
+      const canvas = id === "legacy" ? canvasRef.current : signatureCanvasRefs.current[id];
+      if (!canvas) continue;
+      const ro = new ResizeObserver(() => setupCanvas(canvas));
+      ro.observe(canvas);
+      observers.push(ro);
     }
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return () => observers.forEach((ro) => ro.disconnect());
+  }, [useOverlay, hasDocumentFields, myFields, setupCanvas, docContainerHeight, signaturePosition]);
+
+  const getPos = (
+    e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
+    canvas: HTMLCanvasElement,
+  ) => {
+    const rect = canvas.getBoundingClientRect();
+    const point =
+      "touches" in e && e.touches[0]
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: (e as React.PointerEvent).clientX, y: (e as React.PointerEvent).clientY };
+    return {
+      x: point.x - rect.left,
+      y: point.y - rect.top,
+    };
   };
 
-  const startDraw = (fieldId: string | null) => (e: React.MouseEvent | React.TouchEvent) => {
+  const startDraw = (fieldId: string | null) => (
+    e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
+  ) => {
     e.preventDefault();
+    e.stopPropagation();
     const canvas = fieldId
       ? signatureCanvasRefs.current[fieldId]
       : canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!ctx || !canvas) return;
+    if (!canvas) return;
+    setupCanvas(canvas);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    if ("pointerId" in e) {
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
     setIsDrawing(fieldId ?? "legacy");
     const pos = getPos(e, canvas);
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
   };
 
-  const draw = (fieldId: string | null) => (e: React.MouseEvent | React.TouchEvent) => {
+  const draw = (fieldId: string | null) => (
+    e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
+  ) => {
     e.preventDefault();
     if (isDrawing !== (fieldId ?? "legacy")) return;
     const canvas = fieldId
@@ -141,7 +186,11 @@ export default function SignDocument() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    setupCanvas(canvas);
     if (fieldId) {
       setSignatureFieldSigned((prev) => ({ ...prev, [fieldId]: false }));
     } else {
@@ -249,25 +298,23 @@ export default function SignDocument() {
       return (
         <div
           key={field.id}
-          className="absolute border-2 border-primary rounded bg-white/95 overflow-hidden"
+          className="absolute border-2 border-primary rounded bg-white/95 z-10"
           style={style}
         >
           <div
-            className="absolute top-0 right-0 bg-primary text-primary-foreground px-1 py-0.5 rounded-bl z-10"
+            className="absolute top-0 right-0 bg-primary text-primary-foreground px-1 py-0.5 rounded-bl z-10 pointer-events-none"
             style={{ fontSize: Math.max(8, fontSize - 2) }}
           >
             {field.label}
           </div>
           <canvas
             ref={(el) => { signatureCanvasRefs.current[field.id] = el; }}
-            className="w-full h-full cursor-crosshair touch-none"
-            onMouseDown={startDraw(field.id)}
-            onMouseMove={draw(field.id)}
-            onMouseUp={endDraw}
-            onMouseLeave={endDraw}
-            onTouchStart={startDraw(field.id)}
-            onTouchMove={draw(field.id)}
-            onTouchEnd={endDraw}
+            className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+            onPointerDown={startDraw(field.id)}
+            onPointerMove={draw(field.id)}
+            onPointerUp={endDraw}
+            onPointerLeave={endDraw}
+            onPointerCancel={endDraw}
           />
         </div>
       );
@@ -362,6 +409,7 @@ export default function SignDocument() {
             <CardContent>
               <SignatureDocumentViewer
                 fileUrl={docFileUrl}
+                mediaKind={detectMediaKind(doc?.file_url)}
                 loading={loadingDocFile}
                 error={!docFileUrl && !loadingDocFile ? "לא ניתן לטעון את המסמך" : null}
                 onHeightChange={setDocContainerHeight}
@@ -370,7 +418,7 @@ export default function SignDocument() {
                   ? myFields.map(renderFieldOverlay)
                   : signaturePosition && (
                     <div
-                      className="absolute border-2 border-primary rounded bg-white/90 overflow-hidden"
+                      className="absolute border-2 border-primary rounded bg-white/90 z-10"
                       style={{
                         left: `${signaturePosition.x}%`,
                         top: `${signaturePosition.y}%`,
@@ -378,19 +426,17 @@ export default function SignDocument() {
                         height: `${signaturePosition.height}%`,
                       }}
                     >
-                      <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-bl z-10">
+                      <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-bl z-10 pointer-events-none">
                         חתום כאן
                       </div>
                       <canvas
                         ref={canvasRef}
-                        className="w-full h-full cursor-crosshair touch-none"
-                        onMouseDown={startDraw(null)}
-                        onMouseMove={draw(null)}
-                        onMouseUp={endDraw}
-                        onMouseLeave={endDraw}
-                        onTouchStart={startDraw(null)}
-                        onTouchMove={draw(null)}
-                        onTouchEnd={endDraw}
+                        className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+                        onPointerDown={startDraw(null)}
+                        onPointerMove={draw(null)}
+                        onPointerUp={endDraw}
+                        onPointerLeave={endDraw}
+                        onPointerCancel={endDraw}
                       />
                     </div>
                   )}
@@ -454,13 +500,11 @@ export default function SignDocument() {
                     ref={canvasRef}
                     className="w-full cursor-crosshair touch-none"
                     style={{ height: "200px" }}
-                    onMouseDown={startDraw(null)}
-                    onMouseMove={draw(null)}
-                    onMouseUp={endDraw}
-                    onMouseLeave={endDraw}
-                    onTouchStart={startDraw(null)}
-                    onTouchMove={draw(null)}
-                    onTouchEnd={endDraw}
+                    onPointerDown={startDraw(null)}
+                    onPointerMove={draw(null)}
+                    onPointerUp={endDraw}
+                    onPointerLeave={endDraw}
+                    onPointerCancel={endDraw}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground text-center mt-2">

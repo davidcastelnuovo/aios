@@ -28,6 +28,8 @@ import { syncSignatureRecipientPosition, updateSignatureDocumentFields } from "@
 import { signatureDocumentStoragePath } from "@/lib/resolveSignatureDocumentUrl";
 import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureDocumentFieldEditor";
 import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
+import { mediaKindFromFile } from "@/components/signatures/signatureDocumentMedia";
+import { SignatureOriginalFileLink } from "@/components/signatures/SignatureOriginalFileLink";
 
 interface Recipient {
   name: string;
@@ -571,6 +573,7 @@ export default function Signatures() {
         <div className="flex-1 overflow-auto p-4">
           <SignatureFieldPlacer
             fileUrl={previewUrl}
+            mediaKind={createTab === "upload" ? mediaKindFromFile(uploadFile) : undefined}
             fullScreen
             recipients={recipientIndexForPlacement}
             fields={documentFields}
@@ -647,7 +650,7 @@ export default function Signatures() {
                     <Label>העלה קובץ (PDF, DOCX, תמונה)</Label>
                     <Input
                       type="file"
-                      accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
+                      accept=".pdf,.png,.jpg,.jpeg"
                       onChange={e => handleFileChange(e.target.files?.[0] || null)}
                       className="mt-1"
                     />
@@ -958,10 +961,15 @@ export default function Signatures() {
               {selectedDoc.document_type === "uploaded" && selectedDoc.file_url && (
                 <Card>
                   <CardContent className="p-4">
-                    <a href={selectedDoc.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
-                      <ExternalLink className="h-4 w-4" />
-                      צפה בקובץ המקורי
-                    </a>
+                    <SignatureOriginalFileLink fileUrl={selectedDoc.file_url} />
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedDoc.status === "completed" && !signedPdfUrl && (
+                <Card>
+                  <CardContent className="p-4 text-sm text-muted-foreground">
+                    המסמך סומן כחתום — PDF חתום עדיין לא זמין. רענן בעוד רגע.
                   </CardContent>
                 </Card>
               )}

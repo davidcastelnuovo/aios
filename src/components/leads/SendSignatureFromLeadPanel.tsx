@@ -327,11 +327,15 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
         onOpenChange={setSendDialogOpen}
         document={
           selectedSourceDoc
-            ? { id: selectedSourceDoc.id, title: selectedSourceDoc.title, is_template: true }
+            ? {
+                id: selectedSourceDoc.id,
+                title: selectedSourceDoc.title,
+                is_template: !!selectedSourceDoc.is_template,
+              }
             : null
         }
         tenantId={tenantId}
-        mode="template"
+        mode={selectedSourceDoc?.is_template ? "template" : "direct"}
         leadId={lead.id}
         documentTitleOverride={documentTitle.trim() || undefined}
         defaultRecipient={{

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import SignatureFieldPlacer, { getRecipientColor } from "@/components/signatures/SignatureFieldPlacer";
 import { type DocumentField } from "@/components/signatures/signatureFieldTypes";
 import { useSignatureDocumentUrl } from "@/hooks/useSignatureDocumentUrl";
+import { detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
 
 interface SignatureDocumentFieldEditorProps {
   title: string;
@@ -68,6 +69,7 @@ export function SignatureDocumentFieldEditor({
         {resolvedUrl && !loading && (
           <SignatureFieldPlacer
             fileUrl={resolvedUrl}
+            mediaKind={detectMediaKind(fileUrl)}
             fullScreen
             recipients={recipients}
             fields={fields}
