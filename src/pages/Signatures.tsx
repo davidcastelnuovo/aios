@@ -170,62 +170,102 @@ export default function Signatures() {
         fileUrl = documentUrl;
       }
 
-      // Create document
-      const { data: doc, error: docError } = await supabase
-        .from("signature_documents")
-        .insert({
-          tenant_id: tenantId,
-          title,
-          content: createTab === "create" ? content : null,
-          file_url: fileUrl,
-          document_type: docType,
-          status: "draft",
-          created_by: userId,
-          is_template: isTemplate,
-          template_name: isTemplate ? (templateName || title) : null,
-          document_fields: documentFields as any,
-        })
-        .select()
-        .single();
-      if (docError) throw docError;
+      const baseDoc = {
+        tenant_id: tenantId,
+        title,
+        content: createTab === "create" ? content : null,
+        file_url: fileUrl,
+        document_type: docType,
+        status: "draft",
+        created_by: userId,
+        is_template: isTemplate,
+        template_name: isTemplate ? (templateName || title) : null,
+      };
 
-      // Add recipients with positions (legacy signature_position from first signature field per recipient)
+      let doc: { id: string } | null = null;
+      let docError: { message: string } | null = null;
+
+      if (documentFields.length > 0) {
+        const res = await supabase
+          .from("signature_documents")
+          .insert({ ...baseDoc, document_fields: documentFields as any })
+          .select("id")
+          .single();
+        doc = res.data;
+        docError = res.error;
+      }
+
+      if (docError?.message?.includes("document_fields")) {
+        const res = await supabase.from("signature_documents").insert(baseDoc).select("id").single();
+        doc = res.data;
+        docError = res.error;
+      } else if (!doc && docError) {
+        throw docError;
+      }
+
+      if (!doc) {
+        const res = await supabase.from("signature_documents").insert(baseDoc).select("id").single();
+        if (res.error) throw res.error;
+        doc = res.data;
+      }
+
       const validRecipients = recipients.filter(r => r.name && r.email);
       if (validRecipients.length > 0) {
-        const { error: recError } = await supabase
-          .from("signature_recipients")
-          .insert(
-            validRecipients.map((r, i) => {
-              const sigField = documentFields.find(
-                (f) => f.type === "signature" && (f.recipient_index ?? 0) === i,
-              );
-              const position = sigField?.position ?? r.signaturePosition;
-              const fieldPrefill = buildFieldPrefill(documentFields, i, r);
-              return {
-                document_id: doc.id,
-                tenant_id: tenantId,
-                name: r.name,
-                email: r.email,
-                sign_order: i + 1,
-                signature_position: position as any,
-                field_values: fieldPrefill as any,
-              };
-            })
+        const rows = validRecipients.map((r, i) => {
+          const sigField = documentFields.find(
+            (f) => f.type === "signature" && (f.recipient_index ?? 0) === i,
           );
+          const position = sigField?.position ?? r.signaturePosition;
+          const fieldPrefill = buildFieldPrefill(documentFields, i, r);
+          return {
+            document_id: doc!.id,
+            tenant_id: tenantId,
+            name: r.name,
+            email: r.email,
+            sign_order: i + 1,
+            signature_position: position as any,
+            field_values: fieldPrefill as any,
+          };
+        });
+
+        let recError = (await supabase.from("signature_recipients").insert(rows)).error;
+        if (recError?.message?.includes("field_values")) {
+          recError = (await supabase.from("signature_recipients").insert(
+            rows.map(({ field_values: _fv, ...rest }) => rest),
+          )).error;
+        }
         if (recError) throw recError;
       }
 
-      return doc;
+      return { doc, isTemplate };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
-      toast.success("המסמך נוצר בהצלחה");
+    },
+    onError: (err: any) => toast.error("שגיאה: " + err.message),
+  });
+
+  const handleSaveOrSend = async () => {
+    try {
+      const result = await createMutation.mutateAsync();
+      const docId = result.doc.id;
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+
+      if (result.isTemplate) {
+        toast.success("התבנית נשמרה");
+      } else if (recipients.some((r) => r.name && r.email)) {
+        await sendMutation.mutateAsync(docId);
+      } else {
+        toast.success("נשמר כטיוטה");
+      }
+
       setShowPlacement(false);
       resetForm();
       setIsCreateOpen(false);
-    },
-    onError: (err: any) => toast.error("שגיאה ביצירת מסמך: " + err.message),
-  });
+    } catch {
+      // errors handled in mutations
+    }
+  };
 
   // Send for signing via edge function (email + audit)
   const sendMutation = useMutation({
@@ -325,7 +365,7 @@ export default function Signatures() {
 
   const previewUrl = getPreviewUrl();
   const hasValidRecipients = recipients.some(r => r.name && r.email);
-  const canShowPlacement = (createTab === "upload" || createTab === "url") && previewUrl && hasValidRecipients;
+  const canShowPlacement = (createTab === "upload" || createTab === "url") && previewUrl && (isTemplate || hasValidRecipients);
 
   const getSigningLink = (token: string) => {
     return `${window.location.origin}/sign/${token}`;
@@ -341,7 +381,13 @@ export default function Signatures() {
     const placementCanCreate =
       !!title.trim() &&
       !createMutation.isPending &&
-      (createTab === "upload" ? !!uploadFile : createTab === "url" ? !!documentUrl : !!content);
+      !sendMutation.isPending &&
+      (createTab === "upload" ? !!uploadFile : createTab === "url" ? !!documentUrl : !!content) &&
+      (isTemplate || hasValidRecipients);
+
+    const placementActionLabel = isTemplate
+      ? (createMutation.isPending ? "שומר..." : "שמור תבנית")
+      : (createMutation.isPending || sendMutation.isPending ? "שולח..." : "שלח לחתימה");
 
     return (
       <div className="fixed inset-0 z-50 bg-background flex flex-col" dir="rtl">
@@ -366,10 +412,10 @@ export default function Signatures() {
                 חזור
               </Button>
               <Button
-                onClick={() => createMutation.mutate()}
+                onClick={() => handleSaveOrSend()}
                 disabled={!placementCanCreate}
               >
-                {createMutation.isPending ? "יוצר..." : "צור מסמך"}
+                {placementActionLabel}
               </Button>
             </div>
             {!title.trim() && (
@@ -560,16 +606,33 @@ export default function Signatures() {
                   </Button>
                 )}
                 <Button
-                  onClick={() => createMutation.mutate()}
+                  onClick={async () => {
+                    try {
+                      const result = await createMutation.mutateAsync();
+                      if (!result.isTemplate && recipients.some((r) => r.name && r.email)) {
+                        await sendMutation.mutateAsync(result.doc.id);
+                      } else if (result.isTemplate) {
+                        toast.success("התבנית נשמרה");
+                      } else {
+                        toast.success("נשמר כטיוטה");
+                      }
+                      resetForm();
+                      setIsCreateOpen(false);
+                    } catch { /* toast in mutation */ }
+                  }}
                   disabled={
                     !title ||
                     createMutation.isPending ||
+                    sendMutation.isPending ||
                     (createTab === "create" && !content) ||
                     (createTab === "upload" && !uploadFile) ||
-                    (createTab === "url" && !documentUrl)
+                    (createTab === "url" && !documentUrl) ||
+                    (!isTemplate && !hasValidRecipients)
                   }
                 >
-                  {createMutation.isPending ? "יוצר..." : "צור מסמך"}
+                  {isTemplate
+                    ? (createMutation.isPending ? "שומר..." : "שמור תבנית")
+                    : (createMutation.isPending || sendMutation.isPending ? "שולח..." : "שלח לחתימה")}
                 </Button>
               </div>
             </div>

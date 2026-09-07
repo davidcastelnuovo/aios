@@ -7039,6 +7039,9 @@ export type Database = {
           file_url: string | null
           id: string
           is_template: boolean
+          lead_id: string | null
+          client_id: string | null
+          saved_to_entity_at: string | null
           signed_file_url: string | null
           status: string
           tenant_id: string
@@ -7056,6 +7059,9 @@ export type Database = {
           file_url?: string | null
           id?: string
           is_template?: boolean
+          lead_id?: string | null
+          client_id?: string | null
+          saved_to_entity_at?: string | null
           signed_file_url?: string | null
           status?: string
           tenant_id: string
@@ -7073,6 +7079,9 @@ export type Database = {
           file_url?: string | null
           id?: string
           is_template?: boolean
+          lead_id?: string | null
+          client_id?: string | null
+          saved_to_entity_at?: string | null
           signed_file_url?: string | null
           status?: string
           tenant_id?: string

@@ -197,6 +197,8 @@ export async function cloneSignatureFromTemplate(
     recipientName: string;
     recipientEmail: string;
     documentTitle?: string;
+    leadId?: string;
+    clientId?: string;
     contactDetails?: {
       firstName?: string;
       lastName?: string;
@@ -213,6 +215,8 @@ export async function cloneSignatureFromTemplate(
     recipientName,
     recipientEmail,
     documentTitle,
+    leadId,
+    clientId,
     contactDetails,
   } = opts;
 
@@ -249,6 +253,8 @@ export async function cloneSignatureFromTemplate(
       created_by: createdBy,
       is_template: false,
       document_fields: template.document_fields ?? [],
+      lead_id: leadId ?? null,
+      client_id: clientId ?? null,
     })
     .select('id')
     .single();
@@ -269,4 +275,71 @@ export async function cloneSignatureFromTemplate(
   if (recError) throw recError;
 
   return doc.id;
+}
+
+function safeStorageFileName(title: string): string {
+  const base = title.replace(/[/\\]/g, '_').replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').slice(0, 40);
+  return (base || 'signed_document') + '.pdf';
+}
+
+export async function saveSignedPdfToEntity(
+  supabase: SupabaseClient,
+  opts: {
+    documentId: string;
+    tenantId: string;
+    signedStoragePath: string;
+    title: string;
+    leadId?: string | null;
+    clientId?: string | null;
+  },
+): Promise<boolean> {
+  const { documentId, tenantId, signedStoragePath, title, leadId, clientId } = opts;
+  if (!leadId && !clientId) return false;
+
+  const { data: fileData, error: downloadError } = await supabase.storage
+    .from('signature-documents')
+    .download(signedStoragePath);
+  if (downloadError || !fileData) throw downloadError || new Error('failed_to_download_signed_pdf');
+
+  const entityType = leadId ? 'lead' : 'client';
+  const entityId = leadId || clientId!;
+  const attachPath = `${tenantId}/${entityType}/${entityId}/${Date.now()}_${safeStorageFileName(title)}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('entity-attachments')
+    .upload(attachPath, fileData, { contentType: 'application/pdf', upsert: false });
+  if (uploadError) throw uploadError;
+
+  const newAttachment = {
+    name: `${title} (חתום).pdf`,
+    path: attachPath,
+    type: 'application/pdf',
+    size: fileData.size,
+    uploaded_at: new Date().toISOString(),
+  };
+
+  const table = leadId ? 'leads' : 'clients';
+  const { data: entity, error: entityError } = await supabase
+    .from(table)
+    .select('attachments')
+    .eq('id', entityId)
+    .maybeSingle();
+  if (entityError || !entity) throw entityError || new Error('entity_not_found');
+
+  const existing = Array.isArray(entity.attachments) ? entity.attachments : [];
+  const { error: updateError } = await supabase
+    .from(table)
+    .update({
+      attachments: [...existing, newAttachment],
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', entityId);
+  if (updateError) throw updateError;
+
+  await supabase
+    .from('signature_documents')
+    .update({ saved_to_entity_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', documentId);
+
+  return true;
 }

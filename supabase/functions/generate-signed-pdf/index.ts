@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 import { corsHeaders } from '../_shared/cors.ts';
+import { saveSignedPdfToEntity } from '../_shared/signature-automation.ts';
 
 interface SignaturePosition {
   x: number;
@@ -229,7 +230,7 @@ Deno.serve(async (req) => {
 
     const { data: doc, error: docError } = await supabase
       .from('signature_documents')
-      .select('id, title, content, file_url, document_type, tenant_id, status, document_fields')
+      .select('id, title, content, file_url, document_type, tenant_id, status, document_fields, lead_id, client_id, saved_to_entity_at')
       .eq('id', documentId)
       .maybeSingle();
 
@@ -272,6 +273,21 @@ Deno.serve(async (req) => {
       _ip: null,
       _metadata: { path: storagePath },
     });
+
+    if (!doc.saved_to_entity_at && (doc.lead_id || doc.client_id)) {
+      try {
+        await saveSignedPdfToEntity(supabase, {
+          documentId,
+          tenantId: doc.tenant_id,
+          signedStoragePath: storagePath,
+          title: doc.title,
+          leadId: doc.lead_id,
+          clientId: doc.client_id,
+        });
+      } catch (saveErr) {
+        console.error('[generate-signed-pdf] entity save failed', saveErr);
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true, path: storagePath }),

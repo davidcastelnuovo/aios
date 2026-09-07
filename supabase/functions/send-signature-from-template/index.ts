@@ -18,6 +18,8 @@ interface SendSignatureFromTemplateBody {
     address?: string;
     idNumber?: string;
   };
+  leadId?: string;
+  clientId?: string;
 }
 
 Deno.serve(async (req) => {
@@ -48,6 +50,8 @@ Deno.serve(async (req) => {
       documentTitle,
       baseUrl,
       contactDetails,
+      leadId,
+      clientId,
     } = body;
 
     if (!templateDocumentId || !recipientName?.trim() || !recipientEmail?.trim()) {
@@ -72,6 +76,8 @@ Deno.serve(async (req) => {
       recipientEmail: recipientEmail.trim(),
       documentTitle: documentTitle?.trim() || undefined,
       contactDetails,
+      leadId,
+      clientId,
     });
 
     let senderName: string | undefined;
