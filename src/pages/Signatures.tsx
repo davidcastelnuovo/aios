@@ -24,6 +24,7 @@ import SignatureContactPicker from "@/components/signatures/SignatureContactPick
 import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
 import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
+import { signatureDocumentStoragePath } from "@/lib/resolveSignatureDocumentUrl";
 import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureDocumentFieldEditor";
 import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
 
@@ -186,16 +187,12 @@ export default function Signatures() {
       if (createTab === "upload" && uploadFile) {
         docType = "uploaded";
         const safeName = sanitizeFileName(uploadFile.name);
-        const filePath = `${tenantId}/${Date.now()}_${safeName}`;
+        const filePath = signatureDocumentStoragePath(tenantId, safeName);
         const { error: uploadError } = await supabase.storage
           .from("signature-documents")
           .upload(filePath, uploadFile);
         if (uploadError) throw uploadError;
-        
-        const { data: urlData } = supabase.storage
-          .from("signature-documents")
-          .getPublicUrl(filePath);
-        fileUrl = urlData.publicUrl;
+        fileUrl = filePath;
       } else if (createTab === "url" && documentUrl) {
         docType = "uploaded";
         fileUrl = documentUrl;

@@ -14,6 +14,7 @@ import {
   getFieldLabel,
   getFieldFontSizePx,
 } from "@/components/signatures/signatureFieldTypes";
+import { useSignatureDocumentUrl } from "@/hooks/useSignatureDocumentUrl";
 
 interface SignaturePosition {
   x: number;
@@ -55,12 +56,13 @@ export default function SignDocument() {
   }, [recipient?.field_values]);
 
   const doc = recipient?.signature_documents as any;
+  const { resolvedUrl: docFileUrl, loading: loadingDocFile } = useSignatureDocumentUrl(doc?.file_url);
   const signaturePosition = recipient?.signature_position as unknown as SignaturePosition | null;
   const recipientIndex = Math.max(0, (recipient?.sign_order ?? 1) - 1);
   const allDocFields = parseDocumentFields(doc?.document_fields);
   const myFields = allDocFields.filter((f) => (f.recipient_index ?? 0) === recipientIndex);
   const hasDocumentFields = myFields.length > 0;
-  const useOverlay = !!doc?.file_url && (hasDocumentFields || !!signaturePosition);
+  const useOverlay = !!docFileUrl && (hasDocumentFields || !!signaturePosition);
 
   const setupCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
     if (!canvas) return;
@@ -98,7 +100,7 @@ export default function SignDocument() {
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [doc?.file_url, useOverlay]);
+  }, [docFileUrl, useOverlay]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
@@ -369,10 +371,14 @@ export default function SignDocument() {
             </CardHeader>
             <CardContent>
               <div className="relative" ref={docContainerRef}>
-                {/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(doc.file_url) ? (
-                  <img src={doc.file_url} alt="Document" className="w-full h-auto rounded" />
+                {loadingDocFile ? (
+                  <p className="text-center text-muted-foreground py-12">טוען מסמך...</p>
+                ) : !docFileUrl ? (
+                  <p className="text-center text-destructive py-12">לא ניתן לטעון את המסמך</p>
+                ) : /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(docFileUrl) ? (
+                  <img src={docFileUrl} alt="Document" className="w-full h-auto rounded" />
                 ) : (
-                  <iframe src={doc.file_url} className="w-full border-0 rounded" style={{ height: 700 }} title="Document" />
+                  <iframe src={docFileUrl} className="w-full border-0 rounded" style={{ height: 700 }} title="Document" />
                 )}
 
                 {hasDocumentFields

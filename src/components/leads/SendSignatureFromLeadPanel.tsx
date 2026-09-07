@@ -17,6 +17,7 @@ import { splitContactName } from "@/components/signatures/signatureContactUtils"
 import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
 import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
+import { signatureDocumentStoragePath } from "@/lib/resolveSignatureDocumentUrl";
 import { Pencil } from "lucide-react";
 import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
 
@@ -100,17 +101,16 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
       if (!newDocTitle.trim()) throw new Error("הזן שם למסמך");
 
       const safeName = sanitizeFileName(uploadFile.name);
-      const filePath = `${tenantId}/${Date.now()}_${safeName}`;
+      const filePath = signatureDocumentStoragePath(tenantId, safeName);
       const { error: uploadError } = await supabase.storage
         .from("signature-documents")
         .upload(filePath, uploadFile);
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from("signature-documents").getPublicUrl(filePath);
       const doc = await insertSignatureDocument({
         tenant_id: tenantId,
         title: newDocTitle.trim(),
-        file_url: urlData.publicUrl,
+        file_url: filePath,
         document_type: "uploaded",
         status: "draft",
         created_by: userId,

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import SignatureFieldPlacer, { getRecipientColor } from "@/components/signatures/SignatureFieldPlacer";
 import { type DocumentField } from "@/components/signatures/signatureFieldTypes";
+import { useSignatureDocumentUrl } from "@/hooks/useSignatureDocumentUrl";
 
 interface SignatureDocumentFieldEditorProps {
   title: string;
@@ -21,6 +22,7 @@ export function SignatureDocumentFieldEditor({
   onClose,
 }: SignatureDocumentFieldEditorProps) {
   const [fields, setFields] = useState<DocumentField[]>(initialFields);
+  const { resolvedUrl, loading, error } = useSignatureDocumentUrl(fileUrl);
 
   const recipients = [{ index: 0, name: "חותם", color: getRecipientColor(0) }];
 
@@ -41,13 +43,24 @@ export function SignatureDocumentFieldEditor({
         </div>
       </div>
       <div className="flex-1 overflow-auto p-4">
-        <SignatureFieldPlacer
-          fileUrl={fileUrl}
-          fullScreen
-          recipients={recipients}
-          fields={fields}
-          onFieldsChange={setFields}
-        />
+        {loading && (
+          <p className="text-center text-muted-foreground py-12">טוען מסמך...</p>
+        )}
+        {error && !loading && (
+          <div className="text-center py-12 space-y-2">
+            <p className="text-destructive">{error}</p>
+            <p className="text-sm text-muted-foreground">נסה להעלות את המסמך מחדש</p>
+          </div>
+        )}
+        {resolvedUrl && !loading && (
+          <SignatureFieldPlacer
+            fileUrl={resolvedUrl}
+            fullScreen
+            recipients={recipients}
+            fields={fields}
+            onFieldsChange={setFields}
+          />
+        )}
       </div>
     </div>
   );
