@@ -1431,6 +1431,7 @@ Deno.serve(async (req) => {
       }
     }
 
+    payloadData = await enrichLeadPayloadData(supabase, payloadData || {})
 
     // Execute each matching automation
     const results = await Promise.allSettled(
@@ -2661,6 +2662,49 @@ async function resolveAutomationEmailFrom(
     : (domainRow.from_name || null)
 
   return { fromEmail, fromName }
+}
+
+// Fill lead fields from DB when trigger payload omitted them (e.g. webhook lead_created).
+async function enrichLeadPayloadData(
+  supabase: any,
+  data: Record<string, any>,
+): Promise<Record<string, any>> {
+  const leadId = data?.lead_id || data?.id
+  if (!leadId) return data
+
+  const isBlank = (value: unknown) => value == null || String(value).trim() === ''
+  const needsNotes = isBlank(data.notes)
+  const needsEmail = isBlank(data.email)
+  const needsContact = isBlank(data.contact_name)
+  const needsPhone = isBlank(data.phone)
+  const needsCompany = isBlank(data.company_name)
+
+  if (!needsNotes && !needsEmail && !needsContact && !needsPhone && !needsCompany) {
+    return data
+  }
+
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('id, notes, email, contact_name, phone, company_name, source, status, campaign_name, agency_id')
+    .eq('id', leadId)
+    .maybeSingle()
+
+  if (!lead) return data
+
+  return {
+    ...data,
+    lead_id: data.lead_id || lead.id,
+    id: data.id || lead.id,
+    ...(needsNotes && lead.notes ? { notes: lead.notes } : {}),
+    ...(needsEmail && lead.email ? { email: lead.email } : {}),
+    ...(needsContact && lead.contact_name ? { contact_name: lead.contact_name } : {}),
+    ...(needsPhone && lead.phone ? { phone: lead.phone } : {}),
+    ...(needsCompany && lead.company_name ? { company_name: lead.company_name } : {}),
+    ...(data.source == null && lead.source ? { source: lead.source } : {}),
+    ...(data.status == null && lead.status ? { status: lead.status } : {}),
+    ...(data.campaign_name == null && lead.campaign_name ? { campaign_name: lead.campaign_name } : {}),
+    ...(data.agency_id == null && lead.agency_id ? { agency_id: lead.agency_id } : {}),
+  }
 }
 
 // Execute email action via Resend

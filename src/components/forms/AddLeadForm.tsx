@@ -245,6 +245,7 @@ export function AddLeadForm() {
                 contact_name: data.contact_name,
                 phone: data.phone,
                 email: data.email,
+                notes: data.notes,
                 status: data.status,
                 source: data.source,
                 agency_id: data.agency_id,
