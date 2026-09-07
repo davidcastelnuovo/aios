@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { X, MousePointer2, Crosshair } from "lucide-react";
+import { X, Crosshair } from "lucide-react";
 import {
   type DocumentField,
   type SignatureFieldType,
@@ -33,7 +33,7 @@ interface SignatureFieldPlacerProps {
 }
 
 const COLORS = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899"];
-const DRAG_THRESHOLD_PX = 6;
+const DRAG_THRESHOLD_PX = 4;
 const MIN_FIELD_WIDTH = 8;
 const MIN_FIELD_HEIGHT = 2.5;
 
@@ -56,9 +56,11 @@ export default function SignatureFieldPlacer({
   const [selectedType, setSelectedType] = useState<SignatureFieldType | null>(null);
   const [selectedRecipient, setSelectedRecipient] = useState(0);
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [resizingId, setResizingId] = useState<string | null>(null);
+  const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null);
+
   const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const activeDragIdRef = useRef<string | null>(null);
+  const activeResizeIdRef = useRef<string | null>(null);
   const resizeStartRef = useRef<{ x: number; y: number; w: number; h: number; fieldX: number; fieldY: number } | null>(null);
   const placePointerRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -75,15 +77,15 @@ export default function SignatureFieldPlacer({
     return () => ro.disconnect();
   }, [fileUrl, fullScreen]);
 
-  const exitPlacingMode = () => setSelectedType(null);
-
   const getRecipientColorForField = (recipientIndex = 0) =>
     recipients.find((r) => r.index === recipientIndex)?.color ?? getRecipientColor(recipientIndex);
 
   const toggleFieldType = (type: SignatureFieldType) => {
     setSelectedType((prev) => (prev === type ? null : type));
-    setSelectedFieldId(null);
   };
+
+  const isFieldTarget = (target: EventTarget | null) =>
+    target instanceof HTMLElement && !!target.closest("[data-sig-field]");
 
   const placeFieldAt = useCallback(
     (clientX: number, clientY: number) => {
@@ -111,31 +113,15 @@ export default function SignatureFieldPlacer({
 
       onFieldsChange([...fieldsRef.current, field]);
       setSelectedFieldId(field.id);
-      setSelectedType(null);
     },
     [selectedType, selectedRecipient, onFieldsChange],
   );
 
-  const handleOverlayMouseDown = (e: React.MouseEvent) => {
-    if (!isPlacing) return;
-    placePointerRef.current = { x: e.clientX, y: e.clientY };
-  };
+  const startDrag = (e: React.PointerEvent, fieldId: string) => {
+    if ((e.target as HTMLElement).closest("[data-resize-handle]")) return;
 
-  const handleOverlayMouseUp = (e: React.MouseEvent) => {
-    if (!isPlacing || draggingId) return;
-    const start = placePointerRef.current;
-    placePointerRef.current = null;
-    if (!start) return;
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-    if (Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) return;
-    placeFieldAt(e.clientX, e.clientY);
-  };
-
-  const handleFieldPointerDown = (e: React.PointerEvent, fieldId: string) => {
     e.stopPropagation();
     e.preventDefault();
-    exitPlacingMode();
     setSelectedFieldId(fieldId);
 
     const container = containerRef.current;
@@ -147,19 +133,24 @@ export default function SignatureFieldPlacer({
       x: e.clientX - rect.left - (field.position.x / 100) * rect.width,
       y: e.clientY - rect.top - (field.position.y / 100) * rect.height,
     };
-    setDraggingId(fieldId);
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    activeDragIdRef.current = fieldId;
+    activeResizeIdRef.current = null;
+    resizeStartRef.current = null;
+
+    const el = (e.currentTarget as HTMLElement);
+    el.setPointerCapture(e.pointerId);
   };
 
-  const handleResizePointerDown = (e: React.PointerEvent, fieldId: string) => {
+  const startResize = (e: React.PointerEvent, fieldId: string) => {
     e.stopPropagation();
     e.preventDefault();
-    exitPlacingMode();
+    setSelectedFieldId(fieldId);
+
     const field = fieldsRef.current.find((f) => f.id === fieldId);
     if (!field) return;
 
-    setSelectedFieldId(fieldId);
-    setResizingId(fieldId);
+    activeResizeIdRef.current = fieldId;
+    activeDragIdRef.current = null;
     resizeStartRef.current = {
       x: e.clientX,
       y: e.clientY,
@@ -168,20 +159,37 @@ export default function SignatureFieldPlacer({
       fieldX: field.position.x,
       fieldY: field.position.y,
     };
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleContainerPointerDown = (e: React.PointerEvent) => {
+    if (isFieldTarget(e.target)) return;
+    if (!isPlacing) {
+      setSelectedFieldId(null);
+      return;
+    }
+    placePointerRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleContainerPointerUp = (e: React.PointerEvent) => {
+    if (!isPlacing || isFieldTarget(e.target)) return;
+    const start = placePointerRef.current;
+    placePointerRef.current = null;
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) return;
+    placeFieldAt(e.clientX, e.clientY);
   };
 
   useEffect(() => {
-    if (!draggingId && !resizingId) return;
-
     const onPointerMove = (e: PointerEvent) => {
       const container = containerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
 
-      if (resizingId && resizeStartRef.current) {
-        const field = fieldsRef.current.find((f) => f.id === resizingId);
-        if (!field) return;
+      if (activeResizeIdRef.current && resizeStartRef.current) {
         const dx = ((e.clientX - resizeStartRef.current.x) / rect.width) * 100;
         const dy = ((e.clientY - resizeStartRef.current.y) / rect.height) * 100;
         const newW = Math.max(
@@ -195,7 +203,7 @@ export default function SignatureFieldPlacer({
 
         onFieldsChange(
           fieldsRef.current.map((f) =>
-            f.id === resizingId
+            f.id === activeResizeIdRef.current
               ? { ...f, position: { ...f.position, width: newW, height: newH } }
               : f,
           ),
@@ -203,8 +211,8 @@ export default function SignatureFieldPlacer({
         return;
       }
 
-      if (!draggingId) return;
-      const field = fieldsRef.current.find((f) => f.id === draggingId);
+      if (!activeDragIdRef.current) return;
+      const field = fieldsRef.current.find((f) => f.id === activeDragIdRef.current);
       if (!field) return;
 
       const xPct = ((e.clientX - rect.left - dragOffsetRef.current.x) / rect.width) * 100;
@@ -212,7 +220,7 @@ export default function SignatureFieldPlacer({
 
       onFieldsChange(
         fieldsRef.current.map((f) =>
-          f.id === draggingId
+          f.id === activeDragIdRef.current
             ? {
                 ...f,
                 position: {
@@ -227,18 +235,20 @@ export default function SignatureFieldPlacer({
     };
 
     const onPointerUp = () => {
-      setDraggingId(null);
-      setResizingId(null);
+      activeDragIdRef.current = null;
+      activeResizeIdRef.current = null;
       resizeStartRef.current = null;
     };
 
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
     return () => {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
     };
-  }, [draggingId, resizingId, onFieldsChange]);
+  }, [onFieldsChange]);
 
   const removeField = (id: string) => {
     onFieldsChange(fieldsRef.current.filter((f) => f.id !== id));
@@ -250,25 +260,16 @@ export default function SignatureFieldPlacer({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border bg-muted/40">
-        <Button
-          type="button"
-          size="sm"
-          variant={!isPlacing ? "default" : "outline"}
-          onClick={() => { exitPlacingMode(); setSelectedFieldId(null); }}
-        >
-          <MousePointer2 className="h-4 w-4 ml-1" />
-          בחירה / הזזה
-        </Button>
-        {isPlacing && (
+        {isPlacing ? (
           <span className="text-sm text-primary font-medium flex items-center gap-1">
             <Crosshair className="h-4 w-4" />
-            מצב הצבה: {getFieldLabel(selectedType!)}
+            מצב הצבה: {getFieldLabel(selectedType!)} — לחץ על מקום ריק להוספה, או גרור שדה קיים
           </span>
+        ) : (
+          <span className="text-sm text-muted-foreground">בחר סוג שדה להוספה, או גרור שדה קיים לשינוי מיקום</span>
         )}
         <span className="text-xs text-muted-foreground mr-auto">
-          {isPlacing
-            ? "לחץ על המסמך להוספת שדה — אחרי ההצבה אפשר לגרור ולשנות גודל."
-            : "לחץ על שדה לבחירה · גרור להזזה · גרור הפינה לשינוי גודל"}
+          גרור שדה להזזה · פינה ימנית-תחתונה לשינוי גודל
         </span>
       </div>
 
@@ -313,7 +314,7 @@ export default function SignatureFieldPlacer({
               className={`flex items-center gap-1 text-xs border rounded px-2 py-1 transition-colors ${
                 selectedFieldId === f.id ? "border-primary bg-primary/10" : ""
               }`}
-              onClick={() => { exitPlacingMode(); setSelectedFieldId(f.id); }}
+              onClick={() => setSelectedFieldId(f.id)}
             >
               <div className="w-2 h-2 rounded" style={{ backgroundColor: getRecipientColorForField(f.recipient_index) }} />
               <span>{f.label}</span>
@@ -328,12 +329,11 @@ export default function SignatureFieldPlacer({
 
       <div
         ref={containerRef}
-        className="relative border-2 border-dashed border-border rounded-lg bg-white select-none touch-none"
-        onPointerDown={(e) => {
-          if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === "IMG") {
-            if (!isPlacing) setSelectedFieldId(null);
-          }
-        }}
+        className={`relative border-2 border-dashed border-border rounded-lg bg-white select-none touch-none ${
+          isPlacing ? "cursor-crosshair" : ""
+        }`}
+        onPointerDown={handleContainerPointerDown}
+        onPointerUp={handleContainerPointerUp}
       >
         {isImage ? (
           <img src={fileUrl} alt="Document" className="w-full h-auto block pointer-events-none" draggable={false} />
@@ -346,24 +346,19 @@ export default function SignatureFieldPlacer({
           />
         )}
 
-        {isPlacing && (
-          <div
-            className="absolute inset-0 z-[5] cursor-crosshair"
-            onMouseDown={handleOverlayMouseDown}
-            onMouseUp={handleOverlayMouseUp}
-          />
-        )}
-
         {fields.map((f) => {
           const color = getRecipientColorForField(f.recipient_index);
           const fontSize = getFieldFontSizePx(f.position, containerHeight);
           const isSelected = selectedFieldId === f.id;
+          const isHovered = hoveredFieldId === f.id;
+          const showResize = isSelected || isHovered;
 
           return (
             <div
               key={f.id}
+              data-sig-field={f.id}
               className={`absolute border-2 rounded flex items-center justify-center font-medium group z-10 cursor-move touch-none ${
-                isSelected ? "ring-2 ring-offset-1" : ""
+                isSelected ? "ring-2 ring-offset-1" : isHovered ? "ring-1 ring-offset-1" : ""
               }`}
               style={{
                 left: `${f.position.x}%`,
@@ -371,12 +366,13 @@ export default function SignatureFieldPlacer({
                 width: `${f.position.width}%`,
                 height: `${f.position.height}%`,
                 borderColor: color,
-                backgroundColor: `${color}33`,
+                backgroundColor: `${color}44`,
                 boxShadow: isSelected ? `0 0 0 2px ${color}` : undefined,
-                zIndex: draggingId === f.id || resizingId === f.id ? 20 : isSelected ? 15 : 10,
+                zIndex: isSelected || isHovered ? 20 : 10,
               }}
-              onPointerDown={(e) => handleFieldPointerDown(e, f.id)}
-              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => startDrag(e, f.id)}
+              onPointerEnter={() => setHoveredFieldId(f.id)}
+              onPointerLeave={() => setHoveredFieldId((id) => (id === f.id ? null : id))}
             >
               <span
                 style={{ color, fontSize }}
@@ -384,17 +380,21 @@ export default function SignatureFieldPlacer({
               >
                 {f.type === "signature" ? "✍ " : ""}{getFieldLabel(f.type)}
               </span>
-              {isSelected && (
+
+              {showResize && (
                 <div
-                  className="absolute bottom-0 left-0 w-4 h-4 bg-white border-2 rounded-sm cursor-se-resize z-30 touch-none"
-                  style={{ borderColor: color, transform: "translate(-35%, 35%)" }}
-                  onPointerDown={(e) => handleResizePointerDown(e, f.id)}
-                  title="גרור לשינוי גודל"
+                  data-resize-handle
+                  role="button"
+                  aria-label="שינוי גודל"
+                  className="absolute -bottom-1.5 -right-1.5 w-5 h-5 bg-white border-2 rounded-sm cursor-se-resize z-40 shadow-sm hover:scale-110 transition-transform"
+                  style={{ borderColor: color }}
+                  onPointerDown={(e) => startResize(e, f.id)}
                 />
               )}
+
               <button
                 type="button"
-                className="absolute -top-2 -left-2 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-30"
+                className="absolute -top-2 -left-2 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-40"
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
