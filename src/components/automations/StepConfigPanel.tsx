@@ -99,7 +99,7 @@ export const TRIGGER_CATEGORIES = [
   {
     label: "🔗 אינטגרציות",
     options: [
-      { value: "inbound_webhook_task",     label: "Webhook נכנס" },
+      { value: "inbound_webhook_task",     label: "Webhook נכנס (ספציפי לאוטומציה)" },
       { value: "inbound_webhook_lead",     label: "Webhook ליד (ללא יצירה ב-CRM)" },
       { value: "facebook_lead_form",       label: "טופס ליד פייסבוק" },
       { value: "instagram_message",        label: "הודעת אינסטגרם" },
@@ -166,6 +166,19 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
         { key: "client_phone", label: "טלפון הלקוח המקבל" },
         { key: "client_email", label: "אימייל הלקוח המקבל" },
         { key: "form_qa_summary", label: "כל שאלות ותשובות הסינון" },
+      ];
+      break;
+    case "inbound_webhook_task":
+      fields = [
+        { key: "title", label: "כותרת" },
+        { key: "notes", label: "הערות / תיאור" },
+        { key: "status", label: "סטטוס" },
+        { key: "contact_name", label: "שם איש קשר" },
+        { key: "phone", label: "טלפון" },
+        { key: "email", label: "אימייל" },
+        { key: "client_name", label: "שם לקוח" },
+        { key: "client_phone", label: "טלפון לקוח" },
+        { key: "external_id", label: "מזהה חיצוני" },
       ];
       break;
     case "facebook_lead_form":
@@ -661,13 +674,99 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
             </div>
           )}
 
-          {/* ── Webhook נכנס ── */}
+          {/* ── Webhook נכנס (per-automation, no CRM side effects) ── */}
           {node.step_type === "trigger" && node.action_type === "inbound_webhook_task" && (
-            <div className="space-y-2 bg-muted/50 p-3 rounded">
-              <p className="text-xs text-right text-muted-foreground">
-                האוטומציה תופעל בקריאה ל-Webhook הנכנס של המערכת.
-                כל הנתונים שיישלחו ב-payload יהיו זמינים כמשתנים בצעדים הבאים.
-              </p>
+            <div className="space-y-4 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3">
+              <div>
+                <p className="text-right text-xs font-semibold text-sky-700">
+                  Webhook ייעודי לאוטומציה זו
+                </p>
+                <p className="text-right text-xs text-muted-foreground">
+                  כל שדות ה-JSON יהיו זמינים בצעדים הבאים. לא נוצר ליד, משימה או רשומה אחרת ב-CRM.
+                </p>
+              </div>
+
+              {!node.configuration?.webhook_secret ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    const bytes = crypto.getRandomValues(new Uint8Array(24));
+                    const secret = Array.from(bytes)
+                      .map((byte) => byte.toString(16).padStart(2, "0"))
+                      .join("");
+                    handleConfigChange("webhook_secret", secret);
+                  }}
+                >
+                  יצירת כתובת Webhook מאובטחת
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <Label className="block text-right">Webhook URL</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      dir="ltr"
+                      className="font-mono text-[10px]"
+                      value={`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-flow-webhook?automation_id=${automationId || ""}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={async () => {
+                        const webhookUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-flow-webhook?automation_id=${automationId || ""}`;
+                        await navigator.clipboard.writeText(webhookUrl);
+                        toast({ title: "הועתק", description: "כתובת ה-Webhook הועתקה" });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Label className="block text-right">Header: x-webhook-secret</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      dir="ltr"
+                      type="password"
+                      className="font-mono text-[10px]"
+                      value={node.configuration.webhook_secret}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(node.configuration.webhook_secret);
+                        toast({ title: "הועתק", description: "סוד ה-Webhook הועתק" });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-right text-[11px] text-muted-foreground">
+                    שלח POST עם JSON חופשי. הסוד חייב להגיע ב-header `x-webhook-secret`, לא ב-URL.
+                    כל מפתח ב-JSON זמין כ-{'{{field_name}}'} בצעדים הבאים.
+                  </p>
+                  <details className="rounded-md border bg-background/70 p-2">
+                    <summary className="cursor-pointer text-right text-xs font-medium">
+                      הצג JSON לדוגמה
+                    </summary>
+                    <pre dir="ltr" className="mt-2 overflow-x-auto text-left text-[10px]">
+{`{
+  "external_id": "evt-123",
+  "title": "כותרת לדוגמה",
+  "notes": "תיאור חופשי",
+  "contact_name": "ישראל ישראלי",
+  "phone": "0501234567",
+  "email": "user@example.com",
+  "custom_field": "כל שדה נוסף עובר לפלוו"
+}`}
+                    </pre>
+                  </details>
+                </div>
+              )}
             </div>
           )}
 

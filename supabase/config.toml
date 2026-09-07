@@ -139,6 +139,9 @@ verify_jwt = false
 [functions.automation-lead-webhook]
 verify_jwt = false
 
+[functions.automation-flow-webhook]
+verify_jwt = false
+
 [functions.webhook-task-intake]
 verify_jwt = false
 

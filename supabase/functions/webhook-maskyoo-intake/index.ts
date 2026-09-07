@@ -367,6 +367,7 @@ Deno.serve(async (req) => {
             status: lead.status,
             agency_id: lead.agency_id,
             email: lead.email || null,
+            notes: lead.notes || null,
           }
         }
       })
