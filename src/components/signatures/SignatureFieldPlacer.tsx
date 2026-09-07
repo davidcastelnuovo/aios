@@ -29,6 +29,7 @@ interface RecipientInfo {
 interface SignatureFieldPlacerProps {
   fileUrl: string;
   mediaKind?: SignatureMediaKind | null;
+  forcePdf?: boolean;
   recipients: RecipientInfo[];
   fields: DocumentField[];
   onFieldsChange: (fields: DocumentField[]) => void;
@@ -47,6 +48,7 @@ export function getRecipientColor(index: number) {
 export default function SignatureFieldPlacer({
   fileUrl,
   mediaKind,
+  forcePdf,
   recipients,
   fields,
   onFieldsChange,
@@ -324,6 +326,7 @@ export default function SignatureFieldPlacer({
         ref={containerRef}
         fileUrl={fileUrl}
         mediaKind={mediaKind}
+        forcePdf={forcePdf}
         onHeightChange={setContainerHeight}
         onPointerDown={handleContainerPointerDown}
         onPointerUp={handleContainerPointerUp}

@@ -16,6 +16,8 @@ export function detectMediaKind(
   if (!url) return "other";
   if (isPdfUrl(url)) return "pdf";
   if (isImageUrl(url)) return "image";
+  // Signed storage URLs sometimes omit a clear extension after query rewriting
+  if (/signature-documents/i.test(url) && !isImageUrl(url)) return "pdf";
   return "other";
 }
 

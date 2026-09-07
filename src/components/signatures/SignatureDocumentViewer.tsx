@@ -13,6 +13,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 interface SignatureDocumentViewerProps {
   fileUrl: string | null;
   mediaKind?: SignatureMediaKind | null;
+  /** Prefer PDF rendering even when URL has no .pdf suffix (e.g. signed URLs). */
+  forcePdf?: boolean;
   loading?: boolean;
   error?: string | null;
   className?: string;
@@ -22,10 +24,15 @@ interface SignatureDocumentViewerProps {
   children?: React.ReactNode;
 }
 
+/**
+ * Renders a document page and overlays children inside the exact page box.
+ * Field % coordinates are relative to this page box (forwarded ref).
+ */
 export const SignatureDocumentViewer = forwardRef<HTMLDivElement, SignatureDocumentViewerProps>(
 function SignatureDocumentViewer({
   fileUrl,
   mediaKind,
+  forcePdf,
   loading,
   error,
   className = "",
@@ -34,20 +41,22 @@ function SignatureDocumentViewer({
   onPointerUp,
   children,
 }, ref) {
-  const internalRef = useRef<HTMLDivElement>(null);
-  const containerRef = (node: HTMLDivElement | null) => {
-    internalRef.current = node;
+  const pageStageRef = useRef<HTMLDivElement>(null);
+  const setPageStageRef = (node: HTMLDivElement | null) => {
+    pageStageRef.current = node;
     if (typeof ref === "function") ref(node);
     else if (ref) ref.current = node;
   };
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [pdfReady, setPdfReady] = useState(false);
-  const kind = detectMediaKind(fileUrl, mediaKind);
+
+  const kind = forcePdf ? "pdf" : detectMediaKind(fileUrl, mediaKind);
 
   useEffect(() => {
-    const el = internalRef.current;
+    const el = pageStageRef.current;
     if (!el || !onHeightChange) return;
     const update = () => onHeightChange(el.getBoundingClientRect().height);
     update();
@@ -58,42 +67,55 @@ function SignatureDocumentViewer({
 
   useEffect(() => {
     if (!fileUrl || kind !== "pdf") {
-      setPdfReady(false);
+      setPdfReady(kind === "image");
       return;
     }
 
     let cancelled = false;
+    let renderTask: { cancel?: () => void } | null = null;
     setRendering(true);
     setRenderError(null);
     setPdfReady(false);
 
     (async () => {
       try {
-        const pdf = await pdfjs.getDocument(fileUrl).promise;
+        const pdf = await pdfjs.getDocument({ url: fileUrl, withCredentials: false }).promise;
+        if (cancelled) return;
         const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1 });
-        const containerWidth = internalRef.current?.clientWidth || viewport.width;
-        const scale = containerWidth / viewport.width;
-        const scaledViewport = page.getViewport({ scale });
+        if (cancelled) return;
+
+        const unscaled = page.getViewport({ scale: 1 });
+        // Use page-stage width if available; otherwise parent width
+        const stage = pageStageRef.current;
+        const parentWidth =
+          stage?.clientWidth ||
+          stage?.parentElement?.clientWidth ||
+          unscaled.width;
+        const scale = parentWidth / unscaled.width;
+        const viewport = page.getViewport({ scale });
 
         const canvas = canvasRef.current;
         if (!canvas || cancelled) return;
-
         const context = canvas.getContext("2d");
         if (!context) return;
 
-        canvas.width = scaledViewport.width;
-        canvas.height = scaledViewport.height;
-        canvas.style.width = "100%";
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        // Exact pixel match — no CSS stretching mismatch
+        canvas.style.width = `${canvas.width}px`;
+        canvas.style.height = `${canvas.height}px`;
+        canvas.style.maxWidth = "100%";
         canvas.style.height = "auto";
         canvas.style.display = "block";
 
-        await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
-        if (!cancelled) {
-          setPdfReady(true);
-          if (onHeightChange && internalRef.current) {
-            onHeightChange(internalRef.current.getBoundingClientRect().height);
-          }
+        const task = page.render({ canvasContext: context, viewport });
+        renderTask = task;
+        await task.promise;
+        if (cancelled) return;
+
+        setPdfReady(true);
+        if (onHeightChange && pageStageRef.current) {
+          onHeightChange(pageStageRef.current.getBoundingClientRect().height);
         }
       } catch (err) {
         if (!cancelled) {
@@ -106,6 +128,11 @@ function SignatureDocumentViewer({
 
     return () => {
       cancelled = true;
+      try {
+        renderTask?.cancel?.();
+      } catch {
+        /* ignore */
+      }
     };
   }, [fileUrl, kind, onHeightChange]);
 
@@ -121,38 +148,59 @@ function SignatureDocumentViewer({
     return <p className="text-center text-destructive py-12">לא ניתן לטעון את המסמך</p>;
   }
 
+  const showOverlays = kind === "image" || (kind === "pdf" && pdfReady);
+
   return (
     <div
-      ref={containerRef}
-      className={`relative w-full ${className}`}
+      className={`w-full max-w-full overflow-hidden ${className}`}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
-      {kind === "pdf" ? (
-        <>
-          <canvas
-            ref={canvasRef}
-            className="w-full h-auto block rounded"
-            style={{ visibility: pdfReady ? "visible" : "hidden", minHeight: rendering ? 400 : undefined }}
+      {/* Page stage = sole coordinate space for field % positions */}
+      <div
+        ref={setPageStageRef}
+        data-sig-page-stage
+        className="relative w-full mx-auto leading-none"
+      >
+        {kind === "pdf" && (
+          <>
+            <canvas
+              ref={canvasRef}
+              className="block w-full h-auto select-none pointer-events-none"
+              style={{ visibility: pdfReady ? "visible" : "hidden" }}
+            />
+            {(rendering || renderError) && (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted/40 pointer-events-none z-[5] min-h-[320px]">
+                <p className="text-muted-foreground text-sm px-4 text-center">
+                  {renderError || "מעבד PDF..."}
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        {kind === "image" && (
+          <img
+            src={fileUrl}
+            alt="Document"
+            className="w-full h-auto block select-none pointer-events-none"
+            draggable={false}
+            onLoad={() => {
+              if (onHeightChange && pageStageRef.current) {
+                onHeightChange(pageStageRef.current.getBoundingClientRect().height);
+              }
+            }}
           />
-          {(rendering || renderError) && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/60 pointer-events-none z-[5]">
-              <p className="text-muted-foreground text-sm">{renderError || "מעבד PDF..."}</p>
-            </div>
-          )}
-        </>
-      ) : kind === "image" ? (
-        <img src={fileUrl} alt="Document" className="w-full h-auto block rounded" draggable={false} />
-      ) : (
-        <iframe
-          src={fileUrl}
-          className="w-full border-0 rounded block"
-          style={{ height: "min(1200px, 150vh)" }}
-          title="Document"
-        />
-      )}
-      {/* Overlay fields only after PDF page metrics are stable */}
-      {(kind !== "pdf" || pdfReady) && children}
+        )}
+
+        {kind === "other" && (
+          <div className="w-full bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+            תצוגת PDF לא זמינה לקובץ זה — העלה PDF או תמונה להצבת שדות מדויקת.
+          </div>
+        )}
+
+        {showOverlays && children}
+      </div>
     </div>
   );
 });

@@ -183,7 +183,10 @@ export function SendSignatureDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-md w-[min(28rem,calc(100vw-2rem))] max-h-[90vh] overflow-x-hidden overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle className="truncate">שליחה לחתימה — {doc?.title}</DialogTitle>
         </DialogHeader>
@@ -251,15 +254,21 @@ export function SendSignatureDialog({
           </div>
 
           {links.length > 0 && (
-            <div className="rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-3 min-w-0 overflow-hidden">
+            <div className="rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-3 max-w-full overflow-hidden">
               <p className="text-sm font-medium text-green-800">קישור לחתימה</p>
-              {links.map((link) => (
-                <div key={link.url} className="space-y-2 min-w-0">
+              {links.map((link) => {
+                const short =
+                  link.url.length > 64
+                    ? `${link.url.slice(0, 28)}…${link.url.slice(-20)}`
+                    : link.url;
+                return (
+                <div key={link.url} className="space-y-2 max-w-full overflow-hidden">
                   <p
-                    className="text-xs text-muted-foreground break-all whitespace-pre-wrap"
+                    className="text-xs text-muted-foreground max-w-full overflow-hidden text-ellipsis"
                     dir="ltr"
+                    title={link.url}
                   >
-                    {link.url}
+                    {short}
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -301,7 +310,8 @@ export function SendSignatureDialog({
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               <Button
                 type="button"
                 variant="secondary"

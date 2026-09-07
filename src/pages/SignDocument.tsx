@@ -392,27 +392,33 @@ export default function SignDocument() {
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground mb-1">חתימה דיגיטלית</h1>
           <p className="text-muted-foreground">שלום {recipient.name}, אנא מלא את השדות וחתום על המסמך</p>
         </div>
 
         {useOverlay ? (
-          <Card>
-            <CardHeader>
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
                 {doc?.title}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-2 sm:p-4">
               <SignatureDocumentViewer
                 fileUrl={docFileUrl}
                 mediaKind={detectMediaKind(doc?.file_url)}
+                forcePdf={
+                  !!doc?.file_url &&
+                  !/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(doc.file_url) &&
+                  doc.document_type === "uploaded"
+                }
                 loading={loadingDocFile}
                 error={!docFileUrl && !loadingDocFile ? "לא ניתן לטעון את המסמך" : null}
                 onHeightChange={setDocContainerHeight}
+                className="bg-white"
               >
                 {hasDocumentFields
                   ? myFields.map(renderFieldOverlay)

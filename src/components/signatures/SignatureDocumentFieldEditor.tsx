@@ -70,6 +70,10 @@ export function SignatureDocumentFieldEditor({
           <SignatureFieldPlacer
             fileUrl={resolvedUrl}
             mediaKind={detectMediaKind(fileUrl)}
+            forcePdf={
+              !!fileUrl &&
+              !/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(fileUrl)
+            }
             fullScreen
             recipients={recipients}
             fields={fields}

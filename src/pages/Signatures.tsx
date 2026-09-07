@@ -28,7 +28,7 @@ import { syncSignatureRecipientPosition, updateSignatureDocumentFields } from "@
 import { signatureDocumentStoragePath } from "@/lib/resolveSignatureDocumentUrl";
 import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureDocumentFieldEditor";
 import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
-import { mediaKindFromFile } from "@/components/signatures/signatureDocumentMedia";
+import { mediaKindFromFile, detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
 import { SignatureOriginalFileLink } from "@/components/signatures/SignatureOriginalFileLink";
 
 interface Recipient {
@@ -573,7 +573,18 @@ export default function Signatures() {
         <div className="flex-1 overflow-auto p-4">
           <SignatureFieldPlacer
             fileUrl={previewUrl}
-            mediaKind={createTab === "upload" ? mediaKindFromFile(uploadFile) : undefined}
+            mediaKind={
+              createTab === "upload"
+                ? mediaKindFromFile(uploadFile)
+                : createTab === "url" && previewUrl
+                  ? detectMediaKind(previewUrl)
+                  : undefined
+            }
+            forcePdf={
+              createTab === "upload"
+                ? mediaKindFromFile(uploadFile) === "pdf"
+                : createTab === "url" && !!previewUrl && detectMediaKind(previewUrl) === "pdf"
+            }
             fullScreen
             recipients={recipientIndexForPlacement}
             fields={documentFields}
