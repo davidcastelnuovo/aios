@@ -43,6 +43,14 @@ export default function SignDocument() {
     enabled: !!token,
   });
 
+  useEffect(() => {
+    if (!recipient?.field_values || typeof recipient.field_values !== "object") return;
+    const existing = recipient.field_values as Record<string, string>;
+    if (Object.keys(existing).length > 0) {
+      setFieldValues(existing);
+    }
+  }, [recipient?.field_values]);
+
   const doc = recipient?.signature_documents as any;
   const signaturePosition = recipient?.signature_position as unknown as SignaturePosition | null;
   const recipientIndex = Math.max(0, (recipient?.sign_order ?? 1) - 1);

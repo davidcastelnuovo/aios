@@ -18,10 +18,18 @@ import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle,
 import { format } from "date-fns";
 import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
 import { type DocumentField, parseDocumentFields } from "@/components/signatures/signatureFieldTypes";
+import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
+import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 
 interface Recipient {
   name: string;
   email: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  address?: string;
+  idNumber?: string;
+  contactSource?: string;
   signaturePosition: SignaturePosition | null;
 }
 
@@ -190,6 +198,7 @@ export default function Signatures() {
                 (f) => f.type === "signature" && (f.recipient_index ?? 0) === i,
               );
               const position = sigField?.position ?? r.signaturePosition;
+              const fieldPrefill = buildFieldPrefill(documentFields, i, r);
               return {
                 document_id: doc.id,
                 tenant_id: tenantId,
@@ -197,6 +206,7 @@ export default function Signatures() {
                 email: r.email,
                 sign_order: i + 1,
                 signature_position: position as any,
+                field_values: fieldPrefill as any,
               };
             })
           );
@@ -271,6 +281,23 @@ export default function Signatures() {
     const updated = [...recipients];
     updated[i] = { ...updated[i], [field]: val };
     setRecipients(updated);
+  };
+
+  const applyContactToRecipient = (index: number, contact: SignatureContactDetails) => {
+    const updated = [...recipients];
+    updated[index] = {
+      ...updated[index],
+      name: contact.name,
+      email: contact.email,
+      phone: contact.phone,
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      address: contact.address,
+      idNumber: contact.idNumber,
+      contactSource: contact.sourceLabel,
+    };
+    setRecipients(updated);
+    toast.success("פרטי איש הקשר נטענו");
   };
 
   const handleFileChange = (file: File | null) => {
@@ -457,25 +484,44 @@ export default function Signatures() {
                   </Button>
                 </div>
                 {recipients.map((r, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <div className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: getRecipientColor(i) }} />
-                    <Input
-                      placeholder="שם"
-                      value={r.name}
-                      onChange={e => updateRecipient(i, "name", e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      placeholder="אימייל"
-                      type="email"
-                      value={r.email}
-                      onChange={e => updateRecipient(i, "email", e.target.value)}
-                      className="flex-1"
-                    />
-                    {recipients.length > 1 && (
-                      <Button variant="ghost" size="icon" onClick={() => removeRecipient(i)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                  <div key={i} className="space-y-2 p-3 border rounded-lg">
+                    <div className="flex gap-2 items-center">
+                      <div className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: getRecipientColor(i) }} />
+                      <SignatureContactPicker
+                        tenantId={tenantId}
+                        onSelect={(contact) => applyContactToRecipient(i, contact)}
+                      />
+                      {recipients.length > 1 && (
+                        <Button variant="ghost" size="icon" className="mr-auto" onClick={() => removeRecipient(i)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                    {r.contactSource && (
+                      <p className="text-xs text-primary">{r.contactSource}</p>
+                    )}
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        placeholder="שם"
+                        value={r.name}
+                        onChange={e => updateRecipient(i, "name", e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="אימייל"
+                        type="email"
+                        value={r.email}
+                        onChange={e => updateRecipient(i, "email", e.target.value)}
+                        className="flex-1"
+                        dir="ltr"
+                      />
+                    </div>
+                    {(r.phone || r.firstName || r.lastName) && (
+                      <p className="text-xs text-muted-foreground">
+                        {r.firstName && `שם: ${r.firstName}`}
+                        {r.lastName && ` · משפחה: ${r.lastName}`}
+                        {r.phone && ` · טלפון: ${r.phone}`}
+                      </p>
                     )}
                   </div>
                 ))}
