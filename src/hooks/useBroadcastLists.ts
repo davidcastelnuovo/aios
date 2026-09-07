@@ -127,7 +127,7 @@ export function useBroadcastLists() {
         .filter((r) => r.phone || r.email);
       for (let i = 0; i < payload.length; i += 500) {
         const { error } = await supabase.from("broadcast_list_members")
-          .upsert(payload.slice(i, i + 500), { onConflict: "list_id,phone", ignoreDuplicates: true });
+          .upsert(payload.slice(i, i + 500), { ignoreDuplicates: true });
         if (error && !String(error.message).includes("duplicate")) throw error;
       }
       await recomputeCount(listId);
