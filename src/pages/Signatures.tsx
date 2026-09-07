@@ -314,7 +314,7 @@ export default function Signatures() {
         <div className="flex items-center justify-between p-4 border-b border-border bg-background">
           <h2 className="text-lg font-bold text-foreground">הגדרת שדות וחתימות — {title}</h2>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowPlacement(false)}>
+            <Button variant="outline" onClick={() => { setShowPlacement(false); setIsCreateOpen(true); }}>
               חזור
             </Button>
             <Button
