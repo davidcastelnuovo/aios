@@ -176,7 +176,7 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   scheduled_weekly: "טריגר שבועי",
   scheduled_monthly: "טריגר חודשי",
   // טריגרים – אינטגרציות
-  inbound_webhook_task: "Webhook נכנס",
+  inbound_webhook_task: "Webhook נכנס (ספציפי)",
   facebook_lead_form: "טופס ליד פייסבוק",
   instagram_message: "הודעת אינסטגרם",
   typeform_submitted: "Typeform נשלח",
