@@ -250,11 +250,10 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           </div>
 
           {lastLinks.length > 0 && (
-            <div className="rounded-lg border p-3 space-y-3">
-              <p className="text-sm font-medium">קישור לחתימה</p>
+            <div className="rounded-lg border p-3 space-y-3 min-w-0 overflow-hidden">
+              <p className="text-sm font-medium">הקישור לחתימה מוכן</p>
               {lastLinks.map((link) => (
-                <div key={link.url} className="space-y-2">
-                  <p className="text-xs text-muted-foreground truncate" dir="ltr">{link.url}</p>
+                <div key={link.url} className="space-y-2 min-w-0">
                   <SignatureLinkShareButtons
                     size="sm"
                     signingUrl={link.url}

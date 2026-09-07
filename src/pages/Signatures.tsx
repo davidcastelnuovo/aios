@@ -618,7 +618,7 @@ export default function Signatures() {
               מסמך חדש
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-x-hidden overflow-y-auto min-w-0" dir="rtl">
             <DialogHeader>
               <DialogTitle>יצירת מסמך חדש</DialogTitle>
             </DialogHeader>
@@ -949,7 +949,7 @@ export default function Signatures() {
 
       {/* View Document Dialog */}
       <Dialog open={isViewOpen} onOpenChange={(open) => { setIsViewOpen(open); if (!open) setLastSentLinks([]); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-x-hidden overflow-y-auto min-w-0" dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedDoc?.title}</DialogTitle>
           </DialogHeader>
@@ -1018,11 +1018,11 @@ export default function Signatures() {
                 </CardHeader>
                 <CardContent>
                   {lastSentLinks.length > 0 && (
-                    <div className="mb-4 rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-2">
-                      <p className="text-sm font-medium text-green-800">קישורים לחתימה</p>
+                    <div className="mb-4 rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-2 min-w-0 overflow-hidden">
+                      <p className="text-sm font-medium text-green-800">קישורים לחתימה מוכנים</p>
                       {lastSentLinks.map((link) => (
-                        <div key={link.url} className="space-y-2">
-                          <p className="text-xs text-muted-foreground truncate" dir="ltr">{link.url}</p>
+                        <div key={link.url} className="space-y-2 min-w-0">
+                          <p className="text-xs text-muted-foreground truncate">{link.name || "חותם"}</p>
                           <SignatureLinkShareButtons
                             size="sm"
                             signingUrl={link.url}

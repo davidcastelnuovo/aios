@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Copy, Link2, Mail } from "lucide-react";
+import { Check, Copy, Link2, Mail } from "lucide-react";
 import {
   copyFirstSigningLink,
   openWhatsAppForLinks,
@@ -77,6 +77,7 @@ export function SendSignatureDialog({
   const [busy, setBusy] = useState<SendAction | null>(null);
   const [links, setLinks] = useState<SigningLinkResult[]>([]);
   const [emailSent, setEmailSent] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const { data: existingRecipients = [] } = useQuery({
     queryKey: ["signature-recipients-for-send", doc?.id],
@@ -97,6 +98,7 @@ export function SendSignatureDialog({
       setLinks([]);
       setBusy(null);
       setEmailSent(false);
+      setCopied(false);
       return;
     }
     const existing = existingRecipients[0];
@@ -105,6 +107,7 @@ export function SendSignatureDialog({
     setPhone(defaultRecipient?.phone || "");
     setLinks([]);
     setEmailSent(false);
+    setCopied(false);
   }, [open, doc?.id, defaultRecipient, existingRecipients]);
 
   const canAct = !!doc && name.trim() && (email.trim() || phone.trim());
@@ -181,24 +184,34 @@ export function SendSignatureDialog({
     }
   };
 
+  const handleCopy = async (url?: string) => {
+    if (url) await copySigningUrl(url);
+    else await copyFirstSigningLink(links);
+    setCopied(true);
+    toast.success("הקישור הועתק");
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-md w-[min(28rem,calc(100vw-2rem))] max-h-[90vh] overflow-x-hidden overflow-y-auto"
+        className="!flex !flex-col !gap-4 w-[calc(100vw-2rem)] max-w-md max-h-[90vh] overflow-hidden p-4 sm:p-6"
         dir="rtl"
       >
-        <DialogHeader>
-          <DialogTitle className="truncate">שליחה לחתימה — {doc?.title}</DialogTitle>
+        <DialogHeader className="min-w-0 shrink-0 pr-6">
+          <DialogTitle className="truncate text-base sm:text-lg">
+            שליחה לחתימה — {doc?.title}
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 min-w-0">
-          <div className="space-y-3 rounded-lg border p-3">
+        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden space-y-4">
+          <div className="space-y-3 rounded-lg border p-3 min-w-0">
             <p className="text-sm font-medium">פרטי החותם</p>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>שם</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="שם החותם" />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>אימייל</Label>
               <Input
                 type="email"
@@ -206,29 +219,29 @@ export function SendSignatureDialog({
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="email@example.com"
                 dir="ltr"
-                className="text-left"
+                className="text-left min-w-0"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>טלפון (לוואטסאפ)</Label>
               <Input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="05..."
                 dir="ltr"
-                className="text-left"
+                className="text-left min-w-0"
               />
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid gap-2 min-w-0">
             <Button
               type="button"
               onClick={() => runAction("link")}
               disabled={!canAct || !!busy}
-              className="w-full justify-center"
+              className="w-full"
             >
-              <Link2 className="h-4 w-4 ml-2" />
+              <Link2 className="h-4 w-4 ml-2 shrink-0" />
               {busy === "link" ? "מכין קישור..." : "קבל קישור לחתימה"}
             </Button>
             <Button
@@ -236,9 +249,9 @@ export function SendSignatureDialog({
               variant="secondary"
               onClick={() => runAction("email")}
               disabled={!canAct || !canEmail || !!busy}
-              className="w-full justify-center"
+              className="w-full"
             >
-              <Mail className="h-4 w-4 ml-2" />
+              <Mail className="h-4 w-4 ml-2 shrink-0" />
               {busy === "email" ? "שולח מייל..." : emailSent ? "שלח מייל שוב" : "שלח במייל"}
             </Button>
             <Button
@@ -246,91 +259,66 @@ export function SendSignatureDialog({
               variant="outline"
               onClick={() => runAction("whatsapp")}
               disabled={!canAct || !canWhatsApp || !!busy}
-              className="w-full justify-center text-green-700 border-green-200"
+              className="w-full text-green-700 border-green-200"
             >
-              <WhatsAppIcon className="h-4 w-4 ml-2" />
+              <WhatsAppIcon className="h-4 w-4 ml-2 shrink-0" />
               {busy === "whatsapp" ? "פותח וואטסאפ..." : "שלח בוואטסאפ"}
             </Button>
           </div>
 
           {links.length > 0 && (
-            <div className="rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-3 max-w-full overflow-hidden">
-              <p className="text-sm font-medium text-green-800">קישור לחתימה</p>
-              {links.map((link) => {
-                const short =
-                  link.url.length > 64
-                    ? `${link.url.slice(0, 28)}…${link.url.slice(-20)}`
-                    : link.url;
-                return (
-                <div key={link.url} className="space-y-2 max-w-full overflow-hidden">
-                  <p
-                    className="text-xs text-muted-foreground max-w-full overflow-hidden text-ellipsis"
-                    dir="ltr"
-                    title={link.url}
-                  >
-                    {short}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
+            <div className="rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-3 min-w-0">
+              <div className="flex items-center gap-2 text-green-800 text-sm font-medium min-w-0">
+                <Check className="h-4 w-4 shrink-0" />
+                <span className="truncate">הקישור לחתימה מוכן</span>
+              </div>
+              <div className="grid gap-2 min-w-0">
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => handleCopy()}
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 ml-2 shrink-0" />
+                  ) : (
+                    <Copy className="h-4 w-4 ml-2 shrink-0" />
+                  )}
+                  {copied ? "הועתק!" : "העתק קישור"}
+                </Button>
+                {links.map((link) => {
+                  const wa = buildWhatsAppSignUrl({
+                    phone: link.phone ?? phone,
+                    signingUrl: link.url,
+                    recipientName: link.name,
+                    documentTitle: documentTitleOverride || doc?.title,
+                  });
+                  if (!wa) return null;
+                  return (
                     <Button
+                      key={link.url}
                       type="button"
                       variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        await copySigningUrl(link.url);
-                        toast.success("הקישור הועתק");
-                      }}
+                      className="w-full text-green-700 border-green-200"
+                      onClick={() => window.open(wa, "_blank", "noopener,noreferrer")}
                     >
-                      <Copy className="h-4 w-4 ml-1" />
-                      העתק קישור
+                      <WhatsAppIcon className="h-4 w-4 ml-2 shrink-0" />
+                      שלח בוואטסאפ
                     </Button>
-                    {buildWhatsAppSignUrl({
-                      phone: link.phone ?? phone,
-                      signingUrl: link.url,
-                      recipientName: link.name,
-                      documentTitle: documentTitleOverride || doc?.title,
-                    }) && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="text-green-700 border-green-200"
-                        onClick={() => {
-                          const wa = buildWhatsAppSignUrl({
-                            phone: link.phone ?? phone,
-                            signingUrl: link.url,
-                            recipientName: link.name,
-                            documentTitle: documentTitleOverride || doc?.title,
-                          });
-                          if (wa) window.open(wa, "_blank", "noopener,noreferrer");
-                        }}
-                      >
-                        <WhatsAppIcon className="h-4 w-4 ml-1" />
-                        וואטסאפ
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                );
-              })}
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={async () => {
-                  await copyFirstSigningLink(links);
-                  toast.success("הקישור הועתק");
-                }}
-              >
-                <Copy className="h-4 w-4 ml-2" />
-                העתק קישור
-              </Button>
+                  );
+                })}
+              </div>
             </div>
           )}
-
-          <Button type="button" variant="ghost" className="w-full" onClick={() => onOpenChange(false)}>
-            סגור
-          </Button>
         </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full shrink-0"
+          onClick={() => onOpenChange(false)}
+        >
+          סגור
+        </Button>
       </DialogContent>
     </Dialog>
   );
