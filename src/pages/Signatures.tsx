@@ -720,7 +720,7 @@ export default function Signatures() {
                 </CardContent>
               </Card>
 
-              {selectedDoc.status === "draft" && (
+              {selectedDoc.status === "draft" && !selectedDoc.is_template && (
                 <div className="flex justify-end">
                   <Button onClick={() => { sendMutation.mutate(selectedDoc.id); setIsViewOpen(false); }}>
                     <Send className="h-4 w-4 ml-2" />
