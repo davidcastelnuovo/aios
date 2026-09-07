@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link, Download, History } from "lucide-react";
@@ -62,6 +63,8 @@ export default function Signatures() {
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [showPlacement, setShowPlacement] = useState(false);
+  const [isTemplate, setIsTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
 
   // Fetch documents
   const { data: documents, isLoading } = useQuery({
@@ -166,6 +169,8 @@ export default function Signatures() {
           document_type: docType,
           status: "draft",
           created_by: userId,
+          is_template: isTemplate,
+          template_name: isTemplate ? (templateName || title) : null,
         })
         .select()
         .single();
@@ -245,6 +250,8 @@ export default function Signatures() {
     setUploadPreviewUrl(null);
     setCreateTab("create");
     setShowPlacement(false);
+    setIsTemplate(false);
+    setTemplateName("");
   };
 
   const addRecipient = () => setRecipients([...recipients, { name: "", email: "", signaturePosition: null }]);
@@ -447,6 +454,25 @@ export default function Signatures() {
                 ))}
               </div>
 
+              <div className="flex items-center gap-2 p-3 border rounded-lg">
+                <Checkbox
+                  id="is-template"
+                  checked={isTemplate}
+                  onCheckedChange={(v) => setIsTemplate(!!v)}
+                />
+                <Label htmlFor="is-template" className="cursor-pointer">שמור כתבנית לשימוש באוטומציות</Label>
+              </div>
+              {isTemplate && (
+                <div>
+                  <Label>שם התבנית</Label>
+                  <Input
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder={title || "שם התבנית..."}
+                  />
+                </div>
+              )}
+
               <div className="flex gap-2 justify-end pt-4">
                 <Button variant="outline" onClick={() => setIsCreateOpen(false)}>ביטול</Button>
                 {canShowPlacement && (
@@ -525,7 +551,12 @@ export default function Signatures() {
                   const StatusIcon = statusIcons[doc.status] || FileText;
                   return (
                     <TableRow key={doc.id}>
-                      <TableCell className="font-medium">{doc.title}</TableCell>
+                      <TableCell className="font-medium">
+                        {doc.title}
+                        {doc.is_template && (
+                          <Badge variant="secondary" className="mr-2">תבנית</Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {doc.document_type === "created" ? "נוצר" : "הועלה"}
@@ -547,7 +578,7 @@ export default function Signatures() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {doc.status === "draft" && (
+                          {doc.status === "draft" && !doc.is_template && (
                             <Button
                               variant="ghost"
                               size="icon"

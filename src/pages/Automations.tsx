@@ -62,6 +62,7 @@ const ACTION_LABELS: Record<string, string> = {
   add_lead_update: "הוסף עדכון לליד",
   add_client_update: "הוסף עדכון ללקוח",
   create_task: "צור משימה",
+  send_signature: "שלח חתימה דיגיטלית",
 };
 
 export default function Automations() {

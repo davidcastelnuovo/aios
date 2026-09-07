@@ -586,6 +586,13 @@ export const NODE_ICON_MAP: Record<string, NodeIconConfig> = {
     borderColor: "rgba(37,99,235,0.35)",
     category: "action_crm",
   },
+  send_signature: {
+    icon: FileText,
+    color: "#0d9488",
+    bgColor: "rgba(13,148,136,0.12)",
+    borderColor: "rgba(13,148,136,0.35)",
+    category: "action_crm",
+  },
   add_lead_update: {
     icon: MessageSquarePlus,
     color: "#16a34a",

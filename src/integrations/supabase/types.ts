@@ -7037,9 +7037,11 @@ export type Database = {
           document_type: string
           file_url: string | null
           id: string
+          is_template: boolean
           signed_file_url: string | null
           status: string
           tenant_id: string
+          template_name: string | null
           title: string
           updated_at: string | null
         }
@@ -7051,9 +7053,11 @@ export type Database = {
           document_type?: string
           file_url?: string | null
           id?: string
+          is_template?: boolean
           signed_file_url?: string | null
           status?: string
           tenant_id: string
+          template_name?: string | null
           title: string
           updated_at?: string | null
         }
@@ -7065,9 +7069,11 @@ export type Database = {
           document_type?: string
           file_url?: string | null
           id?: string
+          is_template?: boolean
           signed_file_url?: string | null
           status?: string
           tenant_id?: string
+          template_name?: string | null
           title?: string
           updated_at?: string | null
         }
@@ -11110,6 +11116,7 @@ export type Database = {
         | "create_task"
         | "create_lead"
         | "send_telegram"
+        | "send_signature"
       automation_trigger:
         | "task_assigned"
         | "task_status_changed"
@@ -11375,6 +11382,7 @@ export const Constants = {
         "create_task",
         "create_lead",
         "send_telegram",
+        "send_signature",
       ],
       automation_trigger: [
         "task_assigned",
