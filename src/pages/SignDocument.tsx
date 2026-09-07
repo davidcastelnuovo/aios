@@ -12,6 +12,7 @@ import {
   type DocumentField,
   parseDocumentFields,
   getFieldLabel,
+  getFieldFontSizePx,
 } from "@/components/signatures/signatureFieldTypes";
 
 interface SignaturePosition {
@@ -25,6 +26,8 @@ interface SignaturePosition {
 export default function SignDocument() {
   const { token } = useParams<{ token: string }>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const docContainerRef = useRef<HTMLDivElement>(null);
+  const [docContainerHeight, setDocContainerHeight] = useState(700);
   const signatureCanvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
   const [isDrawing, setIsDrawing] = useState<string | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
@@ -86,6 +89,16 @@ export default function SignDocument() {
       setupCanvas(signatureCanvasRefs.current[field.id]);
     }
   }, [useOverlay, hasDocumentFields, myFields, setupCanvas]);
+
+  useEffect(() => {
+    const el = docContainerRef.current;
+    if (!el) return;
+    const update = () => setDocContainerHeight(el.getBoundingClientRect().height);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [doc?.file_url, useOverlay]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
@@ -238,6 +251,7 @@ export default function SignDocument() {
       width: `${field.position.width}%`,
       height: `${field.position.height}%`,
     };
+    const fontSize = getFieldFontSizePx(field.position, docContainerHeight);
 
     if (field.type === "signature") {
       return (
@@ -246,7 +260,10 @@ export default function SignDocument() {
           className="absolute border-2 border-primary rounded bg-white/95 overflow-hidden"
           style={style}
         >
-          <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[9px] px-1 py-0.5 rounded-bl z-10">
+          <div
+            className="absolute top-0 right-0 bg-primary text-primary-foreground px-1 py-0.5 rounded-bl z-10"
+            style={{ fontSize: Math.max(8, fontSize - 2) }}
+          >
             {field.label}
           </div>
           <canvas
@@ -271,7 +288,8 @@ export default function SignDocument() {
             value={fieldValues[field.id] ?? ""}
             onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
             placeholder={field.label}
-            className="w-full h-full text-[11px] resize-none bg-white/95 border-primary"
+            className="w-full h-full resize-none bg-white/95 border-primary"
+            style={{ fontSize }}
             dir="rtl"
           />
         </div>
@@ -287,7 +305,8 @@ export default function SignDocument() {
           value={fieldValues[field.id] ?? ""}
           onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
           placeholder={field.label}
-          className="w-full h-full text-[11px] bg-white/95 border-primary px-1"
+          className="w-full h-full bg-white/95 border-primary px-1"
+          style={{ fontSize }}
           dir={field.type === "phone" || field.type === "id_number" ? "ltr" : "rtl"}
         />
       </div>
@@ -349,7 +368,7 @@ export default function SignDocument() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="relative">
+              <div className="relative" ref={docContainerRef}>
                 {/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(doc.file_url) ? (
                   <img src={doc.file_url} alt="Document" className="w-full h-auto rounded" />
                 ) : (

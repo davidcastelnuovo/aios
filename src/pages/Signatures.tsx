@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -14,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link, Download, History } from "lucide-react";
+import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link, Download, History, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
 import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
@@ -23,6 +24,7 @@ import SignatureContactPicker from "@/components/signatures/SignatureContactPick
 import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
 import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
+import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureDocumentFieldEditor";
 
 interface Recipient {
   name: string;
@@ -80,6 +82,22 @@ export default function Signatures() {
   const [documentFields, setDocumentFields] = useState<DocumentField[]>([]);
   const [lastSentLinks, setLastSentLinks] = useState<Array<{ name: string; email: string; url: string }>>([]);
   const skipDialogResetRef = useRef(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [editingDoc, setEditingDoc] = useState<any>(null);
+
+  const canEditDocFields = (doc: { status: string; file_url?: string | null }) =>
+    doc.status === "draft" && !!doc.file_url;
+
+  const openFieldEditor = (doc: any) => {
+    if (!canEditDocFields(doc)) {
+      toast.error("עריכת שדות זמינה רק למסמכי טיוטה עם קובץ");
+      return;
+    }
+    setEditingDoc(doc);
+    setIsViewOpen(false);
+  };
+
+  const closeFieldEditor = () => setEditingDoc(null);
 
   // Fetch documents
   const { data: documents, isLoading } = useQuery({
@@ -300,6 +318,50 @@ export default function Signatures() {
     },
   });
 
+  const updateFieldsMutation = useMutation({
+    mutationFn: async ({ docId, fields }: { docId: string; fields: DocumentField[] }) => {
+      const { error } = await supabase
+        .from("signature_documents")
+        .update({
+          document_fields: fields as any,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", docId);
+      if (error?.message?.includes("document_fields")) {
+        throw new Error("עמודת שדות לא זמינה — יש להריץ migration");
+      }
+      if (error) throw error;
+
+      const sigField = fields.find((f) => f.type === "signature");
+      if (sigField) {
+        await supabase
+          .from("signature_recipients")
+          .update({ signature_position: sigField.position as any })
+          .eq("document_id", docId);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["signature-source-documents", tenantId] });
+      toast.success("השדות נשמרו");
+      closeFieldEditor();
+    },
+    onError: (err: Error) => toast.error(err.message || "שגיאה בשמירת שדות"),
+  });
+
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (!editId || !documents?.length) return;
+    const doc = documents.find((d) => d.id === editId);
+    if (doc?.status === "draft" && doc.file_url) {
+      setEditingDoc(doc);
+      setIsViewOpen(false);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("edit");
+    setSearchParams(next, { replace: true });
+  }, [documents, searchParams, setSearchParams]);
+
   const resetForm = () => {
     setTitle("");
     setContent("");
@@ -367,6 +429,19 @@ export default function Signatures() {
   const getSigningLink = (token: string) => {
     return `${window.location.origin}/sign/${token}`;
   };
+
+  if (editingDoc?.file_url) {
+    return (
+      <SignatureDocumentFieldEditor
+        title={editingDoc.title}
+        fileUrl={editingDoc.file_url}
+        initialFields={parseDocumentFields(editingDoc.document_fields)}
+        saving={updateFieldsMutation.isPending}
+        onClose={closeFieldEditor}
+        onSave={(fields) => updateFieldsMutation.mutate({ docId: editingDoc.id, fields })}
+      />
+    );
+  }
 
   // Full-screen placement overlay
   if (showPlacement && previewUrl) {
@@ -753,6 +828,16 @@ export default function Signatures() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+                          {canEditDocFields(doc) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="ערוך שדות"
+                              onClick={() => openFieldEditor(doc)}
+                            >
+                              <Pencil className="h-4 w-4 text-primary" />
+                            </Button>
+                          )}
                           {doc.status === "draft" && !doc.is_template && (
                             <Button
                               variant="ghost"
@@ -930,12 +1015,18 @@ export default function Signatures() {
                 </CardContent>
               </Card>
 
-              {selectedDoc.status === "draft" && !selectedDoc.is_template && (
-                <div className="flex justify-end">
-                  <Button onClick={() => { sendMutation.mutate(selectedDoc.id); setIsViewOpen(false); }}>
-                    <Send className="h-4 w-4 ml-2" />
-                    שלח לחתימה
+              {selectedDoc.status === "draft" && canEditDocFields(selectedDoc) && (
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => openFieldEditor(selectedDoc)}>
+                    <Pencil className="h-4 w-4 ml-2" />
+                    ערוך שדות
                   </Button>
+                  {!selectedDoc.is_template && (
+                    <Button onClick={() => { sendMutation.mutate(selectedDoc.id); setIsViewOpen(false); }}>
+                      <Send className="h-4 w-4 ml-2" />
+                      שלח לחתימה
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

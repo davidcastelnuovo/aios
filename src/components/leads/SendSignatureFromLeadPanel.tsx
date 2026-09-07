@@ -17,6 +17,7 @@ import { splitContactName } from "@/components/signatures/signatureContactUtils"
 import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
 import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
+import { Pencil } from "lucide-react";
 
 interface LeadContact {
   id: string;
@@ -263,6 +264,14 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
               <Send className="h-4 w-4 ml-2" />
               {sendMutation.isPending ? "שולח..." : "שלח לחתימה"}
             </Button>
+            {sourceDocId && (
+              <Button variant="secondary" asChild>
+                <Link to={buildPath(`signatures?edit=${sourceDocId}`)}>
+                  <Pencil className="h-4 w-4 ml-2" />
+                  ערוך שדות
+                </Link>
+              </Button>
+            )}
             <Button variant="outline" asChild>
               <Link to={buildPath("signatures")}>
                 <Plus className="h-4 w-4 ml-2" />

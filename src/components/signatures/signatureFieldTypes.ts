@@ -42,6 +42,14 @@ export function getDefaultFieldSize(type: SignatureFieldType) {
   return { width: opt?.width ?? 20, height: opt?.height ?? 4 };
 }
 
+/** Font size in px scaled to field box height (% of document). */
+export function getFieldFontSizePx(position: SignaturePosition, containerHeightPx?: number): number {
+  const boxHeightPx = containerHeightPx
+    ? (position.height / 100) * containerHeightPx
+    : position.height * 8;
+  return Math.round(Math.max(9, Math.min(28, boxHeightPx * 0.55)));
+}
+
 export function createDocumentField(
   type: SignatureFieldType,
   position: SignaturePosition,
