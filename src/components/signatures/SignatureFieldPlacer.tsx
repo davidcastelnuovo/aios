@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Crosshair } from "lucide-react";
+import { Minus, Plus, X, Crosshair } from "lucide-react";
 import {
   type DocumentField,
   type SignatureFieldType,
@@ -38,8 +38,10 @@ interface SignatureFieldPlacerProps {
 
 const COLORS = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899"];
 const DRAG_THRESHOLD_PX = 4;
-const MIN_FIELD_WIDTH = 8;
-const MIN_FIELD_HEIGHT = 2.5;
+const MIN_FIELD_WIDTH = 12;
+const MIN_FIELD_HEIGHT = 4;
+const MAX_FIELD_WIDTH = 80;
+const MAX_FIELD_HEIGHT = 40;
 
 export function getRecipientColor(index: number) {
   return COLORS[index % COLORS.length];
@@ -71,6 +73,24 @@ export default function SignatureFieldPlacer({
   const placePointerRef = useRef<{ x: number; y: number } | null>(null);
 
   const isPlacing = selectedType !== null;
+
+  // Auto-fix fields that were shrunk below usable size
+  useEffect(() => {
+    const needsFix = fields.some(
+      (f) => f.position.width < MIN_FIELD_WIDTH || f.position.height < MIN_FIELD_HEIGHT,
+    );
+    if (!needsFix) return;
+    onFieldsChange(
+      fields.map((f) => ({
+        ...f,
+        position: {
+          ...f.position,
+          width: Math.max(MIN_FIELD_WIDTH, f.position.width),
+          height: Math.max(MIN_FIELD_HEIGHT, f.position.height),
+        },
+      })),
+    );
+  }, [fields, onFieldsChange]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -163,6 +183,23 @@ export default function SignatureFieldPlacer({
     };
   };
 
+  const nudgeFieldSize = (fieldId: string, delta: number) => {
+    onFieldsChange(
+      fieldsRef.current.map((f) => {
+        if (f.id !== fieldId) return f;
+        const newW = Math.max(
+          MIN_FIELD_WIDTH,
+          Math.min(MAX_FIELD_WIDTH, Math.min(100 - f.position.x, f.position.width + delta)),
+        );
+        const newH = Math.max(
+          MIN_FIELD_HEIGHT,
+          Math.min(MAX_FIELD_HEIGHT, Math.min(100 - f.position.y, f.position.height + delta * 0.4)),
+        );
+        return { ...f, position: { ...f.position, width: newW, height: newH } };
+      }),
+    );
+  };
+
   const handleContainerPointerDown = (e: React.PointerEvent) => {
     if (isFieldTarget(e.target)) return;
     if (!isPlacing) {
@@ -191,10 +228,11 @@ export default function SignatureFieldPlacer({
 
       if (activeResizeIdRef.current && resizeStartRef.current) {
         const start = resizeStartRef.current;
+        // SE-handle: drag right/down grows, left/up shrinks
         const dx = ((e.clientX - start.x) / rect.width) * 100;
         const dy = ((e.clientY - start.y) / rect.height) * 100;
-        const maxW = Math.max(MIN_FIELD_WIDTH, 100 - start.fieldX);
-        const maxH = Math.max(MIN_FIELD_HEIGHT, 100 - start.fieldY);
+        const maxW = Math.min(MAX_FIELD_WIDTH, Math.max(MIN_FIELD_WIDTH, 100 - start.fieldX));
+        const maxH = Math.min(MAX_FIELD_HEIGHT, Math.max(MIN_FIELD_HEIGHT, 100 - start.fieldY));
         const newW = Math.max(MIN_FIELD_WIDTH, Math.min(maxW, start.w + dx));
         const newH = Math.max(MIN_FIELD_HEIGHT, Math.min(maxH, start.h + dy));
 
@@ -301,7 +339,7 @@ export default function SignatureFieldPlacer({
       )}
 
       {fields.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           {fields.map((f) => (
             <button
               key={f.id}
@@ -319,6 +357,31 @@ export default function SignatureFieldPlacer({
               />
             </button>
           ))}
+          {selectedFieldId && (
+            <div className="flex items-center gap-1 mr-auto">
+              <span className="text-xs text-muted-foreground">גודל:</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 w-7 p-0"
+                title="הקטן"
+                onClick={() => nudgeFieldSize(selectedFieldId, -3)}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 w-7 p-0"
+                title="הגדל"
+                onClick={() => nudgeFieldSize(selectedFieldId, 3)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -374,7 +437,7 @@ export default function SignatureFieldPlacer({
                   data-resize-handle
                   role="button"
                   aria-label="שינוי גודל"
-                  className="absolute bottom-0 left-0 w-5 h-5 bg-white border-2 rounded-sm cursor-nesw-resize z-40 shadow-sm hover:scale-110 transition-transform translate-y-1/2 -translate-x-1/2"
+                  className="absolute -bottom-2 -right-2 w-6 h-6 bg-white border-2 rounded-full cursor-se-resize z-40 shadow-md hover:scale-110 transition-transform"
                   style={{ borderColor: color }}
                   onPointerDown={(e) => startResize(e, f.id)}
                 />

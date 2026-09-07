@@ -24,13 +24,13 @@ export const SIGNATURE_FIELD_OPTIONS: Array<{
   width: number;
   height: number;
 }> = [
-  { type: "signature", label: "חתימה", width: 25, height: 8 },
-  { type: "first_name", label: "שם", width: 18, height: 4 },
-  { type: "last_name", label: "שם משפחה", width: 18, height: 4 },
-  { type: "phone", label: "טלפון", width: 20, height: 4 },
-  { type: "address", label: "כתובת", width: 30, height: 5 },
-  { type: "date", label: "תאריך", width: 14, height: 4 },
-  { type: "id_number", label: "ח.פ / ת.ז", width: 18, height: 4 },
+  { type: "signature", label: "חתימה", width: 28, height: 10 },
+  { type: "first_name", label: "שם", width: 18, height: 5 },
+  { type: "last_name", label: "שם משפחה", width: 18, height: 5 },
+  { type: "phone", label: "טלפון", width: 20, height: 5 },
+  { type: "address", label: "כתובת", width: 30, height: 6 },
+  { type: "date", label: "תאריך", width: 14, height: 5 },
+  { type: "id_number", label: "ח.פ / ת.ז", width: 18, height: 5 },
 ];
 
 export function getFieldLabel(type: SignatureFieldType): string {
