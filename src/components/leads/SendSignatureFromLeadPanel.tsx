@@ -16,6 +16,7 @@ import { Download, FileSignature, FolderCheck, Plus, Save, Send } from "lucide-r
 import { splitContactName } from "@/components/signatures/signatureContactUtils";
 import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
+import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
 
 interface LeadContact {
   id: string;
@@ -49,6 +50,8 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
 
   const recipientName = lead.contact_name || lead.company_name || "";
   const recipientEmail = lead.email || "";
+  const signingEmail = recipientEmail || `${lead.id.replace(/-/g, "")}@sign.aios.local`;
+  const canSend = !!sourceDocId && (!!recipientEmail || !!lead.phone);
   const { firstName, lastName } = splitContactName(recipientName);
 
   const { data: sourceDocuments = [], isLoading: loadingSources, refetch: refetchSources } = useQuery({
@@ -100,39 +103,17 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from("signature-documents").getPublicUrl(filePath);
-      const insertBase = {
+      const doc = await insertSignatureDocument({
         tenant_id: tenantId,
         title: newDocTitle.trim(),
         file_url: urlData.publicUrl,
-        document_type: "uploaded" as const,
-        status: "draft" as const,
+        document_type: "uploaded",
+        status: "draft",
         created_by: userId,
+        is_template: true,
         template_name: newDocTitle.trim(),
-      };
-
-      let docId: string | null = null;
-      const withTemplate = await supabase
-        .from("signature_documents")
-        .insert({ ...insertBase, is_template: true })
-        .select("id")
-        .single();
-
-      if (withTemplate.error?.message?.includes("is_template")) {
-        const fallback = await supabase
-          .from("signature_documents")
-          .insert(insertBase)
-          .select("id")
-          .single();
-        if (fallback.error) throw fallback.error;
-        docId = fallback.data?.id ?? null;
-      } else if (withTemplate.error) {
-        throw withTemplate.error;
-      } else {
-        docId = withTemplate.data?.id ?? null;
-      }
-
-      if (!docId) throw new Error("שמירת המסמך נכשלה");
-      return docId;
+      });
+      return doc.id;
     },
     onSuccess: (docId) => {
       setSourceDocId(docId);
@@ -147,13 +128,13 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
   const sendMutation = useMutation({
     mutationFn: async () => {
       if (!sourceDocId) throw new Error("בחר מסמך לשליחה");
-      if (!recipientEmail) throw new Error("לליד חסר אימייל");
+      if (!recipientEmail && !lead.phone) throw new Error("לליד חסר אימייל או טלפון");
 
       const { data, error } = await supabase.functions.invoke("send-signature-from-template", {
         body: {
           templateDocumentId: sourceDocId,
-          recipientName,
-          recipientEmail,
+          recipientName: recipientName || "חותם",
+          recipientEmail: signingEmail,
           documentTitle: documentTitle.trim() || undefined,
           baseUrl: window.location.origin,
           leadId: lead.id,
@@ -237,8 +218,11 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
             </Button>
           </div>
 
-          {!recipientEmail && (
-            <p className="text-sm text-destructive">יש להוסיף אימייל לליד לפני שליחה לחתימה.</p>
+          {!recipientEmail && !lead.phone && (
+            <p className="text-sm text-destructive">יש להוסיף אימייל או טלפון לליד לפני שליחה לחתימה.</p>
+          )}
+          {!recipientEmail && lead.phone && (
+            <p className="text-sm text-muted-foreground">אין אימייל לליד — השליחה תהיה בוואטסאפ בלבד.</p>
           )}
 
           <div className="space-y-2">
@@ -274,7 +258,7 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => sendMutation.mutate()}
-              disabled={!sourceDocId || !recipientEmail || sendMutation.isPending}
+              disabled={!canSend || sendMutation.isPending}
             >
               <Send className="h-4 w-4 ml-2" />
               {sendMutation.isPending ? "שולח..." : "שלח לחתימה"}

@@ -22,6 +22,7 @@ import { type DocumentField, parseDocumentFields } from "@/components/signatures
 import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
 import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
+import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
 
 interface Recipient {
   name: string;
@@ -74,10 +75,11 @@ export default function Signatures() {
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [showPlacement, setShowPlacement] = useState(false);
-  const [isTemplate, setIsTemplate] = useState(true);
+  const [isTemplate, setIsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [documentFields, setDocumentFields] = useState<DocumentField[]>([]);
   const [lastSentLinks, setLastSentLinks] = useState<Array<{ name: string; email: string; url: string }>>([]);
+  const skipDialogResetRef = useRef(false);
 
   // Fetch documents
   const { data: documents, isLoading } = useQuery({
@@ -184,32 +186,11 @@ export default function Signatures() {
         template_name: isTemplate ? (templateName || title) : null,
       };
 
-      let doc: { id: string } | null = null;
-      let docError: { message: string } | null = null;
-
-      if (documentFields.length > 0) {
-        const res = await supabase
-          .from("signature_documents")
-          .insert({ ...baseDoc, document_fields: documentFields as any })
-          .select("id")
-          .single();
-        doc = res.data;
-        docError = res.error;
-      }
-
-      if (docError?.message?.includes("document_fields")) {
-        const res = await supabase.from("signature_documents").insert(baseDoc).select("id").single();
-        doc = res.data;
-        docError = res.error;
-      } else if (!doc && docError) {
-        throw docError;
-      }
-
-      if (!doc) {
-        const res = await supabase.from("signature_documents").insert(baseDoc).select("id").single();
-        if (res.error) throw res.error;
-        doc = res.data;
-      }
+      const insertPayload = {
+        ...baseDoc,
+        ...(documentFields.length > 0 ? { document_fields: documentFields as any } : {}),
+      };
+      const doc = await insertSignatureDocument(insertPayload);
 
       const validRecipients = recipients.filter(r => r.name && r.email);
       if (validRecipients.length > 0) {
@@ -465,7 +446,16 @@ export default function Signatures() {
           <h1 className="text-2xl font-bold text-foreground">חתימות דיגיטליות</h1>
           <p className="text-muted-foreground">ניהול מסמכים וחתימות דיגיטליות</p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
+        <Dialog open={isCreateOpen} onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) {
+            if (skipDialogResetRef.current) {
+              skipDialogResetRef.current = false;
+              return;
+            }
+            resetForm();
+          }
+        }}>
           <DialogTrigger asChild>
             <Button onClick={() => { resetForm(); setIsCreateOpen(true); }}>
               <Plus className="h-4 w-4 ml-2" />
@@ -621,7 +611,11 @@ export default function Signatures() {
                   <Button
                     variant="secondary"
                     disabled={!title.trim()}
-                    onClick={() => { setIsCreateOpen(false); setShowPlacement(true); }}
+                    onClick={() => {
+                      skipDialogResetRef.current = true;
+                      setShowPlacement(true);
+                      setIsCreateOpen(false);
+                    }}
                   >
                     הגדר שדות וחתימות
                   </Button>
