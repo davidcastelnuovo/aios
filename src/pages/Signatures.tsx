@@ -74,7 +74,7 @@ export default function Signatures() {
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [showPlacement, setShowPlacement] = useState(false);
-  const [isTemplate, setIsTemplate] = useState(false);
+  const [isTemplate, setIsTemplate] = useState(true);
   const [templateName, setTemplateName] = useState("");
   const [documentFields, setDocumentFields] = useState<DocumentField[]>([]);
   const [lastSentLinks, setLastSentLinks] = useState<Array<{ name: string; email: string; url: string }>>([]);
@@ -247,6 +247,19 @@ export default function Signatures() {
     onError: (err: any) => toast.error("שגיאה: " + err.message),
   });
 
+  const handleSaveOnly = async () => {
+    try {
+      const result = await createMutation.mutateAsync();
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+      toast.success(result.isTemplate ? "התבנית נשמרה" : "המסמך נשמר — מוכן לשליחה");
+      setShowPlacement(false);
+      resetForm();
+      setIsCreateOpen(false);
+    } catch {
+      // errors handled in mutations
+    }
+  };
+
   const handleSaveOrSend = async () => {
     try {
       const result = await createMutation.mutateAsync();
@@ -374,11 +387,6 @@ export default function Signatures() {
     return `${window.location.origin}/sign/${token}`;
   };
 
-  const copySigningLink = (token: string) => {
-    navigator.clipboard.writeText(getSigningLink(token));
-    toast.success("הקישור הועתק");
-  };
-
   // Full-screen placement overlay
   if (showPlacement && previewUrl) {
     const placementCanCreate =
@@ -415,11 +423,21 @@ export default function Signatures() {
                 חזור
               </Button>
               <Button
-                onClick={() => handleSaveOrSend()}
+                variant={isTemplate ? "default" : "secondary"}
+                onClick={() => handleSaveOnly()}
                 disabled={!placementCanCreate}
               >
-                {placementActionLabel}
+                {createMutation.isPending
+                  ? "שומר..."
+                  : isTemplate
+                    ? "שמור תבנית"
+                    : "שמור מסמך"}
               </Button>
+              {!isTemplate && hasValidRecipients && (
+                <Button onClick={() => handleSaveOrSend()} disabled={!placementCanCreate}>
+                  {placementActionLabel}
+                </Button>
+              )}
             </div>
             {!title.trim() && (
               <p className="text-xs text-destructive">נא למלא שם מסמך כדי להמשיך</p>
@@ -584,7 +602,7 @@ export default function Signatures() {
                   checked={isTemplate}
                   onCheckedChange={(v) => setIsTemplate(!!v)}
                 />
-                <Label htmlFor="is-template" className="cursor-pointer">שמור כתבנית לשימוש באוטומציות</Label>
+                <Label htmlFor="is-template" className="cursor-pointer">שמור כתבנית לשימוש חוזר (מלידים / אוטומציות)</Label>
               </div>
               {isTemplate && (
                 <div>
@@ -609,13 +627,32 @@ export default function Signatures() {
                   </Button>
                 )}
                 <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      await createMutation.mutateAsync();
+                      toast.success(isTemplate ? "התבנית נשמרה" : "המסמך נשמר — מוכן לשליחה");
+                      resetForm();
+                      setIsCreateOpen(false);
+                    } catch { /* toast in mutation */ }
+                  }}
+                  disabled={
+                    !title ||
+                    createMutation.isPending ||
+                    (createTab === "create" && !content) ||
+                    (createTab === "upload" && !uploadFile) ||
+                    (createTab === "url" && !documentUrl)
+                  }
+                >
+                  {createMutation.isPending ? "שומר..." : "שמור מסמך"}
+                </Button>
+                {!isTemplate && (
+                <Button
                   onClick={async () => {
                     try {
                       const result = await createMutation.mutateAsync();
-                      if (!result.isTemplate && recipients.some((r) => r.name && r.email)) {
+                      if (recipients.some((r) => r.name && r.email)) {
                         await sendMutation.mutateAsync(result.doc.id);
-                      } else if (result.isTemplate) {
-                        toast.success("התבנית נשמרה");
                       } else {
                         toast.success("נשמר כטיוטה");
                       }
@@ -630,13 +667,12 @@ export default function Signatures() {
                     (createTab === "create" && !content) ||
                     (createTab === "upload" && !uploadFile) ||
                     (createTab === "url" && !documentUrl) ||
-                    (!isTemplate && !hasValidRecipients)
+                    !hasValidRecipients
                   }
                 >
-                  {isTemplate
-                    ? (createMutation.isPending ? "שומר..." : "שמור תבנית")
-                    : (createMutation.isPending || sendMutation.isPending ? "שולח..." : "שלח לחתימה")}
+                  {createMutation.isPending || sendMutation.isPending ? "שולח..." : "שלח לחתימה"}
                 </Button>
+                )}
               </div>
             </div>
           </DialogContent>

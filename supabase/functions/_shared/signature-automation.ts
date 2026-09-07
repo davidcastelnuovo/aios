@@ -220,14 +220,23 @@ export async function cloneSignatureFromTemplate(
     contactDetails,
   } = opts;
 
-  const { data: template, error: templateError } = await supabase
+  const { data: source, error: sourceError } = await supabase
     .from('signature_documents')
     .select('*')
     .eq('id', templateDocumentId)
     .eq('tenant_id', tenantId)
-    .eq('is_template', true)
     .maybeSingle();
-  if (templateError || !template) throw new Error('תבנית חתימה לא נמצאה');
+  if (sourceError || !source) throw new Error('מסמך לא נמצא');
+
+  const isReusable = source.is_template === true || source.status === 'draft';
+  if (!isReusable) {
+    throw new Error('ניתן לשלוח רק מתבנית או מסמך שמור (טיוטה)');
+  }
+  if (!source.file_url && !source.content) {
+    throw new Error('למסמך אין קובץ או תוכן לשליחה');
+  }
+
+  const template = source;
 
   const { data: templateRecipients } = await supabase
     .from('signature_recipients')

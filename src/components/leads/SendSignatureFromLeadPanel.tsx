@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,9 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Download, ExternalLink, FileSignature, FolderCheck, Plus, Send } from "lucide-react";
+import { Download, FileSignature, FolderCheck, Plus, Save, Send } from "lucide-react";
 import { splitContactName } from "@/components/signatures/signatureContactUtils";
 import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
+import { sanitizeFileName } from "@/lib/sanitizeFileName";
 
 interface LeadContact {
   id: string;
@@ -37,23 +39,27 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 
 export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFromLeadPanelProps) {
   const { buildPath } = useTenantPath();
+  const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
-  const [templateId, setTemplateId] = useState("");
+  const [sourceDocId, setSourceDocId] = useState("");
   const [documentTitle, setDocumentTitle] = useState("");
   const [lastLinks, setLastLinks] = useState<Array<{ name: string; email: string; url: string }>>([]);
+  const [newDocTitle, setNewDocTitle] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   const recipientName = lead.contact_name || lead.company_name || "";
   const recipientEmail = lead.email || "";
   const { firstName, lastName } = splitContactName(recipientName);
 
-  const { data: templates = [], isLoading: loadingTemplates } = useQuery({
-    queryKey: ["signature-templates", tenantId],
+  const { data: sourceDocuments = [], isLoading: loadingSources, refetch: refetchSources } = useQuery({
+    queryKey: ["signature-source-documents", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("signature_documents")
-        .select("id, title, template_name, document_type, created_at")
+        .select("id, title, template_name, is_template, status, created_at, file_url")
         .eq("tenant_id", tenantId!)
-        .eq("is_template", true)
+        .eq("status", "draft")
+        .not("file_url", "is", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -80,14 +86,72 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
     enabled: !!tenantId && !!lead.id,
   });
 
+  const saveDocMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId || !userId) throw new Error("חסר משתמש או דייר");
+      if (!uploadFile) throw new Error("בחר קובץ להעלאה");
+      if (!newDocTitle.trim()) throw new Error("הזן שם למסמך");
+
+      const safeName = sanitizeFileName(uploadFile.name);
+      const filePath = `${tenantId}/${Date.now()}_${safeName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("signature-documents")
+        .upload(filePath, uploadFile);
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from("signature-documents").getPublicUrl(filePath);
+      const insertBase = {
+        tenant_id: tenantId,
+        title: newDocTitle.trim(),
+        file_url: urlData.publicUrl,
+        document_type: "uploaded" as const,
+        status: "draft" as const,
+        created_by: userId,
+        template_name: newDocTitle.trim(),
+      };
+
+      let docId: string | null = null;
+      const withTemplate = await supabase
+        .from("signature_documents")
+        .insert({ ...insertBase, is_template: true })
+        .select("id")
+        .single();
+
+      if (withTemplate.error?.message?.includes("is_template")) {
+        const fallback = await supabase
+          .from("signature_documents")
+          .insert(insertBase)
+          .select("id")
+          .single();
+        if (fallback.error) throw fallback.error;
+        docId = fallback.data?.id ?? null;
+      } else if (withTemplate.error) {
+        throw withTemplate.error;
+      } else {
+        docId = withTemplate.data?.id ?? null;
+      }
+
+      if (!docId) throw new Error("שמירת המסמך נכשלה");
+      return docId;
+    },
+    onSuccess: (docId) => {
+      setSourceDocId(docId);
+      setUploadFile(null);
+      refetchSources();
+      queryClient.invalidateQueries({ queryKey: ["signature-templates", tenantId] });
+      toast.success("המסמך נשמר — בחר אותו ושלח לחתימה");
+    },
+    onError: (err: Error) => toast.error(err.message || "שגיאה בשמירה"),
+  });
+
   const sendMutation = useMutation({
     mutationFn: async () => {
-      if (!templateId) throw new Error("בחר תבנית");
+      if (!sourceDocId) throw new Error("בחר מסמך לשליחה");
       if (!recipientEmail) throw new Error("לליד חסר אימייל");
 
       const { data, error } = await supabase.functions.invoke("send-signature-from-template", {
         body: {
-          templateDocumentId: templateId,
+          templateDocumentId: sourceDocId,
           recipientName,
           recipientEmail,
           documentTitle: documentTitle.trim() || undefined,
@@ -114,7 +178,6 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
     onError: (err: Error) => toast.error(err.message || "שגיאה בשליחה"),
   });
 
-
   const getSigningUrl = (token: string) => `${window.location.origin}/sign/${token}`;
 
   const downloadSigned = async (doc: { signed_file_url: string | null; title: string }) => {
@@ -135,7 +198,7 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <FileSignature className="h-4 w-4" />
-            שליחה לחתימה דיגיטלית
+            שמירה ושליחה לחתימה
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -145,23 +208,53 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
             {lead.phone && <p><span className="text-muted-foreground">טלפון:</span> {lead.phone}</p>}
           </div>
 
+          {/* Save new document */}
+          <div className="rounded-lg border p-3 space-y-3">
+            <p className="text-sm font-medium">שמור מסמך חדש</p>
+            <div className="space-y-2">
+              <Label>שם המסמך</Label>
+              <Input
+                value={newDocTitle}
+                onChange={(e) => setNewDocTitle(e.target.value)}
+                placeholder={lead.company_name ? `חוזה - ${lead.company_name}` : "שם המסמך..."}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>קובץ PDF / תמונה</Label>
+              <Input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+              />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => saveDocMutation.mutate()}
+              disabled={!uploadFile || !newDocTitle.trim() || saveDocMutation.isPending}
+            >
+              <Save className="h-4 w-4 ml-2" />
+              {saveDocMutation.isPending ? "שומר..." : "שמור מסמך"}
+            </Button>
+          </div>
+
           {!recipientEmail && (
             <p className="text-sm text-destructive">יש להוסיף אימייל לליד לפני שליחה לחתימה.</p>
           )}
 
           <div className="space-y-2">
-            <Label>תבנית</Label>
-            <Select value={templateId} onValueChange={setTemplateId} disabled={loadingTemplates}>
+            <Label>מסמך לשליחה</Label>
+            <Select value={sourceDocId} onValueChange={setSourceDocId} disabled={loadingSources}>
               <SelectTrigger>
-                <SelectValue placeholder={loadingTemplates ? "טוען..." : "בחר תבנית..."} />
+                <SelectValue placeholder={loadingSources ? "טוען..." : "בחר מסמך שמור..."} />
               </SelectTrigger>
               <SelectContent>
-                {templates.length === 0 ? (
-                  <SelectItem value="__none" disabled>אין תבניות — צור תבנית בחתימות דיגיטליות</SelectItem>
+                {sourceDocuments.length === 0 ? (
+                  <SelectItem value="__none" disabled>אין מסמכים שמורים — העלה ושמור למעלה</SelectItem>
                 ) : (
-                  templates.map((t) => (
+                  sourceDocuments.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.template_name || t.title}
+                      {t.is_template ? " (תבנית)" : ""}
                     </SelectItem>
                   ))
                 )}
@@ -174,14 +267,14 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
             <Input
               value={documentTitle}
               onChange={(e) => setDocumentTitle(e.target.value)}
-              placeholder={lead.company_name ? `חוזה - ${lead.company_name}` : "כותרת המסמך..."}
+              placeholder="כותרת שתופיע במייל לחותם..."
             />
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => sendMutation.mutate()}
-              disabled={!templateId || !recipientEmail || sendMutation.isPending}
+              disabled={!sourceDocId || !recipientEmail || sendMutation.isPending}
             >
               <Send className="h-4 w-4 ml-2" />
               {sendMutation.isPending ? "שולח..." : "שלח לחתימה"}
@@ -189,7 +282,7 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
             <Button variant="outline" asChild>
               <Link to={buildPath("signatures")}>
                 <Plus className="h-4 w-4 ml-2" />
-                צור תבנית
+                ניהול מסמכים מתקדם
               </Link>
             </Button>
           </div>
@@ -217,7 +310,7 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
       {leadDocuments.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">מסמכים לחתימה</CardTitle>
+            <CardTitle className="text-sm">מסמכים שנשלחו לליד</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {leadDocuments.map((doc) => {
