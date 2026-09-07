@@ -2284,6 +2284,20 @@ Deno.serve(async (req) => {
                     // IMPORTANT: do NOT overwrite previousStepOutput — keep agent output for send step
                     // previousStepOutput stays as the agent's output so send_greenapi_message uses it
                   }
+                } else if (effectiveActionType === 'email') {
+                  if (previousStepOutput) {
+                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
+                    if (stepConfig.subject_template) {
+                      stepConfig.subject_template = stepConfig.subject_template.replace(/\{\{agent_output\}\}/g, agentText)
+                      stepConfig.subject_template = stepConfig.subject_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                    }
+                    if (stepConfig.body_template) {
+                      stepConfig.body_template = stepConfig.body_template.replace(/\{\{agent_output\}\}/g, agentText)
+                      stepConfig.body_template = stepConfig.body_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                    }
+                  }
+                  stepResponse = await executeEmail(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
                 } else if (effectiveActionType === 'run_manus_task') {
                   stepResponse = await executeRunManusTask(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
@@ -2317,7 +2331,7 @@ Deno.serve(async (req) => {
             if (automation.action_type === 'webhook') {
               response = await executeWebhook(automation.configuration, payloadData)
             } else if (automation.action_type === 'email') {
-              response = await executeEmail(automation.configuration, payloadData)
+              response = await executeEmail(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'notification') {
               response = await executeNotification(automation.configuration, payloadData)
             } else if (automation.action_type === 'update_status') {
@@ -2556,9 +2570,146 @@ async function executeWebhook(config: any, data: any) {
   }
 }
 
-// Execute email action (placeholder)
-async function executeEmail(config: any, data: any) {
-  return { message: 'Email action not implemented' }
+function textToHtml(body: string): string {
+  return body
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br/>')
+}
+
+function parseEmailList(raw: string): string[] {
+  return String(raw || '')
+    .split(/[,;\s]+/)
+    .map((v) => v.trim().toLowerCase())
+    .filter((v) => v.includes('@'))
+}
+
+async function resolveEmailRecipients(
+  supabase: any,
+  recipients: any[],
+  data: any,
+  tenantId: string,
+): Promise<string[]> {
+  const out: string[] = []
+  for (const r of recipients || []) {
+    try {
+      if (!r || typeof r !== 'object') continue
+      switch (r.type) {
+        case 'email_field': {
+          const v = r.field ? data?.[r.field] : null
+          if (v) out.push(...parseEmailList(String(v)))
+          break
+        }
+        case 'email_manual': {
+          if (r.email) out.push(...parseEmailList(r.email))
+          break
+        }
+        case 'contact_lookup': {
+          if (!r.id) break
+          const table = r.entity === 'client' ? 'clients' : 'leads'
+          const { data: row } = await supabase
+            .from(table).select('email').eq('id', r.id).eq('tenant_id', tenantId).maybeSingle()
+          if (row?.email) out.push(...parseEmailList(row.email))
+          break
+        }
+      }
+    } catch (e) {
+      console.error('[email-recipients] resolve error', r, e)
+    }
+  }
+  return Array.from(new Set(out))
+}
+
+async function resolveAutomationEmailFrom(
+  supabase: any,
+  config: any,
+  tenantId: string,
+): Promise<{ fromEmail: string; fromName: string | null }> {
+  let domainRow: any = null
+  if (config?.sender_domain_id) {
+    const { data } = await supabase
+      .from('broadcast_email_domains')
+      .select('domain, default_local, from_name, is_default')
+      .eq('id', config.sender_domain_id)
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
+    domainRow = data
+  }
+  if (!domainRow) {
+    const { data } = await supabase
+      .from('broadcast_email_domains')
+      .select('domain, default_local, from_name, is_default')
+      .eq('tenant_id', tenantId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    domainRow = data
+  }
+  if (!domainRow?.domain) {
+    throw new Error('לא הוגדר דומיין שליחה מאומת לארגון. הוסף דומיין בדיוור → הגדרות שולח.')
+  }
+
+  const fromMode = config?.from_mode || 'default'
+  const localPart = fromMode === 'custom'
+    ? String(config?.from_local || domainRow.default_local || 'noreply').trim()
+    : String(domainRow.default_local || 'noreply').trim()
+  const fromEmail = `${localPart}@${domainRow.domain}`
+  const fromName = fromMode === 'custom'
+    ? (String(config?.from_name || '').trim() || domainRow.from_name || null)
+    : (domainRow.from_name || null)
+
+  return { fromEmail, fromName }
+}
+
+// Execute email action via Resend
+async function executeEmail(supabase: any, config: any, data: any, tenantId: string) {
+  const recipients = Array.isArray(config?.email_recipients) ? config.email_recipients : []
+  const emails = await resolveEmailRecipients(supabase, recipients, data, tenantId)
+  if (emails.length === 0) {
+    throw new Error('לא נמצאו כתובות אימייל לשליחה')
+  }
+
+  const subject = replaceTemplateVariables(config?.subject_template || '', data).trim()
+  const body = replaceTemplateVariables(config?.body_template || config?.message_template || '', data).trim()
+  if (!subject) throw new Error('נושא האימייל חסר')
+  if (!body) throw new Error('גוף האימייל חסר')
+
+  const { fromEmail, fromName } = await resolveAutomationEmailFrom(supabase, config, tenantId)
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!supabaseUrl || !serviceKey) throw new Error('Supabase env vars missing')
+
+  const html = `<div dir="rtl" style="font-family:system-ui,Arial,sans-serif">${textToHtml(body)}</div>`
+  const results: Array<{ to: string; id?: string }> = []
+
+  for (const to of emails) {
+    const res = await fetch(`${supabaseUrl}/functions/v1/send-resend-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        to,
+        subject,
+        html,
+        text: body,
+        fromEmail,
+        fromName: fromName || undefined,
+        replyTo: config?.reply_to || undefined,
+        tags: [{ name: 'automation_email', value: tenantId }],
+      }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(`שגיאה בשליחת אימייל ל-${to}: ${JSON.stringify(json)}`)
+    }
+    results.push({ to, id: json?.id })
+  }
+
+  return { success: true, sent: results.length, results, from: fromEmail }
 }
 
 // Execute notification action (placeholder)

@@ -30,6 +30,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useToast } from "@/hooks/use-toast";
 import { RecipientsListEditor, migrateLegacyRecipients } from "./RecipientsListEditor";
+import { EmailActionConfig } from "./EmailActionConfig";
 
 // Trigger options organized by category for the Flow Builder
 export const TRIGGER_CATEGORIES = [
@@ -1030,6 +1031,16 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
               configuration={node.configuration}
               onConfigChange={handleConfigChange}
               availableFields={availableFields}
+            />
+          )}
+
+          {/* Email action config */}
+          {node.action_type === "email" && (
+            <EmailActionConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              availableFields={availableFields}
+              onConfigChange={handleConfigChange}
             />
           )}
 
