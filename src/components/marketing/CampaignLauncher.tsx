@@ -42,6 +42,14 @@ interface AdAccount {
   account_id: string;
 }
 
+interface AdIntegrationRow {
+  id: string;
+  integration_type: string;
+  settings: Record<string, unknown> | null;
+  display_name: string | null;
+  company_id: string | null;
+}
+
 interface LaunchResult {
   platform: Platform;
   success: boolean;
@@ -103,22 +111,23 @@ export function CampaignLauncher({
     queryFn: async () => {
       const { data } = await supabase
         .from("tenant_integrations")
-        .select("id, integration_type, settings, display_name")
+        .select("id, integration_type, settings, display_name, company_id")
         .eq("tenant_id", tenantId)
         .eq("is_active", true)
         .in("integration_type", ["facebook_ads", "google_ads", "meta_ads"]);
 
       const accounts: AdAccount[] = [];
-      (data ?? []).forEach((row: any) => {
+      ((data ?? []) as AdIntegrationRow[]).forEach((row) => {
         const isMeta =
           row.integration_type === "facebook_ads" ||
           row.integration_type === "meta_ads";
         const isGoogle = row.integration_type === "google_ads";
-        const accountId =
+        const accountId = String(
           row.settings?.ad_account_id ??
-          row.settings?.account_id ??
-          row.company_id ??
-          row.id;
+            row.settings?.account_id ??
+            row.company_id ??
+            row.id,
+        );
         accounts.push({
           id: row.id,
           name: row.display_name ?? (isMeta ? "Meta Ads" : "Google Ads"),
@@ -131,6 +140,20 @@ export function CampaignLauncher({
   });
 
   const filteredAccounts = accounts.filter((a) => a.platform === platform);
+
+  const saveLaunchReference = async (launchPayload: Record<string, unknown>) => {
+    const { data: current, error: readError } = await supabase
+      .from("marketing_work_items")
+      .select("payload")
+      .eq("id", workItemId)
+      .single();
+    if (readError) throw readError;
+    const { error: updateError } = await supabase
+      .from("marketing_work_items")
+      .update({ payload: { ...((current?.payload as Record<string, unknown> | null) ?? {}), ...launchPayload }, status: "in_progress" })
+      .eq("id", workItemId);
+    if (updateError) throw updateError;
+  };
 
   // ─── Launch ───────────────────────────────────────────────────────────────
 
@@ -167,19 +190,13 @@ export function CampaignLauncher({
         }
 
         // Save campaign reference to work item payload
-        await supabase
-          .from("marketing_work_items")
-          .update({
-            payload: {
+        await saveLaunchReference({
               campaign_platform: "meta",
               campaign_id: data.campaign_id,
               campaign_name: name,
               ad_account_id: account.account_id,
               launched_at: new Date().toISOString(),
-            },
-            status: "in_progress",
-          })
-          .eq("id", workItemId);
+        });
 
         setResult({ platform: "meta", success: true, campaign_id: data.campaign_id });
         toast.success("קמפיין Meta הושק בהצלחה! (במצב מושהה)");
@@ -203,25 +220,19 @@ export function CampaignLauncher({
           throw new Error(data?.error ?? error?.message ?? "שגיאה בהשקת קמפיין Google");
         }
 
-        await supabase
-          .from("marketing_work_items")
-          .update({
-            payload: {
+        await saveLaunchReference({
               campaign_platform: "google",
               campaign_id: data.campaign_id ?? data.resource_name,
               campaign_name: name,
               customer_id: account.account_id,
               launched_at: new Date().toISOString(),
-            },
-            status: "in_progress",
-          })
-          .eq("id", workItemId);
+        });
 
         setResult({ platform: "google", success: true, campaign_id: data.campaign_id ?? data.resource_name });
         toast.success("קמפיין Google Ads הושק בהצלחה! (במצב מושהה)");
       }
-    } catch (err: any) {
-      const msg = err.message ?? "שגיאה לא ידועה";
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "שגיאה לא ידועה";
       setResult({ platform, success: false, error: msg });
       toast.error(msg);
     } finally {
