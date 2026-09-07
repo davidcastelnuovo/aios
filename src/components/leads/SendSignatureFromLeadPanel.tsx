@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Copy, Download, ExternalLink, FileSignature, FolderCheck, Plus, Send } from "lucide-react";
+import { Download, ExternalLink, FileSignature, FolderCheck, Plus, Send } from "lucide-react";
 import { splitContactName } from "@/components/signatures/signatureContactUtils";
+import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
 
 interface LeadContact {
   id: string;
@@ -65,7 +66,10 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
     queryFn: async () => {
       const { data, error } = await supabase
         .from("signature_documents")
-        .select("id, title, status, created_at, signed_file_url, saved_to_entity_at")
+        .select(`
+          id, title, status, created_at, signed_file_url, saved_to_entity_at,
+          signature_recipients(name, email, sign_token, status)
+        `)
         .eq("tenant_id", tenantId!)
         .eq("lead_id", lead.id)
         .eq("is_template", false)
@@ -110,10 +114,8 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
     onError: (err: Error) => toast.error(err.message || "שגיאה בשליחה"),
   });
 
-  const copyLink = (url: string) => {
-    navigator.clipboard.writeText(url);
-    toast.success("הקישור הועתק");
-  };
+
+  const getSigningUrl = (token: string) => `${window.location.origin}/sign/${token}`;
 
   const downloadSigned = async (doc: { signed_file_url: string | null; title: string }) => {
     if (!doc.signed_file_url) return;
@@ -193,14 +195,18 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           </div>
 
           {lastLinks.length > 0 && (
-            <div className="rounded-lg border p-3 space-y-2">
-              <p className="text-sm font-medium">קישור לחתימה (ממתין)</p>
+            <div className="rounded-lg border p-3 space-y-3">
+              <p className="text-sm font-medium">קישור לחתימה</p>
               {lastLinks.map((link) => (
-                <div key={link.url} className="flex items-center gap-2 text-sm">
-                  <span className="truncate flex-1 text-muted-foreground" dir="ltr">{link.url}</span>
-                  <Button variant="ghost" size="icon" onClick={() => copyLink(link.url)}>
-                    <Copy className="h-4 w-4" />
-                  </Button>
+                <div key={link.url} className="space-y-2">
+                  <p className="text-xs text-muted-foreground truncate" dir="ltr">{link.url}</p>
+                  <SignatureLinkShareButtons
+                    size="sm"
+                    signingUrl={link.url}
+                    phone={lead.phone}
+                    recipientName={link.name || recipientName}
+                    documentTitle={documentTitle.trim() || undefined}
+                  />
                 </div>
               ))}
             </div>
@@ -216,13 +222,30 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           <CardContent className="space-y-2">
             {leadDocuments.map((doc) => {
               const st = statusLabels[doc.status] || statusLabels.draft;
+              const pendingRecipient = (doc.signature_recipients as Array<{ sign_token?: string; name?: string; status?: string }> | undefined)
+                ?.find((r) => r.status === "pending" && r.sign_token);
+              const signingUrl = pendingRecipient?.sign_token
+                ? getSigningUrl(pendingRecipient.sign_token)
+                : null;
+
               return (
                 <div key={doc.id} className="flex items-center justify-between gap-2 p-2 border rounded-lg text-sm">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{doc.title}</p>
                     <p className="text-xs text-muted-foreground">
                       {format(new Date(doc.created_at!), "dd/MM/yy HH:mm")}
                     </p>
+                    {signingUrl && (
+                      <div className="mt-2">
+                        <SignatureLinkShareButtons
+                          size="sm"
+                          signingUrl={signingUrl}
+                          phone={lead.phone}
+                          recipientName={pendingRecipient?.name || recipientName}
+                          documentTitle={doc.title}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <Badge className={st.color}>{st.label}</Badge>

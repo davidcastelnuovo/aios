@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link, Download, History } from "lucide-react";
 import { format } from "date-fns";
 import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
+import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
 import { type DocumentField, parseDocumentFields } from "@/components/signatures/signatureFieldTypes";
 import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
 import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
@@ -76,6 +77,7 @@ export default function Signatures() {
   const [isTemplate, setIsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [documentFields, setDocumentFields] = useState<DocumentField[]>([]);
+  const [lastSentLinks, setLastSentLinks] = useState<Array<{ name: string; email: string; url: string }>>([]);
 
   // Fetch documents
   const { data: documents, isLoading } = useQuery({
@@ -280,9 +282,10 @@ export default function Signatures() {
       }
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["signature-events", selectedDoc?.id] });
+      if (data?.signingLinks?.length) setLastSentLinks(data.signingLinks);
       toast.success("המסמך נשלח לחתימה");
     },
     onError: (err: any) => toast.error("שגיאה בשליחה: " + err.message),
@@ -750,7 +753,7 @@ export default function Signatures() {
       </Card>
 
       {/* View Document Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+      <Dialog open={isViewOpen} onOpenChange={(open) => { setIsViewOpen(open); if (!open) setLastSentLinks([]); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedDoc?.title}</DialogTitle>
@@ -814,6 +817,22 @@ export default function Signatures() {
                   <CardTitle className="text-sm">חותמים</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {lastSentLinks.length > 0 && (
+                    <div className="mb-4 rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-2">
+                      <p className="text-sm font-medium text-green-800">קישורים לחתימה</p>
+                      {lastSentLinks.map((link) => (
+                        <div key={link.url} className="space-y-2">
+                          <p className="text-xs text-muted-foreground truncate" dir="ltr">{link.url}</p>
+                          <SignatureLinkShareButtons
+                            size="sm"
+                            signingUrl={link.url}
+                            recipientName={link.name}
+                            documentTitle={selectedDoc?.title}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {!docRecipients?.length ? (
                     <p className="text-sm text-muted-foreground">אין חותמים</p>
                   ) : (
@@ -834,9 +853,13 @@ export default function Signatures() {
                               {r.status === "signed" ? "חתם" : r.status === "declined" ? "סירב" : "ממתין"}
                             </Badge>
                             {selectedDoc.status !== "draft" && r.sign_token && (
-                              <Button variant="ghost" size="icon" onClick={() => copySigningLink(r.sign_token)}>
-                                <Copy className="h-4 w-4" />
-                              </Button>
+                              <>
+                                <SignatureLinkShareButtons
+                                  signingUrl={getSigningLink(r.sign_token)}
+                                  recipientName={r.name}
+                                  documentTitle={selectedDoc.title}
+                                />
+                              </>
                             )}
                           </div>
                         </div>
