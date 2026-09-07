@@ -34,19 +34,59 @@ export interface SendSignatureResult {
   partial?: boolean;
 }
 
+type SignatureDocRow = {
+  id: string;
+  tenant_id: string;
+  status: string;
+  document_fields?: unknown;
+};
+
+async function fetchSignatureDocument(docId: string): Promise<SignatureDocRow> {
+  let result = await supabase
+    .from("signature_documents")
+    .select("id, tenant_id, status, document_fields")
+    .eq("id", docId)
+    .maybeSingle();
+
+  if (result.error?.message?.includes("document_fields")) {
+    result = await supabase
+      .from("signature_documents")
+      .select("id, tenant_id, status")
+      .eq("id", docId)
+      .maybeSingle();
+    if (result.data) {
+      return { ...result.data, document_fields: [] };
+    }
+  }
+
+  if (result.error) throw new Error(result.error.message);
+  if (!result.data) throw new Error("מסמך לא נמצא");
+  return result.data as SignatureDocRow;
+}
+
+async function insertRecipientWithFallback(
+  row: Record<string, unknown>,
+): Promise<void> {
+  let { error } = await supabase.from("signature_recipients").insert(row);
+  if (error?.message?.includes("field_values")) {
+    const { field_values: _fv, ...withoutFieldValues } = row;
+    error = (await supabase.from("signature_recipients").insert(withoutFieldValues)).error;
+  }
+  if (error?.message?.includes("signature_position")) {
+    const { signature_position: _sp, field_values: _fv, ...minimal } = row;
+    error = (await supabase.from("signature_recipients").insert(minimal)).error;
+  }
+  if (error) throw error;
+}
+
 async function prepareDirectClientSide(
-  opts: SendSignatureOptions & { tenantId: string },
+  opts: SendSignatureOptions,
 ): Promise<SendSignatureResult> {
-  const { documentId, tenantId, recipient, contactDetails } = opts;
+  const { documentId, recipient, contactDetails } = opts;
   const origin = window.location.origin;
 
-  const { data: doc, error: docError } = await supabase
-    .from("signature_documents")
-    .select("id, document_fields, status")
-    .eq("id", documentId)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-  if (docError || !doc) throw new Error("מסמך לא נמצא");
+  const doc = await fetchSignatureDocument(documentId);
+  const tenantId = doc.tenant_id;
 
   const { data: existing } = await supabase
     .from("signature_recipients")
@@ -56,7 +96,7 @@ async function prepareDirectClientSide(
   if (!existing?.length) {
     const fields = Array.isArray(doc.document_fields) ? doc.document_fields : [];
     const sigField = fields.find((f: { type?: string }) => f.type === "signature") as { position?: unknown } | undefined;
-    const { error: insertError } = await supabase.from("signature_recipients").insert({
+    await insertRecipientWithFallback({
       document_id: documentId,
       tenant_id: tenantId,
       name: recipient.name.trim(),
@@ -65,7 +105,6 @@ async function prepareDirectClientSide(
       signature_position: sigField?.position ?? null,
       role: "signer",
     });
-    if (insertError) throw insertError;
   }
 
   if (doc.status === "draft") {
@@ -94,6 +133,20 @@ async function prepareDirectClientSide(
     })),
     emailSent: false,
   };
+}
+
+function parseInvokeError(data: unknown, error: Error | null): string | null {
+  if (data && typeof data === "object" && "error" in data && data.error) {
+    return String(data.error);
+  }
+  return error?.message ?? null;
+}
+
+/** Prepare signing links without sending email/WhatsApp. */
+export async function prepareSigningLinks(
+  opts: SendSignatureOptions & { tenantId?: string },
+): Promise<SendSignatureResult> {
+  return sendSignatureDocument({ ...opts, sendEmail: false });
 }
 
 export async function sendSignatureDocument(
@@ -135,7 +188,8 @@ export async function sendSignatureDocument(
         };
 
   const { data, error } = await supabase.functions.invoke(functionName, { body });
-  if (!error && !data?.error) {
+  const invokeError = parseInvokeError(data, error);
+  if (!invokeError) {
     return {
       documentId: data.documentId ?? documentId,
       signingLinks: (data.signingLinks ?? []).map((l: SigningLinkResult) => ({
@@ -148,21 +202,16 @@ export async function sendSignatureDocument(
   }
 
   if (mode === "template") {
-    throw new Error(data?.error || error?.message || "שגיאה בשליחה — נדרש deploy של send-signature-from-template");
+    throw new Error(invokeError || "שגיאה בשליחה — נדרש deploy של send-signature-from-template");
   }
 
-  const { data: tenantData } = await supabase.auth.getUser();
-  const tenantId =
-    opts.tenantId ??
-    (await supabase.rpc("get_user_tenant_id", { _user_id: tenantData.user?.id ?? "" })).data as string | null;
-  if (!tenantId) throw new Error(data?.error || error?.message || "שגיאה בשליחה");
-
-  const prepared = await prepareDirectClientSide({ ...opts, tenantId });
+  const prepared = await prepareDirectClientSide(opts);
   if (sendEmail) {
     const { data: emailData, error: emailError } = await supabase.functions.invoke("send-signature-request", {
       body: { documentId: prepared.documentId, baseUrl: window.location.origin, sendEmail: true },
     });
-    if (!emailError && !emailData?.error) {
+    const emailInvokeError = parseInvokeError(emailData, emailError);
+    if (!emailInvokeError) {
       return {
         ...prepared,
         emailSent: !!emailData.emailSent,

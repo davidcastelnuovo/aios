@@ -196,9 +196,9 @@ export async function prepareSignatureDocumentForSigning(
     .from('signature_documents')
     .select('*')
     .eq('id', documentId)
-    .eq('tenant_id', tenantId)
     .maybeSingle();
   if (docError || !doc) throw new Error('מסמך לא נמצא');
+  const effectiveTenantId = doc.tenant_id as string;
 
   let targetDocId = documentId;
 
@@ -208,7 +208,7 @@ export async function prepareSignatureDocumentForSigning(
     }
     targetDocId = await cloneSignatureFromTemplate(supabase, {
       templateDocumentId: documentId,
-      tenantId,
+      tenantId: effectiveTenantId,
       createdBy,
       recipientName: recipient.name.trim(),
       recipientEmail: recipient.email.trim(),
@@ -237,23 +237,32 @@ export async function prepareSignatureDocumentForSigning(
         0,
       );
 
-      const { error: insertError } = await supabase.from('signature_recipients').insert({
+      const recipientRow = {
         document_id: targetDocId,
-        tenant_id: tenantId,
+        tenant_id: effectiveTenantId,
         name: recipient.name.trim(),
         email: recipient.email.trim(),
         sign_order: 1,
         signature_position: position,
         role: 'signer',
         field_values: fieldPrefill,
-      });
+      };
+      let { error: insertError } = await supabase.from('signature_recipients').insert(recipientRow);
+      if (insertError?.message?.includes('field_values')) {
+        const { field_values: _fv, ...withoutFieldValues } = recipientRow;
+        insertError = (await supabase.from('signature_recipients').insert(withoutFieldValues)).error;
+      }
+      if (insertError?.message?.includes('signature_position')) {
+        const { signature_position: _sp, field_values: _fv, ...minimal } = recipientRow;
+        insertError = (await supabase.from('signature_recipients').insert(minimal)).error;
+      }
       if (insertError) throw insertError;
     }
   }
 
   await sendSignatureDocumentEmails(supabase, {
     documentId: targetDocId,
-    tenantId,
+    tenantId: effectiveTenantId,
     baseUrl,
     sendEmail: false,
     requireEmailSuccess: false,
@@ -348,9 +357,9 @@ export async function cloneSignatureFromTemplate(
     .from('signature_documents')
     .select('*')
     .eq('id', templateDocumentId)
-    .eq('tenant_id', tenantId)
     .maybeSingle();
   if (sourceError || !source) throw new Error('מסמך לא נמצא');
+  const effectiveTenantId = (source.tenant_id as string) || tenantId;
 
   const isReusable = source.is_template === true || source.status === 'draft';
   if (!isReusable) {
@@ -374,37 +383,54 @@ export async function cloneSignatureFromTemplate(
       : null)
     ?? null;
 
-  const { data: doc, error: docError } = await supabase
-    .from('signature_documents')
-    .insert({
-      tenant_id: tenantId,
-      title: documentTitle || template.title,
-      content: template.content,
-      file_url: template.file_url,
-      document_type: template.document_type,
-      status: 'draft',
-      created_by: createdBy,
-      is_template: false,
-      document_fields: template.document_fields ?? [],
-      lead_id: leadId ?? null,
-      client_id: clientId ?? null,
-    })
-    .select('id')
-    .single();
+  const insertPayload = {
+    tenant_id: effectiveTenantId,
+    title: documentTitle || template.title,
+    content: template.content,
+    file_url: template.file_url,
+    document_type: template.document_type,
+    status: 'draft',
+    created_by: createdBy,
+    is_template: false,
+    document_fields: template.document_fields ?? [],
+    lead_id: leadId ?? null,
+    client_id: clientId ?? null,
+  };
+
+  let docResult = await supabase.from('signature_documents').insert(insertPayload).select('id').single();
+  if (docResult.error?.message?.includes('document_fields')) {
+    const { document_fields: _df, ...withoutFields } = insertPayload;
+    docResult = await supabase.from('signature_documents').insert(withoutFields).select('id').single();
+  }
+  if (docResult.error?.message?.includes('lead_id') || docResult.error?.message?.includes('client_id')) {
+    const { document_fields: _df, lead_id: _l, client_id: _c, ...minimal } = insertPayload;
+    docResult = await supabase.from('signature_documents').insert(minimal).select('id').single();
+  }
+  const doc = docResult.data;
+  const docError = docResult.error;
   if (docError || !doc) throw docError || new Error('יצירת מסמך נכשלה');
 
   const fieldPrefill = buildFieldPrefillFromContact(template.document_fields, contactDetails ?? {}, 0);
 
-  const { error: recError } = await supabase.from('signature_recipients').insert({
+  const recipientRow = {
     document_id: doc.id,
-    tenant_id: tenantId,
+    tenant_id: effectiveTenantId,
     name: recipientName,
     email: recipientEmail,
     sign_order: 1,
     signature_position: position,
     role: templateRecipients?.[0]?.role || 'signer',
     field_values: fieldPrefill,
-  });
+  };
+  let { error: recError } = await supabase.from('signature_recipients').insert(recipientRow);
+  if (recError?.message?.includes('field_values')) {
+    const { field_values: _fv, ...withoutFieldValues } = recipientRow;
+    recError = (await supabase.from('signature_recipients').insert(withoutFieldValues)).error;
+  }
+  if (recError?.message?.includes('signature_position')) {
+    const { signature_position: _sp, field_values: _fv, ...minimal } = recipientRow;
+    recError = (await supabase.from('signature_recipients').insert(minimal)).error;
+  }
   if (recError) throw recError;
 
   return doc.id;

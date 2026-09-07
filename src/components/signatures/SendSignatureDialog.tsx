@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Copy, Mail, Send } from "lucide-react";
+import { Copy, Link2, Mail } from "lucide-react";
 import {
   copyFirstSigningLink,
   openWhatsAppForLinks,
@@ -118,7 +118,7 @@ export function SendSignatureDialog({
 
   const canSubmit = !!doc && name.trim() && (email.trim() || phone.trim());
 
-  const handleSend = async () => {
+  const handlePrepareLink = async () => {
     if (!doc) return;
     if (!name.trim()) {
       toast.error("הזן שם חותם");
@@ -167,13 +167,15 @@ export function SendSignatureDialog({
       if (sendEmail && result.emailSent) toast.success("המייל נשלח");
       else if (sendEmail && !result.emailSent) {
         toast.warning("הקישור מוכן — שליחת המייל נכשלה (אפשר וואטסאפ/העתקה)");
-      } else toast.success("הקישור לחתימה מוכן");
+      } else {
+        toast.success("קישור לחתימה מוכן");
+      }
 
       if (result.partial) toast.warning("חלק מהמיילים לא נשלחו");
 
       onSuccess?.({ signingLinks: result.signingLinks, documentId: result.documentId });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "שגיאה בשליחה");
+      toast.error(err instanceof Error ? err.message : "שגיאה בהכנת קישור");
     } finally {
       setSending(false);
     }
@@ -262,7 +264,7 @@ export function SendSignatureDialog({
               </Label>
             </div>
             <p className="text-xs text-muted-foreground">
-              תמיד תוכל להעתיק את הקישור לחתימה — לפני או אחרי השליחה.
+              לחץ "קבל קישור" כדי לקבל קישור לחתימה. אפשר אחר כך לשלוח במייל או וואטסאפ.
             </p>
           </div>
 
@@ -309,14 +311,14 @@ export function SendSignatureDialog({
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-2 sm:gap-0 flex-wrap">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {done ? "סגור" : "ביטול"}
           </Button>
           {!done && (
-            <Button onClick={handleSend} disabled={!canSubmit || sending}>
-              <Send className="h-4 w-4 ml-2" />
-              {sending ? "מכין קישור..." : "שלח לחתימה"}
+            <Button onClick={handlePrepareLink} disabled={!canSubmit || sending}>
+              <Link2 className="h-4 w-4 ml-2" />
+              {sending ? "מכין קישור..." : "קבל קישור לחתימה"}
             </Button>
           )}
           {done && links[0] && (
