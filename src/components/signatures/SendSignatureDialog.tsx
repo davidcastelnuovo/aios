@@ -11,14 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Check, Copy, Link2, Mail } from "lucide-react";
+import { Check, Copy, Mail } from "lucide-react";
 import {
   copyFirstSigningLink,
   openWhatsAppForLinks,
   sendSignatureDocument,
   type SigningLinkResult,
 } from "@/lib/signatureSend";
-import { buildWhatsAppSignUrl, copySigningUrl } from "@/lib/signatureShare";
+import { buildWhatsAppSignUrl } from "@/lib/signatureShare";
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -55,7 +55,8 @@ export interface SendSignatureDialogProps {
   onSuccess?: (result: { signingLinks: SigningLinkResult[]; documentId: string }) => void;
 }
 
-type SendAction = "link" | "email" | "whatsapp";
+/** Three independent actions — none depends on the others. */
+type SendAction = "copy" | "email" | "whatsapp";
 
 export function SendSignatureDialog({
   open,
@@ -76,8 +77,7 @@ export function SendSignatureDialog({
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState<SendAction | null>(null);
   const [links, setLinks] = useState<SigningLinkResult[]>([]);
-  const [emailSent, setEmailSent] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [lastAction, setLastAction] = useState<SendAction | null>(null);
 
   const { data: existingRecipients = [] } = useQuery({
     queryKey: ["signature-recipients-for-send", doc?.id],
@@ -97,8 +97,7 @@ export function SendSignatureDialog({
     if (!open) {
       setLinks([]);
       setBusy(null);
-      setEmailSent(false);
-      setCopied(false);
+      setLastAction(null);
       return;
     }
     const existing = existingRecipients[0];
@@ -106,12 +105,11 @@ export function SendSignatureDialog({
     setEmail(defaultRecipient?.email || existing?.email || "");
     setPhone(defaultRecipient?.phone || "");
     setLinks([]);
-    setEmailSent(false);
-    setCopied(false);
+    setLastAction(null);
   }, [open, doc?.id, defaultRecipient, existingRecipients]);
 
   const canAct = !!doc && name.trim() && (email.trim() || phone.trim());
-  const canEmail = !!email.trim() || !!existingRecipients[0]?.email;
+  const canEmail = !!(email.trim() || existingRecipients[0]?.email);
   const canWhatsApp = !!phone.trim();
 
   const runAction = async (action: SendAction) => {
@@ -134,7 +132,9 @@ export function SendSignatureDialog({
     }
 
     const signingEmail =
-      email.trim() || existingRecipients[0]?.email || `${doc.id.replace(/-/g, "").slice(0, 12)}@sign.aios.local`;
+      email.trim() ||
+      existingRecipients[0]?.email ||
+      `${doc.id.replace(/-/g, "").slice(0, 12)}@sign.aios.local`;
 
     setBusy(action);
     try {
@@ -145,7 +145,11 @@ export function SendSignatureDialog({
         mode: resolvedMode,
         sendEmail: action === "email",
         tenantId,
-        recipient: { name: name.trim(), email: signingEmail, phone: phone.trim() || undefined },
+        recipient: {
+          name: name.trim(),
+          email: signingEmail,
+          phone: phone.trim() || undefined,
+        },
         contactDetails: {
           firstName: defaultRecipient?.firstName,
           lastName: defaultRecipient?.lastName,
@@ -157,23 +161,21 @@ export function SendSignatureDialog({
       });
 
       setLinks(result.signingLinks);
+      setLastAction(action);
 
-      if (action === "whatsapp") {
+      if (action === "copy") {
+        await copyFirstSigningLink(result.signingLinks);
+        toast.success("הקישור לחתימה הועתק");
+      } else if (action === "email") {
+        if (result.emailSent) toast.success("נשלח לאימייל");
+        else toast.warning("הכנה הצליחה — שליחת המייל נכשלה (אפשר להעתיק)");
+      } else if (action === "whatsapp") {
         const { opened } = openWhatsAppForLinks(
           result.signingLinks,
           documentTitleOverride || doc.title,
         );
         if (opened === 0) toast.warning("לא נמצא מספר טלפון תקין לוואטסאפ");
         else toast.success("נפתח וואטסאפ עם קישור לחתימה");
-      } else if (action === "email") {
-        if (result.emailSent) {
-          setEmailSent(true);
-          toast.success("המייל נשלח");
-        } else {
-          toast.warning("הקישור מוכן — שליחת המייל נכשלה (אפשר להעתיק)");
-        }
-      } else {
-        toast.success("קישור לחתימה מוכן");
       }
 
       onSuccess?.({ signingLinks: result.signingLinks, documentId: result.documentId });
@@ -182,14 +184,6 @@ export function SendSignatureDialog({
     } finally {
       setBusy(null);
     }
-  };
-
-  const handleCopy = async (url?: string) => {
-    if (url) await copySigningUrl(url);
-    else await copyFirstSigningLink(links);
-    setCopied(true);
-    toast.success("הקישור הועתק");
-    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -209,7 +203,11 @@ export function SendSignatureDialog({
             <p className="text-sm font-medium">פרטי החותם</p>
             <div className="space-y-2 min-w-0">
               <Label>שם</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="שם החותם" />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="שם החותם"
+              />
             </div>
             <div className="space-y-2 min-w-0">
               <Label>אימייל</Label>
@@ -235,15 +233,22 @@ export function SendSignatureDialog({
           </div>
 
           <div className="grid gap-2 min-w-0">
+            <p className="text-sm font-medium">בחר פעולה</p>
+
             <Button
               type="button"
-              onClick={() => runAction("link")}
+              onClick={() => runAction("copy")}
               disabled={!canAct || !!busy}
               className="w-full"
             >
-              <Link2 className="h-4 w-4 ml-2 shrink-0" />
-              {busy === "link" ? "מכין קישור..." : "קבל קישור לחתימה"}
+              {lastAction === "copy" && !busy ? (
+                <Check className="h-4 w-4 ml-2 shrink-0" />
+              ) : (
+                <Copy className="h-4 w-4 ml-2 shrink-0" />
+              )}
+              {busy === "copy" ? "מעתיק קישור..." : "העתק קישור לחתימה"}
             </Button>
+
             <Button
               type="button"
               variant="secondary"
@@ -252,8 +257,9 @@ export function SendSignatureDialog({
               className="w-full"
             >
               <Mail className="h-4 w-4 ml-2 shrink-0" />
-              {busy === "email" ? "שולח מייל..." : emailSent ? "שלח מייל שוב" : "שלח במייל"}
+              {busy === "email" ? "שולח לאימייל..." : "שלח לאימייל"}
             </Button>
+
             <Button
               type="button"
               variant="outline"
@@ -262,51 +268,26 @@ export function SendSignatureDialog({
               className="w-full text-green-700 border-green-200"
             >
               <WhatsAppIcon className="h-4 w-4 ml-2 shrink-0" />
-              {busy === "whatsapp" ? "פותח וואטסאפ..." : "שלח בוואטסאפ"}
+              {busy === "whatsapp" ? "פותח וואטסאפ..." : "שלח לוואטסאפ"}
             </Button>
           </div>
 
           {links.length > 0 && (
-            <div className="rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-3 min-w-0">
-              <div className="flex items-center gap-2 text-green-800 text-sm font-medium min-w-0">
+            <div className="rounded-lg border border-green-200 bg-green-50/50 p-3 min-w-0">
+              <p className="text-sm text-green-800 font-medium flex items-center gap-2">
                 <Check className="h-4 w-4 shrink-0" />
-                <span className="truncate">הקישור לחתימה מוכן</span>
-              </div>
-              <div className="grid gap-2 min-w-0">
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={() => handleCopy()}
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 ml-2 shrink-0" />
-                  ) : (
-                    <Copy className="h-4 w-4 ml-2 shrink-0" />
-                  )}
-                  {copied ? "הועתק!" : "העתק קישור"}
-                </Button>
-                {links.map((link) => {
-                  const wa = buildWhatsAppSignUrl({
-                    phone: link.phone ?? phone,
-                    signingUrl: link.url,
-                    recipientName: link.name,
-                    documentTitle: documentTitleOverride || doc?.title,
-                  });
-                  if (!wa) return null;
-                  return (
-                    <Button
-                      key={link.url}
-                      type="button"
-                      variant="outline"
-                      className="w-full text-green-700 border-green-200"
-                      onClick={() => window.open(wa, "_blank", "noopener,noreferrer")}
-                    >
-                      <WhatsAppIcon className="h-4 w-4 ml-2 shrink-0" />
-                      שלח בוואטסאפ
-                    </Button>
-                  );
-                })}
-              </div>
+                הקישור מוכן — אפשר להעתיק או לשלוח שוב בכל עת
+              </p>
+              {links[0] && buildWhatsAppSignUrl({
+                phone: links[0].phone ?? phone,
+                signingUrl: links[0].url,
+                recipientName: links[0].name,
+                documentTitle: documentTitleOverride || doc?.title,
+              }) && (
+                <p className="text-xs text-muted-foreground mt-1 truncate">
+                  חותם: {links[0].name}
+                </p>
+              )}
             </div>
           )}
         </div>
