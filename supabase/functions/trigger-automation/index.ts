@@ -2652,11 +2652,21 @@ async function resolveAutomationEmailFrom(
     throw new Error('לא הוגדר דומיין שליחה מאומת לארגון. הוסף דומיין בדיוור → הגדרות שולח.')
   }
 
+  let domainName = String(domainRow.domain || '').trim().toLowerCase()
+  let defaultLocal = String(domainRow.default_local || 'noreply').trim().toLowerCase()
+  const looksLikeVerifiedDomain = (value: string) =>
+    /\.(co\.il|org\.il|ac\.il|gov\.il|com|net|org|io|co)$/i.test(value)
+  if (looksLikeVerifiedDomain(defaultLocal) && !looksLikeVerifiedDomain(domainName)) {
+    const swappedLocal = domainName || 'noreply'
+    domainName = defaultLocal
+    defaultLocal = swappedLocal
+  }
+
   const fromMode = config?.from_mode || 'default'
   const localPart = fromMode === 'custom'
-    ? String(config?.from_local || domainRow.default_local || 'noreply').trim()
-    : String(domainRow.default_local || 'noreply').trim()
-  const fromEmail = `${localPart}@${domainRow.domain}`
+    ? String(config?.from_local || defaultLocal || 'noreply').trim()
+    : String(defaultLocal || 'noreply').trim()
+  const fromEmail = `${localPart}@${domainName}`
   const fromName = fromMode === 'custom'
     ? (String(config?.from_name || '').trim() || domainRow.from_name || null)
     : (domainRow.from_name || null)

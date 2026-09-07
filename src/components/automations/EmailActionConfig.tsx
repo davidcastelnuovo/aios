@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useBroadcastDomains } from "@/hooks/useBroadcastDomains";
+import { formatSenderEmail } from "@/lib/senderEmailDomain";
 import { EmailRecipientsListEditor, migrateLegacyEmailRecipients } from "./EmailRecipientsListEditor";
 
 interface Props {
@@ -127,7 +128,7 @@ export function EmailActionConfig({ configuration, availableFields, tenantId, on
         ) : (
           <>
             <div className="space-y-2">
-              <Label className="text-right block text-xs">דומיין מאומת</Label>
+              <Label className="text-right block text-xs">דומיין מאומת ב-Resend</Label>
               <Select
                 value={configuration?.sender_domain_id || selectedDomain?.id || ""}
                 onValueChange={(v) => onConfigChange("sender_domain_id", v)}
@@ -138,7 +139,7 @@ export function EmailActionConfig({ configuration, availableFields, tenantId, on
                 <SelectContent>
                   {domains.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
-                      {d.default_local}@{d.domain}
+                      <span dir="ltr">{formatSenderEmail(d.default_local, d.domain)}</span>
                       {d.from_name ? ` · ${d.from_name}` : ""}
                       {d.is_default ? " (ברירת מחדל)" : ""}
                     </SelectItem>
@@ -153,7 +154,11 @@ export function EmailActionConfig({ configuration, availableFields, tenantId, on
                 onClick={() => onConfigChange("from_mode", "default")}
                 className={`rounded border px-2 py-1 ${fromMode === "default" ? "bg-primary text-primary-foreground" : ""}`}
               >
-                ברירת מחדל ({selectedDomain ? `${selectedDomain.default_local}@${selectedDomain.domain}` : ""})
+                ברירת מחדל (
+                <span dir="ltr">
+                  {selectedDomain ? formatSenderEmail(selectedDomain.default_local, selectedDomain.domain) : ""}
+                </span>
+                )
               </button>
               <button
                 type="button"
@@ -176,7 +181,7 @@ export function EmailActionConfig({ configuration, availableFields, tenantId, on
                   <Input
                     value={configuration?.from_local || selectedDomain?.default_local || "noreply"}
                     onChange={(e) => onConfigChange("from_local", e.target.value)}
-                    placeholder="info"
+                    placeholder="pdpsagot"
                     className="flex-1"
                     dir="ltr"
                   />
@@ -188,7 +193,9 @@ export function EmailActionConfig({ configuration, availableFields, tenantId, on
                     dir="ltr"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground text-right">ניתן לשלוח רק מדומיין מאומת ב-Resend.</p>
+                <p className="text-xs text-muted-foreground text-right">
+                  דוגמה: <span dir="ltr">pdpsagot@aios.co.il</span> — רק הדומיין מאומת ב-Resend.
+                </p>
               </div>
             )}
           </>
