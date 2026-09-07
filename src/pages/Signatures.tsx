@@ -332,14 +332,17 @@ export default function Signatures() {
       fields: DocumentField[];
       thenSend?: boolean;
     }) => {
-      await updateSignatureDocumentFields(doc.id, fields);
-      await syncSignatureRecipientPosition(doc.id, fields);
-      return { doc, thenSend: !!thenSend };
+      const result = await updateSignatureDocumentFields(doc.id, fields);
+      return { doc, thenSend: !!thenSend, ...result };
     },
-    onSuccess: async ({ doc, thenSend }) => {
+    onSuccess: async ({ doc, thenSend, savedDocumentFields }) => {
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["signature-source-documents", tenantId] });
-      toast.success(doc.is_template ? "התבנית נשמרה" : "המסמך נשמר — מוכן לשליחה");
+      if (!savedDocumentFields) {
+        toast.warning("מיקום החתימה נשמר — שדות מלאים דורשים migration");
+      } else {
+        toast.success(doc.is_template ? "התבנית נשמרה" : "המסמך נשמר — מוכן לשליחה");
+      }
       closeFieldEditor();
 
       if (thenSend && !doc.is_template) {
