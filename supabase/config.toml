@@ -409,6 +409,9 @@ verify_jwt = true
 [functions.send-signature-request]
 verify_jwt = true
 
+[functions.send-signature-from-template]
+verify_jwt = true
+
 [functions.submit-signature]
 verify_jwt = false
 

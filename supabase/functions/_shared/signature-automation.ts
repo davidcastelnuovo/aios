@@ -157,6 +157,37 @@ export async function sendSignatureDocumentEmails(
   return { sent, results };
 }
 
+function buildFieldPrefillFromContact(
+  documentFields: unknown,
+  contact: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    address?: string;
+    idNumber?: string;
+  },
+  recipientIndex = 0,
+): Record<string, string> {
+  if (!Array.isArray(documentFields)) return {};
+  const typeToValue: Record<string, string | undefined> = {
+    first_name: contact.firstName,
+    last_name: contact.lastName,
+    phone: contact.phone,
+    address: contact.address,
+    id_number: contact.idNumber,
+  };
+  const prefill: Record<string, string> = {};
+  for (const field of documentFields) {
+    if (!field || typeof field !== 'object') continue;
+    const f = field as { id?: string; type?: string; recipient_index?: number };
+    if ((f.recipient_index ?? 0) !== recipientIndex) continue;
+    if (!f.id || !f.type || f.type === 'signature' || f.type === 'date') continue;
+    const val = typeToValue[f.type];
+    if (val?.trim()) prefill[f.id] = val.trim();
+  }
+  return prefill;
+}
+
 export async function cloneSignatureFromTemplate(
   supabase: SupabaseClient,
   opts: {
@@ -166,9 +197,24 @@ export async function cloneSignatureFromTemplate(
     recipientName: string;
     recipientEmail: string;
     documentTitle?: string;
+    contactDetails?: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      address?: string;
+      idNumber?: string;
+    };
   },
 ): Promise<string> {
-  const { templateDocumentId, tenantId, createdBy, recipientName, recipientEmail, documentTitle } = opts;
+  const {
+    templateDocumentId,
+    tenantId,
+    createdBy,
+    recipientName,
+    recipientEmail,
+    documentTitle,
+    contactDetails,
+  } = opts;
 
   const { data: template, error: templateError } = await supabase
     .from('signature_documents')
@@ -208,6 +254,8 @@ export async function cloneSignatureFromTemplate(
     .single();
   if (docError || !doc) throw docError || new Error('יצירת מסמך נכשלה');
 
+  const fieldPrefill = buildFieldPrefillFromContact(template.document_fields, contactDetails ?? {}, 0);
+
   const { error: recError } = await supabase.from('signature_recipients').insert({
     document_id: doc.id,
     tenant_id: tenantId,
@@ -216,6 +264,7 @@ export async function cloneSignatureFromTemplate(
     sign_order: 1,
     signature_position: position,
     role: templateRecipients?.[0]?.role || 'signer',
+    field_values: fieldPrefill,
   });
   if (recError) throw recError;
 
