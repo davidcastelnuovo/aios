@@ -9,7 +9,8 @@ function clientIp(req: Request): string | null {
 
 interface SubmitSignatureBody {
   token: string;
-  signatureData: string;
+  signatureData?: string;
+  fieldValues?: Record<string, string>;
   action?: 'sign' | 'decline';
 }
 
@@ -17,7 +18,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { token, signatureData, action = 'sign' }: SubmitSignatureBody = await req.json();
+    const { token, signatureData, fieldValues, action = 'sign' }: SubmitSignatureBody = await req.json();
     if (!token) {
       return new Response(JSON.stringify({ error: 'missing_token' }), { status: 400, headers: corsHeaders });
     }
@@ -45,6 +46,7 @@ Deno.serve(async (req) => {
         _token: token,
         _signature_data: signatureData,
         _ip: ip,
+        _field_values: fieldValues ?? {},
       });
       if (error) throw error;
       result = data as Record<string, unknown>;

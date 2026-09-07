@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link, Download, History } from "lucide-react";
 import { format } from "date-fns";
 import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
+import { type DocumentField, parseDocumentFields } from "@/components/signatures/signatureFieldTypes";
 
 interface Recipient {
   name: string;
@@ -65,6 +66,7 @@ export default function Signatures() {
   const [showPlacement, setShowPlacement] = useState(false);
   const [isTemplate, setIsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
+  const [documentFields, setDocumentFields] = useState<DocumentField[]>([]);
 
   // Fetch documents
   const { data: documents, isLoading } = useQuery({
@@ -171,25 +173,32 @@ export default function Signatures() {
           created_by: userId,
           is_template: isTemplate,
           template_name: isTemplate ? (templateName || title) : null,
+          document_fields: documentFields as any,
         })
         .select()
         .single();
       if (docError) throw docError;
 
-      // Add recipients with positions
+      // Add recipients with positions (legacy signature_position from first signature field per recipient)
       const validRecipients = recipients.filter(r => r.name && r.email);
       if (validRecipients.length > 0) {
         const { error: recError } = await supabase
           .from("signature_recipients")
           .insert(
-            validRecipients.map((r, i) => ({
-              document_id: doc.id,
-              tenant_id: tenantId,
-              name: r.name,
-              email: r.email,
-              sign_order: i + 1,
-              signature_position: r.signaturePosition as any,
-            }))
+            validRecipients.map((r, i) => {
+              const sigField = documentFields.find(
+                (f) => f.type === "signature" && (f.recipient_index ?? 0) === i,
+              );
+              const position = sigField?.position ?? r.signaturePosition;
+              return {
+                document_id: doc.id,
+                tenant_id: tenantId,
+                name: r.name,
+                email: r.email,
+                sign_order: i + 1,
+                signature_position: position as any,
+              };
+            })
           );
         if (recError) throw recError;
       }
@@ -252,6 +261,7 @@ export default function Signatures() {
     setShowPlacement(false);
     setIsTemplate(false);
     setTemplateName("");
+    setDocumentFields([]);
   };
 
   const addRecipient = () => setRecipients([...recipients, { name: "", email: "", signaturePosition: null }]);
@@ -272,11 +282,9 @@ export default function Signatures() {
     }
   };
 
-  const handlePositionChange = (index: number, position: SignaturePosition) => {
-    const updated = [...recipients];
-    updated[index] = { ...updated[index], signaturePosition: position };
-    setRecipients(updated);
-  };
+  const recipientIndexForPlacement = recipients
+    .map((r, i) => ({ index: i, name: r.name, color: getRecipientColor(i) }))
+    .filter((r) => r.name);
 
   // Get preview URL for placement
   const getPreviewUrl = (): string | null => {
@@ -304,7 +312,7 @@ export default function Signatures() {
       <div className="fixed inset-0 z-50 bg-background flex flex-col" dir="rtl">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-background">
-          <h2 className="text-lg font-bold text-foreground">הגדרת מיקום חתימות — {title}</h2>
+          <h2 className="text-lg font-bold text-foreground">הגדרת שדות וחתימות — {title}</h2>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowPlacement(false)}>
               חזור
@@ -322,13 +330,9 @@ export default function Signatures() {
           <SignatureFieldPlacer
             fileUrl={previewUrl}
             fullScreen
-            recipients={recipients.filter(r => r.name).map((r, i) => ({
-              index: i,
-              name: r.name,
-              color: getRecipientColor(i),
-              position: r.signaturePosition,
-            }))}
-            onPositionChange={handlePositionChange}
+            recipients={recipientIndexForPlacement}
+            fields={documentFields}
+            onFieldsChange={setDocumentFields}
           />
         </div>
       </div>
@@ -477,7 +481,7 @@ export default function Signatures() {
                 <Button variant="outline" onClick={() => setIsCreateOpen(false)}>ביטול</Button>
                 {canShowPlacement && (
                   <Button variant="secondary" onClick={() => { setIsCreateOpen(false); setShowPlacement(true); }}>
-                    הגדר מיקום חתימות
+                    הגדר שדות וחתימות
                   </Button>
                 )}
                 <Button
@@ -651,6 +655,21 @@ export default function Signatures() {
                 </Card>
               )}
 
+              {selectedDoc.document_fields && parseDocumentFields(selectedDoc.document_fields).length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">שדות במסמך</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {parseDocumentFields(selectedDoc.document_fields).map((f) => (
+                        <Badge key={f.id} variant="outline">{f.label}</Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Recipients */}
               <Card>
                 <CardHeader>
@@ -668,7 +687,7 @@ export default function Signatures() {
                               <p className="font-medium text-sm">{r.name}</p>
                               <p className="text-xs text-muted-foreground">{r.email}</p>
                               {r.signature_position && (
-                                <p className="text-xs text-primary">📍 מיקום חתימה מוגדר</p>
+                                <p className="text-xs text-primary">📍 שדות מוגדרים</p>
                               )}
                             </div>
                           </div>

@@ -185,7 +185,11 @@ export async function cloneSignatureFromTemplate(
     .eq('document_id', templateDocumentId)
     .order('sign_order');
 
-  const position = templateRecipients?.[0]?.signature_position ?? null;
+  const position = templateRecipients?.[0]?.signature_position
+    ?? (Array.isArray(template.document_fields)
+      ? template.document_fields.find((f: { type?: string }) => f.type === 'signature')?.position
+      : null)
+    ?? null;
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
@@ -198,6 +202,7 @@ export async function cloneSignatureFromTemplate(
       status: 'draft',
       created_by: createdBy,
       is_template: false,
+      document_fields: template.document_fields ?? [],
     })
     .select('id')
     .single();

@@ -7035,6 +7035,7 @@ export type Database = {
           created_at: string | null
           created_by: string
           document_type: string
+          document_fields: Json
           file_url: string | null
           id: string
           is_template: boolean
@@ -7051,6 +7052,7 @@ export type Database = {
           created_at?: string | null
           created_by: string
           document_type?: string
+          document_fields?: Json
           file_url?: string | null
           id?: string
           is_template?: boolean
@@ -7067,6 +7069,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string
           document_type?: string
+          document_fields?: Json
           file_url?: string | null
           id?: string
           is_template?: boolean
@@ -7092,6 +7095,7 @@ export type Database = {
           created_at: string | null
           document_id: string
           email: string
+          field_values: Json
           id: string
           ip_address: string | null
           name: string
@@ -7109,6 +7113,7 @@ export type Database = {
           created_at?: string | null
           document_id: string
           email: string
+          field_values?: Json
           id?: string
           ip_address?: string | null
           name: string
@@ -7126,6 +7131,7 @@ export type Database = {
           created_at?: string | null
           document_id?: string
           email?: string
+          field_values?: Json
           id?: string
           ip_address?: string | null
           name?: string

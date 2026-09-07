@@ -10,6 +10,15 @@ interface SignaturePosition {
   page: number;
 }
 
+interface DocumentField {
+  id: string;
+  type: string;
+  label: string;
+  position: SignaturePosition;
+  required?: boolean;
+  recipient_index?: number;
+}
+
 interface RecipientRow {
   id: string;
   name: string;
@@ -18,6 +27,8 @@ interface RecipientRow {
   signature_position: SignaturePosition | null;
   signed_at: string | null;
   status: string;
+  sign_order: number | null;
+  field_values: Record<string, string> | null;
 }
 
 function decodeBase64Png(dataUrl: string): Uint8Array {
@@ -74,13 +85,33 @@ async function drawSignatureOnPage(
   page.drawImage(pngImage, { x, y, width: sigWidth, height: sigHeight });
 }
 
+async function drawTextOnPage(
+  pdfDoc: PDFDocument,
+  pageIndex: number,
+  text: string,
+  position: SignaturePosition,
+  font: any,
+): Promise<void> {
+  const pages = pdfDoc.getPages();
+  const page = pages[Math.min(pageIndex, pages.length - 1)];
+  const { width: pageWidth, height: pageHeight } = page.getSize();
+  const boxWidth = (position.width / 100) * pageWidth;
+  const boxHeight = (position.height / 100) * pageHeight;
+  const x = (position.x / 100) * pageWidth;
+  const y = pageHeight - (position.y / 100) * pageHeight - boxHeight * 0.7;
+  const fontSize = Math.min(12, Math.max(7, boxHeight * 0.55));
+  const maxChars = Math.floor(boxWidth / (fontSize * 0.5));
+  page.drawText(text.slice(0, maxChars), { x, y, size: fontSize, font, color: rgb(0, 0, 0) });
+}
+
 async function buildSignedPdf(doc: {
   title: string;
   content: string | null;
   file_url: string | null;
   document_type: string;
+  document_fields?: DocumentField[] | null;
 }, recipients: RecipientRow[]): Promise<Uint8Array> {
-  const signedRecipients = recipients.filter((r) => r.status === 'signed' && r.signature_data);
+  const signedRecipients = recipients.filter((r) => r.status === 'signed');
   let pdfDoc: PDFDocument;
 
   if (doc.file_url && isPdfUrl(doc.file_url)) {
@@ -130,12 +161,33 @@ async function buildSignedPdf(doc: {
   }
 
   let fallbackIndex = 0;
+  const docFields = Array.isArray(doc.document_fields) ? doc.document_fields : [];
+  const textFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
   for (const recipient of signedRecipients) {
-    if (!recipient.signature_data) continue;
-    const pngBytes = decodeBase64Png(recipient.signature_data);
-    const pageIndex = Math.max(0, (recipient.signature_position?.page ?? 1) - 1);
-    await drawSignatureOnPage(pdfDoc, pageIndex, pngBytes, recipient.signature_position, fallbackIndex);
-    fallbackIndex++;
+    const recipientIndex = Math.max(0, (recipient.sign_order ?? 1) - 1);
+    const values = recipient.field_values ?? {};
+
+    if (docFields.length > 0) {
+      for (const field of docFields) {
+        if ((field.recipient_index ?? 0) !== recipientIndex) continue;
+        const value = values[field.id];
+        if (!value) continue;
+        const pageIndex = Math.max(0, (field.position?.page ?? 1) - 1);
+
+        if (field.type === 'signature') {
+          const pngBytes = decodeBase64Png(value);
+          await drawSignatureOnPage(pdfDoc, pageIndex, pngBytes, field.position, fallbackIndex);
+        } else {
+          await drawTextOnPage(pdfDoc, pageIndex, value, field.position, textFont);
+        }
+      }
+    } else if (recipient.signature_data) {
+      const pngBytes = decodeBase64Png(recipient.signature_data);
+      const pageIndex = Math.max(0, (recipient.signature_position?.page ?? 1) - 1);
+      await drawSignatureOnPage(pdfDoc, pageIndex, pngBytes, recipient.signature_position, fallbackIndex);
+      fallbackIndex++;
+    }
   }
 
   // Audit summary page
@@ -177,7 +229,7 @@ Deno.serve(async (req) => {
 
     const { data: doc, error: docError } = await supabase
       .from('signature_documents')
-      .select('id, title, content, file_url, document_type, tenant_id, status')
+      .select('id, title, content, file_url, document_type, tenant_id, status, document_fields')
       .eq('id', documentId)
       .maybeSingle();
 
@@ -191,7 +243,7 @@ Deno.serve(async (req) => {
 
     const { data: recipients, error: recError } = await supabase
       .from('signature_recipients')
-      .select('id, name, email, signature_data, signature_position, signed_at, status')
+      .select('id, name, email, signature_data, signature_position, signed_at, status, sign_order, field_values')
       .eq('document_id', documentId)
       .order('sign_order');
 
