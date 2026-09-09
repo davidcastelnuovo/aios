@@ -243,39 +243,36 @@ async function buildSignedPdf(doc: {
   const docFields = Array.isArray(doc.document_fields) ? doc.document_fields : [];
   const textFont = await embedFieldFont(pdfDoc);
 
-  let businessName = (doc.business_stamp_name || '').trim();
+  let fallbackBusinessName = (doc.business_stamp_name || '').trim();
   let companyId = (doc.business_stamp_company_id || '').trim();
-  if (!businessName && doc.client_id) {
+  if (!fallbackBusinessName && doc.client_id) {
     const { data: client } = await supabase.from('clients').select('name').eq('id', doc.client_id).maybeSingle();
-    businessName = (client?.name || '').trim();
+    fallbackBusinessName = (client?.name || '').trim();
   }
-  if (!businessName && doc.lead_id) {
+  if (!fallbackBusinessName && doc.lead_id) {
     const { data: lead } = await supabase
       .from('leads')
       .select('company_name, contact_name')
       .eq('id', doc.lead_id)
       .maybeSingle();
-    businessName = (lead?.company_name || lead?.contact_name || '').trim();
+    fallbackBusinessName = (lead?.company_name || lead?.contact_name || '').trim();
   }
 
   for (const recipient of signedRecipients) {
     const recipientIndex = Math.max(0, (recipient.sign_order ?? 1) - 1);
     const values = recipient.field_values ?? {};
-    if (!businessName) businessName = (recipient.name || '').trim();
 
     let recipientCompanyId = companyId;
+    let recipientCompanyName = '';
     for (const field of docFields) {
       if ((field.recipient_index ?? 0) !== recipientIndex) continue;
-      if (field.type === 'id_number' && values[field.id]?.trim()) {
-        recipientCompanyId = values[field.id].trim();
-        break;
-      }
+      const filled = values[field.id]?.trim();
+      if (!filled) continue;
+      if (field.type === 'id_number') recipientCompanyId = filled;
+      if (field.type === 'company_name') recipientCompanyName = filled;
     }
 
-    const businessStampPng = await renderBusinessStampPng({
-      businessName: businessName || recipient.name || 'חותם',
-      companyId: recipientCompanyId || null,
-    });
+    const stampName = (recipientCompanyName || fallbackBusinessName || '').trim();
 
     if (docFields.length > 0) {
       for (const field of docFields) {
@@ -284,8 +281,15 @@ async function buildSignedPdf(doc: {
         if (!value) continue;
         const pageIndex = Math.max(0, (field.position?.page ?? 1) - 1);
 
-        if (field.type === 'signature') {
+        if (field.type === 'signature' || field.type === 'signature_stamp') {
           const pngBytes = decodeBase64Png(value);
+          const withStamp = field.type === 'signature_stamp' && !!stampName;
+          const businessStampPng = withStamp
+            ? await renderBusinessStampPng({
+              businessName: stampName,
+              companyId: recipientCompanyId || null,
+            })
+            : null;
           await drawSignatureOnPage(
             pdfDoc,
             pageIndex,
@@ -299,6 +303,7 @@ async function buildSignedPdf(doc: {
         }
       }
     } else if (recipient.signature_data) {
+      // Legacy single-signature docs: no company stamp (use signature_stamp field for that).
       const pngBytes = decodeBase64Png(recipient.signature_data);
       const pageIndex = Math.max(0, (recipient.signature_position?.page ?? 1) - 1);
       await drawSignatureOnPage(
@@ -307,7 +312,7 @@ async function buildSignedPdf(doc: {
         pngBytes,
         recipient.signature_position,
         fallbackIndex,
-        businessStampPng,
+        null,
       );
       fallbackIndex++;
     }

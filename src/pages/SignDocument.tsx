@@ -13,6 +13,8 @@ import {
   parseDocumentFields,
   getFieldLabel,
   getFieldFontSizePx,
+  isSignatureFieldType,
+  isStampSignatureType,
 } from "@/components/signatures/signatureFieldTypes";
 import { useSignatureDocumentUrl } from "@/hooks/useSignatureDocumentUrl";
 import { SignatureDocumentViewer } from "@/components/signatures/SignatureDocumentViewer";
@@ -84,8 +86,16 @@ export default function SignDocument() {
     .filter((f) => f.type === "id_number")
     .map((f) => fieldValues[f.id]?.trim())
     .find(Boolean);
+  const companyNameFromFields = myFields
+    .filter((f) => f.type === "company_name")
+    .map((f) => fieldValues[f.id]?.trim())
+    .find(Boolean);
   const stampCompanyId = (idNumberFromFields || businessStamp.company_id || "").trim();
-  const stampBusinessName = (businessStamp.name || recipient?.name || "").trim();
+  const stampBusinessName = (
+    companyNameFromFields ||
+    businessStamp.name ||
+    ""
+  ).trim();
   const companyIdLabel = stampCompanyId
     ? (/^\d+$/.test(stampCompanyId) ? `ח.פ/ע.מ ${stampCompanyId}` : stampCompanyId)
     : "";
@@ -124,7 +134,7 @@ export default function SignDocument() {
   useEffect(() => {
     if (!useOverlay) return;
     const ids = hasDocumentFields
-      ? pageFields.filter((f) => f.type === "signature").map((f) => f.id)
+      ? pageFields.filter((f) => isSignatureFieldType(f.type)).map((f) => f.id)
       : legacyOnCurrentPage && signaturePosition
         ? ["legacy"]
         : [];
@@ -228,7 +238,7 @@ export default function SignDocument() {
 
     for (const field of myFields) {
       if (!field.required) continue;
-      if (field.type === "signature") {
+      if (isSignatureFieldType(field.type)) {
         if (!signatureFieldSigned[field.id]) {
           toast.error(`נא למלא שדה: ${getFieldLabel(field.type)}`);
           return false;
@@ -243,7 +253,7 @@ export default function SignDocument() {
 
   const collectFieldValues = (): Record<string, string> => {
     const values = { ...fieldValues };
-    for (const field of myFields.filter((f) => f.type === "signature")) {
+    for (const field of myFields.filter((f) => isSignatureFieldType(f.type))) {
       const canvas = signatureCanvasRefs.current[field.id];
       if (canvas && signatureFieldSigned[field.id]) {
         values[field.id] = canvas.toDataURL("image/png");
@@ -253,7 +263,7 @@ export default function SignDocument() {
   };
 
   const getPrimarySignatureData = (values: Record<string, string>): string => {
-    const sigField = myFields.find((f) => f.type === "signature");
+    const sigField = myFields.find((f) => isSignatureFieldType(f.type));
     if (sigField && values[sigField.id]) return values[sigField.id];
     if (canvasRef.current && hasSignature) return canvasRef.current.toDataURL("image/png");
     const legacyCanvas = signatureCanvasRefs.current["legacy"];
@@ -309,9 +319,9 @@ export default function SignDocument() {
   });
 
   const canSubmit = hasDocumentFields
-    ? myFields.some((f) => f.type === "signature")
+    ? myFields.some((f) => isSignatureFieldType(f.type))
       ? myFields.filter((f) => f.required).every((f) =>
-          f.type === "signature" ? signatureFieldSigned[f.id] : !!fieldValues[f.id]?.trim(),
+          isSignatureFieldType(f.type) ? signatureFieldSigned[f.id] : !!fieldValues[f.id]?.trim(),
         )
       : myFields.filter((f) => f.required).every((f) => !!fieldValues[f.id]?.trim())
     : hasSignature;
@@ -325,14 +335,14 @@ export default function SignDocument() {
     };
     const fontSize = getFieldFontSizePx(field.position, docContainerHeight);
 
-    if (field.type === "signature") {
+    if (isSignatureFieldType(field.type)) {
       return (
         <div
           key={field.id}
           className="absolute border-2 border-primary rounded bg-white/80 z-10 overflow-hidden"
           style={style}
         >
-          {stampBusinessName && (
+          {isStampSignatureType(field.type) && stampBusinessName && (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none px-1"
               style={{ color: "#6B7280", opacity: 0.72, transform: "rotate(-2deg)" }}
@@ -550,22 +560,6 @@ export default function SignDocument() {
                         height: `${signaturePosition.height}%`,
                       }}
                     >
-                      {stampBusinessName && (
-                        <div
-                          className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none px-1"
-                          style={{ color: "#6B7280", opacity: 0.72, transform: "rotate(-2deg)" }}
-                          aria-hidden
-                        >
-                          <div className="font-bold text-center leading-tight truncate max-w-full text-sm">
-                            {stampBusinessName}
-                          </div>
-                          {companyIdLabel && (
-                            <div className="text-center leading-tight truncate max-w-full text-xs mt-0.5">
-                              {companyIdLabel}
-                            </div>
-                          )}
-                        </div>
-                      )}
                       <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-bl z-10 pointer-events-none">
                         חתום כאן
                       </div>
@@ -583,8 +577,8 @@ export default function SignDocument() {
               </SignatureDocumentViewer>
 
               <div className="flex justify-end mt-2 gap-2 flex-wrap">
-                {hasDocumentFields && pageFields.some((f) => f.type === "signature") && (
-                  pageFields.filter((f) => f.type === "signature").map((f) => (
+                {hasDocumentFields && pageFields.some((f) => isSignatureFieldType(f.type)) && (
+                  pageFields.filter((f) => isSignatureFieldType(f.type)).map((f) => (
                     <Button key={f.id} variant="ghost" size="sm" onClick={() => clearSignature(f.id)}>
                       <Eraser className="h-4 w-4 ml-1" />
                       נקה {f.label || "חתימה"}

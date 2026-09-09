@@ -41,7 +41,7 @@ export async function syncSignatureRecipientPosition(
   docId: string,
   fields: DocumentField[],
 ): Promise<boolean> {
-  const sigField = fields.find((f) => f.type === "signature");
+  const sigField = fields.find((f) => f.type === "signature" || f.type === "signature_stamp");
   if (!sigField) return false;
 
   const { error } = await supabase

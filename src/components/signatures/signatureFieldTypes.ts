@@ -2,9 +2,12 @@ import type { SignaturePosition } from "./SignatureFieldPlacer";
 
 export type SignatureFieldType =
   | "signature"
+  | "signature_stamp"
   | "text"
   | "first_name"
   | "last_name"
+  | "full_name"
+  | "company_name"
   | "phone"
   | "address"
   | "date"
@@ -26,14 +29,25 @@ export const SIGNATURE_FIELD_OPTIONS: Array<{
   height: number;
 }> = [
   { type: "signature", label: "חתימה", width: 28, height: 10 },
+  { type: "signature_stamp", label: "חתימה עם חותמת", width: 30, height: 12 },
   { type: "text", label: "שדה כללי", width: 22, height: 5 },
-  { type: "first_name", label: "שם", width: 18, height: 5 },
+  { type: "first_name", label: "שם פרטי", width: 18, height: 5 },
   { type: "last_name", label: "שם משפחה", width: 18, height: 5 },
+  { type: "full_name", label: "שם מלא", width: 24, height: 5 },
+  { type: "company_name", label: "שם העסק/חברה", width: 26, height: 5 },
   { type: "phone", label: "טלפון", width: 20, height: 5 },
   { type: "address", label: "כתובת", width: 30, height: 6 },
   { type: "date", label: "תאריך", width: 14, height: 5 },
   { type: "id_number", label: "ח.פ / ת.ז", width: 18, height: 5 },
 ];
+
+export function isSignatureFieldType(type: string | undefined | null): boolean {
+  return type === "signature" || type === "signature_stamp";
+}
+
+export function isStampSignatureType(type: string | undefined | null): boolean {
+  return type === "signature_stamp";
+}
 
 export function getFieldLabel(type: SignatureFieldType): string {
   return SIGNATURE_FIELD_OPTIONS.find((o) => o.type === type)?.label ?? type;
