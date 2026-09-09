@@ -143,6 +143,18 @@ test('the platform breakdown row matches the Google Ads tab totals', () => {
   assert.equal(breakdown.spend, googleAdsTab.spend);
 });
 
+test('aggregateFacebookCampaignsFromRecords ignores adset/ad rows to avoid triple-counting', () => {
+  const records = [
+    { data: { entity_level: 'campaign', campaign_name: 'Camp A', spend: 100, leads: 5 } },
+    { data: { entity_level: 'adset', campaign_name: 'Camp A', spend: 100, leads: 5 } },
+    { data: { entity_level: 'ad', campaign_name: 'Camp A', spend: 100, leads: 5 } },
+  ];
+  const rows = aggregateFacebookCampaignsFromRecords(records);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].spend, 100);
+  assert.equal(rows[0].leads, 5);
+});
+
 test('mixed Facebook table is detected when campaign_type is unset', () => {
   assert.equal(facebookTableUsesMixedRows('facebook_insights', {}), true);
   assert.equal(facebookTableUsesMixedRows('facebook_insights', { campaign_type: 'leads' }), false);

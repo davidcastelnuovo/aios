@@ -55,6 +55,7 @@ import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
 import { fetchWooDashboardSummary, getWooDashboardDateRangeIso, invalidateWooDashboardQueries } from "@/lib/wooDashboardQueries";
 import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
+import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -415,6 +416,8 @@ export default function DashboardView() {
         // Exclude: traffic_source (no date), daily_source (per-source breakdown = double counting), top_pages
         if (data.report_type !== 'daily') return false;
       }
+      // Ads sync stores campaign + adset + ad rows; dashboards aggregate at campaign level only.
+      if (isAdsPlatform(source) && !shouldIncludeInAdsDashboardAggregate(record.data, source)) return false;
       return true;
     });
   }, [displayAllRecords, platformFilter]);
@@ -572,6 +575,7 @@ export default function DashboardView() {
       if (isAdsPlatform(source)) {
         const data = record.data || {};
         if (data.report_type && data.report_type !== 'daily') return;
+        if (!shouldIncludeInAdsDashboardAggregate(data, source)) return;
         spend += getSpendFromData(data);
         impressions += Number(data.impressions) || 0;
       }

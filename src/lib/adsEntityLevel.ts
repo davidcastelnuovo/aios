@@ -29,6 +29,34 @@ export function resolveRecordEntityLevel(data: Record<string, unknown> | undefin
   return 'campaign';
 }
 
+const ADS_INTEGRATION_TYPES = new Set([
+  'facebook_insights',
+  'facebook_ecommerce',
+  'google_ads',
+  'tiktok',
+]);
+
+export function isAdsIntegrationType(integrationType: string | null | undefined): boolean {
+  return !!integrationType && ADS_INTEGRATION_TYPES.has(integrationType);
+}
+
+/** Dashboards and pulse metrics must aggregate campaign-level rows only — adset/ad rows duplicate spend. */
+export function shouldIncludeInAdsDashboardAggregate(
+  data: Record<string, unknown> | undefined | null,
+  integrationType?: string | null,
+): boolean {
+  if (integrationType && !isAdsIntegrationType(integrationType)) return true;
+  return resolveRecordEntityLevel(data) === 'campaign';
+}
+
+export function filterCampaignLevelAdsRecords<T extends { data?: Record<string, any> }>(
+  records: T[],
+  integrationType?: string | null,
+): T[] {
+  if (!isAdsIntegrationType(integrationType)) return records;
+  return records.filter((record) => shouldIncludeInAdsDashboardAggregate(record.data, integrationType));
+}
+
 export function filterRecordsByEntityLevel<T extends { data?: Record<string, any> }>(
   records: T[],
   level: AdsEntityLevel,

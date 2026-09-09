@@ -20,6 +20,7 @@ import {
   getSessionsFromData,
   getSpendFromData,
 } from "@/lib/adsMetrics";
+import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
 
 import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
 import { ManualHealthEditDialog } from "@/components/clients/ManualHealthEditDialog";
@@ -608,6 +609,7 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter, custo
       if (isAnalyticsPlatform(integrationType)) {
         if (data.report_type !== 'traffic_source') return;
       }
+      if (isAdsPlatform(integrationType) && !shouldIncludeInAdsDashboardAggregate(data, integrationType)) return;
       
       const campaignName = isAnalyticsPlatform(integrationType) 
         ? (data.source_medium || 'Unknown')

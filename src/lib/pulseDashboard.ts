@@ -1,3 +1,5 @@
+import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
+
 /**
  * Helpers for the Pulse Check dashboard (דשבורד בדיקת דופק).
  * Maps deterministic campaign_pulse_snapshots into UI rows, and supports
@@ -266,6 +268,7 @@ export function computeGoalMetricsForBounds(
   const previous: PulseCrmRecord[] = [];
 
   for (const row of records) {
+    if (!shouldIncludeInAdsDashboardAggregate(row.data)) continue;
     const date = typeof row.data?.date === "string" ? row.data.date : null;
     if (!date) continue;
     if (date >= bounds.startDate && date <= bounds.endDate) current.push(row);

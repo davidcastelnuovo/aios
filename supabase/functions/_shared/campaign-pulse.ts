@@ -483,6 +483,11 @@ function roundMetric(value: number | null, digits = 2): number | null {
   return Math.round(value * factor) / factor
 }
 
+function isCampaignLevelAdsRow(data: Record<string, unknown> | null | undefined): boolean {
+  const level = String(data?.entity_level || 'campaign').toLowerCase()
+  return level === 'campaign'
+}
+
 /** Aggregate 7d + prior-window metrics for one campaign goal from CRM rows. */
 export function computeGoalMetricsFromRecords(
   records: RecordLike[],
@@ -491,6 +496,7 @@ export function computeGoalMetricsFromRecords(
   d14Str: string,
 ): GoalMetricBundle {
   const recent = records.filter((row) => {
+    if (!isCampaignLevelAdsRow(row.data || null)) return false
     const date = typeof row.data?.date === 'string' ? row.data.date : null
     return date && date >= d14Str
   })

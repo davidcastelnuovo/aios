@@ -8,6 +8,7 @@ import {
   hasEntityLevelData,
   recordMatchesEntitySearch,
   resolveRecordEntityLevel,
+  shouldIncludeInAdsDashboardAggregate,
 } from './adsEntityLevel.ts';
 
 test('legacy rows without entity_level are treated as campaign', () => {
@@ -59,4 +60,11 @@ test('hasEntityLevelData requires explicit rows for adset/ad', () => {
   const legacy = [{ data: { campaign_name: 'Only campaign' } }];
   assert.equal(hasEntityLevelData(legacy, 'campaign'), true);
   assert.equal(hasEntityLevelData(legacy, 'adset'), false);
+});
+
+test('shouldIncludeInAdsDashboardAggregate keeps campaign rows and drops adset/ad', () => {
+  assert.equal(shouldIncludeInAdsDashboardAggregate({ campaign_name: 'A' }, 'facebook_insights'), true);
+  assert.equal(shouldIncludeInAdsDashboardAggregate({ entity_level: 'adset', campaign_name: 'A' }, 'facebook_insights'), false);
+  assert.equal(shouldIncludeInAdsDashboardAggregate({ entity_level: 'ad', campaign_name: 'A' }, 'google_ads'), false);
+  assert.equal(shouldIncludeInAdsDashboardAggregate({ report_type: 'daily' }, 'google_analytics'), true);
 });
