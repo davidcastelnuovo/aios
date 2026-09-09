@@ -41,6 +41,7 @@ const CATEGORIES: Category[] = [
       { key: "sales-people", label: "אנשי מכירות", description: "ניהול צוות המכירות", route: "/sales-people", icon: UserCheck, permission: "sales_people", color: "bg-emerald-500/10 text-emerald-600" },
       { key: "campaigners", label: "קמפיינרים", description: "ניהול קמפיינרים וסוכנויות", route: "/campaigners", icon: Megaphone, permission: "campaigners", color: "bg-emerald-500/10 text-emerald-600" },
       { key: "products", label: "מוצרים ושירותים", description: "קטלוג מוצרים ומחירים", route: "/products", icon: Package, permission: "leads", color: "bg-emerald-500/10 text-emerald-600" },
+      { key: "signatures", label: "חתימות", description: "ניהול חתימות דיגיטליות", route: "/signatures", icon: PenLine, permission: "signatures", color: "bg-emerald-500/10 text-emerald-600" },
     ],
   },
   {
@@ -66,7 +67,6 @@ const CATEGORIES: Category[] = [
 { key: "dynamic-tables", label: "דשבורדים ודוחות", description: "בניית דשבורדים ודוחות דינמיים", route: "/dynamic-tables", icon: Table2, permission: "dynamic_tables", color: "bg-blue-500/10 text-blue-600" },
       { key: "chat", label: "צ'אט", description: "ניהול שיחות עם לקוחות", route: "/chat", icon: MessageSquare, permission: "chat", color: "bg-blue-500/10 text-blue-600" },
       { key: "gmail", label: "Gmail", description: "ניהול דואר אלקטרוני", route: "/gmail", icon: Mail, color: "bg-blue-500/10 text-blue-600" },
-      { key: "signatures", label: "חתימות", description: "ניהול חתימות דיגיטליות", route: "/signatures", icon: PenLine, permission: "signatures", color: "bg-blue-500/10 text-blue-600" },
       { key: "team-chat", label: "צ'אט צוות", description: "תקשורת פנים-ארגונית", route: "/team-chat", icon: MessagesSquare, permission: "team_chat", color: "bg-blue-500/10 text-blue-600" },
       { key: "integrations", label: "אינטגרציות", description: "חיבורים לפלטפורמות חיצוניות", route: "/integrations", icon: Plug, permission: "lead_integrations", color: "bg-blue-500/10 text-blue-600" },
       { key: "recordings", label: "הקלטות", description: "ניהול הקלטות שיחות", route: "/recordings", icon: Plug, permission: "recordings", color: "bg-blue-500/10 text-blue-600" },
