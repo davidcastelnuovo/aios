@@ -5,7 +5,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 
-const STORAGE_KEY = "aios-report-query-cache-v1";
+const STORAGE_KEY = "aios-report-query-cache-v2";
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const PERSISTED_QUERY_ROOTS = new Set([
@@ -16,8 +16,7 @@ const PERSISTED_QUERY_ROOTS = new Set([
   "crm-fields-dashboard",
   "crm-tables-for-dashboard",
   "ahrefs-reports",
-  "client-crm-tables",
-  "all-crm-tables",
+  // client-crm-tables / all-crm-tables: linking changes often — do not persist (empty lists stuck after fixes).
   "woo-report-attribution",
 ]);
 
