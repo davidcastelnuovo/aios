@@ -29,7 +29,8 @@ export const CLIENT_LIST_COLUMNS = [
   "notes",
   "start_date",
   "end_date",
-  "follow_up_date",
+  // follow_up_date exists on Staging but is not yet on Production — do NOT
+  // include it here or the whole clients list query 400s and the page goes empty.
   "mood_status",
   "health_score",
   "tier",
