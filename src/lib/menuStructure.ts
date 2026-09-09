@@ -98,6 +98,7 @@ export const MENU_TABS: MenuTab[] = [
         label: "כלים",
         items: [
           { key: "products", label: "מוצרים ושירותים", route: "/products", icon: Package },
+          { key: "signatures", label: "חתימות", route: "/signatures", icon: PenLine },
           { key: "lead-integrations", label: "אינטגרציות לידים", route: "/lead-integrations", icon: Plug },
         ],
       },
@@ -127,7 +128,6 @@ export const MENU_TABS: MenuTab[] = [
         items: [
           { key: "broadcast", label: "דיוור", route: "/broadcast", icon: Send },
           { key: "gmail", label: "Gmail", route: "/gmail", icon: Mail },
-          { key: "signatures", label: "חתימות", route: "/signatures", icon: PenLine },
         ],
       },
       {
