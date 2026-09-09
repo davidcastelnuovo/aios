@@ -67,10 +67,19 @@ export function filterRecordsByEntityLevel<T extends { data?: Record<string, any
 export function getEntityDisplayName(data: Record<string, any> | undefined | null, level: AdsEntityLevel): string {
   const d = data || {};
   if (level === 'ad') {
-    return String(d.ad_name || d.ad_id || 'ללא שם');
+    const name = String(d.ad_name || d.ad_id || 'ללא שם');
+    const adset = String(d.adset_name || d.ad_group_name || '').trim();
+    const campaign = String(d.campaign_name || d.campaign || '').trim();
+    // Same creative is often duplicated across ad sets/campaigns — show parents.
+    const parts = [name];
+    if (adset && adset !== name) parts.push(adset);
+    if (campaign && campaign !== name && campaign !== adset) parts.push(campaign);
+    return parts.join(' · ');
   }
   if (level === 'adset') {
-    return String(d.adset_name || d.ad_group_name || d.adset_id || d.ad_group_id || 'ללא שם');
+    const name = String(d.adset_name || d.ad_group_name || d.adset_id || d.ad_group_id || 'ללא שם');
+    const campaign = String(d.campaign_name || d.campaign || '').trim();
+    return campaign && campaign !== name ? `${name} · ${campaign}` : name;
   }
   return String(d.campaign_name || d.campaign || 'ללא שם');
 }

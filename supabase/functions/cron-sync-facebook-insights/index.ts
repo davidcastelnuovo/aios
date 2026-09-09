@@ -286,12 +286,11 @@ Deno.serve(async (req) => {
           await supabase.from('crm_fields').insert(fieldsToInsert);
         }
 
-        // Delete old records and insert new ones
+        // Delete old records and insert new ones (table_id only — see sync-facebook-insights).
         await supabase
           .from('crm_records')
           .delete()
-          .eq('table_id', table.id)
-          .eq('tenant_id', table.tenant_id);
+          .eq('table_id', table.id);
 
         // Bulk insert new records (one round-trip per chunk instead of one per row)
         if (insights.length > 0) {

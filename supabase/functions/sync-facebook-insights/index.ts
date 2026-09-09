@@ -300,12 +300,13 @@ Deno.serve(async (req) => {
       .eq('table_id', table_id)
       .in('key', ['date_start', 'date_stop', 'landing_page_views']);
 
-    // Delete existing records and insert new ones
-    await supabase
+    // Delete existing records and insert new ones.
+    // Scope by table_id only — shared-agency tables can leave orphan rows under a
+    // previous tenant_id; filtering by tenant_id would leave them forever and inflate KPIs.
+    await supabaseAdmin
       .from('crm_records')
       .delete()
-      .eq('table_id', table_id)
-      .eq('tenant_id', tableTenantId);
+      .eq('table_id', table_id);
 
     // Bulk insert new records (one round-trip per chunk instead of one per row)
     if (insights.length > 0) {
