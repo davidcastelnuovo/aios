@@ -6,6 +6,7 @@ import { saveSignedPdfToEntity } from '../_shared/signature-automation.ts';
 import {
   buildCertificateId,
   renderAiosStampPng,
+  renderBusinessStampPng,
   renderCertificateCardPng,
 } from '../_shared/aios-stamp.ts';
 
@@ -103,11 +104,11 @@ async function drawSignatureOnPage(
   pngBytes: Uint8Array,
   position: SignaturePosition | null,
   fallbackYOffset: number,
+  businessStampPng?: Uint8Array | null,
 ): Promise<void> {
   const pages = pdfDoc.getPages();
   const page = pages[Math.min(pageIndex, pages.length - 1)];
   const { width: pageWidth, height: pageHeight } = page.getSize();
-  const pngImage = await pdfDoc.embedPng(pngBytes);
 
   let x: number;
   let y: number;
@@ -126,6 +127,25 @@ async function drawSignatureOnPage(
     y = pageHeight * 0.1 + fallbackYOffset * (sigHeight + 10);
   }
 
+  // Business rubber stamp sits under the handwritten signature.
+  if (businessStampPng) {
+    try {
+      const stamp = await pdfDoc.embedPng(businessStampPng);
+      const stampW = sigWidth * 0.92;
+      const stampH = Math.min(sigHeight * 0.85, (stamp.height / stamp.width) * stampW);
+      page.drawImage(stamp, {
+        x: x + (sigWidth - stampW) / 2,
+        y: y + (sigHeight - stampH) / 2,
+        width: stampW,
+        height: stampH,
+        opacity: 0.7,
+      });
+    } catch (err) {
+      console.warn('[generate-signed-pdf] business stamp embed failed', err);
+    }
+  }
+
+  const pngImage = await pdfDoc.embedPng(pngBytes);
   page.drawImage(pngImage, { x, y, width: sigWidth, height: sigHeight });
 }
 
@@ -166,6 +186,11 @@ async function buildSignedPdf(doc: {
   file_url: string | null;
   document_type: string;
   document_fields?: DocumentField[] | null;
+  client_id?: string | null;
+  lead_id?: string | null;
+  business_stamp_name?: string | null;
+  business_stamp_company_id?: string | null;
+  tenant_id?: string;
 }, recipients: RecipientRow[], supabase: ReturnType<typeof createClient>): Promise<Uint8Array> {
   const signedRecipients = recipients.filter((r) => r.status === 'signed');
   let pdfDoc: PDFDocument;
@@ -218,9 +243,39 @@ async function buildSignedPdf(doc: {
   const docFields = Array.isArray(doc.document_fields) ? doc.document_fields : [];
   const textFont = await embedFieldFont(pdfDoc);
 
+  let businessName = (doc.business_stamp_name || '').trim();
+  let companyId = (doc.business_stamp_company_id || '').trim();
+  if (!businessName && doc.client_id) {
+    const { data: client } = await supabase.from('clients').select('name').eq('id', doc.client_id).maybeSingle();
+    businessName = (client?.name || '').trim();
+  }
+  if (!businessName && doc.lead_id) {
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('company_name, name, contact_name')
+      .eq('id', doc.lead_id)
+      .maybeSingle();
+    businessName = (lead?.company_name || lead?.name || lead?.contact_name || '').trim();
+  }
+
   for (const recipient of signedRecipients) {
     const recipientIndex = Math.max(0, (recipient.sign_order ?? 1) - 1);
     const values = recipient.field_values ?? {};
+    if (!businessName) businessName = (recipient.name || '').trim();
+
+    let recipientCompanyId = companyId;
+    for (const field of docFields) {
+      if ((field.recipient_index ?? 0) !== recipientIndex) continue;
+      if (field.type === 'id_number' && values[field.id]?.trim()) {
+        recipientCompanyId = values[field.id].trim();
+        break;
+      }
+    }
+
+    const businessStampPng = await renderBusinessStampPng({
+      businessName: businessName || recipient.name || 'חותם',
+      companyId: recipientCompanyId || null,
+    });
 
     if (docFields.length > 0) {
       for (const field of docFields) {
@@ -231,7 +286,14 @@ async function buildSignedPdf(doc: {
 
         if (field.type === 'signature') {
           const pngBytes = decodeBase64Png(value);
-          await drawSignatureOnPage(pdfDoc, pageIndex, pngBytes, field.position, fallbackIndex);
+          await drawSignatureOnPage(
+            pdfDoc,
+            pageIndex,
+            pngBytes,
+            field.position,
+            fallbackIndex,
+            businessStampPng,
+          );
         } else {
           await drawTextOnPage(pdfDoc, pageIndex, value, field.position, textFont);
         }
@@ -239,7 +301,14 @@ async function buildSignedPdf(doc: {
     } else if (recipient.signature_data) {
       const pngBytes = decodeBase64Png(recipient.signature_data);
       const pageIndex = Math.max(0, (recipient.signature_position?.page ?? 1) - 1);
-      await drawSignatureOnPage(pdfDoc, pageIndex, pngBytes, recipient.signature_position, fallbackIndex);
+      await drawSignatureOnPage(
+        pdfDoc,
+        pageIndex,
+        pngBytes,
+        recipient.signature_position,
+        fallbackIndex,
+        businessStampPng,
+      );
       fallbackIndex++;
     }
   }
@@ -338,7 +407,7 @@ Deno.serve(async (req) => {
 
     const { data: doc, error: docError } = await supabase
       .from('signature_documents')
-      .select('id, title, content, file_url, document_type, tenant_id, status, document_fields, lead_id, client_id, saved_to_entity_at')
+      .select('id, title, content, file_url, document_type, tenant_id, status, document_fields, lead_id, client_id, saved_to_entity_at, business_stamp_name, business_stamp_company_id')
       .eq('id', documentId)
       .maybeSingle();
 

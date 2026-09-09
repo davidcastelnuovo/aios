@@ -216,3 +216,54 @@ export async function renderCertificateCardPng(input: StampRenderInput & {
 
   return renderSvgToPng(svg, 520);
 }
+
+export interface BusinessStampInput {
+  businessName: string;
+  companyId?: string | null;
+}
+
+/** Gray rubber-style business stamp drawn under the client's handwritten signature. */
+export async function renderBusinessStampPng(input: BusinessStampInput): Promise<Uint8Array | null> {
+  const businessName = (input.businessName || '').trim();
+  if (!businessName) return null;
+  await ensureGraphicsRuntime();
+
+  const companyId = (input.companyId || '').trim();
+  const idLine = companyId
+    ? (companyId.match(/^[0-9]+$/) ? `ח.פ/ע.מ ${companyId}` : companyId)
+    : '';
+
+  const w = 720;
+  const h = 280;
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <defs>
+    <filter id="bizInk" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="3" seed="11" result="grain"/>
+      <feColorMatrix in="grain" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 1.4 -0.28"
+        result="grainMask"/>
+      <feComposite in="SourceGraphic" in2="grainMask" operator="in" result="blotched"/>
+      <feTurbulence type="turbulence" baseFrequency="0.06" numOctaves="2" seed="5" result="warpNoise"/>
+      <feDisplacementMap in="blotched" in2="warpNoise" scale="1.8" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <style>
+      .he {
+        font-family: 'DejaVu Sans';
+        direction: rtl;
+        unicode-bidi: plaintext;
+        fill: #6B7280;
+      }
+    </style>
+  </defs>
+  <g opacity="0.72" filter="url(#bizInk)" transform="rotate(-2 ${w / 2} ${h / 2})">
+    <text class="he" x="${w / 2}" y="${idLine ? 118 : 150}" text-anchor="middle" font-size="42" font-weight="700">${escapeXml(businessName)}</text>
+    ${idLine ? `<text class="he" x="${w / 2}" y="178" text-anchor="middle" font-size="28">${escapeXml(idLine)}</text>` : ''}
+  </g>
+</svg>`;
+
+  return renderSvgToPng(svg, 360);
+}

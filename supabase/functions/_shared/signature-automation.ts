@@ -382,6 +382,22 @@ export async function cloneSignatureFromTemplate(
       : null)
     ?? null;
 
+  let businessStampName: string | null = null;
+  let businessStampCompanyId: string | null = null;
+  if (clientId) {
+    const { data: client } = await supabase.from('clients').select('name').eq('id', clientId).maybeSingle();
+    businessStampName = client?.name ?? null;
+  } else if (leadId) {
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('company_name, name, contact_name')
+      .eq('id', leadId)
+      .maybeSingle();
+    businessStampName = lead?.company_name || lead?.name || lead?.contact_name || null;
+  }
+  if (!businessStampName) businessStampName = recipientName || null;
+  if (contactDetails?.idNumber) businessStampCompanyId = contactDetails.idNumber;
+
   const insertPayload = {
     tenant_id: effectiveTenantId,
     title: documentTitle || template.title,
@@ -394,6 +410,8 @@ export async function cloneSignatureFromTemplate(
     document_fields: template.document_fields ?? [],
     lead_id: leadId ?? null,
     client_id: clientId ?? null,
+    business_stamp_name: businessStampName,
+    business_stamp_company_id: businessStampCompanyId,
   };
 
   let docResult = await supabase.from('signature_documents').insert(insertPayload).select('id').single();
@@ -401,8 +419,19 @@ export async function cloneSignatureFromTemplate(
     const { document_fields: _df, ...withoutFields } = insertPayload;
     docResult = await supabase.from('signature_documents').insert(withoutFields).select('id').single();
   }
-  if (docResult.error?.message?.includes('lead_id') || docResult.error?.message?.includes('client_id')) {
-    const { document_fields: _df, lead_id: _l, client_id: _c, ...minimal } = insertPayload;
+  if (
+    docResult.error?.message?.includes('lead_id')
+    || docResult.error?.message?.includes('client_id')
+    || docResult.error?.message?.includes('business_stamp')
+  ) {
+    const {
+      document_fields: _df,
+      lead_id: _l,
+      client_id: _c,
+      business_stamp_name: _bn,
+      business_stamp_company_id: _bc,
+      ...minimal
+    } = insertPayload;
     docResult = await supabase.from('signature_documents').insert(minimal).select('id').single();
   }
   const doc = docResult.data;
