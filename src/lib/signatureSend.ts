@@ -95,7 +95,7 @@ async function prepareDirectClientSide(
 
   if (!existing?.length) {
     const fields = Array.isArray(doc.document_fields) ? doc.document_fields : [];
-    const sigField = fields.find((f: { type?: string }) => f.type === "signature") as { position?: unknown } | undefined;
+    const sigField = fields.find((f: { type?: string }) => f.type === "signature" || f.type === "signature_stamp") as { position?: unknown } | undefined;
     await insertRecipientWithFallback({
       document_id: documentId,
       tenant_id: tenantId,

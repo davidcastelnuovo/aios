@@ -9,6 +9,7 @@ import {
   getFieldLabel,
   getFieldPlacerLabel,
   getFieldFontSizePx,
+  isSignatureFieldType,
 } from "./signatureFieldTypes";
 import { SignatureDocumentViewer } from "./SignatureDocumentViewer";
 import { SignaturePageThumbnails } from "./SignaturePageThumbnails";
@@ -523,7 +524,7 @@ export default function SignatureFieldPlacer({
                     style={{ color, fontSize }}
                     className="pointer-events-none font-semibold px-1 truncate leading-tight"
                   >
-                    {f.type === "signature" ? "✍ " : ""}
+                    {isSignatureFieldType(f.type) ? "✍ " : ""}
                     {getFieldPlacerLabel(f.type)}
                   </span>
 

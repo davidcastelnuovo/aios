@@ -223,7 +223,7 @@ export default function Signatures() {
       if (validRecipients.length > 0) {
         const rows = validRecipients.map((r, i) => {
           const sigField = documentFields.find(
-            (f) => f.type === "signature" && (f.recipient_index ?? 0) === i,
+            (f) => (f.type === "signature" || f.type === "signature_stamp") && (f.recipient_index ?? 0) === i,
           );
           const position = sigField?.position ?? r.signaturePosition;
           const fieldPrefill = buildFieldPrefill(documentFields, i, r);

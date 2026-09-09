@@ -227,7 +227,7 @@ export async function prepareSignatureDocumentForSigning(
         throw new Error('אין חותמים במסמך — הזן שם ואימייל לחותם');
       }
       const sigField = Array.isArray(doc.document_fields)
-        ? doc.document_fields.find((f: { type?: string }) => f.type === 'signature')
+        ? doc.document_fields.find((f: { type?: string }) => f.type === 'signature' || f.type === 'signature_stamp')
         : null;
       const position = sigField?.position ?? null;
       const fieldPrefill = buildFieldPrefillFromContact(
@@ -304,6 +304,7 @@ function buildFieldPrefillFromContact(
   const typeToValue: Record<string, string | undefined> = {
     first_name: contact.firstName,
     last_name: contact.lastName,
+    full_name: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || undefined,
     phone: contact.phone,
     address: contact.address,
     id_number: contact.idNumber,
@@ -313,7 +314,7 @@ function buildFieldPrefillFromContact(
     if (!field || typeof field !== 'object') continue;
     const f = field as { id?: string; type?: string; recipient_index?: number };
     if ((f.recipient_index ?? 0) !== recipientIndex) continue;
-    if (!f.id || !f.type || f.type === 'signature' || f.type === 'date') continue;
+    if (!f.id || !f.type || f.type === 'signature' || f.type === 'signature_stamp' || f.type === 'date') continue;
     const val = typeToValue[f.type];
     if (val?.trim()) prefill[f.id] = val.trim();
   }
@@ -378,7 +379,7 @@ export async function cloneSignatureFromTemplate(
 
   const position = templateRecipients?.[0]?.signature_position
     ?? (Array.isArray(template.document_fields)
-      ? template.document_fields.find((f: { type?: string }) => f.type === 'signature')?.position
+      ? template.document_fields.find((f: { type?: string }) => f.type === 'signature' || f.type === 'signature_stamp')?.position
       : null)
     ?? null;
 
