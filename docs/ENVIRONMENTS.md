@@ -66,7 +66,11 @@ feature/* or fix/*
     → Production (aios.co.il)
 ```
 
-**`develop` is the release candidate.** `main` only moves after Staging is verified. There is no auto-sync from `main` back to `develop` (hotfix backport: manual `sync-develop-from-main` workflow only).
+**`develop` is the release candidate.** `main` only moves after Staging is verified.
+
+**Branch freshness (required):** every PR must contain the latest tip of its base (`develop` or `main`) before merge. CI workflow `Require PR up to date with base` fails stale heads — enable it as a required status check in GitHub branch protection. Cloud Agents must `git fetch origin <base>` and merge/rebase before opening or updating a PR.
+
+**Staging stays current:** on every push to `main`, workflow `Sync develop from main` merges `main` → `develop` so `https://staging.aios.co.il` never lags Production hotfixes. Manual `workflow_dispatch` remains available.
 
 | Git | Deploy | Data |
 | --- | --- | --- |

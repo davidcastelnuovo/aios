@@ -79,6 +79,15 @@ jobs:
               return;
             }
 
+            // Never auto-merge a branch that is behind main (stale overwrite risk).
+            const comparison = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: `${pr.head.sha}...main`,
+            });
+            if ((comparison.data.ahead_by || 0) > 0) {
+              core.info(`Skip: PR head is behind main by ${comparison.data.ahead_by} commit(s)`);
+              return;
+            }
+
             await github.rest.pulls.merge({
               owner, repo, pull_number: pr.number, merge_method: 'squash',
             });
