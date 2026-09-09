@@ -14,7 +14,10 @@ interface CampaignerScope {
   clientIds: Set<string>;
 }
 
-async function getSeoClientIds(admin: any, userId: string): Promise<Set<string> | null> {
+async function userHasSeoScope(admin: any, userId: string): Promise<boolean> {
+  const { data: hasScope, error } = await admin.rpc('user_has_seo_scope', { _user_id: userId });
+  if (!error) return !!hasScope;
+
   const [{ data: seoRole }, { data: isSeoStaff }] = await Promise.all([
     admin
       .from('user_roles')
@@ -25,8 +28,26 @@ async function getSeoClientIds(admin: any, userId: string): Promise<Set<string> 
       .maybeSingle(),
     admin.rpc('is_seo_staff', { _user_id: userId }),
   ]);
+  if (seoRole || isSeoStaff) return true;
 
-  if (!seoRole && !isSeoStaff) return null;
+  const { data: profileRow } = await admin
+    .from('profiles')
+    .select('campaigner_id')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!profileRow?.campaigner_id) return false;
+
+  const { data: campaignerRow } = await admin
+    .from('campaigners')
+    .select('role')
+    .eq('id', profileRow.campaigner_id)
+    .maybeSingle();
+  const tags = Array.isArray(campaignerRow?.role) ? campaignerRow.role : [];
+  return tags.includes('SEO');
+}
+
+async function getSeoClientIds(admin: any, userId: string): Promise<Set<string> | null> {
+  if (!(await userHasSeoScope(admin, userId))) return null;
 
   const { data: clientIds } = await admin.rpc('get_user_client_ids', { _user_id: userId });
   return new Set((clientIds || []).filter(Boolean));

@@ -65,6 +65,22 @@ export function useUserRole() {
     refetchOnWindowFocus: false,
   });
 
+  const { data: campaignerRoleTags } = useQuery({
+    queryKey: ["user-campaigner-role-tags", campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return [] as string[];
+      const { data } = await supabase
+        .from("campaigners")
+        .select("role")
+        .eq("id", campaignerId)
+        .maybeSingle();
+      return Array.isArray(data?.role) ? data.role : [];
+    },
+    enabled: !!campaignerId,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  });
+
   // Lazy-load sales person agencies only when user has sales_person role
   const isSalesPersonRole = roles?.includes("sales_person") || false;
   const { data: salesPersonAgencyIds } = useQuery({
@@ -114,6 +130,7 @@ export function useUserRole() {
 
   const hasRole = (role: UserRole) => roles?.includes(role) || false;
   const isTenantOwner = tenantMembership === "owner" || tenantMembership === "agency_owner";
+  const isSeoTaggedCampaigner = (campaignerRoleTags || []).includes("SEO");
 
   return {
     roles: roles || [],
@@ -123,7 +140,7 @@ export function useUserRole() {
     isCampaigner: hasRole("campaigner"),
     isSalesPerson: hasRole("sales_person"),
     isSuperAdmin: hasRole("super_admin"),
-    isSeo: hasRole("seo"),
+    isSeo: hasRole("seo") || isSeoTaggedCampaigner,
     isLoading: rolesPending || membershipPending,
     isFetching: rolesFetching,
     isError: rolesError,
