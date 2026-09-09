@@ -131,6 +131,7 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   send_greenapi_to_campaigner: "שלח WhatsApp ל-Campaigner",
   send_telegram: "שלח הודעת Telegram",
   create_task: "צור משימה",
+  send_signature: "שלח חתימה דיגיטלית",
   add_lead_update: "הוסף עדכון לליד",
   add_client_update: "הוסף עדכון ללקוח",
   create_manychat_subscriber: "צור subscriber",

@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -11,15 +12,34 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link } from "lucide-react";
+import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link, Download, History, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
+import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
+import { type DocumentField, parseDocumentFields } from "@/components/signatures/signatureFieldTypes";
+import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
+import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
+import { sanitizeFileName } from "@/lib/sanitizeFileName";
+import { insertSignatureDocument } from "@/lib/insertSignatureDocument";
+import { updateSignatureDocumentFields } from "@/lib/updateSignatureDocumentFields";
+import { signatureDocumentStoragePath } from "@/lib/resolveSignatureDocumentUrl";
+import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureDocumentFieldEditor";
+import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
+import { mediaKindFromFile, detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
+import { SignatureOriginalFileLink } from "@/components/signatures/SignatureOriginalFileLink";
 
 interface Recipient {
   name: string;
   email: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  address?: string;
+  idNumber?: string;
+  contactSource?: string;
   signaturePosition: SignaturePosition | null;
 }
 
@@ -39,6 +59,14 @@ const statusIcons: Record<string, any> = {
   cancelled: XCircle,
 };
 
+const eventLabels: Record<string, string> = {
+  sent: "נשלח במייל",
+  viewed: "נצפה",
+  signed: "חתם",
+  declined: "סירב",
+  pdf_generated: "PDF חתום נוצר",
+};
+
 export default function Signatures() {
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
@@ -54,6 +82,35 @@ export default function Signatures() {
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [showPlacement, setShowPlacement] = useState(false);
+  const [isTemplate, setIsTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [documentFields, setDocumentFields] = useState<DocumentField[]>([]);
+  const [lastSentLinks, setLastSentLinks] = useState<Array<{ name: string; email: string; url: string }>>([]);
+  const skipDialogResetRef = useRef(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [editingDoc, setEditingDoc] = useState<any>(null);
+  const [sendDialogDoc, setSendDialogDoc] = useState<any>(null);
+  const [sendDialogRecipient, setSendDialogRecipient] = useState<{
+    name?: string;
+    email?: string;
+    phone?: string;
+    firstName?: string;
+    lastName?: string;
+  } | undefined>();
+
+  const canEditDocFields = (doc: { status: string; file_url?: string | null }) =>
+    doc.status === "draft" && !!doc.file_url;
+
+  const openFieldEditor = (doc: any) => {
+    if (!canEditDocFields(doc)) {
+      toast.error("עריכת שדות זמינה רק למסמכי טיוטה עם קובץ");
+      return;
+    }
+    setEditingDoc(doc);
+    setIsViewOpen(false);
+  };
+
+  const closeFieldEditor = () => setEditingDoc(null);
 
   // Fetch documents
   const { data: documents, isLoading } = useQuery({
@@ -87,6 +144,41 @@ export default function Signatures() {
     enabled: !!selectedDoc?.id,
   });
 
+  // Fetch audit events for selected doc
+  const { data: docEvents } = useQuery({
+    queryKey: ["signature-events", selectedDoc?.id],
+    queryFn: async () => {
+      if (!selectedDoc?.id) return [];
+      const { data, error } = await supabase
+        .from("signature_events")
+        .select("*, signature_recipients(name, email)")
+        .eq("document_id", selectedDoc.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedDoc?.id,
+  });
+
+  const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
+
+  // Resolve signed PDF download URL
+  useEffect(() => {
+    if (!selectedDoc?.signed_file_url) {
+      setSignedPdfUrl(null);
+      return;
+    }
+    const path = selectedDoc.signed_file_url;
+    if (path.startsWith("http")) {
+      setSignedPdfUrl(path);
+      return;
+    }
+    supabase.storage
+      .from("signature-documents")
+      .createSignedUrl(path, 3600)
+      .then(({ data }) => setSignedPdfUrl(data?.signedUrl ?? null));
+  }, [selectedDoc?.signed_file_url]);
+
   // Create document mutation
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -97,80 +189,123 @@ export default function Signatures() {
 
       if (createTab === "upload" && uploadFile) {
         docType = "uploaded";
-        const filePath = `${tenantId}/${Date.now()}_${uploadFile.name}`;
+        const safeName = sanitizeFileName(uploadFile.name);
+        const filePath = signatureDocumentStoragePath(tenantId, safeName);
         const { error: uploadError } = await supabase.storage
           .from("signature-documents")
           .upload(filePath, uploadFile);
         if (uploadError) throw uploadError;
-        
-        const { data: urlData } = supabase.storage
-          .from("signature-documents")
-          .getPublicUrl(filePath);
-        fileUrl = urlData.publicUrl;
+        fileUrl = filePath;
       } else if (createTab === "url" && documentUrl) {
         docType = "uploaded";
         fileUrl = documentUrl;
       }
 
-      // Create document
-      const { data: doc, error: docError } = await supabase
-        .from("signature_documents")
-        .insert({
-          tenant_id: tenantId,
-          title,
-          content: createTab === "create" ? content : null,
-          file_url: fileUrl,
-          document_type: docType,
-          status: "draft",
-          created_by: userId,
-        })
-        .select()
-        .single();
-      if (docError) throw docError;
+      const baseDoc = {
+        tenant_id: tenantId,
+        title,
+        content: createTab === "create" ? content : null,
+        file_url: fileUrl,
+        document_type: docType,
+        status: "draft",
+        created_by: userId,
+        is_template: isTemplate,
+        template_name: isTemplate ? (templateName || title) : null,
+      };
 
-      // Add recipients with positions
+      const insertPayload = {
+        ...baseDoc,
+        ...(documentFields.length > 0 ? { document_fields: documentFields as any } : {}),
+      };
+      const doc = await insertSignatureDocument(insertPayload);
+
       const validRecipients = recipients.filter(r => r.name && r.email);
       if (validRecipients.length > 0) {
-        const { error: recError } = await supabase
-          .from("signature_recipients")
-          .insert(
-            validRecipients.map((r, i) => ({
-              document_id: doc.id,
-              tenant_id: tenantId,
-              name: r.name,
-              email: r.email,
-              sign_order: i + 1,
-              signature_position: r.signaturePosition as any,
-            }))
+        const rows = validRecipients.map((r, i) => {
+          const sigField = documentFields.find(
+            (f) => f.type === "signature" && (f.recipient_index ?? 0) === i,
           );
+          const position = sigField?.position ?? r.signaturePosition;
+          const fieldPrefill = buildFieldPrefill(documentFields, i, r);
+          return {
+            document_id: doc!.id,
+            tenant_id: tenantId,
+            name: r.name,
+            email: r.email,
+            sign_order: i + 1,
+            signature_position: position as any,
+            field_values: fieldPrefill as any,
+          };
+        });
+
+        let recError = (await supabase.from("signature_recipients").insert(rows)).error;
+        if (recError?.message?.includes("field_values")) {
+          recError = (await supabase.from("signature_recipients").insert(
+            rows.map(({ field_values: _fv, ...rest }) => rest),
+          )).error;
+        }
         if (recError) throw recError;
       }
 
-      return doc;
+      return { doc, isTemplate };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
-      toast.success("המסמך נוצר בהצלחה");
-      resetForm();
-      setIsCreateOpen(false);
     },
-    onError: (err: any) => toast.error("שגיאה ביצירת מסמך: " + err.message),
+    onError: (err: any) => toast.error("שגיאה: " + err.message),
   });
 
-  // Send for signing
-  const sendMutation = useMutation({
-    mutationFn: async (docId: string) => {
-      const { error } = await supabase
-        .from("signature_documents")
-        .update({ status: "pending" })
-        .eq("id", docId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
+  const handleSaveOnly = async () => {
+    try {
+      const result = await createMutation.mutateAsync();
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
-      toast.success("המסמך נשלח לחתימה");
-    },
-  });
+      toast.success(result.isTemplate ? "התבנית נשמרה" : "המסמך נשמר — מוכן לשליחה");
+      setShowPlacement(false);
+      resetForm();
+      setIsCreateOpen(false);
+    } catch {
+      // errors handled in mutations
+    }
+  };
+
+  const handleSaveOrSend = async () => {
+    try {
+      const result = await createMutation.mutateAsync();
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+
+      if (result.isTemplate) {
+        toast.success("התבנית נשמרה");
+      } else {
+        setShowPlacement(false);
+        resetForm();
+        setIsCreateOpen(false);
+        openSendDialog({
+          id: result.doc.id,
+          title,
+          is_template: false,
+        }, recipients.find((r) => r.name || r.email));
+        return;
+      }
+
+      setShowPlacement(false);
+      resetForm();
+      setIsCreateOpen(false);
+    } catch {
+      // errors handled in mutations
+    }
+  };
+
+  const openSendDialog = (
+    doc: any,
+    recipient?: { name?: string; email?: string; phone?: string; firstName?: string; lastName?: string },
+  ) => {
+    setSelectedDoc(doc);
+    setSendDialogDoc(doc);
+    setSendDialogRecipient(
+      recipient ??
+      recipients.find((r) => r.name || r.email) ?? undefined,
+    );
+  };
 
   // Delete document
   const deleteMutation = useMutation({
@@ -187,6 +322,93 @@ export default function Signatures() {
     },
   });
 
+  const updateFieldsMutation = useMutation({
+    mutationFn: async ({
+      doc,
+      fields,
+      thenSend,
+    }: {
+      doc: { id: string; title: string; is_template?: boolean };
+      fields: DocumentField[];
+      thenSend?: boolean;
+    }) => {
+      const result = await updateSignatureDocumentFields(doc.id, fields);
+      return { doc, thenSend: !!thenSend, ...result };
+    },
+    onSuccess: async ({ doc, thenSend, savedDocumentFields }) => {
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["signature-source-documents", tenantId] });
+      if (!savedDocumentFields) {
+        toast.warning("מיקום החתימה נשמר — שדות מלאים דורשים migration");
+      } else {
+        toast.success(doc.is_template ? "התבנית נשמרה" : "המסמך נשמר — מוכן לשליחה");
+      }
+      closeFieldEditor();
+
+      if (thenSend && !doc.is_template) {
+        const { data: recipients } = await supabase
+          .from("signature_recipients")
+          .select("name, email, phone")
+          .eq("document_id", doc.id)
+          .order("sign_order")
+          .limit(1);
+
+        openSendDialog(
+          { id: doc.id, title: doc.title, is_template: false },
+          recipients?.[0] ?? undefined,
+        );
+      }
+    },
+    onError: (err: Error) => toast.error(err.message || "שגיאה בשמירת שדות"),
+  });
+
+  const handleEditSaveOnly = async (fields: DocumentField[]) => {
+    if (!editingDoc) return;
+    try {
+      await updateFieldsMutation.mutateAsync({
+        doc: {
+          id: editingDoc.id,
+          title: editingDoc.title,
+          is_template: editingDoc.is_template,
+        },
+        fields,
+        thenSend: false,
+      });
+    } catch {
+      // errors handled in mutation
+    }
+  };
+
+  const handleEditSaveOrSend = async (fields: DocumentField[]) => {
+    if (!editingDoc) return;
+    try {
+      await updateFieldsMutation.mutateAsync({
+        doc: {
+          id: editingDoc.id,
+          title: editingDoc.title,
+          is_template: editingDoc.is_template,
+        },
+        fields,
+        thenSend: true,
+      });
+    } catch {
+      // errors handled in mutation
+    }
+  };
+
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (!editId || !documents?.length) return;
+    const doc = documents.find((d) => d.id === editId);
+    if (doc?.status === "draft" && doc.file_url) {
+      setEditingDoc(doc);
+      setIsViewOpen(false);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("edit");
+    setSearchParams(next, { replace: true });
+  }, [documents, searchParams, setSearchParams]);
+
   const resetForm = () => {
     setTitle("");
     setContent("");
@@ -196,6 +418,9 @@ export default function Signatures() {
     setUploadPreviewUrl(null);
     setCreateTab("create");
     setShowPlacement(false);
+    setIsTemplate(false);
+    setTemplateName("");
+    setDocumentFields([]);
   };
 
   const addRecipient = () => setRecipients([...recipients, { name: "", email: "", signaturePosition: null }]);
@@ -204,6 +429,23 @@ export default function Signatures() {
     const updated = [...recipients];
     updated[i] = { ...updated[i], [field]: val };
     setRecipients(updated);
+  };
+
+  const applyContactToRecipient = (index: number, contact: SignatureContactDetails) => {
+    const updated = [...recipients];
+    updated[index] = {
+      ...updated[index],
+      name: contact.name,
+      email: contact.email,
+      phone: contact.phone,
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      address: contact.address,
+      idNumber: contact.idNumber,
+      contactSource: contact.sourceLabel,
+    };
+    setRecipients(updated);
+    toast.success("פרטי איש הקשר נטענו");
   };
 
   const handleFileChange = (file: File | null) => {
@@ -216,11 +458,9 @@ export default function Signatures() {
     }
   };
 
-  const handlePositionChange = (index: number, position: SignaturePosition) => {
-    const updated = [...recipients];
-    updated[index] = { ...updated[index], signaturePosition: position };
-    setRecipients(updated);
-  };
+  const recipientIndexForPlacement = recipients
+    .map((r, i) => ({ index: i, name: r.name, color: getRecipientColor(i) }))
+    .filter((r) => r.name);
 
   // Get preview URL for placement
   const getPreviewUrl = (): string | null => {
@@ -231,48 +471,127 @@ export default function Signatures() {
 
   const previewUrl = getPreviewUrl();
   const hasValidRecipients = recipients.some(r => r.name && r.email);
-  const canShowPlacement = (createTab === "upload" || createTab === "url") && previewUrl && hasValidRecipients;
+  const canShowPlacement = (createTab === "upload" || createTab === "url") && previewUrl && (isTemplate || hasValidRecipients);
 
   const getSigningLink = (token: string) => {
     return `${window.location.origin}/sign/${token}`;
   };
 
-  const copySigningLink = (token: string) => {
-    navigator.clipboard.writeText(getSigningLink(token));
-    toast.success("הקישור הועתק");
-  };
+  const sendDialog = (
+    <SendSignatureDialog
+      open={!!sendDialogDoc}
+      onOpenChange={(open) => {
+        if (!open) {
+          setSendDialogDoc(null);
+          setSendDialogRecipient(undefined);
+        }
+      }}
+      document={sendDialogDoc}
+      tenantId={tenantId}
+      defaultRecipient={sendDialogRecipient}
+      mode={sendDialogDoc?.is_template ? "template" : "direct"}
+      onSuccess={(result) => {
+        setLastSentLinks(result.signingLinks);
+        queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+        queryClient.invalidateQueries({ queryKey: ["signature-events", result.documentId] });
+      }}
+    />
+  );
+
+  if (editingDoc?.file_url) {
+    return (
+      <>
+        <SignatureDocumentFieldEditor
+          title={editingDoc.title}
+          fileUrl={editingDoc.file_url}
+          initialFields={parseDocumentFields(editingDoc.document_fields)}
+          isTemplate={editingDoc.is_template}
+          saving={updateFieldsMutation.isPending}
+          onClose={closeFieldEditor}
+          onSave={handleEditSaveOnly}
+          onSaveAndSend={handleEditSaveOrSend}
+        />
+        {sendDialog}
+      </>
+    );
+  }
 
   // Full-screen placement overlay
   if (showPlacement && previewUrl) {
+    const placementCanCreate =
+      !!title.trim() &&
+      !createMutation.isPending &&
+      (createTab === "upload" ? !!uploadFile : createTab === "url" ? !!documentUrl : !!content) &&
+      (isTemplate || hasValidRecipients);
+
+    const placementActionLabel = isTemplate
+      ? (createMutation.isPending ? "שומר..." : "שמור תבנית")
+      : (createMutation.isPending ? "שולח..." : "שלח לחתימה");
+
     return (
       <div className="fixed inset-0 z-50 bg-background flex flex-col" dir="rtl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-background">
-          <h2 className="text-lg font-bold text-foreground">הגדרת מיקום חתימות — {title}</h2>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowPlacement(false)}>
-              חזור
-            </Button>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={!title || createMutation.isPending}
-            >
-              {createMutation.isPending ? "יוצר..." : "צור מסמך"}
-            </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-border bg-background">
+          <div className="flex flex-col gap-2 min-w-[200px] flex-1">
+            <h2 className="text-lg font-bold text-foreground">הגדרת שדות וחתימות</h2>
+            <div className="flex items-center gap-2 max-w-md">
+              <Label htmlFor="placement-title" className="shrink-0 text-sm">שם המסמך</Label>
+              <Input
+                id="placement-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="הזן שם למסמך..."
+                className="h-9"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setShowPlacement(false); setIsCreateOpen(true); }}>
+                חזור
+              </Button>
+              <Button
+                variant={isTemplate ? "default" : "secondary"}
+                onClick={() => handleSaveOnly()}
+                disabled={!placementCanCreate}
+              >
+                {createMutation.isPending
+                  ? "שומר..."
+                  : isTemplate
+                    ? "שמור תבנית"
+                    : "שמור מסמך"}
+              </Button>
+              {!isTemplate && hasValidRecipients && (
+                <Button onClick={() => handleSaveOrSend()} disabled={!placementCanCreate}>
+                  {placementActionLabel}
+                </Button>
+              )}
+            </div>
+            {!title.trim() && (
+              <p className="text-xs text-destructive">נא למלא שם מסמך כדי להמשיך</p>
+            )}
           </div>
         </div>
         {/* Placer content */}
         <div className="flex-1 overflow-auto p-4">
           <SignatureFieldPlacer
             fileUrl={previewUrl}
+            mediaKind={
+              createTab === "upload"
+                ? mediaKindFromFile(uploadFile)
+                : createTab === "url" && previewUrl
+                  ? detectMediaKind(previewUrl)
+                  : undefined
+            }
+            forcePdf={
+              createTab === "upload"
+                ? mediaKindFromFile(uploadFile) === "pdf"
+                : createTab === "url" && !!previewUrl && detectMediaKind(previewUrl) === "pdf"
+            }
             fullScreen
-            recipients={recipients.filter(r => r.name).map((r, i) => ({
-              index: i,
-              name: r.name,
-              color: getRecipientColor(i),
-              position: r.signaturePosition,
-            }))}
-            onPositionChange={handlePositionChange}
+            recipients={recipientIndexForPlacement}
+            fields={documentFields}
+            onFieldsChange={setDocumentFields}
           />
         </div>
       </div>
@@ -286,14 +605,23 @@ export default function Signatures() {
           <h1 className="text-2xl font-bold text-foreground">חתימות דיגיטליות</h1>
           <p className="text-muted-foreground">ניהול מסמכים וחתימות דיגיטליות</p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
+        <Dialog open={isCreateOpen} onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) {
+            if (skipDialogResetRef.current) {
+              skipDialogResetRef.current = false;
+              return;
+            }
+            resetForm();
+          }
+        }}>
           <DialogTrigger asChild>
             <Button onClick={() => { resetForm(); setIsCreateOpen(true); }}>
               <Plus className="h-4 w-4 ml-2" />
               מסמך חדש
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-x-hidden overflow-y-auto min-w-0" dir="rtl">
             <DialogHeader>
               <DialogTitle>יצירת מסמך חדש</DialogTitle>
             </DialogHeader>
@@ -336,7 +664,7 @@ export default function Signatures() {
                     <Label>העלה קובץ (PDF, DOCX, תמונה)</Label>
                     <Input
                       type="file"
-                      accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
+                      accept=".pdf,.png,.jpg,.jpeg"
                       onChange={e => handleFileChange(e.target.files?.[0] || null)}
                       className="mt-1"
                     />
@@ -374,39 +702,93 @@ export default function Signatures() {
                   </Button>
                 </div>
                 {recipients.map((r, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <div className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: getRecipientColor(i) }} />
-                    <Input
-                      placeholder="שם"
-                      value={r.name}
-                      onChange={e => updateRecipient(i, "name", e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      placeholder="אימייל"
-                      type="email"
-                      value={r.email}
-                      onChange={e => updateRecipient(i, "email", e.target.value)}
-                      className="flex-1"
-                    />
-                    {recipients.length > 1 && (
-                      <Button variant="ghost" size="icon" onClick={() => removeRecipient(i)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                  <div key={i} className="space-y-2 p-3 border rounded-lg">
+                    <div className="flex gap-2 items-center">
+                      <div className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: getRecipientColor(i) }} />
+                      <SignatureContactPicker
+                        tenantId={tenantId}
+                        onSelect={(contact) => applyContactToRecipient(i, contact)}
+                      />
+                      {recipients.length > 1 && (
+                        <Button variant="ghost" size="icon" className="mr-auto" onClick={() => removeRecipient(i)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                    {r.contactSource && (
+                      <p className="text-xs text-primary">{r.contactSource}</p>
+                    )}
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        placeholder="שם"
+                        value={r.name}
+                        onChange={e => updateRecipient(i, "name", e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="אימייל"
+                        type="email"
+                        value={r.email}
+                        onChange={e => updateRecipient(i, "email", e.target.value)}
+                        className="flex-1"
+                        dir="ltr"
+                      />
+                    </div>
+                    {(r.phone || r.firstName || r.lastName) && (
+                      <p className="text-xs text-muted-foreground">
+                        {r.firstName && `שם: ${r.firstName}`}
+                        {r.lastName && ` · משפחה: ${r.lastName}`}
+                        {r.phone && ` · טלפון: ${r.phone}`}
+                      </p>
                     )}
                   </div>
                 ))}
               </div>
 
+              <div className="flex items-center gap-2 p-3 border rounded-lg">
+                <Checkbox
+                  id="is-template"
+                  checked={isTemplate}
+                  onCheckedChange={(v) => setIsTemplate(!!v)}
+                />
+                <Label htmlFor="is-template" className="cursor-pointer">שמור כתבנית לשימוש חוזר (מלידים / אוטומציות)</Label>
+              </div>
+              {isTemplate && (
+                <div>
+                  <Label>שם התבנית</Label>
+                  <Input
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder={title || "שם התבנית..."}
+                  />
+                </div>
+              )}
+
               <div className="flex gap-2 justify-end pt-4">
                 <Button variant="outline" onClick={() => setIsCreateOpen(false)}>ביטול</Button>
                 {canShowPlacement && (
-                  <Button variant="secondary" onClick={() => { setIsCreateOpen(false); setShowPlacement(true); }}>
-                    הגדר מיקום חתימות
+                  <Button
+                    variant="secondary"
+                    disabled={!title.trim()}
+                    onClick={() => {
+                      skipDialogResetRef.current = true;
+                      setShowPlacement(true);
+                      setIsCreateOpen(false);
+                    }}
+                  >
+                    הגדר שדות וחתימות
                   </Button>
                 )}
                 <Button
-                  onClick={() => createMutation.mutate()}
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      await createMutation.mutateAsync();
+                      toast.success(isTemplate ? "התבנית נשמרה" : "המסמך נשמר — מוכן לשליחה");
+                      resetForm();
+                      setIsCreateOpen(false);
+                    } catch { /* toast in mutation */ }
+                  }}
                   disabled={
                     !title ||
                     createMutation.isPending ||
@@ -415,8 +797,33 @@ export default function Signatures() {
                     (createTab === "url" && !documentUrl)
                   }
                 >
-                  {createMutation.isPending ? "יוצר..." : "צור מסמך"}
+                  {createMutation.isPending ? "שומר..." : "שמור מסמך"}
                 </Button>
+                {!isTemplate && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      const result = await createMutation.mutateAsync();
+                      resetForm();
+                      setIsCreateOpen(false);
+                      openSendDialog({
+                        id: result.doc.id,
+                        title,
+                        is_template: false,
+                      }, recipients.find((r) => r.name || r.email));
+                    } catch { /* toast in mutation */ }
+                  }}
+                  disabled={
+                    !title ||
+                    createMutation.isPending ||
+                    (createTab === "create" && !content) ||
+                    (createTab === "upload" && !uploadFile) ||
+                    (createTab === "url" && !documentUrl)
+                  }
+                >
+                  {createMutation.isPending ? "שומר..." : "שלח לחתימה"}
+                </Button>
+                )}
               </div>
             </div>
           </DialogContent>
@@ -476,7 +883,12 @@ export default function Signatures() {
                   const StatusIcon = statusIcons[doc.status] || FileText;
                   return (
                     <TableRow key={doc.id}>
-                      <TableCell className="font-medium">{doc.title}</TableCell>
+                      <TableCell className="font-medium">
+                        {doc.title}
+                        {doc.is_template && (
+                          <Badge variant="secondary" className="mr-2">תבנית</Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {doc.document_type === "created" ? "נוצר" : "הועלה"}
@@ -498,11 +910,22 @@ export default function Signatures() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+                          {canEditDocFields(doc) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="ערוך שדות"
+                              onClick={() => openFieldEditor(doc)}
+                            >
+                              <Pencil className="h-4 w-4 text-primary" />
+                            </Button>
+                          )}
                           {doc.status === "draft" && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => sendMutation.mutate(doc.id)}
+                              title="שלח לחתימה"
+                              onClick={() => openSendDialog(doc)}
                             >
                               <Send className="h-4 w-4 text-primary" />
                             </Button>
@@ -528,8 +951,8 @@ export default function Signatures() {
       </Card>
 
       {/* View Document Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+      <Dialog open={isViewOpen} onOpenChange={(open) => { setIsViewOpen(open); if (!open) setLastSentLinks([]); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-x-hidden overflow-y-auto min-w-0" dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedDoc?.title}</DialogTitle>
           </DialogHeader>
@@ -552,10 +975,41 @@ export default function Signatures() {
               {selectedDoc.document_type === "uploaded" && selectedDoc.file_url && (
                 <Card>
                   <CardContent className="p-4">
-                    <a href={selectedDoc.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
-                      <ExternalLink className="h-4 w-4" />
-                      צפה בקובץ המקורי
+                    <SignatureOriginalFileLink fileUrl={selectedDoc.file_url} />
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedDoc.status === "completed" && !signedPdfUrl && (
+                <Card>
+                  <CardContent className="p-4 text-sm text-muted-foreground">
+                    המסמך סומן כחתום — PDF חתום עדיין לא זמין. רענן בעוד רגע.
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedDoc.status === "completed" && signedPdfUrl && (
+                <Card>
+                  <CardContent className="p-4">
+                    <a href={signedPdfUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
+                      <Download className="h-4 w-4" />
+                      הורד מסמך חתום (PDF)
                     </a>
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedDoc.document_fields && parseDocumentFields(selectedDoc.document_fields).length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">שדות במסמך</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {parseDocumentFields(selectedDoc.document_fields).map((f) => (
+                        <Badge key={f.id} variant="outline">{f.label}</Badge>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -566,6 +1020,22 @@ export default function Signatures() {
                   <CardTitle className="text-sm">חותמים</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {lastSentLinks.length > 0 && (
+                    <div className="mb-4 rounded-lg border border-green-200 bg-green-50/50 p-3 space-y-2 min-w-0 overflow-hidden">
+                      <p className="text-sm font-medium text-green-800">קישורים לחתימה מוכנים</p>
+                      {lastSentLinks.map((link) => (
+                        <div key={link.url} className="space-y-2 min-w-0">
+                          <p className="text-xs text-muted-foreground truncate">{link.name || "חותם"}</p>
+                          <SignatureLinkShareButtons
+                            size="sm"
+                            signingUrl={link.url}
+                            recipientName={link.name}
+                            documentTitle={selectedDoc?.title}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {!docRecipients?.length ? (
                     <p className="text-sm text-muted-foreground">אין חותמים</p>
                   ) : (
@@ -577,7 +1047,7 @@ export default function Signatures() {
                               <p className="font-medium text-sm">{r.name}</p>
                               <p className="text-xs text-muted-foreground">{r.email}</p>
                               {r.signature_position && (
-                                <p className="text-xs text-primary">📍 מיקום חתימה מוגדר</p>
+                                <p className="text-xs text-primary">📍 שדות מוגדרים</p>
                               )}
                             </div>
                           </div>
@@ -586,9 +1056,13 @@ export default function Signatures() {
                               {r.status === "signed" ? "חתם" : r.status === "declined" ? "סירב" : "ממתין"}
                             </Badge>
                             {selectedDoc.status !== "draft" && r.sign_token && (
-                              <Button variant="ghost" size="icon" onClick={() => copySigningLink(r.sign_token)}>
-                                <Copy className="h-4 w-4" />
-                              </Button>
+                              <>
+                                <SignatureLinkShareButtons
+                                  signingUrl={getSigningLink(r.sign_token)}
+                                  recipientName={r.name}
+                                  documentTitle={selectedDoc.title}
+                                />
+                              </>
                             )}
                           </div>
                         </div>
@@ -598,18 +1072,63 @@ export default function Signatures() {
                 </CardContent>
               </Card>
 
-              {selectedDoc.status === "draft" && (
-                <div className="flex justify-end">
-                  <Button onClick={() => { sendMutation.mutate(selectedDoc.id); setIsViewOpen(false); }}>
-                    <Send className="h-4 w-4 ml-2" />
-                    שלח לחתימה
+              {/* Audit trail */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <History className="h-4 w-4" />
+                    יומן פעילות
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {!docEvents?.length ? (
+                    <p className="text-sm text-muted-foreground">אין אירועים עדיין</p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {docEvents.map((ev: any) => (
+                        <div key={ev.id} className="flex items-center justify-between text-sm border-b pb-2 last:border-0">
+                          <div>
+                            <span className="font-medium">{eventLabels[ev.event_type] || ev.event_type}</span>
+                            {ev.signature_recipients?.name && (
+                              <span className="text-muted-foreground"> — {ev.signature_recipients.name}</span>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(ev.created_at), "dd/MM/yy HH:mm")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {selectedDoc.status === "draft" && canEditDocFields(selectedDoc) && (
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => openFieldEditor(selectedDoc)}>
+                    <Pencil className="h-4 w-4 ml-2" />
+                    ערוך שדות
                   </Button>
+                  {!selectedDoc.is_template && (
+                    <Button onClick={() => { openSendDialog(selectedDoc); setIsViewOpen(false); }}>
+                      <Send className="h-4 w-4 ml-2" />
+                      שלח לחתימה
+                    </Button>
+                  )}
+                  {selectedDoc.is_template && (
+                    <Button onClick={() => { openSendDialog(selectedDoc); setIsViewOpen(false); }}>
+                      <Send className="h-4 w-4 ml-2" />
+                      שלח לחתימה מתבנית
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {sendDialog}
     </div>
   );
 }

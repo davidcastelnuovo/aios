@@ -1,11 +1,22 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { CheckCircle, XCircle, FileText, ExternalLink, Eraser } from "lucide-react";
+import {
+  type DocumentField,
+  parseDocumentFields,
+  getFieldLabel,
+  getFieldFontSizePx,
+} from "@/components/signatures/signatureFieldTypes";
+import { useSignatureDocumentUrl } from "@/hooks/useSignatureDocumentUrl";
+import { SignatureDocumentViewer } from "@/components/signatures/SignatureDocumentViewer";
+import { detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
 
 interface SignaturePosition {
   x: number;
@@ -17,16 +28,21 @@ interface SignaturePosition {
 
 export default function SignDocument() {
   const { token } = useParams<{ token: string }>();
-  const queryClient = useQueryClient();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
-  const documentContainerRef = useRef<HTMLDivElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [docContainerHeight, setDocContainerHeight] = useState(700);
+  const signatureCanvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
+  const [isDrawing, setIsDrawing] = useState<string | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
+  const [signatureFieldSigned, setSignatureFieldSigned] = useState<Record<string, boolean>>({});
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [signed, setSigned] = useState(false);
 
-  // Fetch recipient by token via secured RPC (no direct table access)
-  const { data: recipient, isLoading: loadingRecipient } = useQuery({
+  const {
+    data: recipient,
+    isLoading: loadingRecipient,
+    isError: recipientQueryFailed,
+    error: recipientQueryError,
+  } = useQuery({
     queryKey: ["sign-recipient", token],
     queryFn: async () => {
       if (!token) return null;
@@ -35,116 +51,237 @@ export default function SignDocument() {
       return data as any;
     },
     enabled: !!token,
+    retry: 1,
   });
 
-  const signaturePosition = recipient?.signature_position as unknown as SignaturePosition | null;
-  const useOverlay = !!signaturePosition && recipient?.signature_documents?.file_url;
-
-  // Setup standalone canvas (fallback)
   useEffect(() => {
-    if (useOverlay) return;
-    const canvas = canvasRef.current;
+    if (!recipient?.field_values || typeof recipient.field_values !== "object") return;
+    const existing = recipient.field_values as Record<string, string>;
+    if (Object.keys(existing).length > 0) {
+      setFieldValues(existing);
+    }
+  }, [recipient?.field_values]);
+
+  const doc = recipient?.signature_documents as any;
+  const { resolvedUrl: docFileUrl, loading: loadingDocFile } = useSignatureDocumentUrl(doc?.file_url);
+  const signaturePosition = recipient?.signature_position as unknown as SignaturePosition | null;
+  const recipientIndex = Math.max(0, (recipient?.sign_order ?? 1) - 1);
+  const allDocFields = parseDocumentFields(doc?.document_fields);
+  const myFields = allDocFields.filter((f) => (f.recipient_index ?? 0) === recipientIndex);
+  const hasDocumentFields = myFields.length > 0;
+  const useOverlay = !!docFileUrl && (hasDocumentFields || !!signaturePosition);
+
+  const setupCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
-    ctx.scale(2, 2);
+    if (rect.width === 0 || rect.height === 0) return;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const nextW = Math.round(rect.width * dpr);
+    const nextH = Math.round(rect.height * dpr);
+    if (canvas.width === nextW && canvas.height === nextH) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 2;
+      return;
+    }
+    canvas.width = nextW;
+    canvas.height = nextH;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#000";
-    ctx.lineWidth = 2.5;
-  }, [recipient, useOverlay]);
+    ctx.lineWidth = 2;
+  }, []);
 
-  // Setup overlay canvas
+  useEffect(() => {
+    if (useOverlay || !recipient) return;
+    setupCanvas(canvasRef.current);
+  }, [recipient, useOverlay, setupCanvas]);
+
   useEffect(() => {
     if (!useOverlay) return;
-    const canvas = overlayCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
-    ctx.scale(2, 2);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 2.5;
-  }, [useOverlay, signaturePosition]);
-
-  const getActiveCanvas = () => useOverlay ? overlayCanvasRef.current : canvasRef.current;
-
-  const getPos = (e: React.MouseEvent | React.TouchEvent) => {
-    const canvas = getActiveCanvas()!;
-    const rect = canvas.getBoundingClientRect();
-    if ("touches" in e) {
-      return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top,
-      };
+    const ids = hasDocumentFields
+      ? myFields.filter((f) => f.type === "signature").map((f) => f.id)
+      : signaturePosition
+        ? ["legacy"]
+        : [];
+    for (const id of ids) {
+      const canvas = id === "legacy" ? canvasRef.current : signatureCanvasRefs.current[id];
+      setupCanvas(canvas);
     }
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+    const observers: ResizeObserver[] = [];
+    for (const id of ids) {
+      const canvas = id === "legacy" ? canvasRef.current : signatureCanvasRefs.current[id];
+      if (!canvas) continue;
+      const ro = new ResizeObserver(() => setupCanvas(canvas));
+      ro.observe(canvas);
+      observers.push(ro);
+    }
+    return () => observers.forEach((ro) => ro.disconnect());
+  }, [useOverlay, hasDocumentFields, myFields, setupCanvas, docContainerHeight, signaturePosition]);
+
+  const getPos = (
+    e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
+    canvas: HTMLCanvasElement,
+  ) => {
+    const rect = canvas.getBoundingClientRect();
+    const point =
+      "touches" in e && e.touches[0]
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: (e as React.PointerEvent).clientX, y: (e as React.PointerEvent).clientY };
+    return {
+      x: point.x - rect.left,
+      y: point.y - rect.top,
+    };
   };
 
-  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
+  const startDraw = (fieldId: string | null) => (
+    e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
+  ) => {
     e.preventDefault();
-    const ctx = getActiveCanvas()?.getContext("2d");
+    e.stopPropagation();
+    const canvas = fieldId
+      ? signatureCanvasRefs.current[fieldId]
+      : canvasRef.current;
+    if (!canvas) return;
+    setupCanvas(canvas);
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    setIsDrawing(true);
-    const pos = getPos(e);
+    if ("pointerId" in e) {
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+    setIsDrawing(fieldId ?? "legacy");
+    const pos = getPos(e, canvas);
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
   };
 
-  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+  const draw = (fieldId: string | null) => (
+    e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
+  ) => {
     e.preventDefault();
-    if (!isDrawing) return;
-    const ctx = getActiveCanvas()?.getContext("2d");
-    if (!ctx) return;
-    const pos = getPos(e);
+    if (isDrawing !== (fieldId ?? "legacy")) return;
+    const canvas = fieldId
+      ? signatureCanvasRefs.current[fieldId]
+      : canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx || !canvas) return;
+    const pos = getPos(e, canvas);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
-    setHasSignature(true);
+    if (fieldId) {
+      setSignatureFieldSigned((prev) => ({ ...prev, [fieldId]: true }));
+    } else {
+      setHasSignature(true);
+    }
   };
 
-  const endDraw = () => setIsDrawing(false);
+  const endDraw = () => setIsDrawing(null);
 
-  const clearSignature = () => {
-    const canvas = getActiveCanvas();
+  const clearSignature = (fieldId?: string) => {
+    const canvas = fieldId ? signatureCanvasRefs.current[fieldId] : canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHasSignature(false);
+    ctx.restore();
+    setupCanvas(canvas);
+    if (fieldId) {
+      setSignatureFieldSigned((prev) => ({ ...prev, [fieldId]: false }));
+    } else {
+      setHasSignature(false);
+    }
   };
 
-  // Sign mutation - via secured RPC
+  const validateFields = (): boolean => {
+    if (!hasDocumentFields) return hasSignature;
+
+    for (const field of myFields) {
+      if (!field.required) continue;
+      if (field.type === "signature") {
+        if (!signatureFieldSigned[field.id]) {
+          toast.error(`נא למלא שדה: ${getFieldLabel(field.type)}`);
+          return false;
+        }
+      } else if (!fieldValues[field.id]?.trim()) {
+        toast.error(`נא למלא שדה: ${field.label}`);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const collectFieldValues = (): Record<string, string> => {
+    const values = { ...fieldValues };
+    for (const field of myFields.filter((f) => f.type === "signature")) {
+      const canvas = signatureCanvasRefs.current[field.id];
+      if (canvas && signatureFieldSigned[field.id]) {
+        values[field.id] = canvas.toDataURL("image/png");
+      }
+    }
+    return values;
+  };
+
+  const getPrimarySignatureData = (values: Record<string, string>): string => {
+    const sigField = myFields.find((f) => f.type === "signature");
+    if (sigField && values[sigField.id]) return values[sigField.id];
+    if (canvasRef.current && hasSignature) return canvasRef.current.toDataURL("image/png");
+    const legacyCanvas = signatureCanvasRefs.current["legacy"];
+    if (legacyCanvas) return legacyCanvas.toDataURL("image/png");
+    return "";
+  };
+
   const signMutation = useMutation({
     mutationFn: async () => {
-      const canvas = getActiveCanvas();
-      if (!canvas || !recipient || !token) throw new Error("Missing data");
-      const signatureData = canvas.toDataURL("image/png");
-      const { error } = await supabase.rpc("submit_signature_by_token", {
-        _token: token,
-        _signature_data: signatureData,
-        _ip: null,
+      if (!recipient || !token) throw new Error("Missing data");
+      if (!validateFields()) throw new Error("validation_failed");
+
+      const values = collectFieldValues();
+      const signatureData = getPrimarySignatureData(values);
+      if (!signatureData) throw new Error("missing_signature");
+
+      const { data, error } = await supabase.functions.invoke("submit-signature", {
+        body: { token, signatureData, fieldValues: values, action: "sign" },
       });
-      if (error) throw error;
+      const payload = (data ?? {}) as { error?: string; success?: boolean; ok?: boolean };
+      const message = payload.error || (error as Error | null)?.message || "";
+      if (message.includes("not_found_or_already_signed")) {
+        // Signature may already be saved while PDF generation failed previously.
+        return;
+      }
+      if (error && !payload.success && !payload.ok) throw error;
+      if (payload.error) throw new Error(payload.error);
     },
     onSuccess: () => {
       setSigned(true);
       toast.success("החתימה נשמרה בהצלחה!");
     },
-    onError: (err: any) => toast.error("שגיאה בשמירת החתימה: " + err.message),
+    onError: (err: any) => {
+      if (err.message !== "validation_failed") {
+        toast.error("שגיאה בשמירת החתימה: " + err.message);
+      }
+    },
   });
 
   const declineMutation = useMutation({
     mutationFn: async () => {
       if (!token) throw new Error("Missing data");
-      const { error } = await supabase.rpc("decline_signature_by_token", { _token: token });
+      const { data, error } = await supabase.functions.invoke("submit-signature", {
+        body: { token, action: "decline" },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       setSigned(true);
@@ -152,10 +289,101 @@ export default function SignDocument() {
     },
   });
 
+  const canSubmit = hasDocumentFields
+    ? myFields.some((f) => f.type === "signature")
+      ? myFields.filter((f) => f.required).every((f) =>
+          f.type === "signature" ? signatureFieldSigned[f.id] : !!fieldValues[f.id]?.trim(),
+        )
+      : myFields.filter((f) => f.required).every((f) => !!fieldValues[f.id]?.trim())
+    : hasSignature;
+
+  const renderFieldOverlay = (field: DocumentField) => {
+    const style = {
+      left: `${field.position.x}%`,
+      top: `${field.position.y}%`,
+      width: `${field.position.width}%`,
+      height: `${field.position.height}%`,
+    };
+    const fontSize = getFieldFontSizePx(field.position, docContainerHeight);
+
+    if (field.type === "signature") {
+      return (
+        <div
+          key={field.id}
+          className="absolute border-2 border-primary rounded bg-white/95 z-10"
+          style={style}
+        >
+          <div
+            className="absolute top-0 right-0 bg-primary text-primary-foreground px-1 py-0.5 rounded-bl z-10 pointer-events-none"
+            style={{ fontSize: Math.max(8, fontSize - 2) }}
+          >
+            {field.label}
+          </div>
+          <canvas
+            ref={(el) => { signatureCanvasRefs.current[field.id] = el; }}
+            className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+            onPointerDown={startDraw(field.id)}
+            onPointerMove={draw(field.id)}
+            onPointerUp={endDraw}
+            onPointerLeave={endDraw}
+            onPointerCancel={endDraw}
+          />
+        </div>
+      );
+    }
+
+    if (field.type === "address") {
+      return (
+        <div key={field.id} className="absolute" style={style}>
+          <Textarea
+            value={fieldValues[field.id] ?? ""}
+            onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
+            placeholder={field.label}
+            className="w-full h-full resize-none bg-white/95 border-primary"
+            style={{ fontSize }}
+            dir="rtl"
+          />
+        </div>
+      );
+    }
+
+    const inputType = field.type === "phone" ? "tel" : field.type === "date" ? "date" : "text";
+
+    return (
+      <div key={field.id} className="absolute" style={style}>
+        <Input
+          type={inputType}
+          value={fieldValues[field.id] ?? ""}
+          onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
+          placeholder={field.label}
+          className="w-full h-full bg-white/95 border-primary px-1"
+          style={{ fontSize }}
+          dir={field.type === "phone" || field.type === "id_number" ? "ltr" : "rtl"}
+        />
+      </div>
+    );
+  };
+
   if (loadingRecipient) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <p className="text-muted-foreground">טוען...</p>
+      </div>
+    );
+  }
+
+  if (recipientQueryFailed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center">
+            <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-foreground mb-2">שגיאה בטעינת המסמך</h2>
+            <p className="text-muted-foreground">
+              {(recipientQueryError as Error)?.message || "לא ניתן לטעון את קישור החתימה כרגע. נסו שוב."}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -190,73 +418,84 @@ export default function SignDocument() {
     );
   }
 
-  const doc = recipient.signature_documents as any;
-
   return (
     <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">
-      <div className="max-w-3xl mx-auto space-y-6">
-        {/* Header */}
+      <div className="max-w-4xl mx-auto space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground mb-1">חתימה דיגיטלית</h1>
-          <p className="text-muted-foreground">שלום {recipient.name}, אנא חתום על המסמך הבא</p>
+          <p className="text-muted-foreground">שלום {recipient.name}, אנא מלא את השדות וחתום על המסמך</p>
         </div>
 
-        {/* Document with overlay signature */}
         {useOverlay ? (
-          <Card>
-            <CardHeader>
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
                 {doc?.title}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div ref={documentContainerRef} className="relative">
-                {/* Document preview */}
-                {/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(doc.file_url) ? (
-                  <img src={doc.file_url} alt="Document" className="w-full h-auto rounded" />
-                ) : (
-                  <iframe src={doc.file_url} className="w-full border-0 rounded" style={{ height: 700 }} title="Document" />
+            <CardContent className="p-2 sm:p-4">
+              <SignatureDocumentViewer
+                fileUrl={docFileUrl}
+                mediaKind={detectMediaKind(doc?.file_url)}
+                forcePdf={
+                  !!doc?.file_url &&
+                  !/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(doc.file_url) &&
+                  doc.document_type === "uploaded"
+                }
+                loading={loadingDocFile}
+                error={!docFileUrl && !loadingDocFile ? "לא ניתן לטעון את המסמך" : null}
+                onHeightChange={setDocContainerHeight}
+                className="bg-white"
+              >
+                {hasDocumentFields
+                  ? myFields.map(renderFieldOverlay)
+                  : signaturePosition && (
+                    <div
+                      className="absolute border-2 border-primary rounded bg-white/90 z-10"
+                      style={{
+                        left: `${signaturePosition.x}%`,
+                        top: `${signaturePosition.y}%`,
+                        width: `${signaturePosition.width}%`,
+                        height: `${signaturePosition.height}%`,
+                      }}
+                    >
+                      <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-bl z-10 pointer-events-none">
+                        חתום כאן
+                      </div>
+                      <canvas
+                        ref={canvasRef}
+                        className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+                        onPointerDown={startDraw(null)}
+                        onPointerMove={draw(null)}
+                        onPointerUp={endDraw}
+                        onPointerLeave={endDraw}
+                        onPointerCancel={endDraw}
+                      />
+                    </div>
+                  )}
+              </SignatureDocumentViewer>
+
+              <div className="flex justify-end mt-2 gap-2">
+                {hasDocumentFields && myFields.some((f) => f.type === "signature") && (
+                  myFields.filter((f) => f.type === "signature").map((f) => (
+                    <Button key={f.id} variant="ghost" size="sm" onClick={() => clearSignature(f.id)}>
+                      <Eraser className="h-4 w-4 ml-1" />
+                      נקה {f.label}
+                    </Button>
+                  ))
                 )}
-
-                {/* Signature overlay area */}
-                <div
-                  className="absolute border-2 border-primary rounded bg-white/90 overflow-hidden"
-                  style={{
-                    left: `${signaturePosition!.x}%`,
-                    top: `${signaturePosition!.y}%`,
-                    width: `${signaturePosition!.width}%`,
-                    height: `${signaturePosition!.height}%`,
-                  }}
-                >
-                  <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-bl z-10">
-                    חתום כאן
-                  </div>
-                  <canvas
-                    ref={overlayCanvasRef}
-                    className="w-full h-full cursor-crosshair touch-none"
-                    onMouseDown={startDraw}
-                    onMouseMove={draw}
-                    onMouseUp={endDraw}
-                    onMouseLeave={endDraw}
-                    onTouchStart={startDraw}
-                    onTouchMove={draw}
-                    onTouchEnd={endDraw}
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end mt-2">
-                <Button variant="ghost" size="sm" onClick={clearSignature}>
-                  <Eraser className="h-4 w-4 ml-1" />
-                  נקה חתימה
-                </Button>
+                {!hasDocumentFields && (
+                  <Button variant="ghost" size="sm" onClick={() => clearSignature()}>
+                    <Eraser className="h-4 w-4 ml-1" />
+                    נקה חתימה
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
         ) : (
           <>
-            {/* Document (no overlay) */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -279,12 +518,11 @@ export default function SignDocument() {
               </CardContent>
             </Card>
 
-            {/* Standalone Signature Pad */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-sm">חתימה</CardTitle>
-                  <Button variant="ghost" size="sm" onClick={clearSignature}>
+                  <Button variant="ghost" size="sm" onClick={() => clearSignature()}>
                     <Eraser className="h-4 w-4 ml-1" />
                     נקה
                   </Button>
@@ -296,13 +534,11 @@ export default function SignDocument() {
                     ref={canvasRef}
                     className="w-full cursor-crosshair touch-none"
                     style={{ height: "200px" }}
-                    onMouseDown={startDraw}
-                    onMouseMove={draw}
-                    onMouseUp={endDraw}
-                    onMouseLeave={endDraw}
-                    onTouchStart={startDraw}
-                    onTouchMove={draw}
-                    onTouchEnd={endDraw}
+                    onPointerDown={startDraw(null)}
+                    onPointerMove={draw(null)}
+                    onPointerUp={endDraw}
+                    onPointerLeave={endDraw}
+                    onPointerCancel={endDraw}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground text-center mt-2">
@@ -313,7 +549,6 @@ export default function SignDocument() {
           </>
         )}
 
-        {/* Actions */}
         <div className="flex gap-3 justify-center">
           <Button
             variant="destructive"
@@ -325,7 +560,7 @@ export default function SignDocument() {
           </Button>
           <Button
             onClick={() => signMutation.mutate()}
-            disabled={!hasSignature || signMutation.isPending}
+            disabled={!canSubmit || signMutation.isPending}
             className="min-w-32"
           >
             <CheckCircle className="h-4 w-4 ml-2" />

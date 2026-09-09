@@ -16,7 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
-import { Pencil, CalendarIcon, FileText, DollarSign, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip, UserPlus } from "lucide-react";
+import { Pencil, CalendarIcon, FileText, DollarSign, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip, UserPlus, FolderOpen } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
 import { format } from "date-fns";
@@ -30,6 +30,7 @@ import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { useLeadPipelineStages } from "@/hooks/useLeadPipelineStages";
 import { ManagePipelineStagesDialog } from "./ManagePipelineStagesDialog";
 import { LeadUpdatesTab } from "@/components/leads/LeadUpdatesTab";
+import { SendSignatureFromLeadPanel } from "@/components/leads/SendSignatureFromLeadPanel";
 import { LeadTagSelector, LeadTagBadgesEditable } from "@/components/leads/LeadTagSelector";
 import { FolderLinksField } from "./FolderLinksField";
 import { AttachmentsField } from "./AttachmentsField";
@@ -494,7 +495,7 @@ const updateMutation = useMutation({
 
   const body = (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={cn("grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm", inline && "hidden")}>
+          <TabsList className={cn("grid w-full grid-cols-2 sm:grid-cols-5 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm", inline && "hidden")}>
             <TabsTrigger 
               value="details" 
               className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
@@ -520,6 +521,13 @@ const updateMutation = useMutation({
                   {folderLinks.length + attachments.length}
                 </span>
               )}
+            </TabsTrigger>
+            <TabsTrigger 
+              value="docs" 
+              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
+            >
+              <FolderOpen className="h-3 w-3 sm:h-4 sm:w-4" />
+              מסמכים
             </TabsTrigger>
               <TabsTrigger 
               value="meeting" 
@@ -981,6 +989,11 @@ const updateMutation = useMutation({
                 <Button type="submit" disabled={updateMutation.isPending} className="w-full">
                   {updateMutation.isPending ? "מעדכן..." : "שמור שינויים"}
                 </Button>
+              </TabsContent>
+
+              {/* Tab: Digital signature documents */}
+              <TabsContent value="docs" className="space-y-6 mt-0">
+                <SendSignatureFromLeadPanel lead={lead} tenantId={tenantId} />
               </TabsContent>
 
               {/* Tab 2: Proposals & Pricing */}

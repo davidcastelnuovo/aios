@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { useTenant } from "@/contexts/TenantContext";
+import { useOptionalTenant } from "@/contexts/TenantContext";
 
 function slugFromPathname(pathname = window.location.pathname): string | null {
   const match = pathname.match(/^\/t\/([^/]+)/);
@@ -12,7 +12,8 @@ function slugFromPathname(pathname = window.location.pathname): string | null {
  */
 export function useTenantPath() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
-  const { currentTenantSlug } = useTenant();
+  const tenantContext = useOptionalTenant();
+  const currentTenantSlug = tenantContext?.currentTenantSlug ?? null;
   
   // URL params → tenant context → pathname parse (avoids brief /module 404 flashes)
   const activeSlug = tenantSlug || currentTenantSlug || slugFromPathname();

@@ -405,3 +405,15 @@ verify_jwt = true
 # Mints ephemeral OpenAI Realtime tokens for the Command Center voice chat.
 [functions.carmen-realtime-session]
 verify_jwt = true
+
+[functions.send-signature-request]
+verify_jwt = true
+
+[functions.send-signature-from-template]
+verify_jwt = true
+
+[functions.submit-signature]
+verify_jwt = false
+
+[functions.generate-signed-pdf]
+verify_jwt = false
