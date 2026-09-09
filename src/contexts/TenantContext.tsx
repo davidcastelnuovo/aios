@@ -68,6 +68,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [isActiveTenantDbSynced, setIsActiveTenantDbSynced] = useState(false);
   const [isBootstrapTimedOut, setIsBootstrapTimedOut] = useState(false);
   const previousTenantIdRef = useRef<string | null>(null);
+  const lastTasksInvalidationTenantRef = useRef<string | null>(null);
 
   // Update tenantSlug when location changes (react-router navigation)
   useEffect(() => {
@@ -177,7 +178,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         console.error("Error updating active tenant in DB:", error);
       }
       setIsActiveTenantDbSynced(true);
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      if (lastTasksInvalidationTenantRef.current !== currentTenantId) {
+        lastTasksInvalidationTenantRef.current = currentTenantId;
+        queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      }
     };
 
     void sync().catch((err) => {

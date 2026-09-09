@@ -28,6 +28,7 @@ import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncControl";
 
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
+import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -253,20 +254,12 @@ export default function DynamicTables() {
     enabled: !!tenantId,
   });
 
-  // Fetch dashboards
+  // Fetch dashboards across own tenant + shared agencies (e.g. DMM-MC under DMM).
   const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery({
     queryKey: ['crm-dashboards', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
-        .from('crm_dashboards')
-        // include the client's agency_id so dashboards that have no explicit
-        // agency_id but belong to a client in an agency still scope correctly.
-        .select('*, clients(name, agency_id), agencies(name)')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
+      return fetchAccessibleDashboards(tenantId);
     },
     enabled: !!tenantId,
   });
