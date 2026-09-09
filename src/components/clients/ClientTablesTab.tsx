@@ -56,6 +56,8 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     },
     enabled: !!tenantId && !!clientId,
     ...reportQueryOptions<any[]>(),
+    // Linked reports can change from Dynamic Tables; don't show a stale persisted empty list.
+    refetchOnMount: "always",
   });
 
   // All tenant tables — only for the link-table picker
