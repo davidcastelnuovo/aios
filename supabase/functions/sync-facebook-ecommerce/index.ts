@@ -355,12 +355,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Delete existing records and insert new ones (admin client to bypass RLS)
+    // Delete existing records and insert new ones (admin client to bypass RLS).
+    // table_id only — orphan rows from a previous tenant_id must not survive sync.
     const { error: delErr } = await supabaseAdmin
       .from('crm_records')
       .delete()
-      .eq('table_id', table_id)
-      .eq('tenant_id', tableTenantId);
+      .eq('table_id', table_id);
     if (delErr) console.error('[sync-facebook-ecommerce] delete error:', delErr.message);
 
     // Insert new records (batched)

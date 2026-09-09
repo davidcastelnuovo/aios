@@ -48,6 +48,7 @@ import {
 import { SHARED_COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
 import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
 import { filterWooOrdersForRevenue, sumWooRevenue } from "@/lib/wooOrderRevenue";
+import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
 
 const DATE_FILTERS = SHARED_COMBINED_DASHBOARD_DATE_FILTERS;
 
@@ -312,6 +313,7 @@ export default function SharedDashboard({
         const data = record.data || {};
         if (data.report_type !== 'daily') return false;
       }
+      if (isAdsPlatform(source) && !shouldIncludeInAdsDashboardAggregate(record.data, source)) return false;
       return true;
     });
   }, [records, platformFilter, hasVisibleAnalyticsData]);
@@ -455,6 +457,7 @@ export default function SharedDashboard({
       if (isAdsPlatform(source)) {
         const data = record.data || {};
         if (data.report_type && data.report_type !== 'daily') return;
+        if (!shouldIncludeInAdsDashboardAggregate(data, source)) return;
         spend += getSpendFromData(data);
         impressions += Number(data.impressions) || 0;
       }

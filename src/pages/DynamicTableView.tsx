@@ -2566,7 +2566,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
             campaign_type: 'lead' | 'ecommerce' | 'traffic' | 'other';
           }>);
 
-          const entries = Object.entries(campaignGroups).map(([key, data]) => [data.name, data] as const);
+          const entries = Object.entries(campaignGroups);
           // Respect table-level campaign_type setting: if 'leads', NEVER show ecommerce table
           // (even if Facebook reports stray purchase events from a tracking pixel)
           const tableCampaignType = String(table?.integration_settings?.campaign_type || '').toLowerCase();
@@ -2635,12 +2635,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                         </tr>
                       </thead>
                       <tbody>
-                        {ecommerceCampaigns.map(([campaignName, data]) => {
+                        {ecommerceCampaigns.map(([groupKey, data]) => {
                           const roas = data.spend > 0 ? data.purchase_value / data.spend : 0;
                           const costPerPurchase = data.purchases > 0 ? data.spend / data.purchases : 0;
                           return (
-                            <tr key={`ecom-${campaignName}`} className="border-b hover:bg-muted/30">
-                              <td className="p-2 text-right font-medium">{campaignName}</td>
+                            <tr key={`ecom-${groupKey}`} className="border-b hover:bg-muted/30">
+                              <td className="p-2 text-right font-medium">{data.name}</td>
                               <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                               <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
                               <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
@@ -2687,11 +2687,11 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                         </tr>
                       </thead>
                       <tbody>
-                        {leadCampaigns.map(([campaignName, data]) => {
+                        {leadCampaigns.map(([groupKey, data]) => {
                           const costPerLead = data.leads > 0 ? data.spend / data.leads : 0;
                           return (
-                            <tr key={`lead-${campaignName}`} className="border-b hover:bg-muted/30">
-                              <td className="p-2 text-right font-medium">{campaignName}</td>
+                            <tr key={`lead-${groupKey}`} className="border-b hover:bg-muted/30">
+                              <td className="p-2 text-right font-medium">{data.name}</td>
                               <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                               <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
                               <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>
@@ -2737,12 +2737,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                         </tr>
                       </thead>
                       <tbody>
-                        {trafficCampaigns.map(([campaignName, data]) => {
+                        {trafficCampaigns.map(([groupKey, data]) => {
                           const ctr = data.impressions > 0 ? (data.clicks / data.impressions) * 100 : 0;
                           const cpc = data.clicks > 0 ? data.spend / data.clicks : 0;
                           return (
-                            <tr key={`traffic-${campaignName}`} className="border-b hover:bg-muted/30">
-                              <td className="p-2 text-right font-medium">{campaignName}</td>
+                            <tr key={`traffic-${groupKey}`} className="border-b hover:bg-muted/30">
+                              <td className="p-2 text-right font-medium">{data.name}</td>
                               <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                               <td className="p-2 text-center text-green-600 font-medium">{data.clicks.toLocaleString('he-IL')}</td>
                               <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>

@@ -1,3 +1,5 @@
+import { shouldIncludeInAdsDashboardAggregate } from '@/lib/adsEntityLevel';
+
 // Shared metric extraction for report records (`crm_records.data`).
 //
 // Every integration writes its own field names — Facebook syncs write
@@ -153,6 +155,7 @@ export function aggregateFacebookCampaignsFromRecords(
   const map: Record<string, FacebookCampaignRow> = {};
 
   records.forEach((r) => {
+    if (!shouldIncludeInAdsDashboardAggregate(r.data, 'facebook_insights')) return;
     const d = r.data || {};
     const name = d.campaign_name || d.campaign || 'ללא שם';
     if (!map[name]) {
