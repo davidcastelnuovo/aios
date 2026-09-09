@@ -390,10 +390,10 @@ export async function cloneSignatureFromTemplate(
   } else if (leadId) {
     const { data: lead } = await supabase
       .from('leads')
-      .select('company_name, name, contact_name')
+      .select('company_name, contact_name')
       .eq('id', leadId)
       .maybeSingle();
-    businessStampName = lead?.company_name || lead?.name || lead?.contact_name || null;
+    businessStampName = lead?.company_name || lead?.contact_name || null;
   }
   if (!businessStampName) businessStampName = recipientName || null;
   if (contactDetails?.idNumber) businessStampCompanyId = contactDetails.idNumber;

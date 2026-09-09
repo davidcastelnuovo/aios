@@ -348,7 +348,7 @@ export default function Signatures() {
       if (thenSend && !doc.is_template) {
         const { data: recipients } = await supabase
           .from("signature_recipients")
-          .select("name, email, phone")
+          .select("name, email")
           .eq("document_id", doc.id)
           .order("sign_order")
           .limit(1);
@@ -494,6 +494,12 @@ export default function Signatures() {
         setLastSentLinks(result.signingLinks);
         queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
         queryClient.invalidateQueries({ queryKey: ["signature-events", result.documentId] });
+        queryClient.invalidateQueries({ queryKey: ["signature-recipients", result.documentId] });
+        setSelectedDoc((prev: any) =>
+          prev && (prev.id === result.documentId || prev.id === sendDialogDoc?.id)
+            ? { ...prev, id: result.documentId, status: "pending" }
+            : prev,
+        );
       }}
     />
   );
@@ -1059,7 +1065,7 @@ export default function Signatures() {
                             <Badge className={r.status === "signed" ? "bg-green-100 text-green-800" : r.status === "declined" ? "bg-destructive/10 text-destructive" : "bg-yellow-100 text-yellow-800"}>
                               {r.status === "signed" ? "חתם" : r.status === "declined" ? "סירב" : "ממתין"}
                             </Badge>
-                            {selectedDoc.status !== "draft" && r.sign_token && (
+                            {r.sign_token && (
                               <>
                                 <SignatureLinkShareButtons
                                   signingUrl={getSigningLink(r.sign_token)}

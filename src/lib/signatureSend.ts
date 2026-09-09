@@ -108,10 +108,11 @@ async function prepareDirectClientSide(
   }
 
   if (doc.status === "draft") {
-    await supabase
+    const { error: statusError } = await supabase
       .from("signature_documents")
       .update({ status: "pending", updated_at: new Date().toISOString() })
       .eq("id", documentId);
+    if (statusError) throw new Error(statusError.message);
   }
 
   const { data: recipients, error: fetchError } = await supabase
