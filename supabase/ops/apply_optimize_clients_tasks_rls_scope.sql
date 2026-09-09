@@ -37,11 +37,14 @@ BEGIN
     RETURN false;
   END IF;
 
-  IF public.is_super_admin(uid) THEN
-    RETURN COALESCE(
-      (SELECT t.allow_super_admin_access FROM public.tenants t WHERE t.id = c.tenant_id),
-      false
-    );
+  -- Match stacked permissive policies: allow_super_admin_access grants full
+  -- client read; if false, keep evaluating the other role paths below.
+  IF public.is_super_admin(uid)
+     AND COALESCE(
+       (SELECT t.allow_super_admin_access FROM public.tenants t WHERE t.id = c.tenant_id),
+       false
+     ) THEN
+    RETURN true;
   END IF;
 
   tid := public.get_user_tenant_id(uid);
