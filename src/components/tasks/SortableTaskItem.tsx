@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { MessageSquare, Users, GripVertical, Calendar, CalendarClock, Megaphone, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { embedCount } from "@/lib/embedCount";
 import { format } from "date-fns";
 
 interface SortableTaskItemProps {
@@ -58,8 +59,8 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
   };
 
   const isCompleted = task.status === "done";
-  const updatesCount = task.task_updates?.length || 0;
-  const collaboratorsCount = task.task_collaborators?.length || 0;
+  const updatesCount = embedCount(task.task_updates);
+  const collaboratorsCount = embedCount(task.task_collaborators);
 
   if (compact) {
     return (

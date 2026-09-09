@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Users, GripVertical, GripHorizontal, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { embedCount } from "@/lib/embedCount";
 
 interface ResizableTaskItemProps {
   task: {
@@ -81,8 +82,8 @@ export function ResizableTaskItem({
   };
 
   const isCompleted = task.status === "done";
-  const updatesCount = task.task_updates?.length || 0;
-  const collaboratorsCount = task.task_collaborators?.length || 0;
+  const updatesCount = embedCount(task.task_updates);
+  const collaboratorsCount = embedCount(task.task_collaborators);
 
   const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
