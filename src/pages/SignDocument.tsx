@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, FileText, ExternalLink, Eraser } from "lucide-react";
+import { CheckCircle, XCircle, FileText, ExternalLink, Eraser, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   type DocumentField,
   parseDocumentFields,
@@ -36,6 +36,8 @@ export default function SignDocument() {
   const [signatureFieldSigned, setSignatureFieldSigned] = useState<Record<string, boolean>>({});
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [signed, setSigned] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [numPages, setNumPages] = useState(1);
 
   const {
     data: recipient,
@@ -70,6 +72,12 @@ export default function SignDocument() {
   const myFields = allDocFields.filter((f) => (f.recipient_index ?? 0) === recipientIndex);
   const hasDocumentFields = myFields.length > 0;
   const useOverlay = !!docFileUrl && (hasDocumentFields || !!signaturePosition);
+  const pageFields = useMemo(
+    () => myFields.filter((f) => (f.position.page ?? 1) === currentPage),
+    [myFields, currentPage],
+  );
+  const legacyOnCurrentPage =
+    !hasDocumentFields && (!signaturePosition || (signaturePosition.page ?? 1) === currentPage);
 
   const businessStamp = (recipient?.business_stamp ?? {}) as { name?: string | null; company_id?: string | null };
   const idNumberFromFields = myFields
@@ -116,8 +124,8 @@ export default function SignDocument() {
   useEffect(() => {
     if (!useOverlay) return;
     const ids = hasDocumentFields
-      ? myFields.filter((f) => f.type === "signature").map((f) => f.id)
-      : signaturePosition
+      ? pageFields.filter((f) => f.type === "signature").map((f) => f.id)
+      : legacyOnCurrentPage && signaturePosition
         ? ["legacy"]
         : [];
     for (const id of ids) {
@@ -134,7 +142,7 @@ export default function SignDocument() {
       observers.push(ro);
     }
     return () => observers.forEach((ro) => ro.disconnect());
-  }, [useOverlay, hasDocumentFields, myFields, setupCanvas, docContainerHeight, signaturePosition]);
+  }, [useOverlay, hasDocumentFields, pageFields, setupCanvas, docContainerHeight, signaturePosition, legacyOnCurrentPage, currentPage]);
 
   const getPos = (
     e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
@@ -484,6 +492,34 @@ export default function SignDocument() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-2 sm:p-4">
+              {numPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    disabled={currentPage >= numPages}
+                    onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    עמוד {currentPage} מתוך {numPages}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
               <SignatureDocumentViewer
                 fileUrl={docFileUrl}
                 mediaKind={detectMediaKind(doc?.file_url)}
@@ -492,14 +528,19 @@ export default function SignDocument() {
                   !/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(doc.file_url) &&
                   doc.document_type === "uploaded"
                 }
+                page={currentPage}
+                onNumPagesChange={(n) => {
+                  setNumPages(n);
+                  if (currentPage > n) setCurrentPage(n);
+                }}
                 loading={loadingDocFile}
                 error={!docFileUrl && !loadingDocFile ? "לא ניתן לטעון את המסמך" : null}
                 onHeightChange={setDocContainerHeight}
                 className="bg-white"
               >
                 {hasDocumentFields
-                  ? myFields.map(renderFieldOverlay)
-                  : signaturePosition && (
+                  ? pageFields.map(renderFieldOverlay)
+                  : legacyOnCurrentPage && signaturePosition && (
                     <div
                       className="absolute border-2 border-primary rounded bg-white/80 z-10 overflow-hidden"
                       style={{
@@ -541,16 +582,16 @@ export default function SignDocument() {
                   )}
               </SignatureDocumentViewer>
 
-              <div className="flex justify-end mt-2 gap-2">
-                {hasDocumentFields && myFields.some((f) => f.type === "signature") && (
-                  myFields.filter((f) => f.type === "signature").map((f) => (
+              <div className="flex justify-end mt-2 gap-2 flex-wrap">
+                {hasDocumentFields && pageFields.some((f) => f.type === "signature") && (
+                  pageFields.filter((f) => f.type === "signature").map((f) => (
                     <Button key={f.id} variant="ghost" size="sm" onClick={() => clearSignature(f.id)}>
                       <Eraser className="h-4 w-4 ml-1" />
-                      נקה {f.label}
+                      נקה {f.label || "חתימה"}
                     </Button>
                   ))
                 )}
-                {!hasDocumentFields && (
+                {!hasDocumentFields && legacyOnCurrentPage && (
                   <Button variant="ghost" size="sm" onClick={() => clearSignature()}>
                     <Eraser className="h-4 w-4 ml-1" />
                     נקה חתימה
