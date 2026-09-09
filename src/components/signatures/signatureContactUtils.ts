@@ -34,7 +34,7 @@ export function buildFieldPrefill(
   const prefill: Record<string, string> = {};
   for (const field of fields) {
     if ((field.recipient_index ?? 0) !== recipientIndex) continue;
-    if (field.type === "signature" || field.type === "date") continue;
+    if (field.type === "signature" || field.type === "date" || field.type === "text") continue;
     const val = typeToValue[field.type];
     if (val?.trim()) prefill[field.id] = val.trim();
   }

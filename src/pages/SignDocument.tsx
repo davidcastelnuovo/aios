@@ -215,7 +215,7 @@ export default function SignDocument() {
           return false;
         }
       } else if (!fieldValues[field.id]?.trim()) {
-        toast.error(`נא למלא שדה: ${field.label}`);
+        toast.error(`נא למלא שדה: ${field.label || getFieldLabel(field.type)}`);
         return false;
       }
     }
@@ -340,6 +340,23 @@ export default function SignDocument() {
             onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
             placeholder={field.label}
             className="w-full h-full resize-none bg-white/95 border-primary"
+            style={{ fontSize }}
+            dir="rtl"
+          />
+        </div>
+      );
+    }
+
+    if (field.type === "text") {
+      return (
+        <div key={field.id} className="absolute" style={style}>
+          <Input
+            type="text"
+            value={fieldValues[field.id] ?? ""}
+            onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
+            placeholder=""
+            aria-label="שדה מילוי"
+            className="w-full h-full bg-white/90 border-primary/70 px-1 shadow-none"
             style={{ fontSize }}
             dir="rtl"
           />
