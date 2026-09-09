@@ -797,7 +797,11 @@ export default function Signatures() {
                     (createTab === "url" && !documentUrl)
                   }
                 >
-                  {createMutation.isPending ? "שומר..." : "שמור מסמך"}
+                  {createMutation.isPending
+                    ? "שומר..."
+                    : isTemplate
+                      ? "שמור תבנית"
+                      : "שמור מסמך"}
                 </Button>
                 {!isTemplate && (
                 <Button
