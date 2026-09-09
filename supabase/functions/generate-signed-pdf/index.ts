@@ -1,7 +1,34 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
+import fontkit from 'https://esm.sh/@pdf-lib/fontkit@1.0.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { saveSignedPdfToEntity } from '../_shared/signature-automation.ts';
+
+/** DejaVu supports Hebrew + Latin (Helvetica/WinAnsi cannot encode Hebrew). */
+const UI_FONT_URL =
+  'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf';
+
+async function embedUiFont(pdfDoc: PDFDocument) {
+  try {
+    pdfDoc.registerFontkit(fontkit);
+    const res = await fetch(UI_FONT_URL);
+    if (!res.ok) throw new Error(`font_fetch_${res.status}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return await pdfDoc.embedFont(bytes, { subset: true });
+  } catch (err) {
+    console.warn('[generate-signed-pdf] hebrew font fallback', err);
+    return await pdfDoc.embedFont(StandardFonts.Helvetica);
+  }
+}
+
+function drawTextSafe(page: { drawText: (t: string, o: Record<string, unknown>) => void }, text: string, opts: Record<string, unknown>) {
+  try {
+    page.drawText(text, opts);
+  } catch {
+    const ascii = text.replace(/[^\x20-\x7E]/g, '?');
+    page.drawText(ascii || '?', opts);
+  }
+}
 
 interface SignaturePosition {
   x: number;
@@ -115,7 +142,7 @@ async function drawTextOnPage(
   const y = pageHeight - (position.y / 100) * pageHeight - boxHeight * 0.7;
   const fontSize = Math.min(12, Math.max(7, boxHeight * 0.55));
   const maxChars = Math.floor(boxWidth / (fontSize * 0.5));
-  page.drawText(text.slice(0, maxChars), { x, y, size: fontSize, font, color: rgb(0, 0, 0) });
+  drawTextSafe(page, text.slice(0, maxChars), { x, y, size: fontSize, font, color: rgb(0, 0, 0) });
 }
 
 async function buildSignedPdf(doc: {
@@ -161,22 +188,22 @@ async function buildSignedPdf(doc: {
   } else {
     pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([595, 842]);
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const { width, height } = page.getSize();
-    page.drawText(doc.title || 'Document', { x: 50, y: height - 60, size: 18, font, color: rgb(0, 0, 0) });
+    const font = await embedUiFont(pdfDoc);
+    const { height } = page.getSize();
+    drawTextSafe(page, doc.title || 'Document', { x: 50, y: height - 60, size: 18, font, color: rgb(0, 0, 0) });
     const content = (doc.content || '').slice(0, 3000);
     const lines = content.split('\n');
     let yPos = height - 100;
     for (const line of lines) {
       if (yPos < 80) break;
-      page.drawText(line.slice(0, 90), { x: 50, y: yPos, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
+      drawTextSafe(page, line.slice(0, 90), { x: 50, y: yPos, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
       yPos -= 16;
     }
   }
 
   let fallbackIndex = 0;
   const docFields = Array.isArray(doc.document_fields) ? doc.document_fields : [];
-  const textFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const textFont = await embedUiFont(pdfDoc);
 
   for (const recipient of signedRecipients) {
     const recipientIndex = Math.max(0, (recipient.sign_order ?? 1) - 1);
@@ -206,13 +233,13 @@ async function buildSignedPdf(doc: {
 
   // Audit summary page
   const summaryPage = pdfDoc.addPage([595, 842]);
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const font = await embedUiFont(pdfDoc);
   const { height } = summaryPage.getSize();
-  summaryPage.drawText('Signature Certificate', { x: 50, y: height - 50, size: 16, font });
+  drawTextSafe(summaryPage, 'Signature Certificate', { x: 50, y: height - 50, size: 16, font });
   let y = height - 80;
   for (const r of signedRecipients) {
     const line = `${r.name} <${r.email}> - ${r.signed_at || 'signed'}`;
-    summaryPage.drawText(line.slice(0, 80), { x: 50, y, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
+    drawTextSafe(summaryPage, line.slice(0, 80), { x: 50, y, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
     y -= 18;
     if (y < 50) break;
   }

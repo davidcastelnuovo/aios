@@ -254,8 +254,14 @@ export default function SignDocument() {
       const { data, error } = await supabase.functions.invoke("submit-signature", {
         body: { token, signatureData, fieldValues: values, action: "sign" },
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const payload = (data ?? {}) as { error?: string; success?: boolean; ok?: boolean };
+      const message = payload.error || (error as Error | null)?.message || "";
+      if (message.includes("not_found_or_already_signed")) {
+        // Signature may already be saved while PDF generation failed previously.
+        return;
+      }
+      if (error && !payload.success && !payload.ok) throw error;
+      if (payload.error) throw new Error(payload.error);
     },
     onSuccess: () => {
       setSigned(true);

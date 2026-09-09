@@ -78,10 +78,11 @@ Deno.serve(async (req) => {
         fieldValues ?? {},
       );
 
+      // Signature is already persisted — never fail the request because PDF generation failed.
       if (result.document_status === 'completed' && result.document_id) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-        try {
+        const runPdf = async () => {
           const pdfRes = await fetch(`${supabaseUrl}/functions/v1/generate-signed-pdf`, {
             method: 'POST',
             headers: {
@@ -92,10 +93,26 @@ Deno.serve(async (req) => {
           });
           const pdfBody = await pdfRes.json().catch(() => ({}));
           if (!pdfRes.ok || pdfBody?.error) {
-            pdfError = pdfBody?.error || `pdf_http_${pdfRes.status}`;
-            console.error('[submit-signature] pdf generation failed', pdfError);
+            const errMsg = pdfBody?.error || `pdf_http_${pdfRes.status}`;
+            console.error('[submit-signature] pdf generation failed', errMsg);
+            return { pdfGenerated: false, pdfError: errMsg as string };
+          }
+          return { pdfGenerated: true, pdfError: null as string | null };
+        };
+
+        try {
+          // Prefer background work so the signer gets an immediate success response.
+          const edgeRuntime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+          if (edgeRuntime?.waitUntil) {
+            edgeRuntime.waitUntil(
+              runPdf().catch((err) => console.error('[submit-signature] pdf background failed', err)),
+            );
+            pdfGenerated = false;
+            pdfError = null;
           } else {
-            pdfGenerated = true;
+            const pdfOutcome = await runPdf();
+            pdfGenerated = pdfOutcome.pdfGenerated;
+            pdfError = pdfOutcome.pdfError;
           }
         } catch (err) {
           pdfError = err instanceof Error ? err.message : String(err);
