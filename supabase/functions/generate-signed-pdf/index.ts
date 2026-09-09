@@ -3,267 +3,14 @@ import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 import fontkit from 'https://esm.sh/@pdf-lib/fontkit@1.0.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { saveSignedPdfToEntity } from '../_shared/signature-automation.ts';
+import {
+  buildCertificateId,
+  renderAiosStampPng,
+  renderCertificateCardPng,
+} from '../_shared/aios-stamp.ts';
 
-/** DejaVu supports Hebrew + Latin (Helvetica/WinAnsi cannot encode Hebrew). */
 const UI_FONT_URL =
   'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf';
-const UI_FONT_BOLD_URL =
-  'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans-Bold.ttf';
-
-const AIOS_INK = rgb(0.07, 0.25, 0.45);
-const AIOS_INK_SOFT = rgb(0.12, 0.35, 0.55);
-const AIOS_MUTED = rgb(0.35, 0.4, 0.45);
-
-type PdfFont = {
-  widthOfTextAtSize: (t: string, s: number) => number;
-};
-
-type PdfPage = {
-  drawText: (t: string, o: Record<string, unknown>) => void;
-  drawCircle: (o: Record<string, unknown>) => void;
-  drawRectangle: (o: Record<string, unknown>) => void;
-  drawLine: (o: Record<string, unknown>) => void;
-  getWidth: () => number;
-  getHeight: () => number;
-  getSize: () => { width: number; height: number };
-};
-
-async function embedUiFont(pdfDoc: PDFDocument, bold = false) {
-  try {
-    pdfDoc.registerFontkit(fontkit);
-    const res = await fetch(bold ? UI_FONT_BOLD_URL : UI_FONT_URL);
-    if (!res.ok) throw new Error(`font_fetch_${res.status}`);
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    return await pdfDoc.embedFont(bytes, { subset: true });
-  } catch (err) {
-    console.warn('[generate-signed-pdf] hebrew font fallback', err);
-    return await pdfDoc.embedFont(bold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica);
-  }
-}
-
-/** pdf-lib draws LTR; reverse full Hebrew segments (incl. spaces/colon) for correct visual RTL. */
-function preparePdfText(text: string): string {
-  return text.replace(/[\u0590-\u05FF][\u0590-\u05FF\s־–—:]*/g, (run) => {
-    const trailingSpace = run.match(/\s+$/)?.[0] ?? '';
-    const core = run.slice(0, run.length - trailingSpace.length);
-    return Array.from(core).reverse().join('') + trailingSpace;
-  });
-}
-
-function drawTextSafe(page: { drawText: (t: string, o: Record<string, unknown>) => void }, text: string, opts: Record<string, unknown>) {
-  const prepared = preparePdfText(text);
-  try {
-    page.drawText(prepared, opts);
-  } catch {
-    const ascii = prepared.replace(/[^\x20-\x7E]/g, '?');
-    page.drawText(ascii || '?', opts);
-  }
-}
-
-function formatSignedAt(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())} UTC`;
-}
-
-function centerText(
-  page: PdfPage,
-  text: string,
-  y: number,
-  size: number,
-  font: PdfFont,
-  color = AIOS_INK,
-) {
-  const prepared = preparePdfText(text);
-  const width = font.widthOfTextAtSize(prepared, size);
-  drawTextSafe(page, text, {
-    x: (page.getWidth() - width) / 2,
-    y,
-    size,
-    font,
-    color,
-  });
-}
-
-function drawAiosStamp(
-  page: PdfPage,
-  font: PdfFont,
-  fontBold: PdfFont,
-  cx: number,
-  cy: number,
-  radius = 72,
-) {
-  // Soft fill so stamp sits on top of document content cleanly
-  page.drawCircle({
-    x: cx,
-    y: cy,
-    size: radius,
-    color: rgb(1, 1, 1),
-    opacity: 0.96,
-    borderWidth: 0,
-  });
-
-  // Classic seal rings
-  page.drawCircle({
-    x: cx,
-    y: cy,
-    size: radius,
-    borderColor: AIOS_INK,
-    borderWidth: 3,
-    borderOpacity: 1,
-  });
-  page.drawCircle({
-    x: cx,
-    y: cy,
-    size: radius - 5,
-    borderColor: AIOS_INK_SOFT,
-    borderWidth: 1.4,
-    borderOpacity: 0.95,
-  });
-  page.drawCircle({
-    x: cx,
-    y: cy,
-    size: radius - 10,
-    borderColor: AIOS_INK,
-    borderWidth: 0.8,
-    borderOpacity: 0.65,
-  });
-
-  // Decorative tick marks around the seal
-  for (let i = 0; i < 24; i++) {
-    const angle = (i / 24) * Math.PI * 2;
-    const inner = radius - 14;
-    const outer = radius - 11.2;
-    page.drawLine({
-      start: { x: cx + Math.cos(angle) * inner, y: cy + Math.sin(angle) * inner },
-      end: { x: cx + Math.cos(angle) * outer, y: cy + Math.sin(angle) * outer },
-      thickness: 0.7,
-      color: AIOS_INK_SOFT,
-      opacity: 0.75,
-    });
-  }
-
-  const line1 = 'נחתם ותועד';
-  const line2 = 'על ידי';
-  const brand = 'aios';
-
-  const s1 = Math.max(10, Math.round(radius * 0.17));
-  const s2 = Math.max(9, Math.round(radius * 0.14));
-  const s3 = Math.max(14, Math.round(radius * 0.24));
-  const w1 = fontBold.widthOfTextAtSize(preparePdfText(line1), s1);
-  const w2 = font.widthOfTextAtSize(preparePdfText(line2), s2);
-  const w3 = fontBold.widthOfTextAtSize(brand, s3);
-
-  drawTextSafe(page, line1, { x: cx - w1 / 2, y: cy + radius * 0.18, size: s1, font: fontBold, color: AIOS_INK });
-  drawTextSafe(page, line2, { x: cx - w2 / 2, y: cy - radius * 0.02, size: s2, font, color: AIOS_INK_SOFT });
-  drawTextSafe(page, brand, { x: cx - w3 / 2, y: cy - radius * 0.32, size: s3, font: fontBold, color: AIOS_INK });
-}
-
-function drawRtlLine(
-  page: PdfPage,
-  text: string,
-  rightX: number,
-  y: number,
-  size: number,
-  font: PdfFont,
-  color: ReturnType<typeof rgb>,
-) {
-  const prepared = preparePdfText(text);
-  const width = font.widthOfTextAtSize(prepared, size);
-  drawTextSafe(page, text, { x: rightX - width, y, size, font, color });
-}
-
-function drawCertificatePage(
-  page: PdfPage,
-  font: PdfFont,
-  fontBold: PdfFont,
-  doc: { id?: string; title?: string },
-  signedRecipients: RecipientRow[],
-) {
-  const { width, height } = page.getSize();
-
-  page.drawRectangle({
-    x: 36,
-    y: 36,
-    width: width - 72,
-    height: height - 72,
-    borderColor: AIOS_INK,
-    borderWidth: 1.4,
-    color: rgb(0.985, 0.99, 1),
-  });
-  page.drawRectangle({
-    x: 44,
-    y: 44,
-    width: width - 88,
-    height: height - 88,
-    borderColor: AIOS_INK_SOFT,
-    borderWidth: 0.7,
-    borderOpacity: 0.75,
-  });
-
-  centerText(page, 'אישור חתימה דיגיטלית', height - 88, 20, fontBold, AIOS_INK);
-  centerText(page, 'Digital Signature Certificate', height - 110, 10, font, AIOS_MUTED);
-
-  drawAiosStamp(page, font, fontBold, width / 2, height - 228, 80);
-
-  const cardX = 70;
-  const cardW = width - 140;
-  let cardY = height - 360;
-  const cardHeight = Math.max(78, 48 + signedRecipients.length * 56);
-  page.drawRectangle({
-    x: cardX,
-    y: cardY + 18 - cardHeight,
-    width: cardW,
-    height: cardHeight,
-    borderColor: rgb(0.8, 0.85, 0.9),
-    borderWidth: 0.9,
-    color: rgb(1, 1, 1),
-  });
-
-  const right = cardX + cardW - 18;
-  const title = doc.title?.trim() || 'מסמך';
-  drawRtlLine(page, `מסמך: ${title}`, right, cardY, 11, fontBold, AIOS_INK);
-  cardY -= 20;
-  if (doc.id) {
-    drawTextSafe(page, `Document ID: ${doc.id}`, {
-      x: cardX + 16,
-      y: cardY,
-      size: 8,
-      font,
-      color: AIOS_MUTED,
-    });
-    cardY -= 18;
-  }
-
-  page.drawLine({
-    start: { x: cardX + 16, y: cardY + 6 },
-    end: { x: cardX + cardW - 16, y: cardY + 6 },
-    thickness: 0.5,
-    color: rgb(0.85, 0.88, 0.92),
-  });
-  cardY -= 14;
-
-  for (const r of signedRecipients) {
-    drawRtlLine(page, `חותם: ${r.name || '—'}`, right, cardY, 11, fontBold, AIOS_INK);
-    cardY -= 16;
-    drawTextSafe(page, r.email || '', {
-      x: cardX + 16,
-      y: cardY,
-      size: 9,
-      font,
-      color: AIOS_MUTED,
-    });
-    cardY -= 14;
-    drawRtlLine(page, `נחתם ב־${formatSignedAt(r.signed_at)}`, right, cardY, 9, font, AIOS_MUTED);
-    cardY -= 26;
-    if (cardY < 90) break;
-  }
-
-  centerText(page, 'נחתם ותועד על ידי aios', 72, 11, fontBold, AIOS_INK_SOFT);
-  centerText(page, 'aios.co.il', 54, 8, font, AIOS_MUTED);
-}
 
 interface SignaturePosition {
   x: number;
@@ -329,6 +76,27 @@ function isImageFile(fileUrl: string): boolean {
   return /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(fileUrl);
 }
 
+async function embedFieldFont(pdfDoc: PDFDocument) {
+  try {
+    pdfDoc.registerFontkit(fontkit);
+    const res = await fetch(UI_FONT_URL);
+    if (!res.ok) throw new Error(`font_fetch_${res.status}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return await pdfDoc.embedFont(bytes, { subset: true });
+  } catch {
+    return await pdfDoc.embedFont(StandardFonts.Helvetica);
+  }
+}
+
+/** Reverse Hebrew segments for pdf-lib field overlays only (not the stamp). */
+function preparePdfText(text: string): string {
+  return text.replace(/[\u0590-\u05FF][\u0590-\u05FF\s־–—:]*/g, (run) => {
+    const trailingSpace = run.match(/\s+$/)?.[0] ?? '';
+    const core = run.slice(0, run.length - trailingSpace.length);
+    return Array.from(core).reverse().join('') + trailingSpace;
+  });
+}
+
 async function drawSignatureOnPage(
   pdfDoc: PDFDocument,
   pageIndex: number,
@@ -366,7 +134,7 @@ async function drawTextOnPage(
   pageIndex: number,
   text: string,
   position: SignaturePosition,
-  font: PdfFont,
+  font: { widthOfTextAtSize: (t: string, s: number) => number },
 ): Promise<void> {
   const pages = pdfDoc.getPages();
   const page = pages[Math.min(pageIndex, pages.length - 1)];
@@ -377,11 +145,22 @@ async function drawTextOnPage(
   const y = pageHeight - (position.y / 100) * pageHeight - boxHeight * 0.7;
   const fontSize = Math.min(12, Math.max(7, boxHeight * 0.55));
   const maxChars = Math.floor(boxWidth / (fontSize * 0.5));
-  drawTextSafe(page, text.slice(0, maxChars), { x, y, size: fontSize, font, color: rgb(0, 0, 0) });
+  const prepared = preparePdfText(text.slice(0, maxChars));
+  try {
+    page.drawText(prepared, { x, y, size: fontSize, font, color: rgb(0, 0, 0) });
+  } catch {
+    page.drawText(prepared.replace(/[^\x20-\x7E]/g, '?') || '?', {
+      x,
+      y,
+      size: fontSize,
+      font,
+      color: rgb(0, 0, 0),
+    });
+  }
 }
 
 async function buildSignedPdf(doc: {
-  id?: string;
+  id: string;
   title: string;
   content: string | null;
   file_url: string | null;
@@ -424,23 +203,20 @@ async function buildSignedPdf(doc: {
   } else {
     pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([595, 842]);
-    const font = await embedUiFont(pdfDoc);
+    const font = await embedFieldFont(pdfDoc);
     const { height } = page.getSize();
-    drawTextSafe(page, doc.title || 'Document', { x: 50, y: height - 60, size: 18, font, color: rgb(0, 0, 0) });
-    const content = (doc.content || '').slice(0, 3000);
-    const lines = content.split('\n');
-    let yPos = height - 100;
-    for (const line of lines) {
-      if (yPos < 80) break;
-      drawTextSafe(page, line.slice(0, 90), { x: 50, y: yPos, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
-      yPos -= 16;
-    }
+    page.drawText(preparePdfText(doc.title || 'Document'), {
+      x: 50,
+      y: height - 60,
+      size: 18,
+      font,
+      color: rgb(0, 0, 0),
+    });
   }
 
   let fallbackIndex = 0;
   const docFields = Array.isArray(doc.document_fields) ? doc.document_fields : [];
-  const textFont = await embedUiFont(pdfDoc);
-  const fontBold = await embedUiFont(pdfDoc, true);
+  const textFont = await embedFieldFont(pdfDoc);
 
   for (const recipient of signedRecipients) {
     const recipientIndex = Math.max(0, (recipient.sign_order ?? 1) - 1);
@@ -468,16 +244,73 @@ async function buildSignedPdf(doc: {
     }
   }
 
-  // Compact stamp on the last content page (before certificate)
+  const primary = signedRecipients[0];
+  const signedAt = primary?.signed_at ?? new Date().toISOString();
+  const certificateId = buildCertificateId(doc.id, signedAt);
+
+  const stampPng = await renderAiosStampPng({
+    signedAt,
+    certificateId,
+    signerName: primary?.name,
+    documentTitle: doc.title,
+  });
+  const stampImage = await pdfDoc.embedPng(stampPng);
+
+  // Transparent ink stamp on last content page
   const contentPages = pdfDoc.getPages();
   if (contentPages.length > 0) {
-    const lastContent = contentPages[contentPages.length - 1] as unknown as PdfPage;
-    const { width } = lastContent.getSize();
-    drawAiosStamp(lastContent, textFont, fontBold, width - 95, 95, 52);
+    const lastContent = contentPages[contentPages.length - 1];
+    const { width, height } = lastContent.getSize();
+    const stampW = 132;
+    const stampH = (stampImage.height / stampImage.width) * stampW;
+    lastContent.drawImage(stampImage, {
+      x: width - stampW - 28,
+      y: 28,
+      width: stampW,
+      height: stampH,
+      opacity: 0.88,
+    });
   }
 
-  const summaryPage = pdfDoc.addPage([595, 842]) as unknown as PdfPage;
-  drawCertificatePage(summaryPage, textFont, fontBold, doc, signedRecipients);
+  // Certificate page: large stamp + Hebrew card (both PNG via resvg)
+  const summaryPage = pdfDoc.addPage([595, 842]);
+  const { width, height } = summaryPage.getSize();
+  summaryPage.drawRectangle({
+    x: 28,
+    y: 28,
+    width: width - 56,
+    height: height - 56,
+    borderColor: rgb(0.09, 0.23, 0.37),
+    borderWidth: 1.2,
+    color: rgb(0.99, 0.995, 1),
+  });
+
+  const bigStampW = 220;
+  const bigStampH = (stampImage.height / stampImage.width) * bigStampW;
+  summaryPage.drawImage(stampImage, {
+    x: (width - bigStampW) / 2,
+    y: height - 120 - bigStampH,
+    width: bigStampW,
+    height: bigStampH,
+    opacity: 0.92,
+  });
+
+  const cardPng = await renderCertificateCardPng({
+    signedAt,
+    certificateId,
+    signerName: primary?.name,
+    signerEmail: primary?.email,
+    documentTitle: doc.title,
+  });
+  const cardImage = await pdfDoc.embedPng(cardPng);
+  const cardW = 460;
+  const cardH = (cardImage.height / cardImage.width) * cardW;
+  summaryPage.drawImage(cardImage, {
+    x: (width - cardW) / 2,
+    y: 120,
+    width: cardW,
+    height: cardH,
+  });
 
   return await pdfDoc.save();
 }
