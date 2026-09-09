@@ -108,39 +108,66 @@ export async function renderAiosStampPng(input: StampRenderInput): Promise<Uint8
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <defs>
-    <filter id="ink" x="-20%" y="-20%" width="140%" height="140%">
-      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="noise"/>
-      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" xChannelSelector="R" yChannelSelector="G"/>
+    <!-- Authentic rubber-stamp ink: blotchy coverage + rough edges + slight bleed -->
+    <filter id="stampInk" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="4" seed="7" result="grain"/>
+      <feColorMatrix in="grain" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 1.55 -0.35"
+        result="grainMask"/>
+      <feComposite in="SourceGraphic" in2="grainMask" operator="in" result="blotched"/>
+      <feTurbulence type="turbulence" baseFrequency="0.08" numOctaves="2" seed="3" result="warpNoise"/>
+      <feDisplacementMap in="blotched" in2="warpNoise" scale="2.8" xChannelSelector="R" yChannelSelector="G" result="warped"/>
+      <feGaussianBlur in="warped" stdDeviation="0.35" result="bleed"/>
+      <feBlend in="bleed" in2="warped" mode="multiply" result="inked"/>
+      <feComponentTransfer in="inked">
+        <feFuncA type="linear" slope="1.15" intercept="-0.02"/>
+      </feComponentTransfer>
     </filter>
     <style>
       .he {
         font-family: 'DejaVu Sans';
         direction: rtl;
         unicode-bidi: plaintext;
-        fill: #9A2B2B;
+        fill: #8E2424;
       }
       .brand {
         font-family: 'DejaVu Sans';
         font-weight: 700;
-        fill: #9A2B2B;
+        fill: #8E2424;
       }
       .meta {
         font-family: 'DejaVu Sans';
-        fill: #8A3030;
+        fill: #7A2A2A;
+      }
+      .ring {
+        fill: none;
+        stroke: #8E2424;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
     </style>
   </defs>
-  <!-- Transparent canvas: no background rect. Ink-only stamp. -->
-  <g transform="rotate(-9 ${c} ${c})" opacity="0.78" filter="url(#ink)">
-    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="#9A2B2B" stroke-width="12"/>
-    <circle cx="${c}" cy="${c}" r="${r - 16}" fill="none" stroke="#9A2B2B" stroke-width="3.5"/>
-    <circle cx="${c}" cy="${c}" r="${r - 32}" fill="none" stroke="#9A2B2B" stroke-width="2.2" stroke-dasharray="2 6"/>
+  <!-- Transparent canvas — ink only -->
+  <g transform="rotate(-10 ${c} ${c})" opacity="0.86" filter="url(#stampInk)">
+    <!-- Soft under-ink ghost for pressure unevenness -->
+    <g opacity="0.28" transform="translate(1.6,1.2)">
+      <circle class="ring" cx="${c}" cy="${c}" r="${r}" stroke-width="13"/>
+      <text class="he" x="${c}" y="${c - 86}" text-anchor="middle" font-size="36" font-weight="700">נחתם ותועד</text>
+      <text class="brand" x="${c}" y="${c + 4}" text-anchor="middle" font-size="54">aios</text>
+    </g>
+
+    <circle class="ring" cx="${c}" cy="${c}" r="${r}" stroke-width="12"/>
+    <circle class="ring" cx="${c}" cy="${c}" r="${r - 16}" stroke-width="3.4"/>
+    <circle class="ring" cx="${c}" cy="${c}" r="${r - 32}" stroke-width="2.1" stroke-dasharray="1.8 5.5"/>
 
     <text class="he" x="${c}" y="${c - 86}" text-anchor="middle" font-size="36" font-weight="700">נחתם ותועד</text>
     <text class="he" x="${c}" y="${c - 44}" text-anchor="middle" font-size="26">על ידי</text>
     <text class="brand" x="${c}" y="${c + 4}" text-anchor="middle" font-size="54">aios</text>
 
-    <line x1="${c - 118}" y1="${c + 24}" x2="${c + 118}" y2="${c + 24}" stroke="#9A2B2B" stroke-width="1.6" opacity="0.75"/>
+    <line x1="${c - 118}" y1="${c + 24}" x2="${c + 118}" y2="${c + 24}" stroke="#8E2424" stroke-width="1.7" opacity="0.8" stroke-linecap="round"/>
 
     <text class="he" x="${c}" y="${c + 56}" text-anchor="middle" font-size="20">תאריך: ${escapeXml(date)}</text>
     <text class="he" x="${c}" y="${c + 84}" text-anchor="middle" font-size="20">שעה: ${escapeXml(time)}</text>
