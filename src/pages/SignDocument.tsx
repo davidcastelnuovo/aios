@@ -37,7 +37,12 @@ export default function SignDocument() {
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [signed, setSigned] = useState(false);
 
-  const { data: recipient, isLoading: loadingRecipient } = useQuery({
+  const {
+    data: recipient,
+    isLoading: loadingRecipient,
+    isError: recipientQueryFailed,
+    error: recipientQueryError,
+  } = useQuery({
     queryKey: ["sign-recipient", token],
     queryFn: async () => {
       if (!token) return null;
@@ -46,6 +51,7 @@ export default function SignDocument() {
       return data as any;
     },
     enabled: !!token,
+    retry: 1,
   });
 
   useEffect(() => {
@@ -356,6 +362,22 @@ export default function SignDocument() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <p className="text-muted-foreground">טוען...</p>
+      </div>
+    );
+  }
+
+  if (recipientQueryFailed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center">
+            <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-foreground mb-2">שגיאה בטעינת המסמך</h2>
+            <p className="text-muted-foreground">
+              {(recipientQueryError as Error)?.message || "לא ניתן לטעון את קישור החתימה כרגע. נסו שוב."}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
