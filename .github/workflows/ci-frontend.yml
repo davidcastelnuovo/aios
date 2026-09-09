@@ -27,5 +27,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Shared-agency dashboard guard
+        run: pnpm test:guards
+
       - name: Build frontend
         run: pnpm build

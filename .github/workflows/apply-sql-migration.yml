@@ -50,6 +50,7 @@ on:
       - 'supabase/ops/fix_user_can_access_client_tenant_users_fallback.sql'
       - 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'
       - 'supabase/ops/apply_cursor_human_task_queue.sql'
+      - 'supabase/ops/apply_optimize_clients_tasks_rls_scope.sql'
 
 jobs:
   apply:
