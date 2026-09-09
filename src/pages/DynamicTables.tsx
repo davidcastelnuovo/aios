@@ -29,6 +29,7 @@ import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncCon
 
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
 import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
+import { invalidateClientCrmTablesQueries } from "@/lib/reportQueryCache";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -426,9 +427,10 @@ export default function DynamicTables() {
       
       return await response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['clients', tenantId] });
+      invalidateClientCrmTablesQueries(queryClient, tenantId, variables.client_id);
       setEditingTable(null);
       toast.success('הדוח עודכן בהצלחה');
     },

@@ -12,6 +12,7 @@ import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClien
 import { getIntegrationIcon } from "@/lib/integrationIcons";
 import { toast } from "sonner";
 import { Loader2, AlertCircle, Search } from "lucide-react";
+import { invalidateClientCrmTablesQueries } from "@/lib/reportQueryCache";
 
 interface EditTableDialogProps {
   open: boolean;
@@ -155,7 +156,7 @@ export function EditTableDialog({ open, onOpenChange, table, tenantId, onSaved }
       toast.success("הטבלה עודכנה בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["crm-tables"] });
       queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
+      invalidateClientCrmTablesQueries(queryClient, tenantId, clientId || table?.client_id || null);
       onSaved?.();
       onOpenChange(false);
     } catch (err: unknown) {

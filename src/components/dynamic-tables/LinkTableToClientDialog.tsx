@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Link2, Loader2, Search } from "lucide-react";
+import { invalidateClientCrmTablesQueries } from "@/lib/reportQueryCache";
 
 interface LinkTableToClientDialogProps {
   tableId: string;
@@ -108,11 +109,12 @@ export function LinkTableToClientDialog({
         throw new Error(message);
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, clientId) => {
       toast.success("הטבלה שויכה ללקוח בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["crm-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["client-dashboard-tables", tenantId] });
+      invalidateClientCrmTablesQueries(queryClient, tenantId, clientId || currentClientId || null);
       setOpen(false);
     },
     onError: (e: Error) => {

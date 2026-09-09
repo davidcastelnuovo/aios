@@ -14,7 +14,10 @@ interface CampaignerScope {
   clientIds: Set<string>;
 }
 
-async function getSeoClientIds(admin: any, userId: string): Promise<Set<string> | null> {
+async function userHasSeoScope(admin: any, userId: string): Promise<boolean> {
+  const { data: hasScope, error } = await admin.rpc('user_has_seo_scope', { _user_id: userId });
+  if (!error) return !!hasScope;
+
   const [{ data: seoRole }, { data: isSeoStaff }] = await Promise.all([
     admin
       .from('user_roles')
@@ -25,8 +28,26 @@ async function getSeoClientIds(admin: any, userId: string): Promise<Set<string> 
       .maybeSingle(),
     admin.rpc('is_seo_staff', { _user_id: userId }),
   ]);
+  if (seoRole || isSeoStaff) return true;
 
-  if (!seoRole && !isSeoStaff) return null;
+  const { data: profileRow } = await admin
+    .from('profiles')
+    .select('campaigner_id')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!profileRow?.campaigner_id) return false;
+
+  const { data: campaignerRow } = await admin
+    .from('campaigners')
+    .select('role')
+    .eq('id', profileRow.campaigner_id)
+    .maybeSingle();
+  const tags = Array.isArray(campaignerRow?.role) ? campaignerRow.role : [];
+  return tags.includes('SEO');
+}
+
+async function getSeoClientIds(admin: any, userId: string): Promise<Set<string> | null> {
+  if (!(await userHasSeoScope(admin, userId))) return null;
 
   const { data: clientIds } = await admin.rpc('get_user_client_ids', { _user_id: userId });
   return new Set((clientIds || []).filter(Boolean));
@@ -85,6 +106,20 @@ function serviceRoleClient() {
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
+}
+
+/** Match crm_tables.client_id and legacy integration_settings.clientId. */
+function applyClientIdFilter(query: any, clientIdFilter: string) {
+  return query.or(
+    `client_id.eq.${clientIdFilter},integration_settings->>clientId.eq.${clientIdFilter}`,
+  );
+}
+
+function tableMatchesClientFilter(table: any, clientIdFilter: string): boolean {
+  if (!clientIdFilter) return true;
+  const settings = (table?.integration_settings || {}) as Record<string, unknown>;
+  const settingsClientId = settings.clientId ?? settings.client_id;
+  return table?.client_id === clientIdFilter || settingsClientId === clientIdFilter;
 }
 
 async function syncClientCardAfterTableChange(tableRow: Record<string, unknown> | null | undefined) {
@@ -178,7 +213,7 @@ serve(async (req) => {
           ownQuery = ownQuery.or(`agency_id.eq.${agencyIdFilter},agency_id.is.null`);
         }
         if (slugFilter) ownQuery = ownQuery.eq('slug', slugFilter);
-        if (clientIdFilter) ownQuery = ownQuery.eq('client_id', clientIdFilter);
+        if (clientIdFilter) ownQuery = applyClientIdFilter(ownQuery, clientIdFilter);
 
         const { data: ownTables, error: ownError } = await ownQuery;
         if (ownError) throw ownError;
@@ -198,7 +233,7 @@ serve(async (req) => {
             sharedQuery = sharedQuery.eq('agency_id', agencyIdFilter);
           }
           if (slugFilter) sharedQuery = sharedQuery.eq('slug', slugFilter);
-          if (clientIdFilter) sharedQuery = sharedQuery.eq('client_id', clientIdFilter);
+          if (clientIdFilter) sharedQuery = applyClientIdFilter(sharedQuery, clientIdFilter);
 
           const { data: sharedTables, error: sharedError } = await sharedQuery;
           if (sharedError) {
@@ -222,7 +257,7 @@ serve(async (req) => {
             ownedForeignQuery = ownedForeignQuery.eq('agency_id', agencyIdFilter);
           }
           if (slugFilter) ownedForeignQuery = ownedForeignQuery.eq('slug', slugFilter);
-          if (clientIdFilter) ownedForeignQuery = ownedForeignQuery.eq('client_id', clientIdFilter);
+          if (clientIdFilter) ownedForeignQuery = applyClientIdFilter(ownedForeignQuery, clientIdFilter);
 
           const { data: ownedForeignTables, error: ownedForeignError } = await ownedForeignQuery;
           if (ownedForeignError) {
@@ -255,7 +290,7 @@ serve(async (req) => {
                 .order('created_at', { ascending: false });
 
               if (slugFilter) foreignByClientQuery = foreignByClientQuery.eq('slug', slugFilter);
-              if (clientIdFilter) foreignByClientQuery = foreignByClientQuery.eq('client_id', clientIdFilter);
+              if (clientIdFilter) foreignByClientQuery = applyClientIdFilter(foreignByClientQuery, clientIdFilter);
 
               const { data: foreignByClient, error: foreignByClientErr } = await foreignByClientQuery;
               if (foreignByClientErr) {
@@ -267,9 +302,10 @@ serve(async (req) => {
           }
         }
 
-        // Dedupe by id
+        // Dedupe by id; when scoping to a client, keep legacy settings-only links too.
         const seen = new Set<string>();
         allTables = allTables.filter(t => {
+          if (clientIdFilter && !tableMatchesClientFilter(t, clientIdFilter)) return false;
           if (seen.has(t.id)) return false;
           seen.add(t.id);
           return true;
@@ -420,18 +456,36 @@ serve(async (req) => {
         if (agency_id !== undefined) updateData.agency_id = agency_id || null;
         if (client_id !== undefined) updateData.client_id = client_id || null;
         if (campaign_active !== undefined) updateData.campaign_active = !!campaign_active;
-        if (integration_settings !== undefined) {
-          // Merge with existing integration_settings to avoid overwriting
+        let existingSettings: Record<string, unknown> = {};
+        if (integration_settings !== undefined || client_id !== undefined) {
           const { data: existingTable } = await supabase
             .from('crm_tables')
             .select('integration_settings')
             .eq('id', table_id)
             .single();
+          existingSettings = (existingTable?.integration_settings as Record<string, unknown>) || {};
+        }
 
+        if (integration_settings !== undefined) {
           updateData.integration_settings = {
-            ...(existingTable?.integration_settings as Record<string, unknown> || {}),
+            ...existingSettings,
             ...integration_settings,
           };
+        }
+
+        // Keep client_id column and integration_settings.clientId in sync.
+        if (client_id !== undefined && client_id) {
+          updateData.integration_settings = {
+            ...(updateData.integration_settings || existingSettings),
+            clientId: client_id,
+          };
+        } else if (client_id === undefined && updateData.integration_settings) {
+          const settingsClientId =
+            (updateData.integration_settings as Record<string, unknown>).clientId
+            ?? (updateData.integration_settings as Record<string, unknown>).client_id;
+          if (typeof settingsClientId === 'string' && settingsClientId) {
+            updateData.client_id = settingsClientId;
+          }
         }
 
         const { data: table, error } = await supabase
@@ -498,7 +552,7 @@ serve(async (req) => {
             (!tableRow.client_id && !tableRow.agency_id)
           )
           : (
-            !!tableRow.client_id && seoClientIds!.has(tableRow.client_id)
+            !tableRow.client_id || seoClientIds!.has(tableRow.client_id)
           );
 
         // When linking, the target client must also be within their scope.

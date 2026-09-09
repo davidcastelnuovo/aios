@@ -52,6 +52,24 @@ export function hydrateReportQueryCache(queryClient: QueryClient): void {
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Bust client-card report lists after linking/unlinking tables outside ClientTablesTab. */
+export function invalidateClientCrmTablesQueries(
+  queryClient: QueryClient,
+  tenantId?: string | null,
+  clientId?: string | null,
+): void {
+  if (tenantId && clientId) {
+    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId, clientId] });
+  } else if (tenantId) {
+    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId] });
+  } else {
+    queryClient.invalidateQueries({ queryKey: ["client-crm-tables"] });
+  }
+  if (tenantId) {
+    queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
+  }
+}
+
 export function setupReportQueryCachePersistence(queryClient: QueryClient): void {
   hydrateReportQueryCache(queryClient);
 

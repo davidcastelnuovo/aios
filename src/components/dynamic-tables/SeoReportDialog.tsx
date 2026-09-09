@@ -21,6 +21,7 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { cn } from "@/lib/utils";
+import { invalidateClientCrmTablesQueries } from "@/lib/reportQueryCache";
 
 interface SeoReportDialogProps {
   open: boolean;
@@ -390,6 +391,7 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
 
       toast({ title: "טבלת דוח SEO נוצרה בהצלחה!" });
       queryClient.invalidateQueries({ queryKey: ['crm-tables', currentTenantId] });
+      invalidateClientCrmTablesQueries(queryClient, currentTenantId, selectedClient);
       onOpenChange(false);
       // Navigate to the new table
       const tenantSlug = currentTenant?.slug || '';
@@ -473,6 +475,7 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
       queryClient.invalidateQueries({ queryKey: ['seo-reports', currentTenantId, selectedClient] });
       queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', currentTenantId] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables', currentTenantId] });
+      invalidateClientCrmTablesQueries(queryClient, currentTenantId, selectedClient);
       onOpenChange(false);
       const tenantSlug = currentTenant?.slug || '';
       if (tenantSlug) navigate(`/t/${tenantSlug}/table/${slug}`);
