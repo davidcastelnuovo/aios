@@ -71,6 +71,17 @@ export default function SignDocument() {
   const hasDocumentFields = myFields.length > 0;
   const useOverlay = !!docFileUrl && (hasDocumentFields || !!signaturePosition);
 
+  const businessStamp = (recipient?.business_stamp ?? {}) as { name?: string | null; company_id?: string | null };
+  const idNumberFromFields = myFields
+    .filter((f) => f.type === "id_number")
+    .map((f) => fieldValues[f.id]?.trim())
+    .find(Boolean);
+  const stampCompanyId = (idNumberFromFields || businessStamp.company_id || "").trim();
+  const stampBusinessName = (businessStamp.name || recipient?.name || "").trim();
+  const companyIdLabel = stampCompanyId
+    ? (/^\d+$/.test(stampCompanyId) ? `ח.פ/ע.מ ${stampCompanyId}` : stampCompanyId)
+    : "";
+
   const setupCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -310,18 +321,39 @@ export default function SignDocument() {
       return (
         <div
           key={field.id}
-          className="absolute border-2 border-primary rounded bg-white/95 z-10"
+          className="absolute border-2 border-primary rounded bg-white/80 z-10 overflow-hidden"
           style={style}
         >
-          <div
-            className="absolute top-0 right-0 bg-primary text-primary-foreground px-1 py-0.5 rounded-bl z-10 pointer-events-none"
-            style={{ fontSize: Math.max(8, fontSize - 2) }}
-          >
-            {field.label}
-          </div>
+          {stampBusinessName && (
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none px-1"
+              style={{ color: "#6B7280", opacity: 0.72, transform: "rotate(-2deg)" }}
+              aria-hidden
+            >
+              <div
+                className="font-bold text-center leading-tight truncate max-w-full"
+                style={{ fontSize: Math.max(10, fontSize + 2) }}
+              >
+                {stampBusinessName}
+              </div>
+              {companyIdLabel && (
+                <div className="text-center leading-tight truncate max-w-full mt-0.5" style={{ fontSize: Math.max(8, fontSize - 1) }}>
+                  {companyIdLabel}
+                </div>
+              )}
+            </div>
+          )}
+          {field.label ? (
+            <div
+              className="absolute top-0 right-0 bg-primary text-primary-foreground px-1 py-0.5 rounded-bl z-10 pointer-events-none"
+              style={{ fontSize: Math.max(8, fontSize - 2) }}
+            >
+              {field.label}
+            </div>
+          ) : null}
           <canvas
             ref={(el) => { signatureCanvasRefs.current[field.id] = el; }}
-            className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+            className="absolute inset-0 w-full h-full cursor-crosshair touch-none z-[1] bg-transparent"
             onPointerDown={startDraw(field.id)}
             onPointerMove={draw(field.id)}
             onPointerUp={endDraw}
@@ -469,7 +501,7 @@ export default function SignDocument() {
                   ? myFields.map(renderFieldOverlay)
                   : signaturePosition && (
                     <div
-                      className="absolute border-2 border-primary rounded bg-white/90 z-10"
+                      className="absolute border-2 border-primary rounded bg-white/80 z-10 overflow-hidden"
                       style={{
                         left: `${signaturePosition.x}%`,
                         top: `${signaturePosition.y}%`,
@@ -477,12 +509,28 @@ export default function SignDocument() {
                         height: `${signaturePosition.height}%`,
                       }}
                     >
+                      {stampBusinessName && (
+                        <div
+                          className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none px-1"
+                          style={{ color: "#6B7280", opacity: 0.72, transform: "rotate(-2deg)" }}
+                          aria-hidden
+                        >
+                          <div className="font-bold text-center leading-tight truncate max-w-full text-sm">
+                            {stampBusinessName}
+                          </div>
+                          {companyIdLabel && (
+                            <div className="text-center leading-tight truncate max-w-full text-xs mt-0.5">
+                              {companyIdLabel}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-bl z-10 pointer-events-none">
                         חתום כאן
                       </div>
                       <canvas
                         ref={canvasRef}
-                        className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+                        className="absolute inset-0 w-full h-full cursor-crosshair touch-none z-[1] bg-transparent"
                         onPointerDown={startDraw(null)}
                         onPointerMove={draw(null)}
                         onPointerUp={endDraw}
