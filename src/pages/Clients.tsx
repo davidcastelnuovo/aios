@@ -285,9 +285,16 @@ export default function Clients() {
     queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin, selectedAgency, (agencies?.length || 0)],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
+      // Include every column the client card / grid / table / export reads.
+      // Omitting a field here makes it look empty in the UI even when set in DB.
       const selectStr = `
-        id, name, status, agency_id, tenant_id, is_seo_client, services, created_at,
-        phone, contact_name, mood_status, health_score, monthly_budget, retainer,
+        id, name, status, agency_id, tenant_id, is_seo_client, services, created_at, updated_at,
+        phone, contact_name, email, website, notes,
+        start_date, end_date, follow_up_date,
+        mood_status, health_score, tier, industry,
+        monthly_budget, retainer, monthly_fixed_expense,
+        folder_link, folder_links, attachments,
+        whatsapp_group_id, meta_ads_account_id, google_ads_account_id,
         agencies (name),
         client_team (
           campaigner_id,
