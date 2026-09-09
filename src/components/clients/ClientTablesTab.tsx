@@ -83,19 +83,20 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     return filtered;
   }, [allTables, clientId, tableSearch]);
 
-  // Dashboards linked to this client
+  // Dashboards linked to this client (includes DMM-hosted rows for shared agencies).
   const { data: dashboards = [] } = useQuery({
-    queryKey: ["client-dashboards", clientId],
+    queryKey: ["client-dashboards", tenantId, clientId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("crm_dashboards")
-        .select("*")
-        .eq("client_id", clientId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data || [];
+      const rows = await fetchAccessibleDashboards(tenantId!, { select: "*" });
+      return rows
+        .filter((d) => d.client_id === clientId)
+        .sort((a, b) => {
+          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tb - ta;
+        });
     },
-    enabled: !!clientId,
+    enabled: !!tenantId && !!clientId,
   });
 
   // All dashboards accessible from this tenant (own + shared agencies like DMM-MC)
@@ -180,7 +181,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       .eq("id", dashboardId);
     if (error) { toast.error("שגיאה בשיוך הדשבורד"); return; }
     toast.success("דשבורד שויך בהצלחה");
-    queryClient.invalidateQueries({ queryKey: ["client-dashboards", clientId] });
+    queryClient.invalidateQueries({ queryKey: ["client-dashboards", tenantId, clientId] });
     queryClient.invalidateQueries({ queryKey: ["all-dashboards", tenantId] });
     setDashboardSearch("");
     setShowDashboardDropdown(false);
@@ -193,7 +194,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       .eq("id", dashboardId);
     if (error) { toast.error("שגיאה בהסרת השיוך"); return; }
     toast.success("שיוך הדשבורד הוסר");
-    queryClient.invalidateQueries({ queryKey: ["client-dashboards", clientId] });
+    queryClient.invalidateQueries({ queryKey: ["client-dashboards", tenantId, clientId] });
     queryClient.invalidateQueries({ queryKey: ["all-dashboards", tenantId] });
   };
 
