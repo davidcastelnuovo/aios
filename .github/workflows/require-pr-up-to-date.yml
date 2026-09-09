@@ -1,0 +1,47 @@
+# Fail PRs whose head is behind the base branch.
+# Prevents stale-branch merges that silently overwrite newer fixes
+# (see docs/postmortems/2026-09-09-dmm-dashboards-regression.md).
+#
+# Enable as a required status check in GitHub branch protection for
+# `develop` and `main` → "Branch up to date with base".
+
+name: Require PR up to date with base
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main, develop]
+
+concurrency:
+  group: pr-up-to-date-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  up-to-date:
+    name: Branch up to date with base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fail if behind base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          if git merge-base --is-ancestor "origin/${BASE_REF}" HEAD; then
+            echo "OK — HEAD contains latest origin/${BASE_REF}"
+            exit 0
+          fi
+          BEHIND=$(git rev-list --count HEAD.."origin/${BASE_REF}" || true)
+          echo "::error::PR branch is ${BEHIND} commit(s) behind origin/${BASE_REF}."
+          echo "Rebase or merge the latest base before merging:"
+          echo "  git fetch origin ${BASE_REF}"
+          echo "  git merge origin/${BASE_REF}"
+          echo "  # or: git rebase origin/${BASE_REF}"
+          echo "Stale merges overwrite newer call sites (DMM dashboards / Clients Dialog regressions)."
+          exit 1
