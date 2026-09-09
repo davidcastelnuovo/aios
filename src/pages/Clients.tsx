@@ -286,7 +286,8 @@ export default function Clients() {
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       const selectStr = `
-        *,
+        id, name, status, agency_id, tenant_id, is_seo_client, services, created_at,
+        phone, contact_name, mood_status, health_score, monthly_budget, retainer,
         agencies (name),
         client_team (
           campaigner_id,

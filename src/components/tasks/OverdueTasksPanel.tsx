@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { embedCount } from "@/lib/embedCount";
 import { useState } from "react";
 import { QuickTaskInput, QuickTaskPayload } from "./QuickTaskInput";
 import { isTaskOverdue } from "@/lib/taskDeadline";
@@ -239,16 +240,16 @@ function DraggableBacklogTask({
                 {new Date(task.due_date).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}
               </Badge>
             )}
-            {(task.task_updates?.length ?? 0) > 0 && (
+            {embedCount(task.task_updates) > 0 && (
               <Badge variant="secondary" className="text-xs">
                 <MessageSquare className="h-3 w-3 mr-1" />
-                {task.task_updates?.length}
+                {embedCount(task.task_updates)}
               </Badge>
             )}
-            {(task.task_collaborators?.length ?? 0) > 0 && (
+            {embedCount(task.task_collaborators) > 0 && (
               <Badge variant="secondary" className="text-xs">
                 <Users className="h-3 w-3 mr-1" />
-                {task.task_collaborators?.length}
+                {embedCount(task.task_collaborators)}
               </Badge>
             )}
           </div>

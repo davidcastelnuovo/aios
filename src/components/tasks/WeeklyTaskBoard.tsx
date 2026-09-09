@@ -174,8 +174,8 @@ export function WeeklyTaskBoard() {
           *,
           clients (name, agency_id),
           campaigners (full_name),
-          task_updates (id),
-          task_collaborators (id)
+          task_updates (count),
+          task_collaborators (count)
         `)
         .eq("id", linkedTaskId)
         .maybeSingle();
@@ -307,8 +307,8 @@ export function WeeklyTaskBoard() {
           *,
           clients (name, agency_id),
           campaigners (full_name),
-          task_updates (id),
-          task_collaborators (id)
+          task_updates (count),
+          task_collaborators (count)
         `);
 
       // Tenant scope only. The header agency is applied after the fetch, on the

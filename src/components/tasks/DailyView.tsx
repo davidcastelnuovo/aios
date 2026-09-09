@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { embedCount } from "@/lib/embedCount";
 
 interface Task {
   id: string;
@@ -106,16 +107,16 @@ function DraggableTask({
             </p>
           )}
           <div className="flex items-center gap-1 mt-1">
-            {(task.task_updates?.length ?? 0) > 0 && (
+            {embedCount(task.task_updates) > 0 && (
               <Badge variant="secondary" className="text-xs">
                 <MessageSquare className="h-3 w-3 mr-1" />
-                {task.task_updates?.length}
+                {embedCount(task.task_updates)}
               </Badge>
             )}
-            {(task.task_collaborators?.length ?? 0) > 0 && (
+            {embedCount(task.task_collaborators) > 0 && (
               <Badge variant="secondary" className="text-xs">
                 <Users className="h-3 w-3 mr-1" />
-                {task.task_collaborators?.length}
+                {embedCount(task.task_collaborators)}
               </Badge>
             )}
           </div>
