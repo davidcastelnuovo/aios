@@ -41,9 +41,13 @@ async function embedUiFont(pdfDoc: PDFDocument, bold = false) {
   }
 }
 
-/** pdf-lib draws LTR; reverse Hebrew runs so they render visually correct. */
+/** pdf-lib draws LTR; reverse full Hebrew segments (incl. spaces/colon) for correct visual RTL. */
 function preparePdfText(text: string): string {
-  return text.replace(/[\u0590-\u05FF]+/g, (run) => Array.from(run).reverse().join(''));
+  return text.replace(/[\u0590-\u05FF][\u0590-\u05FF\s־–—:]*/g, (run) => {
+    const trailingSpace = run.match(/\s+$/)?.[0] ?? '';
+    const core = run.slice(0, run.length - trailingSpace.length);
+    return Array.from(core).reverse().join('') + trailingSpace;
+  });
 }
 
 function drawTextSafe(page: { drawText: (t: string, o: Record<string, unknown>) => void }, text: string, opts: Record<string, unknown>) {
