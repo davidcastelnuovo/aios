@@ -1,8 +1,5 @@
--- Business stamp under client signature: name + ח.פ / ע.מ from linked entity / document.
-
-ALTER TABLE public.signature_documents
-  ADD COLUMN IF NOT EXISTS business_stamp_name text,
-  ADD COLUMN IF NOT EXISTS business_stamp_company_id text;
+-- Fix get_signature_by_token: leads has company_name/contact_name, not name.
+-- Broken RPC made signing links fail after send (looked like "draft won't send").
 
 CREATE OR REPLACE FUNCTION public.get_signature_by_token(_token uuid)
  RETURNS jsonb

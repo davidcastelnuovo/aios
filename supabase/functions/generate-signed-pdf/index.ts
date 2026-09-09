@@ -252,10 +252,10 @@ async function buildSignedPdf(doc: {
   if (!businessName && doc.lead_id) {
     const { data: lead } = await supabase
       .from('leads')
-      .select('company_name, name, contact_name')
+      .select('company_name, contact_name')
       .eq('id', doc.lead_id)
       .maybeSingle();
-    businessName = (lead?.company_name || lead?.name || lead?.contact_name || '').trim();
+    businessName = (lead?.company_name || lead?.contact_name || '').trim();
   }
 
   for (const recipient of signedRecipients) {
