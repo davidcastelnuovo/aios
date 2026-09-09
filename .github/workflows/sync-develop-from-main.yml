@@ -1,10 +1,13 @@
-name: Sync develop from main (hotfix only)
+# Keep Staging (`develop`) on the newest code.
+# Normal release flow is still feature → develop → main.
+# After a merge/hotfix lands on `main`, Staging must not lag — auto-merge main → develop.
+# Also available manually for emergency backports.
 
-# EMERGENCY / HOTFIX ONLY — normal flow is develop → main, not the reverse.
-# Use when a fix landed on `main` first and must be backported to Staging (`develop`).
-# Do NOT use for regular releases; merge feature branches to `develop` first.
+name: Sync develop from main
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -22,6 +25,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: develop
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Merge main into develop
         run: |
@@ -30,12 +34,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           if git merge-base --is-ancestor origin/main HEAD; then
-            echo "develop already contains main — nothing to sync"
+            echo "develop already contains main — Staging is current"
             exit 0
           fi
           if git merge-base --is-ancestor HEAD origin/main; then
             git merge --ff-only origin/main
           else
-            git merge --no-edit origin/main
+            git merge --no-edit -m "chore: sync develop from main (keep Staging current)" origin/main
           fi
           git push origin HEAD:develop
+          echo "Staging (develop) updated from main"

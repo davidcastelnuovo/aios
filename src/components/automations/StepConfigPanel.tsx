@@ -31,6 +31,8 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useToast } from "@/hooks/use-toast";
 import { RecipientsListEditor, migrateLegacyRecipients } from "./RecipientsListEditor";
 import { EmailActionConfig } from "./EmailActionConfig";
+import SendSignatureActionConfig from "./SendSignatureActionConfig";
+import StatusFilterTriggerConfig from "./StatusFilterTriggerConfig";
 
 // Trigger options organized by category for the Flow Builder
 export const TRIGGER_CATEGORIES = [
@@ -133,6 +135,7 @@ const ACTION_OPTIONS = [
   { value: "update_status", label: "שנה סטטוס" },
   { value: "webhook", label: "Webhook" },
   { value: "email", label: "אימייל" },
+  { value: "send_signature", label: "שלח חתימה דיגיטלית" },
   { value: "notification", label: "התראה" },
   { value: "run_manus_task", label: "🤖 הרץ משימת Manus (ברקע)" },
   { value: "send_manus_direct", label: "💬 שלח הודעה ישירה ל-Manus" },
@@ -484,6 +487,15 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
           {/* Carmen WhatsApp Session trigger config */}
           {node.step_type === "trigger" && node.action_type === "carmen_whatsapp_session" && (
             <CarmenSessionConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              onConfigChange={handleConfigChange}
+            />
+          )}
+
+          {node.step_type === "trigger" && (node.action_type === "lead_status_changed" || node.action_type === "task_status_changed") && (
+            <StatusFilterTriggerConfig
+              triggerType={node.action_type || ""}
               tenantId={tenantId}
               configuration={node.configuration}
               onConfigChange={handleConfigChange}
@@ -1264,6 +1276,14 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [], 
               tenantId={tenantId}
               configuration={node.configuration}
               availableFields={availableFields}
+              onConfigChange={handleConfigChange}
+            />
+          )}
+
+          {node.action_type === "send_signature" && (
+            <SendSignatureActionConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
               onConfigChange={handleConfigChange}
             />
           )}

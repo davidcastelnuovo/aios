@@ -47,6 +47,7 @@ Non-obvious gotchas:
 - When capturing screen recordings of the app, note that Chrome's GPU-composited surface may not be captured by the recorder (shows a black screen / spinning cube). Screenshots capture the real page correctly; prefer screenshots for UI evidence here.
 
 Verification / token budget:
+- **Branch freshness:** before opening/updating a PR, `git fetch origin <base>` and merge/rebase so HEAD contains the latest base. CI `Require PR up to date with base` must stay green — never merge a stale branch (it overwrites newer fixes). Staging (`develop`) auto-syncs from `main` after Production pushes.
 - Shared-agency dashboards: `pnpm test:guards` (and CI) must stay green — never list `crm_dashboards` by UI `tenant_id` alone in `DynamicTables` / client Reports; use `fetchAccessibleDashboards`. Postmortem: `docs/postmortems/2026-09-09-dmm-dashboards-regression.md`.
 - Small UI changes: verify with `pnpm build` (and a focused lint of changed files if useful). Do **not** run browser sessions, click-throughs, or screenshots/recordings unless the user explicitly asked for a visual check.
 - Data / production changes: verify with SQL against the hosted project. That is the source of truth; do not add a UI walkthrough on top.

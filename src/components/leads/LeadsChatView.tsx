@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import ChatViewComponent from "@/components/chat/ChatView";
 import { Link } from "react-router-dom";
-import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, FileText, DollarSign, Paperclip, Users, ChevronRight, X, ArrowRight, Pencil, Archive } from "lucide-react";
+import { User, Phone, PhoneCall, Building2, Clock, Search, Tag, Mail, ExternalLink, CheckSquare, Trash2, Settings2, FileText, DollarSign, Paperclip, Users, ChevronRight, X, ArrowRight, Pencil, Archive, FolderOpen } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CallDialog } from "@/components/telephony/CallDialog";
 import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
@@ -34,6 +34,7 @@ import {
   unmatchedResponseStatusValue,
 } from "@/lib/leadFields";
 import { LeadCreatedAtLines, LeadSourceLines } from "@/components/leads/LeadOriginLines";
+import { SendSignatureFromLeadPanel } from "@/components/leads/SendSignatureFromLeadPanel";
 
 interface LeadsChatViewProps {
   leads: any[];
@@ -652,7 +653,7 @@ export function LeadsChatView({
 
             {/* Detail tabs content */}
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value === "updates" ? "details" : value)} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-6 w-auto max-w-3xl h-9 bg-muted/50 mr-4 ml-auto">
+              <TabsList className="mx-4 mt-3 grid grid-cols-7 w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto">
                 <TabsTrigger value="details" className="text-xs gap-1.5">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי ליד
@@ -660,6 +661,10 @@ export function LeadsChatView({
                 <TabsTrigger value="proposals" className="text-xs gap-1.5">
                   <DollarSign className="h-3.5 w-3.5" />
                   הצעות מחיר
+                </TabsTrigger>
+                <TabsTrigger value="docs" className="text-xs gap-1.5">
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  מסמכים
                 </TabsTrigger>
                 <TabsTrigger value="files" className="text-xs gap-1.5">
                   <Paperclip className="h-3.5 w-3.5" />
@@ -803,6 +808,10 @@ export function LeadsChatView({
                       return null;
                     }
                   })()}
+                </TabsContent>
+
+                <TabsContent value="docs" className="mt-0" dir="rtl">
+                  <SendSignatureFromLeadPanel lead={selectedLead} tenantId={tenantId} />
                 </TabsContent>
 
                 {(activeTab === "proposals" || activeTab === "files" || activeTab === "meeting") && (

@@ -13,6 +13,11 @@ import { withManyChatDestinationLock } from '../_shared/manychat-destination-loc
 import { formatTaskNotificationMessage } from '../_shared/task-notification-message.ts'
 import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
 import { claimFacebookLeadAutomationRun, claimFacebookLeadWhatsAppSend, claimIdenticalWhatsAppSend, releaseFacebookLeadAutomationRun, releaseFacebookLeadWhatsAppSend } from '../_shared/facebook-lead-dedup.ts'
+import {
+  cloneSignatureFromTemplate,
+  resolveTenantOwnerId,
+  sendSignatureDocumentEmails,
+} from '../_shared/signature-automation.ts'
 // clearer error when ManyChat wa_id ghost on deleted contact — 2026-08-09
 
 const corsHeaders = {
@@ -1171,6 +1176,12 @@ Deno.serve(async (req) => {
       if (safeConfig.source_filter === 'private' && safeData.group_id) {
         return { matches: false, reason: 'source_filter_private' }
       }
+      if (safeConfig.filter_status && safeConfig.filter_status !== 'any') {
+        const dataStatus = safeData.new_status || safeData.status
+        if (dataStatus !== safeConfig.filter_status) {
+          return { matches: false, reason: 'status_mismatch' }
+        }
+      }
       // Specific phones whitelist
       if (safeConfig.source_filter === 'specific_phones') {
         const allowedPhones: string[] = safeConfig.allowed_phones || []
@@ -2154,6 +2165,9 @@ Deno.serve(async (req) => {
                 } else if (effectiveActionType === 'create_lead') {
                   stepResponse = await executeCreateLead(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
+                } else if (effectiveActionType === 'send_signature') {
+                  stepResponse = await executeSendSignature(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
                 } else if (effectiveActionType === 'update_status') {
                   stepResponse = await executeStatusUpdate(supabase, stepConfig, stepData)
                   previousStepOutput = stepResponse
@@ -2355,6 +2369,8 @@ Deno.serve(async (req) => {
               response = await executeCreateTask(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'create_lead') {
               response = await executeCreateLead(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'send_signature') {
+              response = await executeSendSignature(supabase, automation.configuration, payloadData, tenantId)
             } else if (automation.action_type === 'agent') {
               const agentConfig = automation.configuration || {}
               const agentId = agentConfig.agent_id
@@ -5239,4 +5255,50 @@ async function executeSendManusMessage(supabase: any, config: any, data: any, te
   })
   if (!res.ok) { const err = await res.text(); throw new Error(`Manus send_message failed [${res.status}]: ${err}`) }
   return { success: true, task_id: config.task_id || 'agent-default-main_task', message: 'הודעה נשלחה ל-Manus בהצלחה' }
+}
+
+async function executeSendSignature(supabase: any, config: any, data: any, tenantId: string) {
+  const templateDocumentId = config?.template_document_id
+  if (!templateDocumentId) throw new Error('חסרה תבנית חתימה בהגדרות האוטומציה')
+
+  const { data: tenant } = await supabase.from('tenants').select('slug').eq('id', tenantId).single()
+  const tenantSlug = tenant?.slug || ''
+
+  const recipientNameField = config?.recipient_name_field || 'contact_name'
+  const recipientEmailField = config?.recipient_email_field || 'email'
+  const recipientName = replaceTemplateVariables(`{{${recipientNameField}}}`, data, tenantSlug).trim()
+    || data.contact_name || data.name || 'לקוח'
+  const recipientEmail = replaceTemplateVariables(`{{${recipientEmailField}}}`, data, tenantSlug).trim()
+    || data.email
+
+  if (!recipientEmail) throw new Error('לא נמצאה כתובת אימייל לשליחת חתימה')
+
+  const documentTitle = config?.document_title_template
+    ? replaceTemplateVariables(config.document_title_template, data, tenantSlug).trim()
+    : undefined
+
+  const createdBy = await resolveTenantOwnerId(supabase, tenantId)
+  const documentId = await cloneSignatureFromTemplate(supabase, {
+    templateDocumentId,
+    tenantId,
+    createdBy,
+    recipientName,
+    recipientEmail,
+    documentTitle,
+  })
+
+  const baseUrl = config?.base_url || Deno.env.get('APP_BASE_URL') || 'https://aios.co.il'
+  const sendResult = await sendSignatureDocumentEmails(supabase, {
+    documentId,
+    tenantId,
+    baseUrl,
+    senderName: config?.sender_name || undefined,
+  })
+
+  return {
+    success: true,
+    document_id: documentId,
+    recipient_email: recipientEmail,
+    emails_sent: sendResult.sent,
+  }
 }
