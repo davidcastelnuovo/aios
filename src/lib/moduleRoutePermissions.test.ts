@@ -45,3 +45,29 @@ test("recordings route maps to recordings permission", () => {
     "recordings",
   );
 });
+
+test("integrations hub uses integrations permission, distinct from lead-integrations", () => {
+  assert.equal(permissionForSubpath("integrations"), "integrations");
+  assert.equal(
+    permissionHandleForPathname("/t/acme/integrations")?.permission,
+    "integrations",
+  );
+  assert.notEqual(permissionForSubpath("integrations"), "lead_integrations");
+});
+
+test("SEO integration settings use integrations permission", () => {
+  assert.equal(
+    permissionForSubpath("google-search-console-settings"),
+    "integrations",
+  );
+  assert.equal(permissionForSubpath("ahrefs-settings"), "integrations");
+  assert.equal(permissionForSubpath("integrations/serpapi"), "integrations");
+});
+
+test("lead-specific integration settings stay on lead_integrations", () => {
+  assert.equal(permissionForSubpath("facebook-settings"), "lead_integrations");
+  assert.equal(
+    permissionForSubpath("integrations/facebook"),
+    "lead_integrations",
+  );
+});
