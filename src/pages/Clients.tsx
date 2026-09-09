@@ -64,6 +64,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { isSeoTaggedClient } from "@/lib/seoClients";
+import { CLIENT_LIST_SELECT } from "@/lib/clientListSelect";
 
 // Session-scoped: owners and SEO viewers get organization-wide starting view on first
 // visit to Clients. Must NOT re-run on every remount — that was wiping the global
@@ -285,18 +286,7 @@ export default function Clients() {
     queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin, selectedAgency, (agencies?.length || 0)],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      const selectStr = `
-        id, name, status, agency_id, tenant_id, is_seo_client, services, created_at,
-        phone, contact_name, mood_status, health_score, monthly_budget, retainer,
-        agencies (name),
-        client_team (
-          campaigner_id,
-          campaigners!inner (
-            id,
-            full_name
-          )
-        )
-      `;
+      const selectStr = CLIENT_LIST_SELECT;
 
       let query = supabase
         .from("clients")

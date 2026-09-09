@@ -56,7 +56,7 @@ export function SignatureDocumentFieldEditor({
           )}
         </div>
       </div>
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-3 sm:p-4 min-h-0">
         {loading && (
           <p className="text-center text-muted-foreground py-12">טוען מסמך...</p>
         )}

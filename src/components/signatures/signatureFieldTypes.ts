@@ -2,6 +2,7 @@ import type { SignaturePosition } from "./SignatureFieldPlacer";
 
 export type SignatureFieldType =
   | "signature"
+  | "text"
   | "first_name"
   | "last_name"
   | "phone"
@@ -25,6 +26,7 @@ export const SIGNATURE_FIELD_OPTIONS: Array<{
   height: number;
 }> = [
   { type: "signature", label: "חתימה", width: 28, height: 10 },
+  { type: "text", label: "שדה כללי", width: 22, height: 5 },
   { type: "first_name", label: "שם", width: 18, height: 5 },
   { type: "last_name", label: "שם משפחה", width: 18, height: 5 },
   { type: "phone", label: "טלפון", width: 20, height: 5 },
@@ -35,6 +37,12 @@ export const SIGNATURE_FIELD_OPTIONS: Array<{
 
 export function getFieldLabel(type: SignatureFieldType): string {
   return SIGNATURE_FIELD_OPTIONS.find((o) => o.type === type)?.label ?? type;
+}
+
+/** Placement UI label — generic fields stay untitled on the signed PDF form. */
+export function getFieldPlacerLabel(type: SignatureFieldType): string {
+  if (type === "text") return "מילוי";
+  return getFieldLabel(type);
 }
 
 export function getDefaultFieldSize(type: SignatureFieldType) {
@@ -58,9 +66,10 @@ export function createDocumentField(
   return {
     id: crypto.randomUUID(),
     type,
-    label: getFieldLabel(type),
+    // Generic fields have no title — the PDF already shows what to fill.
+    label: type === "text" ? "" : getFieldLabel(type),
     position,
-    required: true,
+    required: type === "text" ? false : true,
     recipient_index: recipientIndex,
   };
 }

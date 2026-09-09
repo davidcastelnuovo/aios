@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, FileText, ExternalLink, Eraser } from "lucide-react";
+import { CheckCircle, XCircle, FileText, ExternalLink, Eraser, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   type DocumentField,
   parseDocumentFields,
@@ -36,6 +36,8 @@ export default function SignDocument() {
   const [signatureFieldSigned, setSignatureFieldSigned] = useState<Record<string, boolean>>({});
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [signed, setSigned] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [numPages, setNumPages] = useState(1);
 
   const {
     data: recipient,
@@ -70,6 +72,23 @@ export default function SignDocument() {
   const myFields = allDocFields.filter((f) => (f.recipient_index ?? 0) === recipientIndex);
   const hasDocumentFields = myFields.length > 0;
   const useOverlay = !!docFileUrl && (hasDocumentFields || !!signaturePosition);
+  const pageFields = useMemo(
+    () => myFields.filter((f) => (f.position.page ?? 1) === currentPage),
+    [myFields, currentPage],
+  );
+  const legacyOnCurrentPage =
+    !hasDocumentFields && (!signaturePosition || (signaturePosition.page ?? 1) === currentPage);
+
+  const businessStamp = (recipient?.business_stamp ?? {}) as { name?: string | null; company_id?: string | null };
+  const idNumberFromFields = myFields
+    .filter((f) => f.type === "id_number")
+    .map((f) => fieldValues[f.id]?.trim())
+    .find(Boolean);
+  const stampCompanyId = (idNumberFromFields || businessStamp.company_id || "").trim();
+  const stampBusinessName = (businessStamp.name || recipient?.name || "").trim();
+  const companyIdLabel = stampCompanyId
+    ? (/^\d+$/.test(stampCompanyId) ? `ח.פ/ע.מ ${stampCompanyId}` : stampCompanyId)
+    : "";
 
   const setupCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
     if (!canvas) return;
@@ -105,8 +124,8 @@ export default function SignDocument() {
   useEffect(() => {
     if (!useOverlay) return;
     const ids = hasDocumentFields
-      ? myFields.filter((f) => f.type === "signature").map((f) => f.id)
-      : signaturePosition
+      ? pageFields.filter((f) => f.type === "signature").map((f) => f.id)
+      : legacyOnCurrentPage && signaturePosition
         ? ["legacy"]
         : [];
     for (const id of ids) {
@@ -123,7 +142,7 @@ export default function SignDocument() {
       observers.push(ro);
     }
     return () => observers.forEach((ro) => ro.disconnect());
-  }, [useOverlay, hasDocumentFields, myFields, setupCanvas, docContainerHeight, signaturePosition]);
+  }, [useOverlay, hasDocumentFields, pageFields, setupCanvas, docContainerHeight, signaturePosition, legacyOnCurrentPage, currentPage]);
 
   const getPos = (
     e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
@@ -215,7 +234,7 @@ export default function SignDocument() {
           return false;
         }
       } else if (!fieldValues[field.id]?.trim()) {
-        toast.error(`נא למלא שדה: ${field.label}`);
+        toast.error(`נא למלא שדה: ${field.label || getFieldLabel(field.type)}`);
         return false;
       }
     }
@@ -310,18 +329,39 @@ export default function SignDocument() {
       return (
         <div
           key={field.id}
-          className="absolute border-2 border-primary rounded bg-white/95 z-10"
+          className="absolute border-2 border-primary rounded bg-white/80 z-10 overflow-hidden"
           style={style}
         >
-          <div
-            className="absolute top-0 right-0 bg-primary text-primary-foreground px-1 py-0.5 rounded-bl z-10 pointer-events-none"
-            style={{ fontSize: Math.max(8, fontSize - 2) }}
-          >
-            {field.label}
-          </div>
+          {stampBusinessName && (
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none px-1"
+              style={{ color: "#6B7280", opacity: 0.72, transform: "rotate(-2deg)" }}
+              aria-hidden
+            >
+              <div
+                className="font-bold text-center leading-tight truncate max-w-full"
+                style={{ fontSize: Math.max(10, fontSize + 2) }}
+              >
+                {stampBusinessName}
+              </div>
+              {companyIdLabel && (
+                <div className="text-center leading-tight truncate max-w-full mt-0.5" style={{ fontSize: Math.max(8, fontSize - 1) }}>
+                  {companyIdLabel}
+                </div>
+              )}
+            </div>
+          )}
+          {field.label ? (
+            <div
+              className="absolute top-0 right-0 bg-primary text-primary-foreground px-1 py-0.5 rounded-bl z-10 pointer-events-none"
+              style={{ fontSize: Math.max(8, fontSize - 2) }}
+            >
+              {field.label}
+            </div>
+          ) : null}
           <canvas
             ref={(el) => { signatureCanvasRefs.current[field.id] = el; }}
-            className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+            className="absolute inset-0 w-full h-full cursor-crosshair touch-none z-[1] bg-transparent"
             onPointerDown={startDraw(field.id)}
             onPointerMove={draw(field.id)}
             onPointerUp={endDraw}
@@ -340,6 +380,23 @@ export default function SignDocument() {
             onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
             placeholder={field.label}
             className="w-full h-full resize-none bg-white/95 border-primary"
+            style={{ fontSize }}
+            dir="rtl"
+          />
+        </div>
+      );
+    }
+
+    if (field.type === "text") {
+      return (
+        <div key={field.id} className="absolute" style={style}>
+          <Input
+            type="text"
+            value={fieldValues[field.id] ?? ""}
+            onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
+            placeholder=""
+            aria-label="שדה מילוי"
+            className="w-full h-full bg-white/90 border-primary/70 px-1 shadow-none"
             style={{ fontSize }}
             dir="rtl"
           />
@@ -435,6 +492,34 @@ export default function SignDocument() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-2 sm:p-4">
+              {numPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    disabled={currentPage >= numPages}
+                    onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    עמוד {currentPage} מתוך {numPages}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
               <SignatureDocumentViewer
                 fileUrl={docFileUrl}
                 mediaKind={detectMediaKind(doc?.file_url)}
@@ -443,16 +528,21 @@ export default function SignDocument() {
                   !/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(doc.file_url) &&
                   doc.document_type === "uploaded"
                 }
+                page={currentPage}
+                onNumPagesChange={(n) => {
+                  setNumPages(n);
+                  if (currentPage > n) setCurrentPage(n);
+                }}
                 loading={loadingDocFile}
                 error={!docFileUrl && !loadingDocFile ? "לא ניתן לטעון את המסמך" : null}
                 onHeightChange={setDocContainerHeight}
                 className="bg-white"
               >
                 {hasDocumentFields
-                  ? myFields.map(renderFieldOverlay)
-                  : signaturePosition && (
+                  ? pageFields.map(renderFieldOverlay)
+                  : legacyOnCurrentPage && signaturePosition && (
                     <div
-                      className="absolute border-2 border-primary rounded bg-white/90 z-10"
+                      className="absolute border-2 border-primary rounded bg-white/80 z-10 overflow-hidden"
                       style={{
                         left: `${signaturePosition.x}%`,
                         top: `${signaturePosition.y}%`,
@@ -460,12 +550,28 @@ export default function SignDocument() {
                         height: `${signaturePosition.height}%`,
                       }}
                     >
+                      {stampBusinessName && (
+                        <div
+                          className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none px-1"
+                          style={{ color: "#6B7280", opacity: 0.72, transform: "rotate(-2deg)" }}
+                          aria-hidden
+                        >
+                          <div className="font-bold text-center leading-tight truncate max-w-full text-sm">
+                            {stampBusinessName}
+                          </div>
+                          {companyIdLabel && (
+                            <div className="text-center leading-tight truncate max-w-full text-xs mt-0.5">
+                              {companyIdLabel}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-bl z-10 pointer-events-none">
                         חתום כאן
                       </div>
                       <canvas
                         ref={canvasRef}
-                        className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+                        className="absolute inset-0 w-full h-full cursor-crosshair touch-none z-[1] bg-transparent"
                         onPointerDown={startDraw(null)}
                         onPointerMove={draw(null)}
                         onPointerUp={endDraw}
@@ -476,16 +582,16 @@ export default function SignDocument() {
                   )}
               </SignatureDocumentViewer>
 
-              <div className="flex justify-end mt-2 gap-2">
-                {hasDocumentFields && myFields.some((f) => f.type === "signature") && (
-                  myFields.filter((f) => f.type === "signature").map((f) => (
+              <div className="flex justify-end mt-2 gap-2 flex-wrap">
+                {hasDocumentFields && pageFields.some((f) => f.type === "signature") && (
+                  pageFields.filter((f) => f.type === "signature").map((f) => (
                     <Button key={f.id} variant="ghost" size="sm" onClick={() => clearSignature(f.id)}>
                       <Eraser className="h-4 w-4 ml-1" />
-                      נקה {f.label}
+                      נקה {f.label || "חתימה"}
                     </Button>
                   ))
                 )}
-                {!hasDocumentFields && (
+                {!hasDocumentFields && legacyOnCurrentPage && (
                   <Button variant="ghost" size="sm" onClick={() => clearSignature()}>
                     <Eraser className="h-4 w-4 ml-1" />
                     נקה חתימה

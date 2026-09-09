@@ -1,24 +1,22 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
-import * as pdfjs from "pdfjs-dist";
 import {
   detectMediaKind,
   type SignatureMediaKind,
 } from "./signatureDocumentMedia";
-
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
+import { renderPdfPageToCanvas, usePdfDocument } from "./usePdfDocument";
 
 interface SignatureDocumentViewerProps {
   fileUrl: string | null;
   mediaKind?: SignatureMediaKind | null;
   /** Prefer PDF rendering even when URL has no .pdf suffix (e.g. signed URLs). */
   forcePdf?: boolean;
+  /** 1-based page index for PDFs. */
+  page?: number;
   loading?: boolean;
   error?: string | null;
   className?: string;
   onHeightChange?: (height: number) => void;
+  onNumPagesChange?: (numPages: number) => void;
   onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerUp?: (e: React.PointerEvent<HTMLDivElement>) => void;
   children?: React.ReactNode;
@@ -33,10 +31,12 @@ function SignatureDocumentViewer({
   fileUrl,
   mediaKind,
   forcePdf,
+  page = 1,
   loading,
   error,
   className = "",
   onHeightChange,
+  onNumPagesChange,
   onPointerDown,
   onPointerUp,
   children,
@@ -54,6 +54,14 @@ function SignatureDocumentViewer({
   const [pdfReady, setPdfReady] = useState(false);
 
   const kind = forcePdf ? "pdf" : detectMediaKind(fileUrl, mediaKind);
+  const { pdf, numPages, loading: pdfLoading, error: pdfError } = usePdfDocument(
+    fileUrl,
+    kind === "pdf",
+  );
+
+  useEffect(() => {
+    onNumPagesChange?.(kind === "pdf" ? numPages : 1);
+  }, [kind, numPages, onNumPagesChange]);
 
   useEffect(() => {
     const el = pageStageRef.current;
@@ -63,54 +71,31 @@ function SignatureDocumentViewer({
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [onHeightChange, fileUrl, pdfReady, kind]);
+  }, [onHeightChange, fileUrl, pdfReady, kind, page]);
 
   useEffect(() => {
-    if (!fileUrl || kind !== "pdf") {
+    if (!fileUrl || kind !== "pdf" || !pdf) {
       setPdfReady(kind === "image");
       return;
     }
 
     let cancelled = false;
-    let renderTask: { cancel?: () => void } | null = null;
     setRendering(true);
     setRenderError(null);
     setPdfReady(false);
 
     (async () => {
       try {
-        const pdf = await pdfjs.getDocument({ url: fileUrl, withCredentials: false }).promise;
-        if (cancelled) return;
-        const page = await pdf.getPage(1);
-        if (cancelled) return;
-
-        const unscaled = page.getViewport({ scale: 1 });
-        // Use page-stage width if available; otherwise parent width
+        const canvas = canvasRef.current;
         const stage = pageStageRef.current;
+        if (!canvas || cancelled) return;
+
         const parentWidth =
           stage?.clientWidth ||
           stage?.parentElement?.clientWidth ||
-          unscaled.width;
-        const scale = parentWidth / unscaled.width;
-        const viewport = page.getViewport({ scale });
-
-        const canvas = canvasRef.current;
-        if (!canvas || cancelled) return;
-        const context = canvas.getContext("2d");
-        if (!context) return;
-
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        // Exact pixel match — no CSS stretching mismatch
-        canvas.style.width = `${canvas.width}px`;
-        canvas.style.height = `${canvas.height}px`;
-        canvas.style.maxWidth = "100%";
-        canvas.style.height = "auto";
-        canvas.style.display = "block";
-
-        const task = page.render({ canvasContext: context, viewport });
-        renderTask = task;
-        await task.promise;
+          800;
+        const safePage = Math.min(Math.max(1, page), pdf.numPages || 1);
+        await renderPdfPageToCanvas(pdf, safePage, canvas, parentWidth);
         if (cancelled) return;
 
         setPdfReady(true);
@@ -128,20 +113,15 @@ function SignatureDocumentViewer({
 
     return () => {
       cancelled = true;
-      try {
-        renderTask?.cancel?.();
-      } catch {
-        /* ignore */
-      }
     };
-  }, [fileUrl, kind, onHeightChange]);
+  }, [fileUrl, kind, pdf, page, onHeightChange]);
 
-  if (loading) {
+  if (loading || (kind === "pdf" && pdfLoading && !pdf)) {
     return <p className="text-center text-muted-foreground py-12">טוען מסמך...</p>;
   }
 
-  if (error) {
-    return <p className="text-center text-destructive py-12">{error}</p>;
+  if (error || pdfError) {
+    return <p className="text-center text-destructive py-12">{error || pdfError}</p>;
   }
 
   if (!fileUrl) {
@@ -156,10 +136,10 @@ function SignatureDocumentViewer({
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
-      {/* Page stage = sole coordinate space for field % positions */}
       <div
         ref={setPageStageRef}
         data-sig-page-stage
+        data-sig-page={page}
         className="relative w-full mx-auto leading-none"
       >
         {kind === "pdf" && (
