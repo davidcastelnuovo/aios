@@ -68,7 +68,7 @@ const CATEGORIES: Category[] = [
       { key: "chat", label: "צ'אט", description: "ניהול שיחות עם לקוחות", route: "/chat", icon: MessageSquare, permission: "chat", color: "bg-blue-500/10 text-blue-600" },
       { key: "gmail", label: "Gmail", description: "ניהול דואר אלקטרוני", route: "/gmail", icon: Mail, color: "bg-blue-500/10 text-blue-600" },
       { key: "team-chat", label: "צ'אט צוות", description: "תקשורת פנים-ארגונית", route: "/team-chat", icon: MessagesSquare, permission: "team_chat", color: "bg-blue-500/10 text-blue-600" },
-      { key: "integrations", label: "אינטגרציות", description: "חיבורים לפלטפורמות חיצוניות", route: "/integrations", icon: Plug, permission: "lead_integrations", color: "bg-blue-500/10 text-blue-600" },
+      { key: "integrations", label: "אינטגרציות", description: "חיבורים לפלטפורמות חיצוניות", route: "/integrations", icon: Plug, permission: "integrations", color: "bg-blue-500/10 text-blue-600" },
       { key: "recordings", label: "הקלטות", description: "ניהול הקלטות שיחות", route: "/recordings", icon: Plug, permission: "recordings", color: "bg-blue-500/10 text-blue-600" },
     ],
   },
