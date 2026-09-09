@@ -99,6 +99,12 @@ export function useUserPermissions() {
     }
 
     if (restrictedModules.includes(module)) {
+      // Hub permission id is `integrations`; legacy rows may only have `lead_integrations`.
+      if (module === "integrations") {
+        return (
+          permissions?.integrations === true || permissions?.lead_integrations === true
+        );
+      }
       return permissions?.[module] === true;
     }
 
