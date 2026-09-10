@@ -545,7 +545,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       if (!question.trim() || !tenantId) return "לא התקבלה שאלה.";
       setMessages(prev => [...prev, { role: "tool_call", tool: `מוח: ${brain.selected.label} · ${question.slice(0, 60)}` }]);
       try {
-        const history = messages
+        const history = filterMessagesForRoute(messages, brain.selected)
           .filter(m => m.role === "user" || m.role === "assistant")
           .map(m => ({ role: m.role, content: m.content ?? "" }))
           .slice(-24);
