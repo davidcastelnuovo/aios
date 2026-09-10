@@ -48,7 +48,7 @@ import {
   isFacebookLeadsOnlyTable,
   summarizeFacebookCampaignGroup,
 } from "@/lib/adsMetrics";
-import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
+import { reportQueryOptions, getReportLastSyncAt, refetchOnMountIfEmpty } from "@/lib/reportQueryOptions";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
@@ -212,8 +212,8 @@ export default function DashboardView() {
     },
     enabled: !!dashboard?.client_id,
     ...reportQueryOptions<any[]>(),
-    // Permission scope can change (e.g. SEO staff) — never show a stale empty table list.
-    refetchOnMount: "always",
+    // Bust empty lists after permission grants; keep warm cache when data exists.
+    refetchOnMount: refetchOnMountIfEmpty,
   });
 
   const dashboardLastSyncAt = useMemo(() => {
@@ -309,7 +309,7 @@ export default function DashboardView() {
     },
     enabled: tables.length > 0 && isCustomReady,
     ...reportQueryOptions<any[]>(),
-    refetchOnMount: "always",
+    refetchOnMount: refetchOnMountIfEmpty,
   });
 
   const displayAllRecords = allRecords ?? [];
