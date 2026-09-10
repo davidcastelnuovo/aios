@@ -27,13 +27,15 @@ interface SendSignatureRequest {
   clientId?: string;
 }
 
+const responseHeaders = { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: responseHeaders });
     }
 
     const supabase = createClient(
@@ -44,13 +46,13 @@ Deno.serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: responseHeaders });
     }
 
     const body: SendSignatureRequest = await req.json();
     const { documentId, baseUrl, sendEmail = false, recipient, contactDetails, leadId, clientId } = body;
     if (!documentId) {
-      return new Response(JSON.stringify({ error: 'missing_document_id' }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'missing_document_id' }), { status: 400, headers: responseHeaders });
     }
 
     const tenantId = await requireSignatureAccess(supabase, documentId, { clientId, leadId });
@@ -104,11 +106,11 @@ Deno.serve(async (req) => {
         emailSent: sent > 0,
         partial: sendEmail && sent > 0 && sent < emails.length,
       }),
-      { status: 200, headers: corsHeaders },
+      { status: 200, headers: responseHeaders },
     );
   } catch (e: unknown) {
     console.error('[send-signature-request]', e);
     const message = e instanceof Error ? e.message : String(e);
-    return new Response(JSON.stringify({ error: message }), { status: message === 'signature_access_denied' ? 403 : 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: message }), { status: message === 'signature_access_denied' ? 403 : 400, headers: responseHeaders });
   }
 });

@@ -14,17 +14,19 @@ interface SubmitSignatureBody {
   action?: 'sign' | 'decline';
 }
 
+const responseHeaders = { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
     const { token, signatureData, fieldValues, action = 'sign' }: SubmitSignatureBody = await req.json();
     if (typeof token !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
-      return new Response(JSON.stringify({ error: 'missing_token' }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'missing_token' }), { status: 400, headers: responseHeaders });
     }
 
     if (!['sign', 'decline'].includes(action)) {
-      return new Response(JSON.stringify({ error: 'invalid_action' }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'invalid_action' }), { status: 400, headers: responseHeaders });
     }
     const ip = clientIp(req);
     const supabase = createClient(
@@ -45,7 +47,7 @@ Deno.serve(async (req) => {
       result = data as Record<string, unknown>;
     } else {
       if (!signatureData) {
-        return new Response(JSON.stringify({ error: 'missing_signature' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'missing_signature' }), { status: 400, headers: responseHeaders });
       }
 
       const submission = await supabase.rpc('submit_signature_by_token', {
@@ -99,11 +101,11 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, ...result, pdfGenerated, pdfError }),
-      { status: 200, headers: corsHeaders },
+      { status: 200, headers: responseHeaders },
     );
   } catch (e: unknown) {
     console.error('[submit-signature]', e);
     const message = e instanceof Error ? e.message : (e as { message?: string })?.message || 'submission_failed';
-    return new Response(JSON.stringify({ error: message }), { status: 400, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: message }), { status: 400, headers: responseHeaders });
   }
 });

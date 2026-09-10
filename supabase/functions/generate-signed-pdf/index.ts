@@ -394,6 +394,8 @@ async function buildSignedPdf(doc: {
   return await pdfDoc.save();
 }
 
+const responseHeaders = { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -402,12 +404,12 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
     if (!serviceKey || bearer !== serviceKey) {
-      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: responseHeaders });
     }
 
     const { documentId } = await req.json();
     if (!documentId) {
-      return new Response(JSON.stringify({ error: 'missing_document_id' }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'missing_document_id' }), { status: 400, headers: responseHeaders });
     }
 
     const supabase = createClient(
@@ -422,11 +424,11 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (docError || !doc) {
-      return new Response(JSON.stringify({ error: 'document_not_found' }), { status: 404, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'document_not_found' }), { status: 404, headers: responseHeaders });
     }
 
     if (doc.status !== 'completed') {
-      return new Response(JSON.stringify({ error: 'document_not_completed' }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'document_not_completed' }), { status: 400, headers: responseHeaders });
     }
 
     const { data: recipients, error: recError } = await supabase
@@ -437,7 +439,7 @@ Deno.serve(async (req) => {
 
     if (recError) throw recError;
     if (!recipients?.length || recipients.some((recipient) => recipient.status !== 'signed')) {
-      return new Response(JSON.stringify({ error: 'document_not_fully_signed' }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: 'document_not_fully_signed' }), { status: 400, headers: responseHeaders });
     }
 
     const pdfBytes = await buildSignedPdf(doc, recipients as RecipientRow[], supabase);
@@ -481,11 +483,11 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, path: storagePath }),
-      { status: 200, headers: corsHeaders },
+      { status: 200, headers: responseHeaders },
     );
   } catch (e: unknown) {
     console.error('[generate-signed-pdf]', e);
     const message = e instanceof Error ? e.message : String(e);
-    return new Response(JSON.stringify({ error: message }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: message }), { status: 500, headers: responseHeaders });
   }
 });
