@@ -25,6 +25,7 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
   const [resolvingTenant, setResolvingTenant] = useState(false);
+  const [bootTimedOut, setBootTimedOut] = useState(false);
 
   // If user is authenticated but URL lacks tenant slug, resolve and redirect
   useEffect(() => {
@@ -51,11 +52,36 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
     goToTenant();
   }, [authenticated, tenantSlug, navigate, resolvingTenant]);
 
+  const permissionsResolving = permissionsLoading && !permissionsReady;
+  const rolesResolving = rolesLoading && !rolesReady;
+  const bootBlocked = sessionLoading || permissionsResolving || rolesResolving;
+
+  useEffect(() => {
+    if (!bootBlocked) {
+      setBootTimedOut(false);
+      return;
+    }
+    const timeoutId = window.setTimeout(() => setBootTimedOut(true), 8000);
+    return () => window.clearTimeout(timeoutId);
+  }, [bootBlocked]);
+
   // Show spinner only while the cached session is resolving (usually instant on repeat visits)
-  if (sessionLoading) {
+  if (bootBlocked && !bootTimedOut) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (bootTimedOut && (sessionLoading || !authenticated)) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-6 text-center" dir="rtl">
+        <p className="text-base font-medium">המערכת עמוסה כרגע ולא מצליחה לסיים טעינה.</p>
+        <p className="text-sm text-muted-foreground">זה לא נעילה קבועה — תרענן בעוד רגע.</p>
+        <button type="button" className="text-sm text-primary underline" onClick={() => window.location.reload()}>
+          נסה שוב
+        </button>
       </div>
     );
   }
@@ -64,18 +90,7 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
     return <Navigate to="/auth" replace />;
   }
 
-  // Only block the shell on first bootstrap — not on background refetches (prevents flash).
-  const permissionsResolving = permissionsLoading && !permissionsReady;
-  const rolesResolving = rolesLoading && !rolesReady;
-  if (permissionsResolving || rolesResolving) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (requiredPermission && !hasPermission(requiredPermission)) {
+  if (requiredPermission && permissionsReady && !hasPermission(requiredPermission)) {
     return <Navigate to={buildPath(redirectTo)} replace />;
   }
 
