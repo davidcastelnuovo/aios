@@ -110,15 +110,47 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get Facebook access token (including shared integrations)
-    let { data: integration } = await supabase
-      .from('tenant_integrations')
-      .select('api_key, shared_from_integration_id')
-      .eq('tenant_id', tableTenantId)
-      .in('integration_type', ['facebook', 'facebook_lead_ads'])
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle();
+    // Prefer the connection stored on the table (Anna/Yuval/David), then org-visible, then any active FB token.
+    const storedIntegrationId = settings.integration_id || settings.integrationId || null;
+    let integration: { api_key?: string | null; shared_from_integration_id?: string | null } | null = null;
+
+    if (storedIntegrationId) {
+      const { data: stored } = await supabase
+        .from('tenant_integrations')
+        .select('api_key, shared_from_integration_id')
+        .eq('id', storedIntegrationId)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .maybeSingle();
+      integration = stored;
+    }
+
+    if (!integration?.api_key) {
+      const { data: orgIntegration } = await supabase
+        .from('tenant_integrations')
+        .select('api_key, shared_from_integration_id')
+        .eq('tenant_id', tableTenantId)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .in('connection_visibility', ['org', 'private'])
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      integration = orgIntegration;
+    }
+
+    if (!integration?.api_key) {
+      const { data: fallback } = await supabase
+        .from('tenant_integrations')
+        .select('api_key, shared_from_integration_id')
+        .eq('tenant_id', tableTenantId)
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      integration = fallback;
+    }
 
     // If this is a shared integration, fetch the source integration's token
     if (integration?.shared_from_integration_id && !integration?.api_key) {

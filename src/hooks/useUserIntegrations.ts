@@ -6,12 +6,15 @@ import {
   toClientIntegration,
   type ClientIntegration,
 } from "@/lib/tenantIntegrationsClient";
+import { isReportTenantScopedIntegration } from "@/lib/reportIntegrationTypes";
 
 /**
  * Fetches integrations the current user has access to:
  * 1. Own integrations (user_id = currentUserId)
  * 2. Shared integrations (via integration_user_permissions)
- * 
+ * 3. For report types (GA/GSC/Ads/FB/Ahrefs/TikTok): all active tenant
+ *    connections — so anyone who can open a report can use Anna/Yuval/etc.
+ *
  * Returns combined list with ownership info.
  *
  * Pass `tenantIds` (multiple) instead of `tenantId` to look up across a
@@ -41,12 +44,8 @@ export function useUserIntegrations(
     queryFn: async () => {
       if (tenantIds.length === 0 || !userId) return [];
 
-      // Tenant-scoped integrations: visible to all members of the tenant
-      // (e.g. Google Analytics is shared across the organization)
-      // All Google integrations are now tenant-scoped: any member of the tenant
-      // who has access to reports/dashboards can see the data — no per-user privacy.
-      const TENANT_SCOPED_TYPES = new Set(['google_analytics', 'google_search_console', 'google_ads']);
-      const isTenantScoped = TENANT_SCOPED_TYPES.has(integrationType);
+      // Report OAuth connections are tenant-scoped (see reportIntegrationTypes).
+      const isTenantScoped = isReportTenantScopedIntegration(integrationType);
 
       const selectColumns = getClientIntegrationSelect(integrationType);
 
