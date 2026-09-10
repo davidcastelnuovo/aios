@@ -4,6 +4,7 @@ import { Loader2, Phone, Users, MessageSquare, Shield, Download, Save } from "lu
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { fetchCarmenManusGroups } from "@/lib/carmenManusGroups";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -76,18 +77,17 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     },
   });
 
-  const { data: groups } = useQuery({
-    queryKey: ["carmen-access-groups", tenantId],
+  /** Only groups where Carmen's Manus bot has been seen — not operator Green API groups. */
+  const { data: manusGroups, isLoading: groupsLoading } = useQuery({
+    queryKey: ["carmen-manus-groups", tenantId],
     enabled: !!tenantId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("whatsapp_groups")
-        .select("id, group_name, group_chat_id")
-        .eq("tenant_id", tenantId!)
-        .order("group_name");
-      return data || [];
-    },
+    queryFn: () => fetchCarmenManusGroups(tenantId!),
   });
+
+  const manusGroupIdSet = useMemo(
+    () => new Set((manusGroups || []).map((g) => g.id)),
+    [manusGroups],
+  );
 
   const { data: clients } = useQuery({
     queryKey: ["carmen-access-clients", tenantId],
@@ -130,11 +130,21 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   useEffect(() => {
     if (!policy) return;
     setPhones(Array.isArray(policy.private_phones) ? policy.private_phones : []);
-    setGroupIds(Array.isArray(policy.allowed_group_ids) ? policy.allowed_group_ids : []);
+    const savedGroups: string[] = Array.isArray(policy.allowed_group_ids) ? policy.allowed_group_ids : [];
+    setGroupIds(savedGroups);
     setRequireDirect(policy.require_direct_address !== false);
     setOpenMemberGroups(!!policy.open_member_groups);
     setDenyMessage(policy.deny_message_he || "");
   }, [policy?.id, policy?.updated_at]);
+
+  // Drop saved group selections that are not Manus-connected once the list loads.
+  useEffect(() => {
+    if (manusGroupIdSet.size === 0) return;
+    setGroupIds((prev) => {
+      const filtered = prev.filter((id) => manusGroupIdSet.has(id));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [manusGroupIdSet]);
 
   useEffect(() => {
     if (clientGroupAccess) setClientRows(clientGroupAccess);
@@ -160,7 +170,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       const gids: string[] = cfg.carmen_allowed_group_ids?.length
         ? cfg.carmen_allowed_group_ids
         : (cfg.carmen_allowed_group_id ? [cfg.carmen_allowed_group_id] : []);
-      const resolved = (groups || [])
+      const resolved = (manusGroups || [])
         .filter((g: any) => gids.includes(g.group_chat_id) || gids.includes(g.id))
         .map((g: any) => g.id);
       setGroupIds(resolved);
@@ -173,11 +183,12 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   const save = useMutation({
     mutationFn: async () => {
       if (!tenantId) throw new Error("חסר tenant");
+      const allowedManusGroups = groupIds.filter((id) => manusGroupIdSet.has(id));
       const payload = {
         tenant_id: tenantId,
         agent_id: agent.id,
         private_phones: phones,
-        allowed_group_ids: groupIds,
+        allowed_group_ids: allowedManusGroups,
         require_direct_address: requireDirect,
         open_member_groups: openMemberGroups,
         deny_message_he: denyMessage || null,
@@ -190,6 +201,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
 
       for (const row of clientRows) {
         if (!row.client_id || !row.whatsapp_group_id) continue;
+        if (!manusGroupIdSet.has(row.whatsapp_group_id)) continue;
         const { error } = await supabase.from("carmen_client_group_access" as any).upsert({
           tenant_id: tenantId,
           client_id: row.client_id,
@@ -246,7 +258,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   };
 
   const addClientGroupRow = () => {
-    const c = (clients || []).find((cl: any) => cl.whatsapp_group_id);
+    const c = (clients || []).find((cl: any) => cl.whatsapp_group_id && manusGroupIdSet.has(cl.whatsapp_group_id));
     setClientRows([
       ...clientRows,
       {
@@ -260,40 +272,27 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   };
 
   const groupName = (id: string) =>
-    (groups || []).find((g: any) => g.id === id)?.group_name || id;
-
-  const clientName = (id: string) =>
-    (clients || []).find((c: any) => c.id === id)?.name || id;
+    (manusGroups || []).find((g: any) => g.id === id)?.group_name || id;
 
   const approvedCount = useMemo(
     () => (identities || []).filter((i: any) => i.status === "approved").length,
     [identities],
   );
 
-  if (policyLoading) {
+  if (policyLoading || groupsLoading) {
     return (
-      <div className="flex justify-center py-12">
+      <div className="flex justify-center py-12" dir="rtl">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-5xl" dir="rtl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => importFromAutomation.mutate()}
-            disabled={importFromAutomation.isPending} className="gap-1">
-            <Download className="h-4 w-4" /> ייבא מאוטומציה
-          </Button>
-          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending} className="gap-1">
-            {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            שמור הרשאות
-          </Button>
-        </div>
-        <div className="text-right">
-          <h2 className="text-lg font-semibold flex items-center gap-2 justify-end">
-            <Shield className="h-5 w-5 text-purple-500" />
+    <div className="space-y-6 max-w-5xl text-right" dir="rtl">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold flex items-center gap-2 justify-start">
+            <Shield className="h-5 w-5 text-purple-500 shrink-0" />
             הרשאות שיחה — {agent.name}
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -303,59 +302,50 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
             )}
           </p>
         </div>
+        <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+          <Button variant="outline" size="sm" onClick={() => importFromAutomation.mutate()}
+            disabled={importFromAutomation.isPending} className="gap-1">
+            <Download className="h-4 w-4" /> ייבא מאוטומציה
+          </Button>
+          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending} className="gap-1">
+            {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            שמור הרשאות
+          </Button>
+        </div>
       </div>
 
       <Card className="p-4 space-y-4">
-        <h3 className="font-medium flex items-center gap-2 justify-end">
-          <Phone className="h-4 w-4" /> WhatsApp — שיחה פרטית
+        <h3 className="font-medium flex items-center gap-2 justify-start">
+          <Phone className="h-4 w-4 shrink-0" />
+          WhatsApp — שיחה פרטית
         </h3>
-        <div className="flex gap-2">
-          <Button type="button" size="sm" onClick={addPhone}>הוסף</Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
             value={newPhone}
             onChange={(e) => setNewPhone(e.target.value)}
             placeholder="972501234567"
-            className="text-right flex-1"
+            className="text-left font-mono sm:flex-1"
             dir="ltr"
           />
+          <Button type="button" size="sm" onClick={addPhone} className="shrink-0">הוסף מספר</Button>
         </div>
         <ScrollArea className="max-h-48">
-          <Table>
+          <Table dir="rtl">
             <TableHeader>
               <TableRow>
-                <TableHead className="text-right w-24" />
-                <TableHead className="text-right">Escalation</TableHead>
-                <TableHead className="text-right">קבוצה</TableHead>
-                <TableHead className="text-right">פרטי</TableHead>
                 <TableHead className="text-right">טלפון</TableHead>
+                <TableHead className="text-right w-16">פרטי</TableHead>
+                <TableHead className="text-right w-16">קבוצה</TableHead>
+                <TableHead className="text-right">Escalation</TableHead>
+                <TableHead className="text-right w-16" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {phones.map((row, idx) => (
                 <TableRow key={row.phone}>
+                  <TableCell className="font-mono text-left" dir="ltr">{row.phone}</TableCell>
                   <TableCell>
-                    <Button type="button" variant="ghost" size="sm"
-                      onClick={() => setPhones(phones.filter((_, i) => i !== idx))}>×</Button>
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={row.dev_escalation_tier || "none"}
-                      onValueChange={(v) => {
-                        const next = [...phones];
-                        next[idx] = {
-                          ...row,
-                          dev_escalation_tier: v === "none" ? null : (v as "full" | "bugfix"),
-                        };
-                        setPhones(next);
-                      }}
-                    >
-                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">ללא פיתוח</SelectItem>
-                        <SelectItem value="bugfix">באגים → Cursor</SelectItem>
-                        <SelectItem value="full">מלא (כל הסוכנים)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Checkbox checked={row.surfaces?.includes("whatsapp_private") ?? true} disabled />
                   </TableCell>
                   <TableCell>
                     <Checkbox
@@ -370,9 +360,29 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
                     />
                   </TableCell>
                   <TableCell>
-                    <Checkbox checked={row.surfaces?.includes("whatsapp_private") ?? true} disabled />
+                    <Select
+                      value={row.dev_escalation_tier || "none"}
+                      onValueChange={(v) => {
+                        const next = [...phones];
+                        next[idx] = {
+                          ...row,
+                          dev_escalation_tier: v === "none" ? null : (v as "full" | "bugfix"),
+                        };
+                        setPhones(next);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-right"><SelectValue /></SelectTrigger>
+                      <SelectContent dir="rtl">
+                        <SelectItem value="none">ללא פיתוח</SelectItem>
+                        <SelectItem value="bugfix">באגים → Cursor</SelectItem>
+                        <SelectItem value="full">מלא (כל הסוכנים)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </TableCell>
-                  <TableCell className="font-mono text-left" dir="ltr">{row.phone}</TableCell>
+                  <TableCell>
+                    <Button type="button" variant="ghost" size="sm"
+                      onClick={() => setPhones(phones.filter((_, i) => i !== idx))}>×</Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -381,29 +391,39 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       </Card>
 
       <Card className="p-4 space-y-4">
-        <h3 className="font-medium flex items-center gap-2 justify-end">
-          <Users className="h-4 w-4" /> WhatsApp — קבוצות
+        <h3 className="font-medium flex items-center gap-2 justify-start">
+          <Users className="h-4 w-4 shrink-0" />
+          WhatsApp — קבוצות (Manus בלבד)
         </h3>
-        <div className="flex flex-wrap gap-4 justify-end">
+        <p className="text-xs text-muted-foreground">
+          מוצגות רק קבוצות שבהן כרמן מחוברת דרך Manus WA — לא קבוצות שסונכרנו מ-Green API של המפעיל.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-start">
           <div className="flex items-center gap-2">
-            <Switch checked={openMemberGroups} onCheckedChange={setOpenMemberGroups} />
-            <Label>open member groups</Label>
+            <Switch checked={requireDirect} onCheckedChange={setRequireDirect} id="require-direct" />
+            <Label htmlFor="require-direct" className="cursor-pointer">חובה לפנות «כרמן» ישירות</Label>
           </div>
           <div className="flex items-center gap-2">
-            <Switch checked={requireDirect} onCheckedChange={setRequireDirect} />
-            <Label>חובה לפנות «כרמן» ישירות</Label>
+            <Switch checked={openMemberGroups} onCheckedChange={setOpenMemberGroups} id="open-member" />
+            <Label htmlFor="open-member" className="cursor-pointer">כל קבוצת Manus שכרמן חבר בה</Label>
           </div>
         </div>
         <ScrollArea className="h-40 border rounded-md p-2">
-          {(groups || []).map((g: any) => (
-            <label key={g.id} className="flex items-center gap-2 py-1 cursor-pointer">
-              <Checkbox checked={groupIds.includes(g.id)} onCheckedChange={() => toggleGroup(g.id)} />
-              <span className="text-sm flex-1 text-right">{g.group_name}</span>
-            </label>
-          ))}
+          {(manusGroups || []).length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6">
+              אין עדיין קבוצות Manus — כרמן צריכה לקבל הודעה בקבוצה (או סשן פעיל) כדי שתופיע כאן.
+            </p>
+          ) : (
+            (manusGroups || []).map((g: any) => (
+              <label key={g.id} className="flex flex-row-reverse items-center gap-2 py-1 cursor-pointer justify-end">
+                <span className="text-sm">{g.group_name}</span>
+                <Checkbox checked={groupIds.includes(g.id)} onCheckedChange={() => toggleGroup(g.id)} />
+              </label>
+            ))
+          )}
         </ScrollArea>
         {groupIds.length > 0 && (
-          <div className="flex flex-wrap gap-1 justify-end">
+          <div className="flex flex-wrap gap-1 justify-start">
             {groupIds.map((id) => (
               <Badge key={id} variant="secondary">{groupName(id)}</Badge>
             ))}
@@ -412,13 +432,16 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       </Card>
 
       <Card className="p-4 space-y-4">
-        <div className="flex justify-between items-center">
-          <Button type="button" size="sm" variant="outline" onClick={addClientGroupRow}>+ לקוח↔קבוצה</Button>
-          <h3 className="font-medium flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" /> לקוח ↔ קבוצה (scope)
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <Button type="button" size="sm" variant="outline" onClick={addClientGroupRow} className="self-start">
+            + לקוח ↔ קבוצה
+          </Button>
+          <h3 className="font-medium flex items-center gap-2 justify-start">
+            <MessageSquare className="h-4 w-4 shrink-0" />
+            לקוח ↔ קבוצה (scope)
           </h3>
         </div>
-        <p className="text-xs text-muted-foreground text-right">
+        <p className="text-xs text-muted-foreground">
           איש קשר לקוח מדבר רק בקבוצת הלקוח, רק על הלקוח — לפי info_boundary.
         </p>
         {clientRows.map((row, idx) => (
@@ -426,15 +449,14 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
             <Select value={row.client_id} onValueChange={(v) => {
               const next = [...clientRows];
               const cl = (clients || []).find((c: any) => c.id === v);
-              next[idx] = {
-                ...row,
-                client_id: v,
-                whatsapp_group_id: cl?.whatsapp_group_id || row.whatsapp_group_id,
-              };
+              const wg = cl?.whatsapp_group_id && manusGroupIdSet.has(cl.whatsapp_group_id)
+                ? cl.whatsapp_group_id
+                : row.whatsapp_group_id;
+              next[idx] = { ...row, client_id: v, whatsapp_group_id: wg };
               setClientRows(next);
             }}>
-              <SelectTrigger><SelectValue placeholder="לקוח" /></SelectTrigger>
-              <SelectContent>
+              <SelectTrigger className="text-right"><SelectValue placeholder="לקוח" /></SelectTrigger>
+              <SelectContent dir="rtl">
                 {(clients || []).map((c: any) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
@@ -445,29 +467,29 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
               next[idx] = { ...row, whatsapp_group_id: v };
               setClientRows(next);
             }}>
-              <SelectTrigger><SelectValue placeholder="קבוצה" /></SelectTrigger>
-              <SelectContent>
-                {(groups || []).map((g: any) => (
+              <SelectTrigger className="text-right"><SelectValue placeholder="קבוצה Manus" /></SelectTrigger>
+              <SelectContent dir="rtl">
+                {(manusGroups || []).map((g: any) => (
                   <SelectItem key={g.id} value={g.id}>{g.group_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-row-reverse items-center gap-2 justify-end">
+              <span className="text-xs">אנשי קשר</span>
               <Checkbox checked={row.allow_client_contacts}
                 onCheckedChange={(c) => {
                   const next = [...clientRows];
                   next[idx] = { ...row, allow_client_contacts: !!c };
                   setClientRows(next);
                 }} />
-              <span className="text-xs">אנשי קשר</span>
             </div>
             <Select value={row.info_boundary} onValueChange={(v: "external_only" | "full") => {
               const next = [...clientRows];
               next[idx] = { ...row, info_boundary: v };
               setClientRows(next);
             }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+              <SelectContent dir="rtl">
                 <SelectItem value="external_only">מידע חיצוני בלבד</SelectItem>
                 <SelectItem value="full">מלא (מנהלים)</SelectItem>
               </SelectContent>
@@ -477,7 +499,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       </Card>
 
       <Card className="p-4">
-        <Label className="text-right block mb-2">הודעת deny (אופציונלי)</Label>
+        <Label className="block mb-2">הודעת deny (אופציונלי)</Label>
         <Input value={denyMessage} onChange={(e) => setDenyMessage(e.target.value)}
           placeholder="אני לא מזהה אותך…" className="text-right" />
       </Card>

@@ -21,6 +21,7 @@ import {
   mergeCarmenScopeConfig,
   parsePolicyPhones,
   policyPhoneList,
+  filterPolicyGroupsToManus,
 } from './carmen-access-policy.ts';
 
 const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
@@ -1089,11 +1090,16 @@ async function loadCarmenAccessContext(
     .maybeSingle();
   let groupChatIds: string[] = [];
   if (policy?.allowed_group_ids?.length) {
-    const { data: groups } = await supabase
-      .from('whatsapp_groups')
-      .select('group_chat_id')
-      .in('id', policy.allowed_group_ids);
-    groupChatIds = (groups || []).map((g: any) => g.group_chat_id).filter(Boolean);
+    const manusGroupIds = await filterPolicyGroupsToManus(
+      supabase, tenantId, policy.allowed_group_ids,
+    );
+    if (manusGroupIds.length > 0) {
+      const { data: groups } = await supabase
+        .from('whatsapp_groups')
+        .select('group_chat_id')
+        .in('id', manusGroupIds);
+      groupChatIds = (groups || []).map((g: any) => g.group_chat_id).filter(Boolean);
+    }
   }
   return { policy, groupChatIds, mergedScope: null };
 }
