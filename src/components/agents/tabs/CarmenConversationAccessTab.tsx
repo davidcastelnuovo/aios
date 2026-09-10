@@ -233,8 +233,11 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     if (autoSyncedRef.current || policyLoading || groupsLoading || automationLoading) return;
     if (!tenantId || !automationCfg) return;
     const needsSeed = !policy
-      || (Array.isArray(policy.private_phones) && policy.private_phones.length === 0
-        && (automationCfg.carmen_allowed_phones?.length ?? 0) > 0);
+      || (automationCfg.carmen_open_member_groups === true && !policy?.open_member_groups)
+      || (
+        Array.isArray(policy?.private_phones) && policy.private_phones.length === 0
+        && (automationCfg.carmen_allowed_phones?.length ?? 0) > 0
+      );
     if (!needsSeed) return;
     autoSyncedRef.current = true;
     autoSyncFromAutomation.mutate();
