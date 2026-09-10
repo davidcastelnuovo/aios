@@ -57,14 +57,15 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
   // Check whether we actually have valid Ahrefs SEO reports for this client.
   // Use client-scoped lookup so reports stored under a sibling tenant still load.
+  /** The one domain this client's SEO artifacts may come from. */
+  const expectedDomain = scope?.expectedDomain || "";
+
   const { data: ahrefsReports } = useAhrefsReports({
     clientId,
     tenantIds: accessibleTenantIds,
+    domain: expectedDomain || undefined,
     limit: 12,
   });
-
-  /** The one domain this client's SEO artifacts may come from. */
-  const expectedDomain = scope?.expectedDomain || "";
 
   const ownDomainReports = useMemo(
     () => filterSeoReportsByDomain(ahrefsReports || [], expectedDomain),
