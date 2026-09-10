@@ -1098,7 +1098,7 @@ export default function Signatures() {
                       {docEvents.map((ev: any) => (
                         <div key={ev.id} className="flex items-center justify-between text-sm border-b pb-2 last:border-0">
                           <div>
-                            <span className="font-medium">{eventLabels[ev.event_type] || ev.event_type}</span>
+                            <span className="font-medium">{ev.event_type === "sent" && ev.metadata?.channel === "link" ? "קישור לחתימה הוכן" : eventLabels[ev.event_type] || ev.event_type}</span>
                             {ev.signature_recipients?.name && (
                               <span className="text-muted-foreground"> — {ev.signature_recipients.name}</span>
                             )}

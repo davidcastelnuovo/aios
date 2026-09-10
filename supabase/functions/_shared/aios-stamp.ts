@@ -48,6 +48,22 @@ function escapeXml(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
+// resvg does not apply SVG direction/unicode-bidi consistently to mixed text.
+// Unicode isolates keep Hebrew, Latin names and numbers in their logical order.
+function rtlText(text: string): string {
+  return escapeXml(`\u2067${text}\u2069`);
+}
+
+export async function renderSignatureFieldPng(
+  text: string, width: number, height: number, fontSize: number,
+): Promise<Uint8Array> {
+  await ensureGraphicsRuntime();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    <text x="0" y="${height * 0.7}" font-family="DejaVu Sans" font-size="${fontSize}" fill="#000">${rtlText(text)}</text>
+  </svg>`;
+  return renderSvgToPng(svg, Math.max(1, Math.ceil(width * 3)));
+}
+
 /** Israel-local date + time for stamp display. */
 export function formatStampDateTime(iso: string | null | undefined): { date: string; time: string; full: string } {
   const d = iso ? new Date(iso) : new Date();
@@ -169,8 +185,8 @@ export async function renderAiosStampPng(input: StampRenderInput): Promise<Uint8
 
     <line x1="${c - 118}" y1="${c + 24}" x2="${c + 118}" y2="${c + 24}" stroke="#8E2424" stroke-width="1.7" opacity="0.8" stroke-linecap="round"/>
 
-    <text class="he" x="${c}" y="${c + 56}" text-anchor="middle" font-size="20">תאריך: ${escapeXml(date)}</text>
-    <text class="he" x="${c}" y="${c + 84}" text-anchor="middle" font-size="20">שעה: ${escapeXml(time)}</text>
+    <text class="he" x="${c}" y="${c + 56}" text-anchor="middle" font-size="20">${rtlText(`תאריך: ${date}`)}</text>
+    <text class="he" x="${c}" y="${c + 84}" text-anchor="middle" font-size="20">${rtlText(`שעה: ${time}`)}</text>
     <text class="meta" x="${c}" y="${c + 120}" text-anchor="middle" font-size="13">SPEC ${cert}</text>
   </g>
 </svg>`;
@@ -184,8 +200,8 @@ export async function renderCertificateCardPng(input: StampRenderInput & {
 }): Promise<Uint8Array> {
   await ensureGraphicsRuntime();
   const { full } = formatStampDateTime(input.signedAt);
-  const title = escapeXml(input.documentTitle || 'מסמך');
-  const name = escapeXml(input.signerName || '—');
+  const title = input.documentTitle || 'מסמך';
+  const name = input.signerName || '—';
   const email = escapeXml(input.signerEmail || '');
   const cert = escapeXml(input.certificateId);
   const w = 900;
@@ -205,11 +221,11 @@ export async function renderCertificateCardPng(input: StampRenderInput & {
   <text class="muted" x="36" y="54" text-anchor="start" font-size="16">Digital Signature Certificate</text>
   <line x1="36" y1="74" x2="${w - 36}" y2="74" stroke="#D0D7DE" stroke-width="1"/>
 
-  <text class="he" x="${w - 36}" y="118" text-anchor="end" font-size="20">מסמך: ${title}</text>
-  <text class="he" x="${w - 36}" y="152" text-anchor="end" font-size="20">חותם: ${name}</text>
+  <text class="he" x="${w - 36}" y="118" text-anchor="end" font-size="20">${rtlText(`מסמך: ${title}`)}</text>
+  <text class="he" x="${w - 36}" y="152" text-anchor="end" font-size="20">${rtlText(`חותם: ${name}`)}</text>
   <text class="muted" x="36" y="152" text-anchor="start" font-size="16">${email}</text>
-  <text class="he" x="${w - 36}" y="186" text-anchor="end" font-size="18">תאריך ושעת חתימה: ${escapeXml(full)}</text>
-  <text class="he" x="${w - 36}" y="222" text-anchor="end" font-size="18">מפרט אישור (Specification):</text>
+  <text class="he" x="${w - 36}" y="186" text-anchor="end" font-size="18">${rtlText(`תאריך ושעת חתימה: ${full}`)}</text>
+  <text class="he" x="${w - 36}" y="222" text-anchor="end" font-size="18">${rtlText('מפרט אישור (Specification):')}</text>
   <text class="brand" x="${w - 36}" y="256" text-anchor="end" font-size="18">${cert}</text>
   <text class="muted" x="36" y="256" text-anchor="start" font-size="14">aios.co.il</text>
 </svg>`;
@@ -230,7 +246,7 @@ export async function renderBusinessStampPng(input: BusinessStampInput): Promise
 
   const companyId = (input.companyId || '').trim();
   const idLine = companyId
-    ? (companyId.match(/^[0-9]+$/) ? `ח.פ/ע.מ ${companyId}` : companyId)
+    ? (companyId.match(/^[0-9]+$/) ? `ח.פ / ת.ז ${companyId}` : companyId)
     : '';
 
   const w = 720;
@@ -238,32 +254,20 @@ export async function renderBusinessStampPng(input: BusinessStampInput): Promise
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
   <defs>
-    <filter id="bizInk" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="3" seed="11" result="grain"/>
-      <feColorMatrix in="grain" type="matrix"
-        values="0 0 0 0 0
-                0 0 0 0 0
-                0 0 0 0 0
-                0 0 0 1.4 -0.28"
-        result="grainMask"/>
-      <feComposite in="SourceGraphic" in2="grainMask" operator="in" result="blotched"/>
-      <feTurbulence type="turbulence" baseFrequency="0.06" numOctaves="2" seed="5" result="warpNoise"/>
-      <feDisplacementMap in="blotched" in2="warpNoise" scale="1.8" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>
     <style>
       .he {
         font-family: 'DejaVu Sans';
         direction: rtl;
         unicode-bidi: plaintext;
-        fill: #6B7280;
+        fill: #4B5563;
       }
     </style>
   </defs>
-  <g opacity="0.72" filter="url(#bizInk)" transform="rotate(-2 ${w / 2} ${h / 2})">
-    <text class="he" x="${w / 2}" y="${idLine ? 118 : 150}" text-anchor="middle" font-size="42" font-weight="700">${escapeXml(businessName)}</text>
-    ${idLine ? `<text class="he" x="${w / 2}" y="178" text-anchor="middle" font-size="28">${escapeXml(idLine)}</text>` : ''}
+  <g opacity="0.85" transform="rotate(-2 ${w / 2} ${h / 2})">
+    <text class="he" x="${w / 2}" y="${idLine ? 118 : 150}" text-anchor="middle" font-size="42" font-weight="700">${rtlText(businessName)}</text>
+    ${idLine ? `<text class="he" x="${w / 2}" y="178" text-anchor="middle" font-size="28">${rtlText(idLine)}</text>` : ''}
   </g>
 </svg>`;
 
-  return renderSvgToPng(svg, 360);
+  return renderSvgToPng(svg, 720);
 }
