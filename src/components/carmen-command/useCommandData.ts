@@ -94,13 +94,17 @@ export function useIntelFeed(tenantId: string | null) {
             provider_failover: { sev: "warning", title: a.reason || `♻️ כרמן עברה אוטומטית לספק AI אחר` },
             budget_95: { sev: "critical", title: a.reason || "השימוש ב-AI חצה 95% מהתקציב החודשי" },
             budget_80: { sev: "warning", title: a.reason || "השימוש ב-AI חצה 80% מהתקציב החודשי" },
+            db_capacity_warn: { sev: "warning", title: a.reason || "עומס חיבורי דאטאבייס" },
+            db_capacity_critical: { sev: "critical", title: a.reason || "חיבורי דאטאבייס על סף קריסה" },
+            db_capacity_scaled: { sev: "warning", title: a.reason || "הדאטאבייס גדל אוטומטית" },
           };
           const m = map[a.alert_type];
           const isRecall = a.provider === "recall";
+          const isPostgres = a.provider === "postgres";
           return {
             id: `il-${a.id}`,
             severity: m?.sev ?? "critical",
-            source: isRecall ? "הקלטות" : m ? "קרדיט AI" : "אינטגרציות",
+            source: isPostgres ? "דאטאבייס" : isRecall ? "הקלטות" : m ? "קרדיט AI" : "אינטגרציות",
             title: m?.title ?? `${a.provider} התנתק${a.reason ? ` — ${a.reason}` : ""}`,
             time: a.fired_at,
           };
@@ -175,6 +179,7 @@ export function useHealth(tenantId: string | null) {
 
       const openCircuits = (ihRes.data ?? []).filter((r: any) => r.is_circuit_open);
 
+      const connProbe = latestOf("db_connections");
       const waProbe = latestOf("whatsapp");
       const mcpProbe = latestOf("mcp");
       const openaiProbe = latestOf("openai");
@@ -191,6 +196,13 @@ export function useHealth(tenantId: string | null) {
           detail: dbRes.error ? "שגיאת חיבור" : "Supabase Postgres",
           latencyMs: dbRes.error ? undefined : dbLatency,
           history: historyOf("db"),
+        },
+        {
+          key: "db_connections", label: "חיבורי דאטאבייס",
+          status: connProbe?.status ?? (dbRes.error ? "down" : "unknown"),
+          detail: connProbe?.detail ?? (dbRes.error ? "אין תשובה מהדאטאבייס" : "ממתין לבדיקה"),
+          latencyMs: connProbe?.latency_ms ?? undefined,
+          history: historyOf("db_connections"),
         },
         {
           key: "whatsapp", label: "WhatsApp",

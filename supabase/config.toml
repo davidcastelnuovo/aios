@@ -417,3 +417,7 @@ verify_jwt = false
 
 [functions.generate-signed-pdf]
 verify_jwt = false
+
+# Connection-pressure guard — pg_cron every 2 minutes (service-role JWT).
+[functions.db-capacity-guard]
+verify_jwt = true

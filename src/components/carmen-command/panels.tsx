@@ -3,7 +3,7 @@ import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
 import {
   Activity, AlertTriangle, Brain, CheckCircle2, Circle, CircleAlert,
-  Cpu, Database, HeartPulse, Info, ListTodo, MessageCircle, Mic,
+  Cpu, Database, Gauge, HeartPulse, Info, ListTodo, MessageCircle, Mic,
   PlusCircle, ScrollText, Bot, Zap,
 } from "lucide-react";
 import {
@@ -124,6 +124,7 @@ const STATUS_META: Record<ServiceHealth["status"], { color: string; label: strin
 
 const SERVICE_ICON: Record<string, ReactNode> = {
   db: <Database className="h-4 w-4" />,
+  db_connections: <Gauge className="h-4 w-4" />,
   whatsapp: <MessageCircle className="h-4 w-4" />,
   integrations: <Zap className="h-4 w-4" />,
   mcp: <Cpu className="h-4 w-4" />,

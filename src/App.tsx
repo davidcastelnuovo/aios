@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { AgencyProvider } from "./contexts/AgencyContext";
@@ -16,6 +16,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { tenantRoutes } from "@/routes/tenantRoutes";
 import { StagingBanner } from "@/components/StagingBanner";
+import { SystemStatusBanner } from "@/components/SystemStatusBanner";
+import { noteDbError } from "@/lib/dbOverload";
 import { setupReportQueryCachePersistence } from "@/lib/reportQueryCache";
 import { REPORT_QUERY_GC_MS, REPORT_QUERY_STALE_MS } from "@/lib/reportQueryOptions";
 
@@ -34,6 +36,16 @@ const UnifiedCallback = lazy(() => import("./pages/UnifiedCallback"));
 const SignDocument = lazy(() => import("./pages/SignDocument"));
 
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => {
+      noteDbError(error);
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      noteDbError(error);
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: REPORT_QUERY_STALE_MS,
@@ -117,6 +129,7 @@ const App = () => (
         <TooltipProvider delayDuration={0} skipDelayDuration={0}>
           <Toaster />
           <Sonner />
+          <SystemStatusBanner />
           <RouteScopedProviders>
             <Suspense fallback={<PageLoader />}>
               <Routes>

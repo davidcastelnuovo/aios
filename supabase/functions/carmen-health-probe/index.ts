@@ -172,6 +172,36 @@ Deno.serve(async (req) => {
       latency_ms: latency,
       detail: error ? error.message : 'Supabase Postgres',
     });
+
+    try {
+      const tConn = performance.now();
+      const { data: pressure, error: pressureError } = await supabase.rpc('db_connection_pressure');
+      if (!pressureError && pressure) {
+        const pct = Number((pressure as { used_pct?: number }).used_pct);
+        const used = Number((pressure as { used?: number }).used);
+        const max = Number((pressure as { max?: number }).max);
+        rows.push({
+          tenant_id: null, service: 'db_connections',
+          status: !Number.isFinite(pct) ? 'down' : pct >= 85 ? 'down' : pct >= 70 ? 'warn' : 'ok',
+          latency_ms: Math.round(performance.now() - tConn),
+          detail: Number.isFinite(used) && Number.isFinite(max)
+            ? `${used}/${max} חיבורים (${Number.isFinite(pct) ? pct.toFixed(0) : '?'}%)`
+            : 'snapshot ok',
+        });
+        if (Number.isFinite(pct) && pct >= 70) {
+          fetch(`${supabaseUrl}/functions/v1/db-capacity-guard`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: '{}',
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      // RPC missing until the capacity migration is applied — skip.
+    }
   }
 
   // 2. MCP edge functions — any HTTP answer below 500 proves the function is up
