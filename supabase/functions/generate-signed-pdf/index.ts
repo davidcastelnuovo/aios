@@ -9,6 +9,7 @@ import {
   renderAiosStampPng,
   renderBusinessStampPng,
   renderCertificateCardPng,
+  renderSignatureFieldPng,
 } from '../_shared/aios-stamp.ts';
 
 const UI_FONT_URL =
@@ -92,15 +93,6 @@ async function embedFieldFont(pdfDoc: PDFDocument) {
   }
 }
 
-/** Reverse Hebrew segments for pdf-lib field overlays only (not the stamp). */
-function preparePdfText(text: string): string {
-  return text.replace(/[\u0590-\u05FF][\u0590-\u05FF\s־–—:]*/g, (run) => {
-    const trailingSpace = run.match(/\s+$/)?.[0] ?? '';
-    const core = run.slice(0, run.length - trailingSpace.length);
-    return Array.from(core).reverse().join('') + trailingSpace;
-  });
-}
-
 async function drawSignatureOnPage(
   pdfDoc: PDFDocument,
   pageIndex: number,
@@ -141,7 +133,7 @@ async function drawSignatureOnPage(
         y: y + (sigHeight - stampH) / 2,
         width: stampW,
         height: stampH,
-        opacity: 0.7,
+        opacity: 0.9,
       });
     } catch (err) {
       console.warn('[generate-signed-pdf] business stamp embed failed', err);
@@ -166,10 +158,15 @@ async function drawTextOnPage(
   const boxHeight = (position.height / 100) * pageHeight;
   const x = (position.x / 100) * pageWidth;
   const y = pageHeight - (position.y / 100) * pageHeight - boxHeight * 0.7;
-  const prepared = preparePdfText(text);
+  const prepared = text;
   const preferredSize = Math.min(12, Math.max(3, boxHeight * 0.55));
   const textWidth = font.widthOfTextAtSize(prepared, preferredSize);
   const fontSize = textWidth > boxWidth ? preferredSize * boxWidth / textWidth : preferredSize;
+  if (/[\u0590-\u05FF]/.test(text)) {
+    const image = await pdfDoc.embedPng(await renderSignatureFieldPng(text, boxWidth, boxHeight, fontSize));
+    page.drawImage(image, { x, y: pageHeight - (position.y / 100) * pageHeight - boxHeight, width: boxWidth, height: boxHeight });
+    return;
+  }
   try {
     page.drawText(prepared, { x, y, size: fontSize, font, color: rgb(0, 0, 0) });
   } catch {
@@ -234,7 +231,12 @@ async function buildSignedPdf(doc: {
     const page = pdfDoc.addPage([595, 842]);
     const font = await embedFieldFont(pdfDoc);
     const { height } = page.getSize();
-    page.drawText(preparePdfText(doc.title || 'Document'), {
+    const title = doc.title || 'Document';
+    if (/[\u0590-\u05FF]/.test(title)) {
+      const size = Math.min(18, 18 * 495 / font.widthOfTextAtSize(title, 18));
+      const image = await pdfDoc.embedPng(await renderSignatureFieldPng(title, 495, 30, size));
+      page.drawImage(image, { x: 50, y: height - 70, width: 495, height: 30 });
+    } else page.drawText(title, {
       x: 50,
       y: height - 60,
       size: 18,
