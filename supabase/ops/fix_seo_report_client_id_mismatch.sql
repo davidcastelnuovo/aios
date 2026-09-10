@@ -27,3 +27,18 @@ UPDATE public.ahrefs_reports
 SET client_id = '7f7ed121-12c5-467f-86c1-8743a9331646'
 WHERE lower(domain) LIKE '%studiodil.co.il%'
   AND client_id IS DISTINCT FROM '7f7ed121-12c5-467f-86c1-8743a9331646';
+
+-- זכיינות: SEO table linked to deleted GA row; duplicate ahrefs table with null domain
+UPDATE public.crm_tables
+SET
+  client_id = 'f850564a-2471-4ff0-89d3-ea55168aa8d9',
+  integration_settings = integration_settings
+    || jsonb_build_object(
+      'clientId', 'f850564a-2471-4ff0-89d3-ea55168aa8d9',
+      'linkedGaTableId', 'f6206fcc-0f97-4043-9b73-326539478916'
+    ),
+  updated_at = now()
+WHERE id = 'a182df69-e951-46c5-95ff-4b51e6863d9f';
+
+DELETE FROM public.crm_tables
+WHERE id = 'c9a748fe-818d-4c04-9a20-9d0774b9a845';

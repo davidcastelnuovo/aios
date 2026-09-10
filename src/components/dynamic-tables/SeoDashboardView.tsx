@@ -136,6 +136,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   const { data: reports = [], isLoading, isFetching: reportsFetching, error: reportsError } = useAhrefsReports({
     clientId,
     tenantIds: reportTenants,
+    domain: expectedDomain || undefined,
     limit: 12,
   });
 
