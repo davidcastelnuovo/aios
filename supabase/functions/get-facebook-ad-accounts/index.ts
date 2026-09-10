@@ -62,21 +62,19 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (specific) {
+        // Report Facebook connections are org-wide: any member of the same tenant
+        // (or with cross-tenant integration access) may list ad accounts from
+        // Anna/Yuval/David's connection — same rule as GA/GSC/Ads listing.
         const sameTenant = specific.tenant_id === tenantId;
-        const directlyAccessible = specific.user_id === user.id || specific.connection_visibility === 'org' || specific.user_id === null;
-        let sharedPermission = false;
-
-        if (specific.connection_visibility === 'shared') {
-          const { data: permission } = await supabaseAdmin
-            .from('integration_user_permissions')
-            .select('id')
-            .eq('integration_id', requestedIntegrationId)
-            .eq('user_id', user.id)
-            .maybeSingle();
-          sharedPermission = !!permission;
+        let crossTenantAccess = false;
+        if (!sameTenant) {
+          const { data: hasAccess } = await supabaseAdmin.rpc('user_has_integration_access', {
+            _user_id: user.id,
+            _integration_id: requestedIntegrationId,
+          });
+          crossTenantAccess = !!hasAccess;
         }
-
-        if (sameTenant && (directlyAccessible || sharedPermission)) integration = specific;
+        if (sameTenant || crossTenantAccess) integration = specific;
       }
 
       if (!integration) return jsonResponse({ error: 'Integration not found or access denied', message: 'אין גישה לחיבור המבוקש' }, 403);

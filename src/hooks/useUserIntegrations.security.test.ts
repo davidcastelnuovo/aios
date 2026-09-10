@@ -4,8 +4,20 @@ import {
   getClientIntegrationSelect,
   toClientIntegration,
 } from '../lib/tenantIntegrationsClient.ts';
+import {
+  isReportTenantScopedIntegration,
+  REPORT_TENANT_SCOPED_INTEGRATION_TYPES,
+} from '../lib/reportIntegrationTypes.ts';
 
 const GOOGLE_TYPES = ['google_ads', 'google_analytics', 'google_search_console'] as const;
+const REPORT_TYPES = [
+  'google_ads',
+  'google_analytics',
+  'google_search_console',
+  'facebook_lead_ads',
+  'ahrefs',
+  'tiktok',
+] as const;
 
 function assertNoSecrets(payload: unknown, label: string) {
   const json = JSON.stringify(payload);
@@ -14,6 +26,15 @@ function assertNoSecrets(payload: unknown, label: string) {
   assert.ok(!json.includes('"api_key"'), `${label}: api_key field leaked`);
   assert.ok(!json.includes('refresh_token'), `${label}: refresh_token field leaked`);
 }
+
+test('report integration types are tenant-scoped for listing', () => {
+  for (const type of REPORT_TYPES) {
+    assert.equal(isReportTenantScopedIntegration(type), true, type);
+  }
+  assert.equal(isReportTenantScopedIntegration('meta_whatsapp'), false);
+  assert.equal(isReportTenantScopedIntegration('green_api'), false);
+  assert.ok(REPORT_TENANT_SCOPED_INTEGRATION_TYPES.has('facebook'));
+});
 
 for (const integrationType of GOOGLE_TYPES) {
   test(`useUserIntegrations pipeline strips secrets for ${integrationType}`, () => {
@@ -47,7 +68,7 @@ for (const integrationType of GOOGLE_TYPES) {
       api_token_last_4: null,
     };
 
-  // Mirrors useUserIntegrations tenant-scoped mapping.
+    // Mirrors useUserIntegrations tenant-scoped mapping.
     const clientRows = [
       toClientIntegration(dbRow, { _isOwn: true, _sharedByName: null }),
       toClientIntegration(
