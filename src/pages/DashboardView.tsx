@@ -212,6 +212,8 @@ export default function DashboardView() {
     },
     enabled: !!dashboard?.client_id,
     ...reportQueryOptions<any[]>(),
+    // Permission scope can change (e.g. SEO staff) — never show a stale empty table list.
+    refetchOnMount: "always",
   });
 
   const dashboardLastSyncAt = useMemo(() => {
@@ -307,6 +309,7 @@ export default function DashboardView() {
     },
     enabled: tables.length > 0 && isCustomReady,
     ...reportQueryOptions<any[]>(),
+    refetchOnMount: "always",
   });
 
   const displayAllRecords = allRecords ?? [];

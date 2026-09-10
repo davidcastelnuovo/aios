@@ -253,6 +253,7 @@ export default function DynamicTables() {
       return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
     enabled: !!tenantId,
+    refetchOnMount: "always",
   });
 
   // Fetch dashboards across own tenant + shared agencies (e.g. DMM-MC under DMM).
