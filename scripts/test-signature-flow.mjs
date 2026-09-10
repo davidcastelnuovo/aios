@@ -68,6 +68,31 @@ test('submission validation failure is returned without retrying a legacy bypass
   }, { 'https://esm.sh/@supabase/supabase-js@2.75.0': { createClient: () => supabase } });
   const response = await handler(new Request('https://example.invalid', { method: 'POST', body: JSON.stringify({ token: '11111111-1111-4111-8111-111111111111', signatureData: 'png', action: 'sign' }) }));
   assert.equal(response.status, 400);
+  assert.equal(response.headers.get('Content-Type'), 'application/json');
   assert.equal((await response.json()).error, 'missing_required_field');
   assert.equal(calls, 1);
+});
+
+test('the real Functions client receives a signing-link object immediately after preparation', async () => {
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const sdkRequire = createRequire(require.resolve('@supabase/supabase-js'));
+  const { FunctionsClient } = sdkRequire('@supabase/functions-js');
+  let handler;
+  const link = { name: 'QA', email: 'qa@example.invalid', url: 'https://example.invalid/sign/qa' };
+  moduleFrom('supabase/functions/send-signature-request/index.ts', {
+    Deno: { env: { get: () => '' }, serve: (callback) => { handler = callback; } }, Response,
+  }, {
+    'https://esm.sh/@supabase/supabase-js@2.75.0': { createClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'user' } } }) } }) },
+    '../_shared/signature-access.ts': { requireSignatureAccess: async () => 'tenant' },
+    '../_shared/signature-automation.ts': { prepareSignatureDocumentForSigning: async () => ({ documentId: 'doc', signingLinks: [link] }) },
+  });
+  const client = new FunctionsClient('https://example.invalid', {
+    headers: { Authorization: 'Bearer test-only' },
+    customFetch: (url, init) => handler(new Request(url, init)),
+  });
+  const response = await client.invoke('send-signature-request', { body: { documentId: 'doc', sendEmail: false } });
+  assert.equal(response.error, null);
+  assert.equal(typeof response.data, 'object');
+  assert.equal(response.data.signingLinks[0].url, link.url);
 });
