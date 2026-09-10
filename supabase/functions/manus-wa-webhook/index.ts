@@ -1084,6 +1084,46 @@ Deno.serve(async (req) => {
       }
 
       let carmenOutcome: string | null = null;
+
+      // Persist group turn for audit + Green-API author pairing (private path inserts below).
+      if (messageText?.trim()) {
+        try {
+          const { data: wgRow } = await supabase
+            .from('whatsapp_groups')
+            .select('id')
+            .eq('tenant_id', groupTenantId)
+            .eq('group_chat_id', groupChatId)
+            .maybeSingle();
+          if (wgRow?.id) {
+            const { error: groupInsertErr } = await supabase.from('chat_messages').insert({
+              group_id: wgRow.id,
+              tenant_id: groupTenantId,
+              connection_user_id: connectionUserId,
+              message_text: messageText,
+              direction: isOutgoingFromPhone ? 'outbound' : 'inbound',
+              channel: 'whatsapp',
+              provider: 'manus_wa',
+              sender_phone: authorPhone || null,
+              sender_name: senderName,
+              raw_provider_data: {
+                ...(payload || {}),
+                _voice: voiceMeta,
+                _group_author_raw: authorRaw || null,
+              },
+            });
+            if (groupInsertErr) {
+              console.warn('[manus-wa group] chat_messages insert failed (non-fatal):', groupInsertErr.message);
+            } else {
+              console.log('[manus-wa group] chat_messages saved', {
+                groupChatId, authorPhone, groupId: wgRow.id,
+              });
+            }
+          }
+        } catch (insertErr) {
+          console.warn('[manus-wa group] chat_messages insert error (non-fatal):', insertErr);
+        }
+      }
+
       try {
         const result = await handleCarmenMessage({
           supabase,

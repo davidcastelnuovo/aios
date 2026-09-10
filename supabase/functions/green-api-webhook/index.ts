@@ -4,6 +4,7 @@
 // redeploy trigger: refuse Carmen turns without a canonical chat_id (2026-08-27b)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { handleCarmenMessage, fetchKnownEntityNames } from '../_shared/carmen.ts';
+import { resolveGroupParticipantPhone } from '../_shared/carmen-group-sender.ts';
 import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
 import {
   VOICE_STATUSES,
@@ -512,7 +513,15 @@ Deno.serve(async (req) => {
           });
         }
         
-        // Save group message
+        // Save group message — participant is the connected account on manual outbound.
+        const statusParticipantPhone = resolveGroupParticipantPhone({
+          groupChatId,
+          phoneNumber,
+          sourcePhoneNumber: selfWid?.split('@')[0]?.replace(/\D/g, '') || null,
+          senderWid: webhookData?.senderData?.sender || selfWid,
+          selfWid,
+          isOutgoing: true,
+        });
         const { error: insertError } = await supabaseClient
           .from('chat_messages')
           .insert({
@@ -523,7 +532,7 @@ Deno.serve(async (req) => {
             direction: 'outbound',
             channel: 'whatsapp',
             provider: 'green_api',
-            sender_phone: phoneNumber,
+            sender_phone: statusParticipantPhone,
             is_blocked: false,
             raw_provider_data: combinedRawData,
           });
@@ -1073,7 +1082,15 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Save group message
+      // Save group message — sender_phone MUST be the participant, not the group JID.
+      const participantPhone = resolveGroupParticipantPhone({
+        groupChatId,
+        phoneNumber,
+        sourcePhoneNumber,
+        senderWid,
+        selfWid,
+        isOutgoing,
+      });
       const { error: insertError } = await supabaseClient
         .from('chat_messages')
         .insert({
@@ -1084,7 +1101,7 @@ Deno.serve(async (req) => {
           direction: isOutgoing ? 'outbound' : 'inbound',
           channel: 'whatsapp',
           provider: 'green_api',
-          sender_phone: phoneNumber,
+          sender_phone: participantPhone,
           sender_name: senderData.senderName || null,
           is_blocked: false,
           raw_provider_data: webhookData,
@@ -1094,6 +1111,11 @@ Deno.serve(async (req) => {
         console.error('❌ Failed to save group message:', insertError);
         throw insertError;
       }
+      console.log('[green-api group] chat_messages saved', {
+        groupChatId,
+        participantPhone,
+        direction: isOutgoing ? 'outbound' : 'inbound',
+      });
 
 
       // Forward to linked team channels
@@ -1206,14 +1228,6 @@ Deno.serve(async (req) => {
             } else {
             }
           }
-
-          // For group messages, sender_phone must be the actual participant's phone,
-          // NOT the group chat ID. For outgoing messages the participant is the instance owner (selfWid),
-          // for incoming messages it's senderData.sender (the participant wid).
-          const participantWid = isOutgoing ? (selfWid || senderWid) : (senderWid || selfWid);
-          const participantPhone = participantWid
-            ? String(participantWid).split('@')[0]
-            : phoneNumber;
 
           const automationPayload = {
             trigger_type: 'whatsapp_message_received',
