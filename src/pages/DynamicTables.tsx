@@ -30,6 +30,7 @@ import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncCon
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
 import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
 import { invalidateClientCrmTablesQueries } from "@/lib/reportQueryCache";
+import { refetchOnMountIfEmpty } from "@/lib/reportQueryOptions";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -253,7 +254,7 @@ export default function DynamicTables() {
       return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
     enabled: !!tenantId,
-    refetchOnMount: "always",
+    refetchOnMount: refetchOnMountIfEmpty,
   });
 
   // Fetch dashboards across own tenant + shared agencies (e.g. DMM-MC under DMM).
