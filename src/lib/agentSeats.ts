@@ -1,4 +1,5 @@
-import type { BrainRoute } from "@/lib/agentChannelRouting";
+import { routeForRestoredChat, type BrainRoute } from "@/lib/agentChannelRouting";
+import type { TopicChat } from "@/lib/chatTopics";
 
 export type AgentSeatKey =
   | "shared"
@@ -78,6 +79,23 @@ type ChatLike = {
   speaker?: string | null;
   channel?: string | null;
 };
+
+/** Ghost sprite for the agent that opened a Command Center chat topic. */
+export function topicAgentSprite(
+  conv: Pick<TopicChat, "brain_route_id" | "routing_mode">,
+  routes: BrainRoute[],
+): string {
+  const route = routeForRestoredChat(routes, conv);
+  const key = seatKeyFromRoute(route);
+  return AGENT_SPRITES[key === "user" ? "carmen" : key];
+}
+
+export function topicAgentLabel(
+  conv: Pick<TopicChat, "brain_route_id" | "routing_mode">,
+  routes: BrainRoute[],
+): string {
+  return routeForRestoredChat(routes, conv).label;
+}
 
 /** Shared space shows all agent traffic; direct hides other agents' lines. */
 export function filterMessagesForRoute<T extends ChatLike>(messages: T[], route: BrainRoute | null): T[] {
