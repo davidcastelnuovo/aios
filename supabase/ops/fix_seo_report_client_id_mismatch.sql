@@ -42,3 +42,18 @@ WHERE id = 'a182df69-e951-46c5-95ff-4b51e6863d9f';
 
 DELETE FROM public.crm_tables
 WHERE id = 'c9a748fe-818d-4c04-9a20-9d0774b9a845';
+
+-- dentiq.co.il: Site Explorer returned 0 organic rows; mirror Rank Tracker phrases
+UPDATE public.ahrefs_reports
+SET report_data = report_data
+  || jsonb_build_object(
+    'organic_keywords', report_data->'tracked_keywords',
+    'snapshot', coalesce(report_data->'snapshot', '{}'::jsonb)
+      || jsonb_build_object(
+        'org_keywords_total',
+        jsonb_array_length(coalesce(report_data->'tracked_keywords', '[]'::jsonb))
+      )
+  )
+WHERE client_id = '56c51416-e2b3-4455-bbe9-866d6bcf7f96'
+  AND jsonb_array_length(coalesce(report_data->'organic_keywords', '[]'::jsonb)) = 0
+  AND jsonb_array_length(coalesce(report_data->'tracked_keywords', '[]'::jsonb)) > 0;
