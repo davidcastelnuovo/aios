@@ -85,8 +85,10 @@ export async function sendSignatureDocumentEmails(
     .from('signature_documents')
     .select('id, title, status, tenant_id')
     .eq('id', documentId)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
   if (docError || !doc) throw new Error('מסמך חתימה לא נמצא');
+  if (!['draft', 'pending', 'partially_signed'].includes(doc.status)) throw new Error('document_not_signable');
 
   const { data: recipients, error: recError } = await supabase
     .from('signature_recipients')
@@ -100,7 +102,8 @@ export async function sendSignatureDocumentEmails(
     const { error: statusError } = await supabase
       .from('signature_documents')
       .update({ status: 'pending', updated_at: new Date().toISOString() })
-      .eq('id', documentId);
+      .eq('id', documentId)
+      .eq('status', 'draft');
     if (statusError) throw statusError;
   }
 
@@ -181,6 +184,8 @@ export async function prepareSignatureDocumentForSigning(
     leadId?: string;
     clientId?: string;
     contactDetails?: {
+      name?: string;
+      companyName?: string;
       firstName?: string;
       lastName?: string;
       phone?: string;
@@ -195,8 +200,10 @@ export async function prepareSignatureDocumentForSigning(
     .from('signature_documents')
     .select('*')
     .eq('id', documentId)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
   if (docError || !doc) throw new Error('מסמך לא נמצא');
+  if (!['draft', 'pending', 'partially_signed'].includes(doc.status)) throw new Error('document_not_signable');
   const effectiveTenantId = doc.tenant_id as string;
 
   let targetDocId = documentId;
@@ -232,7 +239,7 @@ export async function prepareSignatureDocumentForSigning(
       const position = sigField?.position ?? null;
       const fieldPrefill = buildFieldPrefillFromContact(
         doc.document_fields,
-        contactDetails ?? { phone: recipient.phone },
+        { ...contactDetails, name: recipient.name, phone: contactDetails?.phone ?? recipient.phone },
         0,
       );
 
@@ -292,6 +299,8 @@ export async function prepareSignatureDocumentForSigning(
 function buildFieldPrefillFromContact(
   documentFields: unknown,
   contact: {
+    name?: string;
+    companyName?: string;
     firstName?: string;
     lastName?: string;
     phone?: string;
@@ -304,7 +313,8 @@ function buildFieldPrefillFromContact(
   const typeToValue: Record<string, string | undefined> = {
     first_name: contact.firstName,
     last_name: contact.lastName,
-    full_name: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || undefined,
+    full_name: contact.name || [contact.firstName, contact.lastName].filter(Boolean).join(' ') || undefined,
+    company_name: contact.companyName,
     phone: contact.phone,
     address: contact.address,
     id_number: contact.idNumber,
@@ -333,6 +343,8 @@ export async function cloneSignatureFromTemplate(
     leadId?: string;
     clientId?: string;
     contactDetails?: {
+      name?: string;
+      companyName?: string;
       firstName?: string;
       lastName?: string;
       phone?: string;
@@ -357,6 +369,7 @@ export async function cloneSignatureFromTemplate(
     .from('signature_documents')
     .select('*')
     .eq('id', templateDocumentId)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
   if (sourceError || !source) throw new Error('מסמך לא נמצא');
   const effectiveTenantId = (source.tenant_id as string) || tenantId;
@@ -396,7 +409,7 @@ export async function cloneSignatureFromTemplate(
       .maybeSingle();
     businessStampName = lead?.company_name || lead?.contact_name || null;
   }
-  if (!businessStampName) businessStampName = recipientName || null;
+  if (contactDetails?.companyName) businessStampName = contactDetails.companyName;
   if (contactDetails?.idNumber) businessStampCompanyId = contactDetails.idNumber;
 
   const insertPayload = {
@@ -439,7 +452,7 @@ export async function cloneSignatureFromTemplate(
   const docError = docResult.error;
   if (docError || !doc) throw docError || new Error('יצירת מסמך נכשלה');
 
-  const fieldPrefill = buildFieldPrefillFromContact(template.document_fields, contactDetails ?? {}, 0);
+  const fieldPrefill = buildFieldPrefillFromContact(template.document_fields, { ...contactDetails, name: recipientName, companyName: businessStampName ?? undefined }, 0);
 
   const recipientRow = {
     document_id: doc.id,

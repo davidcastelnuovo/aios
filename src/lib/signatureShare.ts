@@ -31,6 +31,29 @@ export function buildWhatsAppSignUrl(opts: {
   return `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`;
 }
 
-export async function copySigningUrl(url: string): Promise<void> {
-  await navigator.clipboard.writeText(url);
+export async function copySigningUrl(url: string | Promise<string>): Promise<void> {
+  // Safari requires the clipboard call itself to happen inside the click gesture.
+  if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/plain": Promise.resolve(url).then((text) => new Blob([text], { type: "text/plain" })),
+      })]);
+      return;
+    } catch { /* Try the compatible text API, then a selectable textarea. */ }
+  }
+  const text = await url;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.cssText = "position:fixed;opacity:0";
+    const focused = document.activeElement as HTMLElement | null;
+    (focused?.closest('[role="dialog"]') || document.body).appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    focused?.focus();
+    if (!copied) throw new Error("לא ניתן להעתיק אוטומטית");
+  }
 }

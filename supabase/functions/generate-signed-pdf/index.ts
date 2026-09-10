@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 import fontkit from 'https://esm.sh/@pdf-lib/fontkit@1.0.0';
+import { signatureStoragePath } from '../_shared/signature-storage.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { saveSignedPdfToEntity } from '../_shared/signature-automation.ts';
 import {
@@ -59,12 +60,14 @@ async function fetchFileBytes(url: string): Promise<Uint8Array> {
 async function fetchDocumentBytes(
   supabase: ReturnType<typeof createClient>,
   fileUrl: string,
+  tenantId: string,
 ): Promise<Uint8Array> {
-  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+  const storagePath = signatureStoragePath(fileUrl, tenantId);
+  if (!storagePath && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://'))) {
     return fetchFileBytes(fileUrl);
   }
 
-  const { data, error } = await supabase.storage.from('signature-documents').download(fileUrl);
+  const { data, error } = await supabase.storage.from('signature-documents').download(storagePath!);
   if (error || !data) throw error || new Error('failed_to_download_document');
   return new Uint8Array(await data.arrayBuffer());
 }
@@ -163,9 +166,10 @@ async function drawTextOnPage(
   const boxHeight = (position.height / 100) * pageHeight;
   const x = (position.x / 100) * pageWidth;
   const y = pageHeight - (position.y / 100) * pageHeight - boxHeight * 0.7;
-  const fontSize = Math.min(12, Math.max(7, boxHeight * 0.55));
-  const maxChars = Math.floor(boxWidth / (fontSize * 0.5));
-  const prepared = preparePdfText(text.slice(0, maxChars));
+  const prepared = preparePdfText(text);
+  const preferredSize = Math.min(12, Math.max(3, boxHeight * 0.55));
+  const textWidth = font.widthOfTextAtSize(prepared, preferredSize);
+  const fontSize = textWidth > boxWidth ? preferredSize * boxWidth / textWidth : preferredSize;
   try {
     page.drawText(prepared, { x, y, size: fontSize, font, color: rgb(0, 0, 0) });
   } catch {
@@ -196,10 +200,10 @@ async function buildSignedPdf(doc: {
   let pdfDoc: PDFDocument;
 
   if (doc.file_url && isPdfFile(doc.file_url)) {
-    const pdfBytes = await fetchDocumentBytes(supabase, doc.file_url);
+    const pdfBytes = await fetchDocumentBytes(supabase, doc.file_url, doc.tenant_id!);
     pdfDoc = await PDFDocument.load(pdfBytes);
   } else if (doc.file_url && isImageFile(doc.file_url)) {
-    const imageBytes = await fetchDocumentBytes(supabase, doc.file_url);
+    const imageBytes = await fetchDocumentBytes(supabase, doc.file_url, doc.tenant_id!);
     pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([595, 842]);
     const { width, height } = page.getSize();
@@ -262,8 +266,8 @@ async function buildSignedPdf(doc: {
     const recipientIndex = Math.max(0, (recipient.sign_order ?? 1) - 1);
     const values = recipient.field_values ?? {};
 
-    let recipientCompanyId = companyId;
-    let recipientCompanyName = '';
+    let recipientCompanyId = values.__stamp_company_id || companyId;
+    let recipientCompanyName = values.__stamp_name || '';
     for (const field of docFields) {
       if ((field.recipient_index ?? 0) !== recipientIndex) continue;
       const filled = values[field.id]?.trim();
@@ -302,7 +306,8 @@ async function buildSignedPdf(doc: {
           await drawTextOnPage(pdfDoc, pageIndex, value, field.position, textFont);
         }
       }
-    } else if (recipient.signature_data) {
+    }
+    if (!docFields.some((field) => (field.recipient_index ?? 0) === recipientIndex && (field.type === 'signature' || field.type === 'signature_stamp')) && recipient.signature_data) {
       // Legacy single-signature docs: no company stamp (use signature_stamp field for that).
       const pngBytes = decodeBase64Png(recipient.signature_data);
       const pageIndex = Math.max(0, (recipient.signature_position?.page ?? 1) - 1);
@@ -431,6 +436,9 @@ Deno.serve(async (req) => {
       .order('sign_order');
 
     if (recError) throw recError;
+    if (!recipients?.length || recipients.some((recipient) => recipient.status !== 'signed')) {
+      return new Response(JSON.stringify({ error: 'document_not_fully_signed' }), { status: 400, headers: corsHeaders });
+    }
 
     const pdfBytes = await buildSignedPdf(doc, recipients as RecipientRow[], supabase);
     const storagePath = `${doc.tenant_id}/signed/${documentId}.pdf`;
