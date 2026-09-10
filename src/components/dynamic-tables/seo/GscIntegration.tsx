@@ -353,7 +353,14 @@ export function GscIntegration({
       });
       forceLiveNextRef.current = false;
 
-      if (response.error) throw response.error;
+      if (response.error) {
+        if (hideTable) {
+          console.warn("[GSC] silent enrich fetch failed:", response.error);
+          onDataLoaded?.([]);
+          return [] as GscKeywordData[];
+        }
+        throw response.error;
+      }
       // Token revoked → mark integration as broken so the selection memo
       // falls back to the org-wide service-side integration if available.
       if (response.data?.needs_reconnect && gscIntegration?.id && !isFallbackIntegration) {
@@ -548,6 +555,9 @@ export function GscIntegration({
 
   if (isLoadingIntegration) return null;
 
+  // SEO dashboard uses GSC only for silent keyword enrichment — no connect CTA.
+  if (!gscIntegration && hideTable) return null;
+
   if (!gscIntegration) {
     return (
       <Card className="border-dashed border-primary/30">
@@ -572,6 +582,9 @@ export function GscIntegration({
       </Card>
     );
   }
+
+  // hideTable = silent enrichment inside SeoDashboardView — no GSC chrome.
+  if (hideTable) return null;
 
   return (
     <Card className="border-primary/20">
@@ -695,7 +708,7 @@ export function GscIntegration({
         </div>
       </CardHeader>
 
-      {needsReconnect && (
+      {needsReconnect && !hideTable && (
         <CardContent className="px-4 pb-3 pt-0">
           <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-center justify-between gap-2">
             <p className="text-xs text-amber-800 dark:text-amber-200">
