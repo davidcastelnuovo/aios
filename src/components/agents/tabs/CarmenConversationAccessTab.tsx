@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Phone, Users, MessageSquare, Shield, Download, Save } from "lucide-react";
+import { Loader2, Phone, Users, MessageSquare, Shield, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { fetchCarmenManusGroups } from "@/lib/carmenManusGroups";
+import {
+  buildPolicyFromAutomation,
+  fetchCarmenAutomationConfig,
+} from "@/lib/carmenAccessAutomation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -52,6 +56,7 @@ function normalizePhone(p: string) {
 export function CarmenConversationAccessTab({ agent }: { agent: { id: string; name: string } }) {
   const { tenantId } = useCurrentTenant();
   const qc = useQueryClient();
+  const autoSyncedRef = useRef(false);
   const [phones, setPhones] = useState<PolicyPhone[]>([]);
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [requireDirect, setRequireDirect] = useState(true);
@@ -127,6 +132,54 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     },
   });
 
+  const { data: automationCfg, isLoading: automationLoading } = useQuery({
+    queryKey: ["carmen-automation-cfg", tenantId, agent.id],
+    enabled: !!tenantId && !!agent.id,
+    queryFn: () => fetchCarmenAutomationConfig(tenantId!, agent.id),
+  });
+
+  const persistPolicy = async (draft: {
+    phones: PolicyPhone[];
+    groupIds: string[];
+    requireDirect: boolean;
+    openMemberGroups: boolean;
+    denyMessage: string;
+  }) => {
+    if (!tenantId) throw new Error("חסר tenant");
+    const allowedManusGroups = draft.groupIds.filter((id) => manusGroupIdSet.has(id));
+    const payload = {
+      tenant_id: tenantId,
+      agent_id: agent.id,
+      private_phones: draft.phones,
+      allowed_group_ids: allowedManusGroups,
+      require_direct_address: draft.requireDirect,
+      open_member_groups: draft.openMemberGroups,
+      deny_message_he: draft.denyMessage || null,
+      updated_at: new Date().toISOString(),
+    };
+    const { error: pErr } = await supabase
+      .from("carmen_access_policies" as any)
+      .upsert(payload, { onConflict: "tenant_id,agent_id" });
+    if (pErr) throw pErr;
+
+    for (const entry of draft.phones) {
+      const phone = normalizePhone(entry.phone);
+      if (phone.length < 9) continue;
+      const { data: existing } = await supabase
+        .from("carmen_whatsapp_identities" as any)
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("phone", phone)
+        .maybeSingle();
+      if (existing?.id) {
+        await supabase.from("carmen_whatsapp_identities" as any).update({
+          surfaces: entry.surfaces?.length ? entry.surfaces : ["whatsapp_private"],
+          dev_escalation_tier: entry.dev_escalation_tier || null,
+        }).eq("id", existing.id);
+      }
+    }
+  };
+
   useEffect(() => {
     if (!policy) return;
     setPhones(Array.isArray(policy.private_phones) ? policy.private_phones : []);
@@ -150,54 +203,65 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     if (clientGroupAccess) setClientRows(clientGroupAccess);
   }, [clientGroupAccess]);
 
+  const autoSyncFromAutomation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId || !automationCfg) return;
+      const built = buildPolicyFromAutomation(automationCfg, manusGroups || []);
+      const draft = {
+        phones: built.phones,
+        groupIds: built.groupIds,
+        requireDirect: built.requireDirectAddress,
+        openMemberGroups: built.openMemberGroups,
+        denyMessage,
+      };
+      await persistPolicy(draft);
+      setPhones(draft.phones);
+      setGroupIds(draft.groupIds);
+      setOpenMemberGroups(draft.openMemberGroups);
+      setRequireDirect(draft.requireDirect);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: policyKey });
+      qc.invalidateQueries({ queryKey: ["carmen-identities", tenantId] });
+      qc.invalidateQueries({ queryKey: ["carmen-manus-groups", tenantId] });
+      toast.success("הרשאות סונכרנו אוטומטית מהאוטומציה");
+    },
+    onError: (e: Error) => toast.error(e.message || "סנכרון אוטומטי נכשל"),
+  });
+
+  useEffect(() => {
+    if (autoSyncedRef.current || policyLoading || groupsLoading || automationLoading) return;
+    if (!tenantId || !automationCfg) return;
+    const needsSeed = !policy
+      || (Array.isArray(policy.private_phones) && policy.private_phones.length === 0
+        && (automationCfg.carmen_allowed_phones?.length ?? 0) > 0);
+    if (!needsSeed) return;
+    autoSyncedRef.current = true;
+    autoSyncFromAutomation.mutate();
+  }, [
+    policy,
+    policyLoading,
+    groupsLoading,
+    automationLoading,
+    automationCfg,
+    tenantId,
+  ]);
+
   const importFromAutomation = useMutation({
     mutationFn: async () => {
-      const { data: steps } = await supabase
-        .from("automation_flow_steps")
-        .select("configuration")
-        .eq("tenant_id", tenantId!)
-        .eq("step_type", "trigger")
-        .eq("action_type", "carmen_whatsapp_session");
-      const cfg = (steps || [])
-        .map((s: any) => s.configuration)
-        .find((c: any) => c?.agent_id === agent.id || !c?.agent_id) || (steps?.[0] as any)?.configuration;
-      if (!cfg) throw new Error("לא נמצאה אוטומציית כרמן לייבוא");
-      const importedPhones: PolicyPhone[] = (cfg.carmen_allowed_phones || []).map((p: string) => ({
-        phone: normalizePhone(p),
-        surfaces: ["whatsapp_private"],
-      }));
-      setPhones(importedPhones);
-      const gids: string[] = cfg.carmen_allowed_group_ids?.length
-        ? cfg.carmen_allowed_group_ids
-        : (cfg.carmen_allowed_group_id ? [cfg.carmen_allowed_group_id] : []);
-      const resolved = (manusGroups || [])
-        .filter((g: any) => gids.includes(g.group_chat_id) || gids.includes(g.id))
-        .map((g: any) => g.id);
-      setGroupIds(resolved);
-      setOpenMemberGroups(!!cfg.carmen_open_member_groups);
-      toast.success("יובא מאוטומציה — לחץ שמור להחיל");
+      if (!automationCfg) throw new Error("לא נמצאה אוטומציית כרמן לייבוא");
+      const built = buildPolicyFromAutomation(automationCfg, manusGroups || []);
+      setPhones(built.phones);
+      setGroupIds(built.groupIds);
+      setOpenMemberGroups(built.openMemberGroups);
+      toast.success("עודכן מהאוטומציה — לחץ שמור להחיל");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!tenantId) throw new Error("חסר tenant");
-      const allowedManusGroups = groupIds.filter((id) => manusGroupIdSet.has(id));
-      const payload = {
-        tenant_id: tenantId,
-        agent_id: agent.id,
-        private_phones: phones,
-        allowed_group_ids: allowedManusGroups,
-        require_direct_address: requireDirect,
-        open_member_groups: openMemberGroups,
-        deny_message_he: denyMessage || null,
-        updated_at: new Date().toISOString(),
-      };
-      const { error: pErr } = await supabase
-        .from("carmen_access_policies" as any)
-        .upsert(payload, { onConflict: "tenant_id,agent_id" });
-      if (pErr) throw pErr;
+      await persistPolicy({ phones, groupIds, requireDirect, openMemberGroups, denyMessage });
 
       for (const row of clientRows) {
         if (!row.client_id || !row.whatsapp_group_id) continue;
@@ -212,23 +276,6 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
           updated_at: new Date().toISOString(),
         }, { onConflict: "tenant_id,client_id,whatsapp_group_id" });
         if (error) throw error;
-      }
-
-      for (const entry of phones) {
-        const phone = normalizePhone(entry.phone);
-        if (phone.length < 9) continue;
-        const { data: existing } = await supabase
-          .from("carmen_whatsapp_identities" as any)
-          .select("id")
-          .eq("tenant_id", tenantId)
-          .eq("phone", phone)
-          .maybeSingle();
-        if (existing?.id) {
-          await supabase.from("carmen_whatsapp_identities" as any).update({
-            surfaces: entry.surfaces?.length ? entry.surfaces : ["whatsapp_private"],
-            dev_escalation_tier: entry.dev_escalation_tier || null,
-          }).eq("id", existing.id);
-        }
       }
     },
     onSuccess: () => {
@@ -279,7 +326,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     [identities],
   );
 
-  if (policyLoading || groupsLoading) {
+  if (policyLoading || groupsLoading || automationLoading || autoSyncFromAutomation.isPending) {
     return (
       <div className="flex justify-center py-12" dir="rtl">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -304,8 +351,8 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         </div>
         <div className="flex flex-wrap gap-2 justify-end shrink-0">
           <Button variant="outline" size="sm" onClick={() => importFromAutomation.mutate()}
-            disabled={importFromAutomation.isPending} className="gap-1">
-            <Download className="h-4 w-4" /> ייבא מאוטומציה
+            disabled={importFromAutomation.isPending || !automationCfg} className="gap-1">
+            <RefreshCw className="h-4 w-4" /> סנכרן מאוטומציה
           </Button>
           <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending} className="gap-1">
             {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
