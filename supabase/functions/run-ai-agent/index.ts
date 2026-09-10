@@ -26,8 +26,7 @@ import {
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 import { asUuidOrNull } from '../_shared/uuid.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
-import {
-  buildDevEscalationPromptRule,
+import { loadDevEscalationTierFromDb } from '../_shared/carmen-access-policy.ts'
   DEV_ESCALATION_REFUSAL_HE,
   DEV_ESCALATION_BUGFIX_ONLY_REFUSAL_HE,
   getDevEscalationTier,
@@ -1757,7 +1756,13 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
   // WhatsApp / automations often pass the sentinel "system". Never write that into uuid columns.
   const actorUserId = asUuidOrNull(userId)
   // Coding-agent escalations are identity-allowlisted (David=full, Ana=bugfix-only).
-  const devEscalationTier = getDevEscalationTier({ campaignerId: callerCampaignerId, userId: actorUserId, phone: callerPhone })
+  const devEscalationTier = await loadDevEscalationTierFromDb(supabase, {
+    tenantId,
+    agentId: agentId || null,
+    userId: actorUserId,
+    campaignerId: callerCampaignerId || null,
+    phone: callerPhone || null,
+  })
   if (isDevEscalationTool(name) && !isDevEscalationToolAllowed(name, devEscalationTier)) {
     return {
       error: 'dev_escalation_forbidden',
@@ -6586,9 +6591,11 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
 
     // System/dev-fix escalations (Cursor/Claude/Manus MCP + GitHub agent) —
     // tiered allowlist: David=full, Ana=bugfix→Cursor only. Role alone is not enough.
-    const devEscalationTier = getDevEscalationTier({
-      campaignerId: callerCampaignerId,
+    const devEscalationTier = await loadDevEscalationTierFromDb(supabase, {
+      tenantId: resolvedTenantId,
+      agentId: agent_id || null,
       userId: callerUserId || asUuidOrNull(resolvedUserId),
+      campaignerId: callerCampaignerId,
       phone: callerPhone,
     })
     const canEscalateDevFixes = devEscalationTier !== null
