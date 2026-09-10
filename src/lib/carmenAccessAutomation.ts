@@ -52,16 +52,22 @@ export function resolveAutomationGroupIds(
 export function buildPolicyFromAutomation(
   cfg: CarmenAutomationConfig,
   manusGroups: ManusGroupRow[],
+  options?: { hasManusIntegration?: boolean },
 ) {
   const phones = (cfg.carmen_allowed_phones || []).map((p: string) => ({
     phone: normalizePhone(p),
     surfaces: ["whatsapp_private"],
   }));
   const groupIds = resolveAutomationGroupIds(cfg, manusGroups);
+  const scopeMode = cfg.carmen_scope_mode || "all";
+  const openMemberGroups = cfg.carmen_open_member_groups === true
+    || (options?.hasManusIntegration === true
+      && scopeMode !== "private_only"
+      && scopeMode !== "specific_phone");
   return {
     phones,
     groupIds,
-    openMemberGroups: cfg.carmen_open_member_groups === true,
+    openMemberGroups,
     requireDirectAddress: true,
   };
 }

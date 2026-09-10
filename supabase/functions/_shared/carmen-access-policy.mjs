@@ -243,6 +243,7 @@ export async function fetchManusConnectedGroupIds(supabase, tenantId) {
     supabase.from('clients').select('whatsapp_group_id').eq('tenant_id', tenantId).not('whatsapp_group_id', 'is', null),
   ]);
 
+  const hasManusIntegration = (manusIntegrations || []).length > 0;
   const manusIntegrationIds = new Set((manusIntegrations || []).map((i) => i.id));
   const manusUserIds = [...new Set((manusIntegrations || []).map((i) => i.user_id).filter(Boolean))];
   const greenUserIds = new Set((greenIntegrations || []).map((i) => i.user_id).filter(Boolean));
@@ -301,7 +302,7 @@ export async function fetchManusConnectedGroupIds(supabase, tenantId) {
     await resolveGroupRefsToIds(supabase, tenantId, sessionChatIds, ids);
   }
 
-  if (openMemberMode) {
+  if (openMemberMode || hasManusIntegration) {
     const { data: allGroups } = await supabase
       .from('whatsapp_groups')
       .select('id')
