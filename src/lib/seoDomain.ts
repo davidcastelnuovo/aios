@@ -80,8 +80,12 @@ export function selectSeoTableForClient<T extends SeoTableLike>(
   const scored = candidates.map((table) => {
     const domain = seoTableDomain(table);
     let score = 0;
-    if (expected && domain) score = seoDomainsMatch(domain, expected) ? 2 : 0;
-    else if (domain) score = 1;
+    if (expected) {
+      if (domain) score = seoDomainsMatch(domain, expected) ? 2 : 0;
+      else score = -1; // duplicate rows with no domain must lose to a real match
+    } else if (domain) {
+      score = 1;
+    }
     return { table, score, ts: tableTimestamp(table) };
   });
 
@@ -211,4 +215,23 @@ export function looksLikeSeoDomain(value?: string | null): boolean {
   const n = normalizeSeoDomain(value);
   if (!n || n.includes(" ")) return false;
   return /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(n);
+}
+
+type LinkedTableLike = { id: string; client_id?: string | null };
+
+/**
+ * Pick a linked GA/GSC crm_table for an SEO dashboard. A saved id that no
+ * longer exists (deleted table / stale settings) must not block auto-match.
+ */
+export function resolveLinkedCrmTableId(
+  savedId: string | null | undefined,
+  candidates: LinkedTableLike[],
+  clientId: string,
+): string {
+  const list = candidates || [];
+  if (savedId && list.some((t) => t.id === savedId)) return savedId;
+  const byClient = list.find((t) => t.client_id === clientId);
+  if (byClient) return byClient.id;
+  if (list.length === 1) return list[0].id;
+  return "";
 }

@@ -218,8 +218,8 @@ Deno.serve(async (req) => {
       const trackedByKey = new Map<string, any>();
       const normalizeTracked = (k: any, source: string, device?: string) => ({
         keyword: String(k.keyword || "").trim(),
-        position: k.position ?? null,
-        position_prev_month: k.position_prev ?? null,
+        position: k.position ?? k.best_position ?? null,
+        position_prev_month: k.position_prev ?? k.best_position_prev ?? null,
         traffic: k.traffic ?? 0,
         traffic_prev_month: k.traffic_prev ?? 0,
         volume: k.volume ?? 0,
@@ -242,8 +242,8 @@ Deno.serve(async (req) => {
         }
       };
       const selectFields = [
-        "keyword","position","position_prev","volume","keyword_difficulty",
-        "cost_per_click","traffic","traffic_prev","url","country","location","language","tags",
+        "keyword","position","position_prev","best_position","best_position_prev",
+        "volume","keyword_difficulty","cost_per_click","traffic","traffic_prev","url","country","location","language","tags",
       ].join(",");
       const today = new Date().toISOString().split("T")[0];
       const trackerDates: string[] = [];
@@ -476,14 +476,8 @@ Deno.serve(async (req) => {
 
     // 2) Organic keywords (top ~500) — use the same mode/protocol that worked
     // NOTE: Ahrefs v3 organic-keywords returns best_position / sum_traffic (not position / traffic).
-    const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(domain)}&date=${reportDate}&country=${country}&protocol=${usedProtocol}&mode=${usedMode}&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,sum_traffic,best_position,best_position_url`;
-    const kwRes = await fetch(kwUrl, {
-      headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
-    });
-    let organic_keywords: any[] = [];
-    if (kwRes.ok) {
-      const kwJson = await kwRes.json();
-      organic_keywords = (kwJson?.keywords || []).map((k: any) => ({
+    const mapOrganicRows = (rows: any[]) =>
+      (rows || []).map((k: any) => ({
         keyword: k.keyword,
         position: k.best_position ?? k.position ?? null,
         traffic: k.sum_traffic ?? k.traffic ?? 0,
@@ -492,8 +486,24 @@ Deno.serve(async (req) => {
         cpc: k.cpc,
         url: k.best_position_url ?? k.url ?? "",
       }));
-    } else {
-      console.warn("Ahrefs organic-keywords fetch failed:", await kwRes.text());
+
+    const fetchOrganicKeywords = async (target: string): Promise<any[]> => {
+      const kwUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(target)}&date=${reportDate}&country=${country}&protocol=${usedProtocol}&mode=${usedMode}&output=json&limit=500&select=keyword,volume,keyword_difficulty,cpc,sum_traffic,best_position,best_position_url`;
+      const kwRes = await fetch(kwUrl, {
+        headers: { Authorization: `Bearer ${ahrefsApiKey}`, Accept: "application/json" },
+      });
+      if (!kwRes.ok) {
+        console.warn(`Ahrefs organic-keywords fetch failed for ${target}:`, await kwRes.text());
+        return [];
+      }
+      const kwJson = await kwRes.json();
+      return mapOrganicRows(kwJson?.keywords || []);
+    };
+
+    let organic_keywords: any[] = await fetchOrganicKeywords(domain);
+    if (organic_keywords.length === 0 && !domain.startsWith("www.")) {
+      const wwwRows = await fetchOrganicKeywords(`www.${domain}`);
+      if (wwwRows.length > 0) organic_keywords = wwwRows;
     }
 
     // Build report payload mirroring the webhook contract
@@ -587,21 +597,34 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fallback: if organic-keywords returned nothing (e.g. API field changes, plan limits),
-    // compute Top 3 / Top 10 from tracked keywords so the SEO snapshot cards aren't zeroed out.
+    // When Site Explorer returns no organic rows but Rank Tracker has phrases, mirror
+    // tracked into organic_keywords so the SEO dashboard isn't blank (dentiq.co.il).
     if ((organic_keywords?.length ?? 0) === 0 && Array.isArray(tracked_keywords) && tracked_keywords.length > 0) {
-      const posOf = (k: any) => {
-        const p = k?.position ?? k?.best_position;
-        return typeof p === "number" ? p : null;
-      };
-      const trackedTop3 = tracked_keywords.filter((k) => {
-        const p = posOf(k); return p != null && p >= 1 && p <= 3;
+      organic_keywords = tracked_keywords.map((k: any) => ({
+        keyword: k.keyword,
+        position: k.position ?? k.best_position ?? null,
+        traffic: k.traffic ?? 0,
+        volume: k.volume ?? null,
+        kd: k.kd ?? null,
+        cpc: k.cpc ?? null,
+        url: k.url ?? "",
+      }));
+    }
+
+    const posOf = (k: any) => {
+      const p = k?.position ?? k?.best_position;
+      return typeof p === "number" && p >= 1 ? p : null;
+    };
+    if (organic_keywords.length > 0) {
+      const organicTop3 = organic_keywords.filter((k) => {
+        const p = posOf(k); return p != null && p <= 3;
       }).length;
-      const trackedTop10 = tracked_keywords.filter((k) => {
-        const p = posOf(k); return p != null && p >= 1 && p <= 10;
+      const organicTop10 = organic_keywords.filter((k) => {
+        const p = posOf(k); return p != null && p <= 10;
       }).length;
-      if (!snapshot.org_keywords_top3) snapshot.org_keywords_top3 = trackedTop3;
-      if (!snapshot.org_keywords_top10) snapshot.org_keywords_top10 = trackedTop10;
+      if (!snapshot.org_keywords_total) snapshot.org_keywords_total = organic_keywords.length;
+      if (!snapshot.org_keywords_top3) snapshot.org_keywords_top3 = organicTop3;
+      if (!snapshot.org_keywords_top10) snapshot.org_keywords_top10 = organicTop10;
     }
 
 

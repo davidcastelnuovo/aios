@@ -21,7 +21,7 @@ import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { useSeoScope } from "@/hooks/useSeoScope";
-import { filterSeoReportsByDomain, seoDomainsMatch } from "@/lib/seoDomain";
+import { filterSeoReportsByDomain, resolveLinkedCrmTableId, seoDomainsMatch } from "@/lib/seoDomain";
 
 interface SeoReportTabsProps {
   /**
@@ -134,32 +134,20 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const [showGaDialog, setShowGaDialog] = useState(false);
 
   useEffect(() => {
-    if (savedGaTableId) setSelectedGaTableId(savedGaTableId);
-    else {
-      // Auto-match by client_id
-      const matchByClient = gaTables.find(t => t.client_id === clientId);
-      if (matchByClient) {
-        setSelectedGaTableId(matchByClient.id);
-        // Auto-save the link
-        if (seoTable?.id) saveLinkMutation.mutate({ key: 'linkedGaTableId', value: matchByClient.id });
-      } else if (gaTables.length === 1) {
-        setSelectedGaTableId(gaTables[0].id);
-      }
+    const resolved = resolveLinkedCrmTableId(savedGaTableId, gaTables, clientId);
+    setSelectedGaTableId(resolved);
+    if (resolved && resolved !== savedGaTableId && seoTable?.id) {
+      saveLinkMutation.mutate({ key: "linkedGaTableId", value: resolved });
     }
-  }, [savedGaTableId, gaTables, clientId]);
+  }, [savedGaTableId, gaTables, clientId, seoTable?.id]);
 
   useEffect(() => {
-    if (savedGscTableId) setSelectedGscTableId(savedGscTableId);
-    else {
-      const matchByClient = gscTables.find(t => t.client_id === clientId);
-      if (matchByClient) {
-        setSelectedGscTableId(matchByClient.id);
-        if (seoTable?.id) saveLinkMutation.mutate({ key: 'linkedGscTableId', value: matchByClient.id });
-      } else if (gscTables.length === 1) {
-        setSelectedGscTableId(gscTables[0].id);
-      }
+    const resolved = resolveLinkedCrmTableId(savedGscTableId, gscTables, clientId);
+    setSelectedGscTableId(resolved);
+    if (resolved && resolved !== savedGscTableId && seoTable?.id) {
+      saveLinkMutation.mutate({ key: "linkedGscTableId", value: resolved });
     }
-  }, [savedGscTableId, gscTables, clientId]);
+  }, [savedGscTableId, gscTables, clientId, seoTable?.id]);
 
   // Save linked table ID to SEO table's integration_settings
   const saveLinkMutation = useMutation({

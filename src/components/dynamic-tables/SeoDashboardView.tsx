@@ -136,6 +136,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   const { data: reports = [], isLoading, isFetching: reportsFetching, error: reportsError } = useAhrefsReports({
     clientId,
     tenantIds: reportTenants,
+    domain: expectedDomain || undefined,
     limit: 12,
   });
 
@@ -288,7 +289,13 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   const prevMonthMap = useMemo(() => buildPrevMonthMap(prevMonthReport), [prevMonthReport]);
 
   // Normalize and enrich keywords with comparison data
-  const rawOrganic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
+  const rawOrganic = useMemo(() => {
+    const organic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
+    if (organic.length > 0) return organic;
+    // Rank-tracker-only reports (dentiq): mirror tracked phrases for the organic table.
+    const tracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
+    return tracked.length > 0 ? tracked : [];
+  }, [reportData?.organic_keywords, reportData?.tracked_keywords]);
   const rawTracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
 
   // Build GSC lookup map (current period — used for clicks/impressions/CTR enrichment)
