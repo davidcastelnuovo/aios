@@ -206,15 +206,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   const autoSyncFromAutomation = useMutation({
     mutationFn: async () => {
       if (!tenantId || !automationCfg) return;
-      const { data: manusInts } = await supabase
-        .from("tenant_integrations")
-        .select("id")
-        .eq("tenant_id", tenantId)
-        .eq("integration_type", "manus_wa")
-        .eq("is_active", true);
-      const built = buildPolicyFromAutomation(automationCfg, manusGroups || [], {
-        hasManusIntegration: (manusInts || []).length > 0,
-      });
+      const built = buildPolicyFromAutomation(automationCfg, manusGroups || []);
       const draft = {
         phones: built.phones,
         groupIds: built.groupIds,
@@ -454,7 +446,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
           WhatsApp — קבוצות (Manus בלבד)
         </h3>
         <p className="text-xs text-muted-foreground text-right">
-          מוצגות קבוצות Manus — מאוטומציה, לקוחות, מדיניות, תעבורה — לא מראה Green API של המפעיל בלבד.
+          רק קבוצות של חיבור Manus של כרמן — לא קבוצות מ-Green API (הטלפון שלך לצ׳אט/דיוור).
         </p>
         <div className="space-y-2 w-full">
           <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2">
@@ -472,14 +464,30 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         </div>
         <ScrollArea className="h-48 w-full border rounded-md p-2">
           {(manusGroups || []).length === 0 ? (
-            <p className="text-xs text-muted-foreground text-right py-6 px-2">
-              אין קבוצות רשומות — ודא ש-Manus WA מחובר ושיש קבוצות WhatsApp בלקוחות.
-            </p>
+            <div className="text-xs text-muted-foreground text-right space-y-2 py-4 px-2">
+              <p className="font-medium text-foreground">אין עדיין קבוצות Manus לרשימה</p>
+              <p>
+                Manus Gateway עדיין לא חושף API של «רשימת קבוצות» — לכן מוצגות רק קבוצות שבהן כבר הייתה
+                תעבורת כרמן (Manus), לא קבוצות מ-Green API של הטלפון שלך.
+              </p>
+              <p>
+                אחרי ש-Manus יוסיף <span dir="ltr" className="font-mono">GET …/groups</span> נסנכרן אוטומטית.
+                בינתיים: שליחת «כרמן» בקבוצה שבה הבוט חבר תוסיף אותה לכאן.
+              </p>
+            </div>
           ) : (
             (manusGroups || []).map((g: any) => (
-              <label key={g.id} className="flex items-center gap-2 py-1 cursor-pointer justify-end text-right">
-                <span className="text-sm flex-1">{g.group_name}</span>
-                <Checkbox checked={groupIds.includes(g.id)} onCheckedChange={() => toggleGroup(g.id)} />
+              <label
+                key={g.id}
+                className="flex w-full items-center gap-2 py-1.5 px-1 cursor-pointer"
+                dir="rtl"
+              >
+                <Checkbox
+                  className="shrink-0"
+                  checked={groupIds.includes(g.id)}
+                  onCheckedChange={() => toggleGroup(g.id)}
+                />
+                <span className="min-w-0 flex-1 text-sm text-right truncate">{g.group_name}</span>
               </label>
             ))
           )}
