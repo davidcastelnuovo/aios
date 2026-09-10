@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { reportQueryOptions } from "@/lib/reportQueryOptions";
+import { filterSeoReportsByDomain, normalizeSeoDomain } from "@/lib/seoDomain";
 
 export interface AhrefsReport {
   id: string;
@@ -55,24 +56,60 @@ export function useAhrefsReports(options: UseAhrefsReportsOptions = {}) {
       limit,
     ],
     queryFn: async () => {
-      let query = supabase
-        .from("ahrefs_reports" as any)
-        .select("*")
-        .order("received_at", { ascending: false })
-        .limit(limit);
+      const baseQuery = () => {
+        let q = supabase
+          .from("ahrefs_reports" as any)
+          .select("*")
+          .order("received_at", { ascending: false })
+          .limit(limit);
+        if (reportType) q = q.eq("report_type", reportType);
+        return q;
+      };
+
+      const scopeByTenants = (q: ReturnType<typeof baseQuery>) => {
+        if (effectiveTenants.length === 1) {
+          return q.eq("tenant_id", effectiveTenants[0]);
+        }
+        if (effectiveTenants.length > 1) {
+          return q.in("tenant_id", effectiveTenants);
+        }
+        return q;
+      };
 
       // Prefer client-scoped lookup (works across shared-agency tenants).
-      // Fall back to tenant filtering only if there's no clientId.
       if (clientId) {
-        query = query.eq("client_id", clientId);
-      } else if (effectiveTenants.length === 1) {
-        query = query.eq("tenant_id", effectiveTenants[0]);
-      } else if (effectiveTenants.length > 1) {
-        query = query.in("tenant_id", effectiveTenants);
+        const { data, error } = await baseQuery().eq("client_id", clientId);
+        if (error) {
+          if (error.code === "42P01") return [];
+          throw error;
+        }
+        const rows = (data || []) as unknown as AhrefsReport[];
+        if (rows.length > 0) {
+          return domain ? filterSeoReportsByDomain(rows, domain) : rows;
+        }
+
+        // Duplicate client cards sometimes link the SEO table to client A while
+        // ahrefs_reports rows were saved under client B for the same domain.
+        const normalized = normalizeSeoDomain(domain);
+        if (normalized) {
+          const { data: domainRows, error: domainError } = await scopeByTenants(baseQuery()).ilike(
+            "domain",
+            `%${normalized}%`,
+          );
+          if (domainError) {
+            if (domainError.code === "42P01") return [];
+            throw domainError;
+          }
+          return filterSeoReportsByDomain(
+            (domainRows || []) as unknown as AhrefsReport[],
+            normalized,
+          );
+        }
+        return rows;
       }
 
+      let query = scopeByTenants(baseQuery());
       if (domain) query = query.eq("domain", domain);
-      if (reportType) query = query.eq("report_type", reportType);
 
       const { data, error } = await query;
       if (error) {
