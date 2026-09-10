@@ -288,10 +288,10 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   }
 
   return (
-    <div className="space-y-6 max-w-5xl text-right" dir="rtl">
+    <div className="w-full space-y-6" dir="rtl">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold flex items-center gap-2 justify-start">
+        <div className="space-y-1 text-right flex-1">
+          <h2 className="text-lg font-semibold flex items-center gap-2 justify-end">
             <Shield className="h-5 w-5 text-purple-500 shrink-0" />
             הרשאות שיחה — {agent.name}
           </h2>
@@ -302,7 +302,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
             )}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+        <div className="flex flex-wrap gap-2 justify-end shrink-0">
           <Button variant="outline" size="sm" onClick={() => importFromAutomation.mutate()}
             disabled={importFromAutomation.isPending} className="gap-1">
             <Download className="h-4 w-4" /> ייבא מאוטומציה
@@ -314,8 +314,8 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         </div>
       </div>
 
-      <Card className="p-4 space-y-4">
-        <h3 className="font-medium flex items-center gap-2 justify-start">
+      <Card className="p-4 space-y-4 w-full">
+        <h3 className="font-medium flex items-center gap-2 justify-end">
           <Phone className="h-4 w-4 shrink-0" />
           WhatsApp — שיחה פרטית
         </h3>
@@ -390,15 +390,15 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         </ScrollArea>
       </Card>
 
-      <Card className="p-4 space-y-4">
-        <h3 className="font-medium flex items-center gap-2 justify-start">
+      <Card className="p-4 space-y-4 w-full">
+        <h3 className="font-medium flex items-center gap-2 justify-end">
           <Users className="h-4 w-4 shrink-0" />
           WhatsApp — קבוצות (Manus בלבד)
         </h3>
-        <p className="text-xs text-muted-foreground">
-          מוצגות רק קבוצות שבהן כרמן מחוברת דרך Manus WA — לא קבוצות שסונכרנו מ-Green API של המפעיל.
+        <p className="text-xs text-muted-foreground text-right">
+          מוצגות קבוצות Manus — מאוטומציה, לקוחות, מדיניות, תעבורה — לא מראה Green API של המפעיל בלבד.
         </p>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-start">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
           <div className="flex items-center gap-2">
             <Switch checked={requireDirect} onCheckedChange={setRequireDirect} id="require-direct" />
             <Label htmlFor="require-direct" className="cursor-pointer">חובה לפנות «כרמן» ישירות</Label>
@@ -411,19 +411,19 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         <ScrollArea className="h-40 border rounded-md p-2">
           {(manusGroups || []).length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-6">
-              אין עדיין קבוצות Manus — כרמן צריכה לקבל הודעה בקבוצה (או סשן פעיל) כדי שתופיע כאן.
+              אין קבוצות Manus זמינות — חברי קבוצות לאוטומציה, לקוח, או שלחי «כרמן» בקבוצה.
             </p>
           ) : (
             (manusGroups || []).map((g: any) => (
-              <label key={g.id} className="flex flex-row-reverse items-center gap-2 py-1 cursor-pointer justify-end">
-                <span className="text-sm">{g.group_name}</span>
+              <label key={g.id} className="flex items-center gap-2 py-1 cursor-pointer justify-end text-right">
+                <span className="text-sm flex-1">{g.group_name}</span>
                 <Checkbox checked={groupIds.includes(g.id)} onCheckedChange={() => toggleGroup(g.id)} />
               </label>
             ))
           )}
         </ScrollArea>
         {groupIds.length > 0 && (
-          <div className="flex flex-wrap gap-1 justify-start">
+          <div className="flex flex-wrap gap-1 justify-end">
             {groupIds.map((id) => (
               <Badge key={id} variant="secondary">{groupName(id)}</Badge>
             ))}
@@ -431,17 +431,17 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         )}
       </Card>
 
-      <Card className="p-4 space-y-4">
+      <Card className="p-4 space-y-4 w-full">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Button type="button" size="sm" variant="outline" onClick={addClientGroupRow} className="self-start">
+          <Button type="button" size="sm" variant="outline" onClick={addClientGroupRow} className="self-end">
             + לקוח ↔ קבוצה
           </Button>
-          <h3 className="font-medium flex items-center gap-2 justify-start">
+          <h3 className="font-medium flex items-center gap-2 justify-end">
             <MessageSquare className="h-4 w-4 shrink-0" />
             לקוח ↔ קבוצה (scope)
           </h3>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground text-right">
           איש קשר לקוח מדבר רק בקבוצת הלקוח, רק על הלקוח — לפי info_boundary.
         </p>
         {clientRows.map((row, idx) => (
@@ -498,8 +498,8 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         ))}
       </Card>
 
-      <Card className="p-4">
-        <Label className="block mb-2">הודעת deny (אופציונלי)</Label>
+      <Card className="p-4 w-full">
+        <Label className="block mb-2 text-right">הודעת deny (אופציונלי)</Label>
         <Input value={denyMessage} onChange={(e) => setDenyMessage(e.target.value)}
           placeholder="אני לא מזהה אותך…" className="text-right" />
       </Card>
