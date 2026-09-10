@@ -11,6 +11,10 @@ import {
   replyDestinationIsConsistent,
   requireOriginChatId,
 } from './carmen-session-identity.ts';
+import {
+  buildGroupSenderContextNote,
+  managerGroupAccessViaAllowedPhones,
+} from './carmen-group-sender.ts';
 
 const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
 
@@ -779,7 +783,10 @@ export async function runCarmenAI(
     conversation_history: cleanHistory,
     tenant_id: tenantId,
     user_name: senderName || 'WhatsApp',
-    lead_data: senderPhone ? { phone: senderPhone } : undefined,
+    lead_data: senderPhone ? {
+      phone: senderPhone,
+      channel: waNotify?.is_group ? 'whatsapp_group' : 'whatsapp_private',
+    } : undefined,
     surface: 'whatsapp',
     wa_notify: waNotify || null,
   });
@@ -1068,10 +1075,13 @@ async function resolveCarmenGroupIdentity(
   phoneNumber: string,
   senderName: string | null | undefined,
   messageText: string,
-  _allowedPhones: unknown,
+  allowedPhones: unknown,
 ): Promise<CarmenIdentityAccess> {
   const digits = await resolveCarmenIdentityPhone(supabase, phoneNumber);
   const tail = phoneTail(digits);
+  console.log('[carmen] group identity check', {
+    tenantId, chatId, phoneNumber: digits || phoneNumber, senderName,
+  });
   const { data: group } = await supabase.from('whatsapp_groups')
     .select('id').eq('tenant_id', tenantId).eq('group_chat_id', chatId).maybeSingle();
   const { data: groupClient } = group?.id
@@ -1136,6 +1146,18 @@ async function resolveCarmenGroupIdentity(
       allowed: false,
       reason: `identity_${identity.status}`,
       reply: 'אני מזהה את המספר, אבל הוא אינו מורשה כרגע. בקש ממנהל המערכת לאשר אותו בהגדרות קארמן.',
+    };
+  }
+
+  const staff = await findCarmenTenantStaffByPhone(supabase, tenantId, digits);
+  if (managerGroupAccessViaAllowedPhones({
+    phoneDigits: digits,
+    allowedPhones,
+    isManager: !!staff?.isManager,
+  })) {
+    return {
+      allowed: true,
+      context: `\n\n[הרשאת זהות מחייבת] הדובר הוא ${staff?.displayName || senderName || 'מנהל'} (${digits}) — מנהל מורשה לפי carmen_allowed_phones. מותר לענות במסגרת הארגון בקבוצה זו בלבד.`,
     };
   }
 
@@ -1349,7 +1371,8 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // Authorization is independent from group scope. Being in a group where
   // Carmen is enabled does not grant the author permission to use her.
   let identityContext = '';
-  if (isGroup && sourceChannel === 'own_instance') {
+  if (isGroup) {
+    identityContext = buildGroupSenderContextNote(phoneNumber, senderName);
     const access = await resolveCarmenGroupIdentity(
       supabase, tenantId, chatId, phoneNumber, senderName, messageText,
       cfg.carmen_allowed_phones,
@@ -1357,11 +1380,11 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     if (!access.allowed) {
       if (access.reply) await routedSend(chatId, access.reply);
       console.log('[carmen] group author blocked by identity access', {
-        tenantId, chatId, phoneNumber, reason: access.reason,
+        tenantId, chatId, phoneNumber, sourceChannel, reason: access.reason,
       });
       return { handled: true, outcome: 'active' };
     }
-    identityContext = access.context;
+    identityContext += access.context;
   }
 
   if (activeSession) {
