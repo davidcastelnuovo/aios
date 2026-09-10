@@ -175,4 +175,48 @@ export async function loadDevEscalationTierFromDb(
   return getHardcodedDevTier({ userId, campaignerId, phone });
 }
 
+/**
+ * Groups where Carmen's Manus WA bot has been seen (chat_messages or active group session).
+ * Excludes groups registered only via operator Green API mirror.
+ */
+export async function fetchManusConnectedGroupIds(supabase, tenantId) {
+  const ids = new Set();
+  if (!tenantId) return ids;
+
+  const { data: manusMsgs } = await supabase
+    .from('chat_messages')
+    .select('group_id')
+    .eq('tenant_id', tenantId)
+    .eq('provider', 'manus_wa')
+    .not('group_id', 'is', null);
+  for (const row of manusMsgs || []) {
+    if (row.group_id) ids.add(String(row.group_id));
+  }
+
+  const { data: sessions } = await supabase
+    .from('carmen_whatsapp_sessions')
+    .select('chat_id')
+    .eq('tenant_id', tenantId)
+    .like('chat_id', '%@g.us');
+  const chatIds = [...new Set((sessions || []).map((s) => s.chat_id).filter(Boolean))];
+  if (chatIds.length > 0) {
+    const { data: groups } = await supabase
+      .from('whatsapp_groups')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .in('group_chat_id', chatIds);
+    for (const g of groups || []) ids.add(String(g.id));
+  }
+
+  return ids;
+}
+
+/** Filter policy group UUIDs to Manus-connected groups only. */
+export async function filterPolicyGroupsToManus(supabase, tenantId, allowedGroupIds) {
+  const raw = Array.isArray(allowedGroupIds) ? allowedGroupIds.map(String).filter(Boolean) : [];
+  if (!raw.length) return [];
+  const manusIds = await fetchManusConnectedGroupIds(supabase, tenantId);
+  return raw.filter((id) => manusIds.has(id));
+}
+
 export { managerGroupAccessViaAllowedPhones, phoneTail, phonesMatch };

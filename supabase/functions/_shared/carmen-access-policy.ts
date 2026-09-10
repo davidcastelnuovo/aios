@@ -11,4 +11,6 @@ export {
   policyPhoneList,
   resolveDevEscalationTier,
   loadDevEscalationTierFromDb,
+  filterPolicyGroupsToManus,
+  fetchManusConnectedGroupIds,
 } from './carmen-access-policy.mjs';
