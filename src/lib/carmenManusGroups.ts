@@ -34,6 +34,39 @@ async function resolveGroupRefsToIds(
   for (const g of groups || []) into.add(String(g.id));
 }
 
+function isMissingRelation(err: { code?: string; message?: string } | null | undefined) {
+  if (!err) return false;
+  return err.code === "PGRST205" || err.code === "42P01" || /does not exist/i.test(err.message || "");
+}
+
+async function addNonMirrorTenantGroups(
+  tenantId: string,
+  ids: Set<string>,
+  greenUserIds: Set<string>,
+) {
+  const { data: allGroups, error: allErr } = await supabase
+    .from("whatsapp_groups")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .or("is_blocked.is.null,is_blocked.eq.false");
+  if (allErr) throw allErr;
+  const allIds = (allGroups || []).map((g) => String(g.id));
+  if (allIds.length === 0) return;
+
+  const { data: groupMsgs, error: gmErr } = await supabase
+    .from("chat_messages")
+    .select("group_id, provider, connection_user_id")
+    .eq("tenant_id", tenantId)
+    .in("group_id", allIds)
+    .not("group_id", "is", null);
+  if (gmErr) throw gmErr;
+
+  const mirrorOnly = findGreenApiMirrorOnlyGroupIds(allIds, groupMsgs || [], greenUserIds, ids);
+  for (const gid of allIds) {
+    if (!mirrorOnly.has(gid)) ids.add(gid);
+  }
+}
+
 /** Groups whose chat history is exclusively Green API operator mirror traffic. */
 export function findGreenApiMirrorOnlyGroupIds(
   groupIds: string[],
@@ -57,23 +90,40 @@ export function findGreenApiMirrorOnlyGroupIds(
   return mirrorOnly;
 }
 
+async function fetchManusIntegrationsForTenant(tenantId: string) {
+  const { data: grants } = await supabase
+    .from("integration_tenant_access")
+    .select("integration_id")
+    .eq("accessing_tenant_id", tenantId);
+  const grantIds = (grants || []).map((g) => g.integration_id).filter(Boolean);
+
+  let query = supabase
+    .from("tenant_integrations")
+    .select("id, user_id")
+    .eq("integration_type", "manus_wa")
+    .eq("is_active", true);
+  if (grantIds.length > 0) {
+    query = query.or(`tenant_id.eq.${tenantId},id.in.(${grantIds.join(",")})`);
+  } else {
+    query = query.eq("tenant_id", tenantId);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<string>> {
   const ids = new Set<string>();
 
   const [
-    { data: manusIntegrations, error: manusIntErr },
+    manusIntegrations,
     { data: greenIntegrations, error: greenIntErr },
     { data: steps, error: stepsErr },
     { data: policies, error: policyErr },
     { data: clientGroupAccess, error: cgaErr },
     { data: clients, error: clientsErr },
   ] = await Promise.all([
-    supabase
-      .from("tenant_integrations")
-      .select("id, user_id")
-      .eq("tenant_id", tenantId)
-      .eq("integration_type", "manus_wa")
-      .eq("is_active", true),
+    fetchManusIntegrationsForTenant(tenantId),
     supabase
       .from("tenant_integrations")
       .select("id, user_id")
@@ -101,15 +151,16 @@ export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<st
       .not("whatsapp_group_id", "is", null),
   ]);
 
-  if (manusIntErr) throw manusIntErr;
   if (greenIntErr) throw greenIntErr;
   if (stepsErr) throw stepsErr;
-  if (policyErr) throw policyErr;
-  if (cgaErr) throw cgaErr;
+  if (policyErr && !isMissingRelation(policyErr)) throw policyErr;
+  if (cgaErr && !isMissingRelation(cgaErr)) throw cgaErr;
   if (clientsErr) throw clientsErr;
 
-  const manusIntegrationIds = new Set((manusIntegrations || []).map((i) => i.id));
-  const manusUserIds = [...new Set((manusIntegrations || []).map((i) => i.user_id).filter(Boolean))] as string[];
+  const hasManusIntegration = manusIntegrations.length > 0;
+
+  const manusIntegrationIds = new Set(manusIntegrations.map((i) => i.id));
+  const manusUserIds = [...new Set(manusIntegrations.map((i) => i.user_id).filter(Boolean))] as string[];
   const greenUserIds = new Set(
     (greenIntegrations || []).map((i) => i.user_id).filter(Boolean) as string[],
   );
@@ -177,32 +228,9 @@ export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<st
     await resolveGroupRefsToIds(tenantId, sessionChatIds, ids);
   }
 
-  if (openMemberMode) {
-    const { data: allGroups, error: allErr } = await supabase
-      .from("whatsapp_groups")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .or("is_blocked.is.null,is_blocked.eq.false");
-    if (allErr) throw allErr;
-    const allIds = (allGroups || []).map((g) => String(g.id));
-    if (allIds.length > 0) {
-      const { data: groupMsgs, error: gmErr } = await supabase
-        .from("chat_messages")
-        .select("group_id, provider, connection_user_id")
-        .eq("tenant_id", tenantId)
-        .in("group_id", allIds)
-        .not("group_id", "is", null);
-      if (gmErr) throw gmErr;
-      const mirrorOnly = findGreenApiMirrorOnlyGroupIds(
-        allIds,
-        groupMsgs || [],
-        greenUserIds,
-        ids,
-      );
-      for (const gid of allIds) {
-        if (!mirrorOnly.has(gid)) ids.add(gid);
-      }
-    }
+  // Tenant has Manus WA → show all registered groups except Green API operator-only mirrors.
+  if (hasManusIntegration || openMemberMode) {
+    await addNonMirrorTenantGroups(tenantId, ids, greenUserIds);
   }
 
   return ids;

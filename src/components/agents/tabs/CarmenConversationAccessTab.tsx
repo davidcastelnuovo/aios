@@ -206,7 +206,15 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   const autoSyncFromAutomation = useMutation({
     mutationFn: async () => {
       if (!tenantId || !automationCfg) return;
-      const built = buildPolicyFromAutomation(automationCfg, manusGroups || []);
+      const { data: manusInts } = await supabase
+        .from("tenant_integrations")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "manus_wa")
+        .eq("is_active", true);
+      const built = buildPolicyFromAutomation(automationCfg, manusGroups || [], {
+        hasManusIntegration: (manusInts || []).length > 0,
+      });
       const draft = {
         phones: built.phones,
         groupIds: built.groupIds,
@@ -448,20 +456,24 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         <p className="text-xs text-muted-foreground text-right">
           מוצגות קבוצות Manus — מאוטומציה, לקוחות, מדיניות, תעבורה — לא מראה Green API של המפעיל בלבד.
         </p>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
-          <div className="flex items-center gap-2">
+        <div className="space-y-2 w-full">
+          <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2">
+            <Label htmlFor="require-direct" className="cursor-pointer text-right flex-1">
+              חובה לפנות «כרמן» ישירות
+            </Label>
             <Switch checked={requireDirect} onCheckedChange={setRequireDirect} id="require-direct" />
-            <Label htmlFor="require-direct" className="cursor-pointer">חובה לפנות «כרמן» ישירות</Label>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2">
+            <Label htmlFor="open-member" className="cursor-pointer text-right flex-1">
+              כל קבוצת Manus שכרמן חבר בה
+            </Label>
             <Switch checked={openMemberGroups} onCheckedChange={setOpenMemberGroups} id="open-member" />
-            <Label htmlFor="open-member" className="cursor-pointer">כל קבוצת Manus שכרמן חבר בה</Label>
           </div>
         </div>
-        <ScrollArea className="h-40 border rounded-md p-2">
+        <ScrollArea className="h-48 w-full border rounded-md p-2">
           {(manusGroups || []).length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">
-              אין קבוצות Manus זמינות — חברי קבוצות לאוטומציה, לקוח, או שלחי «כרמן» בקבוצה.
+            <p className="text-xs text-muted-foreground text-right py-6 px-2">
+              אין קבוצות רשומות — ודא ש-Manus WA מחובר ושיש קבוצות WhatsApp בלקוחות.
             </p>
           ) : (
             (manusGroups || []).map((g: any) => (
