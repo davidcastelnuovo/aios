@@ -10,7 +10,13 @@ import { ChatMessageRow } from "./ChatMessageRow";
 import { ChatTopicRail } from "./ChatTopicRail";
 import { ThinkingGalaxy } from "./ThinkingGalaxy";
 import type { BrainChannel } from "./useBrainChannel";
-import { AGENT_SPRITES, filterMessagesForRoute, seatKeyFromRoute } from "@/lib/agentSeats";
+import {
+  AGENT_SPRITES,
+  conversationsForRoute,
+  filterMessagesForRoute,
+  lastConversationStorageKeyForSeat,
+  seatKeyFromRoute,
+} from "@/lib/agentSeats";
 import { hudStage, routeForRestoredChat } from "@/lib/agentChannelRouting";
 import { composerLockedForChat, lastConversationStorageKey, streamAppliesToActive, topicIsLive, type TopicChat } from "@/lib/chatTopics";
 import type { ConversationChannelStatus, HudStage } from "@/lib/agentChannelRouting";
@@ -292,12 +298,16 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       return null;
     };
 
-    const rememberConv = (id: string | null | undefined) => {
+    const rememberConv = (id: string | null | undefined, seatSlug?: string) => {
       if (!id) return;
       conversationIdRef.current = id;
       setConversationId(id);
       onConversationIdChange?.(id);
-      if (tenantId) localStorage.setItem(lastConversationStorageKey(tenantId), id);
+      if (tenantId) {
+        const seat = seatSlug || brain.selected.slug || "cursor";
+        localStorage.setItem(lastConversationStorageKey(tenantId), id);
+        localStorage.setItem(lastConversationStorageKeyForSeat(tenantId, seat), id);
+      }
     };
 
     const streamInternal = useCallback(async (
@@ -436,7 +446,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
 
       let boundId = activeId;
       try {
-        const history = messages
+        const history = filterMessagesForRoute(messages, sendRoute)
           .filter(m => m.role === "user" || m.role === "assistant")
           .map(m => ({ role: m.role, content: m.content ?? "" }));
         const route = sendRoute;
@@ -903,7 +913,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setStreamingText("");
       setHistory(false);
       brain.setStatus("idle");
-      if (tenantId) localStorage.removeItem(lastConversationStorageKey(tenantId));
+      if (tenantId) {
+        localStorage.removeItem(lastConversationStorageKey(tenantId));
+        localStorage.removeItem(lastConversationStorageKeyForSeat(tenantId, brain.selected.slug));
+      }
     }, [learnFromConversation, tenantId, brain]);
 
     const loadConversation = useCallback(async (conv: TopicChat) => {
@@ -954,17 +967,52 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     });
 
     const restoredRef = useRef(false);
+    const seatSlugRef = useRef(brain.selected.slug);
+    const routeScopedConversations = conversationsForRoute(
+      pastConversations ?? [],
+      brain.selected,
+      brain.routes,
+    );
+
     useEffect(() => {
       if (!tenantId || restoredRef.current || conversationIdRef.current) return;
-      const last = localStorage.getItem(lastConversationStorageKey(tenantId));
-      const hit = pastConversations?.find((c) => c.id === last);
+      const seat = brain.selected.slug || "cursor";
+      const last =
+        localStorage.getItem(lastConversationStorageKeyForSeat(tenantId, seat))
+        || localStorage.getItem(lastConversationStorageKey(tenantId));
+      const hit = conversationsForRoute(pastConversations ?? [], brain.selected, brain.routes)
+        .find((c) => c.id === last);
       if (hit) {
         restoredRef.current = true;
         loadConversation(hit);
       } else if (pastConversations) {
         restoredRef.current = true;
       }
-    }, [tenantId, pastConversations, loadConversation]);
+    }, [tenantId, pastConversations, loadConversation, brain.selected, brain.routes]);
+
+    /** Switching seats must open that seat's thread — never keep Carmen lines inside Cursor Direct. */
+    useEffect(() => {
+      const nextSlug = brain.selected.slug;
+      const prevSlug = seatSlugRef.current;
+      if (prevSlug === nextSlug) return;
+      seatSlugRef.current = nextSlug;
+      if (!tenantId) return;
+
+      const scoped = conversationsForRoute(pastConversations ?? [], brain.selected, brain.routes);
+      const saved = localStorage.getItem(lastConversationStorageKeyForSeat(tenantId, nextSlug));
+      const hit = scoped.find((c) => c.id === saved) || scoped[0];
+      if (hit) {
+        if (hit.id !== conversationIdRef.current) loadConversation(hit);
+        return;
+      }
+      conversationIdRef.current = null;
+      setConversationId(null);
+      onConversationIdChange?.(null);
+      setMessages([]);
+      setStreamingText("");
+      setIsStreaming(false);
+      brain.setStatus("idle");
+    }, [brain.selected.slug, brain.selected, brain.routes, tenantId, pastConversations, loadConversation, brain, onConversationIdChange]);
 
     /* ---------- Mute (keep the conversation, stop listening) ---------- */
 
@@ -1059,7 +1107,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         {historyVisible && (
           <ChatTopicRail
             className="is-overlay"
-            items={pastConversations ?? []}
+            items={routeScopedConversations}
             activeId={conversationId}
             onSelect={(conv) => { loadConversation(conv); }}
             onNew={startNewConversation}
@@ -1072,8 +1120,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 {isSidecar
                   ? "תיאורי מה לתקן במסך שאתה רואה. כרמן מקבלת את הנתיב וההקשר. 'שלחי לפיתוח' / 'תריצי דרך קרסר' → Cursor."
                   : isShared
-                    ? "מרחב משותף — כולם שומעים, ורואים גם תקשורת בין האייג׳נטים."
-                    : "שיחה ישירה — רק אתה והאייג׳נט שנבחר."}
+                    ? "מרחב משותף (קולבוריישן) — כולם שומעים, ורואים גם תקשורת בין האייג׳נטים. נפתח רק כאן."
+                    : "שיחה ישירה — רק אתה והאייג׳נט שנבחר. בלי הודעות מכרמן או ממושבים אחרים."}
               </p>
             )}
             {visibleMessages.map((m, i) => (
