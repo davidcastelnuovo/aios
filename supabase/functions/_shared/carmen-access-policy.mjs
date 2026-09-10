@@ -229,44 +229,28 @@ export async function fetchManusConnectedGroupIds(supabase, tenantId) {
 
   const [
     { data: manusIntegrations },
-    { data: greenIntegrations },
     { data: steps },
     { data: policies },
-    { data: clientGroupAccess },
-    { data: clients },
   ] = await Promise.all([
     supabase.from('tenant_integrations').select('id, user_id').eq('tenant_id', tenantId).eq('integration_type', 'manus_wa').eq('is_active', true),
-    supabase.from('tenant_integrations').select('id, user_id').eq('tenant_id', tenantId).in('integration_type', ['green_api', 'greenapi']).eq('is_active', true),
     supabase.from('automation_flow_steps').select('configuration').eq('tenant_id', tenantId).eq('step_type', 'trigger').eq('action_type', 'carmen_whatsapp_session'),
     supabase.from('carmen_access_policies').select('allowed_group_ids').eq('tenant_id', tenantId),
-    supabase.from('carmen_client_group_access').select('whatsapp_group_id').eq('tenant_id', tenantId),
-    supabase.from('clients').select('whatsapp_group_id').eq('tenant_id', tenantId).not('whatsapp_group_id', 'is', null),
   ]);
 
-  const hasManusIntegration = (manusIntegrations || []).length > 0;
   const manusIntegrationIds = new Set((manusIntegrations || []).map((i) => i.id));
   const manusUserIds = [...new Set((manusIntegrations || []).map((i) => i.user_id).filter(Boolean))];
-  const greenUserIds = new Set((greenIntegrations || []).map((i) => i.user_id).filter(Boolean));
 
-  let openMemberMode = false;
   const configGroupRefs = [];
   for (const step of steps || []) {
     const cfg = step?.configuration || {};
     const pinned = cfg.carmen_integration_id;
-    const usesManus = !pinned || manusIntegrationIds.has(pinned);
-    if (!usesManus) continue;
-    if (cfg.carmen_open_member_groups === true) openMemberMode = true;
+    if (pinned && !manusIntegrationIds.has(pinned)) continue;
+    if (!pinned && manusIntegrationIds.size === 0) continue;
     configGroupRefs.push(...collectAutomationGroupRefs(cfg));
   }
 
   for (const p of policies || []) {
     for (const gid of p?.allowed_group_ids || []) if (gid) ids.add(String(gid));
-  }
-  for (const row of clientGroupAccess || []) {
-    if (row?.whatsapp_group_id) ids.add(String(row.whatsapp_group_id));
-  }
-  for (const c of clients || []) {
-    if (c?.whatsapp_group_id) ids.add(String(c.whatsapp_group_id));
   }
   await resolveGroupRefsToIds(supabase, tenantId, configGroupRefs, ids);
 
@@ -300,27 +284,6 @@ export async function fetchManusConnectedGroupIds(supabase, tenantId) {
   const sessionChatIds = [...new Set((sessions || []).map((s) => s.chat_id).filter(Boolean))];
   if (sessionChatIds.length) {
     await resolveGroupRefsToIds(supabase, tenantId, sessionChatIds, ids);
-  }
-
-  if (openMemberMode || hasManusIntegration) {
-    const { data: allGroups } = await supabase
-      .from('whatsapp_groups')
-      .select('id')
-      .eq('tenant_id', tenantId)
-      .or('is_blocked.is.null,is_blocked.eq.false');
-    const allIds = (allGroups || []).map((g) => String(g.id));
-    if (allIds.length) {
-      const { data: groupMsgs } = await supabase
-        .from('chat_messages')
-        .select('group_id, provider, connection_user_id')
-        .eq('tenant_id', tenantId)
-        .in('group_id', allIds)
-        .not('group_id', 'is', null);
-      const mirrorOnly = findGreenApiMirrorOnlyGroupIds(allIds, groupMsgs || [], greenUserIds, ids);
-      for (const gid of allIds) {
-        if (!mirrorOnly.has(gid)) ids.add(gid);
-      }
-    }
   }
 
   return ids;

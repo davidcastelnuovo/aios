@@ -1088,6 +1088,7 @@ Deno.serve(async (req) => {
       // Persist group turn for audit + Green-API author pairing (private path inserts below).
       if (messageText?.trim()) {
         try {
+          let wgId: string | null = null;
           const { data: wgRow } = await supabase
             .from('whatsapp_groups')
             .select('id')
@@ -1095,8 +1096,35 @@ Deno.serve(async (req) => {
             .eq('group_chat_id', groupChatId)
             .maybeSingle();
           if (wgRow?.id) {
+            wgId = wgRow.id;
+          } else {
+            const groupName = String(
+              (payload as any).groupName || (payload as any).chatName || (payload as any).subject || groupChatId,
+            );
+            const { data: upserted, error: upsertErr } = await supabase
+              .from('whatsapp_groups')
+              .upsert(
+                {
+                  tenant_id: groupTenantId,
+                  group_chat_id: groupChatId,
+                  group_name: groupName.slice(0, 200),
+                },
+                { onConflict: 'tenant_id,group_chat_id' },
+              )
+              .select('id')
+              .maybeSingle();
+            if (upsertErr) {
+              console.warn('[manus-wa group] whatsapp_groups upsert failed:', upsertErr.message);
+            } else {
+              wgId = upserted?.id || null;
+              console.log('[manus-wa group] registered whatsapp_groups from Manus traffic', {
+                groupChatId, groupId: wgId,
+              });
+            }
+          }
+          if (wgId) {
             const { error: groupInsertErr } = await supabase.from('chat_messages').insert({
-              group_id: wgRow.id,
+              group_id: wgId,
               tenant_id: groupTenantId,
               connection_user_id: connectionUserId,
               message_text: messageText,
@@ -1115,7 +1143,7 @@ Deno.serve(async (req) => {
               console.warn('[manus-wa group] chat_messages insert failed (non-fatal):', groupInsertErr.message);
             } else {
               console.log('[manus-wa group] chat_messages saved', {
-                groupChatId, authorPhone, groupId: wgRow.id,
+                groupChatId, authorPhone, groupId: wgId,
               });
             }
           }
