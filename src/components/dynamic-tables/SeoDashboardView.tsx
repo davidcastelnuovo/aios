@@ -426,6 +426,14 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   }, [rawOrganic, rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
   const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
 
+  // Rank-tracker-only clients (e.g. dentiq) often have empty organic_keywords — landing
+  // on Top 20 looks like a broken report even though במעקב is populated.
+  const keywordsDefaultTab = useMemo((): "tracked" | "top10" => {
+    if (organicKeywords.length > 0) return "top10";
+    if (trackedKeywords.length > 0) return "tracked";
+    return "top10";
+  }, [organicKeywords.length, trackedKeywords.length]);
+
   // Build GSC-only keywords: keywords in GSC that don't exist in Ahrefs data
   const gscOnlyKeywords = useMemo(() => {
     if (gscData.length === 0) return [];
@@ -704,7 +712,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         hasGscData={gscData.length > 0}
         show3Month={effectiveComparison.threeMonth.size > 0 || gscThreeMonthMap.size > 0}
         showYearly={effectiveComparison.yearly.size > 0 || gscYearlyMap.size > 0}
-        defaultTab="top10"
+        defaultTab={keywordsDefaultTab}
         relevancePersistKey={clientId}
         initialLangFilter={initialLangFilter}
         onLangFilterChange={onLangFilterChange}
