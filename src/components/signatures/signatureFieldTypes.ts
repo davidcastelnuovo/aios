@@ -69,7 +69,7 @@ export function getFieldFontSizePx(position: SignaturePosition, containerHeightP
   const boxHeightPx = containerHeightPx
     ? (position.height / 100) * containerHeightPx
     : position.height * 8;
-  return Math.round(Math.max(9, Math.min(28, boxHeightPx * 0.55)));
+  return Math.round(Math.max(6, Math.min(28, boxHeightPx * 0.55)));
 }
 
 export function createDocumentField(

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { requireSignatureAccess } from '../_shared/signature-access.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import {
   cloneSignatureFromTemplate,
@@ -14,6 +15,7 @@ interface SendSignatureFromTemplateBody {
   baseUrl?: string;
   sendEmail?: boolean;
   contactDetails?: {
+    companyName?: string;
     firstName?: string;
     lastName?: string;
     phone?: string;
@@ -61,10 +63,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'missing_fields' }), { status: 400, headers: corsHeaders });
     }
 
-    const { data: tenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: user.id });
-    if (!tenantId) {
-      return new Response(JSON.stringify({ error: 'no_tenant' }), { status: 403, headers: corsHeaders });
-    }
+    const tenantId = await requireSignatureAccess(supabase, templateDocumentId, { clientId, leadId });
 
     const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -136,6 +135,6 @@ Deno.serve(async (req) => {
   } catch (e: unknown) {
     console.error('[send-signature-from-template]', e);
     const message = e instanceof Error ? e.message : String(e);
-    return new Response(JSON.stringify({ error: message }), { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ error: message }), { status: message === 'signature_access_denied' ? 403 : 400, headers: corsHeaders });
   }
 });
