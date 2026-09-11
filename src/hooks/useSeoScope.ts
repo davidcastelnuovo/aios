@@ -28,6 +28,8 @@ export interface SeoScope {
   agencyId: string | null;
   /** The client's own website, as stored on the client record. */
   clientWebsite: string | null;
+  /** Search Console property URL on the client card (SEO clients). */
+  clientGscSiteUrl: string | null;
   /**
    * The domain every SEO artifact for this client must belong to (normalized,
    * no protocol / www). Prefers the client's website, falls back to the domain
@@ -60,6 +62,7 @@ export function useSeoScope(clientId: string | undefined) {
           clientTenantId: null,
           agencyId: null,
           clientWebsite: null,
+          clientGscSiteUrl: null,
           expectedDomain: "",
           accessibleTenantIds: [],
           seoTable: null,
@@ -71,13 +74,15 @@ export function useSeoScope(clientId: string | undefined) {
       // 1. Load the client itself
       const { data: client } = await supabase
         .from("clients")
-        .select("id, tenant_id, agency_id, website")
+        .select("id, tenant_id, agency_id, website, gsc_site_url")
         .eq("id", clientId)
         .maybeSingle();
 
       const clientTenantId = client?.tenant_id ?? null;
       const agencyId = client?.agency_id ?? null;
       const clientWebsite = (client as { website?: string | null } | null)?.website ?? null;
+      const clientGscSiteUrl =
+        (client as { gsc_site_url?: string | null } | null)?.gsc_site_url ?? null;
 
       // 2. Build the set of accessible tenant_ids via agency_tenant_access
       const tenantSet = new Set<string>();
@@ -133,6 +138,7 @@ export function useSeoScope(clientId: string | undefined) {
         clientTenantId,
         agencyId,
         clientWebsite,
+        clientGscSiteUrl,
         expectedDomain:
           normalizeSeoDomain(clientWebsite) || (seoTable ? seoTableDomain(seoTable) : ""),
         accessibleTenantIds,

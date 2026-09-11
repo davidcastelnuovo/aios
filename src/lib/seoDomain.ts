@@ -55,8 +55,39 @@ function tableTimestamp(table: SeoTableLike): number {
 export function seoTableDomain(table: SeoTableLike): string {
   const s = settingsOf(table);
   return normalizeSeoDomain(
-    (s.targetDomain as string) || (s.domain as string) || (s.linkedGscSiteUrl as string) || "",
+    (s.targetDomain as string) ||
+      (s.domain as string) ||
+      (s.linkedGscSiteUrl as string) ||
+      (s.gsc_site_url as string) ||
+      "",
   );
+}
+
+/**
+ * Resolve the Search Console property URL for an SEO report.
+ * Older tables stored `gsc_site_url` in integration_settings; the dashboard
+ * reads `linkedGscSiteUrl`. The client card may also carry `gsc_site_url`.
+ */
+export function resolveSeoLinkedGscSiteUrl(input: {
+  integrationSettings?: Record<string, unknown> | null;
+  clientGscSiteUrl?: string | null;
+  expectedDomain?: string | null;
+}): string {
+  const settings = input.integrationSettings || {};
+  const candidates = [
+    settings.linkedGscSiteUrl,
+    settings.gsc_site_url,
+    settings.site_url,
+    input.clientGscSiteUrl,
+  ];
+  const expected = normalizeSeoDomain(input.expectedDomain);
+  for (const raw of candidates) {
+    const value = String(raw || "").trim();
+    if (!value) continue;
+    if (expected && !seoDomainsMatch(value, expected)) continue;
+    return value;
+  }
+  return "";
 }
 
 /**
@@ -188,6 +219,7 @@ export function pickSeoSyncDomain(input: {
   const chain: Array<{ raw: unknown; from: string }> = [
     { raw: settings.targetDomain || settings.target || settings.domain, from: "targetDomain" },
     { raw: settings.linkedGscSiteUrl, from: "linkedGscSiteUrl" },
+    { raw: settings.gsc_site_url, from: "gsc_site_url" },
     { raw: input.client?.ahrefs_domain, from: "ahrefs_domain" },
     { raw: input.client?.website, from: "website" },
     { raw: input.latestReportDomain, from: "ahrefs_reports" },

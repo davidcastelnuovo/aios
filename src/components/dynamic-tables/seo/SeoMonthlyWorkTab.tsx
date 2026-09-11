@@ -25,7 +25,7 @@ import { useSeoScope } from "@/hooks/useSeoScope";
 import { useSeoMonthlyGsc } from "@/hooks/useSeoMonthlyGsc";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 import { filterValidSeoReports } from "@/components/dynamic-tables/seo/reportValidity";
-import { filterSeoReportsByDomain, normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
+import { filterSeoReportsByDomain, normalizeSeoDomain, resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -226,11 +226,12 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
 
   // A linked property for a different site is dropped, so Search Console
   // numbers can only ever come from this client's own property.
-  const linkedGscSiteUrl = seoScope?.seoTable?.integration_settings?.linkedGscSiteUrl || undefined;
   const savedSiteUrl =
-    linkedGscSiteUrl && expectedDomain && !seoDomainsMatch(linkedGscSiteUrl, expectedDomain)
-      ? undefined
-      : linkedGscSiteUrl;
+    resolveSeoLinkedGscSiteUrl({
+      integrationSettings: (seoScope?.seoTable?.integration_settings || {}) as Record<string, unknown>,
+      clientGscSiteUrl: seoScope?.clientGscSiteUrl,
+      expectedDomain,
+    }) || undefined;
 
   const gsc = useSeoMonthlyGsc({
     clientId,

@@ -6,6 +6,7 @@ import {
   looksLikeSeoDomain,
   pickSeoSyncDomain,
   resolveLinkedCrmTableId,
+  resolveSeoLinkedGscSiteUrl,
   selectSeoTableForClient,
   seoTableNeedsSyncThisMonth,
 } from "./seoDomain.ts";
@@ -77,6 +78,45 @@ test("selectSeoTableForClient prefers domain match over null-domain duplicate", 
     "https://franchise.org.il",
   );
   assert.equal(picked?.id, "good");
+});
+
+test("resolveSeoLinkedGscSiteUrl prefers linkedGscSiteUrl and falls back to legacy gsc_site_url", () => {
+  assert.equal(
+    resolveSeoLinkedGscSiteUrl({
+      integrationSettings: {
+        linkedGscSiteUrl: "sc-domain:franchise.org.il",
+        gsc_site_url: "https://other.example/",
+      },
+      expectedDomain: "franchise.org.il",
+    }),
+    "sc-domain:franchise.org.il",
+  );
+
+  assert.equal(
+    resolveSeoLinkedGscSiteUrl({
+      integrationSettings: { gsc_site_url: "sc-domain:franchise.org.il" },
+      clientGscSiteUrl: "https://franchise.org.il/",
+      expectedDomain: "franchise.org.il",
+    }),
+    "sc-domain:franchise.org.il",
+  );
+
+  assert.equal(
+    resolveSeoLinkedGscSiteUrl({
+      integrationSettings: {},
+      clientGscSiteUrl: "https://franchise.org.il/",
+      expectedDomain: "franchise.org.il",
+    }),
+    "https://franchise.org.il/",
+  );
+
+  assert.equal(
+    resolveSeoLinkedGscSiteUrl({
+      integrationSettings: { gsc_site_url: "https://other.example/" },
+      expectedDomain: "franchise.org.il",
+    }),
+    "",
+  );
 });
 
 test("seoTableNeedsSyncThisMonth is true when last sync is before current month", () => {

@@ -356,12 +356,13 @@ Deno.serve(async (req) => {
         const seoSettings = (seoTable?.integration_settings as any) || {};
         const linkedGaTableId = seoSettings.linkedGaTableId || null;
         const linkedGscTableId = seoSettings.linkedGscTableId || null;
-        seoLinkedGscSiteUrl = seoSettings.linkedGscSiteUrl || null;
+        seoLinkedGscSiteUrl = seoSettings.linkedGscSiteUrl || seoSettings.gsc_site_url || null;
         seoTargetClientId = seoSettings.clientId || seoSettings.client_id || dashboard.client_id || null;
         seoTargetDomain =
           seoSettings.targetDomain ||
           seoSettings.domain ||
           seoSettings.linkedGscSiteUrl ||
+          seoSettings.gsc_site_url ||
           null;
 
         const accessibleTenantIds = new Set<string>();

@@ -462,6 +462,7 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
             reportType: 'site_explorer',
             ahrefs_project_id: ahrefsProjectId,
             gsc_integration_id: gscIntId,
+            linkedGscSiteUrl: gscIntId ? (selectedGscSite || null) : null,
             gsc_site_url: gscIntId ? (selectedGscSite || null) : null,
             ga_integration_id: gaIntId,
             ga_property_id: gaIntId ? (selectedGaProperty || null) : null,

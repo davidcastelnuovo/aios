@@ -692,7 +692,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         tenantId={tenantId}
         tenantIds={accessibleTenantIds}
         clientId={clientId}
-        domain={reportData?.domain || selectedReport?.domain}
+        domain={expectedDomain || reportData?.domain || selectedReport?.domain}
         keywords={[]}
         onDataLoaded={handleGscDataLoaded}
         onMultiPeriodLoaded={handleGscMultiPeriodLoaded}
