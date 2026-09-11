@@ -417,3 +417,7 @@ verify_jwt = false
 
 [functions.generate-signed-pdf]
 verify_jwt = false
+
+# Public signing uses document-bound tokens validated inside the function.
+[functions.get-signature-document]
+verify_jwt = false

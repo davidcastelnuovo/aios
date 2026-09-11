@@ -41,15 +41,19 @@ export async function syncSignatureRecipientPosition(
   docId: string,
   fields: DocumentField[],
 ): Promise<boolean> {
-  const sigField = fields.find((f) => f.type === "signature");
-  if (!sigField) return false;
-
-  const { error } = await supabase
-    .from("signature_recipients")
-    .update({ signature_position: sigField.position as unknown as Record<string, unknown> })
-    .eq("document_id", docId);
-
-  if (error?.message?.includes("signature_position")) return false;
-  if (error) throw error;
-  return true;
+  const { data: recipients, error: readError } = await supabase
+    .from("signature_recipients").select("id, sign_order").eq("document_id", docId);
+  if (readError) throw readError;
+  let saved = false;
+  for (const recipient of recipients ?? []) {
+    const sigField = fields.find((field) => (field.type === "signature" || field.type === "signature_stamp")
+      && (field.recipient_index ?? 0) === Math.max(0, recipient.sign_order - 1));
+    const { error } = await supabase.from("signature_recipients")
+      .update({ signature_position: sigField?.position as unknown as import("@/integrations/supabase/types").Json ?? null })
+      .eq("id", recipient.id).eq("document_id", docId);
+    if (error?.message?.includes("signature_position")) return false;
+    if (error) throw error;
+    saved = true;
+  }
+  return saved;
 }
