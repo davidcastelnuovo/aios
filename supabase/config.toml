@@ -418,6 +418,10 @@ verify_jwt = false
 [functions.generate-signed-pdf]
 verify_jwt = false
 
+# Existing collaboration service is deployed to Staging only (see scripts/staging-only-functions.json).
+[functions.collaboration-mcp]
+verify_jwt = false
+
 # Public signing uses document-bound tokens validated inside the function.
 [functions.get-signature-document]
 verify_jwt = false

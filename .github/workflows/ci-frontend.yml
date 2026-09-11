@@ -1,6 +1,11 @@
 name: CI — frontend build
 
 on:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
   pull_request:
     branches: [main, develop]
   push:
@@ -15,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -22,13 +29,20 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Shared-agency dashboard guard
         run: pnpm test:guards
+
+      - name: Environment and report regression tests
+        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs src/lib/reportRecords.test.ts
+
+      - name: Mirror contract tests
+        run: python3 -m unittest discover -s scripts -p 'test_staging_mirror.py'
 
       - name: Build frontend
         run: pnpm build
