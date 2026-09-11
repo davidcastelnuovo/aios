@@ -21,6 +21,7 @@ import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { useSeoScope } from "@/hooks/useSeoScope";
+import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
 import { filterSeoReportsByDomain, resolveLinkedCrmTableId, resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
 
 interface SeoReportTabsProps {
@@ -121,6 +122,15 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     expectedDomain,
   });
   const savedGscLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || 'all') as 'all' | 'he' | 'en';
+
+  // Org-wide GSC fallback — same path as SeoDashboardView so the Search Console
+  // tab works even when the viewer didn't OAuth personally (Anna's connection).
+  const resolvedGsc = useResolvedGscIntegration({
+    clientId,
+    tenantIds: accessibleTenantIds,
+    savedSiteUrl: savedGscSiteUrl,
+    expectedDomain,
+  });
 
   // GA / GSC tables come from the scope (already searched across all accessible tenants)
   const gaTables = scope?.gaTables || [];
@@ -255,6 +265,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     (Array.isArray(gscUserIntegrations) && gscUserIntegrations.length > 0) ||
     gscTables.length > 0 ||
     !!savedGscTableId ||
+    !!resolvedGsc.integrationId ||
     !!savedGscSiteUrl;
 
   // Always render tabs so the Maskyoo (calls) tab is available even when no
@@ -362,6 +373,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   domain={savedGscSiteUrl || expectedDomain || targetDomain || clientWebsite}
                   initialSiteUrl={savedGscSiteUrl}
                   initialLangFilter={savedGscLangFilter}
+                  resolvedFallback={resolvedGsc}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
                   onSiteSelected={(siteUrl) => {
                     if (siteUrl && siteUrl !== savedGscSiteUrl) {
