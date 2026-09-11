@@ -185,13 +185,27 @@ def preflight(names, source, target):
         # PostgreSQL's typed JSON record conversion handles compatible enum/text,
         # json-array/array and numeric representations; invalid values fail the
         # batch transaction without changing its checkpoint or any other table.
-        plan.append({'name': name, 'keys': keys, 'columns': columns})
+        array_columns = [c['name'] for c in src['columns'] if c['name'] in columns and c.get('type') == 'jsonb' and target_columns[c['name']].get('type') == 'text[]']
+        plan.append({'name': name, 'keys': keys, 'columns': columns, 'array_columns': array_columns})
     return plan, errors
 
 
-def apply_batch_sql(table, keys, columns, items):
+def normalize_arrays(row, array_columns):
+    result = dict(row)
+    for column in array_columns:
+        value = result.get(column)
+        if value is None or isinstance(value, list): continue
+        if not isinstance(value, str):
+            raise RuntimeError(f'{column}: incompatible array representation')
+        try: decoded = json.loads(value)
+        except json.JSONDecodeError: decoded = value
+        result[column] = decoded if isinstance(decoded, list) else [decoded if isinstance(decoded, str) else value]
+    return result
+
+
+def apply_batch_sql(table, keys, columns, items, array_columns=()):
     relation = 'public.' + ident(table)
-    payload = [item['row'] for item in items]
+    payload = [normalize_arrays(item['row'], array_columns) for item in items]
     matches = ' AND '.join(f't.{ident(k)} IS NOT DISTINCT FROM s.{ident(k)}' for k in keys)
     nonkeys = [c for c in columns if c not in keys]
     update = ('WHEN MATCHED THEN UPDATE SET ' + ','.join(f'{ident(c)}=s.{ident(c)}' for c in nonkeys)) if nonkeys else ''
@@ -278,7 +292,7 @@ def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows
         # between inventory and fetch; its newer version must never be skipped.
         rows = api.query(f"SELECT {key_sql(keys)} AS key, md5({row_value}::text) AS digest, {row_value} AS row FROM {relation} t JOIN jsonb_populate_recordset(NULL::{relation},{json_sql(requested)}) s ON {matches}", source=True)
         if rows:
-            api.query(apply_batch_sql(name, keys, columns, rows))
+            api.query(apply_batch_sql(name, keys, columns, rows, table.get('array_columns', [])))
             applied += len(rows)
     removed = [item['row_key'] for key, item in previous.items() if key not in incoming] if delete_only else []
     deleted = 0

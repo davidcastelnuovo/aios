@@ -11,6 +11,12 @@ verify_spec.loader.exec_module(verify)
 
 
 class MirrorTests(unittest.TestCase):
+    def test_legacy_json_skill_strings_fit_staging_arrays_without_changing_source(self):
+        for value, expected in [('seo', ['seo']), ('["seo","copy"]', ['seo','copy']), (['seo'], ['seo']), (None, None)]:
+            row = {'task_skills': value}
+            self.assertEqual(mirror.normalize_arrays(row, ['task_skills'])['task_skills'], expected)
+            self.assertEqual(row['task_skills'], value)
+
     def test_unchanged_inventory_needs_no_per_table_requests(self):
         class API:
             def query(self, *args, **kwargs):
