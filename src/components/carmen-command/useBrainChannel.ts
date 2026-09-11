@@ -26,6 +26,7 @@ export type ChannelSendResult = {
   external_url?: string | null;
   duplicate?: boolean;
   error?: string;
+  inline_reply?: string;
 };
 
 const FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-channel-send`;

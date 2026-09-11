@@ -106,6 +106,9 @@ verify_jwt = true
 [functions.goal-execution-center]
 verify_jwt = true
 
+[functions.openai-billing-status]
+verify_jwt = true
+
 [functions.test-facebook-lead-webhook]
 verify_jwt = false
 

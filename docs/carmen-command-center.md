@@ -23,7 +23,7 @@ src/components/carmen-command/
   ParliamentBoard.tsx
   useBrainChannel.ts    # gateway agent-channel-send
   panels.tsx            # HudPanel + פאנלים: Core, פיד, דופק, משימות, ציר זמן, פקודות
-  UsagePanel.tsx        # גרף שימוש ב-API (recharts)
+  UsagePanel.tsx        # גרף שימוש + OpenAI Admin billing (recharts)
   useCommandData.ts     # כל שאילתות הנתונים (react-query) + Realtime
   command-center.css    # שפת העיצוב (משתני CSS, גריד, אנימציות)
 ```

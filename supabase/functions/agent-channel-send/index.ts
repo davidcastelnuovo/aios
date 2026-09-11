@@ -10,6 +10,7 @@ import {
   findMessageByIdempotency,
   insertMessage,
   loadRoute,
+  logChannelAction,
   resolveCarmenAgent,
   serviceClient,
   setConversationStatus,
@@ -222,6 +223,25 @@ Deno.serve(async (req) => {
     if (reused) return json(200, { ...reused, duplicate: true });
   }
 
+  const provider = String(route.provider || route.slug || "internal");
+  if (action === "send" && provider !== "internal" && provider !== "parliament") {
+    const { recordAndCheckLoopGuard } = await import("../_shared/carmen-brain-flags.ts");
+    const loopHit = recordAndCheckLoopGuard({
+      conversationId: conv.id,
+      provider,
+    });
+    if (loopHit) {
+      console.warn("[agent-channel-send] loop_guard", JSON.stringify(loopHit));
+      await logChannelAction(sb, {
+        tenantId,
+        agentId,
+        action: "loop_guard_warning",
+        details: loopHit,
+        status: "warn",
+      });
+    }
+  }
+
   try {
     const result: SendResult = await dispatchSend({
       tenantId,
@@ -239,6 +259,9 @@ Deno.serve(async (req) => {
     await sb.from("ai_conversation_messages").update({
       metadata: { dispatch: result, input_mode: body.input_mode || "typed" },
     }).eq("tenant_id", tenantId).eq("idempotency_key", idempotencyKey);
+    if (result.inline_reply) {
+      await setConversationStatus(sb, conv.id, "idle");
+    }
     return json(200, result);
   } catch (e: any) {
     await setConversationStatus(sb, conv.id, "error");
