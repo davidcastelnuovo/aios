@@ -17,6 +17,13 @@ credentials_spec.loader.exec_module(credentials)
 
 
 class MirrorTests(unittest.TestCase):
+    def test_reports_and_their_parents_precede_unrelated_history(self):
+        names = ['history', 'crm_records', 'crm_tables', 'clients', 'tenants']
+        edges = [{'child': child, 'parent': parent} for child, parent in
+                 [('crm_records', 'crm_tables'), ('crm_tables', 'clients'), ('clients', 'tenants')]]
+        ordered = mirror.dependency_order([{'name': n} for n in names], edges)
+        self.assertEqual([t['name'] for t in ordered], ['tenants', 'clients', 'crm_tables', 'crm_records', 'history'])
+
     def test_large_imports_bound_wire_bytes_and_preserve_every_row(self):
         rows = [{'key': {'id': str(i)}, 'digest': 'digest'+str(i),
                  'row': {'id': str(i), 'name': 'נתונים'*1000}} for i in range(6)]
