@@ -24,27 +24,9 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom"],
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return;
-          if (id.includes("@supabase")) return "vendor-supabase";
-          if (
-            id.includes("recharts") ||
-            id.includes("d3-") ||
-            id.includes("victory")
-          ) {
-            return "vendor-charts";
-          }
-          if (
-            id.includes("xlsx") ||
-            id.includes("jspdf") ||
-            id.includes("html2canvas")
-          ) {
-            return "vendor-export";
-          }
-        },
-      },
-    },
+    manifest: true,
+    // Let Rollup split shared dependencies from the actual import graph.
+    // Grouping CommonJS charts/PDF packages manually created entry-chunk cycles
+    // and made export libraries load before the first page rendered.
   },
 }));

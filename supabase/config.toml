@@ -417,3 +417,7 @@ verify_jwt = false
 
 [functions.generate-signed-pdf]
 verify_jwt = false
+
+# Existing collaboration service is deployed to Staging only (see scripts/staging-only-functions.json).
+[functions.collaboration-mcp]
+verify_jwt = false
