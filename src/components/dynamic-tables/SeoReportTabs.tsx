@@ -21,7 +21,7 @@ import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { useSeoScope } from "@/hooks/useSeoScope";
-import { filterSeoReportsByDomain, resolveLinkedCrmTableId, seoDomainsMatch } from "@/lib/seoDomain";
+import { filterSeoReportsByDomain, resolveLinkedCrmTableId, resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
 
 interface SeoReportTabsProps {
   /**
@@ -115,13 +115,11 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const targetDomain = (seoTable?.integration_settings as any)?.targetDomain || '';
   const savedGaTableId = (seoTable?.integration_settings as any)?.linkedGaTableId || '';
   const savedGscTableId = (seoTable?.integration_settings as any)?.linkedGscTableId || '';
-  const savedGscSiteUrlRaw = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || '';
-  // Ignore a linked Search Console property that belongs to another site —
-  // otherwise a bad link keeps feeding another client's clicks/impressions in.
-  const savedGscSiteUrl =
-    savedGscSiteUrlRaw && expectedDomain && !seoDomainsMatch(savedGscSiteUrlRaw, expectedDomain)
-      ? ''
-      : savedGscSiteUrlRaw;
+  const savedGscSiteUrl = resolveSeoLinkedGscSiteUrl({
+    integrationSettings: (seoTable?.integration_settings || {}) as Record<string, unknown>,
+    clientGscSiteUrl: scope?.clientGscSiteUrl,
+    expectedDomain,
+  });
   const savedGscLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || 'all') as 'all' | 'he' | 'en';
 
   // GA / GSC tables come from the scope (already searched across all accessible tenants)

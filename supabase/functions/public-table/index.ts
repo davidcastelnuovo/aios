@@ -469,7 +469,7 @@ Deno.serve(async (req) => {
       const settings = (table.integration_settings as any) || {};
       const targetClientId = settings.clientId || table.client_id;
       const targetDomain = settings.targetDomain || null;
-      const linkedGscSiteUrl = settings.linkedGscSiteUrl || null;
+      const linkedGscSiteUrl = settings.linkedGscSiteUrl || settings.gsc_site_url || null;
       const linkedGaTableId = settings.linkedGaTableId || null;
       const linkedGscTableId = settings.linkedGscTableId || null;
 
