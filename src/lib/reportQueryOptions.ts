@@ -22,7 +22,9 @@ export function refetchOnMountIfEmpty(
   const data = query.state.data;
   if (data === undefined || data === null) return true;
   if (Array.isArray(data) && data.length === 0) return "always";
-  return false;
+  // `true` refetches only when stale. Cached rows remain visible while the
+  // background request runs; `false` kept persisted reports stale indefinitely.
+  return true;
 }
 
 export function getReportLastSyncAt(table: {
