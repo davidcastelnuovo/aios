@@ -70,11 +70,28 @@ jobs:
         env:
           STAGING_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
         run: python3 scripts/verify-staging-containment.py --prepare-only
+      - name: Recover a completed Staging source deployment
+        if: inputs.environment == 'staging'
+        env:
+          STAGING_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+        run: |
+          set -euo pipefail
+          RECOVERED=$(python3 scripts/verify-staging-containment.py --deployment-base)
+          if [ -n "$RECOVERED" ] && git cat-file -e "$RECOVERED^{commit}" 2>/dev/null; then
+            git merge-base --is-ancestor "$RECOVERED" HEAD
+            echo "DEPLOY_BEFORE=$RECOVERED" >> "$GITHUB_ENV"
+            echo "Resuming from deployed sources; containment verification remains required."
+          fi
       - name: Deploy complete source bundles
         run: |
           set -euo pipefail
           FUNCTIONS=$(node scripts/edge-deploy-plan.mjs)
           node scripts/deploy-edge.mjs "$DEPLOY_ENV" $FUNCTIONS
+      - name: Record source deployment before verification
+        if: inputs.environment == 'staging'
+        env:
+          STAGING_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+        run: python3 scripts/verify-staging-containment.py --record-deployment
       - name: Keep agent credentials connected on Staging
         if: inputs.environment == 'staging'
         env:
