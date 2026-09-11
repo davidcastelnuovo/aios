@@ -58,14 +58,22 @@ END IF; END $gate$;"""
 
 def dependency_order(tables, foreign_keys):
     remaining = {t['name']: t for t in tables}
+    preferred = {'tenants', 'profiles', 'tenant_users', 'user_roles', 'user_permissions',
+                 'clients', 'crm_tables', 'crm_fields', 'crm_dashboards', 'crm_records'}
+    # Load report dependencies first instead of draining every unrelated history
+    # table before advancing to the next foreign-key layer.
+    while True:
+        ancestors = {fk['parent'] for fk in foreign_keys if fk['child'] in preferred}
+        if ancestors <= preferred: break
+        preferred.update(ancestors)
     ordered = []
     while remaining:
         ready = [name for name in remaining if not any(
             fk['child'] == name and fk['parent'] != name and fk['parent'] in remaining for fk in foreign_keys)]
         if not ready:
             raise ValueError('Foreign-key cycle requires explicit reconciliation: ' + ', '.join(remaining))
-        for name in sorted(ready):
-            ordered.append(remaining.pop(name))
+        name = min(ready, key=lambda name: (name not in preferred, name))
+        ordered.append(remaining.pop(name))
     return ordered
 
 
