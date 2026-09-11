@@ -1055,11 +1055,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
 
     return (
       <div className="cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden">
-        <div className="cc-talkbar-shell min-h-0 flex-1">
+        <div className={`cc-talkbar-shell min-h-0 flex-1${historyVisible ? " cc-talkbar-shell--with-rail" : ""}`}>
         {historyVisible && (
           <ChatTopicRail
-            className="is-overlay"
             items={pastConversations ?? []}
+            routes={brain.routes}
             activeId={conversationId}
             onSelect={(conv) => { loadConversation(conv); }}
             onNew={startNewConversation}

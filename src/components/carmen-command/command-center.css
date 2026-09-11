@@ -159,6 +159,10 @@ html:has(.cc-root) body {
   align-items: stretch;
 }
 
+.cc-talkbar-shell--with-rail .cc-chat-rail {
+  flex-shrink: 0;
+}
+
 /* Visual stage unused — dashboard mode uses CarmenFace grid instead */
 .cc-visual-pane {
   display: none;
@@ -551,13 +555,31 @@ html:has(.cc-root) body {
 }
 .cc-chat-topic:hover { background: rgba(76, 195, 255, 0.08); }
 .cc-chat-topic.is-active { background: rgba(76, 195, 255, 0.14); }
+.cc-chat-topic-agent-wrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.cc-chat-topic-agent {
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.45rem;
+  object-fit: cover;
+  border: 1px solid var(--cc-line);
+  background: rgba(5, 10, 22, 0.6);
+}
+
 .cc-chat-topic-dot {
-  margin-top: 6px;
+  position: absolute;
+  bottom: -2px;
+  inset-inline-start: -2px;
   width: 7px;
   height: 7px;
-  flex-shrink: 0;
   border-radius: 50%;
   background: rgba(143, 163, 196, 0.45);
+  border: 1px solid rgba(5, 10, 22, 0.9);
 }
 .cc-chat-topic-dot.is-live {
   background: var(--cc-ok);
