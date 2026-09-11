@@ -32,6 +32,18 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-09-10 — מודול הרשאות שיחה (Agent → 💬 הרשאות שיחה)
+- **Skin slug:** `carmen_conversation_access_admin` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** מנהל מגדיר ב-Agent Hub טאב **הרשאות שיחה**: טלפונים לפרטי, קבוצות, לקוח↔קבוצה, dev tier (full/bugfix). Runtime קורא `carmen_access_policies` + `carmen_whatsapp_identities` + `carmen_client_group_access`.
+- **How:** UI `CarmenConversationAccessTab`; tables `carmen_access_policies`, `carmen_client_group_access`, `carmen_command_center_access`; helpers `_shared/carmen-access-policy.mjs`; `loadDevEscalationTierFromDb` in run-ai-agent.
+- **Origin:** David — אפיון + יישום מערכת הרשאות שיחה עם כרמן (WA + מערכת).
+
+### 2026-09-10 — זיהוי שולח בקבוצות WhatsApp (participant_phone)
+- **Skin slug:** `carmen_whatsapp_group_sender_identity` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** בקבוצות — לדעת **מי** פנה אליה לפי `participant_phone` (לא group_id / display name). דוד (מנהל + `carmen_allowed_phones`) מורשה; אנה מורשית בפרטי בלבד — בקבוצה נחסמת אלא אם יש `carmen_whatsapp_identities` מאושר. עונה רק כשפונים אליה ישירות ("כרמן…").
+- **How:** Pipeline: webhook → `chat_messages.sender_phone` (Green API + Manus) → `handleCarmenMessage` → `resolveCarmenGroupIdentity` + `[שולח בקבוצה] participant_phone=…` בקונטקסט → `run-ai-agent` (`lead_data.phone`, `channel=whatsapp_group`). Helpers: `_shared/carmen-group-sender.mjs`.
+- **Origin:** Carmen → Cursor DEV TASK — בדיקת זיהוי טלפון והרשאות בהודעות קבוצת WhatsApp.
+
 ### 2026-08-31 — מצב ביצוע יעדים (Goal Execution Mode)
 - **Skin slug:** `carmen_goal_execution_mode` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Manage execution goals in Command Center: dedup, milestones, blockers, link tasks/dev tasks/PRs, report progress, delegate to Cursor without concurrency caps. Approval-gated mutations use existing queue.

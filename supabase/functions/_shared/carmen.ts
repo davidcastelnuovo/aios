@@ -11,6 +11,18 @@ import {
   replyDestinationIsConsistent,
   requireOriginChatId,
 } from './carmen-session-identity.ts';
+import {
+  buildGroupSenderContextNote,
+  managerGroupAccessViaAllowedPhones,
+} from './carmen-group-sender.ts';
+import {
+  SURFACE_GROUP,
+  identityAllowsSurface,
+  mergeCarmenScopeConfig,
+  parsePolicyPhones,
+  policyPhoneList,
+  filterPolicyGroupsToManus,
+} from './carmen-access-policy.ts';
 
 const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
 
@@ -779,7 +791,10 @@ export async function runCarmenAI(
     conversation_history: cleanHistory,
     tenant_id: tenantId,
     user_name: senderName || 'WhatsApp',
-    lead_data: senderPhone ? { phone: senderPhone } : undefined,
+    lead_data: senderPhone ? {
+      phone: senderPhone,
+      channel: waNotify?.is_group ? 'whatsapp_group' : 'whatsapp_private',
+    } : undefined,
     surface: 'whatsapp',
     wa_notify: waNotify || null,
   });
@@ -1061,6 +1076,34 @@ async function findCarmenTenantStaffByPhone(
  * contacts for that client only; employees still require explicit approval and
  * phone verification.
  */
+async function loadCarmenAccessContext(
+  supabase: any,
+  tenantId: string,
+  agentId: string | null,
+): Promise<{ policy: any | null; groupChatIds: string[]; mergedScope: ReturnType<typeof mergeCarmenScopeConfig> | null }> {
+  if (!agentId) return { policy: null, groupChatIds: [], mergedScope: null };
+  const { data: policy } = await supabase
+    .from('carmen_access_policies')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('agent_id', agentId)
+    .maybeSingle();
+  let groupChatIds: string[] = [];
+  if (policy?.allowed_group_ids?.length) {
+    const manusGroupIds = await filterPolicyGroupsToManus(
+      supabase, tenantId, policy.allowed_group_ids,
+    );
+    if (manusGroupIds.length > 0) {
+      const { data: groups } = await supabase
+        .from('whatsapp_groups')
+        .select('group_chat_id')
+        .in('id', manusGroupIds);
+      groupChatIds = (groups || []).map((g: any) => g.group_chat_id).filter(Boolean);
+    }
+  }
+  return { policy, groupChatIds, mergedScope: null };
+}
+
 async function resolveCarmenGroupIdentity(
   supabase: any,
   tenantId: string,
@@ -1068,10 +1111,14 @@ async function resolveCarmenGroupIdentity(
   phoneNumber: string,
   senderName: string | null | undefined,
   messageText: string,
-  _allowedPhones: unknown,
+  allowedPhones: unknown,
+  policyPhoneEntries: unknown[] = [],
 ): Promise<CarmenIdentityAccess> {
   const digits = await resolveCarmenIdentityPhone(supabase, phoneNumber);
   const tail = phoneTail(digits);
+  console.log('[carmen] group identity check', {
+    tenantId, chatId, phoneNumber: digits || phoneNumber, senderName,
+  });
   const { data: group } = await supabase.from('whatsapp_groups')
     .select('id').eq('tenant_id', tenantId).eq('group_chat_id', chatId).maybeSingle();
   const { data: groupClient } = group?.id
@@ -1089,12 +1136,40 @@ async function resolveCarmenGroupIdentity(
 
   const { data: identities } = await supabase
     .from('carmen_whatsapp_identities')
-    .select('id, phone, entity_type, entity_id, client_id, display_name, role_title, status, verified_at')
+    .select('id, phone, entity_type, entity_id, client_id, display_name, role_title, status, verified_at, surfaces, scope_mode, allowed_group_ids, dev_escalation_tier')
     .eq('tenant_id', tenantId)
     .or(`phone.eq.${digits},phone.ilike.%${tail}`)
     .limit(3);
   const identity = (identities || []).find((row: any) => phoneTail(row.phone) === tail);
   if (identity?.status === 'approved') {
+    if (!identityAllowsSurface(identity, SURFACE_GROUP)) {
+      return {
+        allowed: false,
+        reason: 'identity_group_surface_denied',
+        reply: 'המספר שלך מורשה לשיחה פרטית, אבל לא בקבוצות WhatsApp. בקש ממנהל המערכת להוסיף הרשאת קבוצה.',
+      };
+    }
+    if (Array.isArray(identity.allowed_group_ids) && identity.allowed_group_ids.length > 0 && group?.id) {
+      if (!identity.allowed_group_ids.includes(group.id)) {
+        return {
+          allowed: false,
+          reason: 'identity_group_not_listed',
+          reply: 'אני מזהה אותך, אבל הקבוצה הזו לא ברשימת הקבוצות שמורשות לך.',
+        };
+      }
+    }
+    if (identity.entity_type === 'client_contact' && group?.id && identity.client_id) {
+      const { data: cga } = await supabase
+        .from('carmen_client_group_access')
+        .select('allow_client_contacts, info_boundary')
+        .eq('tenant_id', tenantId)
+        .eq('client_id', identity.client_id)
+        .eq('whatsapp_group_id', group.id)
+        .maybeSingle();
+      if (cga && !cga.allow_client_contacts) {
+        return { allowed: false, reason: 'client_group_access_denied', reply: null };
+      }
+    }
     if (identity.entity_type === 'campaigner') {
       const tenantStaff = await findCarmenTenantStaffByPhone(supabase, tenantId, digits);
       if (tenantStaff?.isManager) {
@@ -1136,6 +1211,27 @@ async function resolveCarmenGroupIdentity(
       allowed: false,
       reason: `identity_${identity.status}`,
       reply: 'אני מזהה את המספר, אבל הוא אינו מורשה כרגע. בקש ממנהל המערכת לאשר אותו בהגדרות קארמן.',
+    };
+  }
+
+  const staff = await findCarmenTenantStaffByPhone(supabase, tenantId, digits);
+  const parsedEntries = Array.isArray(policyPhoneEntries) && policyPhoneEntries.length
+    && typeof (policyPhoneEntries[0] as any)?.phone === 'string'
+    ? policyPhoneEntries
+    : parsePolicyPhones(policyPhoneEntries);
+  const phoneAllowList = policyPhoneList(parsedEntries as any).length
+    ? policyPhoneList(parsedEntries as any)
+    : (Array.isArray(allowedPhones)
+      ? (allowedPhones as unknown[]).map((p) => String(p).replace(/\D/g, '')).filter(Boolean)
+      : []);
+  if (managerGroupAccessViaAllowedPhones({
+    phoneDigits: digits,
+    allowedPhones: phoneAllowList,
+    isManager: !!staff?.isManager,
+  })) {
+    return {
+      allowed: true,
+      context: `\n\n[הרשאת זהות מחייבת] הדובר הוא ${staff?.displayName || senderName || 'מנהל'} (${digits}) — מנהל מורשה לפי carmen_allowed_phones. מותר לענות במסגרת הארגון בקבוצה זו בלבד.`,
     };
   }
 
@@ -1210,6 +1306,18 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     ? Number(cfg.session_timeout_minutes)
     : CARMEN_SESSION_IDLE_MINUTES_DEFAULT;
 
+  let previewAgentId: string | null = cfg.agent_id || null;
+  if (!previewAgentId) {
+    const carmenAgentRow = await findCarmenAgent(supabase, tenantId);
+    previewAgentId = carmenAgentRow?.id || null;
+  }
+  const accessContext = await loadCarmenAccessContext(supabase, tenantId, previewAgentId);
+  const mergedScope = mergeCarmenScopeConfig(
+    cfg,
+    accessContext.policy,
+    accessContext.groupChatIds,
+  );
+
   // GROUP SAFETY GATE: a blocked group must stay completely silent regardless
   // of provider, automation scope, or an already-warm Carmen session. Green API
   // checks this before calling us, but Manus reaches the shared handler directly,
@@ -1245,7 +1353,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     // session must never make her listen to the group's ordinary conversation.
     // Keep this before identity handling so an unrelated message from an unknown
     // participant cannot trigger an identification prompt either.
-    if (!groupMessageInvokesCarmen(messageText)) {
+    if (mergedScope.requireDirectAddress && !groupMessageInvokesCarmen(messageText)) {
       return { handled: false, reason: 'group_not_addressed' };
     }
   }
@@ -1349,19 +1457,21 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // Authorization is independent from group scope. Being in a group where
   // Carmen is enabled does not grant the author permission to use her.
   let identityContext = '';
-  if (isGroup && sourceChannel === 'own_instance') {
+  if (isGroup) {
+    identityContext = buildGroupSenderContextNote(phoneNumber, senderName);
     const access = await resolveCarmenGroupIdentity(
       supabase, tenantId, chatId, phoneNumber, senderName, messageText,
-      cfg.carmen_allowed_phones,
+      mergedScope.allowedPhones,
+      mergedScope.policyPhones,
     );
     if (!access.allowed) {
       if (access.reply) await routedSend(chatId, access.reply);
       console.log('[carmen] group author blocked by identity access', {
-        tenantId, chatId, phoneNumber, reason: access.reason,
+        tenantId, chatId, phoneNumber, sourceChannel, reason: access.reason,
       });
       return { handled: true, outcome: 'active' };
     }
-    identityContext = access.context;
+    identityContext += access.context;
   }
 
   if (activeSession) {
@@ -1565,16 +1675,26 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     return { handled: false, reason: 'connection_user_filter' };
   }
 
-  // Scope enforcement
-  const scopeMode = carmenAutomation.configuration?.carmen_scope_mode || 'all';
-  const allowedPhones = carmenAutomation.configuration?.carmen_allowed_phones || [];
-  // Canonical key is `carmen_allowed_group_ids` (matches the UI in StepConfigPanel
-  // and trigger-automation). Fall back to legacy singular key for older configs.
-  const cfgForGroups = carmenAutomation.configuration || {};
-  const allowedGroups: string[] = Array.isArray(cfgForGroups.carmen_allowed_group_ids) && cfgForGroups.carmen_allowed_group_ids.length > 0
-    ? cfgForGroups.carmen_allowed_group_ids
-    : (cfgForGroups.carmen_allowed_group_id ? [cfgForGroups.carmen_allowed_group_id]
-      : (Array.isArray(cfgForGroups.carmen_allowed_groups) ? cfgForGroups.carmen_allowed_groups : []));
+  // Scope enforcement — merged policy (Agent → הרשאות שיחה) overrides automation when set
+  const scopeMode = mergedScope.hasPolicy && mergedScope.allowedPhones.length > 0
+    ? 'specific_phone'
+    : (mergedScope.hasPolicy && mergedScope.allowedGroups.length > 0
+      ? 'specific_group'
+      : (carmenAutomation.configuration?.carmen_scope_mode || 'all'));
+  const allowedPhones = mergedScope.allowedPhones.length > 0
+    ? mergedScope.allowedPhones
+    : (carmenAutomation.configuration?.carmen_allowed_phones || []);
+  const allowedGroups: string[] = mergedScope.allowedGroups.length > 0
+    ? mergedScope.allowedGroups
+    : (() => {
+      const cfgForGroups = carmenAutomation.configuration || {};
+      if (Array.isArray(cfgForGroups.carmen_allowed_group_ids) && cfgForGroups.carmen_allowed_group_ids.length > 0) {
+        return cfgForGroups.carmen_allowed_group_ids;
+      }
+      if (cfgForGroups.carmen_allowed_group_id) return [cfgForGroups.carmen_allowed_group_id];
+      if (Array.isArray(cfgForGroups.carmen_allowed_groups)) return cfgForGroups.carmen_allowed_groups;
+      return [];
+    })();
   if (scopeMode === 'specific_phone' && !isGroup) {
     // `sourcePhoneNumber` is the CONNECTED account — i.e. always the operator
     // themselves. On the operator's own OUTBOUND messages (isManualOutgoing) it
@@ -1615,7 +1735,7 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
   // 'own_instance'). The operator's mirrored green_api channel keeps the legacy
   // default-deny — that channel sees ALL the operator's personal groups.
   const openMemberGroups = isGroup
-    && carmenAutomation.configuration?.carmen_open_member_groups === true
+    && (mergedScope.openMemberGroups || carmenAutomation.configuration?.carmen_open_member_groups === true)
     && sourceChannel === 'own_instance';
   if (isGroup && scopeMode !== 'specific_group' && !openMemberGroups) {
     return { handled: false, reason: 'group_requires_explicit_scope' };
