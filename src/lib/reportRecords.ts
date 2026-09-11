@@ -14,8 +14,10 @@ export function reportRecordsQuery(
   dateFrom?: string | null,
   dateTo?: string | null,
 ) {
+  const from = dateFilter === 'custom' ? dateFrom ?? null : null;
+  const to = dateFilter === 'custom' ? dateTo ?? null : null;
   return {
-    queryKey: ['crm-records', tableId, dateFilter, dateFrom ?? null, dateTo ?? null],
+    queryKey: ['crm-records', tableId, dateFilter, from, to],
     staleTime: REPORT_QUERY_STALE_MS,
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const params = new URLSearchParams({ table_id: tableId, date_filter: dateFilter });
