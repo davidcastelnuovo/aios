@@ -21,11 +21,15 @@ export function splitContactName(fullName: string): { firstName: string; lastNam
 export function buildFieldPrefill(
   fields: DocumentField[],
   recipientIndex: number,
-  contact: Pick<SignatureContactDetails, "firstName" | "lastName" | "phone" | "address" | "idNumber">,
+  contact: Pick<SignatureContactDetails, "name" | "firstName" | "lastName" | "phone" | "address" | "idNumber"> & {
+    companyName?: string;
+  },
 ): Record<string, string> {
   const typeToValue: Partial<Record<SignatureFieldType, string | undefined>> = {
     first_name: contact.firstName,
     last_name: contact.lastName,
+    full_name: contact.name || [contact.firstName, contact.lastName].filter(Boolean).join(" "),
+    company_name: contact.companyName,
     phone: contact.phone,
     address: contact.address,
     id_number: contact.idNumber,
@@ -34,7 +38,9 @@ export function buildFieldPrefill(
   const prefill: Record<string, string> = {};
   for (const field of fields) {
     if ((field.recipient_index ?? 0) !== recipientIndex) continue;
-    if (field.type === "signature" || field.type === "date" || field.type === "text") continue;
+    if (field.type === "signature" || field.type === "signature_stamp" || field.type === "date" || field.type === "text") {
+      continue;
+    }
     const val = typeToValue[field.type];
     if (val?.trim()) prefill[field.id] = val.trim();
   }

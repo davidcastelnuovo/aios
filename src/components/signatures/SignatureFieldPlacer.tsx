@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, X, Crosshair, ChevronLeft, ChevronRight } from "lucide-react";
+import { Minus, Plus, X, Crosshair } from "lucide-react";
 import {
   type DocumentField,
   type SignatureFieldType,
@@ -9,8 +9,10 @@ import {
   getFieldLabel,
   getFieldPlacerLabel,
   getFieldFontSizePx,
+  isSignatureFieldType,
 } from "./signatureFieldTypes";
 import { SignatureDocumentViewer } from "./SignatureDocumentViewer";
+import { SignaturePageNavigation } from "./SignaturePageNavigation";
 import { SignaturePageThumbnails } from "./SignaturePageThumbnails";
 import type { SignatureMediaKind } from "./signatureDocumentMedia";
 import { detectMediaKind } from "./signatureDocumentMedia";
@@ -41,8 +43,8 @@ interface SignatureFieldPlacerProps {
 
 const COLORS = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899"];
 const DRAG_THRESHOLD_PX = 4;
-const MIN_FIELD_WIDTH = 12;
-const MIN_FIELD_HEIGHT = 4;
+const MIN_FIELD_WIDTH = 2;
+const MIN_FIELD_HEIGHT = 0.8;
 const MAX_FIELD_WIDTH = 80;
 const MAX_FIELD_HEIGHT = 40;
 
@@ -60,6 +62,7 @@ export default function SignatureFieldPlacer({
   fullScreen,
 }: SignatureFieldPlacerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const pageTopRef = useRef<HTMLDivElement>(null);
   const fieldsRef = useRef(fields);
   fieldsRef.current = fields;
 
@@ -93,25 +96,6 @@ export default function SignatureFieldPlacer({
     }
     return counts;
   }, [fields]);
-
-  // Auto-fix fields that were shrunk below usable size
-  useEffect(() => {
-    const needsFix = fields.some(
-      (f) => f.position.width < MIN_FIELD_WIDTH || f.position.height < MIN_FIELD_HEIGHT,
-    );
-    if (!needsFix) return;
-    onFieldsChange(
-      fields.map((f) => ({
-        ...f,
-        position: {
-          ...f.position,
-          width: Math.max(MIN_FIELD_WIDTH, f.position.width),
-          height: Math.max(MIN_FIELD_HEIGHT, f.position.height),
-          page: f.position.page ?? 1,
-        },
-      })),
-    );
-  }, [fields, onFieldsChange]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -320,10 +304,11 @@ export default function SignatureFieldPlacer({
     const next = Math.min(Math.max(1, page), Math.max(1, numPages));
     setCurrentPage(next);
     setSelectedFieldId(null);
+    pageTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   return (
-    <div className={`flex flex-col gap-3 ${fullScreen ? "h-full min-h-0" : ""}`}>
+    <div className={`flex flex-col gap-3 ${fullScreen ? "min-h-full" : ""}`}>
       <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border bg-muted/40 shrink-0">
         {isPlacing ? (
           <span className="text-sm text-primary font-medium flex items-center gap-1">
@@ -335,40 +320,12 @@ export default function SignatureFieldPlacer({
             בחר שדה מימין והצב על העמוד הפעיל, או גרור שדה קיים
           </span>
         )}
-        {numPages > 1 && (
-          <div className="flex items-center gap-1 mr-auto">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 w-8 p-0"
-              disabled={currentPage >= numPages}
-              onClick={() => goToPage(currentPage + 1)}
-              title="עמוד הבא"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-xs text-muted-foreground min-w-[4.5rem] text-center">
-              עמוד {currentPage} מתוך {numPages}
-            </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 w-8 p-0"
-              disabled={currentPage <= 1}
-              onClick={() => goToPage(currentPage - 1)}
-              title="עמוד קודם"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+        <SignaturePageNavigation page={currentPage} count={numPages} onChange={goToPage} />
       </div>
 
-      <div className={`flex gap-3 items-start min-h-0 ${fullScreen ? "flex-1" : ""}`}>
+      <div className={`flex gap-3 items-start`}>
         {/* Right sidebar (RTL: first = right): fields + page thumbs */}
-        <aside className="w-[11.5rem] sm:w-52 shrink-0 sticky top-2 self-start space-y-3 z-20">
+        <aside className="w-36 sm:w-52 shrink-0 sticky top-2 self-start max-h-[calc(100dvh-8rem)] overflow-y-auto overscroll-contain space-y-3 z-20">
           <div className="rounded-xl border bg-background/95 shadow-md backdrop-blur-sm p-3 space-y-2">
             <p className="text-xs font-medium text-muted-foreground">שדות להצבה</p>
             <div className="flex flex-col gap-1.5">
@@ -419,7 +376,7 @@ export default function SignatureFieldPlacer({
         </aside>
 
         {/* Center: active page */}
-        <div className="flex-1 min-w-0 space-y-3">
+        <div ref={pageTopRef} className="flex-1 min-w-0 space-y-3 scroll-mt-3">
           {fields.length > 0 && (
             <div className="flex flex-wrap gap-2 items-center">
               {fields.map((f) => (
@@ -455,7 +412,7 @@ export default function SignatureFieldPlacer({
                     variant="outline"
                     className="h-7 w-7 p-0"
                     title="הקטן"
-                    onClick={() => nudgeFieldSize(selectedFieldId, -3)}
+                    onClick={() => nudgeFieldSize(selectedFieldId, -0.5)}
                   >
                     <Minus className="h-3.5 w-3.5" />
                   </Button>
@@ -465,7 +422,7 @@ export default function SignatureFieldPlacer({
                     variant="outline"
                     className="h-7 w-7 p-0"
                     title="הגדל"
-                    onClick={() => nudgeFieldSize(selectedFieldId, 3)}
+                    onClick={() => nudgeFieldSize(selectedFieldId, 0.5)}
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
@@ -523,7 +480,7 @@ export default function SignatureFieldPlacer({
                     style={{ color, fontSize }}
                     className="pointer-events-none font-semibold px-1 truncate leading-tight"
                   >
-                    {f.type === "signature" ? "✍ " : ""}
+                    {isSignatureFieldType(f.type) ? "✍ " : ""}
                     {getFieldPlacerLabel(f.type)}
                   </span>
 
@@ -553,6 +510,7 @@ export default function SignatureFieldPlacer({
               );
             })}
           </SignatureDocumentViewer>
+          <SignaturePageNavigation page={currentPage} count={numPages} onChange={goToPage} />
         </div>
       </div>
     </div>

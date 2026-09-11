@@ -14,40 +14,20 @@ interface SubmitSignatureBody {
   action?: 'sign' | 'decline';
 }
 
-async function submitWithFieldValuesFallback(
-  supabase: ReturnType<typeof createClient>,
-  token: string,
-  signatureData: string,
-  ip: string | null,
-  fieldValues: Record<string, string>,
-): Promise<Record<string, unknown>> {
-  const withFields = await supabase.rpc('submit_signature_by_token', {
-    _token: token,
-    _signature_data: signatureData,
-    _ip: ip,
-    _field_values: fieldValues,
-  });
-
-  if (!withFields.error) return withFields.data as Record<string, unknown>;
-
-  const legacy = await supabase.rpc('submit_signature_by_token', {
-    _token: token,
-    _signature_data: signatureData,
-    _ip: ip,
-  });
-  if (legacy.error) throw withFields.error;
-  return legacy.data as Record<string, unknown>;
-}
+const responseHeaders = { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
     const { token, signatureData, fieldValues, action = 'sign' }: SubmitSignatureBody = await req.json();
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'missing_token' }), { status: 400, headers: corsHeaders });
+    if (typeof token !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
+      return new Response(JSON.stringify({ error: 'missing_token' }), { status: 400, headers: responseHeaders });
     }
 
+    if (!['sign', 'decline'].includes(action)) {
+      return new Response(JSON.stringify({ error: 'invalid_action' }), { status: 400, headers: responseHeaders });
+    }
     const ip = clientIp(req);
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -67,16 +47,14 @@ Deno.serve(async (req) => {
       result = data as Record<string, unknown>;
     } else {
       if (!signatureData) {
-        return new Response(JSON.stringify({ error: 'missing_signature' }), { status: 400, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'missing_signature' }), { status: 400, headers: responseHeaders });
       }
 
-      result = await submitWithFieldValuesFallback(
-        supabase,
-        token,
-        signatureData,
-        ip,
-        fieldValues ?? {},
-      );
+      const submission = await supabase.rpc('submit_signature_by_token', {
+        _token: token, _signature_data: signatureData, _ip: ip, _field_values: fieldValues ?? {},
+      });
+      if (submission.error) throw submission.error;
+      result = submission.data as Record<string, unknown>;
 
       // Signature is already persisted — never fail the request because PDF generation failed.
       if (result.document_status === 'completed' && result.document_id) {
@@ -123,11 +101,11 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, ...result, pdfGenerated, pdfError }),
-      { status: 200, headers: corsHeaders },
+      { status: 200, headers: responseHeaders },
     );
   } catch (e: unknown) {
     console.error('[submit-signature]', e);
-    const message = e instanceof Error ? e.message : String(e);
-    return new Response(JSON.stringify({ error: message }), { status: 500, headers: corsHeaders });
+    const message = e instanceof Error ? e.message : (e as { message?: string })?.message || 'submission_failed';
+    return new Response(JSON.stringify({ error: message }), { status: 400, headers: responseHeaders });
   }
 });

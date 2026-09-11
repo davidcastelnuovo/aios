@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-type InsertPayload = Record<string, unknown>;
+type InsertPayload = import("@/integrations/supabase/types").Database["public"]["Tables"]["signature_documents"]["Insert"];
 
 function stripKeys(payload: InsertPayload, keys: string[]): InsertPayload {
   const next = { ...payload };
