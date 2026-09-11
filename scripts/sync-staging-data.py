@@ -94,11 +94,13 @@ ON CONFLICT(id) DO NOTHING; COMMIT;""")
 def ensure_integration_parents(api):
     # Insert metadata for newly created connections so client/report relations
     # remain valid. Preserve existing Staging credentials and endpoint settings.
-    data = read_all(api, "SELECT id,tenant_id,integration_type,display_name,created_at,shared_from_integration_id FROM public.tenant_integrations", source=True)
+    # Keep personal ownership: dropping user_id changes the connection scope
+    # and violates the unique index for tenant-wide connections.
+    data = read_all(api, "SELECT id,tenant_id,user_id,integration_type,connection_visibility,display_name,created_at,shared_from_integration_id FROM public.tenant_integrations", source=True)
     api.query(f"""BEGIN; SET LOCAL lock_timeout='3s';
 {IMPORT_GATE}
-INSERT INTO public.tenant_integrations(id,tenant_id,integration_type,display_name,created_at,shared_from_integration_id,is_active,auto_sync_enabled,settings)
-SELECT id,tenant_id,integration_type,display_name,created_at,shared_from_integration_id,false,false,'{{}}'::jsonb
+INSERT INTO public.tenant_integrations(id,tenant_id,user_id,integration_type,connection_visibility,display_name,created_at,shared_from_integration_id,is_active,auto_sync_enabled,settings)
+SELECT id,tenant_id,user_id,integration_type,connection_visibility,display_name,created_at,shared_from_integration_id,false,false,'{{}}'::jsonb
 FROM jsonb_populate_recordset(NULL::public.tenant_integrations,{json_sql(data)})
 ON CONFLICT(id) DO NOTHING; COMMIT;""")
 
@@ -149,7 +151,25 @@ class Management:
             return self.request(req)
         except urllib.error.HTTPError as error:
             # API errors may echo SQL containing customer data. Never log bodies.
-            raise RuntimeError(f"{'Source read' if source else 'Staging query'} failed: HTTP {error.code}") from None
+            detail = safe_database_error(error.read())
+            raise RuntimeError(f"{'Source read' if source else 'Staging query'} failed: HTTP {error.code}{detail}") from None
+
+
+def safe_database_error(body):
+    # Only schema identifiers and SQLSTATE help operators diagnose failures;
+    # row values, SQL statements and arbitrary error text must stay out of logs.
+    try:
+        value = json.loads(body)
+        message = value.get('message', '') if isinstance(value, dict) else ''
+    except (ValueError, UnicodeDecodeError):
+        return ''
+    if not isinstance(message, str): return ''
+    parts = []
+    code = re.search(r'ERROR:\s*([A-Z0-9]{5}):', message)
+    if code: parts.append('SQLSTATE ' + code.group(1))
+    for kind, name in re.findall(r'\b(constraint|column|relation) "([a-z_][a-z0-9_]{0,62})"', message.split('DETAIL:')[0]):
+        parts.append(kind + ' ' + name)
+    return ' (' + ', '.join(parts) + ')' if parts else ''
 
 
 CATALOG = """
