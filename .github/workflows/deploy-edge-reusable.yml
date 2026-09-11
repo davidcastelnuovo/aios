@@ -18,7 +18,9 @@ permissions:
   contents: write
 concurrency:
   group: edge-deploy-${{ inputs.environment }}
-  cancel-in-progress: false
+  # Staging can resume atomic row/source checkpoints when a newer revision arrives.
+  # Production deployments finish in order.
+  cancel-in-progress: ${{ inputs.environment == 'staging' }}
 jobs:
   deploy:
     runs-on: ubuntu-latest
