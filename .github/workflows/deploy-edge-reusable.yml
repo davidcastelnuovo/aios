@@ -96,16 +96,7 @@ jobs:
         if: inputs.environment == 'staging'
         env:
           CARMEN_TENANT_ID: 2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019
-        run: |
-          set -euo pipefail
-          curl --fail-with-body -sS -X POST "https://${PRODUCTION_REF}.supabase.co/functions/v1/copy-edge-secrets-to-staging" \
-            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" -H 'Content-Type: application/json' \
-            -d "{\"target_ref\":\"${PROJECT_REF}\",\"names\":[\"CURSOR_API_KEY\",\"CURSOR_MCP_BEARER\",\"CURSOR_CLOUD_ENV_NAME\",\"CURSOR_DEFAULT_TENANT_ID\",\"GROK_MCP_BEARER\",\"GROK_CURSOR_MCP_BEARER\",\"AGENT_CHANNEL_MCP_BEARER\",\"AGENT_CHANNEL_CALLBACK_SECRET\"]}" \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True; print("Agent credential sync OK")'
-          curl --fail-with-body -sS -X POST "https://${PROJECT_REF}.supabase.co/functions/v1/mcp-connect" \
-            -H 'Content-Type: application/json' \
-            -d "{\"resync_from_secret\":true,\"tenant_id\":\"${CARMEN_TENANT_ID}\",\"name\":\"Cursor\"}" \
-            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("state") == "ready"; print("Cursor MCP ready")'
+        run: python3 scripts/sync-agent-credentials.py
       - name: Verify Staging containment
         if: inputs.environment == 'staging'
         env:

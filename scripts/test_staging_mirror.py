@@ -11,6 +11,9 @@ spec.loader.exec_module(mirror)
 verify_spec = importlib.util.spec_from_file_location('verify', Path(__file__).with_name('verify-staging-containment.py'))
 verify = importlib.util.module_from_spec(verify_spec)
 verify_spec.loader.exec_module(verify)
+credentials_spec = importlib.util.spec_from_file_location('credentials', Path(__file__).with_name('sync-agent-credentials.py'))
+credentials = importlib.util.module_from_spec(credentials_spec)
+credentials_spec.loader.exec_module(credentials)
 
 
 class MirrorTests(unittest.TestCase):
@@ -100,6 +103,31 @@ class MirrorTests(unittest.TestCase):
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_equal_agent_secret_digests_never_rewrite_secrets(self):
+        for equal in (True, False):
+            class API:
+                source, target, token = 'a'*20, 'b'*20, 'fake'
+                calls = []
+                copied = False
+                def request(self, request):
+                    self.calls.append(request.full_url)
+                    if request.full_url.endswith('/secrets'):
+                        same = equal or self.copied or self.source in request.full_url
+                        return [{'name': 'CURSOR_API_KEY', 'value': ('a' if same else 'b')*64}]
+                    if request.full_url.endswith('/copy-edge-secrets-to-staging'):
+                        self.copied = True
+                        return {'ok': True}
+                    if request.full_url.endswith('/mcp-connect'): return {'state': 'ready'}
+                    raise AssertionError('Unexpected endpoint')
+            api = API()
+            credentials.synchronize(api, 'tenant')
+            self.assertEqual(api.copied, not equal)
+            self.assertEqual(len(api.calls), 3 if equal else 5)
+
+    def test_agent_secret_metadata_rejects_unrecognized_values(self):
+        with self.assertRaises(RuntimeError):
+            credentials.digests([{'name': 'CURSOR_API_KEY', 'value': 'not-a-digest'}])
+
     def test_source_attestation_requires_identical_function_files_and_live_versions(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
