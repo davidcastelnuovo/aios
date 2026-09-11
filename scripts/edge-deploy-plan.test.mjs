@@ -4,9 +4,12 @@ import { deploymentPlan, productionChanges } from './edge-deploy-plan.mjs';
 const available = ['crm-records', 'run-ai-agent', 'send-resend-email'];
 test('shared-only and config changes redeploy complete bundles', () => {
   for (const path of ['supabase/functions/_shared/carmen.ts', 'supabase/config.toml',
-    'scripts/staging-only-functions.json', '.github/workflows/deploy-edge-reusable.yml']) {
+    'scripts/staging-only-functions.json']) {
     assert.deepEqual(deploymentPlan([path], available), available);
   }
+});
+test('verification/workflow recovery changes do not replay deployed runtime code', () => {
+  assert.deepEqual(deploymentPlan(['.github/workflows/deploy-edge-reusable.yml', 'scripts/verify-staging-containment.py', 'scripts/edge-deploy-plan.mjs'], available), []);
 });
 test('all changed function directories are included and deleted directories ignored', () => {
   assert.deepEqual(deploymentPlan(['supabase/functions/crm-records/index.ts', 'supabase/functions/removed/index.ts', 'src/App.tsx'], available), ['crm-records']);

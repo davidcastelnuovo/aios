@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -110,12 +111,28 @@ class Management:
             if not re.fullmatch('[a-z]{20}', ref):
                 raise ValueError('Invalid project reference')
         self.source, self.target, self.token = source, target, token
+        self.last_request_at = 0.0
+
+    def request(self, request):
+        for attempt in range(4):
+            # One shared budget for reads and writes, below Management API limits.
+            time.sleep(max(0, self.last_request_at + 0.75 - time.monotonic()))
+            self.last_request_at = time.monotonic()
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as error:
+                if error.code not in (429, 502, 503, 504) or attempt == 3:
+                    raise
+                retry_after = error.headers.get('Retry-After', '') if error.headers else ''
+                delay = min(60, float(retry_after)) if retry_after.isdigit() else min(60, 30 * (attempt + 1))
+                print(f'Management API HTTP {error.code}; retrying in {delay:g}s', file=sys.stderr, flush=True)
+                time.sleep(delay)
 
     def function_versions(self):
         request = urllib.request.Request(f'https://api.supabase.com/v1/projects/{self.target}/functions',
                                          headers={'Authorization': f'Bearer {self.token}'})
-        with urllib.request.urlopen(request, timeout=60) as response:
-            rows = json.load(response)
+        rows = self.request(request)
         if isinstance(rows, dict): rows = rows['functions']
         return {f['slug']: {'id': f['id'], 'version': f['version']} for f in rows}
 
@@ -129,8 +146,7 @@ class Management:
             method='POST',
         )
         try:
-            with urllib.request.urlopen(req, timeout=120) as response:
-                return json.load(response)
+            return self.request(req)
         except urllib.error.HTTPError as error:
             # API errors may echo SQL containing customer data. Never log bodies.
             raise RuntimeError(f"{'Source read' if source else 'Staging query'} failed: HTTP {error.code}") from None
@@ -169,13 +185,27 @@ def preflight(names, source, target):
         # PostgreSQL's typed JSON record conversion handles compatible enum/text,
         # json-array/array and numeric representations; invalid values fail the
         # batch transaction without changing its checkpoint or any other table.
-        plan.append({'name': name, 'keys': keys, 'columns': columns})
+        array_columns = [c['name'] for c in src['columns'] if c['name'] in columns and c.get('type') == 'jsonb' and target_columns[c['name']].get('type') == 'text[]']
+        plan.append({'name': name, 'keys': keys, 'columns': columns, 'array_columns': array_columns})
     return plan, errors
 
 
-def apply_batch_sql(table, keys, columns, items):
+def normalize_arrays(row, array_columns):
+    result = dict(row)
+    for column in array_columns:
+        value = result.get(column)
+        if value is None or isinstance(value, list): continue
+        if not isinstance(value, str):
+            raise RuntimeError(f'{column}: incompatible array representation')
+        try: decoded = json.loads(value)
+        except json.JSONDecodeError: decoded = value
+        result[column] = decoded if isinstance(decoded, list) else [decoded if isinstance(decoded, str) else value]
+    return result
+
+
+def apply_batch_sql(table, keys, columns, items, array_columns=()):
     relation = 'public.' + ident(table)
-    payload = [item['row'] for item in items]
+    payload = [normalize_arrays(item['row'], array_columns) for item in items]
     matches = ' AND '.join(f't.{ident(k)} IS NOT DISTINCT FROM s.{ident(k)}' for k in keys)
     nonkeys = [c for c in columns if c not in keys]
     update = ('WHEN MATCHED THEN UPDATE SET ' + ','.join(f'{ident(c)}=s.{ident(c)}' for c in nonkeys)) if nonkeys else ''
@@ -204,37 +234,65 @@ DO $restore$ DECLARE n text; BEGIN FOR n IN SELECT tgname FROM mirror_active_tri
 COMMIT;"""
 
 
-def mirror_table(api, table, *, delete_only=False):
+def row_sql(columns):
+    parts = ['jsonb_build_object(' + ','.join(f'{literal(c)},t.{ident(c)}' for c in group) + ')' for group in batches(columns, 40)]
+    return '(' + ' || '.join(parts) + ')'
+
+
+def fingerprint_query(tables):
+    queries = [f"SELECT {literal(t['name'])} AS name, coalesce(jsonb_agg(jsonb_build_object('key',{key_sql(t['keys'])},'digest',md5({row_sql(t['columns'])}::text))),'[]'::jsonb) AS items FROM public.{ident(t['name'])} t" for t in tables]
+    return 'SELECT jsonb_object_agg(name,items) AS inventory FROM (' + ' UNION ALL '.join(queries) + ') q'
+
+
+def load_inventory(api, plan):
+    incoming, previous = {}, {}
+    for group in batches(plan, 8):
+        incoming.update(api.query(fingerprint_query(group), source=True)[0]['inventory'])
+        rows = read_all(api, 'SELECT table_name,row_key,digest FROM environment_sync.managed_rows WHERE table_name IN (' + ','.join(literal(t['name']) for t in group) + ')')
+        for row in rows:
+            previous.setdefault(row['table_name'], []).append(row)
+    return incoming, previous
+
+
+def record_table_states(api, results):
+    payload = [{'table_name': r['table'], 'source_rows': r['source_rows'], 'changed_rows': r['changed_rows']} for r in results]
+    api.query(f"""INSERT INTO environment_sync.table_state(table_name,last_success_at,source_rows,changed_rows)
+SELECT table_name,now(),source_rows,changed_rows FROM jsonb_to_recordset({json_sql(payload)}) x(table_name text,source_rows bigint,changed_rows bigint)
+ON CONFLICT(table_name) DO UPDATE SET last_success_at=EXCLUDED.last_success_at,source_rows=EXCLUDED.source_rows,changed_rows=EXCLUDED.changed_rows""")
+
+
+def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows=None, record_state=True):
     name, keys, columns = table['name'], table['keys'], table['columns']
     relation = 'public.' + ident(name)
     # One aggregate row avoids Management API result-row caps. No customer body
     # is downloaded unless the fingerprint changed.
     # jsonb_build_object accepts at most 100 arguments (50 columns).
-    parts = ['jsonb_build_object(' + ','.join(f'{literal(c)},t.{ident(c)}' for c in group) + ')' for group in batches(columns, 40)]
-    row_sql = '(' + ' || '.join(parts) + ')'
+    row_value = row_sql(columns)
     # The deletion pass only needs IDs, not a second hash of every report body.
-    digest_sql = "NULL::text" if delete_only else f"md5({row_sql}::text)"
-    fingerprints = read_all(api, f"SELECT {key_sql(keys)} AS key, {digest_sql} AS digest FROM {relation} t", source=True)
+    digest_sql = "NULL::text" if delete_only else f"md5({row_value}::text)"
+    fingerprints = inventory if inventory is not None else read_all(api, f"SELECT {key_sql(keys)} AS key, {digest_sql} AS digest FROM {relation} t", source=True)
     incoming = {key_text(item['key']): item for item in fingerprints}
     if len(incoming) != len(fingerprints) or any(any(v is None for v in x['key'].values()) for x in fingerprints):
         raise RuntimeError(f'{name}: source keys are not unique/non-null')
     # Also refuse MERGE into ambiguous old Staging rows (some legacy tables lack a PK).
-    duplicate = api.query(f'SELECT EXISTS(SELECT 1 FROM {relation} GROUP BY {",".join(map(ident,keys))} HAVING count(*)>1) AS duplicate')[0]['duplicate']
-    if duplicate:
-        raise RuntimeError(f'{name}: duplicate Staging keys; reconciliation required')
-    previous_rows = read_all(api, f"SELECT row_key,digest FROM environment_sync.managed_rows WHERE table_name={literal(name)}")
+    if previous_rows is None:
+        previous_rows = read_all(api, f"SELECT row_key,digest FROM environment_sync.managed_rows WHERE table_name={literal(name)}")
     previous = {key_text(row['row_key']): row for row in previous_rows}
     changed = [item for key, item in incoming.items() if previous.get(key, {}).get('digest') != item['digest']]
     if delete_only: changed = []
+    if changed or delete_only:
+        duplicate = api.query(f'SELECT EXISTS(SELECT 1 FROM {relation} GROUP BY {",".join(map(ident,keys))} HAVING count(*)>1) AS duplicate')[0]['duplicate']
+        if duplicate:
+            raise RuntimeError(f'{name}: duplicate Staging keys; reconciliation required')
     applied = 0
     for group in batches(changed):
         matches = ' AND '.join(f't.{ident(k)}=s.{ident(k)}' for k in keys)
         requested = [item['key'] for item in group]
         # Recompute the digest from the SAME row image. A source row can change
         # between inventory and fetch; its newer version must never be skipped.
-        rows = api.query(f"SELECT {key_sql(keys)} AS key, md5({row_sql}::text) AS digest, {row_sql} AS row FROM {relation} t JOIN jsonb_populate_recordset(NULL::{relation},{json_sql(requested)}) s ON {matches}", source=True)
+        rows = api.query(f"SELECT {key_sql(keys)} AS key, md5({row_value}::text) AS digest, {row_value} AS row FROM {relation} t JOIN jsonb_populate_recordset(NULL::{relation},{json_sql(requested)}) s ON {matches}", source=True)
         if rows:
-            api.query(apply_batch_sql(name, keys, columns, rows))
+            api.query(apply_batch_sql(name, keys, columns, rows, table.get('array_columns', [])))
             applied += len(rows)
     removed = [item['row_key'] for key, item in previous.items() if key not in incoming] if delete_only else []
     deleted = 0
@@ -250,7 +308,7 @@ def mirror_table(api, table, *, delete_only=False):
 DELETE FROM {relation} t USING jsonb_populate_recordset(NULL::{relation},{json_sql(gone)}) s WHERE {matches};
 DELETE FROM environment_sync.managed_rows WHERE table_name={literal(name)} AND row_key IN (SELECT value FROM jsonb_array_elements({json_sql(gone)})); COMMIT;""")
         deleted += len(gone)
-    if not delete_only:
+    if not delete_only and record_state:
         api.query(f"INSERT INTO environment_sync.table_state(table_name,last_success_at,source_rows,changed_rows) VALUES({literal(name)},now(),{len(fingerprints)},{applied}) ON CONFLICT(table_name) DO UPDATE SET last_success_at=EXCLUDED.last_success_at,source_rows=EXCLUDED.source_rows,changed_rows=EXCLUDED.changed_rows")
     return {'table': name, 'source_rows': len(fingerprints), 'changed_rows': applied, 'removed_rows': deleted}
 
@@ -276,21 +334,28 @@ def main():
     if not gate[0]['edge_versions'] or api.function_versions() != gate[0]['edge_versions']:
         api.query("UPDATE environment_sync.safety SET outbound_blocked=false WHERE singleton")
         raise RuntimeError('Staging Edge deployments changed since containment verification')
-    foreign_keys = api.query("SELECT c.conrelid::regclass::text AS child,c.confrelid::regclass::text AS parent FROM pg_catalog.pg_constraint c JOIN pg_catalog.pg_namespace n ON n.oid=c.connamespace WHERE c.contype='f' AND n.nspname='public'")
+    foreign_keys = api.query("SELECT child.relname AS child,parent.relname AS parent FROM pg_catalog.pg_constraint c JOIN pg_catalog.pg_class child ON child.oid=c.conrelid JOIN pg_catalog.pg_class parent ON parent.oid=c.confrelid JOIN pg_catalog.pg_namespace n ON n.oid=child.relnamespace WHERE c.contype='f' AND n.nspname='public'")
     plan = dependency_order(plan, foreign_keys)
+    incoming, previous = load_inventory(api, plan)
+    results = []
+    def apply_table(table):
+        result = mirror_table(api, table, inventory=incoming[table['name']], previous_rows=previous.get(table['name'], []), record_state=False)
+        results.append(result)
+        print(json.dumps(result), flush=True)
     ensure_identity_parents(api)
     # Connections can reference a new tenant. Establish tenants first.
     tenant_table = next(t for t in plan if t['name'] == 'tenants')
-    print(json.dumps(mirror_table(api, tenant_table)), flush=True)
+    apply_table(tenant_table)
     ensure_integration_parents(api)
     failures = []
     for table in plan:
         if table['name'] == 'tenants': continue  # Already loaded for integration parents.
         try:
-            print(json.dumps(mirror_table(api, table)), flush=True)
+            apply_table(table)
         except Exception as error:
             # Independent tables still catch up; the run stays red until ALL do.
             failures.append({'table': table['name'], 'error': str(error)})
+    record_table_states(api, results)
     if failures:
         print(json.dumps({'failures': failures})); raise SystemExit(1)
     # Child deletions precede parents; FKs remain enabled throughout. If a

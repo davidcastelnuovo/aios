@@ -15,9 +15,7 @@ export function deploymentPlan(files, available, requested = '') {
   // consumer conservatively; never silently leave old shared code running.
   if (files.some(file => file.startsWith('supabase/functions/_shared/') ||
     file === 'supabase/config.toml' || file.startsWith('scripts/deploy-edge') ||
-    file === 'scripts/staging-only-functions.json' ||
-    /^\.github\/workflows\/deploy.*edge.*\.yml$/.test(file) ||
-    file === 'scripts/edge-deploy-plan.mjs')) return [...names].sort();
+    file === 'scripts/staging-only-functions.json')) return [...names].sort();
   return [...new Set(files.map(file => file.match(/^supabase\/functions\/([^/]+)\//)?.[1])
     .filter(name => names.has(name)))].sort();
 }

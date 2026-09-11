@@ -1,12 +1,32 @@
 import importlib.util
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 spec = importlib.util.spec_from_file_location('mirror', Path(__file__).with_name('sync-staging-data.py'))
 mirror = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mirror)
+verify_spec = importlib.util.spec_from_file_location('verify', Path(__file__).with_name('verify-staging-containment.py'))
+verify = importlib.util.module_from_spec(verify_spec)
+verify_spec.loader.exec_module(verify)
 
 
 class MirrorTests(unittest.TestCase):
+    def test_legacy_json_skill_strings_fit_staging_arrays_without_changing_source(self):
+        for value, expected in [('seo', ['seo']), ('["seo","copy"]', ['seo','copy']), (['seo'], ['seo']), (None, None)]:
+            row = {'task_skills': value}
+            self.assertEqual(mirror.normalize_arrays(row, ['task_skills'])['task_skills'], expected)
+            self.assertEqual(row['task_skills'], value)
+
+    def test_unchanged_inventory_needs_no_per_table_requests(self):
+        class API:
+            def query(self, *args, **kwargs):
+                raise AssertionError('An unchanged cached table must not make a request')
+        result = mirror.mirror_table(API(), {'name': 'clients', 'keys': ['id'], 'columns': ['id', 'name']},
+            inventory=[{'key': {'id': '1'}, 'digest': 'same'}],
+            previous_rows=[{'row_key': {'id': '1'}, 'digest': 'same'}], record_state=False)
+        self.assertEqual(result['changed_rows'], 0)
+        self.assertEqual(result['source_rows'], 1)
+
     def test_source_cannot_be_target(self):
         with self.assertRaises(ValueError): mirror.Management('a'*20, 'a'*20, 'fake')
 
@@ -56,6 +76,36 @@ class MirrorTests(unittest.TestCase):
         result = mirror.mirror_table(CappedAPI(), {'name': 'clients', 'keys': ['id'], 'columns': ['id','name']})
         self.assertEqual(result['source_rows'], 2501)
         self.assertEqual(result['changed_rows'], 0)
+
+
+class RecoveryTests(unittest.TestCase):
+    def test_download_retries_a_rate_limit_without_restart(self):
+        calls, pauses = [], []
+        results = [SimpleNamespace(returncode=1, stdout='', stderr='Error status 429'),
+                   SimpleNamespace(returncode=0, stdout='', stderr='')]
+        def run(args, **kwargs):
+            calls.append(args)
+            return results.pop(0)
+        verify.download_function('crm-records', 's'*20, Path('.'), run=run, pause=pauses.append)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][3], 'crm-records')
+        self.assertEqual(pauses, [30, 0.75])
+
+    def test_unverified_checkpoint_does_not_open_import_gate(self):
+        class API:
+            target = 's'*20
+            def query(self, sql): self.sql = sql
+        api = API()
+        verify.record_state(api, {'report': {'version': 1}}, 'a'*40)
+        self.assertIn('VALUES(true,1,false,NULL,', api.sql)
+        verify.record_state(api, {'report': {'version': 1}}, 'a'*40, verified=True)
+        self.assertIn('VALUES(true,1,true,now(),', api.sql)
+
+    def test_changed_deployment_cannot_resume_from_old_checkpoint(self):
+        class API:
+            def query(self, sql): return [{'source_sha': 'a'*40, 'edge_versions': {'report': 1}}]
+            def function_versions(self): return {'report': 2}
+        self.assertEqual(verify.recover_deployment_base(API()), '')
 
 
 if __name__ == '__main__': unittest.main()
