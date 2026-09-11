@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -92,6 +93,7 @@ import {
   Upload,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { copyDepartmentItemStorageKey } from "@/components/marketing/marketingRoutes";
 
 interface Props {
   clientFilter: MarketingClientFilter;
@@ -235,7 +237,9 @@ const extractCopyDocument = (output: string) => {
 
 export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props) {
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const itemParam = searchParams.get("item");
+  const [selectedId, setSelectedId] = useState<string | null>(itemParam);
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [composer, setComposer] = useState("");
@@ -261,6 +265,25 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const copyAbortRef = useRef<AbortController | null>(null);
   const copyAbortKindRef = useRef<"timeout" | "cancel" | "switch" | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
+  const selectionStorageKey = copyDepartmentItemStorageKey(tenantId);
+
+  const selectProject = useCallback((id: string | null) => {
+    setSelectedId(id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) {
+        next.set("item", id);
+        try {
+          sessionStorage.setItem(selectionStorageKey, id);
+        } catch {
+          // ignore
+        }
+      } else {
+        next.delete("item");
+      }
+      return next;
+    }, { replace: true });
+  }, [selectionStorageKey, setSearchParams]);
 
   const stopConceptGeneration = useCallback((kind: "timeout" | "cancel" | "switch") => {
     conceptsAbortKindRef.current = kind;
@@ -335,11 +358,44 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   });
 
   useEffect(() => {
-    if (!selectedId && items[0]?.id) setSelectedId(items[0].id);
-    if (selectedId && !items.some((item) => item.id === selectedId)) setSelectedId(items[0]?.id ?? null);
-  }, [items, selectedId]);
+    if (isLoading) return;
+
+    const saved = (() => {
+      try {
+        return sessionStorage.getItem(selectionStorageKey);
+      } catch {
+        return null;
+      }
+    })();
+    const preferred = [itemParam, saved].find((id) => id && items.some((item) => item.id === id)) ?? null;
+
+    if (preferred && preferred !== selectedId) {
+      setSelectedId(preferred);
+      if (preferred !== itemParam) {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("item", preferred);
+          return next;
+        }, { replace: true });
+      }
+      return;
+    }
+
+    if (!selectedId && items[0]?.id) {
+      selectProject(items[0].id);
+      return;
+    }
+
+    if (selectedId && !items.some((item) => item.id === selectedId)) {
+      selectProject(items[0]?.id ?? null);
+    }
+  }, [isLoading, itemParam, items, selectProject, selectedId, selectionStorageKey, setSearchParams]);
 
   useEffect(() => {
+    setSettingsOpen(false);
+    setCreateOpen(false);
+    setHandoffOpen(false);
+    setDeleteTarget(null);
     setEditingCopyId(null);
     setEditingCopyDraft("");
     stopConceptGeneration("switch");
@@ -1131,7 +1187,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         .eq("id", deleteTarget.id)
         .eq("tenant_id", tenantId);
       if (error) throw error;
-      if (selectedId === deleteTarget.id) setSelectedId(null);
+      if (selectedId === deleteTarget.id) selectProject(null);
       toast.success("הפרויקט נמחק");
       setDeleteTarget(null);
       await refresh();
@@ -1194,7 +1250,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                       className="h-7 px-2 text-[13px]"
                     />
                   ) : (
-                    <button type="button" onClick={() => setSelectedId(item.id)} className="block w-full min-w-0 overflow-hidden text-right" title={title}>
+                    <button type="button" onClick={() => selectProject(item.id)} className="block w-full min-w-0 overflow-hidden text-right" title={title}>
                       <div className="flex h-5 items-center justify-center group-hover/sidebar:hidden group-focus-within/sidebar:hidden">
                         <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
@@ -1399,7 +1455,7 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         tenantId={tenantId}
         defaultClientId={clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null}
         onCreated={async (id) => {
-          setSelectedId(id);
+          selectProject(id);
           setCreateOpen(false);
           await refresh();
           setSettingsOpen(true);
