@@ -11,6 +11,16 @@ verify_spec.loader.exec_module(verify)
 
 
 class MirrorTests(unittest.TestCase):
+    def test_unchanged_inventory_needs_no_per_table_requests(self):
+        class API:
+            def query(self, *args, **kwargs):
+                raise AssertionError('An unchanged cached table must not make a request')
+        result = mirror.mirror_table(API(), {'name': 'clients', 'keys': ['id'], 'columns': ['id', 'name']},
+            inventory=[{'key': {'id': '1'}, 'digest': 'same'}],
+            previous_rows=[{'row_key': {'id': '1'}, 'digest': 'same'}], record_state=False)
+        self.assertEqual(result['changed_rows'], 0)
+        self.assertEqual(result['source_rows'], 1)
+
     def test_source_cannot_be_target(self):
         with self.assertRaises(ValueError): mirror.Management('a'*20, 'a'*20, 'fake')
 
