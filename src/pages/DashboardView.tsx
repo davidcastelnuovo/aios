@@ -1,3 +1,4 @@
+import { reportRecordsQuery } from "@/lib/reportRecords";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -194,7 +195,7 @@ export default function DashboardView() {
   }, [isOrganizationDashboard, orgAgencies, selectedOrgAgencyId]);
 
   // Fetch tables for the client
-  const { data: tables = [], isPending: tablesPending } = useQuery({
+  const { data: tables = [], isPending: tablesPending } = useQuery<any[]>({
     queryKey: ['crm-tables-for-dashboard', dashboard?.client_id],
     queryFn: async () => {
       if (!dashboard?.client_id) return [];
@@ -242,7 +243,7 @@ export default function DashboardView() {
       }));
       return fieldsMap;
     },
-    enabled: tables.length > 0,
+    enabled: tables.length > 0 && platformFilter !== 'all',
   });
 
   // Fetch records from all tables
@@ -250,9 +251,10 @@ export default function DashboardView() {
     data: allRecords,
     isPending: recordsPending,
     isFetching: recordsFetching,
+    error: recordsError,
     dataUpdatedAt: recordsUpdatedAt,
     refetch: refetchRecords,
-  } = useQuery({
+  } = useQuery<any[]>({
     queryKey: ['crm-records-dashboard', tables.map((t: any) => t.id).join(','), dateFilter, customFromStr, customToStr],
     queryFn: async () => {
       if (tables.length === 0) return [];
@@ -283,17 +285,10 @@ export default function DashboardView() {
       });
 
       const recordsPromises = tablesToFetch.map(async (table: any) => {
-        const params = new URLSearchParams({ table_id: table.id, date_filter: dateFilter });
-        if (dateFilter === 'custom' && customFromStr && customToStr) {
-          params.set('date_from', customFromStr);
-          params.set('date_to', customToStr);
-        }
-        const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, { method: 'GET' });
-        if (response.error) {
-          console.error('Error fetching records for table', table.id, response.error);
-          return [];
-        }
-        const records = Array.isArray(response.data) ? response.data : [];
+        const records = await queryClient.fetchQuery({
+          ...reportRecordsQuery(supabase, table.id, dateFilter, customFromStr, customToStr),
+          // Reuse fresh table data when navigating between report views.
+        });
         return records.map((r: any) => ({
           ...r,
           _source: table.integration_type,
@@ -1074,6 +1069,12 @@ export default function DashboardView() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     const syncToast = toast.loading('מסנכרן נתונים מכל המקורות...');
+    const reloadReportRecords = async () => {
+      await Promise.all(tables.map((table: { id: string }) =>
+        queryClient.invalidateQueries({ queryKey: ['crm-records', table.id], refetchType: 'none' })
+      ));
+      return refetchRecords();
+    };
     try {
       // Compute date range for analytics-style syncs (GA / GSC).
       // ALWAYS sync at least the last 90 days (regardless of display filter)
@@ -1135,7 +1136,7 @@ export default function DashboardView() {
       const allTasks = [...tableTasks, ...wooTasks];
 
       if (allTasks.length === 0) {
-        await refetchRecords();
+        await reloadReportRecords();
         toast.success('הנתונים רועננו', { id: syncToast });
         return;
       }
@@ -1149,7 +1150,7 @@ export default function DashboardView() {
       });
 
       // Reload data from DB + bust Woo caches (tab visibility + KPI cards)
-      await refetchRecords();
+      await reloadReportRecords();
       invalidateWooDashboardQueries(queryClient, dashboard?.client_id);
 
       if (failed.length === 0) {
@@ -1400,6 +1401,11 @@ export default function DashboardView() {
             dashboard?.client_id ? (
               <SeoReportTabs clientId={dashboard.client_id} />
             ) : null
+          ) : recordsError && !allRecords ? (
+            <Card><CardContent className="flex items-center justify-between gap-4 p-6" role="alert">
+              <span>לא הצלחנו לטעון את נתוני הדוח. אפשר לנסות שוב.</span>
+              <Button variant="outline" onClick={() => refetchRecords()}>נסה שוב</Button>
+            </CardContent></Card>
           ) : recordsInitialLoad ? (
             <div className="grid gap-4 md:grid-cols-4">
               {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
