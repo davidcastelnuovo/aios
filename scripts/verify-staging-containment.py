@@ -45,6 +45,20 @@ def recover_deployment_base(api):
     return ''
 
 
+def verified_sources_unchanged(api, versions, root, sha, *, run=subprocess.run):
+    rows = api.query('SELECT verified_at,source_sha,edge_versions FROM environment_sync.safety WHERE singleton AND guard_version=1')
+    if not rows or not rows[0]['verified_at'] or rows[0]['edge_versions'] != versions:
+        return False
+    previous = rows[0]['source_sha'] or ''
+    if not re.fullmatch(r'[0-9a-f]{40}', previous) or not re.fullmatch(r'[0-9a-f]{40}', sha):
+        return False
+    # A previous complete source review remains valid only when ALL function
+    # files are identical and the complete live version map is unchanged.
+    result = run(['git', 'diff', '--quiet', previous, sha, '--', 'supabase/functions'],
+                 cwd=root, capture_output=True, text=True)
+    return result.returncode == 0
+
+
 def main():
     root = Path.cwd()
     api = mirror.Management(os.environ['PRODUCTION_REF'], os.environ['STAGING_REF'], os.environ['SUPABASE_ACCESS_TOKEN'])
@@ -66,9 +80,17 @@ def main():
     versions = api.function_versions()
     if not versions: raise RuntimeError('No live Staging functions to verify')
     sha = os.environ.get('SOURCE_SHA', '')
+    reuse_verified_sources = verified_sources_unchanged(api, versions, root, sha)
     if options.record_deployment:
+        if reuse_verified_sources:
+            print('Reviewed sources and live versions are unchanged; preserving their attestation with imports closed')
+            return
         record_state(api, versions, sha)
         print('Source deployment checkpoint recorded; imports remain blocked')
+        return
+    if reuse_verified_sources:
+        print('Reusing complete source attestation: all function files and live versions are unchanged')
+        finish_verification(api, versions, sha)
         return
     help_result = subprocess.run(['supabase','functions','download','--help'], capture_output=True, text=True, check=True)
     if '--use-api' not in help_result.stdout:
@@ -94,6 +116,10 @@ def main():
                 raise RuntimeError(f'{name}: deployed outbound guard differs from reviewed source')
             if index % 20 == 0 or index == len(versions):
                 print(f'Verified {index}/{len(versions)} Staging entrypoints', flush=True)
+    finish_verification(api, versions, sha)
+
+
+def finish_verification(api, versions, sha):
     row = api.query("SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid='net.http_request_queue'::regclass AND tgname='aios_staging_outbound_block' AND tgenabled='O') AS guarded")[0]
     if not row['guarded']: raise RuntimeError('Database webhook containment is missing')
     if api.function_versions() != versions:

@@ -1,5 +1,8 @@
 import importlib.util
 import unittest
+import json
+import subprocess
+import tempfile
 from types import SimpleNamespace
 from pathlib import Path
 spec = importlib.util.spec_from_file_location('mirror', Path(__file__).with_name('sync-staging-data.py'))
@@ -11,6 +14,24 @@ verify_spec.loader.exec_module(verify)
 
 
 class MirrorTests(unittest.TestCase):
+    def test_connection_parent_keeps_personal_scope_and_no_credentials(self):
+        class API:
+            def query(self, sql, source=False):
+                if source:
+                    self.source_sql = sql
+                    return [{'items': [{'id': '1', 'user_id': 'owner', 'connection_visibility': 'private'}]}]
+                self.target_sql = sql
+        api = API()
+        mirror.ensure_integration_parents(api)
+        self.assertIn('user_id', api.source_sql)
+        self.assertIn('tenant_id,user_id,integration_type,connection_visibility', api.target_sql)
+        self.assertIn("false,false,'{}'::jsonb", api.target_sql)
+        self.assertNotIn('api_key', api.source_sql)
+
+    def test_database_error_logs_schema_but_never_row_data(self):
+        body = json.dumps({'message': 'ERROR:  23505: duplicate key violates unique constraint "connections_org_unique"\nDETAIL: Key (email)=(private@example.com) already exists.\nINSERT secret-value'})
+        self.assertEqual(mirror.safe_database_error(body), ' (SQLSTATE 23505, constraint connections_org_unique)')
+        self.assertEqual(mirror.safe_database_error('private raw body'), '')
     def test_legacy_json_skill_strings_fit_staging_arrays_without_changing_source(self):
         for value, expected in [('seo', ['seo']), ('["seo","copy"]', ['seo','copy']), (['seo'], ['seo']), (None, None)]:
             row = {'task_skills': value}
@@ -79,6 +100,32 @@ class MirrorTests(unittest.TestCase):
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_source_attestation_requires_identical_function_files_and_live_versions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
+            git('init', '-q')
+            git('config', 'user.name', 'Test')
+            git('config', 'user.email', 'test@example.invalid')
+            function = root / 'supabase/functions/report/index.ts'
+            function.parent.mkdir(parents=True)
+            function.write_text('guarded source')
+            git('add', '.')
+            git('commit', '-qm', 'reviewed')
+            previous = git('rev-parse', 'HEAD')
+            (root / 'mirror.py').write_text('data-only change')
+            git('add', '.')
+            git('commit', '-qm', 'mirror change')
+            class API:
+                def query(self, sql): return [{'verified_at': 'timestamp', 'source_sha': previous, 'edge_versions': {'report': 1}}]
+            self.assertTrue(verify.verified_sources_unchanged(API(), {'report': 1}, root, git('rev-parse', 'HEAD')))
+            self.assertFalse(verify.verified_sources_unchanged(API(), {'report': 2}, root, git('rev-parse', 'HEAD')))
+            function.write_text('different runtime')
+            git('add', '.')
+            git('commit', '-qm', 'runtime change')
+            self.assertFalse(verify.verified_sources_unchanged(API(), {'report': 1}, root, git('rev-parse', 'HEAD')))
+
     def test_download_retries_a_rate_limit_without_restart(self):
         calls, pauses = [], []
         results = [SimpleNamespace(returncode=1, stdout='', stderr='Error status 429'),
