@@ -17,6 +17,19 @@ credentials_spec.loader.exec_module(credentials)
 
 
 class MirrorTests(unittest.TestCase):
+    def test_large_imports_bound_wire_bytes_and_preserve_every_row(self):
+        rows = [{'key': {'id': str(i)}, 'digest': 'digest'+str(i),
+                 'row': {'id': str(i), 'name': 'נתונים'*1000}} for i in range(6)]
+        statements = list(mirror.bounded_apply_batches('clients', ['id'], ['id', 'name'], rows, max_bytes=50_000))
+        self.assertGreater(len(statements), 1)
+        self.assertEqual(sum(count for _, count in statements), len(rows))
+        self.assertTrue(all(len(json.dumps({'query': sql}).encode()) <= 50_000 for sql, _ in statements))
+        for i in range(6):
+            self.assertEqual(sum(('digest'+str(i)) in sql for sql, _ in statements), 1)
+        singleton = list(mirror.bounded_apply_batches('clients', ['id'], ['id', 'name'], rows[:1], max_bytes=1))
+        self.assertEqual(singleton[0][1], 1)
+        self.assertEqual([len(batch) for batch in mirror.batches(list(range(1001)))], [500, 500, 1])
+
     def test_connection_parent_keeps_personal_scope_and_no_credentials(self):
         class API:
             def query(self, sql, source=False):

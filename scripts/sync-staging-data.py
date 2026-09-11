@@ -39,7 +39,7 @@ def key_text(key):
     return json.dumps(key, sort_keys=True, separators=(',', ':'))
 
 
-def batches(values, size=150):
+def batches(values, size=500):
     for start in range(0, len(values), size):
         yield values[start:start + size]
 
@@ -254,6 +254,18 @@ DO $restore$ DECLARE n text; BEGIN FOR n IN SELECT tgname FROM mirror_active_tri
 COMMIT;"""
 
 
+def bounded_apply_batches(table, keys, columns, items, array_columns=(), *, max_bytes=2_000_000):
+    sql = apply_batch_sql(table, keys, columns, items, array_columns)
+    # Bound the actual JSON request, including Unicode and SQL escaping.
+    # A single large record stays intact and either succeeds or fails visibly.
+    if len(items) > 1 and len(json.dumps({'query': sql}).encode()) > max_bytes:
+        middle = len(items) // 2
+        yield from bounded_apply_batches(table, keys, columns, items[:middle], array_columns, max_bytes=max_bytes)
+        yield from bounded_apply_batches(table, keys, columns, items[middle:], array_columns, max_bytes=max_bytes)
+    else:
+        yield sql, len(items)
+
+
 def row_sql(columns):
     parts = ['jsonb_build_object(' + ','.join(f'{literal(c)},t.{ident(c)}' for c in group) + ')' for group in batches(columns, 40)]
     return '(' + ' || '.join(parts) + ')'
@@ -312,8 +324,9 @@ def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows
         # between inventory and fetch; its newer version must never be skipped.
         rows = api.query(f"SELECT {key_sql(keys)} AS key, md5({row_value}::text) AS digest, {row_value} AS row FROM {relation} t JOIN jsonb_populate_recordset(NULL::{relation},{json_sql(requested)}) s ON {matches}", source=True)
         if rows:
-            api.query(apply_batch_sql(name, keys, columns, rows, table.get('array_columns', [])))
-            applied += len(rows)
+            for statement, count in bounded_apply_batches(name, keys, columns, rows, table.get('array_columns', [])):
+                api.query(statement)
+                applied += count
     removed = [item['row_key'] for key, item in previous.items() if key not in incoming] if delete_only else []
     deleted = 0
     for group in batches(removed):
