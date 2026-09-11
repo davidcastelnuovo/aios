@@ -1,4 +1,4 @@
-import type { CloudDirectProvider, SendContext, SendResult } from "./types.ts";
+import type { ChannelProvider, CloudDirectProvider, SendContext, SendResult } from "./types.ts";
 import { acceptedMessageFor, capabilitiesForProvider } from "./logic.ts";
 import { grokUsesExistingWebhook } from "./cloud-errors.ts";
 import { createCloudAgent, followUpCloudAgent, cursorApiKey } from "./cursor-api.ts";
@@ -35,14 +35,10 @@ function clip(text: string, max = MAX_TEXT): string {
 
 function modelIdFor(provider: CloudDirectProvider): string {
   if (provider === "grok") return Deno.env.get("GROK_MODEL_ID") || "cursor-grok-4.6-high-fast";
-  if (provider === "codex") return Deno.env.get("CODEX_MODEL_ID") || Deno.env.get("CURSOR_CODEX_MODEL_ID") || "";
   return Deno.env.get("CURSOR_MODEL_ID") || "";
 }
 
 function envNameFor(provider: CloudDirectProvider): string | undefined {
-  if (provider === "codex") {
-    return Deno.env.get("CODEX_CLOUD_ENV_NAME") || Deno.env.get("CURSOR_CLOUD_ENV_NAME") || undefined;
-  }
   if (provider === "grok") {
     return Deno.env.get("GROK_CLOUD_ENV_NAME") || Deno.env.get("CURSOR_CLOUD_ENV_NAME") || undefined;
   }
@@ -106,7 +102,7 @@ export async function launchCloudDirect(
         "Do NOT call ask_carmen. Use reply_to_aios_session or the HTTP callback above.",
     });
     fired = { id: delivered.id, url: delivered.url, reused: true };
-  } else if (provider === "cursor" || provider === "codex") {
+  } else if (provider === "cursor") {
     fired = await deliverToOpenCloudChat({
       apiKey,
       sb,
@@ -197,11 +193,17 @@ async function deliverToOpenCloudChat(args: {
 
 export async function launchParliamentSeat(
   ctx: SendContext,
-  provider: CloudDirectProvider,
+  provider: ChannelProvider,
   prompt: string,
   parliament: { runId: string; round: number },
 ): Promise<SendResult> {
-  return launchCloudDirect(ctx, provider, prompt, parliament);
+  if (provider === "codex" || provider === "chatgpt") {
+    return launchWorkspaceAgent(ctx, provider, prompt, parliament);
+  }
+  if (provider === "cursor" || provider === "grok") {
+    return launchCloudDirect(ctx, provider, prompt, parliament);
+  }
+  throw new Error(`Parliament seat not supported: ${provider}`);
 }
 
 export async function launchClaude(ctx: SendContext, extraPrompt?: string): Promise<SendResult> {

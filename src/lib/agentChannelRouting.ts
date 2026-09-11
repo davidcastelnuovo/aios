@@ -113,7 +113,7 @@ export type ChannelHealth = {
 export function channelHealthBanner(health: ChannelHealth | null | undefined): string | null {
   if (!health) return null;
   if (health.cursor && health.cursor.ok === false) {
-    return "מושבי Cursor / Grok / Codex לא מחוברים בסביבת הפיתוח. הפריוויו מדבר עם Staging — צריך מפתח User תקף ב-CURSOR_API_KEY שם. כרמן הפנימית עובדת.";
+    return "מושבי Cursor / Grok לא מחוברים בסביבת הפיתוח. הפריוויו מדבר עם Staging — צריך מפתח User תקף ב-CURSOR_API_KEY שם. כרמן הפנימית עובדת.";
   }
   if (health.ok && health.seats?.cursor?.open_chat === false) {
     return "Cursor Direct לא זמין — בדוק ש-CURSOR_API_KEY מוגדר בסביבה.";
@@ -126,7 +126,7 @@ export function billingNoteForRoute(provider?: string | null): string | null {
     case "cursor":
       return "כרמן ישיר · סוכן Cursor חדש לכל משימה";
     case "codex":
-      return "Codex Direct · סוכן Cursor חדש לכל משימה";
+      return "Codex Direct · ChatGPT Workspace / Work Mode";
     case "chatgpt":
       return "ChatGPT Workspace · Work Mode";
     case "internal":

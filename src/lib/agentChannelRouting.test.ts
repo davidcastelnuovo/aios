@@ -94,10 +94,10 @@ test("health banner explains when Cursor Direct is unavailable", () => {
   assert.match(banner || "", /CURSOR_API_KEY/);
 });
 
-test("route notes: Cursor and Codex both use Cursor Cloud", () => {
+test("route notes: Cursor uses Cloud; Codex uses ChatGPT Workspace", () => {
   assert.match(billingNoteForRoute("cursor") || "", /סוכן Cursor חדש/);
-  assert.match(billingNoteForRoute("codex") || "", /Codex Direct/);
-  assert.match(billingNoteForRoute("codex") || "", /Cursor/);
+  assert.match(billingNoteForRoute("codex") || "", /ChatGPT Workspace/);
+  assert.doesNotMatch(billingNoteForRoute("codex") || "", /סוכן Cursor/);
 });
 
 test("parliament seats are Cursor + Grok + Codex", () => {
