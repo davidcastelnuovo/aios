@@ -90,6 +90,14 @@ class MirrorTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'ambiguous source logical key'):
             mirror.reconcile_legacy_keys(API(), {'name':'user_permissions'})
 
+    def test_null_or_mismatched_keys_cannot_generate_a_write_or_checkpoint(self):
+        for item in [
+            {'key':{'id':None},'row':{'id':None},'digest':'x'},
+            {'key':{'id':'a'},'row':{'id':'b'},'digest':'x'},
+        ]:
+            with self.assertRaisesRegex(ValueError, 'non-null and match'):
+                mirror.apply_batch_sql('clients',['id'],['id'],[item])
+
     def test_unchanged_inventory_needs_no_per_table_requests(self):
         class API:
             def query(self, *args, **kwargs):

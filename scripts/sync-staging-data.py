@@ -348,9 +348,13 @@ def normalize_arrays(row, array_columns, required_arrays=()):
 
 
 def apply_batch_sql(table, keys, columns, items, array_columns=(), required_arrays=()):
+    if not keys or any(any(item['key'].get(k) is None or item['row'].get(k) != item['key'][k] for k in keys) for item in items):
+        raise ValueError('Mirror keys must be non-null and match their row image')
     relation = 'public.' + ident(table)
     payload = [normalize_arrays(item['row'], array_columns, required_arrays) for item in items]
-    matches = ' AND '.join(f't.{ident(k)} IS NOT DISTINCT FROM s.{ident(k)}' for k in keys)
+    # Stable source keys are non-null. Equality allows indexed lookups instead
+    # of comparing every imported row with the complete destination table.
+    matches = ' AND '.join(f't.{ident(k)}=s.{ident(k)}' for k in keys)
     nonkeys = [c for c in columns if c not in keys]
     update = ('WHEN MATCHED THEN UPDATE SET ' + ','.join(f'{ident(c)}=s.{ident(c)}' for c in nonkeys)) if nonkeys else ''
     fields = ','.join(map(ident, columns))
@@ -373,7 +377,7 @@ DO $apply$ DECLARE batch jsonb := (SELECT jsonb_agg(p.item) FROM mirror_payload 
  issue_state text; issue_constraint text; issue_column text;
 BEGIN
  BEGIN
-  MERGE INTO {relation} t USING (SELECT (jsonb_populate_record(NULL::{relation},x->'row')).* FROM jsonb_array_elements(batch) b(x)) s
+  MERGE INTO {relation} t USING jsonb_populate_recordset(NULL::{relation},(SELECT jsonb_agg(x->'row') FROM jsonb_array_elements(batch) b(x))) s
   ON {matches}
   {update}
   WHEN NOT MATCHED THEN INSERT ({fields}) VALUES ({','.join('s.'+ident(c) for c in columns)});
@@ -384,7 +388,7 @@ BEGIN
   FOR item IN SELECT value FROM jsonb_array_elements(batch) LOOP
    accepted := true;
    BEGIN
-    MERGE INTO {relation} t USING (SELECT (jsonb_populate_record(NULL::{relation},item->'row')).*) s
+    MERGE INTO {relation} t USING jsonb_populate_recordset(NULL::{relation},jsonb_build_array(item->'row')) s
     ON {matches}
     {update}
     WHEN NOT MATCHED THEN INSERT ({fields}) VALUES ({','.join('s.'+ident(c) for c in columns)});
