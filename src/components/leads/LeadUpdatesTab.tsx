@@ -209,9 +209,9 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
   const completedTasks = tasks?.filter(t => t.status === "done") || [];
 
   const getPriorityColor = (priority: number) => {
-    if (priority >= 8) return "bg-red-50 border-red-200 text-red-700";
-    if (priority >= 4) return "bg-yellow-50 border-yellow-200 text-yellow-700";
-    return "bg-green-50 border-green-200 text-green-700";
+    if (priority >= 8) return "bg-surface-status-red border-red-200 text-red-700";
+    if (priority >= 4) return "bg-surface-status-yellow border-yellow-200 text-yellow-700";
+    return "bg-surface-status-green border-green-200 text-green-700";
   };
 
   const getPriorityBadge = (priority: number) => {
@@ -368,7 +368,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
               const isOwner = user?.id === update.user_id;
               
               return (
-                <Card key={update.id} className="bg-muted/50">
+                <Card key={update.id} className="bg-surface-elevated">
                   <CardContent className="p-3">
                     {isEditing ? (
                       <div className="space-y-2">

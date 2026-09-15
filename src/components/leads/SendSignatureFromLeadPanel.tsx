@@ -153,14 +153,14 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
+          <div className="rounded-lg border bg-surface-inset p-3 text-sm space-y-1">
             <p><span className="text-muted-foreground">חותם:</span> {recipientName || "—"}</p>
             <p dir="ltr" className="text-left"><span className="text-muted-foreground" dir="rtl">אימייל:</span> {recipientEmail || "—"}</p>
             {lead.phone && <p><span className="text-muted-foreground">טלפון:</span> {lead.phone}</p>}
           </div>
 
           {/* Save new document */}
-          <div className="rounded-lg border p-3 space-y-3">
+          <div className="rounded-lg border bg-surface-elevated p-3 space-y-3">
             <p className="text-sm font-medium">שמור מסמך חדש</p>
             <div className="space-y-2">
               <Label>שם המסמך</Label>
@@ -250,7 +250,7 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
           </div>
 
           {lastLinks.length > 0 && (
-            <div className="rounded-lg border p-3 space-y-3 min-w-0 overflow-hidden">
+            <div className="rounded-lg border bg-surface-elevated p-3 space-y-3 min-w-0 overflow-hidden">
               <p className="text-sm font-medium">הקישור לחתימה מוכן</p>
               {lastLinks.map((link) => (
                 <div key={link.url} className="space-y-2 min-w-0">
@@ -283,7 +283,7 @@ export function SendSignatureFromLeadPanel({ lead, tenantId }: SendSignatureFrom
                 : null;
 
               return (
-                <div key={doc.id} className="flex items-center justify-between gap-2 p-2 border rounded-lg text-sm">
+                <div key={doc.id} className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-surface-inset text-sm">
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{doc.title}</p>
                     <p className="text-xs text-muted-foreground">

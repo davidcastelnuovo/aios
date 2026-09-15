@@ -188,7 +188,7 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
             {stage.label}
           </div>
         </div>
-        <div className="bg-muted/30 rounded-b-lg p-4 flex-1 space-y-3 min-h-[550px]">
+        <div className="bg-surface-inset rounded-b-lg p-4 flex-1 space-y-3 min-h-[550px]">
           {children}
         </div>
       </div>

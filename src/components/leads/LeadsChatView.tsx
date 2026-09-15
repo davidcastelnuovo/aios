@@ -228,10 +228,10 @@ export function LeadsChatView({
   const getLeadStatusInfo = (statusKey: string) => findLeadStatus(statusKey, leadStatuses);
 
   return (
-    <div dir="ltr" className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background w-full max-w-full">
+    <div dir="ltr" className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-surface-elevated w-full max-w-full">
       {/* Right side - Lead list */}
       {(!isMobile || !selectedLeadId) && (
-      <div dir="rtl" className={cn("border-l flex flex-col bg-muted/20 overflow-hidden", isMobile ? "w-full" : "w-[25%] min-w-[240px] max-w-[25%]")}>
+      <div dir="rtl" className={cn("border-l flex flex-col bg-surface-inset overflow-hidden", isMobile ? "w-full" : "w-[25%] min-w-[240px] max-w-[25%]")}>
         {/* List header with search */}
         <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center gap-2">
@@ -641,7 +641,7 @@ export function LeadsChatView({
 
             {/* Tags bar */}
             {selectedLeadTagIds.length > 0 && (
-              <div className="px-4 py-2 border-b bg-muted/20 flex items-center gap-2">
+              <div className="px-4 py-2 border-b bg-surface-inset flex items-center gap-2">
                 <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                 <LeadTagBadgesEditable
                   leadId={selectedLead.id}
@@ -689,7 +689,7 @@ export function LeadsChatView({
                   {/* Info cards grid */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* Contact */}
-                    <div className="border rounded-lg p-4 space-y-3 text-right">
+                    <div className="bg-surface-elevated border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         פרטי קשר
                         <User className="h-4 w-4 text-primary" />
@@ -729,7 +729,7 @@ export function LeadsChatView({
                     </div>
 
                     {/* Dates & timeline */}
-                    <div className="border rounded-lg p-4 space-y-3 text-right">
+                    <div className="bg-surface-elevated border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
                       <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
                         ציר זמן
                         <Clock className="h-4 w-4 text-primary" />
@@ -770,7 +770,7 @@ export function LeadsChatView({
                   </div>
 
                   {/* Notes */}
-                  <div className="border rounded-lg p-4 text-right">
+                  <div className="bg-surface-elevated border border-border/60 rounded-xl p-4 text-right shadow-sm">
                     <h3 className="font-semibold text-sm mb-2">הערות</h3>
                     {selectedLead.notes ? (
                       <p className="text-sm text-muted-foreground whitespace-pre-wrap text-right" dir="rtl">{selectedLead.notes}</p>
@@ -780,7 +780,7 @@ export function LeadsChatView({
                   </div>
 
                   {/* Updates + tasks in the same details window */}
-                  <div className="border rounded-lg p-4 text-right" dir="rtl">
+                  <div className="bg-surface-elevated border border-border/60 rounded-xl p-4 text-right shadow-sm" dir="rtl">
                     <h3 className="font-semibold text-sm mb-3">עדכונים ומשימות</h3>
                     <LeadUpdatesTab leadId={selectedLead.id} leadName={selectedLead.contact_name || selectedLead.company_name || "ליד"} />
                   </div>
@@ -793,7 +793,7 @@ export function LeadsChatView({
                       const items = ids.map((id: string) => productsLookup[id]).filter(Boolean);
                       if (items.length === 0) return null;
                       return (
-                        <div className="border rounded-lg p-4">
+                        <div className="bg-surface-elevated border border-border/60 rounded-xl p-4 shadow-sm">
                           <h3 className="font-semibold text-sm mb-2">מוצרים / שירותים</h3>
                           <div className="flex flex-wrap gap-2">
                             {items.map((p: any, i: number) => (
