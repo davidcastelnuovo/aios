@@ -50,6 +50,7 @@ import {
   resolveTasksBoardScope,
   filterTasksForBoardView,
   syncLocalTasksForAgencyFilter,
+  filterTasksByBoardTenantScope,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineAssignmentOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
@@ -322,7 +323,6 @@ export function WeeklyTaskBoard() {
       const boardScope = resolveTasksBoardScope({
         tenantId: tenantId!,
         crossTenantAgencyIds,
-        accessibleAgencyIds: (agencies || []).map((agency) => agency.id),
       });
 
       let collaboratorTaskIds: string[] = [];
@@ -430,6 +430,24 @@ export function WeeklyTaskBoard() {
     [filters.campaignerId, mineIdentity],
   );
 
+  const applyBoardViewFilters = useMemo(
+    () => (rows: FullTask[]) =>
+      applyCampaignerBoardFilter(
+        filterTasksByBoardTenantScope(
+          filterTasksForBoardView(rows, selectedAgency, filters.campaignerId),
+          tenantId!,
+          crossTenantAgencyIds,
+        ),
+      ),
+    [
+      applyCampaignerBoardFilter,
+      selectedAgency,
+      filters.campaignerId,
+      tenantId,
+      crossTenantAgencyIds,
+    ],
+  );
+
   useEffect(() => {
     if (isError) return;
     if (!isSuccess && !isFetching) return;
@@ -442,7 +460,7 @@ export function WeeklyTaskBoard() {
       previousLocal: localTasks,
       selectedAgency,
       campaignerFilter: filters.campaignerId,
-      applyCampaignerFilter: applyCampaignerBoardFilter,
+      applyCampaignerFilter: applyBoardViewFilters,
     });
     setLocalTasks(next);
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
@@ -459,10 +477,8 @@ export function WeeklyTaskBoard() {
   // Team board: header agency narrows rows. Personal "mine" queue is the linked
   // staff member's assignments across every agency.
   const tasks = useMemo(
-    () => applyCampaignerBoardFilter(
-      filterTasksForBoardView(localTasks, selectedAgency, filters.campaignerId),
-    ),
-    [localTasks, selectedAgency, filters.campaignerId, applyCampaignerBoardFilter],
+    () => applyBoardViewFilters(localTasks),
+    [localTasks, applyBoardViewFilters],
   );
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates).

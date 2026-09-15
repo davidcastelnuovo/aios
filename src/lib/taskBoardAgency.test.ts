@@ -11,6 +11,8 @@ import {
   buildTasksBoardScopeOrFilter,
   resolveTasksBoardScope,
   syncLocalTasksForAgencyFilter,
+  filterTasksByBoardTenantScope,
+  taskBelongsToBoardTenantScope,
 } from "./taskBoardAgency.ts";
 import { filterTasksByCampaignerBoardFilter } from "./taskFilters.ts";
 
@@ -168,6 +170,61 @@ test("buildTasksBoardScopeOrFilter scopes tenant and shared agencies only", () =
   assert.equal(
     buildTasksBoardScopeOrFilter(resolveTasksBoardScope({ tenantId: "tenant-promo" })),
     "tenant_id.eq.tenant-promo",
+  );
+});
+
+test("resolveTasksBoardScope ignores own-tenant agency ids (not cross-tenant shares)", () => {
+  assert.deepEqual(
+    resolveTasksBoardScope({
+      tenantId: "tenant-promo",
+      crossTenantAgencyIds: [],
+    }),
+    { type: "tenant", tenantId: "tenant-promo" },
+  );
+  assert.deepEqual(
+    resolveTasksBoardScope({
+      tenantId: "tenant-promo",
+      crossTenantAgencyIds: ["agency-dmm-mc"],
+    }),
+    { type: "tenant_or_shared", tenantId: "tenant-promo", crossTenantAgencyIds: ["agency-dmm-mc"] },
+  );
+});
+
+test("filterTasksByBoardTenantScope keeps own tenant and shared-agency client rows", () => {
+  const promoTenant = "tenant-promo";
+  const sharedDmmAgency = DMM;
+  const ownTenantTask = { ...promoTaskNoClient, tenant_id: promoTenant };
+  const foreignSharedClientTask = {
+    ...misstampedDmmTask,
+    tenant_id: "tenant-dmm",
+  };
+  const foreignUnsharedTask = {
+    id: "4",
+    tenant_id: "tenant-other",
+    agency_id: "agency-other",
+    client_id: "client-other",
+    clients: { agency_id: "agency-other" },
+  };
+  const rows = [ownTenantTask, foreignSharedClientTask, foreignUnsharedTask];
+  assert.deepEqual(
+    filterTasksByBoardTenantScope(rows, promoTenant, [sharedDmmAgency]).map((task) => task.id),
+    ["3", "1"],
+  );
+});
+
+test("taskBelongsToBoardTenantScope rejects cross-tenant rows without a shared client", () => {
+  assert.equal(
+    taskBelongsToBoardTenantScope(
+      {
+        tenant_id: "tenant-dmm",
+        agency_id: DMM,
+        client_id: null,
+        clients: null,
+      },
+      "tenant-promo",
+      [DMM],
+    ),
+    false,
   );
 });
 

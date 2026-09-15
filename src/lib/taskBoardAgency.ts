@@ -94,6 +94,39 @@ export function filterTasksForBoardView<T extends AgencyScopedTask>(
   );
 }
 
+type BoardTenantScopedTask = AgencyScopedTask & {
+  tenant_id?: string | null;
+};
+
+/**
+ * Active-tenant guard for the tasks board.
+ *
+ * - Rows stamped with the URL/effective tenant always belong.
+ * - Cross-tenant rows appear only when linked to a client whose agency is
+ *   shared into this tenant via agency_tenant_access.
+ */
+export function taskBelongsToBoardTenantScope(
+  task: BoardTenantScopedTask,
+  tenantId: string,
+  sharedAgencyIds: string[],
+): boolean {
+  if (!tenantId) return true;
+  if (task.tenant_id === tenantId) return true;
+  if (!task.client_id) return false;
+  const clientAgencyId = task.clients?.agency_id;
+  if (!clientAgencyId) return false;
+  return sharedAgencyIds.includes(clientAgencyId);
+}
+
+export function filterTasksByBoardTenantScope<T extends BoardTenantScopedTask>(
+  tasks: T[],
+  tenantId: string,
+  sharedAgencyIds: string[],
+): T[] {
+  if (!tenantId) return tasks;
+  return tasks.filter((task) => taskBelongsToBoardTenantScope(task, tenantId, sharedAgencyIds));
+}
+
 /**
  * PostgREST `.or()` scope for the tasks board fetch.
  *
@@ -126,12 +159,11 @@ export type TasksBoardScope =
 export function resolveTasksBoardScope(input: {
   tenantId: string;
   crossTenantAgencyIds?: string[];
-  accessibleAgencyIds?: string[];
 }): TasksBoardScope {
-  const { tenantId, crossTenantAgencyIds = [], accessibleAgencyIds = [] } = input;
-  const agencyIds = Array.from(new Set([...crossTenantAgencyIds, ...accessibleAgencyIds]));
-  if (agencyIds.length > 0) {
-    return { type: "tenant_or_shared", tenantId, crossTenantAgencyIds: agencyIds };
+  const { tenantId, crossTenantAgencyIds = [] } = input;
+  const sharedAgencyIds = Array.from(new Set(crossTenantAgencyIds));
+  if (sharedAgencyIds.length > 0) {
+    return { type: "tenant_or_shared", tenantId, crossTenantAgencyIds: sharedAgencyIds };
   }
   return { type: "tenant", tenantId };
 }
