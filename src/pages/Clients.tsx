@@ -598,9 +598,9 @@ export default function Clients() {
       case "happy":
         return { emoji: "😊", text: "לקוח מבסוט", color: "text-green-600 bg-green-50 border-green-200" };
       case "wavering":
-        return { emoji: "😐", text: "לקוח מתנדנד", color: "text-yellow-600 bg-yellow-50 border-yellow-200" };
+        return { emoji: "😐", text: "לקוח מתנדנד", color: "text-yellow-600 bg-surface-status-yellow border-yellow-200" };
       case "churn_risk":
-        return { emoji: "😟", text: "סכנת נטישה", color: "text-red-600 bg-red-50 border-red-200" };
+        return { emoji: "😟", text: "סכנת נטישה", color: "text-red-600 bg-surface-status-red border-red-200" };
       case "not_progressing":
         return { emoji: "😔", text: "לא מתקדם", color: "text-orange-600 bg-orange-50 border-orange-200" };
       default:

@@ -9,13 +9,19 @@ All colors MUST be HSL.
 @layer base {
   :root {
     /* Deep Blue #0A1526 - Primary brand color */
-    --background: 0 0% 94%;
+    --background: 220 10% 92%;
     --foreground: 209 59% 10%;
 
-    --card: 0 0% 100%;
+    /* Warm cream — bordered panels sit above the page background */
+    --card: 42 48% 99%;
     --card-foreground: 209 59% 10%;
+    --surface-elevated: 42 48% 99%;
+    --surface-inset: 42 36% 97%;
+    --surface-status-yellow: 46 62% 97.5%;
+    --surface-status-red: 8 58% 97.5%;
+    --surface-status-green: 145 42% 97.5%;
 
-    --popover: 0 0% 100%;
+    --popover: 42 48% 99%;
     --popover-foreground: 209 59% 10%;
 
     /* Turquoise Green - Primary accent color */

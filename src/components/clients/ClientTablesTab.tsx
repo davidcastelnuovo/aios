@@ -324,7 +324,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
       {/* Collapsible link section */}
       {showLinkSection && (
-        <div className="space-y-3 p-3 bg-muted/30 rounded-lg border">
+        <div className="space-y-3 p-3 bg-surface-elevated rounded-lg border">
           {/* Table selector */}
           <div className="flex flex-col items-end gap-1">
             <span className="text-muted-foreground text-xs flex items-center gap-1">

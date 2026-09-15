@@ -756,7 +756,7 @@ export function CampaignPulseDashboard({
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-red-50"
+          className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-surface-status-red"
           onClick={() => setFilterStatus(filterStatus === "red" ? "all" : "red")}
         >
           <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
@@ -768,7 +768,7 @@ export function CampaignPulseDashboard({
           </CardContent>
         </Card>
         <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-yellow-50"
+          className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-surface-status-yellow"
           onClick={() => setFilterStatus(filterStatus === "yellow" ? "all" : "yellow")}
         >
           <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
@@ -780,7 +780,7 @@ export function CampaignPulseDashboard({
           </CardContent>
         </Card>
         <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-green-50"
+          className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-surface-status-green"
           onClick={() => setFilterStatus(filterStatus === "green" ? "all" : "green")}
         >
           <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
@@ -1075,10 +1075,10 @@ export function CampaignPulseDashboard({
                 key={pulseRow.id}
                 className={
                   pulseRow.overall === "red"
-                    ? "border-red-200 bg-red-50/30"
+                    ? "border-red-200 bg-surface-status-red"
                     : pulseRow.overall === "yellow"
-                      ? "border-yellow-200 bg-yellow-50/20"
-                      : ""
+                      ? "border-yellow-200 bg-surface-status-yellow"
+                      : "bg-surface-elevated"
                 }
               >
                 <CardContent className="p-4 space-y-3">
