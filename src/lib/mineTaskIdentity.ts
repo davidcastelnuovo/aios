@@ -72,6 +72,7 @@ export async function fetchMineTaskIdentity(input: {
 
   return {
     ...assignee,
+    userId,
     campaignerIds: [...campaignerIds],
   };
 }

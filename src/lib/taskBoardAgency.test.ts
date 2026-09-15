@@ -11,7 +11,10 @@ import {
   buildTasksBoardScopeOrFilter,
   resolveTasksBoardScope,
   syncLocalTasksForAgencyFilter,
+  filterTasksByBoardTenantScope,
+  taskBelongsToBoardTenantScope,
 } from "./taskBoardAgency.ts";
+import { filterTasksByCampaignerBoardFilter } from "./taskFilters.ts";
 
 const PROMO = "agency-promo";
 const DMM = "agency-dmm";
@@ -134,18 +137,95 @@ test("syncLocalTasksForAgencyFilter keeps mine rows across agencies while fetchi
   assert.deepEqual(duringFetch.map((task) => task.id), ["1", "3"]);
 });
 
-test("buildTasksBoardScopeOrFilter ORs every campaigner assignment into fetch scope", () => {
+test("syncLocalTasksForAgencyFilter can narrow by campaigner while fetching", () => {
+  const rows = [
+    { ...misstampedDmmTask, campaigner_id: "staff-itay" },
+    { ...promoTaskNoClient, campaigner_id: "staff-other" },
+  ];
+  const duringFetch = syncLocalTasksForAgencyFilter({
+    isFetching: true,
+    fetchedTasks: [],
+    previousLocal: rows,
+    selectedAgency: "all",
+    campaignerFilter: "mine",
+    applyCampaignerFilter: (tasks) =>
+      filterTasksByCampaignerBoardFilter(tasks, "mine", {
+        kind: "assigned",
+        campaignerId: "staff-itay",
+        userId: "user-itay",
+        campaignerIds: ["staff-itay"],
+      }),
+  });
+  assert.deepEqual(duringFetch.map((task) => task.id), ["1"]);
+});
+
+test("buildTasksBoardScopeOrFilter scopes tenant and shared agencies only", () => {
   const scope = resolveTasksBoardScope({
     tenantId: "tenant-dmm",
     crossTenantAgencyIds: ["agency-dmm-mc"],
   });
   assert.equal(
-    buildTasksBoardScopeOrFilter(scope, ["campaigner-ana", "campaigner-david"]),
-    "tenant_id.eq.tenant-dmm,agency_id.in.(agency-dmm-mc),campaigner_id.eq.campaigner-ana,campaigner_id.eq.campaigner-david",
-  );
-  assert.equal(
     buildTasksBoardScopeOrFilter(scope),
     "tenant_id.eq.tenant-dmm,agency_id.in.(agency-dmm-mc)",
+  );
+  assert.equal(
+    buildTasksBoardScopeOrFilter(resolveTasksBoardScope({ tenantId: "tenant-promo" })),
+    "tenant_id.eq.tenant-promo",
+  );
+});
+
+test("resolveTasksBoardScope ignores own-tenant agency ids (not cross-tenant shares)", () => {
+  assert.deepEqual(
+    resolveTasksBoardScope({
+      tenantId: "tenant-promo",
+      crossTenantAgencyIds: [],
+    }),
+    { type: "tenant", tenantId: "tenant-promo" },
+  );
+  assert.deepEqual(
+    resolveTasksBoardScope({
+      tenantId: "tenant-promo",
+      crossTenantAgencyIds: ["agency-dmm-mc"],
+    }),
+    { type: "tenant_or_shared", tenantId: "tenant-promo", crossTenantAgencyIds: ["agency-dmm-mc"] },
+  );
+});
+
+test("filterTasksByBoardTenantScope keeps own tenant and shared-agency client rows", () => {
+  const promoTenant = "tenant-promo";
+  const sharedDmmAgency = DMM;
+  const ownTenantTask = { ...promoTaskNoClient, tenant_id: promoTenant };
+  const foreignSharedClientTask = {
+    ...misstampedDmmTask,
+    tenant_id: "tenant-dmm",
+  };
+  const foreignUnsharedTask = {
+    id: "4",
+    tenant_id: "tenant-other",
+    agency_id: "agency-other",
+    client_id: "client-other",
+    clients: { agency_id: "agency-other" },
+  };
+  const rows = [ownTenantTask, foreignSharedClientTask, foreignUnsharedTask];
+  assert.deepEqual(
+    filterTasksByBoardTenantScope(rows, promoTenant, [sharedDmmAgency]).map((task) => task.id),
+    ["3", "1"],
+  );
+});
+
+test("taskBelongsToBoardTenantScope rejects cross-tenant rows without a shared client", () => {
+  assert.equal(
+    taskBelongsToBoardTenantScope(
+      {
+        tenant_id: "tenant-dmm",
+        agency_id: DMM,
+        client_id: null,
+        clients: null,
+      },
+      "tenant-promo",
+      [DMM],
+    ),
+    false,
   );
 });
 
