@@ -519,8 +519,10 @@ test("isPulseDeliveryExcludedRecipient blocks אילנית", () => {
   assert.equal(isPulseDeliveryExcludedRecipient("דנה"), false);
 });
 
-test("isPulseDeliveryExcludedPhone blocks David owner phone", () => {
-  assert.equal(isPulseDeliveryExcludedPhone("972507677613"), true);
-  assert.equal(isPulseDeliveryExcludedPhone("0507677613"), true);
-  assert.equal(isPulseDeliveryExcludedPhone("972558833168"), false);
+test("isPulseDeliveryExcludedPhone blocks David on DMM only", () => {
+  assert.equal(isPulseDeliveryExcludedPhone("972507677613", "dmm"), true);
+  assert.equal(isPulseDeliveryExcludedPhone("0507677613", "dmm"), true);
+  assert.equal(isPulseDeliveryExcludedPhone("972507677613", "marketingcaptain"), false);
+  assert.equal(isPulseDeliveryExcludedPhone("972558833168", "dmm"), false);
+  assert.equal(isPulseDeliveryExcludedPhone("972507677613"), false);
 });

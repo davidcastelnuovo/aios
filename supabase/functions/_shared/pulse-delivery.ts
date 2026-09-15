@@ -47,6 +47,7 @@ export function planCampaignerPulseDeliveries(
   snapshots: SnapshotLike[],
   links: ClientTeamLink[],
   campaigners: CampaignerLike[],
+  tenantSlug?: string | null,
 ): PulseDeliveryPlan[] {
   const snapshotClientIds = new Set(snapshots.map((row) => row.client_id))
   const clientsByCampaigner = new Map<string, Set<string>>()
@@ -61,7 +62,7 @@ export function planCampaignerPulseDeliveries(
   for (const campaigner of campaigners) {
     if (isPulseDeliveryExcludedRecipient(campaigner.full_name)) continue
     const phone = normalizeNotifyPhone(campaigner.phone)
-    if (isPulseDeliveryExcludedPhone(phone)) continue
+    if (isPulseDeliveryExcludedPhone(phone, tenantSlug)) continue
     const clientIds = Array.from(clientsByCampaigner.get(campaigner.id) || [])
     if (!phone || !clientIds.length) continue
     plans.push({
@@ -78,12 +79,13 @@ export function planCampaignerPulseDeliveries(
 export function planTeamManagerPulseDeliveries(
   snapshots: SnapshotLike[],
   managers: TeamManagerLike[],
+  tenantSlug?: string | null,
 ): PulseDeliveryPlan[] {
   const plans: PulseDeliveryPlan[] = []
   for (const manager of managers) {
     if (isPulseDeliveryExcludedRecipient(manager.full_name)) continue
     const phone = normalizeNotifyPhone(manager.phone)
-    if (isPulseDeliveryExcludedPhone(phone)) continue
+    if (isPulseDeliveryExcludedPhone(phone, tenantSlug)) continue
     if (!phone || !manager.agency_ids.length) continue
     const agencySet = new Set(manager.agency_ids)
     const clientIds = snapshots

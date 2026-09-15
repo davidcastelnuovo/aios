@@ -97,13 +97,22 @@ test("planTeamManagerPulseDeliveries skips excluded recipients", () => {
   assert.equal(plans[0].name, "פליקס");
 });
 
-test("planCampaignerPulseDeliveries skips excluded owner phone", () => {
-  const plans = planCampaignerPulseDeliveries(
+test("planCampaignerPulseDeliveries skips David owner phone on DMM only", () => {
+  const dmmPlans = planCampaignerPulseDeliveries(
     SNAPSHOTS,
     [{ campaigner_id: "cam-owner", client_id: "c1" }],
     [{ id: "cam-owner", full_name: "דוד", phone: "972507677613" }],
+    "dmm",
   );
-  assert.equal(plans.length, 0);
+  assert.equal(dmmPlans.length, 0);
+
+  const mcPlans = planCampaignerPulseDeliveries(
+    SNAPSHOTS,
+    [{ campaigner_id: "cam-owner", client_id: "c1" }],
+    [{ id: "cam-owner", full_name: "דוד", phone: "972507677613" }],
+    "marketingcaptain",
+  );
+  assert.equal(mcPlans.length, 1);
 });
 
 test("preview message wraps scoped digest for campaigner", () => {
