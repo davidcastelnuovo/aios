@@ -71,7 +71,7 @@ def main():
     if options.deployment_base:
         print(recover_deployment_base(api))
         return
-    for name in ['install_staging_data_mirror.sql', 'install_staging_outbound_guard.sql', 'reconcile_staging_report_columns.sql']:
+    for name in ['install_staging_data_mirror.sql', 'install_staging_outbound_guard.sql', 'reconcile_staging_report_columns.sql', 'reconcile_staging_asset_types.sql']:
         api.query((root / 'supabase/ops' / name).read_text())
     api.query('UPDATE environment_sync.safety SET outbound_blocked=false WHERE singleton')
     if options.prepare_only:

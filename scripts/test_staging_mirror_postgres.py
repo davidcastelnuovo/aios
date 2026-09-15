@@ -32,6 +32,7 @@ DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated; END IF;
 END $$;
 DROP SCHEMA IF EXISTS environment_sync CASCADE;
+DROP TABLE IF EXISTS public.mirror_dependent CASCADE;
 DROP TABLE IF EXISTS public.mirror_probe CASCADE;
 DROP TABLE IF EXISTS public.mirror_parent CASCADE;
 DROP TABLE IF EXISTS public.mirror_side_effects CASCADE;
@@ -68,6 +69,38 @@ INSERT INTO environment_sync.safety(singleton,guard_version,outbound_blocked) VA
         self.sql(mirror.legacy_key_sql('mirror_probe',['name'],[{'id':'one','name':'existing'},{'id':'two','name':'existing'}]), success=False)
         self.assertEqual(self.sql('SELECT id FROM public.mirror_probe'), 'seed')
         self.assertEqual(self.sql('SELECT count(*) FROM environment_sync.key_reconciliations'), '0')
+
+    def test_reviewed_references_move_atomically_and_restore_constraint_definitions(self):
+        self.sql("CREATE TABLE public.mirror_dependent(id text PRIMARY KEY,parent_id text REFERENCES public.mirror_probe(id)); INSERT INTO public.mirror_dependent VALUES('staging-test','seed')")
+        self.sql("CREATE TRIGGER child_effect BEFORE UPDATE ON public.mirror_dependent FOR EACH ROW EXECUTE FUNCTION public.mirror_effect()")
+        references = [{'table_name':'mirror_dependent','column_name':'parent_id'}]
+        self.sql(mirror.legacy_key_sql('mirror_probe',['name'],[{'id':'canonical','name':'existing'}],inbound=references))
+        self.assertEqual(self.sql("SELECT id||':'||parent_id FROM public.mirror_dependent"), 'staging-test:canonical')
+        self.assertEqual(self.sql("SELECT condeferrable FROM pg_constraint WHERE conrelid='public.mirror_dependent'::regclass AND contype='f'"), 'f')
+        self.assertEqual(self.sql('SELECT count(*) FROM public.mirror_side_effects'), '0')
+        self.assertEqual(self.sql("SELECT tgenabled FROM pg_trigger WHERE tgname='child_effect'"), 'O')
+
+    def test_late_alignment_failure_rolls_back_parent_child_and_constraint_changes(self):
+        self.sql("CREATE TABLE public.mirror_dependent(id text PRIMARY KEY,parent_id text REFERENCES public.mirror_probe(id)); INSERT INTO public.mirror_dependent VALUES('staging-test','seed')")
+        self.sql("""CREATE FUNCTION environment_sync.fail_alignment() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'audit failure'; END $$;
+CREATE TRIGGER fail_alignment BEFORE INSERT ON environment_sync.key_reconciliations FOR EACH ROW EXECUTE FUNCTION environment_sync.fail_alignment();""")
+        references = [{'table_name':'mirror_dependent','column_name':'parent_id'}]
+        self.sql(mirror.legacy_key_sql('mirror_probe',['name'],[{'id':'canonical','name':'existing'}],inbound=references), success=False)
+        self.assertEqual(self.sql('SELECT id FROM public.mirror_probe'), 'seed')
+        self.assertEqual(self.sql('SELECT parent_id FROM public.mirror_dependent'), 'seed')
+        self.assertEqual(self.sql("SELECT condeferrable FROM pg_constraint WHERE conrelid='public.mirror_dependent'::regclass AND contype='f'"), 'f')
+        self.assertEqual(self.sql('SELECT count(*) FROM environment_sync.key_reconciliations'), '0')
+
+    def test_storyboard_compatibility_extends_only_the_reviewed_legacy_constraint(self):
+        self.sql("DROP TABLE IF EXISTS public.marketing_assets; CREATE TABLE public.marketing_assets(type text CHECK(type IN ('copy','image','video','brief','data')))")
+        compatibility = Path('supabase/ops/reconcile_staging_asset_types.sql').read_text()
+        self.sql(compatibility)
+        self.sql("INSERT INTO public.marketing_assets VALUES('storyboard')")
+        self.sql(compatibility)
+        self.sql("INSERT INTO public.marketing_assets VALUES('unreviewed')", success=False)
+        self.sql("ALTER TABLE public.marketing_assets DROP CONSTRAINT marketing_assets_type_check; ALTER TABLE public.marketing_assets ADD CONSTRAINT marketing_assets_type_check CHECK(type IN ('copy','image','video','brief','data','storyboard','future_type'))")
+        self.sql(compatibility)
+        self.sql("INSERT INTO public.marketing_assets VALUES('future_type')")
 
     def test_historical_identity_satisfies_required_email_without_activating_invites(self):
         self.sql("""

@@ -153,9 +153,11 @@ FROM jsonb_populate_recordset(NULL::public.tenant_integrations,{json_sql(data)})
 ON CONFLICT(id) DO NOTHING; COMMIT;""")
 
 
-# Only reviewed logical keys on tables with no inbound foreign keys. Carmen
-# instruction conflicts and referenced route/tag IDs require separate review.
+# Reviewed logical keys only. Every inbound reference must also match the
+# explicit schema/column allowlist; ambiguous Carmen instructions stay rejected.
 LEGACY_KEYS = {
+    'agent_brain_routes': (['tenant_id', 'slug'], ''),
+    'chat_tags': (['tenant_id', 'name'], ''),
     'user_permissions': (['user_id', 'module'], ''),
     'menu_items': (['tenant_id', 'menu_key'], ''),
     'seo_monthly_updates': (['client_id', 'month'], ''),
@@ -163,7 +165,16 @@ LEGACY_KEYS = {
 }
 
 
-def legacy_key_sql(table, keys, rows, predicate=''):
+LEGACY_REFERENCES = {
+    'agent_brain_routes': [
+        {'table_name': 'ai_agents', 'column_name': 'brain_route_id'},
+        {'table_name': 'ai_conversations', 'column_name': 'brain_route_id'},
+    ],
+    'chat_tags': [{'table_name': 'chat_contact_tags', 'column_name': 'tag_id'}],
+}
+
+
+def legacy_key_sql(table, keys, rows, predicate='', inbound=()):
     relation = 'public.' + ident(table)
     matches = ' AND '.join(f't.{ident(k)}=s.{ident(k)}' for k in keys)
     target_filter = " AND t.scope='global'" if predicate else ''
@@ -176,21 +187,56 @@ CREATE TEMP TABLE mirror_key_map ON COMMIT DROP AS
  WHERE t.id<>s.id{target_filter};
 -- Ambiguous source/target mappings fail before any business write.
 ALTER TABLE mirror_key_map ADD PRIMARY KEY(old_id),ADD UNIQUE(new_id);
-DO $align$ DECLARE trigger_row record; BEGIN
+DO $align$ DECLARE trigger_row record; reference_row record; BEGIN
  IF NOT EXISTS(SELECT 1 FROM mirror_key_map) THEN RETURN; END IF;
- IF EXISTS(SELECT 1 FROM pg_constraint WHERE contype='f' AND confrelid={literal(relation)}::regclass) THEN
-  RAISE EXCEPTION 'Referenced legacy identifiers require explicit reconciliation';
- END IF;
+ CREATE TEMP TABLE mirror_key_references ON COMMIT DROP AS
+  SELECT c.conname,c.conrelid,c.condeferrable,n.nspname AS schema_name,t.relname AS table_name,
+   a.attname AS column_name,p.attname AS parent_column,cardinality(c.conkey) AS key_columns,
+   cardinality(c.confkey) AS parent_columns
+  FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace
+  JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=c.conkey[1]
+  JOIN pg_attribute p ON p.attrelid=c.confrelid AND p.attnum=c.confkey[1]
+  WHERE c.contype='f' AND c.confrelid={literal(relation)}::regclass;
+ IF EXISTS(
+  SELECT 1 FROM mirror_key_references r
+  LEFT JOIN jsonb_to_recordset({json_sql(list(inbound))}) e(table_name text,column_name text)
+   ON e.table_name=r.table_name AND e.column_name=r.column_name
+  WHERE e.table_name IS NULL OR r.schema_name<>'public' OR r.parent_column<>'id'
+   OR r.key_columns<>1 OR r.parent_columns<>1
+ ) OR EXISTS(
+  SELECT 1 FROM jsonb_to_recordset({json_sql(list(inbound))}) e(table_name text,column_name text)
+  WHERE NOT EXISTS(SELECT 1 FROM mirror_key_references r WHERE r.table_name=e.table_name AND r.column_name=e.column_name)
+ ) THEN RAISE EXCEPTION 'Inbound references differ from reviewed legacy identity mapping'; END IF;
+ FOR reference_row IN SELECT DISTINCT conrelid FROM mirror_key_references ORDER BY conrelid LOOP
+  EXECUTE format('LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE',reference_row.conrelid::regclass);
+ END LOOP;
  IF EXISTS(SELECT 1 FROM {relation} t JOIN mirror_key_map m ON t.id=m.new_id) THEN
   RAISE EXCEPTION 'Canonical identifier already belongs to another Staging row';
  END IF;
  CREATE TEMP TABLE mirror_key_triggers ON COMMIT DROP AS
-  SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid={literal(relation)}::regclass
+  SELECT tgrelid,tgname,tgenabled FROM pg_trigger WHERE tgrelid IN (SELECT conrelid FROM mirror_key_references UNION SELECT {literal(relation)}::regclass::oid)
   AND NOT tgisinternal AND tgenabled IN ('O','A');
  FOR trigger_row IN SELECT * FROM mirror_key_triggers LOOP
-  EXECUTE format('ALTER TABLE %s DISABLE TRIGGER %I',{literal(relation)},trigger_row.tgname);
+  EXECUTE format('ALTER TABLE %s DISABLE TRIGGER %I',trigger_row.tgrelid::regclass,trigger_row.tgname);
+ END LOOP;
+ -- Defer only the reviewed inbound constraints while changing both ends.
+ -- Restore their original definitions and validate before committing.
+ FOR reference_row IN SELECT * FROM mirror_key_references LOOP
+  IF NOT reference_row.condeferrable THEN
+   EXECUTE format('ALTER TABLE %s ALTER CONSTRAINT %I DEFERRABLE INITIALLY DEFERRED',reference_row.conrelid::regclass,reference_row.conname);
+  END IF;
+ END LOOP;
+ SET CONSTRAINTS ALL DEFERRED;
+ FOR reference_row IN SELECT * FROM mirror_key_references LOOP
+  EXECUTE format('UPDATE %s t SET %I=m.new_id FROM mirror_key_map m WHERE t.%I=m.old_id',reference_row.conrelid::regclass,reference_row.column_name,reference_row.column_name);
  END LOOP;
  UPDATE {relation} t SET id=m.new_id FROM mirror_key_map m WHERE t.id=m.old_id;
+ SET CONSTRAINTS ALL IMMEDIATE;
+ FOR reference_row IN SELECT * FROM mirror_key_references LOOP
+  IF NOT reference_row.condeferrable THEN
+   EXECUTE format('ALTER TABLE %s ALTER CONSTRAINT %I NOT DEFERRABLE INITIALLY IMMEDIATE',reference_row.conrelid::regclass,reference_row.conname);
+  END IF;
+ END LOOP;
  INSERT INTO environment_sync.key_reconciliations(table_name,old_id,new_id,reconciled_at)
  SELECT {literal(table)},old_id::text,new_id::text,now() FROM mirror_key_map
  ON CONFLICT(table_name,old_id,new_id) DO NOTHING;
@@ -199,9 +245,9 @@ DO $align$ DECLARE trigger_row record; BEGIN
  AND row_key IN (SELECT jsonb_build_object('id',old_id) FROM mirror_key_map);
  FOR trigger_row IN SELECT * FROM mirror_key_triggers LOOP
   IF trigger_row.tgenabled='A' THEN
-   EXECUTE format('ALTER TABLE %s ENABLE ALWAYS TRIGGER %I',{literal(relation)},trigger_row.tgname);
+   EXECUTE format('ALTER TABLE %s ENABLE ALWAYS TRIGGER %I',trigger_row.tgrelid::regclass,trigger_row.tgname);
   ELSE
-   EXECUTE format('ALTER TABLE %s ENABLE TRIGGER %I',{literal(relation)},trigger_row.tgname);
+   EXECUTE format('ALTER TABLE %s ENABLE TRIGGER %I',trigger_row.tgrelid::regclass,trigger_row.tgname);
   END IF;
  END LOOP;
 END $align$;
@@ -223,7 +269,7 @@ def reconcile_legacy_keys(api, table):
         if key in seen: raise RuntimeError(table['name'] + ': ambiguous source logical key')
         seen.add(key)
     for group in batches(rows):
-        api.query(legacy_key_sql(table['name'], keys, group, predicate))
+        api.query(legacy_key_sql(table['name'], keys, group, predicate, LEGACY_REFERENCES.get(table['name'], ())))
 
 
 class Management:
