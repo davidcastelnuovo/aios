@@ -37,6 +37,7 @@ on:
       - 'supabase/ops/apply_pulse_twice_daily_cadence.sql'
       - 'supabase/ops/notify_felix_calendar_fix_ready.sql'
       - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
+      - 'supabase/ops/apply_pulse_dmm_felix_mc_david.sql'
       - 'supabase/ops/apply_pulse_goal_metrics.sql'
       - 'supabase/ops/apply_campaign_pulse_client_call_freshness.sql'
       - 'supabase/ops/apply_copywriter_inspiration_library.sql'
@@ -137,6 +138,9 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaigner_delivery.sql'; then
               FILE="supabase/ops/apply_pulse_campaigner_delivery.sql"
               NAME="apply_pulse_campaigner_delivery"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_dmm_felix_mc_david.sql'; then
+              FILE="supabase/ops/apply_pulse_dmm_felix_mc_david.sql"
+              NAME="apply_pulse_dmm_felix_mc_david"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_twice_daily_cadence.sql'; then
               FILE="supabase/ops/apply_pulse_twice_daily_cadence.sql"
               NAME="apply_pulse_twice_daily_cadence"
