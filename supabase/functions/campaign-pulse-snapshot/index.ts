@@ -24,6 +24,8 @@ import {
   planTeamManagerPulseDeliveries,
   findCampaignersMissingPulsePhone,
   buildPulseMissingPhoneAlert,
+  filterPulsePlansByCampaignerName,
+  filterMissingPhoneCampaignersByName,
   scopeSnapshotsForPlan,
   type PulseDeliveryPlan,
 } from '../_shared/pulse-delivery.ts'
@@ -250,6 +252,10 @@ Deno.serve(async (req) => {
     body.force_delivery === true && body.source === 'approved_manual_trigger'
   const previewOnlyDelivery =
     body.preview_only === true && body.source === 'approved_manual_trigger'
+  const campaignerNameFilter =
+    manualDeliveryBypass && typeof body.campaigner_name === 'string'
+      ? body.campaigner_name.trim()
+      : null
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
     .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
@@ -615,7 +621,7 @@ Deno.serve(async (req) => {
       )
 
       // Full-tenant digest to the configured management phone (e.g. Felix on DMM).
-      if (!previewOnlyDelivery && setting.campaign_pulse_phone) {
+      if (!previewOnlyDelivery && setting.campaign_pulse_phone && !campaignerNameFilter) {
         sent = await queuePulseWhatsApp(supabase, tenantId, tenantSlug, digest, setting.campaign_pulse_phone)
         if (!sent) {
           console.error('Failed to queue full campaign pulse via Carmen Direct')
@@ -623,7 +629,7 @@ Deno.serve(async (req) => {
       }
 
       const deliverToCampaigners = setting.campaign_pulse_deliver_to_campaigners === true
-      const deliverToManagers = setting.campaign_pulse_deliver_to_team_managers === true
+      const deliverToManagers = setting.campaign_pulse_deliver_to_team_managers === true && !campaignerNameFilter
       if (deliverToCampaigners || deliverToManagers) {
         const snapshotClientIds = snapshots.map((snapshot) => snapshot.client_id)
         const plans: PulseDeliveryPlan[] = []
@@ -635,11 +641,14 @@ Deno.serve(async (req) => {
           ])
           plans.push(...planCampaignerPulseDeliveries(snapshots, links || [], campaigners || [], tenantSlug))
 
-          const missingPhoneCampaigners = findCampaignersMissingPulsePhone(
-            snapshots,
-            links || [],
-            campaigners || [],
-            tenantSlug,
+          const missingPhoneCampaigners = filterMissingPhoneCampaignersByName(
+            findCampaignersMissingPulsePhone(
+              snapshots,
+              links || [],
+              campaigners || [],
+              tenantSlug,
+            ),
+            campaignerNameFilter,
           )
           if (!previewOnlyDelivery && missingPhoneCampaigners.length && setting.campaign_pulse_phone) {
             const alertMessage = buildPulseMissingPhoneAlert(missingPhoneCampaigners, { tenantLabel: tenantSlug })
@@ -664,7 +673,10 @@ Deno.serve(async (req) => {
           plans.push(...await loadTeamManagerDeliveryPlans(supabase, tenantId, tenantSlug, snapshots))
         }
 
-        const mergedPlans = mergePulseDeliveryPlans(plans)
+        const mergedPlans = filterPulsePlansByCampaignerName(
+          mergePulseDeliveryPlans(plans),
+          campaignerNameFilter || '',
+        )
         const recipientDeliveries = await deliverScopedPulseRecipients(
           supabase,
           tenantId,

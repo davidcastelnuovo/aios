@@ -178,6 +178,32 @@ export function mergePulseDeliveryPlans(plans: PulseDeliveryPlan[]): PulseDelive
   return Array.from(byPhone.values())
 }
 
+/** Manual trial: deliver scoped pulse only to campaigners whose name matches. */
+export function filterPulsePlansByCampaignerName(
+  plans: PulseDeliveryPlan[],
+  nameFilter: string,
+): PulseDeliveryPlan[] {
+  const needle = String(nameFilter || '').trim()
+  if (!needle) return plans
+  return plans.filter((plan) => {
+    if (plan.role !== 'campaigner') return false
+    const name = String(plan.name || '').trim()
+    return name === needle || name.includes(needle) || needle.includes(name)
+  })
+}
+
+export function filterMissingPhoneCampaignersByName<T extends { name: string }>(
+  campaigners: T[],
+  nameFilter: string | null | undefined,
+): T[] {
+  const needle = String(nameFilter || '').trim()
+  if (!needle) return campaigners
+  return campaigners.filter((row) => {
+    const name = String(row.name || '').trim()
+    return name === needle || name.includes(needle) || needle.includes(name)
+  })
+}
+
 export function scopeSnapshotsForPlan<T extends { client_id: string }>(
   snapshots: T[],
   plan: PulseDeliveryPlan,
