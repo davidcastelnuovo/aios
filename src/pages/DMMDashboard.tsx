@@ -1,6 +1,6 @@
 /**
- * דשבורד בדיקת דופק — deterministic campaign pulse from campaign_pulse_snapshots.
- * Format matches Carmen's get_latest_campaign_pulse table.
+ * דשבורד בדיקת דופק — unified with agency dashboard: platform-centric campaign
+ * breakdown plus pulse status, client-call, and campaign-touch columns.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -29,17 +29,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronDown, ExternalLink, Filter, Link2, Pencil, RefreshCw, Search } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ChevronDown, Facebook, Filter, LayoutGrid, Link2, RefreshCw, Search } from "lucide-react";
+import {
+  buildClientCampaignTableData,
+  isFacebookIntegration,
+  type AgencyPlatformFilter,
+} from "@/lib/agencyCampaignData";
+import { PulseClientCampaignCard } from "@/components/pulse/PulseClientCampaignCard";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { type OverallStatus } from "@/lib/healthScore";
@@ -57,20 +55,11 @@ import {
   expandPulseToPlatformGoalRows,
   applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
-  formatGoalChange,
-  formatGoalEfficiency,
-  formatGoalOutcomes,
-  formatLastClientCall,
-  formatMetaChangeDetails,
-  formatPulseMoney,
   getPulsePeriodBounds,
-  goalLabel,
-  metaChangeSummary,
-  overallStatusLabel,
+  integrationTypeToGoal,
   platformGoalLabel,
   PULSE_PERIOD_OPTIONS,
-  pulseSpendColumnLabel,
-  pulseStatusLabel,
+  pulsePlatformKey,
   pulseStatusToOverall,
   type PulseCampaignTable,
   type PulseCrmRecord,
@@ -100,222 +89,16 @@ type PulseRow = ClientBase & {
   flags: string[];
 };
 
-function StatusDot({ status, compact = false }: { status: OverallStatus; compact?: boolean }) {
-  const label = status === "red" ? "דורש טיפול" : status === "yellow" ? "לתשומת לב" : "תקין";
-  const dot = status === "red" ? "🔴" : status === "yellow" ? "🟡" : "🟢";
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            className={`cursor-default leading-none ${
-              compact ? "text-base sm:text-xl" : "text-base md:text-xl"
-            }`}
-          >
-            {dot}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
-type PulseRowActionsProps = {
-  client: PulseRow;
-  onOverride: (target: PulseStatusOverrideTarget) => void;
-  onOpenClient: (clientId: string) => void;
-  onCallLog: (target: PulseClientCallTarget) => void;
-  compact?: boolean;
+export type CampaignPulseDashboardProps = {
+  /** When embedded from agency dashboard — lock to one agency and hide picker */
+  fixedAgencyId?: string | null;
+  showTitle?: boolean;
 };
 
-function PulseRowActions({
-  client,
-  onOverride,
-  onOpenClient,
-  compact = false,
-}: Omit<PulseRowActionsProps, "onCallLog">) {
-  return (
-    <div className={`flex flex-wrap gap-1 ${compact ? "w-full" : ""}`}>
-      <Button
-        variant="outline"
-        size="sm"
-        className={`h-8 gap-1 ${compact ? "flex-1 min-w-0 px-2" : "px-2"}`}
-        onClick={() =>
-          onOverride({
-            clientId: client.clientId,
-            clientName: client.name,
-            algorithmOverall: client.algorithmOverall,
-            pulse: client.pulse,
-            flags: client.flags,
-            activeOverride: client.manualOverride,
-          })
-        }
-      >
-        <Pencil className="h-3.5 w-3.5 shrink-0" />
-        <span className="text-xs truncate">ערוך צבע</span>
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className={`h-8 gap-1 ${compact ? "flex-1 min-w-0 px-2" : "px-2"}`}
-        onClick={() => onOpenClient(client.clientId)}
-      >
-        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-        <span className="text-xs truncate">פתח כרטיס</span>
-      </Button>
-    </div>
-  );
-}
-
-function PulseMobileCard({
-  client,
-  period,
-  onOverride,
-  onOpenClient,
-  onCallLog,
-}: Omit<PulseRowActionsProps, "compact"> & { period: PulsePeriod }) {
-  const pulse = client.pulse;
-  const goalRow = client.goalRow;
-  const metaSource = goalRow || pulse;
-  const statusText = client.manualOverride
-    ? `${goalRow ? pulseStatusLabel(goalRow.status) : pulse ? pulseStatusLabel(pulse.status) : overallStatusLabel(client.algorithmOverall)} → ${overallStatusLabel(client.overall)}`
-    : goalRow
-      ? pulseStatusLabel(goalRow.status)
-      : pulse
-        ? pulseStatusLabel(pulse.status)
-        : "🟡 ממתין לבדיקה";
-
-  return (
-    <Card
-      className={
-        client.overall === "red"
-          ? "border-red-200 bg-red-50/40"
-          : client.overall === "yellow"
-            ? "border-yellow-200 bg-yellow-50/30"
-            : ""
-      }
-    >
-      <CardContent className="p-3 space-y-2.5">
-        <div className="flex items-start gap-2 min-w-0">
-          <div className="flex flex-col items-center gap-0.5 shrink-0 pt-0.5">
-            <StatusDot status={client.overall} compact />
-            {client.manualOverride ? (
-              <Badge variant="secondary" className="text-[9px] px-1 py-0">
-                ידני
-              </Badge>
-            ) : null}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="font-medium text-sm leading-snug break-words">{client.name}</div>
-            <div className="text-xs text-muted-foreground break-words">{statusText}</div>
-            <div className="text-xs text-muted-foreground mt-0.5 break-words">
-              {client.agencyName} · {client.campaignerName}
-            </div>
-          </div>
-          {goalRow ? (
-            <Badge variant="outline" className="text-[10px] shrink-0 max-w-[40%] truncate">
-              {platformGoalLabel(goalRow)}
-            </Badge>
-          ) : null}
-        </div>
-
-        {goalRow ? (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-            <div>
-              <span className="text-muted-foreground">{pulseSpendColumnLabel(period).split(" ")[0]}: </span>
-              <span className="tabular-nums font-medium">{formatPulseMoney(goalRow.spend_7d)}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">לידים/רכישות: </span>
-              <span className="tabular-nums font-medium">{formatGoalOutcomes(goalRow)}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">CPL/ROAS: </span>
-              <span className="tabular-nums font-medium">{formatGoalEfficiency(goalRow)}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">שינוי: </span>
-              <span className="tabular-nums font-medium">{formatGoalChange(goalRow)}</span>
-            </div>
-          </div>
-        ) : null}
-
-        {pulse ? (
-          <div className="text-xs">
-            <span className="text-muted-foreground">שיחת לקוח: </span>
-            <button
-              type="button"
-              className={`hover:text-primary ${
-                pulse.last_client_call_at
-                  ? "underline decoration-dotted underline-offset-2"
-                  : "text-amber-700 underline decoration-dotted underline-offset-2 font-medium"
-              }`}
-              onClick={() =>
-                onCallLog({
-                  clientId: client.clientId,
-                  clientName: client.name,
-                  pulse,
-                })
-              }
-            >
-              {formatLastClientCall(pulse)}
-            </button>
-          </div>
-        ) : null}
-
-        {metaSource ? (
-          <div className="text-xs text-muted-foreground break-words line-clamp-2">
-            {metaSource.last_meta_change_at ? (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="underline decoration-dotted underline-offset-2 hover:text-primary text-right"
-                  >
-                    {metaChangeSummary(metaSource)}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[min(18rem,calc(100vw-2rem))] text-sm whitespace-pre-wrap" align="start">
-                  {formatMetaChangeDetails(metaSource)}
-                </PopoverContent>
-              </Popover>
-            ) : (
-              metaChangeSummary(metaSource)
-            )}
-          </div>
-        ) : null}
-
-        {client.flags.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {client.flags.slice(0, 3).map((flag) => (
-              <Badge
-                key={flag}
-                variant="outline"
-                className={`text-[10px] max-w-full truncate ${
-                  flag.includes("אין טבלת") || flag.includes("ממתין")
-                    ? "bg-amber-100 text-amber-900 border-amber-300"
-                    : ""
-                }`}
-              >
-                {flag}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-
-        <PulseRowActions
-          client={client}
-          onOverride={onOverride}
-          onOpenClient={onOpenClient}
-          compact
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function DMMDashboard() {
+export function CampaignPulseDashboard({
+  fixedAgencyId = null,
+  showTitle = true,
+}: CampaignPulseDashboardProps = {}) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -329,21 +112,31 @@ export default function DMMDashboard() {
   const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
   const [filterCampaigner, setFilterCampaigner] = useState("all");
+  const [platformFilter, setPlatformFilter] = useState<AgencyPlatformFilter>("all");
   const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
   const [overrideTarget, setOverrideTarget] = useState<PulseStatusOverrideTarget | null>(null);
   const [callLogTarget, setCallLogTarget] = useState<PulseClientCallTarget | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
+  const effectiveAgencyId = fixedAgencyId || (selectedAgency !== "all" ? selectedAgency : null);
 
-  // Sync agency from shareable URL (?agency=...)
   useEffect(() => {
+    if (fixedAgencyId && fixedAgencyId !== selectedAgency) {
+      setSelectedAgency(fixedAgencyId);
+    }
+  }, [fixedAgencyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync agency from shareable URL (?agency=...) — standalone pulse dashboard only
+  useEffect(() => {
+    if (fixedAgencyId) return;
     const agencyFromUrl = searchParams.get("agency");
     if (agencyFromUrl && agencyFromUrl !== selectedAgency) {
       setSelectedAgency(agencyFromUrl);
     }
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams, fixedAgencyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (fixedAgencyId) return;
     const current = searchParams.get("agency");
     if (selectedAgency && selectedAgency !== "all") {
       if (current !== selectedAgency) {
@@ -356,7 +149,7 @@ export default function DMMDashboard() {
       next.delete("agency");
       setSearchParams(next, { replace: true });
     }
-  }, [selectedAgency]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedAgency, fixedAgencyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openClientCard(clientId: string) {
     navigate(buildPath(`/clients?clientId=${clientId}&tab=updates`));
@@ -370,14 +163,12 @@ export default function DMMDashboard() {
     const url = buildPulseDashboardUrl(
       window.location.origin,
       tenantSlug,
-      selectedAgency && selectedAgency !== "all" ? selectedAgency : null,
+      effectiveAgencyId,
     );
     try {
       await navigator.clipboard.writeText(url);
       toast.success(
-        selectedAgency && selectedAgency !== "all"
-          ? "קישור הסוכנות הועתק"
-          : "קישור הדשבורד הועתק",
+        effectiveAgencyId ? "קישור הסוכנות הועתק" : "קישור הדשבורד הועתק",
       );
     } catch {
       toast.error("לא ניתן להעתיק קישור");
@@ -662,6 +453,8 @@ export default function DMMDashboard() {
         if (filterService === "campaign" && !clientHasCampaignService(c.services)) return false;
         if (filterService === "ppc_meta" && c.goalRow?.platform !== "meta") return false;
         if (filterService === "ppc_google" && c.goalRow?.platform !== "google") return false;
+        if (platformFilter === "facebook" && c.goalRow?.platform !== "meta") return false;
+        if (platformFilter === "google_ads" && c.goalRow?.platform !== "google") return false;
         if (filterService !== "all" && filterService !== "campaign" && filterService !== "ppc_meta" && filterService !== "ppc_google" && !c.services.includes(filterService)) {
           return false;
         }
@@ -671,7 +464,74 @@ export default function DMMDashboard() {
         const rank = (s: OverallStatus) => (s === "red" ? 0 : s === "yellow" ? 1 : 2);
         return rank(a.overall) - rank(b.overall) || a.name.localeCompare(b.name, "he");
       });
-  }, [rows, search, filterStatus, filterService]);
+  }, [rows, search, filterStatus, filterService, platformFilter]);
+
+  const pulseRowByKey = useMemo(() => {
+    const map = new Map<string, PulseRow>();
+    for (const row of rows) {
+      if (!row.goalRow) continue;
+      map.set(`${row.clientId}:${row.goalRow.platform}:${row.goalRow.goal}`, row);
+    }
+    return map;
+  }, [rows]);
+
+  const clientCampaignCards = useMemo(() => {
+    return buildClientCampaignTableData({
+      clients: filteredByRole.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })),
+      tables: (campaignData?.tables ?? []).map((table) => ({
+        id: table.id,
+        client_id: table.client_id,
+        name: null,
+        integration_type: table.integration_type,
+        integration_settings: table.integration_settings as Record<string, unknown> | null,
+      })),
+      records: campaignData?.records ?? [],
+      startDate: periodBounds.startDate,
+      endDate: periodBounds.endDate,
+      platformFilter,
+    });
+  }, [filteredByRole, campaignData, periodBounds, platformFilter]);
+
+  const displayItems = useMemo(() => {
+    const items: Array<
+      | { kind: "campaign"; card: ReturnType<typeof buildClientCampaignTableData>[number]; pulseRow: PulseRow }
+      | { kind: "pulse-only"; pulseRow: PulseRow }
+    > = [];
+    const seen = new Set<string>();
+
+    for (const card of clientCampaignCards) {
+      const platform = pulsePlatformKey(card.integrationType);
+      const goal = integrationTypeToGoal(card.integrationType) || card.campaignType;
+      if (!platform) continue;
+      const key = `${card.clientId}:${platform}:${goal}`;
+      const pulseRow = pulseRowByKey.get(key);
+      if (!pulseRow || !filtered.some((row) => row.id === pulseRow.id)) continue;
+      items.push({ kind: "campaign", card, pulseRow });
+      seen.add(key);
+    }
+
+    for (const pulseRow of filtered) {
+      if (!pulseRow.goalRow) continue;
+      const key = `${pulseRow.clientId}:${pulseRow.goalRow.platform}:${pulseRow.goalRow.goal}`;
+      if (seen.has(key)) continue;
+      items.push({ kind: "pulse-only", pulseRow });
+    }
+
+    return items.sort((a, b) => {
+      const rank = (s: OverallStatus) => (s === "red" ? 0 : s === "yellow" ? 1 : 2);
+      const rowA = a.kind === "campaign" ? a.pulseRow : a.pulseRow;
+      const rowB = b.kind === "campaign" ? b.pulseRow : b.pulseRow;
+      return rank(rowA.overall) - rank(rowB.overall) || rowA.name.localeCompare(rowB.name, "he");
+    });
+  }, [clientCampaignCards, pulseRowByKey, filtered]);
+
+  const availablePlatforms = useMemo(() => {
+    const types = new Set((campaignData?.tables ?? []).map((table) => table.integration_type));
+    return {
+      hasFacebook: Array.from(types).some((type) => isFacebookIntegration(type)),
+      hasGoogleAds: types.has("google_ads"),
+    };
+  }, [campaignData?.tables]);
 
   const summary = useMemo(() => {
     const base = filterService === "campaign"
@@ -752,7 +612,9 @@ export default function DMMDashboard() {
     <div className="p-3 sm:p-4 space-y-3 sm:space-y-4 overflow-x-hidden max-w-full min-w-0" dir="rtl">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold">דשבורד בדיקת דופק</h1>
+          {showTitle ? (
+            <h1 className="text-xl sm:text-2xl font-bold">דשבורד בדיקת דופק</h1>
+          ) : null}
           <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 break-words">
             {summary.total} לקוחות קמפיין פעילים
             {` · ${periodBounds.label}`}
@@ -859,7 +721,7 @@ export default function DMMDashboard() {
             align="start"
             dir="rtl"
           >
-            {agencies && agencies.length > 1 && (
+            {!fixedAgencyId && agencies && agencies.length > 1 && (
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">סוכנות</Label>
                 <Select value={selectedAgency} onValueChange={setSelectedAgency}>
@@ -949,7 +811,7 @@ export default function DMMDashboard() {
 
       {/* Desktop filters — inline row */}
       <div className="hidden md:flex flex-wrap gap-2 items-center">
-        {agencies && agencies.length > 1 && (
+        {!fixedAgencyId && agencies && agencies.length > 1 && (
           <Select value={selectedAgency} onValueChange={setSelectedAgency}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="כל הסוכנויות" />
@@ -1021,240 +883,124 @@ export default function DMMDashboard() {
         )}
       </div>
 
-      {/* Mobile client cards */}
-      <div className="md:hidden space-y-2 min-w-0">
-        {filtered.length === 0 ? (
+      {(availablePlatforms.hasFacebook || availablePlatforms.hasGoogleAds) && (
+        <Tabs value={platformFilter} onValueChange={(value) => setPlatformFilter(value as AgencyPlatformFilter)} dir="rtl">
+          <TabsList className="h-auto flex-wrap gap-1">
+            <TabsTrigger value="all" className="gap-2">
+              <LayoutGrid className="h-4 w-4" />
+              הכל
+            </TabsTrigger>
+            {availablePlatforms.hasFacebook && (
+              <TabsTrigger value="facebook" className="gap-2">
+                <Facebook className="h-4 w-4 text-blue-600" />
+                Facebook
+              </TabsTrigger>
+            )}
+            {availablePlatforms.hasGoogleAds && (
+              <TabsTrigger value="google_ads" className="gap-2">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04" />
+                  <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4" />
+                  <circle cx="6" cy="18" r="3.5" fill="#34A853" />
+                </svg>
+                Google Ads
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </Tabs>
+      )}
+
+      <div className="space-y-4 min-w-0">
+        {displayItems.length === 0 ? (
           <Card>
             <CardContent className="py-10 text-center text-muted-foreground text-sm">
               אין לקוחות להצגה
             </CardContent>
           </Card>
         ) : (
-          filtered.map((client) => (
-            <PulseMobileCard
-              key={client.id}
-              client={client}
-              period={period}
-              onOverride={setOverrideTarget}
-              onOpenClient={openClientCard}
-              onCallLog={setCallLogTarget}
-            />
-          ))
+          displayItems.map((item) => {
+            const pulseRow = item.pulseRow;
+            const openOverride = () =>
+              setOverrideTarget({
+                clientId: pulseRow.clientId,
+                clientName: pulseRow.name,
+                algorithmOverall: pulseRow.algorithmOverall,
+                pulse: pulseRow.pulse,
+                flags: pulseRow.flags,
+                activeOverride: pulseRow.manualOverride,
+              });
+            const openCallLog = () => {
+              if (!pulseRow.pulse) return;
+              setCallLogTarget({
+                clientId: pulseRow.clientId,
+                clientName: pulseRow.name,
+                pulse: pulseRow.pulse,
+              });
+            };
+
+            if (item.kind === "campaign") {
+              return (
+                <PulseClientCampaignCard
+                  key={`${item.card.clientId}-${item.card.tableId}`}
+                  data={item.card}
+                  goalRow={pulseRow.goalRow}
+                  pulse={pulseRow.pulse}
+                  overall={pulseRow.overall}
+                  manualOverride={!!pulseRow.manualOverride}
+                  algorithmOverall={pulseRow.algorithmOverall}
+                  flags={pulseRow.flags}
+                  campaignerName={pulseRow.campaignerName}
+                  onOverride={openOverride}
+                  onOpenClient={() => openClientCard(pulseRow.clientId)}
+                  onCallLog={openCallLog}
+                />
+              );
+            }
+
+            return (
+              <Card
+                key={pulseRow.id}
+                className={
+                  pulseRow.overall === "red"
+                    ? "border-red-200 bg-red-50/30"
+                    : pulseRow.overall === "yellow"
+                      ? "border-yellow-200 bg-yellow-50/20"
+                      : ""
+                }
+              >
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xl">
+                      {pulseRow.overall === "red" ? "🔴" : pulseRow.overall === "yellow" ? "🟡" : "🟢"}
+                    </span>
+                    <span className="font-medium">{pulseRow.name}</span>
+                    {pulseRow.goalRow ? (
+                      <Badge variant="outline" className="text-xs">
+                        {platformGoalLabel(pulseRow.goalRow)}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-sm text-muted-foreground">אין נתוני קמפיין בטווח הנבחר</p>
+                  {pulseRow.flags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {pulseRow.flags.map((flag) => (
+                        <Badge key={flag} variant="outline" className="text-xs">{flag}</Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap gap-1">
+                    <Button variant="outline" size="sm" onClick={openOverride}>ערוך צבע</Button>
+                    <Button variant="outline" size="sm" onClick={() => openClientCard(pulseRow.clientId)}>פתח כרטיס</Button>
+                    {pulseRow.pulse ? (
+                      <Button variant="outline" size="sm" onClick={openCallLog}>שיחת לקוח</Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </div>
-
-      {/* Desktop table */}
-      <Card className="hidden md:block">
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-right w-8">סטטוס</TableHead>
-                <TableHead className="text-right">סוכנות</TableHead>
-                <TableHead className="text-right">לקוח</TableHead>
-                <TableHead className="text-right">פלטפורמה</TableHead>
-                <TableHead className="text-right">יעד</TableHead>
-                <TableHead className="text-right">קמפיינר</TableHead>
-                <TableHead className="text-right">{pulseSpendColumnLabel(period)}</TableHead>
-                <TableHead className="text-right">לידים/רכישות</TableHead>
-                <TableHead className="text-right">CPL/ROAS</TableHead>
-                <TableHead className="text-right">שינוי</TableHead>
-                <TableHead className="text-right">שיחת לקוח אחרונה</TableHead>
-                <TableHead className="text-right">שינוי במטה</TableHead>
-                <TableHead className="text-right">הערה</TableHead>
-                <TableHead className="text-right">פעולות</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={14} className="text-center text-muted-foreground py-10">
-                    אין לקוחות להצגה
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((client) => {
-                  const pulse = client.pulse;
-                  const goalRow = client.goalRow;
-                  const metaSource = goalRow || pulse;
-                  return (
-                    <TableRow
-                      key={client.id}
-                      className={
-                        client.overall === "red"
-                          ? "bg-red-50/40"
-                          : client.overall === "yellow"
-                            ? "bg-yellow-50/30"
-                            : ""
-                      }
-                    >
-                      <TableCell className="text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <StatusDot status={client.overall} />
-                          {client.manualOverride ? (
-                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                              ידני
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {client.agencyName}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium whitespace-nowrap">{client.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {client.manualOverride
-                            ? `${goalRow ? pulseStatusLabel(goalRow.status) : pulse ? pulseStatusLabel(pulse.status) : overallStatusLabel(client.algorithmOverall)} → ${overallStatusLabel(client.overall)}`
-                            : goalRow
-                              ? pulseStatusLabel(goalRow.status)
-                              : pulse
-                                ? pulseStatusLabel(pulse.status)
-                                : "🟡 ממתין לבדיקה"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {goalRow ? (
-                          <Badge variant="secondary" className="text-xs font-medium">
-                            {goalRow.platformLabel}
-                          </Badge>
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {goalRow ? (
-                          <Badge variant="outline" className="text-xs">
-                            {goalLabel(goalRow.goal)}
-                          </Badge>
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {client.campaignerName}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {goalRow ? formatPulseMoney(goalRow.spend_7d) : pulse ? formatPulseMoney(pulse.spend_7d) : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {goalRow ? formatGoalOutcomes(goalRow) : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {goalRow ? formatGoalEfficiency(goalRow) : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {goalRow ? formatGoalChange(goalRow) : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {pulse ? (
-                          <button
-                            type="button"
-                            className={`text-right hover:text-primary ${
-                              pulse.last_client_call_at
-                                ? "underline decoration-dotted underline-offset-2"
-                                : "text-amber-700 underline decoration-dotted underline-offset-2 font-medium"
-                            }`}
-                            onClick={() =>
-                              setCallLogTarget({
-                                clientId: client.clientId,
-                                clientName: client.name,
-                                pulse,
-                              })
-                            }
-                          >
-                            {formatLastClientCall(pulse)}
-                          </button>
-                        ) : (
-                          "—"
-                        )}
-                        {pulse?.last_client_call_by ? (
-                          <div className="text-muted-foreground">תיעד/ה: {pulse.last_client_call_by}</div>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[180px]">
-                        {metaSource ? (
-                          metaSource.last_meta_change_at ? (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="underline decoration-dotted underline-offset-2 hover:text-primary"
-                                >
-                                  {metaChangeSummary(metaSource)}
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-72 text-sm whitespace-pre-wrap" align="start">
-                                {formatMetaChangeDetails(metaSource)}
-                              </PopoverContent>
-                            </Popover>
-                          ) : (
-                            metaChangeSummary(metaSource)
-                          )
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-[220px]">
-                          {client.flags.length === 0 ? (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          ) : (
-                            client.flags.slice(0, 4).map((flag) => (
-                              <Badge
-                                key={flag}
-                                variant="outline"
-                                className={`text-xs ${
-                                  flag.includes("אין טבלת") || flag.includes("ממתין")
-                                    ? "bg-amber-100 text-amber-900 border-amber-300"
-                                    : ""
-                                }`}
-                              >
-                                {flag}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2 gap-1"
-                            onClick={() =>
-                              setOverrideTarget({
-                                clientId: client.clientId,
-                                clientName: client.name,
-                                algorithmOverall: client.algorithmOverall,
-                                pulse: client.pulse,
-                                flags: client.flags,
-                                activeOverride: client.manualOverride,
-                              })
-                            }
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            <span className="text-xs">ערוך צבע</span>
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2 gap-1"
-                            onClick={() => openClientCard(client.clientId)}
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            <span className="text-xs">פתח כרטיס</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
       {dataUpdatedAt ? (
         <p className="text-xs text-muted-foreground">
           טבלאות לא מחוברות מוצגות כאן ליד הלקוח (צהוב) — לא נשלחות בוואטסאפ.
@@ -1297,4 +1043,8 @@ export default function DMMDashboard() {
       />
     </div>
   );
+}
+
+export default function DMMDashboard() {
+  return <CampaignPulseDashboard />;
 }
