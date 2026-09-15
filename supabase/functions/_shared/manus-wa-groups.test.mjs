@@ -28,3 +28,14 @@ test('normalizeManusGroupsPayload: filters non-group ids', () => {
   assert.equal(out.length, 1);
   assert.equal(out[0].id, '1@g.us');
 });
+
+test('normalizeManusGroupsPayload: drops isMember=false', () => {
+  const out = normalizeManusGroupsPayload({
+    groups: [
+      { id: '1@g.us', name: 'in', isMember: true },
+      { id: '2@g.us', name: 'out', isMember: false },
+    ],
+  });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].id, '1@g.us');
+});

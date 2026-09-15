@@ -465,7 +465,8 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
           WhatsApp — קבוצות (Manus בלבד)
         </h3>
         <p className="text-xs text-muted-foreground text-right">
-          רק קבוצות של חיבור Manus של כרמן — לא קבוצות מ-Green API (הטלפון שלך לצ׳אט/דיוור).
+          רק קבוצות שכרמן חברה בהן בחיבור Manus (מסנכרון Gateway) — לא Green API ולא allowlist ישן.
+          לחץ «סנכרן קבוצות מ-Manus» לרענון.
         </p>
         <div className="space-y-2 w-full">
           <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2">
