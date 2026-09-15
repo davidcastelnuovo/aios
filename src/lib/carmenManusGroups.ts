@@ -5,13 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
  * STRICT Manus-only sources — never Green API operator phone groups.
  *
  * Sources:
+ * 0. tenant_integrations.settings.manus_groups_sync (gateway list-groups API)
  * 1. chat_messages.provider = manus_wa (Carmen bot traffic)
  * 2. carmen_whatsapp_sessions with @g.us (Carmen group sessions)
  * 3. Automation carmen_allowed_group_ids / carmen_allowed_group_id
  * 4. carmen_access_policies.allowed_group_ids
- *
- * Manus Gateway currently has no list-groups endpoint, so membership cannot
- * be synced proactively — only observed traffic / explicit allowlist.
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -57,7 +55,7 @@ export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<st
   ] = await Promise.all([
     supabase
       .from("tenant_integrations")
-      .select("id, user_id")
+      .select("id, user_id, settings")
       .eq("tenant_id", tenantId)
       .eq("integration_type", "manus_wa")
       .eq("is_active", true),
@@ -79,6 +77,18 @@ export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<st
 
   const manusIntegrationIds = new Set((manusIntegrations || []).map((i) => i.id));
   const manusUserIds = [...new Set((manusIntegrations || []).map((i) => i.user_id).filter(Boolean))] as string[];
+
+  const syncedChatIds: string[] = [];
+  for (const integ of manusIntegrations || []) {
+    const sync = ((integ as { settings?: Record<string, unknown> }).settings?.manus_groups_sync
+      || {}) as { group_chat_ids?: string[] };
+    if (Array.isArray(sync.group_chat_ids)) {
+      syncedChatIds.push(...sync.group_chat_ids.map(String).filter(Boolean));
+    }
+  }
+  if (syncedChatIds.length > 0) {
+    await resolveGroupRefsToIds(tenantId, syncedChatIds, ids);
+  }
 
   const configGroupRefs: string[] = [];
   for (const step of steps || []) {
@@ -153,6 +163,23 @@ export async function fetchCarmenManusGroups(tenantId: string) {
 }
 
 /** True when tenant has an active Manus WA integration (own or we only check own). */
+export type SyncManusGroupsResult = {
+  success: boolean;
+  syncedCount?: number;
+  groups?: Array<{ groupId: string; groupChatId: string; name: string }>;
+  error?: string;
+};
+
+/** Pull group membership from Manus Gateway and upsert whatsapp_groups. */
+export async function syncCarmenManusGroups(tenantId: string): Promise<SyncManusGroupsResult> {
+  const { data, error } = await supabase.functions.invoke("manus-wa-sync-groups", {
+    body: { tenantId },
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || "סנכרון קבוצות נכשל");
+  return data as SyncManusGroupsResult;
+}
+
 export async function tenantHasManusWa(tenantId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from("tenant_integrations")

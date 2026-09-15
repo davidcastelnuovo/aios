@@ -13,9 +13,12 @@ Today we only use:
 
 Green API (operator phone) is a **separate** channel for CRM chat / broadcasts — not Carmen.
 
-## Problem
-We cannot show “groups Carmen is a member of” in AIOS Agent Hub → Conversation Access.
-There is **no list-groups / list-chats API** on the Manus gateway, so we only learn a group after an inbound webhook and a `whatsapp_groups` row exists.
+## Status (2026-09-15)
+Implemented in AIOS via edge function `manus-wa-sync-groups` → `GET /api/v1/instances/{id}/groups`.
+Agent Hub → **הרשאות WhatsApp** → **סנכרן קבוצות מ-Manus** upserts `whatsapp_groups` and stores JIDs in `tenant_integrations.settings.manus_groups_sync`.
+
+## Problem (historical)
+Before the gateway exposed list-groups, we only learned a group after inbound webhook traffic.
 
 ## Requested API
 

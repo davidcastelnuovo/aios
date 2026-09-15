@@ -4,7 +4,7 @@ import { Loader2, Phone, Users, MessageSquare, Shield, RefreshCw, Save } from "l
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { fetchCarmenManusGroups } from "@/lib/carmenManusGroups";
+import { fetchCarmenManusGroups, syncCarmenManusGroups } from "@/lib/carmenManusGroups";
 import {
   buildPolicyFromAutomation,
   fetchCarmenAutomationConfig,
@@ -250,6 +250,18 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     tenantId,
   ]);
 
+  const syncManusGroups = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("חסר tenant");
+      return syncCarmenManusGroups(tenantId);
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["carmen-manus-groups", tenantId] });
+      toast.success(`סונכרנו ${data.syncedCount ?? 0} קבוצות מ-Manus`);
+    },
+    onError: (e: Error) => toast.error(e.message || "סנכרון קבוצות נכשל"),
+  });
+
   const importFromAutomation = useMutation({
     mutationFn: async () => {
       if (!automationCfg) throw new Error("לא נמצאה אוטומציית כרמן לייבוא");
@@ -353,6 +365,13 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
           </p>
         </div>
         <div className="flex flex-wrap gap-2 justify-end shrink-0">
+          <Button variant="outline" size="sm" onClick={() => syncManusGroups.mutate()}
+            disabled={syncManusGroups.isPending} className="gap-1">
+            {syncManusGroups.isPending
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <RefreshCw className="h-4 w-4" />}
+            סנכרן קבוצות מ-Manus
+          </Button>
           <Button variant="outline" size="sm" onClick={() => importFromAutomation.mutate()}
             disabled={importFromAutomation.isPending || !automationCfg} className="gap-1">
             <RefreshCw className="h-4 w-4" /> סנכרן מאוטומציה
@@ -467,12 +486,11 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
             <div className="text-xs text-muted-foreground text-right space-y-2 py-4 px-2">
               <p className="font-medium text-foreground">אין עדיין קבוצות Manus לרשימה</p>
               <p>
-                Manus Gateway עדיין לא חושף API של «רשימת קבוצות» — לכן מוצגות רק קבוצות שבהן כבר הייתה
-                תעבורת כרמן (Manus), לא קבוצות מ-Green API של הטלפון שלך.
+                לחץ <strong>סנכרן קבוצות מ-Manus</strong> למשוך את כל הקבוצות שבהן כרמן חברה בחיבור Manus.
+                לא מוצגות קבוצות מ-Green API (הטלפון שלך לצ׳אט/דיוור).
               </p>
               <p>
-                אחרי ש-Manus יוסיף <span dir="ltr" className="font-mono">GET …/groups</span> נסנכרן אוטומטית.
-                בינתיים: שליחת «כרמן» בקבוצה שבה הבוט חבר תוסיף אותה לכאן.
+                אם הסנכרון ריק — ודא שחיבור Manus מחובר (CONNECTED) ושלח «כרמן» בקבוצה כדי לוודא תעבורה.
               </p>
             </div>
           ) : (
