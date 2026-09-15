@@ -51,6 +51,7 @@ import {
 } from "@/components/clients/PulseClientCallDialog";
 import {
   buildPulseDashboardUrl,
+  clientHasCampaignCoverage,
   clientHasCampaignService,
   expandPulseToPlatformGoalRows,
   applyClientCallToPulseSnapshot,
@@ -399,9 +400,9 @@ export function CampaignPulseDashboard({
       const services: string[] = Array.isArray(c.services) ? [...c.services] : [];
       if (c.is_seo_client === true && !services.includes("seo")) services.push("seo");
       const pulse = pulseByClient.get(c.id) ?? null;
-      const hasCampaign = clientHasCampaignService(services);
-      const manualOverride = activeOverrideByClient.get(c.id) ?? null;
       const clientTables = tablesByClient.get(c.id) ?? [];
+      const hasCampaign = clientHasCampaignCoverage(services, clientTables);
+      const manualOverride = activeOverrideByClient.get(c.id) ?? null;
       const clientRecords = recordsByClient.get(c.id) ?? [];
       const platformRows = hasCampaign
         ? expandPulseToPlatformGoalRows({
@@ -450,7 +451,10 @@ export function CampaignPulseDashboard({
       .filter((c) => {
         if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
         if (filterStatus !== "all" && c.overall !== filterStatus) return false;
-        if (filterService === "campaign" && !clientHasCampaignService(c.services)) return false;
+        if (filterService === "campaign") {
+          const clientTables = tablesByClient.get(c.clientId) ?? [];
+          if (!clientHasCampaignCoverage(c.services, clientTables)) return false;
+        }
         if (filterService === "ppc_meta" && c.goalRow?.platform !== "meta") return false;
         if (filterService === "ppc_google" && c.goalRow?.platform !== "google") return false;
         if (platformFilter === "facebook" && c.goalRow?.platform !== "meta") return false;
@@ -464,7 +468,7 @@ export function CampaignPulseDashboard({
         const rank = (s: OverallStatus) => (s === "red" ? 0 : s === "yellow" ? 1 : 2);
         return rank(a.overall) - rank(b.overall) || a.name.localeCompare(b.name, "he");
       });
-  }, [rows, search, filterStatus, filterService, platformFilter]);
+  }, [rows, search, filterStatus, filterService, platformFilter, tablesByClient]);
 
   const pulseRowByKey = useMemo(() => {
     const map = new Map<string, PulseRow>();
@@ -474,6 +478,87 @@ export function CampaignPulseDashboard({
     }
     return map;
   }, [rows]);
+
+  const pulseRowsByClient = useMemo(() => {
+    const map = new Map<string, PulseRow[]>();
+    for (const row of rows) {
+      const list = map.get(row.clientId) || [];
+      list.push(row);
+      map.set(row.clientId, list);
+    }
+    return map;
+  }, [rows]);
+
+  const clientMetaById = useMemo(() => {
+    const map = new Map<string, { name: string; campaignerName: string; agencyName: string; services: string[] }>();
+    for (const c of filteredByRole as Array<{
+      id: string;
+      name: string;
+      services?: string[];
+      client_team?: Array<{ campaigners?: { full_name?: string } }>;
+      agencies?: { name?: string };
+    }>) {
+      const services: string[] = Array.isArray(c.services) ? [...c.services] : [];
+      map.set(c.id, {
+        name: c.name,
+        campaignerName: c.client_team?.[0]?.campaigners?.full_name ?? "—",
+        agencyName: c.agencies?.name ?? "—",
+        services,
+      });
+    }
+    return map;
+  }, [filteredByRole]);
+
+  function resolvePulseRowForCard(card: ReturnType<typeof buildClientCampaignTableData>[number]): PulseRow {
+    const { platform, goal } = pulseGoalKeyForTable(card.integrationType, card.campaignType);
+    const exactKey = platform ? `${card.clientId}:${platform}:${goal}` : null;
+    if (exactKey) {
+      const exact = pulseRowByKey.get(exactKey);
+      if (exact) return exact;
+    }
+    const clientRows = pulseRowsByClient.get(card.clientId) ?? [];
+    const platformRow = platform
+      ? clientRows.find((row) => row.goalRow?.platform === platform)
+      : null;
+    if (platformRow) return platformRow;
+    if (clientRows[0]) return clientRows[0];
+
+    const meta = clientMetaById.get(card.clientId);
+    return {
+      id: `${card.clientId}:${card.tableId}`,
+      clientId: card.clientId,
+      name: meta?.name ?? card.clientName,
+      status: "active",
+      agency_id: null,
+      services: meta?.services ?? [],
+      campaignerName: meta?.campaignerName ?? "—",
+      agencyName: meta?.agencyName ?? "—",
+      pulse: pulseByClient.get(card.clientId) ?? null,
+      goalRow: null,
+      algorithmOverall: "yellow",
+      overall: "yellow",
+      manualOverride: activeOverrideByClient.get(card.clientId) ?? null,
+      flags: [],
+    };
+  }
+
+  function cardPassesFilters(card: ReturnType<typeof buildClientCampaignTableData>[number], pulseRow: PulseRow): boolean {
+    if (search && !card.clientName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterStatus !== "all" && pulseRow.overall !== filterStatus) return false;
+    if (filterService === "campaign") {
+      const clientTables = tablesByClient.get(card.clientId) ?? [];
+      if (!clientHasCampaignCoverage(pulseRow.services, clientTables)) return false;
+    }
+    if (filterService === "ppc_meta" && pulseRow.goalRow?.platform !== "meta") return false;
+    if (filterService === "ppc_google" && pulseRow.goalRow?.platform !== "google") return false;
+    if (platformFilter === "facebook" && pulseGoalKeyForTable(card.integrationType, card.campaignType).platform !== "meta") {
+      return false;
+    }
+    if (platformFilter === "google_ads" && pulseGoalKeyForTable(card.integrationType, card.campaignType).platform !== "google") {
+      return false;
+    }
+    return true;
+  }
 
   const clientCampaignCards = useMemo(() => {
     return buildClientCampaignTableData({
@@ -497,32 +582,46 @@ export function CampaignPulseDashboard({
       | { kind: "campaign"; card: ReturnType<typeof buildClientCampaignTableData>[number]; pulseRow: PulseRow }
       | { kind: "pulse-only"; pulseRow: PulseRow }
     > = [];
-    const seen = new Set<string>();
+    const seenCards = new Set<string>();
 
     for (const card of clientCampaignCards) {
-      const { platform, goal } = pulseGoalKeyForTable(card.integrationType, card.campaignType);
-      if (!platform) continue;
-      const key = `${card.clientId}:${platform}:${goal}`;
-      const pulseRow = pulseRowByKey.get(key);
-      if (!pulseRow || !filtered.some((row) => row.id === pulseRow.id)) continue;
+      const pulseRow = resolvePulseRowForCard(card);
+      if (!cardPassesFilters(card, pulseRow)) continue;
       items.push({ kind: "campaign", card, pulseRow });
-      seen.add(key);
+      seenCards.add(`${card.clientId}-${card.tableId}`);
     }
 
     for (const pulseRow of filtered) {
       if (!pulseRow.goalRow) continue;
-      const key = `${pulseRow.clientId}:${pulseRow.goalRow.platform}:${pulseRow.goalRow.goal}`;
-      if (seen.has(key)) continue;
+      const hasCard = clientCampaignCards.some(
+        (card) =>
+          seenCards.has(`${card.clientId}-${card.tableId}`) &&
+          card.clientId === pulseRow.clientId &&
+          pulseGoalKeyForTable(card.integrationType, card.campaignType).platform === pulseRow.goalRow?.platform,
+      );
+      if (hasCard) continue;
       items.push({ kind: "pulse-only", pulseRow });
     }
 
     return items.sort((a, b) => {
       const rank = (s: OverallStatus) => (s === "red" ? 0 : s === "yellow" ? 1 : 2);
-      const rowA = a.kind === "campaign" ? a.pulseRow : a.pulseRow;
-      const rowB = b.kind === "campaign" ? b.pulseRow : b.pulseRow;
-      return rank(rowA.overall) - rank(rowB.overall) || rowA.name.localeCompare(rowB.name, "he");
+      return rank(a.pulseRow.overall) - rank(b.pulseRow.overall) ||
+        a.pulseRow.name.localeCompare(b.pulseRow.name, "he");
     });
-  }, [clientCampaignCards, pulseRowByKey, filtered]);
+  }, [
+    clientCampaignCards,
+    filtered,
+    search,
+    filterStatus,
+    filterService,
+    platformFilter,
+    pulseRowByKey,
+    pulseRowsByClient,
+    clientMetaById,
+    tablesByClient,
+    activeOverrideByClient,
+    pulseByClient,
+  ]);
 
   const availablePlatforms = useMemo(() => {
     const types = new Set((campaignData?.tables ?? []).map((table) => table.integration_type));
@@ -534,7 +633,7 @@ export function CampaignPulseDashboard({
 
   const summary = useMemo(() => {
     const base = filterService === "campaign"
-      ? rows.filter((c) => clientHasCampaignService(c.services))
+      ? rows.filter((c) => clientHasCampaignCoverage(c.services, tablesByClient.get(c.clientId)))
       : rows;
     return {
       red: base.filter((c) => c.overall === "red").length,

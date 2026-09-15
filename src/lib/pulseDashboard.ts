@@ -147,6 +147,18 @@ export function clientHasCampaignService(services: string[] | null | undefined):
   return services.includes("ppc_meta") || services.includes("ppc_google");
 }
 
+export function clientHasConnectedCampaignTables(tables: PulseCampaignTable[] | null | undefined): boolean {
+  if (!Array.isArray(tables) || !tables.length) return false;
+  return tables.some((table) => pulsePlatformKey(table.integration_type) !== null);
+}
+
+export function clientHasCampaignCoverage(
+  services: string[] | null | undefined,
+  tables: PulseCampaignTable[] | null | undefined,
+): boolean {
+  return clientHasCampaignService(services) || clientHasConnectedCampaignTables(tables);
+}
+
 export function formatPulseMoney(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
   return `₪${Math.round(Number(value) * 100) / 100}`;
@@ -428,7 +440,11 @@ export function expandPulseToPlatformGoalRows(input: {
 }): PulsePlatformDisplayRow[] {
   const { snapshot, services, tables, records, bounds } = input;
   const serviceSet = clientCampaignServices(services);
-  const configuredTables = tables.filter((table) => tableMatchesServices(table, serviceSet));
+  let configuredTables = tables.filter((table) => tableMatchesServices(table, serviceSet));
+  // Many clients have connected report tables before ppc_* is set on client.services.
+  if (!configuredTables.length) {
+    configuredTables = tables.filter((table) => pulsePlatformKey(table.integration_type) !== null);
+  }
   const activeTables = configuredTables.filter((table) => table.campaign_active !== false);
   const platforms = platformsForClient(services, configuredTables, activeTables);
 
@@ -1031,9 +1047,6 @@ export function pulseGoalKeyForTable(
   campaignType: "leads" | "ecommerce",
 ): { platform: PulsePlatform | null; goal: CampaignGoal } {
   const platform = pulsePlatformKey(integrationType);
-  const goal =
-    integrationType === "google_ads"
-      ? campaignType
-      : integrationTypeToGoal(integrationType) || campaignType;
+  const goal = integrationTypeToGoal(integrationType) || campaignType;
   return { platform, goal };
 }
