@@ -2317,7 +2317,7 @@ export default function Leads() {
 
   return (
     <LeadEditContext.Provider value={openLeadInChat}>
-    <div className="space-y-6 p-3 md:p-6">
+    <div className={viewMode === "chat" ? "flex h-full min-h-0 max-h-full flex-col gap-4 overflow-hidden p-4" : "space-y-6 p-3 md:p-6"}>
       {/* View As Banner - shows when viewing as another user */}
       {isViewingAs && (
         <div className="bg-warning/20 border border-warning text-warning-foreground px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
@@ -2966,6 +2966,7 @@ export default function Leads() {
           </DndContext>
         </>
       ) : viewMode === "chat" ? (
+        <div className="flex-1 min-h-0 overflow-hidden">
         <LeadsChatView
           key={pendingChatLeadId ?? "chat"}
           initialLeadId={pendingChatLeadId ?? undefined}
@@ -2997,6 +2998,7 @@ export default function Leads() {
           isLoadingMore={!!loadingMoreStage}
           loadedCount={filteredLeads?.length || 0}
         />
+        </div>
       ) : (
         <div className="space-y-6">
           {PIPELINE_STAGES.map((stage) => {

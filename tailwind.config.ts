@@ -56,6 +56,13 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        surface: {
+          elevated: "hsl(var(--surface-elevated))",
+          inset: "hsl(var(--surface-inset))",
+          "status-yellow": "hsl(var(--surface-status-yellow))",
+          "status-red": "hsl(var(--surface-status-red))",
+          "status-green": "hsl(var(--surface-status-green))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
