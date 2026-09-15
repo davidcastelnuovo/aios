@@ -424,8 +424,11 @@ export type CampaignGoalMode = CampaignGoal | 'hybrid'
 /** Team managers / recipients who must never receive scoped pulse digests. */
 export const PULSE_DELIVERY_EXCLUDED_RECIPIENT_NAMES = ['אילנית'] as const
 
-/** Owner phones that must never receive DMM/MarketingCaptain pulse digests or previews. */
+/** Owner phone suffixes blocked from automated pulse on specific tenants only. */
 export const PULSE_DELIVERY_EXCLUDED_PHONE_SUFFIXES = ['507677613'] as const
+
+/** Tenants where David's phone must not receive pulse digests or previews (DMM → Felix only). */
+export const PULSE_DELIVERY_OWNER_EXCLUDED_TENANT_SLUGS = ['dmm'] as const
 
 export function isPulseDeliveryExcludedRecipient(name: string | null | undefined): boolean {
   const normalized = String(name || '').trim()
@@ -435,7 +438,14 @@ export function isPulseDeliveryExcludedRecipient(name: string | null | undefined
   )
 }
 
-export function isPulseDeliveryExcludedPhone(phone: string | null | undefined): boolean {
+export function isPulseDeliveryExcludedPhone(
+  phone: string | null | undefined,
+  tenantSlug?: string | null,
+): boolean {
+  const slug = String(tenantSlug || '').trim().toLowerCase()
+  if (!slug || !(PULSE_DELIVERY_OWNER_EXCLUDED_TENANT_SLUGS as readonly string[]).includes(slug)) {
+    return false
+  }
   const digits = String(phone || '').replace(/\D/g, '')
   if (!digits) return false
   return PULSE_DELIVERY_EXCLUDED_PHONE_SUFFIXES.some((suffix) => digits.endsWith(suffix))

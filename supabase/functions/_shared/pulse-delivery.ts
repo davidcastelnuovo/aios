@@ -20,6 +20,12 @@ export type PulseDeliveryPlan = {
   clientIds: string[]
 }
 
+export type PulseCampaignerMissingPhone = {
+  campaignerId: string
+  name: string
+  clientCount: number
+}
+
 type SnapshotLike = { client_id: string; agency_id?: string | null }
 
 type CampaignerLike = { id: string; full_name: string | null; phone: string | null }
@@ -43,10 +49,62 @@ export function buildPulsePreviewMessage(recipientName: string, digest: string):
   ].join('\n')
 }
 
+/** Campaigners assigned pulse clients but missing a WhatsApp phone. */
+export function findCampaignersMissingPulsePhone(
+  snapshots: SnapshotLike[],
+  links: ClientTeamLink[],
+  campaigners: CampaignerLike[],
+  tenantSlug?: string | null,
+): PulseCampaignerMissingPhone[] {
+  const snapshotClientIds = new Set(snapshots.map((row) => row.client_id))
+  const clientsByCampaigner = new Map<string, Set<string>>()
+  for (const link of links) {
+    if (!snapshotClientIds.has(link.client_id)) continue
+    const set = clientsByCampaigner.get(link.campaigner_id) || new Set<string>()
+    set.add(link.client_id)
+    clientsByCampaigner.set(link.campaigner_id, set)
+  }
+
+  const missing: PulseCampaignerMissingPhone[] = []
+  for (const campaigner of campaigners) {
+    if (isPulseDeliveryExcludedRecipient(campaigner.full_name)) continue
+    const clientIds = clientsByCampaigner.get(campaigner.id)
+    if (!clientIds?.size) continue
+    const phone = normalizeNotifyPhone(campaigner.phone)
+    if (isPulseDeliveryExcludedPhone(phone, tenantSlug)) continue
+    if (phone) continue
+    missing.push({
+      campaignerId: campaigner.id,
+      name: campaigner.full_name || 'קמפיינר',
+      clientCount: clientIds.size,
+    })
+  }
+  return missing
+}
+
+/** Alert the tenant pulse manager (Felix on DMM) to add missing campaigner phones. */
+export function buildPulseMissingPhoneAlert(
+  campaigners: PulseCampaignerMissingPhone[],
+  options?: { tenantLabel?: string | null },
+): string {
+  if (!campaigners.length) return ''
+  const tenantLine = options?.tenantLabel ? `\n_${options.tenantLabel}_` : ''
+  return [
+    '*בדיקת דופק — חסר טלפון WhatsApp לקמפיינר*',
+    'לא ניתן לשלוח דופק scoped. הוסף/עדכן מספר בכרטיס הקמפיינר:',
+    '',
+    ...campaigners.map((c) => `• ${c.name} (${c.clientCount} לקוחות בדופק)`),
+    tenantLine,
+    '',
+    'AIOS → צוות → קמפיינרים',
+  ].filter((line) => line !== '').join('\n')
+}
+
 export function planCampaignerPulseDeliveries(
   snapshots: SnapshotLike[],
   links: ClientTeamLink[],
   campaigners: CampaignerLike[],
+  tenantSlug?: string | null,
 ): PulseDeliveryPlan[] {
   const snapshotClientIds = new Set(snapshots.map((row) => row.client_id))
   const clientsByCampaigner = new Map<string, Set<string>>()
@@ -61,7 +119,7 @@ export function planCampaignerPulseDeliveries(
   for (const campaigner of campaigners) {
     if (isPulseDeliveryExcludedRecipient(campaigner.full_name)) continue
     const phone = normalizeNotifyPhone(campaigner.phone)
-    if (isPulseDeliveryExcludedPhone(phone)) continue
+    if (isPulseDeliveryExcludedPhone(phone, tenantSlug)) continue
     const clientIds = Array.from(clientsByCampaigner.get(campaigner.id) || [])
     if (!phone || !clientIds.length) continue
     plans.push({
@@ -78,12 +136,13 @@ export function planCampaignerPulseDeliveries(
 export function planTeamManagerPulseDeliveries(
   snapshots: SnapshotLike[],
   managers: TeamManagerLike[],
+  tenantSlug?: string | null,
 ): PulseDeliveryPlan[] {
   const plans: PulseDeliveryPlan[] = []
   for (const manager of managers) {
     if (isPulseDeliveryExcludedRecipient(manager.full_name)) continue
     const phone = normalizeNotifyPhone(manager.phone)
-    if (isPulseDeliveryExcludedPhone(phone)) continue
+    if (isPulseDeliveryExcludedPhone(phone, tenantSlug)) continue
     if (!phone || !manager.agency_ids.length) continue
     const agencySet = new Set(manager.agency_ids)
     const clientIds = snapshots
