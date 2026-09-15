@@ -8,6 +8,8 @@ import { fetchCarmenManusGroups, syncCarmenManusGroups } from "@/lib/carmenManus
 import {
   buildPolicyFromAutomation,
   fetchCarmenAutomationConfig,
+  mergePrivatePhoneAllowlist,
+  type PrivatePhoneRow,
 } from "@/lib/carmenAccessAutomation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,13 +35,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type PolicyPhone = {
-  phone: string;
-  label?: string;
-  dev_escalation_tier?: "full" | "bugfix" | null;
-  surfaces?: string[];
-};
-
 type ClientGroupRow = {
   id?: string;
   client_id: string;
@@ -57,7 +52,8 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   const { tenantId } = useCurrentTenant();
   const qc = useQueryClient();
   const autoSyncedRef = useRef(false);
-  const [phones, setPhones] = useState<PolicyPhone[]>([]);
+  const [phones, setPhones] = useState<PrivatePhoneRow[]>([]);
+  const [phonesDirty, setPhonesDirty] = useState(false);
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [requireDirect, setRequireDirect] = useState(true);
   const [openMemberGroups, setOpenMemberGroups] = useState(false);
@@ -138,8 +134,23 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     queryFn: () => fetchCarmenAutomationConfig(tenantId!, agent.id),
   });
 
+  const mergedPhones = useMemo(
+    () => mergePrivatePhoneAllowlist({
+      policyPhones: Array.isArray(policy?.private_phones) ? policy.private_phones : [],
+      identities: identities as Array<{
+        phone: string;
+        display_name?: string | null;
+        status?: string;
+        surfaces?: string[] | null;
+        dev_escalation_tier?: string | null;
+      }>,
+      automationPhones: automationCfg?.carmen_allowed_phones,
+    }),
+    [policy?.private_phones, identities, automationCfg?.carmen_allowed_phones],
+  );
+
   const persistPolicy = async (draft: {
-    phones: PolicyPhone[];
+    phones: PrivatePhoneRow[];
     groupIds: string[];
     requireDirect: boolean;
     openMemberGroups: boolean;
@@ -181,8 +192,12 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   };
 
   useEffect(() => {
+    if (policyLoading || automationLoading) return;
+    if (!phonesDirty) setPhones(mergedPhones);
+  }, [mergedPhones, policyLoading, automationLoading, phonesDirty]);
+
+  useEffect(() => {
     if (!policy) return;
-    setPhones(Array.isArray(policy.private_phones) ? policy.private_phones : []);
     const savedGroups: string[] = Array.isArray(policy.allowed_group_ids) ? policy.allowed_group_ids : [];
     setGroupIds(savedGroups);
     setRequireDirect(policy.require_direct_address !== false);
@@ -215,6 +230,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         denyMessage,
       };
       await persistPolicy(draft);
+      setPhonesDirty(false);
       setPhones(draft.phones);
       setGroupIds(draft.groupIds);
       setOpenMemberGroups(draft.openMemberGroups);
@@ -266,6 +282,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     mutationFn: async () => {
       if (!automationCfg) throw new Error("לא נמצאה אוטומציית כרמן לייבוא");
       const built = buildPolicyFromAutomation(automationCfg, manusGroups || []);
+      setPhonesDirty(true);
       setPhones(built.phones);
       setGroupIds(built.groupIds);
       setOpenMemberGroups(built.openMemberGroups);
@@ -294,6 +311,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       }
     },
     onSuccess: () => {
+      setPhonesDirty(false);
       toast.success("הרשאות שיחה נשמרו");
       qc.invalidateQueries({ queryKey: policyKey });
       qc.invalidateQueries({ queryKey: ["carmen-identities", tenantId] });
@@ -311,8 +329,17 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       toast.error("המספר כבר ברשימה");
       return;
     }
-    setPhones([...phones, { phone: p, surfaces: ["whatsapp_private"], dev_escalation_tier: null }]);
+    setPhonesDirty(true);
+    setPhones([...phones, { phone: p, surfaces: ["whatsapp_private"], dev_escalation_tier: null, source: "policy" }]);
     setNewPhone("");
+  };
+
+  const privateStatusLabel = (row: PrivatePhoneRow) => {
+    if (row.status === "approved") return "מאושר";
+    if (row.status === "pending") return "ממתין";
+    if (row.source === "automation") return "אוטומציה";
+    if (row.source === "policy") return "מדיניות";
+    return "מאושר";
   };
 
   const toggleGroup = (id: string) => {
@@ -402,7 +429,9 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
           <Table dir="rtl">
             <TableHeader>
               <TableRow>
+                <TableHead className="text-right">שם</TableHead>
                 <TableHead className="text-right">טלפון</TableHead>
+                <TableHead className="text-right w-20">סטטוס</TableHead>
                 <TableHead className="text-right w-16">פרטי</TableHead>
                 <TableHead className="text-right w-16">קבוצה</TableHead>
                 <TableHead className="text-right">Escalation</TableHead>
@@ -410,9 +439,22 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
               </TableRow>
             </TableHeader>
             <TableBody>
+              {phones.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                    אין עדיין מורשים לשיחה פרטית — הוסף מספר או סנכרן מאוטומציה.
+                  </TableCell>
+                </TableRow>
+              )}
               {phones.map((row, idx) => (
                 <TableRow key={row.phone}>
+                  <TableCell className="text-right">{row.label || "—"}</TableCell>
                   <TableCell className="font-mono text-left" dir="ltr">{row.phone}</TableCell>
+                  <TableCell>
+                    <Badge variant={row.status === "approved" || row.source === "policy" ? "default" : "secondary"} className="text-[10px]">
+                      {privateStatusLabel(row)}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Checkbox checked={row.surfaces?.includes("whatsapp_private") ?? true} disabled />
                   </TableCell>
@@ -420,6 +462,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
                     <Checkbox
                       checked={row.surfaces?.includes("whatsapp_group") ?? false}
                       onCheckedChange={(c) => {
+                        setPhonesDirty(true);
                         const next = [...phones];
                         const s = new Set(row.surfaces || ["whatsapp_private"]);
                         if (c) s.add("whatsapp_group"); else s.delete("whatsapp_group");
@@ -432,6 +475,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
                     <Select
                       value={row.dev_escalation_tier || "none"}
                       onValueChange={(v) => {
+                        setPhonesDirty(true);
                         const next = [...phones];
                         next[idx] = {
                           ...row,
@@ -450,7 +494,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
                   </TableCell>
                   <TableCell>
                     <Button type="button" variant="ghost" size="sm"
-                      onClick={() => setPhones(phones.filter((_, i) => i !== idx))}>×</Button>
+                      onClick={() => { setPhonesDirty(true); setPhones(phones.filter((_, i) => i !== idx)); }}>×</Button>
                   </TableCell>
                 </TableRow>
               ))}
