@@ -152,6 +152,7 @@ test("syncLocalTasksForAgencyFilter can narrow by campaigner while fetching", ()
       filterTasksByCampaignerBoardFilter(tasks, "mine", {
         kind: "assigned",
         campaignerId: "staff-itay",
+        userId: "user-itay",
         campaignerIds: ["staff-itay"],
       }),
   });

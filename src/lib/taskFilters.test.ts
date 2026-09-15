@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   defaultTaskFilters,
   filterTasksByCampaignerBoardFilter,
+  filterTasksForBoardUserPreview,
   resolveMineTaskAssignee,
 } from "./taskFilters.ts";
 
@@ -45,6 +46,7 @@ test("filterTasksByCampaignerBoardFilter keeps only mine assignments", () => {
   const mine = {
     kind: "assigned" as const,
     campaignerId: "staff-itay",
+    userId: "user-itay",
     campaignerIds: ["staff-itay"],
   };
   assert.deepEqual(
@@ -54,5 +56,23 @@ test("filterTasksByCampaignerBoardFilter keeps only mine assignments", () => {
   assert.deepEqual(
     filterTasksByCampaignerBoardFilter(rows, "staff-other", mine).map((task) => task.id),
     ["2"],
+  );
+});
+
+test("filterTasksForBoardUserPreview hides other users' tasks in view-as mode", () => {
+  const rows = [
+    { id: "1", campaigner_id: "staff-felix", sales_person_id: null, created_by: "user-felix" },
+    { id: "2", campaigner_id: "staff-david", sales_person_id: null, created_by: "user-david" },
+    { id: "3", campaigner_id: null, sales_person_id: null, created_by: "user-david" },
+  ];
+  const felix = {
+    kind: "assigned" as const,
+    campaignerId: "staff-felix",
+    userId: "user-felix",
+    campaignerIds: ["staff-felix"],
+  };
+  assert.deepEqual(
+    filterTasksForBoardUserPreview(rows, "user-felix", felix).map((task) => task.id),
+    ["1"],
   );
 });

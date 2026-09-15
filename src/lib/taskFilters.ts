@@ -40,6 +40,7 @@ export function resolveMineTaskAssignee(input: {
 
 export type MineTaskIdentity = MineTaskAssignee & {
   campaignerIds: string[];
+  userId: string;
 };
 
 type CampaignerBoardTask = {
@@ -71,6 +72,24 @@ export function filterTasksByCampaignerBoardFilter<T extends CampaignerBoardTask
     });
   }
   return tasks.filter((task) => task.campaigner_id === campaignerFilter);
+}
+
+/** View-as preview: only tasks owned by or assigned to the selected user. */
+export function filterTasksForBoardUserPreview<T extends CampaignerBoardTask>(
+  tasks: T[],
+  boardUserId: string,
+  mine?: MineTaskIdentity | null,
+): T[] {
+  if (!boardUserId || !mine) return [];
+  const campaignerIds = new Set(mine.campaignerIds);
+  return tasks.filter((task) => {
+    if (task.created_by === boardUserId) return true;
+    if (task.campaigner_id && campaignerIds.has(task.campaigner_id)) return true;
+    if (mine.kind === "assigned" && mine.salesPersonId && task.sales_person_id === mine.salesPersonId) {
+      return true;
+    }
+    return false;
+  });
 }
 
 /** PostgREST `.or()` filter for "שלי בלבד" assignment rows. */
