@@ -198,7 +198,7 @@ export function PulseClientCampaignCard({
           ? "border-red-200 bg-surface-status-red"
           : overall === "yellow"
             ? "border-yellow-200 bg-surface-status-yellow"
-            : "bg-surface-elevated"
+            : ""
       }
     >
       <CardHeader className="pb-3 space-y-3">
@@ -307,7 +307,7 @@ export function PulseClientCampaignCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {goalRow ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm rounded-md bg-surface-inset p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm rounded-md bg-muted/30 p-3">
             <div>
               <span className="text-muted-foreground">{pulseSpendColumnLabel(period).split(" ")[0]}: </span>
               <span className="font-medium tabular-nums">{formatPulseMoney(goalRow.spend_7d)}</span>
@@ -326,7 +326,7 @@ export function PulseClientCampaignCard({
             </div>
           </div>
         ) : pulse ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm rounded-md bg-surface-inset p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm rounded-md bg-muted/30 p-3">
             <div>
               <span className="text-muted-foreground">הוצאה (snapshot): </span>
               <span className="font-medium tabular-nums">{formatPulseMoney(pulse.spend_7d)}</span>

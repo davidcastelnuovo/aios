@@ -603,7 +603,7 @@ const updateMutation = useMutation({
                 {/* Multi-select salespeople */}
                 <FormItem>
                   <FormLabel className="text-sm font-medium">אנשי מכירות</FormLabel>
-                  <div className="border rounded-lg p-3 max-h-[150px] overflow-y-auto space-y-2 bg-surface-inset">
+                  <div className="border rounded-lg p-3 max-h-[150px] overflow-y-auto space-y-2 bg-muted/30">
                     {salesPeople && salesPeople.length > 0 ? (
                       salesPeople.map((person) => (
                         <div key={person.id} className="flex items-center gap-2">
@@ -956,7 +956,7 @@ const updateMutation = useMutation({
                   )}
                 />
 
-                <div className="border border-border/60 rounded-xl p-4 text-right space-y-3 bg-surface-elevated shadow-sm" dir="rtl">
+                <div className="border border-border/60 rounded-xl p-4 text-right space-y-3 bg-card shadow-sm" dir="rtl">
                   <h3 className="font-semibold text-sm">עדכונים ומשימות</h3>
                   <LeadUpdatesTab leadId={lead.id} leadName={lead.company_name || lead.contact_name || ""} />
                 </div>

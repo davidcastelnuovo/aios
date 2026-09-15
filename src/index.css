@@ -9,7 +9,7 @@ All colors MUST be HSL.
 @layer base {
   :root {
     /* Deep Blue #0A1526 - Primary brand color */
-    --background: 220 10% 92%;
+    --background: 0 0% 94%;
     --foreground: 209 59% 10%;
 
     /* Warm cream — bordered panels sit above the page background */

@@ -1078,7 +1078,7 @@ export function CampaignPulseDashboard({
                     ? "border-red-200 bg-surface-status-red"
                     : pulseRow.overall === "yellow"
                       ? "border-yellow-200 bg-surface-status-yellow"
-                      : "bg-surface-elevated"
+                      : ""
                 }
               >
                 <CardContent className="p-4 space-y-3">

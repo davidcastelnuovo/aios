@@ -368,7 +368,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
               const isOwner = user?.id === update.user_id;
               
               return (
-                <Card key={update.id} className="bg-surface-elevated">
+                <Card key={update.id}>
                   <CardContent className="p-3">
                     {isEditing ? (
                       <div className="space-y-2">
