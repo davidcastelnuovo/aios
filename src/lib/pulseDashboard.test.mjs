@@ -7,6 +7,7 @@ import {
   applyPeriodMetricsToSnapshot,
   buildPulseDashboardUrl,
   clientHasCampaignService,
+  clientHasCampaignTables,
   expandPulseToPlatformGoalRows,
   filterPulseCallFlags,
   formatPulseChange,
@@ -243,4 +244,143 @@ test("expands pulse rows per platform when Meta and Google tables exist", () => 
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((row) => row.platformLabel).sort(), ["Google", "Meta"]);
   assert.equal(platformGoalLabel(rows[0]), rows[0].platformLabel + " · " + (rows[0].goal === "ecommerce" ? "איקומרס" : "לידים"));
+});
+
+test("infers ppc services from assigned tables when client.services is stale", () => {
+  const bounds = getPulsePeriodBounds("last_7_days", new Date("2026-08-05T12:00:00+03:00"));
+  const snapshot = {
+    client_id: "c1",
+    agency_id: null,
+    status: "healthy",
+    campaign_goal_mode: "leads",
+    is_ecommerce: false,
+    spend_7d: 100,
+    lead_spend_7d: 100,
+    ecommerce_spend_7d: 0,
+    leads_7d: 4,
+    cpl_7d: 25,
+    cpl_change_pct: 0,
+    purchases_7d: 0,
+    revenue_7d: 0,
+    roas_7d: null,
+    lead_goal_status: "healthy",
+    ecommerce_goal_status: null,
+    flags: [],
+    data_fresh_through: "2026-08-05",
+    calculated_at: "2026-08-05T10:00:00Z",
+    last_meta_change_at: null,
+    last_meta_change_type: null,
+    last_meta_change_actor: null,
+    last_meta_change_object: null,
+    meta_change_availability: "not_applicable",
+    last_client_call_at: null,
+    last_client_call_by: null,
+  };
+  const tables = [
+    {
+      id: "t-meta",
+      client_id: "c1",
+      integration_type: "facebook_insights",
+      campaign_active: true,
+      last_sync_at: "2026-08-05T09:00:00Z",
+    },
+  ];
+  const records = [{ table_id: "t-meta", data: { date: "2026-08-04", spend: 100, leads: 4 } }];
+  const rows = expandPulseToPlatformGoalRows({
+    snapshot,
+    services: [],
+    tables,
+    records,
+    bounds,
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "healthy");
+  assert.equal(rows[0].platformLabel, "Meta");
+  assert.ok(!rows[0].flags.some((flag) => flag.includes("אין טבלת")));
+});
+
+test("falls back to snapshot status when live tables are unavailable", () => {
+  const bounds = getPulsePeriodBounds("last_7_days", new Date("2026-08-05T12:00:00+03:00"));
+  const snapshot = {
+    client_id: "c1",
+    agency_id: null,
+    status: "healthy",
+    campaign_goal_mode: "leads",
+    is_ecommerce: false,
+    spend_7d: 200,
+    lead_spend_7d: 200,
+    ecommerce_spend_7d: 0,
+    leads_7d: 8,
+    cpl_7d: 25,
+    cpl_change_pct: 0,
+    purchases_7d: 0,
+    revenue_7d: 0,
+    roas_7d: null,
+    lead_goal_status: "healthy",
+    ecommerce_goal_status: null,
+    flags: [],
+    data_fresh_through: "2026-08-05",
+    calculated_at: "2026-08-05T10:00:00Z",
+    last_meta_change_at: null,
+    last_meta_change_type: null,
+    last_meta_change_actor: null,
+    last_meta_change_object: null,
+    meta_change_availability: "not_applicable",
+    last_client_call_at: null,
+    last_client_call_by: null,
+  };
+  const rows = expandPulseToPlatformGoalRows({
+    snapshot,
+    services: ["ppc_meta"],
+    tables: [],
+    records: [],
+    bounds,
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "healthy");
+  assert.ok(!rows[0].flags.some((flag) => flag.includes("אין טבלת")));
+});
+
+test("does not invent disconnected platform rows from services alone", () => {
+  const bounds = getPulsePeriodBounds("last_7_days", new Date("2026-08-05T12:00:00+03:00"));
+  const rows = expandPulseToPlatformGoalRows({
+    snapshot: null,
+    services: ["ppc_meta", "ppc_google"],
+    tables: [],
+    records: [],
+    bounds,
+  });
+  assert.deepEqual(rows, []);
+});
+
+test("detects campaign tables helper", () => {
+  assert.equal(clientHasCampaignTables([]), false);
+  assert.equal(
+    clientHasCampaignTables([{ id: "t1", client_id: "c1", integration_type: "google_ads" }]),
+    true,
+  );
+});
+
+test("paused campaign tables show warning, not disconnected", () => {
+  const bounds = getPulsePeriodBounds("last_7_days", new Date("2026-08-05T12:00:00+03:00"));
+  const tables = [
+    {
+      id: "t-meta",
+      client_id: "c1",
+      integration_type: "facebook_insights",
+      campaign_active: false,
+      last_sync_at: "2026-08-05T09:00:00Z",
+    },
+  ];
+  const rows = expandPulseToPlatformGoalRows({
+    snapshot: null,
+    services: ["ppc_meta"],
+    tables,
+    records: [],
+    bounds,
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].status, "warning");
+  assert.ok(rows[0].flags.some((flag) => flag.includes("מושהות")));
+  assert.ok(!rows[0].flags.some((flag) => flag.includes("אין טבלת")));
 });

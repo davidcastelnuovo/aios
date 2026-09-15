@@ -54,6 +54,7 @@ import {
 import {
   buildPulseDashboardUrl,
   clientHasCampaignService,
+  clientHasCampaignTables,
   expandPulseToPlatformGoalRows,
   applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
@@ -608,7 +609,7 @@ export default function DMMDashboard() {
       const services: string[] = Array.isArray(c.services) ? [...c.services] : [];
       if (c.is_seo_client === true && !services.includes("seo")) services.push("seo");
       const pulse = pulseByClient.get(c.id) ?? null;
-      const hasCampaign = clientHasCampaignService(services);
+      const hasCampaign = clientHasCampaignService(services) || clientHasCampaignTables(clientTables);
       const manualOverride = activeOverrideByClient.get(c.id) ?? null;
       const clientTables = tablesByClient.get(c.id) ?? [];
       const clientRecords = recordsByClient.get(c.id) ?? [];

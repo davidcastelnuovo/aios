@@ -200,6 +200,40 @@ function clientCampaignServices(services: string[] | null | undefined): Set<stri
   );
 }
 
+/** Merge client.services with ppc flags inferred from assigned report tables. */
+function resolveCampaignServices(services: string[], tables: PulseCampaignTable[]): Set<string> {
+  const set = clientCampaignServices(services);
+  for (const table of tables) {
+    if (table.integration_type === "google_ads") set.add("ppc_google");
+    if (table.integration_type === "facebook_insights" || table.integration_type === "facebook_ecommerce") {
+      set.add("ppc_meta");
+    }
+  }
+  return set;
+}
+
+export function clientHasCampaignTables(tables: PulseCampaignTable[] | null | undefined): boolean {
+  if (!Array.isArray(tables) || !tables.length) return false;
+  return tables.some(
+    (table) =>
+      table.integration_type === "facebook_insights"
+      || table.integration_type === "facebook_ecommerce"
+      || table.integration_type === "google_ads",
+  );
+}
+
+function snapshotIndicatesConnected(snapshot: PulseSnapshotRow): boolean {
+  const hasNoDataFlag = Array.isArray(snapshot.flags)
+    && snapshot.flags.some(
+      (flag) => flag.includes("אין טבלת קמפיין") || flag.includes("שגיאה בחישוב דופק"),
+    );
+  if (snapshot.status !== "no_data" && !hasNoDataFlag) return true;
+  const lead = snapshot.lead_goal_status;
+  const ecommerce = snapshot.ecommerce_goal_status;
+  return (lead !== null && lead !== undefined && lead !== "no_data")
+    || (ecommerce !== null && ecommerce !== undefined && ecommerce !== "no_data");
+}
+
 function tableMatchesServices(table: PulseCampaignTable, services: Set<string>): boolean {
   if (table.integration_type === "google_ads") return services.has("ppc_google");
   if (table.integration_type === "facebook_insights" || table.integration_type === "facebook_ecommerce") {
@@ -336,9 +370,14 @@ function classifyPlatformGoalStatus(input: {
   const flags: string[] = [];
   const platformName = pulsePlatformLabel(input.platform);
 
-  if (!input.configuredTables.length || !input.activeTables.length) {
+  if (!input.configuredTables.length) {
     flags.push("אין טבלת קמפיין מחוברת");
     return { status: "no_data", flags };
+  }
+
+  if (!input.activeTables.length) {
+    flags.push("כל טבלאות הקמפיין מושהות");
+    return { status: "warning", flags };
   }
 
   const stale = pickFreshestTablePerPlatform(input.activeTables)
@@ -398,7 +437,6 @@ function goalsForPlatform(tables: PulseCampaignTable[], platform: PulsePlatform)
 }
 
 function platformsForClient(
-  services: string[],
   configuredTables: PulseCampaignTable[],
   activeTables: PulseCampaignTable[],
 ): PulsePlatform[] {
@@ -407,11 +445,25 @@ function platformsForClient(
     const key = pulsePlatformKey(table.integration_type);
     if (key) platforms.add(key);
   }
-  if (!platforms.size) {
-    if (services.includes("ppc_meta")) platforms.add("meta");
-    if (services.includes("ppc_google")) platforms.add("google");
-  }
   return Array.from(platforms);
+}
+
+function expandPulseSnapshotToPlatformGoalRows(
+  snapshot: PulseSnapshotRow,
+  tables: PulseCampaignTable[],
+): PulsePlatformDisplayRow[] {
+  const goalRows = expandPulseSnapshotToGoalRows(snapshot);
+  const platforms = platformsForClient(tables, tables.filter((table) => table.campaign_active !== false));
+  const platformList: PulsePlatform[] = platforms.length ? platforms : ["meta"];
+
+  return goalRows.flatMap((goalRow) =>
+    platformList.map((platform) => ({
+      ...goalRow,
+      platform,
+      platformLabel: pulsePlatformLabel(platform),
+      rowKey: `${goalRow.client_id}:${platform}:${goalRow.goal}`,
+    })),
+  );
 }
 
 /**
@@ -426,11 +478,18 @@ export function expandPulseToPlatformGoalRows(input: {
   bounds: PulsePeriodBounds;
 }): PulsePlatformDisplayRow[] {
   const { snapshot, services, tables, records, bounds } = input;
-  const serviceSet = clientCampaignServices(services);
+  const serviceSet = resolveCampaignServices(services, tables);
   const configuredTables = tables.filter((table) => tableMatchesServices(table, serviceSet));
   const activeTables = configuredTables.filter((table) => table.campaign_active !== false);
-  const platforms = platformsForClient(services, configuredTables, activeTables);
 
+  if (!configuredTables.length) {
+    if (snapshot && snapshotIndicatesConnected(snapshot)) {
+      return expandPulseSnapshotToPlatformGoalRows(snapshot, tables);
+    }
+    return [];
+  }
+
+  const platforms = platformsForClient(configuredTables, activeTables);
   if (!platforms.length) {
     return [];
   }
