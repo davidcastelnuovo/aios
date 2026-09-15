@@ -38,6 +38,7 @@ import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useViewAs } from "@/contexts/ViewAsContext";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
@@ -99,7 +100,9 @@ export function WeeklyTaskBoard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
-  const { isOwner, isSuperAdmin } = useUserRole();
+  const { isViewingAs, viewAsUserId } = useViewAs();
+  const boardUserId = isViewingAs && viewAsUserId ? viewAsUserId : user?.id ?? null;
+  const { isOwner, isSuperAdmin, userId: authenticatedUserId } = useUserRole();
   const { state: sidebarState } = useSidebar();
   const { t } = useTerminology();
 
@@ -139,6 +142,7 @@ export function WeeklyTaskBoard() {
   // Everyone lands on their own queue: tasks assigned to the staff member
   // linked on the user (profiles.campaigner_id / sales_person_id).
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+  const appliedOwnerBoardDefaultRef = useRef(false);
 
   // Personal queue ("mine"): default header to "all agencies" so cross-agency
   // assignments are visible. User can still narrow by agency afterward.
@@ -227,14 +231,14 @@ export function WeeklyTaskBoard() {
 
   // Resolve every campaigner row + sales person that represents this user for "mine".
   const { data: mineIdentity, isSuccess: mineIdentityReady } = useQuery({
-    queryKey: ["mine-task-identity", user?.id, tenantId, crossTenantAgencyIds.join(",")],
+    queryKey: ["mine-task-identity", boardUserId, tenantId, crossTenantAgencyIds.join(","), isViewingAs, viewAsUserId],
     queryFn: () =>
       fetchMineTaskIdentity({
-        userId: user!.id,
+        userId: boardUserId!,
         tenantId: tenantId!,
         crossTenantAgencyIds,
       }),
-    enabled: !!user?.id && !!tenantId,
+    enabled: !!boardUserId && !!tenantId,
   });
 
   const primaryCampaignerId =
@@ -246,8 +250,8 @@ export function WeeklyTaskBoard() {
 
   // Owners without a linked staff row: "mine" only matches created_by and looks empty.
   // Apply once on entry — do not override when the user explicitly picks "שלי בלבד".
-  const appliedOwnerBoardDefaultRef = useRef(false);
   useLayoutEffect(() => {
+    if (isViewingAs) return;
     if (!mineIdentityReady || !mineIdentity || appliedOwnerBoardDefaultRef.current) return;
     if (
       filters.campaignerId === "mine" &&
@@ -296,10 +300,10 @@ export function WeeklyTaskBoard() {
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching, isSuccess, isError, error: tasksError } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency],
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency, isViewingAs, viewAsUserId, boardUserId],
     enabled:
       !!tenantId &&
-      !!user?.id &&
+      !!boardUserId &&
       (filters.campaignerId !== "mine" || mineIdentityReady),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
@@ -423,6 +427,14 @@ export function WeeklyTaskBoard() {
 
   // Local tasks state for optimistic updates
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
+
+  // View-as preview: show the selected user's queue, not the admin's.
+  useEffect(() => {
+    if (!isViewingAs || !viewAsUserId) return;
+    setFilters(defaultTaskFilters);
+    setLocalTasks([]);
+    appliedOwnerBoardDefaultRef.current = true;
+  }, [isViewingAs, viewAsUserId]);
   
   const applyCampaignerBoardFilter = useMemo(
     () => (rows: FullTask[]) =>
@@ -571,7 +583,10 @@ export function WeeklyTaskBoard() {
         priority: 5,
         tenant_id: tenantId,
         agency_id: agencyId,
-        created_by: user?.id || null,
+        created_by: boardUserId,
+        ...(isViewingAs && authenticatedUserId
+          ? { impersonated_by: authenticatedUserId }
+          : {}),
         campaigner_id: assignedCampaignerId,
         sales_person_id: assignedCampaignerId ? null : assignedSalesPersonId,
         client_id: clientId ?? null,
@@ -1717,7 +1732,10 @@ export function WeeklyTaskBoard() {
             priority: 5,
             tenant_id: tenantId,
             agency_id: agencyId,
-            created_by: user?.id || null,
+            created_by: boardUserId,
+        ...(isViewingAs && authenticatedUserId
+          ? { impersonated_by: authenticatedUserId }
+          : {}),
             campaigner_id: myCampaignerId,
             sales_person_id: myCampaignerId ? null : mySalesPersonId,
             due_date: data.dueDate,
