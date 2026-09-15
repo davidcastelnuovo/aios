@@ -158,6 +158,7 @@ export type SyncManusGroupsResult = {
   success: boolean;
   syncedCount?: number;
   groups?: Array<{ groupId: string; groupChatId: string; name: string }>;
+  warning?: string;
   error?: string;
 };
 

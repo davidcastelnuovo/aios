@@ -285,7 +285,11 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["carmen-manus-groups", tenantId] });
       qc.invalidateQueries({ queryKey: ["carmen-manus-sync-info", tenantId] });
-      toast.success(`סונכרנו ${data.syncedCount ?? 0} קבוצות מ-Manus`);
+      if (data.warning) {
+        toast.warning(`${data.syncedCount ?? 0} קבוצות נטענו — ${data.warning}`);
+      } else {
+        toast.success(`סונכרנו ${data.syncedCount ?? 0} קבוצות מ-Manus`);
+      }
     },
     onError: (e: Error) => toast.error(e.message || "סנכרון קבוצות נכשל"),
   });
