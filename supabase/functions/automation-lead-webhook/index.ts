@@ -1,10 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
-import {
-  buildLeadRoutingPayload,
-  filterScreeningAnswers,
-  parseQaText,
-  resolveLeadClient,
-} from "../_shared/lead-routing.ts";
+import { processAutomationOnlyLeadWebhook } from "../_shared/automation-only-lead-webhook.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,80 +16,6 @@ const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-
-const stringRecord = (value: unknown): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(asRecord(value))
-      .filter(([, item]) => item != null && ["string", "number", "boolean"].includes(typeof item))
-      .map(([key, item]) => [key, String(item)]),
-  );
-
-const coerceScreeningRecord = (value: unknown): Record<string, string> => {
-  if (typeof value === "string" && value.trim()) return parseQaText(value);
-  return filterScreeningAnswers(stringRecord(value));
-};
-
-const fieldDataRecord = (body: Record<string, unknown>, payload: Record<string, unknown>) => {
-  // Prefer an explicit answers object/string. Make often sends questions_and_answers
-  // as a free-text blob; never fall back to the whole envelope (client_name, etc.).
-  for (const candidate of [
-    body.form_data,
-    body.answers,
-    body.questions_and_answers,
-    payload.form_data,
-    payload.answers,
-    payload.questions_and_answers,
-  ]) {
-    const parsed = coerceScreeningRecord(candidate);
-    if (Object.keys(parsed).length) return parsed;
-  }
-
-  const fieldData = body.field_data ?? payload.field_data;
-  if (Array.isArray(fieldData)) {
-    return filterScreeningAnswers(Object.fromEntries(
-      fieldData
-        .map((field) => asRecord(field))
-        .map((field) => {
-          const values = Array.isArray(field.values) ? field.values : [];
-          return [String(field.name ?? ""), String(values[0] ?? field.value ?? "")] as const;
-        })
-        .filter(([key, value]) => key && value),
-    ));
-  }
-
-  // Last resort: only non-routing keys from the flat payload.
-  return filterScreeningAnswers(stringRecord(payload));
-};
-
-const firstString = (payload: Record<string, unknown>, keys: string[]) => {
-  for (const key of keys) {
-    const value = payload[key];
-    if (value != null && String(value).trim()) return String(value).trim();
-  }
-  return "";
-};
-
-const digest = async (value: string) => {
-  const bytes = new TextEncoder().encode(value);
-  const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-};
-
-const phoneLast9 = (value: string | null | undefined): string =>
-  String(value ?? "").replace(/\D/g, "").slice(-9);
-
-const leadAlertContentKey = (parts: {
-  clientPhone: string;
-  leadName: string;
-  leadPhone: string;
-  leadEmail: string;
-}) =>
-  [
-    phoneLast9(parts.clientPhone),
-    String(parts.leadName ?? "").trim().toLowerCase(),
-    phoneLast9(parts.leadPhone),
-    String(parts.leadEmail ?? "").trim().toLowerCase(),
-  ].join("|");
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -131,152 +52,25 @@ Deno.serve(async (request) => {
       .eq("step_type", "trigger")
       .maybeSingle();
     const configuration = asRecord(triggerStep?.configuration);
-    const expectedSecret = String(configuration.webhook_secret ?? "");
-    if (
-      triggerStep?.action_type !== "inbound_webhook_lead" ||
-      !expectedSecret ||
-      await digest(expectedSecret) !== await digest(suppliedSecret)
-    ) {
+    if (triggerStep?.action_type !== "inbound_webhook_lead") {
       return reply({ error: "invalid_webhook_secret" }, 403);
     }
 
     const body = asRecord(await request.json().catch(() => ({})));
     const payload = Object.keys(asRecord(body.data)).length ? asRecord(body.data) : body;
-    const formData = fieldDataRecord(body, payload);
-    // A flow may lock to one client, or a trusted sender may route dynamically
-    // by client_id using the same webhook/automation across the whole portfolio.
-    const routedClient = await resolveLeadClient(
-      admin,
-      automation.tenant_id,
-      configuration.client_id || payload.client_id,
-    );
-    const routing = buildLeadRoutingPayload(routedClient, formData);
-    // Make may send client_phone per alert (campaigners test on their own number).
-    // Payload destination always wins over CRM client.phone from resolveLeadClient.
-    const payloadClientPhone = firstString(payload, ["client_phone", "recipient_phone"]);
-    if (payloadClientPhone) routing.client_phone = payloadClientPhone;
-    if (!routedClient) {
-      // Make/Zapier scenarios often already know the destination client.
-      // The per-flow secret makes these trusted fields safe to accept while
-      // avoiding a UUID lookup table in every existing scenario.
-      routing.client_name = firstString(payload, ["client_name", "recipient_name"]);
-      routing.client_email = firstString(payload, ["client_email", "recipient_email"]);
-    }
-    const normalizedLeadName = firstString(payload, ["lead_name", "contact_name", "full_name", "name"]);
-    const normalizedLeadPhone = firstString(payload, ["lead_phone", "phone", "phone_number", "mobile"]);
-    const normalizedLeadEmail = firstString(payload, ["lead_email", "email", "email_address"]);
-    const contentKey = leadAlertContentKey({
-      clientPhone: payloadClientPhone || routing.client_phone || "",
-      leadName: normalizedLeadName,
-      leadPhone: normalizedLeadPhone,
-      leadEmail: normalizedLeadEmail,
+
+    const result = await processAutomationOnlyLeadWebhook(admin, supabaseUrl, serviceKey, {
+      tenantId: automation.tenant_id,
+      automationId: automation.id,
+      triggerConfiguration: configuration,
+      body,
+      payload,
+      source: "webhook",
+      requireWebhookSecret: true,
+      suppliedSecret,
     });
-    const contentLockKey = `leadalert:${automation.tenant_id}:${contentKey}`;
 
-    const externalId = firstString(payload, ["external_id", "leadgen_id", "lead_id", "id"]);
-    const dedupeExternalId = externalId || `fp:${(await digest(contentKey)).slice(0, 40)}`;
-
-    const { data: contentLockAcquired, error: contentLockError } = await admin.rpc(
-      "try_acquire_manychat_destination_lock",
-      { p_destination_key: contentLockKey, p_ttl_seconds: 90 },
-    );
-    if (!contentLockError && contentLockAcquired === false) {
-      return reply({
-        success: true,
-        duplicate: true,
-        skipped: "recent_identical_lead",
-        crm_lead_created: false,
-      });
-    }
-
-    const recentCutoff = new Date(Date.now() - 90_000).toISOString();
-    const { data: recentRuns } = await admin
-      .from("automation_logs")
-      .select("payload")
-      .eq("automation_id", automation.id)
-      .eq("success", true)
-      .gte("triggered_at", recentCutoff)
-      .order("triggered_at", { ascending: false })
-      .limit(15);
-    const recentIdenticalRun = (recentRuns || []).some((row) => {
-      const p = asRecord(row.payload);
-      return leadAlertContentKey({
-        clientPhone: String(p.client_phone ?? p.recipient_phone ?? ""),
-        leadName: String(p.lead_name ?? p.contact_name ?? ""),
-        leadPhone: String(p.lead_phone ?? p.phone ?? ""),
-        leadEmail: String(p.lead_email ?? p.email ?? ""),
-      }) === contentKey;
-    });
-    if (recentIdenticalRun) {
-      return reply({
-        success: true,
-        duplicate: true,
-        skipped: "recent_identical_lead",
-        crm_lead_created: false,
-      });
-    }
-
-    {
-      const { error: receiptError } = await admin
-        .from("lead_notification_events")
-        .insert({
-          tenant_id: automation.tenant_id,
-          source: "webhook",
-          external_id: dedupeExternalId,
-          client_id: routedClient?.client_id ?? null,
-          form_id: firstString(payload, ["form_id", "facebook_form_id"]) || null,
-        });
-      if (receiptError?.code === "23505") {
-        return reply({
-          success: true,
-          duplicate: true,
-          skipped: "already_processed",
-          crm_lead_created: false,
-        });
-      }
-      if (receiptError) throw receiptError;
-    }
-
-    const normalized = {
-      ...payload,
-      contact_name: normalizedLeadName,
-      company_name: firstString(payload, ["lead_company", "company_name", "company"]),
-      phone: normalizedLeadPhone,
-      email: normalizedLeadEmail,
-      lead_name: normalizedLeadName,
-      lead_phone: normalizedLeadPhone,
-      lead_email: normalizedLeadEmail,
-      source: firstString(payload, ["source"]) || "webhook",
-      ...routing,
-      raw_payload: body,
-    };
-
-    const triggerResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        automationId: automation.id,
-        tenant_id: automation.tenant_id,
-        source: "flow_webhook",
-        data: normalized,
-      }),
-    });
-    const triggerResult = await triggerResponse.json().catch(() => ({}));
-    if (!triggerResponse.ok || triggerResult?.error) {
-      console.error("automation-lead-webhook trigger failed", triggerResult);
-      return reply({ error: triggerResult?.error || "automation_trigger_failed" }, 502);
-    }
-
-    return reply({
-      success: true,
-      automation_id: automation.id,
-      client_id: routedClient?.client_id ?? null,
-      crm_lead_created: false,
-      trigger: triggerResult,
-    });
+    return reply(result.body, result.status);
   } catch (error) {
     console.error("automation-lead-webhook error", error);
     return reply({ error: error instanceof Error ? error.message : "unknown_error" }, 500);
