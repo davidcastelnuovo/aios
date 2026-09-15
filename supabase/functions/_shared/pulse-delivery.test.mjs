@@ -4,6 +4,8 @@ import test from "node:test";
 import { buildPulseWhatsAppDigest } from "./campaign-pulse.ts";
 import {
   buildPulsePreviewMessage,
+  buildPulseMissingPhoneAlert,
+  findCampaignersMissingPulsePhone,
   mergePulseDeliveryPlans,
   planCampaignerPulseDeliveries,
   planTeamManagerPulseDeliveries,
@@ -128,4 +130,34 @@ test("preview message wraps scoped digest for campaigner", () => {
   assert.match(preview, /תצוגה מקדימה — בדיקת דופק לאביעד/);
   assert.match(preview, /נבדקו 2 יעדי קמפיין/);
   assert.match(preview, /https:\/\/aios\.co\.il\/t\/dmm\/dmm-dashboard/);
+});
+
+test("findCampaignersMissingPulsePhone lists assigned campaigners without phone", () => {
+  const missing = findCampaignersMissingPulsePhone(
+    SNAPSHOTS,
+    [
+      { campaigner_id: "cam1", client_id: "c1" },
+      { campaigner_id: "cam-no-phone", client_id: "c2" },
+    ],
+    [
+      { id: "cam1", full_name: "אביעד", phone: "972549757611" },
+      { id: "cam-no-phone", full_name: "רונית", phone: null },
+      { id: "cam-idle", full_name: "ללא לקוחות", phone: null },
+    ],
+    "dmm",
+  );
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0].name, "רונית");
+  assert.equal(missing[0].clientCount, 1);
+});
+
+test("buildPulseMissingPhoneAlert asks manager to add campaigner phone", () => {
+  const alert = buildPulseMissingPhoneAlert(
+    [{ campaignerId: "cam-no-phone", name: "רונית", clientCount: 2 }],
+    { tenantLabel: "dmm" },
+  );
+  assert.match(alert, /חסר טלפון WhatsApp לקמפיינר/);
+  assert.match(alert, /• רונית \(2 לקוחות בדופק\)/);
+  assert.match(alert, /AIOS → צוות → קמפיינרים/);
+  assert.match(alert, /_dmm_/);
 });

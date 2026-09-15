@@ -22,6 +22,8 @@ import {
   mergePulseDeliveryPlans,
   planCampaignerPulseDeliveries,
   planTeamManagerPulseDeliveries,
+  findCampaignersMissingPulsePhone,
+  buildPulseMissingPhoneAlert,
   scopeSnapshotsForPlan,
   type PulseDeliveryPlan,
 } from '../_shared/pulse-delivery.ts'
@@ -632,6 +634,30 @@ Deno.serve(async (req) => {
             supabase.from('campaigners').select('id, full_name, phone').eq('tenant_id', tenantId).eq('active', true),
           ])
           plans.push(...planCampaignerPulseDeliveries(snapshots, links || [], campaigners || [], tenantSlug))
+
+          const missingPhoneCampaigners = findCampaignersMissingPulsePhone(
+            snapshots,
+            links || [],
+            campaigners || [],
+            tenantSlug,
+          )
+          if (!previewOnlyDelivery && missingPhoneCampaigners.length && setting.campaign_pulse_phone) {
+            const alertMessage = buildPulseMissingPhoneAlert(missingPhoneCampaigners, { tenantLabel: tenantSlug })
+            const alertQueued = await queuePulseWhatsApp(
+              supabase,
+              tenantId,
+              tenantSlug,
+              alertMessage,
+              setting.campaign_pulse_phone,
+            )
+            scopedDeliveries.push({
+              type: 'missing_phone_alert',
+              campaigners: missingPhoneCampaigners.map((row) => row.name),
+              manager_phone: setting.campaign_pulse_phone,
+              queued: alertQueued,
+            })
+            if (alertQueued) sent = true
+          }
         }
 
         if (deliverToManagers) {
