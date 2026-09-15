@@ -77,11 +77,17 @@ export default function Automations() {
   const [cloneOrgOpen, setCloneOrgOpen] = useState(false);
   const [webhookDocsOpen, setWebhookDocsOpen] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
-  const { tenantId, isActiveTenantSynced } = useCurrentTenant();
+  const { tenantId, isLoading: tenantLoading, isActiveTenantSynced } = useCurrentTenant();
   const { buildPath } = useTenantPath();
 
   // Fetch automations (own + shared mirrors from other tenants)
-  const { data: automations, isLoading } = useQuery({
+  const {
+    data: automations,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["automations", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
@@ -112,7 +118,7 @@ export default function Automations() {
 
       return [...(own || []), ...shared];
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && isActiveTenantSynced,
   });
 
   // Fetch logs for selected automation
@@ -678,10 +684,24 @@ export default function Automations() {
     setEditDialogOpen(true);
   };
 
-  if (isLoading) {
+  if (tenantLoading || !isActiveTenantSynced || (isLoading && !automations)) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 p-12 text-center" dir="rtl">
+        <p className="text-muted-foreground">לא הצלחנו לטעון את האוטומציות.</p>
+        <p className="text-xs text-muted-foreground font-mono max-w-md break-all">
+          {(error as Error)?.message || "שגיאה לא ידועה"}
+        </p>
+        <Button variant="outline" onClick={() => refetch()}>
+          נסה שוב
+        </Button>
       </div>
     );
   }

@@ -162,7 +162,7 @@ export default function FlowEditor() {
 
   // ── Fetch automation ───────────────────────────────────────────────────────
 
-  const { data: automation } = useQuery({
+  const { data: automation, isLoading: automationLoading, isError: automationError, error: automationLoadError } = useQuery({
     queryKey: ["automation", automationId],
     queryFn: async () => {
       if (!automationId || !tenantId) return null;
@@ -181,7 +181,7 @@ export default function FlowEditor() {
   // Read-only when viewing a shared mirror (automation belongs to a different tenant)
   const isReadOnlyMirror = !!automation && !!tenantId && automation.tenant_id !== tenantId;
 
-  const { data: steps } = useQuery({
+  const { data: steps, isLoading: stepsLoading, isError: stepsError, error: stepsLoadError } = useQuery({
     queryKey: ["automation-flow-steps", automationId],
     queryFn: async () => {
       if (!automationId || !tenantId) return [];
@@ -646,6 +646,53 @@ export default function FlowEditor() {
 
   const selectedNode = selectedNodeId ? nodeDataMap[selectedNodeId] : null;
   const allNodes = Object.values(nodeDataMap);
+  const flowLoading =
+    automationLoading ||
+    stepsLoading ||
+    (!initializedRef.current && !!automation);
+
+  if (!tenantId || !isActiveTenantSynced) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (automationError || stepsError) {
+    const message =
+      (automationLoadError as Error)?.message ||
+      (stepsLoadError as Error)?.message ||
+      "שגיאה בטעינת האוטומציה";
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 h-screen p-8 text-center" dir="rtl">
+        <p className="text-muted-foreground">לא הצלחנו לפתוח את עורך הפלוו.</p>
+        <p className="text-xs text-muted-foreground font-mono max-w-lg break-all">{message}</p>
+        <Button variant="outline" onClick={() => navigate(buildPath("/automations"))}>
+          חזרה לרשימת אוטומציות
+        </Button>
+      </div>
+    );
+  }
+
+  if (!automationLoading && !automation) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 h-screen p-8 text-center" dir="rtl">
+        <p className="text-muted-foreground">האוטומציה לא נמצאה או שאין לך גישה אליה.</p>
+        <Button variant="outline" onClick={() => navigate(buildPath("/automations"))}>
+          חזרה לרשימת אוטומציות
+        </Button>
+      </div>
+    );
+  }
+
+  if (flowLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen" dir="rtl">
