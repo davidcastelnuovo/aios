@@ -28,6 +28,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 import { GoalTree } from "@/components/tasks/GoalTree";
 import { SystemCronJobsPanel } from "@/components/agents/SystemCronJobsPanel";
+import { PulseAlertRulesDialog } from "@/components/pulse/PulseAlertRulesDialog";
+import { parsePulseAlertRules, type PulseAlertRules } from "@/lib/pulseAlertRules";
 import { Settings2 } from "lucide-react";
 import { format } from "date-fns";
 import agentGeneral from "@/assets/agents/agent-general.png";
@@ -444,6 +446,7 @@ export default function AgentTasksPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [form, setForm] = useState({ ...defaultForm });
   const [activeTab, setActiveTab] = useState("tasks");
+  const [pulseRulesOpen, setPulseRulesOpen] = useState(false);
 
   // Heartbeat settings
   const { data: heartbeatSettings } = useQuery({
@@ -484,6 +487,7 @@ export default function AgentTasksPage() {
       allowed_actions: string[];
       campaign_pulse_enabled?: boolean;
       campaign_pulse_phone?: string | null;
+      pulse_alert_rules?: PulseAlertRules;
     }) => {
       const { error } = await supabase
         .from("tenant_heartbeat_settings")
@@ -921,7 +925,7 @@ export default function AgentTasksPage() {
                                 <div>
                                   <Label className="text-xs font-medium">בדיקת דופק שבועית + קישור לדשבורד (ראשון 07:00)</Label>
                                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                                    מחושב מהמידע המסונכרן, ללא כרמן וללא קריאת API נוספת
+                                    נתוני הדשבורד מתרעננים פעמיים ביום (07:00, 16:00). התראות מיידיות לפי חוקים.
                                   </p>
                                 </div>
                                 <Switch
@@ -961,6 +965,16 @@ export default function AgentTasksPage() {
                                   }}
                                 />
                               </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => setPulseRulesOpen(true)}
+                              >
+                                <Settings2 className="h-4 w-4 ml-2" />
+                                ניהול חוקי התראות דופק
+                              </Button>
                             </div>
 
                             <div className="grid grid-cols-3 gap-3">
@@ -1492,6 +1506,26 @@ export default function AgentTasksPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <PulseAlertRulesDialog
+        open={pulseRulesOpen}
+        onOpenChange={setPulseRulesOpen}
+        value={heartbeatSettings?.pulse_alert_rules}
+        saving={saveHeartbeatSettings.isPending}
+        onSave={async (rules) => {
+          await saveHeartbeatSettings.mutateAsync({
+            enabled: heartbeatSettings?.enabled || false,
+            interval_hours: heartbeatSettings?.interval_hours || 8,
+            active_hours_start: heartbeatSettings?.active_hours_start || 7,
+            active_hours_end: heartbeatSettings?.active_hours_end || 22,
+            allowed_actions: (heartbeatSettings?.allowed_actions as string[]) || ["reminders", "status_update", "daily_summary"],
+            campaign_pulse_enabled: heartbeatSettings?.campaign_pulse_enabled || false,
+            campaign_pulse_phone: heartbeatSettings?.campaign_pulse_phone || null,
+            pulse_alert_rules: parsePulseAlertRules(rules),
+          });
+          setPulseRulesOpen(false);
+        }}
+      />
     </div>
   );
 }
