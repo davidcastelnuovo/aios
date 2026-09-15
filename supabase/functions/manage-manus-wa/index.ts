@@ -14,6 +14,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { syncManusGroupsForTenant } from '../_shared/manus-wa-sync-groups-core.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -212,6 +213,40 @@ Deno.serve(async (req) => {
         name: statusData.name,
         instanceId: resolvedInstanceId,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ── sync_groups — list Carmen's Manus groups into whatsapp_groups ─────────
+    if (action === 'sync_groups') {
+      if (!tenantId) {
+        return new Response(JSON.stringify({ error: 'tenantId is required' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      let query = supabase
+        .from('tenant_integrations')
+        .select('id, tenant_id, api_key, settings, display_name, instance_id')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'manus_wa')
+        .eq('is_active', true);
+      if (integrationId) query = query.eq('id', integrationId);
+
+      const { data: integrations, error: integErr } = await query;
+      if (integErr) throw integErr;
+      if (!integrations?.length) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'לא נמצא חיבור Manus פעיל לטננט',
+        }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const result = await syncManusGroupsForTenant(supabase, integrations);
+      return new Response(JSON.stringify(result), {
+        status: result.success ? 200 : 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // ── send_message ──────────────────────────────────────────────────────────

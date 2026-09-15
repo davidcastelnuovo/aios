@@ -161,12 +161,20 @@ export type SyncManusGroupsResult = {
   error?: string;
 };
 
-function extractInvokeError(error: unknown, data: unknown): string {
-  const payload = (data && typeof data === "object" ? data : {}) as { error?: string };
+async function extractInvokeError(error: unknown, data: unknown): Promise<string> {
+  const payload = (data && typeof data === "object" ? data : {}) as { error?: string; message?: string };
   if (payload.error) return payload.error;
-  if (error && typeof error === "object" && "message" in error) {
-    return String((error as { message?: string }).message || "סנכרון קבוצות נכשל");
+  if (payload.message) return payload.message;
+
+  const ctx = error && typeof error === "object" ? (error as { context?: Response; message?: string }) : null;
+  if (ctx?.context && typeof ctx.context.json === "function") {
+    try {
+      const body = await ctx.context.clone().json() as { error?: string; message?: string };
+      if (body?.error) return body.error;
+      if (body?.message) return body.message;
+    } catch { /* ignore */ }
   }
+  if (ctx?.message) return ctx.message;
   return "סנכרון קבוצות נכשל";
 }
 
@@ -175,15 +183,21 @@ export async function syncCarmenManusGroups(tenantId: string): Promise<SyncManus
   const attempts: Array<{ fn: string; body: Record<string, unknown> }> = [
     { fn: "manus-wa-sync-groups", body: { tenantId } },
     { fn: "manus-wa-status", body: { tenantId, syncGroups: true } },
+    { fn: "manage-manus-wa", body: { action: "sync_groups", tenantId } },
   ];
 
   let lastError = "סנכרון קבוצות נכשל";
   for (const attempt of attempts) {
-    const { data, error } = await supabase.functions.invoke(attempt.fn, { body: attempt.body });
-    if (data?.success) return data as SyncManusGroupsResult;
-    lastError = extractInvokeError(error, data);
-    const missingFn = /not found|404|Function.*not/i.test(lastError);
-    if (!missingFn && !error) break;
+    try {
+      const { data, error } = await supabase.functions.invoke(attempt.fn, { body: attempt.body });
+      if (data?.success) return data as SyncManusGroupsResult;
+      lastError = await extractInvokeError(error, data);
+      const missingFn = /not found|404|Function.*not|Failed to send a request/i.test(lastError);
+      // Keep trying fallbacks when the function is missing / unreachable.
+      if (!missingFn && data && data.success === false) break;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+    }
   }
   throw new Error(lastError);
 }

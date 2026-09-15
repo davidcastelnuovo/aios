@@ -18,5 +18,9 @@ export function normalizeManusGroupsPayload(data) {
         isMember: isMember === undefined ? true : !!isMember,
       };
     })
-    .filter((g) => g.id && g.id.includes('@g.us') && g.isMember);
+    .filter((g) => {
+      if (!g.id || !g.isMember) return false;
+      // WhatsApp group JIDs are …@g.us (Baileys / Manus / Green API).
+      return /@g\.us$/i.test(g.id) || String(g.id).includes('@g.us');
+    });
 }

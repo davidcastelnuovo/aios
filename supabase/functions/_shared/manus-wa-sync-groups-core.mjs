@@ -11,7 +11,7 @@ function extractNextCursor(data) {
 function parseGatewayJson(text) {
   const trimmed = String(text || '').trim();
   if (!trimmed || trimmed.startsWith('<')) {
-    throw new Error('Gateway החזיר תשובה לא תקינה (HTML במקום JSON) — בדוק instance_id ו-api_key');
+    throw new Error('Gateway החזיר HTML במקום JSON — בדוק MANUS_GATEWAY_URL / instance_id');
   }
   try {
     return JSON.parse(trimmed);
@@ -24,54 +24,95 @@ async function fetchGroupsPage(url, headers) {
   const res = await fetch(url, { method: 'GET', headers });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Gateway groups failed: ${res.status} — ${text.slice(0, 300)}`);
+    throw new Error(`Gateway groups ${res.status}: ${text.slice(0, 280)}`);
   }
   const data = parseGatewayJson(text);
   return {
     groups: normalizeManusGroupsPayload(data),
     nextCursor: extractNextCursor(data),
+    rawCount: Array.isArray(data?.groups) ? data.groups.length
+      : Array.isArray(data?.data?.groups) ? data.data.groups.length
+      : Array.isArray(data) ? data.length : null,
   };
 }
 
-async function fetchAllGroupsFromGateway(buildUrl, headers) {
+async function fetchAllGroups(buildUrl, headers) {
   const byId = new Map();
   let cursor;
+  let lastRawCount = null;
   for (let page = 0; page < 100; page++) {
-    const { groups, nextCursor } = await fetchGroupsPage(buildUrl(cursor), headers);
+    const { groups, nextCursor, rawCount } = await fetchGroupsPage(buildUrl(cursor), headers);
+    lastRawCount = rawCount;
     for (const g of groups) byId.set(g.id, g);
     if (!nextCursor || nextCursor === cursor) break;
     cursor = nextCursor;
   }
-  return [...byId.values()];
+  return { groups: [...byId.values()], lastRawCount };
 }
 
-/** Fetch Carmen instance groups. Prefer admin worker secret when configured. */
+function resolveInstanceId(integ) {
+  const settings = integ.settings || {};
+  return String(
+    integ.instance_id
+    || settings.instance_id
+    || settings.instanceId
+    || '',
+  ).trim();
+}
+
+/**
+ * Try admin path first (worker secret), then instance API key.
+ * Paths match manage-manus-wa / docs: /api/admin/... and /api/v1/...
+ */
 export async function fetchGroupsFromGateway(instanceId, apiKey) {
+  const attempts = [];
+
   if (WORKER_SECRET) {
-    try {
-      const groups = await fetchAllGroupsFromGateway(
+    attempts.push({
+      via: 'admin_worker_secret',
+      run: () => fetchAllGroups(
         (cursor) => {
           const url = new URL(`${BASE_URL}/api/admin/instances/${instanceId}/groups`);
           if (cursor) url.searchParams.set('cursor', cursor);
           return url.toString();
         },
         { 'X-Worker-Secret': WORKER_SECRET },
-      );
-      if (groups.length > 0) return { groups, via: 'admin_worker_secret' };
-    } catch (adminErr) {
-      console.warn('[manus-wa-sync-groups] admin groups failed, trying instance api key', adminErr);
-    }
+      ),
+    });
   }
 
-  const groups = await fetchAllGroupsFromGateway(
-    (cursor) => {
-      const url = new URL(`${BASE_URL}/api/v1/instances/${instanceId}/groups`);
-      if (cursor) url.searchParams.set('cursor', cursor);
-      return url.toString();
-    },
-    { 'X-Api-Key': apiKey },
-  );
-  return { groups, via: 'instance_api_key' };
+  attempts.push({
+    via: 'instance_api_key',
+    run: () => fetchAllGroups(
+      (cursor) => {
+        const url = new URL(`${BASE_URL}/api/v1/instances/${instanceId}/groups`);
+        if (cursor) url.searchParams.set('cursor', cursor);
+        return url.toString();
+      },
+      { 'X-Api-Key': apiKey },
+    ),
+  });
+
+  let lastErr = null;
+  for (const attempt of attempts) {
+    try {
+      const { groups, lastRawCount } = await attempt.run();
+      if (groups.length > 0) {
+        return { groups, via: attempt.via };
+      }
+      // Empty after successful HTTP — keep trying other auth paths in case this
+      // path is authorized but returns an empty/partial payload.
+      if (lastRawCount === 0 || lastRawCount === null) {
+        lastErr = new Error(`${attempt.via}: gateway returned 0 groups`);
+        continue;
+      }
+      return { groups, via: attempt.via };
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      console.warn('[manus-wa-sync-groups] attempt failed', attempt.via, lastErr.message);
+    }
+  }
+  throw lastErr || new Error('סנכרון קבוצות מ-Gateway נכשל');
 }
 
 export async function syncManusGroupsForTenant(supabaseSvc, integrations) {
@@ -80,10 +121,13 @@ export async function syncManusGroupsForTenant(supabaseSvc, integrations) {
 
   for (const integ of integrations) {
     const settings = integ.settings || {};
-    const instanceId = String(settings.instance_id || '');
+    const instanceId = resolveInstanceId(integ);
     const apiKey = integ.api_key || '';
     if (!instanceId || !apiKey) {
-      errors.push({ integrationId: integ.id, error: 'חסר instance_id או api_key בחיבור Manus' });
+      errors.push({
+        integrationId: integ.id,
+        error: `חסר instance_id או api_key בחיבור Manus (instance=${instanceId ? 'ok' : 'missing'}, key=${apiKey ? 'ok' : 'missing'})`,
+      });
       continue;
     }
 
@@ -122,18 +166,28 @@ export async function syncManusGroupsForTenant(supabaseSvc, integrations) {
 
       const mergedSettings = {
         ...settings,
+        instance_id: instanceId,
         manus_groups_sync: {
           synced_at: new Date().toISOString(),
           group_chat_ids: groupChatIds,
           groups: syncedCatalog,
           count: groupChatIds.length,
           via,
+          gateway: BASE_URL,
         },
       };
-      await supabaseSvc
+      const { error: settingsErr } = await supabaseSvc
         .from('tenant_integrations')
         .update({ settings: mergedSettings })
         .eq('id', integ.id);
+      if (settingsErr) throw settingsErr;
+
+      if (groups.length === 0) {
+        errors.push({
+          integrationId: integ.id,
+          error: `Gateway החזיר 0 קבוצות (via=${via}, instance=${instanceId}). ודא שכרמן מחוברת וש-list-groups פעיל ב-Gateway.`,
+        });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[manus-wa-sync-groups] integration failed', integ.id, msg);
@@ -141,10 +195,10 @@ export async function syncManusGroupsForTenant(supabaseSvc, integrations) {
     }
   }
 
-  if (!synced.length && errors.length) {
+  if (!synced.length) {
     return {
       success: false,
-      error: errors[0]?.error || 'סנכרון קבוצות נכשל',
+      error: errors[0]?.error || 'סנכרון קבוצות נכשל — לא נשמרו קבוצות',
       errors,
     };
   }

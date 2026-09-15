@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       );
       let query = supabaseSvc
         .from('tenant_integrations')
-        .select('id, tenant_id, api_key, settings, display_name')
+        .select('id, tenant_id, api_key, settings, display_name, instance_id')
         .eq('tenant_id', body.tenantId)
         .eq('integration_type', 'manus_wa')
         .eq('is_active', true);
