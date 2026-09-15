@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useLayoutEffect } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { markLinkedTaskDoneForCalendarEvent } from "@/lib/taskCalendarSync";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -31,7 +31,7 @@ import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
-import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters, resolveMineTaskAssignee } from "./TaskFiltersDialog";
+import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import type { QuickTaskPayload } from "./QuickTaskInput";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
@@ -53,6 +53,7 @@ import {
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineAssignmentOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
+import { filterTasksByCampaignerBoardFilter } from "@/lib/taskFilters";
 import { buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 
@@ -243,13 +244,16 @@ export function WeeklyTaskBoard() {
     mineIdentity?.kind === "assigned" ? mineIdentity.salesPersonId ?? null : null;
 
   // Owners without a linked staff row: "mine" only matches created_by and looks empty.
+  // Apply once on entry — do not override when the user explicitly picks "שלי בלבד".
+  const appliedOwnerBoardDefaultRef = useRef(false);
   useLayoutEffect(() => {
-    if (!mineIdentityReady || !mineIdentity) return;
+    if (!mineIdentityReady || !mineIdentity || appliedOwnerBoardDefaultRef.current) return;
     if (
       filters.campaignerId === "mine" &&
       mineIdentity.kind === "created_by" &&
       (isOwner || isSuperAdmin)
     ) {
+      appliedOwnerBoardDefaultRef.current = true;
       setFilters((prev) => ({ ...prev, campaignerId: "all" }));
     }
   }, [mineIdentityReady, mineIdentity, isOwner, isSuperAdmin, filters.campaignerId]);
@@ -321,10 +325,9 @@ export function WeeklyTaskBoard() {
         accessibleAgencyIds: (agencies || []).map((agency) => agency.id),
       });
 
-      let personScopeCampaignerIds: string[] = [];
       let collaboratorTaskIds: string[] = [];
       if (filters.campaignerId === "mine") {
-        personScopeCampaignerIds = mineIdentity?.campaignerIds ?? [];
+        const personScopeCampaignerIds = mineIdentity?.campaignerIds ?? [];
         if (personScopeCampaignerIds.length > 0) {
           const { data: collabRows } = await supabase
             .from("task_collaborators")
@@ -332,13 +335,9 @@ export function WeeklyTaskBoard() {
             .in("campaigner_id", personScopeCampaignerIds);
           collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
         }
-      } else if (filters.campaignerId !== "all" && filters.campaignerId !== "none") {
-        personScopeCampaignerIds = [filters.campaignerId];
       }
 
-      query = query.or(
-        buildTasksBoardScopeOrFilter(boardScope, personScopeCampaignerIds, collaboratorTaskIds),
-      );
+      query = query.or(buildTasksBoardScopeOrFilter(boardScope));
 
       // Include: current range OR overdue open OR unscheduled open (no due_date).
       // Do not fetch historical done-undated / all-time untimed rows — that
@@ -357,9 +356,14 @@ export function WeeklyTaskBoard() {
       if (filters.campaignerId === "mine") {
         const mine = mineIdentity!;
         const assignmentOr = buildMineAssignmentOrFilter(mine);
-        if (assignmentOr) {
+        const mineParts: string[] = [];
+        if (assignmentOr) mineParts.push(assignmentOr);
+        if (collaboratorTaskIds.length > 0) {
+          mineParts.push(`id.in.(${collaboratorTaskIds.join(",")})`);
+        }
+        if (mineParts.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(assignmentOr);
+          query = (query as any).or(mineParts.join(","));
         } else if (mine.kind === "created_by") {
           query = query.eq("created_by", mine.userId);
         } else {
@@ -420,6 +424,12 @@ export function WeeklyTaskBoard() {
   // Local tasks state for optimistic updates
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
   
+  const applyCampaignerBoardFilter = useMemo(
+    () => (rows: FullTask[]) =>
+      filterTasksByCampaignerBoardFilter(rows, filters.campaignerId, mineIdentity ?? null),
+    [filters.campaignerId, mineIdentity],
+  );
+
   useEffect(() => {
     if (isError) return;
     if (!isSuccess && !isFetching) return;
@@ -432,6 +442,7 @@ export function WeeklyTaskBoard() {
       previousLocal: localTasks,
       selectedAgency,
       campaignerFilter: filters.campaignerId,
+      applyCampaignerFilter: applyCampaignerBoardFilter,
     });
     setLocalTasks(next);
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
@@ -448,8 +459,10 @@ export function WeeklyTaskBoard() {
   // Team board: header agency narrows rows. Personal "mine" queue is the linked
   // staff member's assignments across every agency.
   const tasks = useMemo(
-    () => filterTasksForBoardView(localTasks, selectedAgency, filters.campaignerId),
-    [localTasks, selectedAgency, filters.campaignerId],
+    () => applyCampaignerBoardFilter(
+      filterTasksForBoardView(localTasks, selectedAgency, filters.campaignerId),
+    ),
+    [localTasks, selectedAgency, filters.campaignerId, applyCampaignerBoardFilter],
   );
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates).

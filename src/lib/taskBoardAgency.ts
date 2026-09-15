@@ -97,29 +97,15 @@ export function filterTasksForBoardView<T extends AgencyScopedTask>(
 /**
  * PostgREST `.or()` scope for the tasks board fetch.
  *
- * Always includes the active tenant. Shared agencies add an `agency_id.in(...)`.
- * When viewing a person queue, also OR-in `campaigner_id.eq(...)` so assignments
- * are not dropped when `tasks.agency_id` was stamped on the wrong agency.
+ * Own-tenant rows plus shared-agency rows the user may read cross-tenant.
+ * Person-queue narrowing (mine / named campaigner) is applied in a separate
+ * ANDed filter — never OR `tenant_id` with `campaigner_id` here, or every row
+ * in the tenant matches the scope clause alone.
  */
-export function buildTasksBoardScopeOrFilter(
-  scope: TasksBoardScope,
-  assignedCampaignerIds?: string | string[] | null,
-  includeTaskIds?: string[],
-): string {
+export function buildTasksBoardScopeOrFilter(scope: TasksBoardScope): string {
   const parts = [`tenant_id.eq.${scope.tenantId}`];
   if (scope.type === "tenant_or_shared" && scope.crossTenantAgencyIds.length > 0) {
     parts.push(`agency_id.in.(${scope.crossTenantAgencyIds.join(",")})`);
-  }
-  const ids = Array.isArray(assignedCampaignerIds)
-    ? assignedCampaignerIds
-    : assignedCampaignerIds
-      ? [assignedCampaignerIds]
-      : [];
-  for (const id of ids) {
-    parts.push(`campaigner_id.eq.${id}`);
-  }
-  if (includeTaskIds && includeTaskIds.length > 0) {
-    parts.push(`id.in.(${includeTaskIds.join(",")})`);
   }
   return parts.join(",");
 }
@@ -155,16 +141,31 @@ export function resolveTasksBoardScope(input: {
  * list to avoid an empty flash — but we MUST still narrow by selectedAgency so
  * switching the header filter cannot keep other agencies' tasks on screen.
  */
-export function syncLocalTasksForAgencyFilter<T extends AgencyScopedTask>(input: {
+export type CampaignerScopedTask = AgencyScopedTask & {
+  campaigner_id?: string | null;
+  sales_person_id?: string | null;
+  created_by?: string | null;
+};
+
+export function syncLocalTasksForAgencyFilter<T extends CampaignerScopedTask>(input: {
   isFetching: boolean;
   fetchedTasks: T[] | undefined | null;
   previousLocal: T[];
   selectedAgency: string | null | undefined;
   campaignerFilter?: string;
+  /** Client-side guard while refetching after a campaigner filter change. */
+  applyCampaignerFilter?: (tasks: T[]) => T[];
 }): T[] {
-  const { isFetching, fetchedTasks, previousLocal, selectedAgency, campaignerFilter = "all" } = input;
-  if (isFetching) {
-    return filterTasksForBoardView(previousLocal, selectedAgency, campaignerFilter);
-  }
-  return filterTasksForBoardView(fetchedTasks ?? [], selectedAgency, campaignerFilter);
+  const {
+    isFetching,
+    fetchedTasks,
+    previousLocal,
+    selectedAgency,
+    campaignerFilter = "all",
+    applyCampaignerFilter,
+  } = input;
+  const base = isFetching
+    ? filterTasksForBoardView(previousLocal, selectedAgency, campaignerFilter)
+    : filterTasksForBoardView(fetchedTasks ?? [], selectedAgency, campaignerFilter);
+  return applyCampaignerFilter ? applyCampaignerFilter(base) : base;
 }

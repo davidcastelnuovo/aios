@@ -12,6 +12,7 @@ import {
   resolveTasksBoardScope,
   syncLocalTasksForAgencyFilter,
 } from "./taskBoardAgency.ts";
+import { filterTasksByCampaignerBoardFilter } from "./taskFilters.ts";
 
 const PROMO = "agency-promo";
 const DMM = "agency-dmm";
@@ -134,18 +135,39 @@ test("syncLocalTasksForAgencyFilter keeps mine rows across agencies while fetchi
   assert.deepEqual(duringFetch.map((task) => task.id), ["1", "3"]);
 });
 
-test("buildTasksBoardScopeOrFilter ORs every campaigner assignment into fetch scope", () => {
+test("syncLocalTasksForAgencyFilter can narrow by campaigner while fetching", () => {
+  const rows = [
+    { ...misstampedDmmTask, campaigner_id: "staff-itay" },
+    { ...promoTaskNoClient, campaigner_id: "staff-other" },
+  ];
+  const duringFetch = syncLocalTasksForAgencyFilter({
+    isFetching: true,
+    fetchedTasks: [],
+    previousLocal: rows,
+    selectedAgency: "all",
+    campaignerFilter: "mine",
+    applyCampaignerFilter: (tasks) =>
+      filterTasksByCampaignerBoardFilter(tasks, "mine", {
+        kind: "assigned",
+        campaignerId: "staff-itay",
+        campaignerIds: ["staff-itay"],
+      }),
+  });
+  assert.deepEqual(duringFetch.map((task) => task.id), ["1"]);
+});
+
+test("buildTasksBoardScopeOrFilter scopes tenant and shared agencies only", () => {
   const scope = resolveTasksBoardScope({
     tenantId: "tenant-dmm",
     crossTenantAgencyIds: ["agency-dmm-mc"],
   });
   assert.equal(
-    buildTasksBoardScopeOrFilter(scope, ["campaigner-ana", "campaigner-david"]),
-    "tenant_id.eq.tenant-dmm,agency_id.in.(agency-dmm-mc),campaigner_id.eq.campaigner-ana,campaigner_id.eq.campaigner-david",
-  );
-  assert.equal(
     buildTasksBoardScopeOrFilter(scope),
     "tenant_id.eq.tenant-dmm,agency_id.in.(agency-dmm-mc)",
+  );
+  assert.equal(
+    buildTasksBoardScopeOrFilter(resolveTasksBoardScope({ tenantId: "tenant-promo" })),
+    "tenant_id.eq.tenant-promo",
   );
 });
 
