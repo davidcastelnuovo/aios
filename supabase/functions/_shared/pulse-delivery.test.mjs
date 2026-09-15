@@ -5,6 +5,7 @@ import { buildPulseWhatsAppDigest } from "./campaign-pulse.ts";
 import {
   buildPulsePreviewMessage,
   buildPulseMissingPhoneAlert,
+  filterPulsePlansByCampaignerName,
   findCampaignersMissingPulsePhone,
   mergePulseDeliveryPlans,
   planCampaignerPulseDeliveries,
@@ -160,4 +161,16 @@ test("buildPulseMissingPhoneAlert asks manager to add campaigner phone", () => {
   assert.match(alert, /• רונית \(2 לקוחות בדופק\)/);
   assert.match(alert, /AIOS → צוות → קמפיינרים/);
   assert.match(alert, /_dmm_/);
+});
+
+test("filterPulsePlansByCampaignerName keeps only matching campaigner plans", () => {
+  const filtered = filterPulsePlansByCampaignerName(
+    [
+      { key: "campaigner:a", role: "campaigner", name: "שנאיה", phone: "972500000001", clientIds: ["c1"] },
+      { key: "campaigner:b", role: "campaigner", name: "אביעד", phone: "972549757611", clientIds: ["c2"] },
+    ],
+    "שנאיה",
+  );
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].name, "שנאיה");
 });
