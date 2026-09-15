@@ -44,3 +44,15 @@ CREATE TABLE IF NOT EXISTS environment_sync.rejected_rows (
 );
 ALTER TABLE environment_sync.rejected_rows ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON environment_sync.rejected_rows FROM PUBLIC, anon, authenticated;
+
+-- Preserve the mapping when an unreferenced logical record receives its
+-- canonical Production identifier. This contains identifiers, not row bodies.
+CREATE TABLE IF NOT EXISTS environment_sync.key_reconciliations (
+  table_name text NOT NULL,
+  old_id text NOT NULL,
+  new_id text NOT NULL,
+  reconciled_at timestamptz NOT NULL,
+  PRIMARY KEY(table_name,old_id,new_id)
+);
+ALTER TABLE environment_sync.key_reconciliations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON environment_sync.key_reconciliations FROM PUBLIC, anon, authenticated;

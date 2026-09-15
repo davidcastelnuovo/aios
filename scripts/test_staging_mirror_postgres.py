@@ -51,6 +51,24 @@ INSERT INTO environment_sync.safety(singleton,guard_version,outbound_blocked) VA
         items = [{'key': {'id': row['id']}, 'digest': 'hash-'+row['id'], 'row': row} for row in rows]
         return mirror.apply_batch_sql('mirror_probe', ['id'], ['id','parent_id','name','amount'], items)
 
+    def test_legacy_identifier_alignment_preserves_data_and_has_no_side_effects(self):
+        sql = mirror.legacy_key_sql('mirror_probe', ['name'], [{'id':'canonical','name':'existing'}])
+        self.sql(sql)
+        self.assertEqual(self.sql("SELECT id||':'||amount FROM public.mirror_probe WHERE name='existing'"), 'canonical:1')
+        self.assertEqual(self.sql('SELECT count(*) FROM public.mirror_side_effects'), '0')
+        self.assertEqual(self.sql('SELECT count(*) FROM environment_sync.key_reconciliations'), '1')
+        self.sql(sql)
+        self.assertEqual(self.sql('SELECT count(*) FROM environment_sync.key_reconciliations'), '1')
+
+    def test_legacy_identifier_alignment_rejects_references_and_ambiguity(self):
+        self.sql("CREATE TABLE public.mirror_dependent(id text REFERENCES public.mirror_probe(id)); INSERT INTO public.mirror_dependent VALUES('seed')")
+        self.sql(mirror.legacy_key_sql('mirror_probe',['name'],[{'id':'canonical','name':'existing'}]), success=False)
+        self.assertEqual(self.sql('SELECT id FROM public.mirror_probe'), 'seed')
+        self.sql('DROP TABLE public.mirror_dependent')
+        self.sql(mirror.legacy_key_sql('mirror_probe',['name'],[{'id':'one','name':'existing'},{'id':'two','name':'existing'}]), success=False)
+        self.assertEqual(self.sql('SELECT id FROM public.mirror_probe'), 'seed')
+        self.assertEqual(self.sql('SELECT count(*) FROM environment_sync.key_reconciliations'), '0')
+
     def test_historical_identity_satisfies_required_email_without_activating_invites(self):
         self.sql("""
 DROP SCHEMA IF EXISTS auth CASCADE;
