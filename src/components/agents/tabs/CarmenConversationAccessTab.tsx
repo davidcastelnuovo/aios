@@ -4,7 +4,11 @@ import { Loader2, Phone, Users, MessageSquare, Shield, RefreshCw, Save } from "l
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { fetchCarmenManusGroups, syncCarmenManusGroups } from "@/lib/carmenManusGroups";
+import {
+  fetchCarmenManusGroups,
+  fetchManusGroupsSyncInfo,
+  syncCarmenManusGroups,
+} from "@/lib/carmenManusGroups";
 import {
   buildPolicyFromAutomation,
   fetchCarmenAutomationConfig,
@@ -19,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -78,11 +83,16 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     },
   });
 
-  /** Only groups where Carmen's Manus bot has been seen — not operator Green API groups. */
   const { data: manusGroups, isLoading: groupsLoading } = useQuery({
     queryKey: ["carmen-manus-groups", tenantId],
     enabled: !!tenantId,
     queryFn: () => fetchCarmenManusGroups(tenantId!),
+  });
+
+  const { data: manusSyncInfo } = useQuery({
+    queryKey: ["carmen-manus-sync-info", tenantId],
+    enabled: !!tenantId,
+    queryFn: () => fetchManusGroupsSyncInfo(tenantId!),
   });
 
   const manusGroupIdSet = useMemo(
@@ -273,6 +283,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["carmen-manus-groups", tenantId] });
+      qc.invalidateQueries({ queryKey: ["carmen-manus-sync-info", tenantId] });
       toast.success(`סונכרנו ${data.syncedCount ?? 0} קבוצות מ-Manus`);
     },
     onError: (e: Error) => toast.error(e.message || "סנכרון קבוצות נכשל"),
@@ -343,7 +354,18 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   };
 
   const toggleGroup = (id: string) => {
+    if (openMemberGroups) return;
     setGroupIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const selectAllGroups = () => {
+    if (openMemberGroups) return;
+    setGroupIds((manusGroups || []).map((g: { id: string }) => g.id));
+  };
+
+  const clearAllGroups = () => {
+    if (openMemberGroups) return;
+    setGroupIds([]);
   };
 
   const addClientGroupRow = () => {
@@ -506,61 +528,94 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       <Card className="p-4 space-y-4 w-full">
         <h3 className="font-medium flex items-center gap-2 justify-end">
           <Users className="h-4 w-4 shrink-0" />
-          WhatsApp — קבוצות (Manus בלבד)
+          באילו קבוצות כרמן מורשית להגיב?
         </h3>
-        <p className="text-xs text-muted-foreground text-right">
-          רק קבוצות שכרמן חברה בהן בחיבור Manus (מסנכרון Gateway) — לא Green API ולא allowlist ישן.
-          לחץ «סנכרן קבוצות מ-Manus» לרענון.
-        </p>
+
+        <Alert className="text-right" dir="rtl">
+          <AlertDescription className="text-xs space-y-1">
+            <p><strong>איך זה עובד:</strong> כרמן מגיבה בקבוצה רק אם (א) הקבוצה מורשית כאן, (ב) מישהו פונה לה ישירות («כרמן…» אם המתג למטה פעיל), ו-(ג) השולח מזוהה ומורשה.</p>
+            <p><strong>רשימה ידנית:</strong> סמן קבוצות — רק בהן כרמן תענה.</p>
+            <p><strong>כל קבוצות Manus:</strong> כל קבוצה שכרמן חברה בה (מסנכרון) — בלי לסמן אחת־אחת.</p>
+          </AlertDescription>
+        </Alert>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            {manusSyncInfo?.hasSync
+              ? `${(manusGroups || []).length} קבוצות מ-Manus · סונכרון אחרון: ${manusSyncInfo.syncedAt ? new Date(manusSyncInfo.syncedAt).toLocaleString("he-IL") : "—"}`
+              : "טרם בוצע סנכרון מ-Manus — לחץ «סנכרן קבוצות מ-Manus»"}
+          </span>
+          {!openMemberGroups && (manusGroups || []).length > 0 && (
+            <span>{groupIds.length} / {(manusGroups || []).length} מסומנות להגיבה</span>
+          )}
+        </div>
+
         <div className="space-y-2 w-full">
           <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2">
             <Label htmlFor="require-direct" className="cursor-pointer text-right flex-1">
-              חובה לפנות «כרמן» ישירות
+              חובה לפנות «כרמן» ישירות (לא מגיבה לשיחה עליה בגוף שלישי)
             </Label>
             <Switch checked={requireDirect} onCheckedChange={setRequireDirect} id="require-direct" />
           </div>
-          <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2">
+          <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2 bg-muted/30">
             <Label htmlFor="open-member" className="cursor-pointer text-right flex-1">
-              כל קבוצת Manus שכרמן חבר בה
+              <span className="font-medium">כל קבוצות Manus</span>
+              <span className="block text-[11px] text-muted-foreground font-normal">
+                כרמן מורשית בכל קבוצה שבה היא חברה — הרשימה למטה להצגה בלבד
+              </span>
             </Label>
-            <Switch checked={openMemberGroups} onCheckedChange={setOpenMemberGroups} id="open-member" />
+            <Switch
+              checked={openMemberGroups}
+              onCheckedChange={(v) => {
+                setOpenMemberGroups(v);
+                if (v) setGroupIds((manusGroups || []).map((g: { id: string }) => g.id));
+              }}
+              id="open-member"
+            />
           </div>
         </div>
-        <ScrollArea className="h-48 w-full border rounded-md p-2">
+
+        {!openMemberGroups && (manusGroups || []).length > 0 && (
+          <div className="flex flex-wrap gap-2 justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={selectAllGroups}>סמן את כולן</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={clearAllGroups}>נקה בחירה</Button>
+          </div>
+        )}
+
+        <ScrollArea className="h-64 w-full border rounded-md p-2">
           {(manusGroups || []).length === 0 ? (
             <div className="text-xs text-muted-foreground text-right space-y-2 py-4 px-2">
               <p className="font-medium text-foreground">אין עדיין קבוצות Manus לרשימה</p>
-              <p>
-                לחץ <strong>סנכרן קבוצות מ-Manus</strong> למשוך את כל הקבוצות שבהן כרמן חברה בחיבור Manus.
-                לא מוצגות קבוצות מ-Green API (הטלפון שלך לצ׳אט/דיוור).
-              </p>
-              <p>
-                אם הסנכרון ריק — ודא שחיבור Manus מחובר (CONNECTED) ושלח «כרמן» בקבוצה כדי לוודא תעבורה.
-              </p>
+              <p>לחץ <strong>סנכרן קבוצות מ-Manus</strong> למשוך את כל הקבוצות שבהן כרמן חברה.</p>
             </div>
           ) : (
-            (manusGroups || []).map((g: any) => (
-              <label
-                key={g.id}
-                className="flex w-full items-center gap-2 py-1.5 px-1 cursor-pointer"
-                dir="rtl"
-              >
-                <Checkbox
-                  className="shrink-0"
-                  checked={groupIds.includes(g.id)}
-                  onCheckedChange={() => toggleGroup(g.id)}
-                />
-                <span className="min-w-0 flex-1 text-sm text-right truncate">{g.group_name}</span>
-              </label>
-            ))
+            (manusGroups || []).map((g: any) => {
+              const allowed = openMemberGroups || groupIds.includes(g.id);
+              return (
+                <label
+                  key={g.id}
+                  className={`flex w-full items-center gap-2 py-1.5 px-1 ${openMemberGroups ? "opacity-80" : "cursor-pointer"}`}
+                  dir="rtl"
+                >
+                  <Checkbox
+                    className="shrink-0"
+                    checked={allowed}
+                    disabled={openMemberGroups}
+                    onCheckedChange={() => toggleGroup(g.id)}
+                  />
+                  <span className="min-w-0 flex-1 text-sm text-right truncate">{g.group_name}</span>
+                  {allowed && (
+                    <Badge variant="outline" className="text-[10px] shrink-0">מורשה להגיב</Badge>
+                  )}
+                </label>
+              );
+            })
           )}
         </ScrollArea>
-        {groupIds.length > 0 && (
-          <div className="flex flex-wrap gap-1 justify-end">
-            {groupIds.map((id) => (
-              <Badge key={id} variant="secondary">{groupName(id)}</Badge>
-            ))}
-          </div>
+        {!openMemberGroups && groupIds.length > 0 && (
+          <p className="text-[11px] text-muted-foreground text-right">
+            נשמרו {groupIds.length} קבוצות מורשות — כרמן תענה בהן בלבד (בנוסף לבדיקת זהות שולח).
+          </p>
         )}
       </Card>
 

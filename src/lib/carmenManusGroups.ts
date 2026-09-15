@@ -61,9 +61,62 @@ async function fetchManusTrafficGroupIds(tenantId: string, into: Set<string>) {
   }
 }
 
-export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<string>> {
-  const ids = new Set<string>();
+export type ManusGroupsSyncInfo = {
+  syncedAt?: string;
+  count?: number;
+  hasSync: boolean;
+};
 
+export async function fetchManusGroupsSyncInfo(tenantId: string): Promise<ManusGroupsSyncInfo> {
+  const { data } = await supabase
+    .from("tenant_integrations")
+    .select("settings")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", "manus_wa")
+    .eq("is_active", true);
+  let syncedAt: string | undefined;
+  let count = 0;
+  let hasSync = false;
+  for (const row of data || []) {
+    const sync = ((row as { settings?: Record<string, unknown> }).settings?.manus_groups_sync
+      || {}) as ManusGroupsSyncMeta;
+    if (sync.synced_at) {
+      hasSync = true;
+      if (!syncedAt || sync.synced_at > syncedAt) syncedAt = sync.synced_at;
+      count = Math.max(count, sync.group_chat_ids?.length || sync.count || 0);
+    }
+  }
+  return { syncedAt, count, hasSync };
+}
+
+export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<string>> {
+  const groups = await fetchCarmenManusGroups(tenantId);
+  return new Set(groups.map((g) => String(g.id)));
+}
+
+type WhatsappGroupRow = {
+  id: string;
+  group_name: string;
+  group_chat_id: string;
+  is_blocked: boolean | null;
+};
+
+async function fetchWhatsappGroupPages(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: WhatsappGroupRow[] | null; error: Error | null }>,
+): Promise<WhatsappGroupRow[]> {
+  const pageSize = 1000;
+  const rows: WhatsappGroupRow[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    rows.push(...data);
+    if (data.length < pageSize) break;
+  }
+  return rows;
+}
+
+export async function fetchCarmenManusGroups(tenantId: string) {
   const { data: manusIntegrations, error: manusIntErr } = await supabase
     .from("tenant_integrations")
     .select("id, user_id, settings")
@@ -72,33 +125,59 @@ export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<st
     .eq("is_active", true);
 
   if (manusIntErr) throw manusIntErr;
-  if (!manusIntegrations?.length) return ids;
+  if (!manusIntegrations?.length) return [];
 
   const { chatIds, hasSync } = collectSyncedChatIds(manusIntegrations);
+  const notBlocked = "is_blocked.is.null,is_blocked.eq.false";
 
   if (hasSync) {
-    // Gateway sync is authoritative — only groups Carmen's Manus instance is in.
+    const byId = new Map<string, WhatsappGroupRow>();
+
+    const syncedRows = await fetchWhatsappGroupPages((from, to) =>
+      supabase
+        .from("whatsapp_groups")
+        .select("id, group_name, group_chat_id, is_blocked")
+        .eq("tenant_id", tenantId)
+        .eq("description", "manus_wa_sync")
+        .or(notBlocked)
+        .order("group_name")
+        .range(from, to),
+    );
+    for (const g of syncedRows) byId.set(g.id, g);
+
     if (chatIds.length > 0) {
-      await resolveGroupRefsToIds(tenantId, chatIds, ids);
+      const chunkSize = 200;
+      for (let i = 0; i < chatIds.length; i += chunkSize) {
+        const chunk = chatIds.slice(i, i + chunkSize);
+        const byChat = await fetchWhatsappGroupPages((from, to) =>
+          supabase
+            .from("whatsapp_groups")
+            .select("id, group_name, group_chat_id, is_blocked")
+            .eq("tenant_id", tenantId)
+            .in("group_chat_id", chunk)
+            .or(notBlocked)
+            .order("group_name")
+            .range(from, to),
+        );
+        for (const g of byChat) byId.set(g.id, g);
+      }
     }
-    return ids;
+
+    return Array.from(byId.values()).sort((a, b) =>
+      (a.group_name || "").localeCompare(b.group_name || "", "he"),
+    );
   }
 
-  // Pre-sync: only groups with manus_wa traffic (not Green / automation allowlist).
+  const ids = new Set<string>();
   await fetchManusTrafficGroupIds(tenantId, ids);
-  return ids;
-}
-
-export async function fetchCarmenManusGroups(tenantId: string) {
-  const manusIds = await fetchCarmenManusGroupIds(tenantId);
-  if (manusIds.size === 0) return [];
+  if (ids.size === 0) return [];
 
   const { data, error } = await supabase
     .from("whatsapp_groups")
     .select("id, group_name, group_chat_id, is_blocked")
     .eq("tenant_id", tenantId)
-    .in("id", [...manusIds])
-    .or("is_blocked.is.null,is_blocked.eq.false")
+    .in("id", [...ids])
+    .or(notBlocked)
     .order("group_name");
   if (error) throw error;
   return data || [];

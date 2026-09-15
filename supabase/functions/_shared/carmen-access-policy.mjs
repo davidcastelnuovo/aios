@@ -247,6 +247,12 @@ export async function fetchManusConnectedGroupIds(supabase, tenantId) {
   }
 
   if (hasSync) {
+    const { data: syncedRows } = await supabase
+      .from('whatsapp_groups')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('description', 'manus_wa_sync');
+    for (const g of syncedRows || []) ids.add(String(g.id));
     if (syncedChatIds.length) {
       await resolveGroupRefsToIds(supabase, tenantId, [...new Set(syncedChatIds)], ids);
     }
