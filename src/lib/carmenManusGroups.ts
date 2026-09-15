@@ -161,14 +161,31 @@ export type SyncManusGroupsResult = {
   error?: string;
 };
 
+function extractInvokeError(error: unknown, data: unknown): string {
+  const payload = (data && typeof data === "object" ? data : {}) as { error?: string };
+  if (payload.error) return payload.error;
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message?: string }).message || "סנכרון קבוצות נכשל");
+  }
+  return "סנכרון קבוצות נכשל";
+}
+
 /** Pull group membership from Manus Gateway and upsert whatsapp_groups. */
 export async function syncCarmenManusGroups(tenantId: string): Promise<SyncManusGroupsResult> {
-  const { data, error } = await supabase.functions.invoke("manus-wa-sync-groups", {
-    body: { tenantId },
-  });
-  if (error) throw error;
-  if (!data?.success) throw new Error(data?.error || "סנכרון קבוצות נכשל");
-  return data as SyncManusGroupsResult;
+  const attempts: Array<{ fn: string; body: Record<string, unknown> }> = [
+    { fn: "manus-wa-sync-groups", body: { tenantId } },
+    { fn: "manus-wa-status", body: { tenantId, syncGroups: true } },
+  ];
+
+  let lastError = "סנכרון קבוצות נכשל";
+  for (const attempt of attempts) {
+    const { data, error } = await supabase.functions.invoke(attempt.fn, { body: attempt.body });
+    if (data?.success) return data as SyncManusGroupsResult;
+    lastError = extractInvokeError(error, data);
+    const missingFn = /not found|404|Function.*not/i.test(lastError);
+    if (!missingFn && !error) break;
+  }
+  throw new Error(lastError);
 }
 
 export async function tenantHasManusWa(tenantId: string): Promise<boolean> {

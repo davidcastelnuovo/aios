@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { syncManusGroupsForTenant } from '../_shared/manus-wa-sync-groups-core.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +27,59 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { instanceId, apiKey, integrationId } = await req.json();
+    const body = await req.json() as {
+      instanceId?: string;
+      apiKey?: string;
+      integrationId?: string;
+      tenantId?: string;
+      syncGroups?: boolean;
+    };
+
+    if (body.syncGroups && body.tenantId) {
+      const { data: membership, error: memberErr } = await supabase
+        .from('tenant_users')
+        .select('tenant_id')
+        .eq('tenant_id', body.tenantId)
+        .limit(1);
+      if (memberErr) throw memberErr;
+      if (!membership?.length) {
+        return new Response(JSON.stringify({ error: 'אין הרשאה לטננט זה' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const supabaseSvc = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      );
+      let query = supabaseSvc
+        .from('tenant_integrations')
+        .select('id, tenant_id, api_key, settings, display_name')
+        .eq('tenant_id', body.tenantId)
+        .eq('integration_type', 'manus_wa')
+        .eq('is_active', true);
+      if (body.integrationId) query = query.eq('id', body.integrationId);
+
+      const { data: integrations, error: integErr } = await query;
+      if (integErr) throw integErr;
+      if (!integrations?.length) {
+        return new Response(JSON.stringify({ error: 'לא נמצא חיבור Manus פעיל לטננט' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const result = await syncManusGroupsForTenant(supabaseSvc, integrations);
+      if (!result.success) {
+        return new Response(JSON.stringify(result), {
+          status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { instanceId, apiKey, integrationId } = body;
     let realInstanceId = instanceId;
     let realApiKey = apiKey;
 
