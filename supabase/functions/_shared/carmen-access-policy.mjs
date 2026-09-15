@@ -241,21 +241,27 @@ export async function fetchManusConnectedGroupIds(supabase, tenantId) {
   for (const integ of manusIntegrations || []) {
     const sync = integ?.settings?.manus_groups_sync || {};
     if (sync.synced_at) hasSync = true;
+    if (Array.isArray(sync.groups)) {
+      for (const g of sync.groups) {
+        if (g?.groupId) ids.add(String(g.groupId));
+        if (g?.groupChatId) syncedChatIds.push(String(g.groupChatId));
+      }
+    }
     if (Array.isArray(sync.group_chat_ids)) {
       syncedChatIds.push(...sync.group_chat_ids.map(String).filter(Boolean));
     }
   }
 
   if (hasSync) {
+    if (syncedChatIds.length) {
+      await resolveGroupRefsToIds(supabase, tenantId, [...new Set(syncedChatIds)], ids);
+    }
     const { data: syncedRows } = await supabase
       .from('whatsapp_groups')
       .select('id')
       .eq('tenant_id', tenantId)
       .eq('description', 'manus_wa_sync');
     for (const g of syncedRows || []) ids.add(String(g.id));
-    if (syncedChatIds.length) {
-      await resolveGroupRefsToIds(supabase, tenantId, [...new Set(syncedChatIds)], ids);
-    }
     return ids;
   }
 

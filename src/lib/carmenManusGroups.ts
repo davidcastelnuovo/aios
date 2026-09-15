@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { collectSyncedCatalog, mergeSyncCatalogWithDb } from "./carmenManusGroupsSync.mjs";
 
 /**
  * Groups Carmen can see in conversation-access UI.
@@ -6,45 +7,54 @@ import { supabase } from "@/integrations/supabase/client";
  * Legacy fallback (pre-sync only): manus_wa message traffic — never Green API.
  */
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 type ManusGroupsSyncMeta = {
   synced_at?: string;
   group_chat_ids?: string[];
+  groups?: Array<{ groupChatId: string; groupId: string; name: string }>;
+  count?: number;
 };
 
-function isUuid(value: string) {
-  return UUID_RE.test(value);
+type WhatsappGroupRow = {
+  id: string;
+  group_name: string;
+  group_chat_id: string;
+  is_blocked: boolean | null;
+};
+
+async function fetchWhatsappGroupPages(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: WhatsappGroupRow[] | null; error: Error | null }>,
+): Promise<WhatsappGroupRow[]> {
+  const pageSize = 1000;
+  const rows: WhatsappGroupRow[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    rows.push(...data);
+    if (data.length < pageSize) break;
+  }
+  return rows;
 }
 
-async function resolveGroupRefsToIds(tenantId: string, refs: string[], into: Set<string>) {
-  for (const ref of refs) {
-    if (isUuid(ref)) into.add(ref);
-  }
-  const chatIds = refs.filter((r) => r.includes("@g.us"));
-  if (chatIds.length === 0) return;
-  const { data: groups, error } = await supabase
-    .from("whatsapp_groups")
-    .select("id")
-    .eq("tenant_id", tenantId)
-    .in("group_chat_id", chatIds);
-  if (error) throw error;
-  for (const g of groups || []) into.add(String(g.id));
-}
+async function fetchGroupsByChatIds(tenantId: string, chatIds: string[]): Promise<Map<string, WhatsappGroupRow>> {
+  const byChatId = new Map<string, WhatsappGroupRow>();
+  if (chatIds.length === 0) return byChatId;
 
-function collectSyncedChatIds(
-  integrations: Array<{ settings?: Record<string, unknown> | null }>,
-): { chatIds: string[]; hasSync: boolean } {
-  const chatIds: string[] = [];
-  let hasSync = false;
-  for (const integ of integrations) {
-    const sync = (integ.settings?.manus_groups_sync || {}) as ManusGroupsSyncMeta;
-    if (sync.synced_at) hasSync = true;
-    if (Array.isArray(sync.group_chat_ids)) {
-      chatIds.push(...sync.group_chat_ids.map(String).filter(Boolean));
-    }
+  const chunkSize = 200;
+  for (let i = 0; i < chatIds.length; i += chunkSize) {
+    const chunk = chatIds.slice(i, i + chunkSize);
+    const rows = await fetchWhatsappGroupPages((from, to) =>
+      supabase
+        .from("whatsapp_groups")
+        .select("id, group_name, group_chat_id, is_blocked")
+        .eq("tenant_id", tenantId)
+        .in("group_chat_id", chunk)
+        .order("group_name")
+        .range(from, to),
+    );
+    for (const row of rows) byChatId.set(row.group_chat_id, row);
   }
-  return { chatIds: [...new Set(chatIds)], hasSync };
+  return byChatId;
 }
 
 /** Fallback before first gateway sync: groups with confirmed manus_wa traffic only. */
@@ -83,7 +93,9 @@ export async function fetchManusGroupsSyncInfo(tenantId: string): Promise<ManusG
     if (sync.synced_at) {
       hasSync = true;
       if (!syncedAt || sync.synced_at > syncedAt) syncedAt = sync.synced_at;
-      count = Math.max(count, sync.group_chat_ids?.length || sync.count || 0);
+      const catalogCount = Array.isArray(sync.groups) ? sync.groups.length : 0;
+      const chatCount = sync.group_chat_ids?.length || 0;
+      count = Math.max(count, catalogCount, chatCount, sync.count || 0);
     }
   }
   return { syncedAt, count, hasSync };
@@ -92,28 +104,6 @@ export async function fetchManusGroupsSyncInfo(tenantId: string): Promise<ManusG
 export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<string>> {
   const groups = await fetchCarmenManusGroups(tenantId);
   return new Set(groups.map((g) => String(g.id)));
-}
-
-type WhatsappGroupRow = {
-  id: string;
-  group_name: string;
-  group_chat_id: string;
-  is_blocked: boolean | null;
-};
-
-async function fetchWhatsappGroupPages(
-  buildQuery: (from: number, to: number) => PromiseLike<{ data: WhatsappGroupRow[] | null; error: Error | null }>,
-): Promise<WhatsappGroupRow[]> {
-  const pageSize = 1000;
-  const rows: WhatsappGroupRow[] = [];
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await buildQuery(from, from + pageSize - 1);
-    if (error) throw error;
-    if (!data?.length) break;
-    rows.push(...data);
-    if (data.length < pageSize) break;
-  }
-  return rows;
 }
 
 export async function fetchCarmenManusGroups(tenantId: string) {
@@ -127,13 +117,14 @@ export async function fetchCarmenManusGroups(tenantId: string) {
   if (manusIntErr) throw manusIntErr;
   if (!manusIntegrations?.length) return [];
 
-  const { chatIds, hasSync } = collectSyncedChatIds(manusIntegrations);
+  const { entries, chatIds, hasSync } = collectSyncedCatalog(manusIntegrations);
   const notBlocked = "is_blocked.is.null,is_blocked.eq.false";
 
-  if (hasSync) {
-    const byId = new Map<string, WhatsappGroupRow>();
+  if (hasSync && (entries.length > 0 || chatIds.length > 0)) {
+    const dbByChatId = await fetchGroupsByChatIds(tenantId, chatIds);
 
-    const syncedRows = await fetchWhatsappGroupPages((from, to) =>
+    // Also include any rows already tagged from prior syncs (names may be fresher in DB).
+    const taggedRows = await fetchWhatsappGroupPages((from, to) =>
       supabase
         .from("whatsapp_groups")
         .select("id, group_name, group_chat_id, is_blocked")
@@ -143,29 +134,9 @@ export async function fetchCarmenManusGroups(tenantId: string) {
         .order("group_name")
         .range(from, to),
     );
-    for (const g of syncedRows) byId.set(g.id, g);
+    for (const row of taggedRows) dbByChatId.set(row.group_chat_id, row);
 
-    if (chatIds.length > 0) {
-      const chunkSize = 200;
-      for (let i = 0; i < chatIds.length; i += chunkSize) {
-        const chunk = chatIds.slice(i, i + chunkSize);
-        const byChat = await fetchWhatsappGroupPages((from, to) =>
-          supabase
-            .from("whatsapp_groups")
-            .select("id, group_name, group_chat_id, is_blocked")
-            .eq("tenant_id", tenantId)
-            .in("group_chat_id", chunk)
-            .or(notBlocked)
-            .order("group_name")
-            .range(from, to),
-        );
-        for (const g of byChat) byId.set(g.id, g);
-      }
-    }
-
-    return Array.from(byId.values()).sort((a, b) =>
-      (a.group_name || "").localeCompare(b.group_name || "", "he"),
-    );
+    return mergeSyncCatalogWithDb(entries, dbByChatId);
   }
 
   const ids = new Set<string>();

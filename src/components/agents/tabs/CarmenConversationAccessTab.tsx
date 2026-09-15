@@ -57,6 +57,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   const { tenantId } = useCurrentTenant();
   const qc = useQueryClient();
   const autoSyncedRef = useRef(false);
+  const autoManusSyncRef = useRef(false);
   const [phones, setPhones] = useState<PrivatePhoneRow[]>([]);
   const [phonesDirty, setPhonesDirty] = useState(false);
   const [groupIds, setGroupIds] = useState<string[]>([]);
@@ -288,6 +289,28 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     },
     onError: (e: Error) => toast.error(e.message || "סנכרון קבוצות נכשל"),
   });
+
+  const groupsCountMismatch = !!manusSyncInfo?.hasSync
+    && (manusSyncInfo.count || 0) > (manusGroups?.length || 0);
+
+  useEffect(() => {
+    if (autoManusSyncRef.current || !tenantId || groupsLoading) return;
+    if (syncManusGroups.isPending) return;
+    const needsSync = !manusSyncInfo?.hasSync
+      || groupsCountMismatch
+      || (manusGroups?.length || 0) === 0;
+    if (!needsSync) return;
+    autoManusSyncRef.current = true;
+    syncManusGroups.mutate();
+  }, [
+    tenantId,
+    groupsLoading,
+    manusSyncInfo?.hasSync,
+    manusSyncInfo?.count,
+    manusGroups?.length,
+    groupsCountMismatch,
+    syncManusGroups.isPending,
+  ]);
 
   const importFromAutomation = useMutation({
     mutationFn: async () => {
@@ -539,11 +562,22 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
           </AlertDescription>
         </Alert>
 
+        {groupsCountMismatch && (
+          <Alert variant="destructive" className="text-right" dir="rtl">
+            <AlertDescription className="text-xs">
+              מ-Manus ידוע על {manusSyncInfo?.count} קבוצות, אבל מוצגות רק {(manusGroups || []).length}.
+              לחץ «סנכרן קבוצות מ-Manus» לרענון מלא מה-Gateway.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>
-            {manusSyncInfo?.hasSync
-              ? `${(manusGroups || []).length} קבוצות מ-Manus · סונכרון אחרון: ${manusSyncInfo.syncedAt ? new Date(manusSyncInfo.syncedAt).toLocaleString("he-IL") : "—"}`
-              : "טרם בוצע סנכרון מ-Manus — לחץ «סנכרן קבוצות מ-Manus»"}
+            {syncManusGroups.isPending
+              ? "מסנכרן קבוצות מ-Manus…"
+              : manusSyncInfo?.hasSync
+                ? `${(manusGroups || []).length} קבוצות מ-Manus · סונכרון אחרון: ${manusSyncInfo.syncedAt ? new Date(manusSyncInfo.syncedAt).toLocaleString("he-IL") : "—"}`
+                : "טרם בוצע סנכרון מ-Manus — מסנכרן אוטומטית…"}
           </span>
           {!openMemberGroups && (manusGroups || []).length > 0 && (
             <span>{groupIds.length} / {(manusGroups || []).length} מסומנות להגיבה</span>

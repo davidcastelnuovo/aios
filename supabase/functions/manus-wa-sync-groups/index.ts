@@ -21,33 +21,71 @@ type IntegrationRow = {
   display_name: string | null;
 };
 
+type GatewayGroup = { id: string; name: string; participantsCount?: number | null };
+
+function extractNextCursor(data: Record<string, unknown>): string | null {
+  const cursor = data?.nextCursor ?? data?.next_cursor ?? data?.cursor;
+  return cursor ? String(cursor) : null;
+}
+
+async function fetchGroupsPage(
+  url: string,
+  headers: Record<string, string>,
+): Promise<{ groups: GatewayGroup[]; nextCursor: string | null }> {
+  const res = await fetch(url, { method: 'GET', headers });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Gateway groups failed: ${res.status} — ${text.slice(0, 300)}`);
+  }
+  const data = await res.json() as Record<string, unknown>;
+  return {
+    groups: normalizeManusGroupsPayload(data),
+    nextCursor: extractNextCursor(data),
+  };
+}
+
+async function fetchAllGroupsFromGateway(
+  buildUrl: (cursor?: string) => string,
+  headers: Record<string, string>,
+): Promise<GatewayGroup[]> {
+  const byId = new Map<string, GatewayGroup>();
+  let cursor: string | undefined;
+  for (let page = 0; page < 100; page++) {
+    const { groups, nextCursor } = await fetchGroupsPage(buildUrl(cursor), headers);
+    for (const g of groups) byId.set(g.id, g);
+    if (!nextCursor || nextCursor === cursor) break;
+    cursor = nextCursor;
+  }
+  return [...byId.values()];
+}
+
 async function fetchGroupsFromGateway(instanceId: string, apiKey: string) {
-  const restPath = `/api/v1/instances/${instanceId}/groups`;
-  const restRes = await fetch(`${BASE_URL}${restPath}`, {
-    method: 'GET',
-    headers: { 'X-Api-Key': apiKey },
-  });
-  if (restRes.ok) {
-    const data = await restRes.json();
-    return { groups: normalizeManusGroupsPayload(data), via: 'instance_api_key' };
+  const restBase = `${BASE_URL}/api/v1/instances/${instanceId}/groups`;
+  try {
+    const groups = await fetchAllGroupsFromGateway(
+      (cursor) => {
+        const url = new URL(restBase);
+        url.searchParams.set('limit', '100');
+        if (cursor) url.searchParams.set('cursor', cursor);
+        return url.toString();
+      },
+      { 'X-Api-Key': apiKey },
+    );
+    return { groups, via: 'instance_api_key' };
+  } catch (restErr) {
+    if (!WORKER_SECRET) throw restErr;
+    const adminBase = `${BASE_URL}/api/admin/instances/${instanceId}/groups`;
+    const groups = await fetchAllGroupsFromGateway(
+      (cursor) => {
+        const url = new URL(adminBase);
+        url.searchParams.set('limit', '100');
+        if (cursor) url.searchParams.set('cursor', cursor);
+        return url.toString();
+      },
+      { 'X-Worker-Secret': WORKER_SECRET },
+    );
+    return { groups, via: 'admin_worker_secret' };
   }
-
-  if (WORKER_SECRET) {
-    const adminPath = `/api/admin/instances/${instanceId}/groups`;
-    const adminRes = await fetch(`${BASE_URL}${adminPath}`, {
-      method: 'GET',
-      headers: { 'X-Worker-Secret': WORKER_SECRET },
-    });
-    if (adminRes.ok) {
-      const data = await adminRes.json();
-      return { groups: normalizeManusGroupsPayload(data), via: 'admin_worker_secret' };
-    }
-    const text = await adminRes.text();
-    throw new Error(`Gateway admin groups failed: ${adminRes.status} — ${text.slice(0, 300)}`);
-  }
-
-  const text = await restRes.text();
-  throw new Error(`Gateway groups failed: ${restRes.status} — ${text.slice(0, 300)}`);
 }
 
 Deno.serve(async (req) => {
@@ -112,6 +150,7 @@ Deno.serve(async (req) => {
       try {
         const { groups, via } = await fetchGroupsFromGateway(instanceId, apiKey);
         const groupChatIds: string[] = [];
+        const syncedCatalog: Array<{ groupChatId: string; groupId: string; name: string }> = [];
 
         for (const g of groups) {
           const { data: row, error: upsertErr } = await supabaseSvc
@@ -131,11 +170,15 @@ Deno.serve(async (req) => {
           if (upsertErr) throw upsertErr;
           if (row?.id) {
             groupChatIds.push(g.id);
-            synced.push({
-              integrationId: integ.id,
+            const entry = {
               groupChatId: g.id,
               groupId: row.id,
               name: row.group_name || g.name,
+            };
+            syncedCatalog.push(entry);
+            synced.push({
+              integrationId: integ.id,
+              ...entry,
             });
           }
         }
@@ -145,6 +188,7 @@ Deno.serve(async (req) => {
           manus_groups_sync: {
             synced_at: new Date().toISOString(),
             group_chat_ids: groupChatIds,
+            groups: syncedCatalog,
             count: groupChatIds.length,
             via,
           },
