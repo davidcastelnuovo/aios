@@ -27,3 +27,20 @@ ALTER TABLE environment_sync.managed_rows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE environment_sync.table_state ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA environment_sync FROM PUBLIC, anon, authenticated;
 -- Deliberately no outbound_blocked=true here: installation is not verification.
+
+-- Invalid source rows are retained for reconciliation, never silently dropped.
+-- The source projection excludes credential columns; this private table is not
+-- exposed to the application. A run with rejected rows remains incomplete.
+CREATE TABLE IF NOT EXISTS environment_sync.rejected_rows (
+  table_name text NOT NULL,
+  row_key jsonb NOT NULL,
+  digest text NOT NULL,
+  row_data jsonb NOT NULL,
+  sqlstate text NOT NULL,
+  constraint_name text,
+  column_name text,
+  last_attempt_at timestamptz NOT NULL,
+  PRIMARY KEY(table_name,row_key)
+);
+ALTER TABLE environment_sync.rejected_rows ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON environment_sync.rejected_rows FROM PUBLIC, anon, authenticated;

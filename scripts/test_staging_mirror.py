@@ -61,6 +61,25 @@ class MirrorTests(unittest.TestCase):
             self.assertEqual(mirror.normalize_arrays(row, ['task_skills'])['task_skills'], expected)
             self.assertEqual(row['task_skills'], value)
 
+    def test_required_legacy_array_null_becomes_empty_without_mutating_source(self):
+        row = {'task_skills': None}
+        self.assertEqual(mirror.normalize_arrays(row, ['task_skills'], ['task_skills']), {'task_skills': []})
+        self.assertEqual(row, {'task_skills': None})
+
+    def test_historical_identity_is_banned_without_email_or_login_material(self):
+        class API:
+            queries = []
+            def query(self, sql, source=False):
+                if source: return [{'items': []}]
+                self.queries.append(sql)
+        api = API()
+        mirror.ensure_identity_parents(api, ['00000000-0000-0000-0000-000000000001'])
+        self.assertEqual(len(api.queries), 1)
+        self.assertIn('banned_until', api.queries[0])
+        self.assertIn("NULL,now(),now(),'2999-12-31'", api.queries[0])
+        self.assertIn('ON CONFLICT(id) DO NOTHING', api.queries[0])
+        self.assertNotIn('encrypted_password', api.queries[0])
+
     def test_unchanged_inventory_needs_no_per_table_requests(self):
         class API:
             def query(self, *args, **kwargs):
@@ -85,7 +104,7 @@ class MirrorTests(unittest.TestCase):
         self.assertEqual(mirror.literal("O'Reilly\\n"), "E'O''Reilly\\\\n'")
         sql = mirror.apply_batch_sql('clients',['id'],['id','name'],[{'key':{'id':'1'},'digest':'abc','row':{'id':'1','name':"O'Reilly"}}])
         self.assertTrue(sql.startswith('BEGIN;'))
-        self.assertTrue(sql.endswith('COMMIT;'))
+        self.assertIn('COMMIT;\nSELECT count(*) AS rejected_rows', sql)
         self.assertNotIn('SET LOCAL session_replication_role', sql)
         self.assertNotIn('DISABLE TRIGGER ALL', sql)
         self.assertIn("tgenabled='O'",sql)

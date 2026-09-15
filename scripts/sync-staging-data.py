@@ -77,7 +77,7 @@ def dependency_order(tables, foreign_keys):
     return ordered
 
 
-def ensure_identity_parents(api):
+def ensure_identity_parents(api, referenced_users=()):
     # Keep production user IDs for RLS/FKs, without copying passwords, login
     # sessions, OAuth identities, MFA factors or recovery tokens. Existing
     # Staging accounts keep their authentication settings.
@@ -85,18 +85,49 @@ def ensure_identity_parents(api):
     for group in batches(users):
         api.query(f"""BEGIN; SET LOCAL lock_timeout='3s';
 {IMPORT_GATE}
+CREATE TEMP TABLE mirror_import_users ON COMMIT DROP AS
+ SELECT * FROM jsonb_to_recordset({json_sql(group)}) x(id uuid,email text,created_at timestamptz);
 -- The existing signup trigger links invitations by email. An imported identity
 -- must not activate an old Staging invitation or its permissions.
 LOCK TABLE public.invitation_tokens IN SHARE MODE;
 DO $invites$ BEGIN IF EXISTS(
- SELECT 1 FROM jsonb_to_recordset({json_sql(group)}) x(id uuid,email text)
+ SELECT 1 FROM mirror_import_users x
  JOIN public.invitation_tokens i ON lower(i.email)=lower(x.email)
  WHERE NOT EXISTS(SELECT 1 FROM auth.users u WHERE u.id=x.id)
 ) THEN RAISE EXCEPTION 'Pending Staging invitations require identity reconciliation'; END IF; END $invites$;
 INSERT INTO auth.users(id,instance_id,aud,role,email,created_at,updated_at,raw_app_meta_data,raw_user_meta_data)
 SELECT id,'00000000-0000-0000-0000-000000000000'::uuid,'authenticated','authenticated',email,created_at,now(),'{{}}'::jsonb,'{{}}'::jsonb
-FROM jsonb_to_recordset({json_sql(group)}) x(id uuid,email text,created_at timestamptz)
+FROM mirror_import_users
 ON CONFLICT(id) DO NOTHING; COMMIT;""")
+
+
+    # Production can retain historical creator IDs after an Auth account was
+    # removed. Retain those relations with non-login identities, never with a
+    # copied email, password, OAuth identity, session or invitation grant.
+    live_ids = {user['id'] for user in users}
+    historical = [{'id': user_id} for user_id in referenced_users if user_id not in live_ids]
+    for group in batches(historical):
+        api.query(f"""BEGIN; SET LOCAL lock_timeout='3s';
+{IMPORT_GATE}
+INSERT INTO auth.users(id,instance_id,aud,role,email,created_at,updated_at,banned_until,raw_app_meta_data,raw_user_meta_data)
+SELECT id,'00000000-0000-0000-0000-000000000000'::uuid,'authenticated','authenticated',NULL,now(),now(),'2999-12-31'::timestamptz,
+ '{{"staging_historical_reference":true}}'::jsonb,'{{}}'::jsonb
+FROM jsonb_to_recordset({json_sql(group)}) x(id uuid)
+ON CONFLICT(id) DO NOTHING; COMMIT;""")
+
+
+def referenced_auth_users(api, tables):
+    allowed = {table['name'] for table in tables}
+    edges = api.query("""SELECT child.relname AS child,a.attname AS column
+FROM pg_constraint c JOIN pg_class child ON child.oid=c.conrelid
+JOIN pg_namespace n ON n.oid=child.relnamespace
+JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=c.conkey[1]
+WHERE c.contype='f' AND n.nspname='public' AND c.confrelid='auth.users'::regclass
+AND cardinality(c.conkey)=1""")
+    queries = [f"SELECT {ident(edge['column'])} AS id FROM public.{ident(edge['child'])} WHERE {ident(edge['column'])} IS NOT NULL"
+               for edge in edges if edge['child'] in allowed]
+    if not queries: return []
+    return [row['id'] for row in read_all(api, ' UNION '.join(queries), source=True)]
 
 
 def ensure_integration_parents(api):
@@ -182,7 +213,7 @@ def safe_database_error(body):
 
 CATALOG = """
 select c.relname as name,
- (select jsonb_agg(jsonb_build_object('name',a.attname,'type',format_type(a.atttypid,a.atttypmod),'generated',a.attgenerated) order by a.attnum)
+ (select jsonb_agg(jsonb_build_object('name',a.attname,'type',format_type(a.atttypid,a.atttypmod),'generated',a.attgenerated,'not_null',a.attnotnull) order by a.attnum)
   from pg_catalog.pg_attribute a where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped) as columns,
  (select jsonb_agg(a.attname order by u.ordinality) from pg_catalog.pg_index i
   cross join lateral unnest(i.indkey) with ordinality u(attnum,ordinality)
@@ -214,15 +245,18 @@ def preflight(names, source, target):
         # json-array/array and numeric representations; invalid values fail the
         # batch transaction without changing its checkpoint or any other table.
         array_columns = [c['name'] for c in src['columns'] if c['name'] in columns and c.get('type') == 'jsonb' and target_columns[c['name']].get('type') == 'text[]']
-        plan.append({'name': name, 'keys': keys, 'columns': columns, 'array_columns': array_columns})
+        plan.append({'name': name, 'keys': keys, 'columns': columns, 'array_columns': array_columns, 'required_arrays': [c for c in array_columns if target_columns[c].get('not_null')]})
     return plan, errors
 
 
-def normalize_arrays(row, array_columns):
+def normalize_arrays(row, array_columns, required_arrays=()):
     result = dict(row)
     for column in array_columns:
         value = result.get(column)
-        if value is None or isinstance(value, list): continue
+        if value is None:
+            if column in required_arrays: result[column] = []
+            continue
+        if isinstance(value, list): continue
         if not isinstance(value, str):
             raise RuntimeError(f'{column}: incompatible array representation')
         try: decoded = json.loads(value)
@@ -231,14 +265,14 @@ def normalize_arrays(row, array_columns):
     return result
 
 
-def apply_batch_sql(table, keys, columns, items, array_columns=()):
+def apply_batch_sql(table, keys, columns, items, array_columns=(), required_arrays=()):
     relation = 'public.' + ident(table)
-    payload = [normalize_arrays(item['row'], array_columns) for item in items]
+    payload = [normalize_arrays(item['row'], array_columns, required_arrays) for item in items]
     matches = ' AND '.join(f't.{ident(k)} IS NOT DISTINCT FROM s.{ident(k)}' for k in keys)
     nonkeys = [c for c in columns if c not in keys]
     update = ('WHEN MATCHED THEN UPDATE SET ' + ','.join(f'{ident(c)}=s.{ident(c)}' for c in nonkeys)) if nonkeys else ''
     fields = ','.join(map(ident, columns))
-    manifest = [{'key': item['key'], 'digest': item['digest']} for item in items]
+    manifest = [{'key': item['key'], 'digest': item['digest'], 'row': row} for item, row in zip(items, payload)]
     return f"""BEGIN;
 SET LOCAL lock_timeout='3s';
 SET LOCAL statement_timeout='90s';
@@ -250,26 +284,69 @@ CREATE TEMP TABLE mirror_active_triggers ON COMMIT DROP AS
  AND NOT tgisinternal AND tgenabled='O';
 DO $restore$ DECLARE n text; BEGIN FOR n IN SELECT tgname FROM mirror_active_triggers LOOP
  EXECUTE format('ALTER TABLE %s DISABLE TRIGGER %I', {literal(relation)}, n); END LOOP; END $restore$;
-MERGE INTO {relation} t USING jsonb_populate_recordset(NULL::{relation}, {json_sql(payload)}) s
-ON {matches}
-{update}
-WHEN NOT MATCHED THEN INSERT ({fields}) VALUES ({','.join('s.'+ident(c) for c in columns)});
-INSERT INTO environment_sync.managed_rows(table_name,row_key,digest)
-SELECT {literal(table)}, x.key, x.digest FROM jsonb_to_recordset({json_sql(manifest)}) x(key jsonb,digest text)
-ON CONFLICT(table_name,row_key) DO UPDATE SET digest=EXCLUDED.digest;
+CREATE TEMP TABLE mirror_payload(item jsonb) ON COMMIT DROP;
+INSERT INTO mirror_payload SELECT value FROM jsonb_array_elements({json_sql(manifest)});
+DO $apply$ DECLARE batch jsonb := (SELECT jsonb_agg(item) FROM mirror_payload);
+ item jsonb; fallback boolean := false; accepted boolean;
+ issue_state text; issue_constraint text; issue_column text;
+BEGIN
+ BEGIN
+  MERGE INTO {relation} t USING (SELECT (jsonb_populate_record(NULL::{relation},x->'row')).* FROM jsonb_array_elements(batch) b(x)) s
+  ON {matches}
+  {update}
+  WHEN NOT MATCHED THEN INSERT ({fields}) VALUES ({','.join('s.'+ident(c) for c in columns)});
+ EXCEPTION WHEN foreign_key_violation OR unique_violation OR not_null_violation OR check_violation OR invalid_text_representation THEN
+  fallback := true;
+ END;
+ IF fallback THEN
+  FOR item IN SELECT value FROM jsonb_array_elements(batch) LOOP
+   accepted := true;
+   BEGIN
+    MERGE INTO {relation} t USING (SELECT (jsonb_populate_record(NULL::{relation},item->'row')).*) s
+    ON {matches}
+    {update}
+    WHEN NOT MATCHED THEN INSERT ({fields}) VALUES ({','.join('s.'+ident(c) for c in columns)});
+   EXCEPTION WHEN foreign_key_violation OR unique_violation OR not_null_violation OR check_violation OR invalid_text_representation THEN
+    accepted := false;
+    GET STACKED DIAGNOSTICS issue_state=RETURNED_SQLSTATE,issue_constraint=CONSTRAINT_NAME,issue_column=COLUMN_NAME;
+   END;
+   -- Bookkeeping is outside the data-error handler. Its failure must roll back
+   -- every data write in this transaction, including earlier fallback rows.
+   IF accepted THEN
+    INSERT INTO environment_sync.managed_rows(table_name,row_key,digest)
+    VALUES({literal(table)},item->'key',item->>'digest')
+    ON CONFLICT(table_name,row_key) DO UPDATE SET digest=EXCLUDED.digest;
+    DELETE FROM environment_sync.rejected_rows WHERE table_name={literal(table)} AND row_key=item->'key';
+   ELSE
+    INSERT INTO environment_sync.rejected_rows(table_name,row_key,digest,row_data,sqlstate,constraint_name,column_name,last_attempt_at)
+    VALUES({literal(table)},item->'key',item->>'digest',item->'row',issue_state,issue_constraint,issue_column,now())
+    ON CONFLICT(table_name,row_key) DO UPDATE SET digest=EXCLUDED.digest,row_data=EXCLUDED.row_data,
+    sqlstate=EXCLUDED.sqlstate,constraint_name=EXCLUDED.constraint_name,column_name=EXCLUDED.column_name,last_attempt_at=EXCLUDED.last_attempt_at;
+   END IF;
+  END LOOP;
+ ELSE
+  INSERT INTO environment_sync.managed_rows(table_name,row_key,digest)
+  SELECT {literal(table)}, x.key, x.digest FROM jsonb_to_recordset(batch) x(key jsonb,digest text)
+  ON CONFLICT(table_name,row_key) DO UPDATE SET digest=EXCLUDED.digest;
+  DELETE FROM environment_sync.rejected_rows WHERE table_name={literal(table)}
+  AND row_key IN (SELECT x.key FROM jsonb_to_recordset(batch) x(key jsonb));
+ END IF;
+END $apply$;
 DO $restore$ DECLARE n text; BEGIN FOR n IN SELECT tgname FROM mirror_active_triggers LOOP
  EXECUTE format('ALTER TABLE %s ENABLE TRIGGER %I', {literal(relation)}, n); END LOOP; END $restore$;
-COMMIT;"""
+COMMIT;
+SELECT count(*) AS rejected_rows FROM environment_sync.rejected_rows WHERE table_name={literal(table)}
+AND row_key IN (SELECT x.key FROM jsonb_to_recordset({json_sql([{'key': item['key']} for item in items])}) x(key jsonb));"""
 
 
-def bounded_apply_batches(table, keys, columns, items, array_columns=(), *, max_bytes=2_000_000):
-    sql = apply_batch_sql(table, keys, columns, items, array_columns)
+def bounded_apply_batches(table, keys, columns, items, array_columns=(), required_arrays=(), *, max_bytes=2_000_000):
+    sql = apply_batch_sql(table, keys, columns, items, array_columns, required_arrays)
     # Bound the actual JSON request, including Unicode and SQL escaping.
     # A single large record stays intact and either succeeds or fails visibly.
     if len(items) > 1 and len(json.dumps({'query': sql}).encode()) > max_bytes:
         middle = len(items) // 2
-        yield from bounded_apply_batches(table, keys, columns, items[:middle], array_columns, max_bytes=max_bytes)
-        yield from bounded_apply_batches(table, keys, columns, items[middle:], array_columns, max_bytes=max_bytes)
+        yield from bounded_apply_batches(table, keys, columns, items[:middle], array_columns, required_arrays, max_bytes=max_bytes)
+        yield from bounded_apply_batches(table, keys, columns, items[middle:], array_columns, required_arrays, max_bytes=max_bytes)
     else:
         yield sql, len(items)
 
@@ -295,7 +372,7 @@ def load_inventory(api, plan):
 
 
 def record_table_states(api, results):
-    payload = [{'table_name': r['table'], 'source_rows': r['source_rows'], 'changed_rows': r['changed_rows']} for r in results]
+    payload = [{'table_name': r['table'], 'source_rows': r['source_rows'], 'changed_rows': r['changed_rows']} for r in results if not r.get('rejected_rows')]
     api.query(f"""INSERT INTO environment_sync.table_state(table_name,last_success_at,source_rows,changed_rows)
 SELECT table_name,now(),source_rows,changed_rows FROM jsonb_to_recordset({json_sql(payload)}) x(table_name text,source_rows bigint,changed_rows bigint)
 ON CONFLICT(table_name) DO UPDATE SET last_success_at=EXCLUDED.last_success_at,source_rows=EXCLUDED.source_rows,changed_rows=EXCLUDED.changed_rows""")
@@ -324,7 +401,7 @@ def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows
         duplicate = api.query(f'SELECT EXISTS(SELECT 1 FROM {relation} GROUP BY {",".join(map(ident,keys))} HAVING count(*)>1) AS duplicate')[0]['duplicate']
         if duplicate:
             raise RuntimeError(f'{name}: duplicate Staging keys; reconciliation required')
-    applied = 0
+    applied = rejected = 0
     for group in batches(changed):
         matches = ' AND '.join(f't.{ident(k)}=s.{ident(k)}' for k in keys)
         requested = [item['key'] for item in group]
@@ -332,9 +409,11 @@ def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows
         # between inventory and fetch; its newer version must never be skipped.
         rows = api.query(f"SELECT {key_sql(keys)} AS key, md5({row_value}::text) AS digest, {row_value} AS row FROM {relation} t JOIN jsonb_populate_recordset(NULL::{relation},{json_sql(requested)}) s ON {matches}", source=True)
         if rows:
-            for statement, count in bounded_apply_batches(name, keys, columns, rows, table.get('array_columns', [])):
-                api.query(statement)
-                applied += count
+            for statement, count in bounded_apply_batches(name, keys, columns, rows, table.get('array_columns', []), table.get('required_arrays', [])):
+                outcome = api.query(statement)
+                rejected_count = outcome[0]['rejected_rows']
+                rejected += rejected_count
+                applied += count - rejected_count
     removed = [item['row_key'] for key, item in previous.items() if key not in incoming] if delete_only else []
     deleted = 0
     for group in batches(removed):
@@ -349,9 +428,9 @@ def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows
 DELETE FROM {relation} t USING jsonb_populate_recordset(NULL::{relation},{json_sql(gone)}) s WHERE {matches};
 DELETE FROM environment_sync.managed_rows WHERE table_name={literal(name)} AND row_key IN (SELECT value FROM jsonb_array_elements({json_sql(gone)})); COMMIT;""")
         deleted += len(gone)
-    if not delete_only and record_state:
+    if not delete_only and record_state and not rejected:
         api.query(f"INSERT INTO environment_sync.table_state(table_name,last_success_at,source_rows,changed_rows) VALUES({literal(name)},now(),{len(fingerprints)},{applied}) ON CONFLICT(table_name) DO UPDATE SET last_success_at=EXCLUDED.last_success_at,source_rows=EXCLUDED.source_rows,changed_rows=EXCLUDED.changed_rows")
-    return {'table': name, 'source_rows': len(fingerprints), 'changed_rows': applied, 'removed_rows': deleted}
+    return {'table': name, 'source_rows': len(fingerprints), 'changed_rows': applied, 'removed_rows': deleted, 'rejected_rows': rejected}
 
 
 def main():
@@ -383,7 +462,7 @@ def main():
         result = mirror_table(api, table, inventory=incoming[table['name']], previous_rows=previous.get(table['name'], []), record_state=False)
         results.append(result)
         print(json.dumps(result), flush=True)
-    ensure_identity_parents(api)
+    ensure_identity_parents(api, referenced_auth_users(api, plan))
     # Connections can reference a new tenant. Establish tenants first.
     tenant_table = next(t for t in plan if t['name'] == 'tenants')
     apply_table(tenant_table)
@@ -397,8 +476,9 @@ def main():
             # Independent tables still catch up; the run stays red until ALL do.
             failures.append({'table': table['name'], 'error': str(error)})
     record_table_states(api, results)
-    if failures:
-        print(json.dumps({'failures': failures})); raise SystemExit(1)
+    rejected = [{'table': r['table'], 'rejected_rows': r['rejected_rows']} for r in results if r.get('rejected_rows')]
+    if failures or rejected:
+        print(json.dumps({'failures': failures, 'rejected': rejected})); raise SystemExit(1)
     # Child deletions precede parents; FKs remain enabled throughout. If a
     # Staging-only test row references a deleted parent, fail visibly and keep it.
     if options.apply_deletes:
