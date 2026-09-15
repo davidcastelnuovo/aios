@@ -8,11 +8,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type { CampaignRecord, ClientCampaignTableData } from "@/lib/agencyCampaignData";
 import type { OverallStatus } from "@/lib/healthScore";
 import {
+  formatGoalChange,
+  formatGoalEfficiency,
+  formatGoalOutcomes,
   formatLastClientCall,
   formatMetaChangeDetails,
+  formatPulseMoney,
   metaChangeSummary,
   overallStatusLabel,
+  pulseSpendColumnLabel,
   pulseStatusLabel,
+  type PulsePeriod,
   type PulsePlatformDisplayRow,
   type PulseSnapshotRow,
 } from "@/lib/pulseDashboard";
@@ -155,6 +161,7 @@ export type PulseClientCampaignCardProps = {
   algorithmOverall: OverallStatus;
   flags: string[];
   campaignerName: string;
+  period: PulsePeriod;
   onOverride: () => void;
   onOpenClient: () => void;
   onCallLog: () => void;
@@ -169,6 +176,7 @@ export function PulseClientCampaignCard({
   algorithmOverall,
   flags,
   campaignerName,
+  period,
   onOverride,
   onOpenClient,
   onCallLog,
@@ -297,7 +305,42 @@ export function PulseClientCampaignCard({
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
+        {goalRow ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm rounded-md bg-muted/40 p-3">
+            <div>
+              <span className="text-muted-foreground">{pulseSpendColumnLabel(period).split(" ")[0]}: </span>
+              <span className="font-medium tabular-nums">{formatPulseMoney(goalRow.spend_7d)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">לידים/רכישות: </span>
+              <span className="font-medium tabular-nums">{formatGoalOutcomes(goalRow)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">CPL/ROAS: </span>
+              <span className="font-medium tabular-nums">{formatGoalEfficiency(goalRow)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">שינוי: </span>
+              <span className="font-medium tabular-nums">{formatGoalChange(goalRow)}</span>
+            </div>
+          </div>
+        ) : pulse ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm rounded-md bg-muted/40 p-3">
+            <div>
+              <span className="text-muted-foreground">הוצאה (snapshot): </span>
+              <span className="font-medium tabular-nums">{formatPulseMoney(pulse.spend_7d)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">לידים: </span>
+              <span className="font-medium tabular-nums">{pulse.leads_7d ?? "—"}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">רכישות: </span>
+              <span className="font-medium tabular-nums">{pulse.purchases_7d ?? "—"}</span>
+            </div>
+          </div>
+        ) : null}
         <div className="overflow-x-auto">
           {data.campaignType === "leads" ? (
             <LeadsTable records={data.records} totals={data.totals} />

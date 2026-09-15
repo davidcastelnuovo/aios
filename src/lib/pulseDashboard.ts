@@ -1,3 +1,4 @@
+import { supabase } from "@/integrations/supabase/client";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
 
 /**
@@ -958,4 +959,81 @@ export function pulseSpendColumnLabel(period: PulsePeriod): string {
   if (period === "last_week") return "הוצאה שבוע שעבר";
   if (period === "this_week") return "הוצאה השבוע";
   return "הוצאה 7 ימים";
+}
+
+/** Skip facebook_insights when the same client also has facebook_ecommerce (avoid double cards). */
+export function filterDuplicateFacebookPulseTables<T extends { id: string; client_id: string; integration_type: string }>(
+  tables: T[],
+): T[] {
+  const clientFbTypes = new Map<string, Set<string>>();
+  for (const table of tables) {
+    if (table.integration_type !== "facebook_insights" && table.integration_type !== "facebook_ecommerce") {
+      continue;
+    }
+    if (!clientFbTypes.has(table.client_id)) clientFbTypes.set(table.client_id, new Set());
+    clientFbTypes.get(table.client_id)!.add(table.integration_type);
+  }
+  const skipTableIds = new Set<string>();
+  for (const table of tables) {
+    if (table.integration_type === "facebook_insights") {
+      const types = clientFbTypes.get(table.client_id);
+      if (types?.has("facebook_ecommerce")) skipTableIds.add(table.id);
+    }
+  }
+  return tables.filter((table) => !skipTableIds.has(table.id));
+}
+
+const PULSE_RECORD_FETCH_CONCURRENCY = 8;
+
+/**
+ * Load campaign records per table via crm-records (paginated server-side).
+ * A single crm_records query with a shared row cap silently drops clients when
+ * many tables are open — this matches the agency dashboard fetch path.
+ */
+export async function fetchPulseCampaignRecords(
+  tableIds: string[],
+  bounds: PulsePeriodBounds,
+): Promise<PulseCrmRecord[]> {
+  if (!tableIds.length) return [];
+
+  const all: PulseCrmRecord[] = [];
+  for (let offset = 0; offset < tableIds.length; offset += PULSE_RECORD_FETCH_CONCURRENCY) {
+    const batch = tableIds.slice(offset, offset + PULSE_RECORD_FETCH_CONCURRENCY);
+    const batchResults = await Promise.all(
+      batch.map(async (tableId) => {
+        const params = new URLSearchParams({
+          table_id: tableId,
+          date_filter: "custom",
+          date_from: bounds.prevStartDate,
+          date_to: bounds.endDate,
+        });
+        const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
+          method: "GET",
+        });
+        if (response.error) {
+          console.error("[pulse] crm-records fetch failed for table", tableId, response.error);
+          return [] as PulseCrmRecord[];
+        }
+        if (!Array.isArray(response.data)) return [] as PulseCrmRecord[];
+        return response.data.map((row: { data?: Record<string, unknown> }) => ({
+          table_id: tableId,
+          data: row.data ?? {},
+        }));
+      }),
+    );
+    for (const rows of batchResults) all.push(...rows);
+  }
+  return all;
+}
+
+export function pulseGoalKeyForTable(
+  integrationType: string,
+  campaignType: "leads" | "ecommerce",
+): { platform: PulsePlatform | null; goal: CampaignGoal } {
+  const platform = pulsePlatformKey(integrationType);
+  const goal =
+    integrationType === "google_ads"
+      ? campaignType
+      : integrationTypeToGoal(integrationType) || campaignType;
+  return { platform, goal };
 }

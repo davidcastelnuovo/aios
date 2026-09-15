@@ -55,11 +55,17 @@ import {
   expandPulseToPlatformGoalRows,
   applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
+  fetchPulseCampaignRecords,
+  filterDuplicateFacebookPulseTables,
+  formatGoalChange,
+  formatGoalEfficiency,
+  formatGoalOutcomes,
+  formatPulseMoney,
   getPulsePeriodBounds,
-  integrationTypeToGoal,
   platformGoalLabel,
+  pulseGoalKeyForTable,
   PULSE_PERIOD_OPTIONS,
-  pulsePlatformKey,
+  pulseSpendColumnLabel,
   pulseStatusToOverall,
   type PulseCampaignTable,
   type PulseCrmRecord,
@@ -334,22 +340,16 @@ export function CampaignPulseDashboard({
       if (tablesError) throw tablesError;
       if (!tables?.length) return empty;
 
-      const tableIds = tables.map((t) => t.id);
-      const tableToType = new Map(tables.map((t) => [t.id, t.integration_type as string | null]));
-      const tableToClient = new Map(tables.map((t) => [t.id, t.client_id as string]));
+      const activeTables = filterDuplicateFacebookPulseTables(tables);
+      const tableIds = activeTables.map((t) => t.id);
+      const tableToType = new Map(activeTables.map((t) => [t.id, t.integration_type as string | null]));
+      const tableToClient = new Map(activeTables.map((t) => [t.id, t.client_id as string]));
 
-      const { data: records, error: recordsError } = await supabase
-        .from("crm_records")
-        .select("table_id, data")
-        .in("table_id", tableIds)
-        .filter("data->>date", "gte", periodBounds.prevStartDate)
-        .filter("data->>date", "lte", periodBounds.endDate)
-        .limit(20000);
-      if (recordsError) throw recordsError;
+      const records = await fetchPulseCampaignRecords(tableIds, periodBounds);
 
       return {
-        tables: tables as PulseCampaignTable[],
-        records: (records ?? []) as PulseCrmRecord[],
+        tables: activeTables as PulseCampaignTable[],
+        records,
         tableToType,
         tableToClient,
       };
@@ -500,8 +500,7 @@ export function CampaignPulseDashboard({
     const seen = new Set<string>();
 
     for (const card of clientCampaignCards) {
-      const platform = pulsePlatformKey(card.integrationType);
-      const goal = integrationTypeToGoal(card.integrationType) || card.campaignType;
+      const { platform, goal } = pulseGoalKeyForTable(card.integrationType, card.campaignType);
       if (!platform) continue;
       const key = `${card.clientId}:${platform}:${goal}`;
       const pulseRow = pulseRowByKey.get(key);
@@ -950,12 +949,18 @@ export function CampaignPulseDashboard({
                   algorithmOverall={pulseRow.algorithmOverall}
                   flags={pulseRow.flags}
                   campaignerName={pulseRow.campaignerName}
+                  period={period}
                   onOverride={openOverride}
                   onOpenClient={() => openClientCard(pulseRow.clientId)}
                   onCallLog={openCallLog}
                 />
               );
             }
+
+            const goalRow = pulseRow.goalRow;
+            const snapshot = pulseRow.pulse;
+            const spend = goalRow?.spend_7d ?? snapshot?.spend_7d ?? null;
+            const hasSummary = goalRow || (snapshot && spend !== null);
 
             return (
               <Card
@@ -974,13 +979,52 @@ export function CampaignPulseDashboard({
                       {pulseRow.overall === "red" ? "🔴" : pulseRow.overall === "yellow" ? "🟡" : "🟢"}
                     </span>
                     <span className="font-medium">{pulseRow.name}</span>
-                    {pulseRow.goalRow ? (
+                    {goalRow ? (
                       <Badge variant="outline" className="text-xs">
-                        {platformGoalLabel(pulseRow.goalRow)}
+                        {platformGoalLabel(goalRow)}
                       </Badge>
                     ) : null}
                   </div>
-                  <p className="text-sm text-muted-foreground">אין נתוני קמפיין בטווח הנבחר</p>
+                  {hasSummary && goalRow ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">{pulseSpendColumnLabel(period).split(" ")[0]}: </span>
+                        <span className="font-medium tabular-nums">{formatPulseMoney(goalRow.spend_7d)}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">לידים/רכישות: </span>
+                        <span className="font-medium tabular-nums">{formatGoalOutcomes(goalRow)}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">CPL/ROAS: </span>
+                        <span className="font-medium tabular-nums">{formatGoalEfficiency(goalRow)}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">שינוי: </span>
+                        <span className="font-medium tabular-nums">{formatGoalChange(goalRow)}</span>
+                      </div>
+                    </div>
+                  ) : hasSummary && snapshot ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">הוצאה (snapshot): </span>
+                        <span className="font-medium tabular-nums">{formatPulseMoney(snapshot.spend_7d)}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">לידים: </span>
+                        <span className="font-medium tabular-nums">{snapshot.leads_7d ?? "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">רכישות: </span>
+                        <span className="font-medium tabular-nums">{snapshot.purchases_7d ?? "—"}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">אין נתוני קמפיין בטווח הנבחר</p>
+                  )}
+                  {!goalRow && hasSummary ? (
+                    <p className="text-xs text-muted-foreground">סיכום מבדיקת דופק — פירוט קמפיינים לא זמין לטווח</p>
+                  ) : null}
                   {pulseRow.flags.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
                       {pulseRow.flags.map((flag) => (
