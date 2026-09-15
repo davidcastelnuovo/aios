@@ -82,6 +82,22 @@ class MirrorTests(unittest.TestCase):
         self.assertIn('ON CONFLICT(id) DO NOTHING', api.queries[0])
         self.assertNotIn('encrypted_password', api.queries[0])
 
+    def test_legacy_source_key_ambiguity_prevents_every_target_write(self):
+        class API:
+            def query(self, sql, source=False):
+                if source: return [{'items':[{'id':'a','user_id':'u','module':'m'}, {'id':'b','user_id':'u','module':'m'}]}]
+                raise AssertionError('Ambiguous identities must not be written')
+        with self.assertRaisesRegex(RuntimeError, 'ambiguous source logical key'):
+            mirror.reconcile_legacy_keys(API(), {'name':'user_permissions'})
+
+    def test_null_or_mismatched_keys_cannot_generate_a_write_or_checkpoint(self):
+        for item in [
+            {'key':{'id':None},'row':{'id':None},'digest':'x'},
+            {'key':{'id':'a'},'row':{'id':'b'},'digest':'x'},
+        ]:
+            with self.assertRaisesRegex(ValueError, 'non-null and match'):
+                mirror.apply_batch_sql('clients',['id'],['id'],[item])
+
     def test_unchanged_inventory_needs_no_per_table_requests(self):
         class API:
             def query(self, *args, **kwargs):

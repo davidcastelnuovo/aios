@@ -153,6 +153,79 @@ FROM jsonb_populate_recordset(NULL::public.tenant_integrations,{json_sql(data)})
 ON CONFLICT(id) DO NOTHING; COMMIT;""")
 
 
+# Only reviewed logical keys on tables with no inbound foreign keys. Carmen
+# instruction conflicts and referenced route/tag IDs require separate review.
+LEGACY_KEYS = {
+    'user_permissions': (['user_id', 'module'], ''),
+    'menu_items': (['tenant_id', 'menu_key'], ''),
+    'seo_monthly_updates': (['client_id', 'month'], ''),
+    'ai_skills': (['slug'], "scope='global'"),
+}
+
+
+def legacy_key_sql(table, keys, rows, predicate=''):
+    relation = 'public.' + ident(table)
+    matches = ' AND '.join(f't.{ident(k)}=s.{ident(k)}' for k in keys)
+    target_filter = " AND t.scope='global'" if predicate else ''
+    return f"""BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='90s';
+{IMPORT_GATE}
+LOCK TABLE {relation} IN SHARE ROW EXCLUSIVE MODE;
+CREATE TEMP TABLE mirror_key_map ON COMMIT DROP AS
+ SELECT t.id AS old_id,s.id AS new_id FROM {relation} t
+ JOIN jsonb_populate_recordset(NULL::{relation},{json_sql(rows)}) s ON {matches}
+ WHERE t.id<>s.id{target_filter};
+-- Ambiguous source/target mappings fail before any business write.
+ALTER TABLE mirror_key_map ADD PRIMARY KEY(old_id),ADD UNIQUE(new_id);
+DO $align$ DECLARE trigger_row record; BEGIN
+ IF NOT EXISTS(SELECT 1 FROM mirror_key_map) THEN RETURN; END IF;
+ IF EXISTS(SELECT 1 FROM pg_constraint WHERE contype='f' AND confrelid={literal(relation)}::regclass) THEN
+  RAISE EXCEPTION 'Referenced legacy identifiers require explicit reconciliation';
+ END IF;
+ IF EXISTS(SELECT 1 FROM {relation} t JOIN mirror_key_map m ON t.id=m.new_id) THEN
+  RAISE EXCEPTION 'Canonical identifier already belongs to another Staging row';
+ END IF;
+ CREATE TEMP TABLE mirror_key_triggers ON COMMIT DROP AS
+  SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid={literal(relation)}::regclass
+  AND NOT tgisinternal AND tgenabled IN ('O','A');
+ FOR trigger_row IN SELECT * FROM mirror_key_triggers LOOP
+  EXECUTE format('ALTER TABLE %s DISABLE TRIGGER %I',{literal(relation)},trigger_row.tgname);
+ END LOOP;
+ UPDATE {relation} t SET id=m.new_id FROM mirror_key_map m WHERE t.id=m.old_id;
+ INSERT INTO environment_sync.key_reconciliations(table_name,old_id,new_id,reconciled_at)
+ SELECT {literal(table)},old_id::text,new_id::text,now() FROM mirror_key_map
+ ON CONFLICT(table_name,old_id,new_id) DO NOTHING;
+ -- These are bookkeeping entries only; no business row is deleted.
+ DELETE FROM environment_sync.managed_rows WHERE table_name={literal(table)}
+ AND row_key IN (SELECT jsonb_build_object('id',old_id) FROM mirror_key_map);
+ FOR trigger_row IN SELECT * FROM mirror_key_triggers LOOP
+  IF trigger_row.tgenabled='A' THEN
+   EXECUTE format('ALTER TABLE %s ENABLE ALWAYS TRIGGER %I',{literal(relation)},trigger_row.tgname);
+  ELSE
+   EXECUTE format('ALTER TABLE %s ENABLE TRIGGER %I',{literal(relation)},trigger_row.tgname);
+  END IF;
+ END LOOP;
+END $align$;
+COMMIT;"""
+
+
+def reconcile_legacy_keys(api, table):
+    rule = LEGACY_KEYS.get(table['name'])
+    if not rule: return
+    keys, predicate = rule
+    fields = ','.join(map(ident, ['id'] + keys))
+    suffix = ' WHERE ' + predicate if predicate else ''
+    rows = read_all(api, f"SELECT {fields} FROM public.{ident(table['name'])}{suffix}", source=True)
+    # Validate across the complete source, before splitting request batches.
+    seen = set()
+    for row in rows:
+        if any(row[key] is None for key in keys): continue
+        key = key_text({name: row[name] for name in keys})
+        if key in seen: raise RuntimeError(table['name'] + ': ambiguous source logical key')
+        seen.add(key)
+    for group in batches(rows):
+        api.query(legacy_key_sql(table['name'], keys, group, predicate))
+
+
 class Management:
     def __init__(self, source, target, token):
         if not source or not target or source == target:
@@ -275,9 +348,13 @@ def normalize_arrays(row, array_columns, required_arrays=()):
 
 
 def apply_batch_sql(table, keys, columns, items, array_columns=(), required_arrays=()):
+    if not keys or any(any(item['key'].get(k) is None or item['row'].get(k) != item['key'][k] for k in keys) for item in items):
+        raise ValueError('Mirror keys must be non-null and match their row image')
     relation = 'public.' + ident(table)
     payload = [normalize_arrays(item['row'], array_columns, required_arrays) for item in items]
-    matches = ' AND '.join(f't.{ident(k)} IS NOT DISTINCT FROM s.{ident(k)}' for k in keys)
+    # Stable source keys are non-null. Equality allows indexed lookups instead
+    # of comparing every imported row with the complete destination table.
+    matches = ' AND '.join(f't.{ident(k)}=s.{ident(k)}' for k in keys)
     nonkeys = [c for c in columns if c not in keys]
     update = ('WHEN MATCHED THEN UPDATE SET ' + ','.join(f'{ident(c)}=s.{ident(c)}' for c in nonkeys)) if nonkeys else ''
     fields = ','.join(map(ident, columns))
@@ -300,7 +377,7 @@ DO $apply$ DECLARE batch jsonb := (SELECT jsonb_agg(p.item) FROM mirror_payload 
  issue_state text; issue_constraint text; issue_column text;
 BEGIN
  BEGIN
-  MERGE INTO {relation} t USING (SELECT (jsonb_populate_record(NULL::{relation},x->'row')).* FROM jsonb_array_elements(batch) b(x)) s
+  MERGE INTO {relation} t USING jsonb_populate_recordset(NULL::{relation},(SELECT jsonb_agg(x->'row') FROM jsonb_array_elements(batch) b(x))) s
   ON {matches}
   {update}
   WHEN NOT MATCHED THEN INSERT ({fields}) VALUES ({','.join('s.'+ident(c) for c in columns)});
@@ -311,7 +388,7 @@ BEGIN
   FOR item IN SELECT value FROM jsonb_array_elements(batch) LOOP
    accepted := true;
    BEGIN
-    MERGE INTO {relation} t USING (SELECT (jsonb_populate_record(NULL::{relation},item->'row')).*) s
+    MERGE INTO {relation} t USING jsonb_populate_recordset(NULL::{relation},jsonb_build_array(item->'row')) s
     ON {matches}
     {update}
     WHEN NOT MATCHED THEN INSERT ({fields}) VALUES ({','.join('s.'+ident(c) for c in columns)});
@@ -468,6 +545,7 @@ def main():
     incoming, previous = load_inventory(api, plan)
     results = []
     def apply_table(table):
+        reconcile_legacy_keys(api, table)
         result = mirror_table(api, table, inventory=incoming[table['name']], previous_rows=previous.get(table['name'], []), record_state=False)
         results.append(result)
         print(json.dumps(result), flush=True)
