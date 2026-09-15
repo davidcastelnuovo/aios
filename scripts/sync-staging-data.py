@@ -286,7 +286,7 @@ DO $restore$ DECLARE n text; BEGIN FOR n IN SELECT tgname FROM mirror_active_tri
  EXECUTE format('ALTER TABLE %s DISABLE TRIGGER %I', {literal(relation)}, n); END LOOP; END $restore$;
 CREATE TEMP TABLE mirror_payload(item jsonb) ON COMMIT DROP;
 INSERT INTO mirror_payload SELECT value FROM jsonb_array_elements({json_sql(manifest)});
-DO $apply$ DECLARE batch jsonb := (SELECT jsonb_agg(item) FROM mirror_payload);
+DO $apply$ DECLARE batch jsonb := (SELECT jsonb_agg(p.item) FROM mirror_payload p);
  item jsonb; fallback boolean := false; accepted boolean;
  issue_state text; issue_constraint text; issue_column text;
 BEGIN
