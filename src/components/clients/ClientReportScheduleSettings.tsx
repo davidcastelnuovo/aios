@@ -136,11 +136,11 @@ export function ClientReportScheduleSettings({ clientId, tenantId, target }: Pro
   };
 
   if (isLoading) {
-    return <div className="h-20 rounded-lg border animate-pulse bg-muted/20" />;
+    return <div className="h-20 rounded-lg border animate-pulse bg-muted/30" />;
   }
 
   return (
-    <div className="space-y-3 rounded-lg border bg-muted/10 p-3" dir="rtl">
+    <div className="space-y-3 rounded-lg border bg-card p-3" dir="rtl">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <CalendarClock className="h-4 w-4 text-primary" />
