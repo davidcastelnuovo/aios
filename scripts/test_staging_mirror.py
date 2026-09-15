@@ -66,7 +66,7 @@ class MirrorTests(unittest.TestCase):
         self.assertEqual(mirror.normalize_arrays(row, ['task_skills'], ['task_skills']), {'task_skills': []})
         self.assertEqual(row, {'task_skills': None})
 
-    def test_historical_identity_is_banned_without_email_or_login_material(self):
+    def test_historical_identity_is_banned_without_deliverable_email_or_login_material(self):
         class API:
             queries = []
             def query(self, sql, source=False):
@@ -76,7 +76,9 @@ class MirrorTests(unittest.TestCase):
         mirror.ensure_identity_parents(api, ['00000000-0000-0000-0000-000000000001'])
         self.assertEqual(len(api.queries), 1)
         self.assertIn('banned_until', api.queries[0])
-        self.assertIn("NULL,now(),now(),'2999-12-31'", api.queries[0])
+        self.assertIn('@staging.invalid', api.queries[0])
+        self.assertIn('Historical Staging identity matches an invitation', api.queries[0])
+        self.assertIn("email,now(),now(),'2999-12-31'", api.queries[0])
         self.assertIn('ON CONFLICT(id) DO NOTHING', api.queries[0])
         self.assertNotIn('encrypted_password', api.queries[0])
 
