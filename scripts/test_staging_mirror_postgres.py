@@ -51,6 +51,38 @@ INSERT INTO environment_sync.safety(singleton,guard_version,outbound_blocked) VA
         items = [{'key': {'id': row['id']}, 'digest': 'hash-'+row['id'], 'row': row} for row in rows]
         return mirror.apply_batch_sql('mirror_probe', ['id'], ['id','parent_id','name','amount'], items)
 
+    def test_historical_identity_satisfies_required_email_without_activating_invites(self):
+        self.sql("""
+DROP SCHEMA IF EXISTS auth CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+DROP TABLE IF EXISTS public.invitation_tokens CASCADE;
+CREATE SCHEMA auth;
+CREATE TABLE auth.users(id uuid PRIMARY KEY,instance_id uuid,aud text,role text,email text,created_at timestamptz,updated_at timestamptz,banned_until timestamptz,raw_app_meta_data jsonb,raw_user_meta_data jsonb);
+CREATE TABLE public.profiles(id uuid PRIMARY KEY REFERENCES auth.users(id),email text NOT NULL);
+CREATE TABLE public.invitation_tokens(email text);
+CREATE FUNCTION auth.profile_on_signup() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN INSERT INTO public.profiles VALUES(NEW.id,NEW.email); RETURN NEW; END $$;
+CREATE TRIGGER signup AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION auth.profile_on_signup();
+""")
+        test = self
+        class API:
+            def query(self, sql, source=False):
+                if source: return [{'items': []}]
+                return test.sql(sql)
+        user_id = '00000000-0000-0000-0000-000000000001'
+        mirror.ensure_identity_parents(API(), [user_id])
+        self.assertEqual(self.sql("SELECT count(*) FROM auth.users WHERE banned_until>now() AND email LIKE '%@staging.invalid'"), '1')
+        self.assertEqual(self.sql('SELECT count(*) FROM public.profiles'), '1')
+        mirror.ensure_identity_parents(API(), [user_id])
+        self.assertEqual(self.sql('SELECT count(*) FROM auth.users'), '1')
+        self.sql("INSERT INTO public.invitation_tokens VALUES('historical+00000000-0000-0000-0000-000000000002@staging.invalid')")
+        class BlockedAPI(API):
+            def query(self, sql, source=False):
+                if source: return [{'items': []}]
+                return test.sql(sql, success=False)
+        mirror.ensure_identity_parents(BlockedAPI(), ['00000000-0000-0000-0000-000000000002'])
+        self.assertEqual(self.sql('SELECT count(*) FROM auth.users'), '1')
+
     def test_bulk_failure_preserves_valid_rows_and_retries_rejected_rows(self):
         good = {'id':'good','parent_id':'parent',"name":"$apply$ O'Reilly \\ נתונים",'amount':1}
         missing = {'id':'missing','parent_id':'later','name':'missing','amount':1}

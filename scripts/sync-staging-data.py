@@ -104,15 +104,24 @@ ON CONFLICT(id) DO NOTHING; COMMIT;""")
     # Production can retain historical creator IDs after an Auth account was
     # removed. Retain those relations with non-login identities, never with a
     # copied email, password, OAuth identity, session or invitation grant.
+    # profiles.email is NOT NULL on Staging; .invalid is deliberately unroutable.
     live_ids = {user['id'] for user in users}
     historical = [{'id': user_id} for user_id in referenced_users if user_id not in live_ids]
     for group in batches(historical):
         api.query(f"""BEGIN; SET LOCAL lock_timeout='3s';
 {IMPORT_GATE}
+CREATE TEMP TABLE mirror_historical_users ON COMMIT DROP AS
+ SELECT id,'historical+'||id::text||'@staging.invalid' AS email
+ FROM jsonb_to_recordset({json_sql(group)}) x(id uuid);
+LOCK TABLE public.invitation_tokens IN SHARE MODE;
+DO $historical$ BEGIN IF EXISTS(
+ SELECT 1 FROM mirror_historical_users h JOIN public.invitation_tokens i ON lower(i.email)=h.email
+ WHERE NOT EXISTS(SELECT 1 FROM auth.users u WHERE u.id=h.id)
+) THEN RAISE EXCEPTION 'Historical Staging identity matches an invitation'; END IF; END $historical$;
 INSERT INTO auth.users(id,instance_id,aud,role,email,created_at,updated_at,banned_until,raw_app_meta_data,raw_user_meta_data)
-SELECT id,'00000000-0000-0000-0000-000000000000'::uuid,'authenticated','authenticated',NULL,now(),now(),'2999-12-31'::timestamptz,
+SELECT id,'00000000-0000-0000-0000-000000000000'::uuid,'authenticated','authenticated',email,now(),now(),'2999-12-31'::timestamptz,
  '{{"staging_historical_reference":true}}'::jsonb,'{{}}'::jsonb
-FROM jsonb_to_recordset({json_sql(group)}) x(id uuid)
+FROM mirror_historical_users
 ON CONFLICT(id) DO NOTHING; COMMIT;""")
 
 
