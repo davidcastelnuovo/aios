@@ -13,7 +13,7 @@ All colors MUST be HSL.
     --foreground: 209 59% 10%;
 
     /* Warm cream — bordered panels sit above the page background */
-    --card: 42 48% 99%;
+    --card: 40 35% 99%;
     --card-foreground: 209 59% 10%;
     --surface-elevated: 42 48% 99%;
     --surface-inset: 42 36% 97%;

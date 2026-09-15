@@ -8,7 +8,6 @@ import { CallHistoryTab } from "@/components/telephony/CallHistoryTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -228,12 +227,12 @@ export function LeadsChatView({
   const getLeadStatusInfo = (statusKey: string) => findLeadStatus(statusKey, leadStatuses);
 
   return (
-    <div dir="ltr" className="flex flex-row-reverse h-[calc(100vh-220px)] border rounded-lg overflow-hidden bg-background w-full max-w-full">
-      {/* Right side - Lead list */}
+    <div className={cn("flex h-full min-h-0 max-h-full overflow-hidden bg-background w-full max-w-full", isMobile ? "border-0 rounded-none" : "border rounded-lg")} dir="rtl">
+      {/* Lead list */}
       {(!isMobile || !selectedLeadId) && (
-      <div dir="rtl" className={cn("border-l flex flex-col bg-muted/20 overflow-hidden", isMobile ? "w-full" : "w-[25%] min-w-[240px] max-w-[25%]")}>
+      <div className={cn("border-s flex flex-col bg-muted/20 overflow-hidden min-h-0", isMobile ? "w-full flex-1" : "w-[25%] min-w-[240px] max-w-[25%]")} dir="rtl">
         {/* List header with search */}
-        <div className="p-3 border-b bg-background/80 backdrop-blur-sm">
+        <div className={cn("border-b bg-background/80 backdrop-blur-sm shrink-0", isMobile ? "p-2" : "p-3")}>
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -450,13 +449,13 @@ export function LeadsChatView({
         </div>
       </div>
       )}
-      {/* Left side - Lead detail panel */}
+      {/* Lead detail panel */}
       {(!isMobile || selectedLeadId) && (
-      <div dir="rtl" className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
         {selectedLead ? (
           <>
             {/* Toolbar */}
-            <div className="flex items-center gap-2 p-3 border-b bg-background/95 backdrop-blur-sm flex-wrap">
+            <div className={cn("flex items-center gap-2 border-b bg-background/95 backdrop-blur-sm shrink-0 flex-wrap", isMobile ? "p-2" : "p-3")}>
               {/* Back button on mobile */}
               {isMobile && (
                 <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSelectedLeadId(null)}>
@@ -652,8 +651,8 @@ export function LeadsChatView({
             )}
 
             {/* Detail tabs content */}
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value === "updates" ? "details" : value)} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="mx-4 mt-3 grid grid-cols-7 w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto">
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value === "updates" ? "details" : value)} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+              <TabsList className="mx-4 mt-3 grid grid-cols-7 w-auto max-w-4xl h-9 bg-muted/50 mr-4 ml-auto shrink-0">
                 <TabsTrigger value="details" className="text-xs gap-1.5">
                   <FileText className="h-3.5 w-3.5" />
                   פרטי ליד
@@ -684,13 +683,17 @@ export function LeadsChatView({
                 </TabsTrigger>
               </TabsList>
 
-              <ScrollArea className={cn("flex-1 p-4", (activeTab === "whatsapp" || activeTab === "calls") && "hidden")}>
+              <div
+                className={cn(
+                  "flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain bg-background",
+                  isMobile ? "p-2" : "p-4",
+                  (activeTab === "whatsapp" || activeTab === "calls") && "hidden",
+                )}
+              >
                 <TabsContent value="details" className="mt-0 space-y-6">
-                  {/* Info cards grid */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Contact */}
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
                         פרטי קשר
                         <User className="h-4 w-4 text-primary" />
                       </h3>
@@ -730,7 +733,7 @@ export function LeadsChatView({
 
                     {/* Dates & timeline */}
                     <div className="bg-card border border-border/60 rounded-xl p-4 space-y-3 text-right shadow-sm">
-                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
+                      <h3 className="font-semibold text-sm flex items-center gap-2 justify-end text-foreground">
                         ציר זמן
                         <Clock className="h-4 w-4 text-primary" />
                       </h3>
@@ -827,7 +830,7 @@ export function LeadsChatView({
                     />
                   </TabsContent>
                 )}
-              </ScrollArea>
+              </div>
 
               {activeTab === "calls" && (
                 <div className="flex-1 min-h-0 p-4">
