@@ -14,6 +14,7 @@ import {
   claimFacebookLeadIntake,
   facebookTriggerAutomationSucceeded,
   findExistingFacebookLead,
+  shouldCreateCrmLeadForFacebookFlow,
   wasFacebookLeadAutomationClaimed,
 } from "../_shared/facebook-lead-dedup.ts";
 
@@ -195,8 +196,12 @@ serve(async (req) => {
                     .eq('automation_id', flowStep.automation_id)
                     .eq('step_type', 'trigger')
                     .maybeSingle();
-                  const skipCrmLead = flowTriggerStep?.action_type === 'inbound_webhook_lead'
-                    || stepConfig.create_crm_lead === false;
+                  const skipCrmLead = !(await shouldCreateCrmLeadForFacebookFlow(
+                    supabase,
+                    flowStep.automation_id,
+                    stepConfig,
+                    flowTriggerStep?.action_type,
+                  ));
                   
                   // Get access token from the referenced integration
                   const { data: fbIntegration } = await supabase
