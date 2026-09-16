@@ -70,6 +70,7 @@ Verification / token budget:
 - Skip extra “manual testing” loops by default. If a check is not needed to prove the change, do not run it.
 
 Preview / merge (standing rule for every Cloud Agent):
+- Before creating, marking ready, or merging a PR (including with `create-pr`), read and follow `CLAUDE.md` → `Agent skills` → `Pull requests` for this repo's draft and approval rules.
 - **Always send David the Vercel preview URL** (the development environment link) when you finish work on a branch, and again after every follow-up that pushes new commits. Include the in-app path when known (e.g. `/t/<tenant>/marketing/department/copy`).
 - **Tenant path is required for in-app pages.** Bare routes like `/signatures` 404 — always use `/t/<tenant-slug-or-id>/…` (e.g. `/t/<tenant>/signatures`). Public routes without tenant (e.g. `/sign/:token`) are the exception.
 - **Do not merge to `main` until he has that preview link and explicitly says `מאשר לפרודקשן`.** Coordinate with other open agents the same way — each agent sends its own branch preview; nobody merges on another agent's behalf.

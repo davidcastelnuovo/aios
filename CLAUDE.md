@@ -15,7 +15,7 @@
 - Never commit Graphify output, `graph.json`, generated reports, summaries, reflections, or work-memory files. Keep changes to Carmen and other critical monolithic functions small and additive.
 
 ## Working mode / autonomy (David's standing preference)
-- **Default to action** — implement → PR to **`develop`** → Staging verify → `מאשר לפרודקשן` → merge to `main`.
+- **Default to action** — implement → draft PR to **`develop`** → user requests ready for review → Staging verify → `מאשר לפרודקשן` → merge to `main`.
 - **Never merge to `main` until David has the preview link and explicitly asks to merge.** This applies to every Cloud Agent / coding session (copy, creative, and anything else).
 - At the end of every completed change that has a frontend preview, include the Vercel preview URL in the reply (and the in-app path when known). Send it again whenever you finish a follow-up that pushed to the PR.
 - After merging an edge-function change (only when David asked to merge), confirm the `deploy-edge-function.yml` run went green.
@@ -80,6 +80,13 @@ Carmen must support voice on **both** her surfaces — keep this true going forw
 - TTS/STT helpers live in `_shared/ai.ts` (`aiSpeak` / `aiTranscribe`). Voice = `ai_agents.voice` (default `shimmer`).
 
 ## Agent skills
+
+### Pull requests
+
+- When creating any PR in this repo, including through the `create-pr` skill, create it as a **draft** (`gh pr create --draft` or API `draft: true`). Target `develop` for feature work.
+- Keep the PR in draft until the user explicitly asks to mark it ready for review. Creating a PR, passing checks, or completing the task is not permission to mark it ready or merge it.
+- Leave auto-merge disabled and merge-triggering labels unset unless the user explicitly requests merging. Existing production approval rules still apply.
+- Before reporting the PR as created, verify `gh pr view <number> --json isDraft` returns `isDraft: true`.
 
 ### Issue tracker
 
