@@ -77,10 +77,14 @@ export default function Automations() {
   const [cloneOrgOpen, setCloneOrgOpen] = useState(false);
   const [webhookDocsOpen, setWebhookDocsOpen] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
-  const { tenantId, isLoading: tenantLoading, isActiveTenantSynced } = useCurrentTenant();
+  const { tenantId } = useCurrentTenant();
   const { buildPath } = useTenantPath();
 
-  // Fetch automations (own + shared mirrors from other tenants)
+  // Fetch automations (own + shared mirrors from other tenants).
+  // Do NOT gate on isActiveTenantSynced — TenantProvider already blocks the
+  // tree while syncing, and gating here re-introduces an infinite spinner when
+  // effectiveTenantId is set from the URL slug before internal sync flips true
+  // (#115 removed this gate for that reason; do not bring it back).
   const {
     data: automations,
     isLoading,
@@ -118,7 +122,7 @@ export default function Automations() {
 
       return [...(own || []), ...shared];
     },
-    enabled: !!tenantId && isActiveTenantSynced,
+    enabled: !!tenantId,
   });
 
   // Fetch logs for selected automation
@@ -684,7 +688,7 @@ export default function Automations() {
     setEditDialogOpen(true);
   };
 
-  if (tenantLoading || !isActiveTenantSynced || (isLoading && !automations)) {
+  if (isLoading && !automations) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>

@@ -75,7 +75,7 @@ function toRFNode(nd: FlowNodeData, onDelete: (id: string) => void, onSelect: (i
 
 export default function FlowEditor() {
   const { automationId } = useParams<{ automationId: string }>();
-  const { tenantId, isActiveTenantSynced } = useCurrentTenant();
+  const { tenantId } = useCurrentTenant();
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -162,7 +162,7 @@ export default function FlowEditor() {
 
   // ── Fetch automation ───────────────────────────────────────────────────────
 
-  const { data: automation, isLoading: automationLoading, isError: automationError, error: automationLoadError } = useQuery({
+  const { data: automation, isLoading: automationLoading, isError: automationError, error: automationLoadError, isFetched: automationFetched } = useQuery({
     queryKey: ["automation", automationId],
     queryFn: async () => {
       if (!automationId || !tenantId) return null;
@@ -175,7 +175,10 @@ export default function FlowEditor() {
       if (error) throw error;
       return data;
     },
-    enabled: !!automationId && !!tenantId && isActiveTenantSynced,
+    // Same as Automations list: TenantProvider already serializes sync. Gating on
+    // isActiveTenantSynced here leaves the editor stuck on a spinner / false 404
+    // when effectiveTenantId is available before the internal sync flag flips.
+    enabled: !!automationId && !!tenantId,
   });
 
   // Read-only when viewing a shared mirror (automation belongs to a different tenant)
@@ -193,7 +196,7 @@ export default function FlowEditor() {
       if (error) throw error;
       return data as any[];
     },
-    enabled: !!automationId && !!tenantId && isActiveTenantSynced,
+    enabled: !!automationId && !!tenantId,
   });
 
   // ── Init from DB (only once, to avoid overwriting user edits on refetch) ───
@@ -651,9 +654,9 @@ export default function FlowEditor() {
     stepsLoading ||
     (!initializedRef.current && !!automation);
 
-  if (!tenantId || !isActiveTenantSynced) {
+  if (!tenantId) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
@@ -665,7 +668,7 @@ export default function FlowEditor() {
       (stepsLoadError as Error)?.message ||
       "שגיאה בטעינת האוטומציה";
     return (
-      <div className="flex flex-col items-center justify-center gap-4 h-screen p-8 text-center" dir="rtl">
+      <div className="flex flex-col items-center justify-center gap-4 h-[calc(100vh-4rem)] p-8 text-center" dir="rtl">
         <p className="text-muted-foreground">לא הצלחנו לפתוח את עורך הפלוו.</p>
         <p className="text-xs text-muted-foreground font-mono max-w-lg break-all">{message}</p>
         <Button variant="outline" onClick={() => navigate(buildPath("/automations"))}>
@@ -675,9 +678,9 @@ export default function FlowEditor() {
     );
   }
 
-  if (!automationLoading && !automation) {
+  if (automationFetched && !automationLoading && !automation) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 h-screen p-8 text-center" dir="rtl">
+      <div className="flex flex-col items-center justify-center gap-4 h-[calc(100vh-4rem)] p-8 text-center" dir="rtl">
         <p className="text-muted-foreground">האוטומציה לא נמצאה או שאין לך גישה אליה.</p>
         <Button variant="outline" onClick={() => navigate(buildPath("/automations"))}>
           חזרה לרשימת אוטומציות
@@ -688,14 +691,14 @@ export default function FlowEditor() {
 
   if (flowLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen" dir="rtl">
+    <div className="flex flex-col h-[calc(100vh-4rem)]" dir="rtl">
       {isReadOnlyMirror && (
         <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-xs text-amber-700 dark:text-amber-400 text-center">
           אוטומציה זו שותפה אליך מארגון אחר ומוצגת כצפייה בלבד. היא רצה פעם אחת בלבד מהארגון שבעליה.
