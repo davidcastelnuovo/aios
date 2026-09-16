@@ -21,7 +21,11 @@ function extractNextCursor(data) {
 function parseGatewayJson(text) {
   const trimmed = String(text || '').trim();
   if (!trimmed || trimmed.startsWith('<')) {
-    throw new Error('Gateway החזיר HTML במקום JSON — בדוק MANUS_GATEWAY_URL / instance_id');
+    throw new Error(
+      'Manus Gateway עדיין לא מחזיר list-groups (קיבלנו HTML במקום JSON). '
+      + 'צריך ש-Manus יפעיל GET /api/v1/instances/{id}/groups. '
+      + 'עד אז AIOS מציג רק קבוצות עם תעבורת manus_wa — לא Green API.',
+    );
   }
   try {
     return JSON.parse(trimmed);

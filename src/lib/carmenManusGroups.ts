@@ -75,6 +75,8 @@ export type ManusGroupsSyncInfo = {
   syncedAt?: string;
   count?: number;
   hasSync: boolean;
+  via?: string;
+  warning?: string;
 };
 
 export async function fetchManusGroupsSyncInfo(tenantId: string): Promise<ManusGroupsSyncInfo> {
@@ -87,18 +89,24 @@ export async function fetchManusGroupsSyncInfo(tenantId: string): Promise<ManusG
   let syncedAt: string | undefined;
   let count = 0;
   let hasSync = false;
+  let via: string | undefined;
+  let warning: string | undefined;
   for (const row of data || []) {
     const sync = ((row as { settings?: Record<string, unknown> }).settings?.manus_groups_sync
-      || {}) as ManusGroupsSyncMeta;
+      || {}) as ManusGroupsSyncMeta & { via?: string; warning?: string };
     if (sync.synced_at) {
       hasSync = true;
-      if (!syncedAt || sync.synced_at > syncedAt) syncedAt = sync.synced_at;
+      if (!syncedAt || sync.synced_at > syncedAt) {
+        syncedAt = sync.synced_at;
+        via = sync.via;
+        warning = sync.warning;
+      }
       const catalogCount = Array.isArray(sync.groups) ? sync.groups.length : 0;
       const chatCount = sync.group_chat_ids?.length || 0;
       count = Math.max(count, catalogCount, chatCount, sync.count || 0);
     }
   }
-  return { syncedAt, count, hasSync };
+  return { syncedAt, count, hasSync, via, warning };
 }
 
 export async function fetchCarmenManusGroupIds(tenantId: string): Promise<Set<string>> {

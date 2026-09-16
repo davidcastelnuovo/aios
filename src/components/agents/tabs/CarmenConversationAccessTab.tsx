@@ -564,6 +564,11 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
             <p><strong>רשימה ידנית:</strong> סמן קבוצות Manus — רק בהן כרמן תענה.</p>
             <p><strong>כל קבוצות Manus:</strong> כל קבוצה שכרמן חברה בה ב-Manus — בלי לסמן אחת־אחת.</p>
             <p className="text-muted-foreground">לא מוצגות קבוצות Green API (הטלפון שלך לצ׳אט/דיוור) — רק Manus של כרמן.</p>
+            {(manusSyncInfo?.via?.includes("traffic") || manusSyncInfo?.warning) && (
+              <p className="text-amber-700 dark:text-amber-400">
+                Manus Gateway עדיין לא מחזיר list-groups כ-JSON — לכן מוצגות רק קבוצות עם תעבורת Manus ידועה, לא כל החברות באינסטנס.
+              </p>
+            )}
           </AlertDescription>
         </Alert>
 

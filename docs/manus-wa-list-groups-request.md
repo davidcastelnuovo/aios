@@ -13,12 +13,25 @@ Today we only use:
 
 Green API (operator phone) is a **separate** channel for CRM chat / broadcasts — not Carmen.
 
-## Status (2026-09-15)
-Implemented in AIOS via edge function `manus-wa-sync-groups` → `GET /api/v1/instances/{id}/groups`.
-Agent Hub → **הרשאות WhatsApp** → **סנכרן קבוצות מ-Manus** upserts `whatsapp_groups` and stores JIDs in `tenant_integrations.settings.manus_groups_sync`.
+## Status (2026-09-16)
+
+**AIOS side:** edge function `manus-wa-sync-groups` is ready and calls
+`GET /api/v1/instances/{id}/groups`.
+
+**Gateway side (blocker):** live Gateway `https://whatsappgw-pzpyrrww.manus.space`
+still does **not** expose `/groups` as JSON. Verified 2026-09-16 from Production:
+
+- `GET …/status` → `200` JSON `{ success, status: CONNECTED, phoneNumber }`
+- `GET …/groups` (and `/api/admin/…/groups`) → `200` **HTML SPA shell** (same as unknown routes)
+
+Until Manus ships the real list-groups API, AIOS can only show groups that already
+have `chat_messages.provider = 'manus_wa'` traffic — never Green API groups.
+
+Green API (operator phone) is a **separate** channel for CRM chat / broadcasts — not Carmen.
 
 ## Problem (historical)
 Before the gateway exposed list-groups, we only learned a group after inbound webhook traffic.
+That remains true until the Gateway route above returns JSON.
 
 ## Requested API
 
