@@ -29,13 +29,15 @@ test('normalizeManusGroupsPayload: filters non-group ids', () => {
   assert.equal(out[0].id, '1@g.us');
 });
 
-test('normalizeManusGroupsPayload: drops isMember=false', () => {
+test('normalizeManusGroupsPayload: Manus subject + participantCount shape', () => {
   const out = normalizeManusGroupsPayload({
+    success: true,
+    instanceId: 'YwIn7GY3Ul3OAxXG',
     groups: [
-      { id: '1@g.us', name: 'in', isMember: true },
-      { id: '2@g.us', name: 'out', isMember: false },
+      { id: '120363423897814166@g.us', subject: 'PPC - DMM', participantCount: 7 },
     ],
   });
   assert.equal(out.length, 1);
-  assert.equal(out[0].id, '1@g.us');
+  assert.equal(out[0].name, 'PPC - DMM');
+  assert.equal(out[0].participantsCount, 7);
 });

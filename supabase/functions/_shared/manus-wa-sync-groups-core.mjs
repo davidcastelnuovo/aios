@@ -4,12 +4,15 @@ import { normalizeManusGroupsPayload } from './manus-wa-groups.mjs';
  * Manus group sync — Carmen's WhatsApp ONLY.
  *
  * NEVER mix with Green API (operator phone), Meta Cloud API, or any other WA
- * connection. Source of truth for membership is Manus Gateway list-groups.
- * Staging mocked Manus has no tokens — fallback is manus_wa chat traffic only,
- * never the full whatsapp_groups table (that includes Green API groups).
+ * connection. Source of truth: Manus Gateway list-groups.
+ *
+ * Exact call (required):
+ *   GET {MANUS_GATEWAY_URL}/api/v1/instances/{instanceId}/groups
+ *   Header: X-Api-Key: <Carmen instance key>
+ * Without a valid key → 401 JSON. HTML SPA ⇒ wrong URL / path missing /api/v1.
  */
 
-const BASE_URL = Deno.env.get('MANUS_GATEWAY_URL') || 'https://whatsappgw-pzpyrrww.manus.space';
+const BASE_URL = (Deno.env.get('MANUS_GATEWAY_URL') || 'https://whatsappgw-pzpyrrww.manus.space').replace(/\/$/, '');
 const WORKER_SECRET = Deno.env.get('MANUS_GATEWAY_WORKER_SECRET') || '';
 const MANUS_SYNC_TAG = 'manus_wa_sync';
 
@@ -18,13 +21,12 @@ function extractNextCursor(data) {
   return cursor ? String(cursor) : null;
 }
 
-function parseGatewayJson(text) {
+function parseGatewayJson(text, url) {
   const trimmed = String(text || '').trim();
   if (!trimmed || trimmed.startsWith('<')) {
     throw new Error(
-      'Manus Gateway עדיין לא מחזיר list-groups (קיבלנו HTML במקום JSON). '
-      + 'צריך ש-Manus יפעיל GET /api/v1/instances/{id}/groups. '
-      + 'עד אז AIOS מציג רק קבוצות עם תעבורת manus_wa — לא Green API.',
+      `Manus Gateway החזיר HTML במקום JSON (url=${url}). `
+      + 'יש לקרוא בדיוק ל-/api/v1/instances/{id}/groups עם X-Api-Key תקין — אחרת מגיעים ל-SPA.',
     );
   }
   try {
@@ -38,9 +40,15 @@ async function fetchGroupsPage(url, headers) {
   const res = await fetch(url, { method: 'GET', headers });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Gateway groups ${res.status}: ${text.slice(0, 280)}`);
+    // 401 with JSON is the documented missing/invalid key response.
+    let detail = text.slice(0, 280);
+    try {
+      const errJson = JSON.parse(text);
+      detail = errJson.error || errJson.message || detail;
+    } catch { /* keep raw */ }
+    throw new Error(`Gateway groups ${res.status}: ${detail}`);
   }
-  const data = parseGatewayJson(text);
+  const data = parseGatewayJson(text, url);
   return {
     groups: normalizeManusGroupsPayload(data),
     nextCursor: extractNextCursor(data),
@@ -74,34 +82,38 @@ function isMockedIntegration(integ) {
   return settings.mocked === true || settings.mock === true;
 }
 
-/** Admin worker secret first, then instance API key. Never Green API. */
+/**
+ * Prefer the documented instance API path + X-Api-Key only.
+ * Admin worker-secret is optional fallback when configured.
+ */
 export async function fetchGroupsFromGateway(instanceId, apiKey) {
   const attempts = [];
-
-  if (WORKER_SECRET) {
-    attempts.push({
-      via: 'admin_worker_secret',
-      run: () => fetchAllGroups(
-        (cursor) => {
-          const url = new URL(`${BASE_URL}/api/admin/instances/${instanceId}/groups`);
-          if (cursor) url.searchParams.set('cursor', cursor);
-          return url.toString();
-        },
-        { 'X-Worker-Secret': WORKER_SECRET },
-      ),
-    });
-  }
 
   if (apiKey) {
     attempts.push({
       via: 'instance_api_key',
       run: () => fetchAllGroups(
         (cursor) => {
-          const url = new URL(`${BASE_URL}/api/v1/instances/${instanceId}/groups`);
-          if (cursor) url.searchParams.set('cursor', cursor);
-          return url.toString();
+          // Exact path — do not omit /api/v1.
+          let url = `${BASE_URL}/api/v1/instances/${instanceId}/groups`;
+          if (cursor) url += `?cursor=${encodeURIComponent(cursor)}`;
+          return url;
         },
         { 'X-Api-Key': apiKey },
+      ),
+    });
+  }
+
+  if (WORKER_SECRET) {
+    attempts.push({
+      via: 'admin_worker_secret',
+      run: () => fetchAllGroups(
+        (cursor) => {
+          let url = `${BASE_URL}/api/admin/instances/${instanceId}/groups`;
+          if (cursor) url += `?cursor=${encodeURIComponent(cursor)}`;
+          return url;
+        },
+        { 'X-Worker-Secret': WORKER_SECRET },
       ),
     });
   }
@@ -124,8 +136,33 @@ export async function fetchGroupsFromGateway(instanceId, apiKey) {
   throw lastErr || new Error('סנכרון קבוצות מ-Manus Gateway נכשל');
 }
 
+/** Already-tagged Manus sync rows (from a prior Gateway sync). Never Green API dump. */
+async function loadTaggedManusSyncGroups(supabaseSvc, tenantId) {
+  const pageSize = 1000;
+  const rows = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseSvc
+      .from('whatsapp_groups')
+      .select('id, group_name, group_chat_id, is_blocked')
+      .eq('tenant_id', tenantId)
+      .eq('description', MANUS_SYNC_TAG)
+      .or('is_blocked.is.null,is_blocked.eq.false')
+      .order('group_name')
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    rows.push(...data);
+    if (data.length < pageSize) break;
+  }
+  return rows.map((row) => ({
+    id: row.group_chat_id,
+    name: row.group_name || row.group_chat_id,
+    dbId: row.id,
+  }));
+}
+
 /**
- * Staging-safe fallback: ONLY groups that already have manus_wa message traffic.
+ * Staging-safe fallback: ONLY groups with manus_wa message traffic.
  * Never scan the full whatsapp_groups table — that mixes Green API operator groups.
  */
 async function loadManusTrafficGroups(supabaseSvc, tenantId) {
@@ -228,8 +265,6 @@ async function persistSyncCatalog(supabaseSvc, integ, settings, instanceId, grou
     synced.push({ integrationId: integ.id, ...entry });
   }
 
-  // Drop manus_wa_sync tags that are not in this Manus-only catalog
-  // (prevents Green API groups from sticking around after a bad sync).
   await clearStaleManusSyncTags(supabaseSvc, integ.tenant_id, keepIds);
 
   const mergedSettings = {
@@ -282,37 +317,48 @@ export async function syncManusGroupsForTenant(supabaseSvc, integrations) {
         continue;
       }
 
-      // Staging mocked Manus: NO tokens, and MUST NOT read Green API groups.
-      // Only groups with confirmed manus_wa traffic are allowed.
-      if (mocked || !canCallGateway) {
-        const trafficGroups = await loadManusTrafficGroups(supabaseSvc, integ.tenant_id);
+      // Staging mocked / no key: NEVER overwrite a prior Gateway catalog with traffic-only.
+      // Prefer already-tagged manus_wa_sync rows (from a Gateway seed). Else traffic only.
+      const existingVia = settings?.manus_groups_sync?.via;
+      const existingCount = settings?.manus_groups_sync?.count || 0;
+      const tagged = await loadTaggedManusSyncGroups(supabaseSvc, integ.tenant_id);
+
+      if (tagged.length > 0 && (existingVia === 'instance_api_key' || existingVia === 'admin_worker_secret' || tagged.length >= existingCount)) {
         const warning = mocked
-          ? 'Staging: Manus מדומה (בלי api_key) — רק קבוצות עם תעבורת manus_wa (לא Green API)'
-          : 'חסר Manus api_key / WORKER_SECRET — רק קבוצות עם תעבורת manus_wa';
+          ? 'Staging: Manus מדומה (בלי api_key) — נשמרה רשימת Gateway קיימת (לא Green API, לא תעבורה חלקית)'
+          : 'חסר api_key — נשמרה רשימת manus_wa_sync קיימת';
         const saved = await persistSyncCatalog(
-          supabaseSvc,
-          integ,
-          settings,
-          instanceId,
-          trafficGroups,
-          mocked ? 'staging_manus_traffic_only' : 'manus_traffic_fallback',
+          supabaseSvc, integ, settings, instanceId, tagged,
+          existingVia || 'manus_wa_sync_tags',
           warning,
         );
         synced.push(...saved);
         warnings.push(warning);
-        if (!trafficGroups.length) {
-          errors.push({
-            integrationId: integ.id,
-            error: 'אין תעבורת manus_wa לקבוצות, ואין גישה ל-Manus Gateway. לא נטענו קבוצות Green API בכוונה.',
-          });
-        }
         continue;
       }
 
-      errors.push({
-        integrationId: integ.id,
-        error: `חסר instance_id לחיבור Manus (instance=${instanceId || 'missing'})`,
-      });
+      const trafficGroups = await loadManusTrafficGroups(supabaseSvc, integ.tenant_id);
+      const warning = mocked
+        ? 'Staging: Manus מדומה (בלי api_key) — רק תעבורת manus_wa. לסנכרון מלא מהאינסטנס צריך X-Api-Key.'
+        : 'חסר Manus api_key / WORKER_SECRET — רק תעבורת manus_wa';
+      const saved = await persistSyncCatalog(
+        supabaseSvc,
+        integ,
+        settings,
+        instanceId,
+        trafficGroups,
+        mocked ? 'staging_manus_traffic_only' : 'manus_traffic_fallback',
+        warning,
+      );
+      synced.push(...saved);
+      warnings.push(warning);
+      if (!trafficGroups.length) {
+        errors.push({
+          integrationId: integ.id,
+          error: 'אין api_key ל-Manus ואין תעבורת manus_wa. לא נטענו קבוצות Green API. '
+            + 'נדרש GET /api/v1/instances/{id}/groups עם X-Api-Key.',
+        });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[manus-wa-sync-groups] integration failed', integ.id, msg);
