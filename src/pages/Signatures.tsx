@@ -68,7 +68,7 @@ const eventLabels: Record<string, string> = {
 };
 
 export default function Signatures() {
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, isActiveTenantDbSynced } = useCurrentTenant();
   const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -503,6 +503,14 @@ export default function Signatures() {
       }}
     />
   );
+
+  if (tenantId && !isActiveTenantDbSynced) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-muted-foreground" dir="rtl">
+        מסנכרן ארגון...
+      </div>
+    );
+  }
 
   if (editingDoc?.file_url) {
     return (
