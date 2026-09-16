@@ -29,6 +29,7 @@ import {
   scopeSnapshotsForPlan,
   type PulseDeliveryPlan,
 } from '../_shared/pulse-delivery.ts'
+import { deliverInstantPulseAlerts } from '../_shared/pulse-instant-alerts.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -257,7 +258,7 @@ Deno.serve(async (req) => {
       ? body.campaigner_name.trim()
       : null
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
-    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone')
+    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone, pulse_alert_rules')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
   const { data: settings, error: settingsError } = await settingsQuery
   if (settingsError) return json({ error: settingsError.message }, 500)
@@ -601,6 +602,24 @@ Deno.serve(async (req) => {
     }
     const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
     const tenantSlug = tenantRow?.slug || tenantId
+    let instantAlerts = { sent: 0, skipped: 0, candidates: 0 }
+    if (snapshots.length) {
+      try {
+        instantAlerts = await deliverInstantPulseAlerts({
+          supabase,
+          tenantId,
+          tenantSlug,
+          pulsePhone: setting.campaign_pulse_phone,
+          snapshots,
+          criticalIssues,
+          rules: setting.pulse_alert_rules,
+          queueWhatsApp: (message, chatId) =>
+            queuePulseWhatsApp(supabase, tenantId, tenantSlug, message, chatId),
+        })
+      } catch (instantAlertError) {
+        console.warn('[campaign-pulse] instant alerts failed', tenantId, instantAlertError)
+      }
+    }
     const dashboardUrl = buildPulseDashboardAbsoluteUrl(tenantSlug)
     const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl, criticalIssues)
     let sent = false
@@ -711,12 +730,14 @@ Deno.serve(async (req) => {
         dashboard_url: dashboardUrl,
         clients_checked: snapshots.length,
         scoped_deliveries: scopedDeliveries,
+        instant_alerts: instantAlerts,
       }],
       summary: digest, duration_ms: Date.now() - started,
     })
     results.push({
       tenant_id: tenantId,
       clients: snapshots.length,
+      instant_alerts: instantAlerts,
       onboarding_clients: onboardingClients.length,
       onboarding_open_tasks: onboardingClients.reduce((total: number, client: any) => total + client.open_tasks.length, 0),
       sent,

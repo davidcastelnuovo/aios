@@ -2,6 +2,20 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
+import { isChunkLoadError } from "./lib/chunkErrors.ts";
+
+/** One-shot guard — unguarded reload() here caused infinite "jumping" after deploys. */
+const MAIN_CHUNK_RELOAD_KEY = "aios-main-chunk-reload";
+
+function reloadOnceForStaleChunk() {
+  try {
+    if (sessionStorage.getItem(MAIN_CHUNK_RELOAD_KEY) === "1") return;
+    sessionStorage.setItem(MAIN_CHUNK_RELOAD_KEY, "1");
+  } catch {
+    // If storage is blocked, still attempt a single reload best-effort.
+  }
+  window.location.reload();
+}
 
 const reportFrontendError = (errorMessage: string, errorStack?: string) => {
   fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/report-error`, {
@@ -19,24 +33,15 @@ const reportFrontendError = (errorMessage: string, errorStack?: string) => {
 window.addEventListener("vite:preloadError", (event) => {
   event.preventDefault();
   reportFrontendError(`Vite preload error: ${event.payload?.message || "unknown"}`, event.payload?.stack);
-  window.location.reload();
+  reloadOnceForStaleChunk();
 });
 
 window.addEventListener("unhandledrejection", (event) => {
   const msg = event.reason?.message || String(event.reason);
   reportFrontendError(`Unhandled Promise: ${msg}`, event.reason?.stack);
 
-  const reasonText = [msg, event.reason?.name, event.reason?.stack]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (
-    reasonText.includes("failed to fetch dynamically imported module") ||
-    reasonText.includes("importing a module script failed") ||
-    reasonText.includes("chunkloaderror")
-  ) {
-    window.location.reload();
+  if (isChunkLoadError(event.reason)) {
+    reloadOnceForStaleChunk();
   }
 });
 

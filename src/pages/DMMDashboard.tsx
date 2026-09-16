@@ -313,51 +313,59 @@ export function CampaignPulseDashboard({
     return map;
   }, [pulseOverrides]);
 
-  // Campaign tables + CRM records for per-platform metrics (all periods).
-  const { data: campaignData, refetch: refetchCampaignData } = useQuery({
-    queryKey: [
-      "pulse-dash-campaign-data",
-      tenantId,
-      clientIds.join(","),
-      period,
-      periodBounds.startDate,
-      periodBounds.endDate,
-      periodBounds.prevStartDate,
-    ],
+  const { data: pulseCampaignTables = [], refetch: refetchPulseTables } = useQuery({
+    queryKey: ["pulse-dash-tables", tenantId, clientIds.join(",")],
     queryFn: async () => {
-      const empty = {
-        tables: [] as PulseCampaignTable[],
-        records: [] as PulseCrmRecord[],
-        tableToType: new Map<string, string | null>(),
-        tableToClient: new Map<string, string>(),
-      };
-      if (!tenantId || !clientIds.length) return empty;
-
-      const { data: tables, error: tablesError } = await supabase
+      if (!tenantId || !clientIds.length) return [] as PulseCampaignTable[];
+      const { data: tables, error } = await supabase
         .from("crm_tables")
         .select("id, client_id, integration_type, campaign_active, last_sync_at, integration_settings")
         .in("client_id", clientIds)
         .in("integration_type", ["facebook_insights", "facebook_ecommerce", "google_ads"]);
-      if (tablesError) throw tablesError;
-      if (!tables?.length) return empty;
-
-      const activeTables = filterDuplicateFacebookPulseTables(tables);
-      const tableIds = activeTables.map((t) => t.id);
-      const tableToType = new Map(activeTables.map((t) => [t.id, t.integration_type as string | null]));
-      const tableToClient = new Map(activeTables.map((t) => [t.id, t.client_id as string]));
-
-      const records = await fetchPulseCampaignRecords(tableIds, periodBounds);
-
-      return {
-        tables: activeTables as PulseCampaignTable[],
-        records,
-        tableToType,
-        tableToClient,
-      };
+      if (error) throw error;
+      return filterDuplicateFacebookPulseTables(tables ?? []) as PulseCampaignTable[];
     },
     enabled: !!tenantId && clientIds.length > 0,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
+
+  const pulseTableIds = useMemo(
+    () => pulseCampaignTables.map((table) => table.id),
+    [pulseCampaignTables],
+  );
+
+  const {
+    data: pulseCampaignRecords = [],
+    isFetching: pulseRecordsFetching,
+    refetch: refetchPulseRecords,
+  } = useQuery({
+    queryKey: [
+      "pulse-dash-records",
+      pulseTableIds.join(","),
+      periodBounds.prevStartDate,
+      periodBounds.endDate,
+    ],
+    queryFn: () => fetchPulseCampaignRecords(pulseTableIds, periodBounds),
+    enabled: pulseTableIds.length > 0,
+    staleTime: 30_000,
+    placeholderData: (previous) => previous,
+  });
+
+  const campaignData = useMemo(() => {
+    const tableToType = new Map(pulseCampaignTables.map((t) => [t.id, t.integration_type as string | null]));
+    const tableToClient = new Map(pulseCampaignTables.map((t) => [t.id, t.client_id as string]));
+    return {
+      tables: pulseCampaignTables,
+      records: pulseCampaignRecords,
+      tableToType,
+      tableToClient,
+    };
+  }, [pulseCampaignTables, pulseCampaignRecords]);
+
+  const refetchCampaignData = () => {
+    refetchPulseTables();
+    refetchPulseRecords();
+  };
 
   const tablesByClient = useMemo(() => {
     const map = new Map<string, PulseCampaignTable[]>();
@@ -720,6 +728,7 @@ export function CampaignPulseDashboard({
               ? ` (${periodBounds.startDate}–${periodBounds.endDate})`
               : ""}
             {freshness ? ` · עודכן ${freshness}` : ""}
+            {pulseRecordsFetching ? " · טוען פירוט קמפיינים..." : ""}
             {summary.missingPulse > 0 ? ` · ${summary.missingPulse} ממתינים לחישוב` : ""}
           </p>
         </div>
@@ -747,7 +756,7 @@ export function CampaignPulseDashboard({
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-red-50"
+          className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-surface-status-red"
           onClick={() => setFilterStatus(filterStatus === "red" ? "all" : "red")}
         >
           <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
@@ -759,7 +768,7 @@ export function CampaignPulseDashboard({
           </CardContent>
         </Card>
         <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-yellow-50"
+          className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-surface-status-yellow"
           onClick={() => setFilterStatus(filterStatus === "yellow" ? "all" : "yellow")}
         >
           <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
@@ -771,7 +780,7 @@ export function CampaignPulseDashboard({
           </CardContent>
         </Card>
         <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-green-50"
+          className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-surface-status-green"
           onClick={() => setFilterStatus(filterStatus === "green" ? "all" : "green")}
         >
           <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
@@ -1066,9 +1075,9 @@ export function CampaignPulseDashboard({
                 key={pulseRow.id}
                 className={
                   pulseRow.overall === "red"
-                    ? "border-red-200 bg-red-50/30"
+                    ? "border-red-200 bg-surface-status-red"
                     : pulseRow.overall === "yellow"
-                      ? "border-yellow-200 bg-yellow-50/20"
+                      ? "border-yellow-200 bg-surface-status-yellow"
                       : ""
                 }
               >

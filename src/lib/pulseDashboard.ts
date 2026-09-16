@@ -999,12 +999,36 @@ export function filterDuplicateFacebookPulseTables<T extends { id: string; clien
   return tables.filter((table) => !skipTableIds.has(table.id));
 }
 
-const PULSE_RECORD_FETCH_CONCURRENCY = 8;
+const PULSE_RECORD_PAGE_SIZE = 1000;
+const PULSE_RECORD_MAX_ROWS = 100_000;
+const PULSE_TABLE_ID_CHUNK = 40;
+
+async function fetchPulseCampaignRecordsChunk(
+  tableIds: string[],
+  bounds: PulsePeriodBounds,
+): Promise<PulseCrmRecord[]> {
+  const rows: PulseCrmRecord[] = [];
+  for (let from = 0; from < PULSE_RECORD_MAX_ROWS; from += PULSE_RECORD_PAGE_SIZE) {
+    const to = from + PULSE_RECORD_PAGE_SIZE - 1;
+    const { data, error } = await supabase
+      .from("crm_records")
+      .select("table_id, data")
+      .in("table_id", tableIds)
+      .filter("data->>date", "gte", bounds.prevStartDate)
+      .filter("data->>date", "lte", bounds.endDate)
+      .range(from, to);
+    if (error) throw error;
+    if (!data?.length) break;
+    rows.push(...(data as PulseCrmRecord[]));
+    if (data.length < PULSE_RECORD_PAGE_SIZE) break;
+  }
+  return rows;
+}
 
 /**
- * Load campaign records per table via crm-records (paginated server-side).
- * A single crm_records query with a shared row cap silently drops clients when
- * many tables are open — this matches the agency dashboard fetch path.
+ * Paginated crm_records fetch (chunked by table_id).
+ * Avoids per-table edge-function calls (~20s for large agencies) and the old
+ * single-query 20k row cap that dropped clients.
  */
 export async function fetchPulseCampaignRecords(
   tableIds: string[],
@@ -1012,34 +1036,15 @@ export async function fetchPulseCampaignRecords(
 ): Promise<PulseCrmRecord[]> {
   if (!tableIds.length) return [];
 
-  const all: PulseCrmRecord[] = [];
-  for (let offset = 0; offset < tableIds.length; offset += PULSE_RECORD_FETCH_CONCURRENCY) {
-    const batch = tableIds.slice(offset, offset + PULSE_RECORD_FETCH_CONCURRENCY);
-    const batchResults = await Promise.all(
-      batch.map(async (tableId) => {
-        const params = new URLSearchParams({
-          table_id: tableId,
-          date_filter: "custom",
-          date_from: bounds.prevStartDate,
-          date_to: bounds.endDate,
-        });
-        const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
-          method: "GET",
-        });
-        if (response.error) {
-          console.error("[pulse] crm-records fetch failed for table", tableId, response.error);
-          return [] as PulseCrmRecord[];
-        }
-        if (!Array.isArray(response.data)) return [] as PulseCrmRecord[];
-        return response.data.map((row: { data?: Record<string, unknown> }) => ({
-          table_id: tableId,
-          data: row.data ?? {},
-        }));
-      }),
-    );
-    for (const rows of batchResults) all.push(...rows);
+  const chunks: string[][] = [];
+  for (let offset = 0; offset < tableIds.length; offset += PULSE_TABLE_ID_CHUNK) {
+    chunks.push(tableIds.slice(offset, offset + PULSE_TABLE_ID_CHUNK));
   }
-  return all;
+
+  const chunkResults = await Promise.all(
+    chunks.map((chunk) => fetchPulseCampaignRecordsChunk(chunk, bounds)),
+  );
+  return chunkResults.flat();
 }
 
 export function pulseGoalKeyForTable(
