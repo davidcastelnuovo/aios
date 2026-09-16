@@ -1,7 +1,8 @@
 export type BrainMode = "internal" | "direct_channel" | "parliament";
 export type RouteType = BrainMode;
 export type ChannelProvider = "cursor" | "grok" | "codex" | "claude" | "chatgpt" | "internal" | "parliament";
-export type CloudDirectProvider = "cursor" | "grok" | "codex";
+export type CloudDirectProvider = "cursor" | "grok";
+export type WorkspaceProvider = "chatgpt" | "codex";
 export type ConversationStatus = "idle" | "streaming" | "waiting_external" | "debating" | "error";
 export type SessionStatus = "running" | "waiting" | "completed" | "failed" | "cancelled";
 export type MessageRole = "user" | "assistant" | "system" | "tool";
@@ -96,6 +97,8 @@ export type SendResult = {
   accepted_message: string;
   external_url?: string | null;
   capabilities: AdapterCapabilities;
+  /** Sync Codex OpenAI API path — answer already persisted server-side. */
+  inline_reply?: string;
 };
 
 export type CallbackPayload = {

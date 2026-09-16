@@ -89,6 +89,61 @@ export function roundMoney(n) {
   return Math.round((Number(n) || 0) * 1e6) / 1e6;
 }
 
+/** Daily cost buckets from GET /v1/organization/costs (start_time per bucket). */
+export function extractDailyCostBuckets(payload) {
+  const buckets = Array.isArray(payload?.data) ? payload.data : [];
+  const out = [];
+  for (const bucket of buckets) {
+    const ts = bucket?.start_time ?? bucket?.startTime;
+    const date = typeof ts === "number"
+      ? new Date(ts * 1000).toISOString().slice(0, 10)
+      : null;
+    if (!date) continue;
+    let cost = 0;
+    const lineItems = {};
+    for (const row of Array.isArray(bucket?.results) ? bucket.results : []) {
+      const value = typeof row?.amount?.value === "number"
+        ? row.amount.value
+        : Number(row?.amount?.value);
+      if (!Number.isFinite(value)) continue;
+      cost += value;
+      const li = row?.line_item || "other";
+      lineItems[li] = roundMoney((lineItems[li] || 0) + value);
+    }
+    out.push({ date, cost: roundMoney(cost), line_items: lineItems });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Daily token/request buckets from GET /v1/organization/usage/completions. */
+export function extractDailyUsageBuckets(payload) {
+  const buckets = Array.isArray(payload?.data) ? payload.data : [];
+  const out = [];
+  for (const bucket of buckets) {
+    const ts = bucket?.start_time ?? bucket?.startTime;
+    const date = typeof ts === "number"
+      ? new Date(ts * 1000).toISOString().slice(0, 10)
+      : null;
+    if (!date) continue;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let requests = 0;
+    for (const row of Array.isArray(bucket?.results) ? bucket.results : []) {
+      inputTokens += Number(row?.input_tokens) || 0;
+      outputTokens += Number(row?.output_tokens) || 0;
+      requests += Number(row?.num_model_requests) || 0;
+    }
+    out.push({
+      date,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
+      num_model_requests: requests,
+    });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /**
  * Build a safe structured status object. Never fabricates remaining credit.
  */

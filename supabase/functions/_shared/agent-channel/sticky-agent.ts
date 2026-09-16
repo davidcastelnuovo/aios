@@ -4,8 +4,9 @@ import {
   asCursorSessionId,
   resolveCursorDirectSession,
 } from "../cursor-direct-session.ts";
+import { lightweightBrainEnabled } from "../carmen-brain-flags.ts";
 
-export type OpenChatProvider = "cursor" | "codex";
+export type OpenChatProvider = "cursor";
 
 export function asCloudAgentId(value?: string | null): string | null {
   return asCursorSessionId(value);
@@ -24,18 +25,19 @@ export function envOpenChatId(
   provider: OpenChatProvider,
   env: Record<string, string | undefined> = {},
 ): string | null {
-  if (provider === "codex") {
-    return asCloudAgentId(env.CODEX_DIRECT_AGENT_ID) || asCloudAgentId(env.CODEX_STICKY_AGENT_ID);
-  }
   return asCloudAgentId(env.CURSOR_DIRECT_AGENT_ID) || asCloudAgentId(env.CURSOR_STICKY_AGENT_ID);
 }
 
 /** Opt-in sticky reuse for Command Center Cursor Direct (default: new agent per message). */
 export function cursorDirectStickyEnabled(env: Record<string, string | undefined> = {}): boolean {
+  if (lightweightBrainEnabled(env)) return true;
   return String(env.CURSOR_DIRECT_STICKY || "").toLowerCase() === "true";
 }
 
 export function allowCreateNewCloudAgent(env: Record<string, string | undefined> = {}): boolean {
+  if (lightweightBrainEnabled(env)) {
+    return String(env.CURSOR_DIRECT_ALLOW_CREATE || "").toLowerCase() === "true";
+  }
   if (cursorDirectStickyEnabled(env)) {
     return String(env.CURSOR_DIRECT_ALLOW_CREATE || "").toLowerCase() === "true";
   }
@@ -47,7 +49,7 @@ export function billingNoteForSeat(provider: string): string {
     case "cursor":
       return "כרמן ישיר · סוכן Cursor חדש לכל משימה";
     case "codex":
-      return "Codex Direct · סוכן Cursor חדש לכל משימה";
+      return "Codex Direct · ChatGPT Workspace / Work Mode";
     case "grok":
       return "Grok Bot הקיים (webhook) — בלי סוכן רקע חדש";
     case "internal":
@@ -61,12 +63,6 @@ export function billingNoteForSeat(provider: string): string {
 }
 
 export function missingOpenChatMessage(provider: OpenChatProvider): string {
-  if (provider === "codex") {
-    return (
-      "Codex Direct לא הצליח לפתוח סוכן Cursor. " +
-      "בדוק ש-CURSOR_API_KEY תקף וש-CODEX_DIRECT_AGENT_ID / CODEX_CLOUD_ENV_NAME מוגדרים."
-    );
-  }
   return (
     "Cursor Direct לא הצליח לפתוח סוכן Cursor. " +
     "בדוק ש-CURSOR_API_KEY תקף ושהסביבה מוגדרת (CURSOR_CLOUD_ENV_NAME)."
@@ -74,7 +70,7 @@ export function missingOpenChatMessage(provider: OpenChatProvider): string {
 }
 
 export function busyOpenChatMessage(provider: OpenChatProvider, url?: string | null): string {
-  const name = provider === "codex" ? "Codex" : "Cursor";
+  const name = "Cursor";
   return (
     `הצ'אט הפתוח של ${name} עדיין רץ — נפתח סוכן מקביל.` +
     (url ? ` מעקב: ${url}` : "")

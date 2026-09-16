@@ -267,6 +267,69 @@ export function useHealth(tenantId: string | null) {
 
 export interface UsageDay { date: string; tokens: number; cost: number; calls: number; }
 
+export interface OpenAiBillingDay {
+  date: string;
+  cost: number;
+  total_tokens?: number;
+  num_model_requests?: number;
+}
+
+export interface OpenAiBillingStatus {
+  ok: boolean;
+  admin_available: boolean;
+  error?: string;
+  period?: string;
+  currency?: string;
+  current_month_usage_cost?: number | null;
+  current_month_usage_tokens?: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    num_model_requests: number;
+  } | null;
+  line_items?: Array<{ name: string; value: number }>;
+  daily_costs?: Array<{ date: string; cost: number; line_items?: Record<string, number> }>;
+  daily_usage?: Array<{ date: string; total_tokens: number; num_model_requests: number }>;
+  remaining_credit_available?: boolean;
+  remaining_credit_reason?: string;
+  limits?: { available: boolean; reason?: string; raw?: unknown };
+  apis_used?: Record<string, string | null>;
+  unavailable_fields?: Record<string, string | null>;
+  errors?: { costs?: string | null; usage?: string | null; spend_limits?: string | null };
+}
+
+const BILLING_FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/openai-billing-status`;
+
+export function useOpenAiBilling(tenantId: string | null) {
+  return useQuery({
+    queryKey: ["cc-openai-billing", tenantId],
+    enabled: !!tenantId,
+    refetchInterval: 300000,
+    retry: 1,
+    queryFn: async (): Promise<OpenAiBillingStatus> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("לא מחוברת");
+      const res = await fetch(BILLING_FN, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ tenant_id: tenantId, include_tokens: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return {
+          ok: false,
+          admin_available: false,
+          error: json.error || `HTTP ${res.status}`,
+        };
+      }
+      return json as OpenAiBillingStatus;
+    },
+  });
+}
+
 export function useUsage(tenantId: string | null) {
   return useQuery({
     queryKey: ["cc-usage", tenantId],

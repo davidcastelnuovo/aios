@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { SeoDashboardView } from "./SeoDashboardView";
+import { resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
 
 interface SeoDashboardWithGaProps {
   tenantId: string;
@@ -60,6 +61,21 @@ export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaPro
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: clientGscSiteUrl } = useQuery({
+    queryKey: ["client-gsc-site", clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("gsc_site_url")
+        .eq("id", clientId)
+        .maybeSingle();
+      if (error) return null;
+      return data?.gsc_site_url || null;
+    },
+    enabled: !!clientId,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const linkedGaTableId = useMemo(() => {
     const fromSettings = (seoTable?.integration_settings as any)?.linkedGaTableId;
     return fromSettings || gaTableByClient?.id || "";
@@ -82,7 +98,10 @@ export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaPro
     staleTime: 5 * 60 * 1000,
   });
 
-  const savedGscSiteUrl = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || "";
+  const savedGscSiteUrl = resolveSeoLinkedGscSiteUrl({
+    integrationSettings: (seoTable?.integration_settings || {}) as Record<string, unknown>,
+    clientGscSiteUrl,
+  });
   const savedLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || "all") as "all" | "he" | "en";
 
   const persistGscSiteUrl = async (siteUrl: string) => {
