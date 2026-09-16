@@ -278,3 +278,46 @@ export async function findExistingFacebookLead(
     .maybeSingle()
   return byNotes?.id ? byNotes : null
 }
+
+const asConfigRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+
+/**
+ * Facebook flow triggers (e.g. סקווש הרצליה → send_greenapi_message) should not
+ * import leads into the agency CRM unless the flow explicitly opts in.
+ */
+export function shouldCreateCrmLeadForFacebookFlowConfig(
+  triggerConfig: unknown,
+  triggerActionType: string | null | undefined,
+  hasCreateLeadActionStep: boolean,
+): boolean {
+  const config = asConfigRecord(triggerConfig)
+  if (triggerActionType === "inbound_webhook_lead") return false
+  if (config.create_crm_lead === true) return true
+  if (config.create_crm_lead === false) return false
+  return hasCreateLeadActionStep
+}
+
+export async function shouldCreateCrmLeadForFacebookFlow(
+  supabase: { from: (table: string) => any },
+  automationId: string,
+  triggerConfig: unknown,
+  triggerActionType: string | null | undefined,
+): Promise<boolean> {
+  const { data: createLeadStep } = await supabase
+    .from("automation_flow_steps")
+    .select("id")
+    .eq("automation_id", automationId)
+    .eq("step_type", "action")
+    .eq("action_type", "create_lead")
+    .limit(1)
+    .maybeSingle()
+
+  return shouldCreateCrmLeadForFacebookFlowConfig(
+    triggerConfig,
+    triggerActionType,
+    Boolean(createLeadStep?.id),
+  )
+}

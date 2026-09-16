@@ -184,3 +184,41 @@ export function buildLeadRoutingPayload(
     ...buildFacebookFields(screening),
   };
 }
+
+export function firstLeadPayloadString(
+  payload: Record<string, unknown>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = payload[key];
+    if (value != null && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+/**
+ * Make/Zapier client lead alerts carry routing envelope fields (client_phone,
+ * lead_name, form_qa_summary, …). Those must trigger WhatsApp automations only —
+ * not create rows in the agency CRM via webhook-lead-intake.
+ */
+export function isClientLeadAlertPayload(payload: Record<string, unknown>): boolean {
+  if (payload.crm_intake === true || payload.create_crm_lead === true) return false;
+
+  const explicitAutomationId = firstLeadPayloadString(payload, ["automation_id"]);
+  if (explicitAutomationId) return true;
+
+  const clientPhone = firstLeadPayloadString(payload, ["client_phone", "recipient_phone"]);
+  const clientId = firstLeadPayloadString(payload, ["client_id"]);
+  const leadName = firstLeadPayloadString(payload, ["lead_name", "contact_name", "full_name", "name"]);
+  const leadPhone = firstLeadPayloadString(payload, ["lead_phone", "phone", "phone_number", "mobile"]);
+  const hasClientTarget = Boolean(clientPhone || clientId);
+  const hasLeadIdentity = Boolean(leadName || leadPhone);
+  const hasRoutingEnvelope = Boolean(
+    firstLeadPayloadString(payload, ["client_name", "recipient_name"]) ||
+      firstLeadPayloadString(payload, ["form_qa_summary"]) ||
+      payload.questions_and_answers ||
+      payload.form_data,
+  );
+
+  return hasClientTarget && hasLeadIdentity && hasRoutingEnvelope;
+}
