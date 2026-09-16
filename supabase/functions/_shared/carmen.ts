@@ -15,6 +15,7 @@ import {
   buildGroupSenderContextNote,
   managerGroupAccessViaAllowedPhones,
 } from './carmen-group-sender.ts';
+import { buildObservedGroupMembersNote } from './carmen-observe-group-member.ts';
 import {
   SURFACE_GROUP,
   identityAllowsSurface,
@@ -211,13 +212,17 @@ function looksLikeInstructionReport(content: string): boolean {
   return /(ההנחיות|ההוראות|הבנתי את ההנחיות|אפעל לפי ההנחיות|שמרתי הנחיה|הנחיותיך נשמרו|נכנסו לכספת|לכספת שלי|לא משחררת מידע|השומרת הכי|הסלקטורית הכי|מוכנה לפקודת|אני כאן לכל משימה|אני כאן ומחכה לפקודות|דרוכה ומוכנה|בסבלנות של נזירה|בלי דליפות מידע|רשמתי לפניי את עניין)/.test(c);
 }
 
-// Pull the last few days of chat history for the current chat (group or 1:1) so Carmen
-// can answer questions about prior conversations, not just messages inside the current
-// session window.
+// Pull recent chat background for Carmen — STRICTLY scoped to the current chat_id.
 //
-// - Groups: look up whatsapp_groups by (tenant_id, group_chat_id=chatId), then fetch
-//   chat_messages WHERE group_id = <uuid>.
-// - 1:1: fetch chat_messages WHERE group_id IS NULL AND sender_phone LIKE %last9digits%.
+// - Groups: whatsapp_groups by group_chat_id=chatId → chat_messages.group_id.
+// - Private: NEVER phone-scan chat_messages. Private continuity lives only in
+//   carmen_whatsapp_sessions.conversation_history keyed by chat_id (e.g.
+//   9725…@c.us). A 30-day sender_phone dump re-opens yesterday's private
+//   thread inside today's new session and feels like context bleed.
+export function backgroundChatContextMode(isGroup: boolean): 'group_id' | 'session_only' {
+  return isGroup ? 'group_id' : 'session_only';
+}
+
 export async function fetchRecentChatContext(
   supabase: any,
   tenantId: string,
@@ -228,33 +233,32 @@ export async function fetchRecentChatContext(
   dayWindow = 30,
 ): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp: string }>> {
   try {
+    if (backgroundChatContextMode(isGroup) === 'session_only') {
+      console.log('[carmen] skip private background history — session chat_id only', {
+        chatId, phoneTail: String(phoneNumber || '').replace(/\D/g, '').slice(-4),
+      });
+      return [];
+    }
+
     const since = new Date(Date.now() - dayWindow * 24 * 60 * 60 * 1000).toISOString();
-    let query = supabase
+    const { data: groupRow } = await supabase
+      .from('whatsapp_groups')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('group_chat_id', chatId)
+      .maybeSingle();
+    if (!groupRow?.id) return [];
+
+    const { data, error } = await supabase
       .from('chat_messages')
       .select('direction, message_text, sender_name, sender_phone, created_at, group_id')
       .eq('tenant_id', tenantId)
+      .eq('group_id', groupRow.id)
       .gte('created_at', since)
       .not('message_text', 'is', null)
       .order('created_at', { ascending: false })
       .limit(maxMessages);
 
-    if (isGroup) {
-      const { data: groupRow } = await supabase
-        .from('whatsapp_groups')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .eq('group_chat_id', chatId)
-        .maybeSingle();
-      if (!groupRow?.id) return [];
-      query = query.eq('group_id', groupRow.id);
-    } else {
-      const digits = (phoneNumber || chatId.split('@')[0] || '').replace(/\D/g, '');
-      if (!digits) return [];
-      const last9 = digits.slice(-9);
-      query = query.is('group_id', null).ilike('sender_phone', `%${last9}%`);
-    }
-
-    const { data, error } = await query;
     if (error || !Array.isArray(data)) return [];
 
     return data
@@ -272,7 +276,7 @@ export async function fetchRecentChatContext(
         }
         return {
           role: 'user' as const,
-          content: isGroup ? `${who}: ${text}` : text,
+          content: `${who}: ${text}`,
           timestamp: m.created_at,
         };
       })
@@ -1472,6 +1476,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       return { handled: true, outcome: 'active' };
     }
     identityContext += access.context;
+    // Roster from Manus-group traffic only (own_instance). Helps Carmen address
+    // known campaigners/contacts by participant_phone when they invoke her.
+    if (sourceChannel === 'own_instance') {
+      try {
+        identityContext += await buildObservedGroupMembersNote(supabase, tenantId, chatId);
+      } catch (rosterErr) {
+        console.warn('[carmen] observed members note failed (non-fatal)', rosterErr);
+      }
+    }
   }
 
   if (activeSession) {
@@ -1594,8 +1607,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
         supabase, tenantId, chatId, isGroup, effectivePhone,
       );
       const mergedHistory = buildCarmenMergedHistory(recentContext, history);
+      const isolationNote = `\n\n[בידוד שיחה] chat_id=${chatId}. עני רק בהקשר של השיחה הזו (סשן נוכחי). אל תגררי נושאים משיחות פרטיות/קבוצות אחרות או מימים קודמים אלא אם המשתמש ביקש במפורש לזכור.`;
       carmenResponse = await runCarmenAI(
-        supabase, activeSession.agent_id, tenantId, messageText + groupNotes + identityContext, mergedHistory,
+        supabase, activeSession.agent_id, tenantId, messageText + groupNotes + identityContext + isolationNote, mergedHistory,
         effectivePhone, effectiveName, waNotify,
       );
 
@@ -1834,8 +1848,9 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       supabase, tenantId, chatId, isGroup, phoneNumber,
     );
     const mergedHistory = buildCarmenMergedHistory(recentContext, []);
+    const isolationNote = `\n\n[בידוד שיחה] chat_id=${chatId}. עני רק בהקשר של השיחה הזו (סשן נוכחי). אל תגררי נושאים משיחות פרטיות/קבוצות אחרות או מימים קודמים אלא אם המשתמש ביקש במפורש לזכור.`;
     const carmenResponse = await runCarmenAI(
-      supabase, agentId, tenantId, contentAfterKeyword + groupNotes + identityContext, mergedHistory, phoneNumber, senderName, waNotify,
+      supabase, agentId, tenantId, contentAfterKeyword + groupNotes + identityContext + isolationNote, mergedHistory, phoneNumber, senderName, waNotify,
     );
 
     if (carmenResponse.includes(DUAL_CARMEN_SKIP)) {
