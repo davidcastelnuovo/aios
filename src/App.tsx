@@ -18,6 +18,7 @@ import { tenantRoutes } from "@/routes/tenantRoutes";
 import { StagingBanner } from "@/components/StagingBanner";
 import { setupReportQueryCachePersistence } from "@/lib/reportQueryCache";
 import { REPORT_QUERY_GC_MS, REPORT_QUERY_STALE_MS } from "@/lib/reportQueryOptions";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 const Landing = lazy(() => import("./pages/Landing"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -155,6 +156,7 @@ const App = () => (
         </TooltipProvider>
       </RoutedErrorBoundary>
     </BrowserRouter>
+    <SpeedInsights />
   </QueryClientProvider>
 );
 
