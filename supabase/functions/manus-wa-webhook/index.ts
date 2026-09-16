@@ -16,7 +16,11 @@ import {
   stripVoiceMarker,
 } from '../_shared/wa-voice-resolve.ts';
 import {
+  isUsableLidKey,
+  looksLikeRealPhone,
   outboundThirdPartyGuardDecision,
+  pickInboundLidDigits,
+  pickPayloadRealPhone,
   pickPrivateCarmenTarget,
   resolveInboundLidToPhone,
   shouldMarkResolvedLidAsOutgoing,
@@ -484,6 +488,11 @@ Deno.serve(async (req) => {
       chatIdRaw.endsWith('@lid') ||
       (!!senderLidRaw && senderLidRaw.replace(/\D/g, '') === fromRaw.replace(/\D/g, ''));
 
+    // The LID only ever comes from LID-bearing fields. Manus commonly delivers the
+    // sender's REAL phone in `from` / `senderPhone` while marking the chat `@lid`,
+    // so deriving the LID from `from` keyed wa_lid_map by a real phone number.
+    const inboundLidDigits = pickInboundLidDigits({ fromRaw, chatIdRaw, senderLidRaw });
+
     // Outbound detection: prefer explicit flags from Manus, then fall back to phone comparison
     const myPhone = (settings.phone_number || '').toString().replace(/\D/g, '');
     const fromDigits = fromRaw.split('@')[0].replace(/\D/g, '');
@@ -506,21 +515,24 @@ Deno.serve(async (req) => {
     // directly — no aliases or pairing needed.
     let lidAutoResolved = false;
     if (isLidEvent && !isOutgoingFromPhone && !isGroup) {
-      const lidDigits = counterpartPhone.replace(/\D/g, '');
-      const candidates = [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber]
-        .map((v: unknown) => String(v || '').split('@')[0].replace(/\D/g, ''))
-        .filter((d: string) => d && d.length >= 9 && d.length <= 15 && d !== lidDigits);
-      if (candidates.length > 0) {
-        counterpartPhone = candidates[0];
+      const lidDigits = inboundLidDigits;
+      const payloadPhone = pickPayloadRealPhone(
+        [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber, fromRaw],
+        lidDigits,
+      );
+      if (payloadPhone) {
+        counterpartPhone = payloadPhone;
         counterpartRaw = `${counterpartPhone}@c.us`;
         normalized = normalizePhone(counterpartPhone);
         lidAutoResolved = true;
         console.log('[manus-wa] LID auto-resolved from payload real-phone field', { lid: lidDigits, phone: counterpartPhone });
         // Persist the mapping so future events resolve even without the payload field.
-        supabase.from('wa_lid_map')
-          .upsert({ lid: lidDigits, phone: counterpartPhone, connection_user_id: connectionUserId, source: 'payload' }, { onConflict: 'lid' })
-          .then(() => {}, () => {});
-      } else if (lidDigits) {
+        if (isUsableLidKey(lidDigits)) {
+          supabase.from('wa_lid_map')
+            .upsert({ lid: lidDigits, phone: counterpartPhone, connection_user_id: connectionUserId, source: 'payload' }, { onConflict: 'lid' })
+            .then(() => {}, () => {});
+        }
+      } else if (isUsableLidKey(lidDigits)) {
         // AUTO LID RESOLUTION 2/2 — learned map. Any previously learned lid→phone pair
         // (from payload fields or Green-API pairing, across all tenants on this system)
         // resolves deterministically with zero configuration.
@@ -587,10 +599,12 @@ Deno.serve(async (req) => {
             (p.code && new RegExp(`(^|\\D)${p.code}(\\D|$)`).test(messageText)) ||
             (p.activation_message_id && quotedId && p.activation_message_id === quotedId));
           if (hit) {
-            const lidDigits = counterpartPhone.replace(/\D/g, '');
+            const lidDigits = inboundLidDigits || counterpartPhone.replace(/\D/g, '');
             const realPhone = String(hit.phone).replace(/\D/g, '');
-            await supabase.from('wa_lid_map')
-              .upsert({ lid: lidDigits, phone: realPhone, connection_user_id: connectionUserId, source: 'activation' }, { onConflict: 'lid' });
+            if (isUsableLidKey(lidDigits)) {
+              await supabase.from('wa_lid_map')
+                .upsert({ lid: lidDigits, phone: realPhone, connection_user_id: connectionUserId, source: 'activation' }, { onConflict: 'lid' });
+            }
             await supabase.from('wa_pending_activations')
               .update({ status: 'completed', completed_at: new Date().toISOString(), completed_lid: lidDigits })
               .eq('id', hit.id);
@@ -682,8 +696,8 @@ Deno.serve(async (req) => {
         console.log('[manus-wa] paired LID event with Green API outbound', { messageId, counterpartPhone, sourcePhoneNumber });
         // AUTO LID LEARNING — a successful pairing proves lid↔phone; persist it so
         // future events (any tenant on this system) resolve without pairing or config.
-        const learnedLid = fromRaw.split('@')[0].replace(/\D/g, '');
-        if (learnedLid && learnedLid !== counterpartPhone.replace(/\D/g, '')) {
+        const learnedLid = inboundLidDigits || fromRaw.split('@')[0].replace(/\D/g, '');
+        if (isUsableLidKey(learnedLid) && learnedLid !== counterpartPhone.replace(/\D/g, '')) {
           supabase.from('wa_lid_map')
             .upsert({ lid: learnedLid, phone: counterpartPhone.replace(/\D/g, ''), connection_user_id: connectionUserId, source: 'green_api_pairing' }, { onConflict: 'lid' })
             .then(() => {}, () => {});
@@ -713,10 +727,10 @@ Deno.serve(async (req) => {
         const lidAliases: Record<string, string> = (cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === 'object')
           ? cfg.carmen_lid_aliases
           : {};
-        const lidKey = String(counterpartPhone || '').replace(/\D/g, '');
+        const lidKey = inboundLidDigits || String(counterpartPhone || '').replace(/\D/g, '');
 
         let waLidMapPhone: string | null = null;
-        if (lidKey) {
+        if (isUsableLidKey(lidKey)) {
           const { data: knownLid } = await supabase
             .from('wa_lid_map')
             .select('phone')
@@ -727,6 +741,10 @@ Deno.serve(async (req) => {
 
         const resolved = resolveInboundLidToPhone({
           lidDigits: lidKey,
+          payloadRealPhone: pickPayloadRealPhone(
+            [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber, fromRaw],
+            lidKey,
+          ),
           lidAliases,
           waLidMapPhone,
           // Only use single-allowed fallback for specific_phone scope; otherwise leave unresolved
@@ -744,7 +762,7 @@ Deno.serve(async (req) => {
             isOutgoingFromPhone = true;
             sourcePhoneNumber = aliasPhone;
           }
-          if (lidKey && lidKey !== aliasPhone) {
+          if (isUsableLidKey(lidKey) && lidKey !== aliasPhone) {
             supabase.from('wa_lid_map')
               .upsert(
                 { lid: lidKey, phone: aliasPhone, connection_user_id: connectionUserId, source: resolved.reason },
@@ -774,11 +792,14 @@ Deno.serve(async (req) => {
 
     // FALLBACK: still only deterministic. Session-based attribution removed — with
     // multiple authorized direct phones it routed Ana → David.
+    // A counterpart that is already a real phone is never a LID, even when the
+    // gateway marked the chat `@lid` (it puts the real phone in `from`).
     const counterpartLooksLikeLid =
       !counterpartPhone ||
-      counterpartPhone.replace(/\D/g, '') === fromDigits ||
-      // Real IL mobiles are ~12 digits (9725…); WhatsApp LIDs are often 14+ (Ana's is 14).
-      counterpartPhone.replace(/\D/g, '').length >= 14;
+      (!looksLikeRealPhone(counterpartPhone) &&
+        (counterpartPhone.replace(/\D/g, '') === fromDigits ||
+          // Real IL mobiles are ~12 digits (9725…); WhatsApp LIDs are often 14+ (Ana's is 14).
+          counterpartPhone.replace(/\D/g, '').length >= 14));
     if (!isGroup && isLidEvent && counterpartLooksLikeLid && messageText.trim() && !lidAutoResolved && !pairedFromGreenApi && !fromMeFlag) {
       try {
         const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
@@ -793,9 +814,9 @@ Deno.serve(async (req) => {
         const lidAliases: Record<string, string> = (cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === 'object')
           ? cfg.carmen_lid_aliases
           : {};
-        const lidKey = String(counterpartPhone || fromDigits || '').replace(/\D/g, '');
+        const lidKey = inboundLidDigits || String(counterpartPhone || fromDigits || '').replace(/\D/g, '');
         let waLidMapPhone: string | null = null;
-        if (lidKey) {
+        if (isUsableLidKey(lidKey)) {
           const { data: knownLid } = await supabase
             .from('wa_lid_map')
             .select('phone')
@@ -805,6 +826,10 @@ Deno.serve(async (req) => {
         }
         const resolved = resolveInboundLidToPhone({
           lidDigits: lidKey,
+          payloadRealPhone: pickPayloadRealPhone(
+            [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber, fromRaw],
+            lidKey,
+          ),
           lidAliases,
           waLidMapPhone,
           allowedPhones,
@@ -903,7 +928,7 @@ Deno.serve(async (req) => {
       // anonymous @lid authors; without resolution Carmen can't tell WHO in the
       // group is speaking. 1) real-phone payload fields → 2) learned wa_lid_map.
       // Payload resolutions are persisted so group traffic keeps teaching the map.
-      if (/@lid/i.test(authorRaw) && authorPhone) {
+      if (/@lid/i.test(authorRaw) && isUsableLidKey(authorPhone)) {
         const lidDigits = authorPhone;
         const realCandidates = [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber]
           .map((v: unknown) => String(v || '').split('@')[0].replace(/\D/g, ''))
@@ -975,7 +1000,7 @@ Deno.serve(async (req) => {
               participant !== groupDigits &&
               isIsraeliMobileTail(participant)
             ) {
-              if (lidDigitsForMap && lidDigitsForMap !== participant) {
+              if (isUsableLidKey(lidDigitsForMap) && lidDigitsForMap !== participant) {
                 supabase.from('wa_lid_map')
                   .upsert(
                     {

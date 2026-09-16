@@ -1,0 +1,29 @@
+{
+  "tenant_id": "2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019",
+  "clients": {
+    "nofar_zommer": "6db997aa-6dac-450d-b091-613628b4d749",
+    "exsitu": "d2c33a17-6f5d-4f2e-bee7-026e498ee213"
+  },
+  "agencies": {
+    "promo": "13147295-9bdd-49ac-a9d5-4a7bae2f3620"
+  },
+  "personas": [
+    {
+      "key": "anna_hybrid_seo_tm",
+      "user_id": "52eb35b4-0899-4927-b118-6cc07c164e3d",
+      "label": "אנה — קמפיינר + SEO + מנהלת צוות (היברידית)",
+      "checks": {
+        "user_has_seo_scope": true,
+        "is_seo_staff": false,
+        "user_is_restricted_client_viewer": false,
+        "user_manages_agency": ["promo"],
+        "user_can_access_client": ["nofar_zommer", "exsitu"],
+        "seo_clients_in_get_user_client_ids": ["nofar_zommer", "exsitu"]
+      }
+    }
+  ],
+  "required_functions": [
+    "user_has_seo_scope(uuid)",
+    "client_is_seo_tagged(boolean,jsonb)"
+  ]
+}
