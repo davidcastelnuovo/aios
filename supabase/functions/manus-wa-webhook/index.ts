@@ -21,6 +21,7 @@ import {
   resolveInboundLidToPhone,
   shouldMarkResolvedLidAsOutgoing,
 } from '../_shared/carmen-private-routing.ts';
+import { observeManusGroupMember } from '../_shared/carmen-observe-group-member.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1145,6 +1146,24 @@ Deno.serve(async (req) => {
               console.log('[manus-wa group] chat_messages saved', {
                 groupChatId, authorPhone, groupId: wgId,
               });
+            }
+
+            // Map members from Carmen's Manus group traffic (for identity when addressed).
+            if (!isOutgoingFromPhone && (authorPhone || /@lid/i.test(authorRaw || ''))) {
+              try {
+                const observed = await observeManusGroupMember(supabase, {
+                  tenantId: groupTenantId,
+                  groupId: wgId,
+                  groupChatId,
+                  phone: authorPhone || null,
+                  whatsappLid: /@lid/i.test(authorRaw || '') ? authorRaw : null,
+                  whatsappName: senderName,
+                  source: 'manus_wa',
+                });
+                console.log('[manus-wa group] member observed', observed);
+              } catch (observeErr) {
+                console.warn('[manus-wa group] member observe failed (non-fatal):', observeErr);
+              }
             }
           }
         } catch (insertErr) {

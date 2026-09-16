@@ -15,6 +15,7 @@ import {
   buildGroupSenderContextNote,
   managerGroupAccessViaAllowedPhones,
 } from './carmen-group-sender.ts';
+import { buildObservedGroupMembersNote } from './carmen-observe-group-member.ts';
 import {
   SURFACE_GROUP,
   identityAllowsSurface,
@@ -1472,6 +1473,15 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
       return { handled: true, outcome: 'active' };
     }
     identityContext += access.context;
+    // Roster from Manus-group traffic only (own_instance). Helps Carmen address
+    // known campaigners/contacts by participant_phone when they invoke her.
+    if (sourceChannel === 'own_instance') {
+      try {
+        identityContext += await buildObservedGroupMembersNote(supabase, tenantId, chatId);
+      } catch (rosterErr) {
+        console.warn('[carmen] observed members note failed (non-fatal)', rosterErr);
+      }
+    }
   }
 
   if (activeSession) {
