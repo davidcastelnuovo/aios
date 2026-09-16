@@ -2,12 +2,11 @@
 /**
  * Guard: every edge-function source file must parse.
  *
- * Regression history: commit 7e2280ab (2026-09-10) replaced the `import {` line of
- * run-ai-agent's dev-escalation-auth import with a different single-line import and
- * left the member list dangling. Nothing in CI parsed edge functions, so main stayed
- * green while `deploy-edge-function.yml` failed on "Expression expected" for six
- * days — Carmen's brain and every function sorted after run-ai-agent stopped
- * deploying to production.
+ * Regression history: the develop merge in PR #621 (commit 21925442) resolved
+ * run-ai-agent's dev-escalation-auth import by dropping the `import {` line, leaving
+ * the member list dangling. Nothing in CI parsed edge functions, so main stayed green
+ * while `deploy-edge-function.yml` failed on "Expression expected" — Carmen's brain
+ * and every function sorted after run-ai-agent stopped deploying to production.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
