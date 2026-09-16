@@ -110,6 +110,7 @@ Already in place:
 - A complete source attestation can be reused only when all function files and all live function IDs/versions remain identical. The database HTTP guard is still checked. Credential synchronization compares the allowlisted secret digests and avoids rewriting equal values, since a secret write increments every live function version.
 - The first full data sync requires a successful complete Staging deployment and containment verification. A green frontend Preview or passing local tests alone does not establish that business data is synchronized. Check the deployment, mirror workflow, and per-table timestamps before describing Staging as current.
 - Keep production WhatsApp/Meta credentials out of Staging. Platform authentication email settings are separate from automation delivery; automated Auth invite/recovery calls from Edge are also blocked.
+- **Never mix WhatsApp connections:** Manus (`manus_wa` = Carmen) ≠ Green API (`green_api` = operator). Carmen group sync must never load the full `whatsapp_groups` table. See `.cursor/rules/whatsapp-connections.mdc` and `AGENTS.md`.
 
 ### Google login on Preview / Staging
 

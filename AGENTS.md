@@ -12,6 +12,22 @@ Source of truth: `docs/ENVIRONMENTS.md`. Cursor rule: `.cursor/rules/environment
 - When a task is done, **always send David the development environment link**: the Vercel Preview URL for this branch (and the in-app path). If the work is on `develop`, also send `STAGING_DOMAIN=https://staging.aios.co.il`.
 - Merge feature PRs to **`develop` first**; verify on Staging. Merge **`develop` → `main`** only after `מאשר לפרודקשן`.
 
+## WhatsApp connections — NEVER mix (standing)
+
+Cursor rule: `.cursor/rules/whatsapp-connections.mdc`.
+
+| Connection | Whose phone | Use for |
+| --- | --- | --- |
+| **Manus** (`manus_wa`) | Carmen | Carmen chat + her group membership |
+| **Green API** (`green_api`) | Operator (David) | CRM chat / broadcasts — **not** Carmen membership |
+| **Meta Cloud API** | Business number | Official Cloud API |
+
+Hard rules for every agent:
+1. Carmen group allowlists / sync = **Manus only** (Gateway `list-groups` or `chat_messages.provider='manus_wa'`).
+2. **Never** dump the full `whatsapp_groups` table into Carmen permissions — it includes Green API operator groups.
+3. Staging Manus is often `mocked` without tokens — do **not** "fix" by copying Green API groups or Production WA tokens.
+4. Automations stay connection-scoped (`carmen_integration_id` / Manus vs Green). Do not bypass dual-channel guards.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

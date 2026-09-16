@@ -347,6 +347,9 @@ verify_jwt = false
 [functions.manus-wa-status]
 verify_jwt = true
 
+[functions.manus-wa-sync-groups]
+verify_jwt = true
+
 [functions.trigger-automation]
 verify_jwt = true
 

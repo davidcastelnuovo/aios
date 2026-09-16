@@ -19,6 +19,7 @@ import { SupervisorTab } from "./tabs/SupervisorTab";
 import { McpConnectionsTab } from "./tabs/McpConnectionsTab";
 import { EvalsTab } from "./tabs/EvalsTab";
 import { AgentAccessTab } from "./tabs/AgentAccessTab";
+import { CarmenConversationAccessTab } from "./tabs/CarmenConversationAccessTab";
 import { AgentLearningTab } from "./tabs/AgentLearningTab";
 import SkinsManager from "@/pages/SkinsManager";
 
@@ -97,6 +98,7 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const initial = params.get("tab") || "profile";
+  const carmen = isCarmen(agent.name);
 
   const groups: { label: string; items: { value: string; label: string }[] }[] = [
     {
@@ -108,6 +110,7 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
         { value: "registry", label: "📚 מאגר כלים" },
         { value: "mcp", label: "🔌 MCP" },
         { value: "supervisor", label: "👑 Supervisor" },
+        ...(carmen ? [{ value: "conversation-access", label: "📱 הרשאות WhatsApp" as const }] : []),
       ],
     },
     {
@@ -206,6 +209,11 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
         {/* Identity & growth — available for every agent */}
         <TabsContent value="skins" className="mt-0"><SkinsManager /></TabsContent>
         <TabsContent value="access" className="mt-0"><AgentAccessTab agent={agent} /></TabsContent>
+        {carmen && (
+          <TabsContent value="conversation-access" className="mt-0">
+            <CarmenConversationAccessTab agent={agent} />
+          </TabsContent>
+        )}
         <TabsContent value="learning" className="mt-0"><AgentLearningTab agent={agent} /></TabsContent>
       </div>
     </Tabs>
