@@ -186,6 +186,22 @@ test("David's private 'כרמן' message resolves to David, not the connected bo
   assert.equal(isPhoneInAllowedList(resolved.phone, allowed), true);
 });
 
+test("two WhatsApp accounts on one device never teach wa_lid_map a phone key", () => {
+  // David's personal number (green_api) and Carmen's number (manus_wa) sit on the
+  // same phone, so Manus mirrors their chat and the Green-API pairing step tried to
+  // learn `lid = from`. With a real phone in `from` that produced the poisoned row.
+  const learnedFromMirror =
+    pickInboundLidDigits({ fromRaw: davidPhone, chatIdRaw: `${davidLid}@lid`, senderLidRaw: davidLid }) ||
+    davidPhone;
+  assert.equal(learnedFromMirror, davidLid);
+  assert.equal(isUsableLidKey(learnedFromMirror), true);
+
+  // No LID field at all: the phone must not be stored as a key.
+  const learnedWithoutLid = pickInboundLidDigits({ fromRaw: davidPhone }) || davidPhone;
+  assert.equal(learnedWithoutLid, davidPhone);
+  assert.equal(isUsableLidKey(learnedWithoutLid), false);
+});
+
 test("a phone-shaped LID key resolves to itself instead of the single allowed phone", () => {
   // Regression: another person's phone was treated as a LID and mapped to David
   // via the single-allowed-phone fallback, hijacking his thread.
