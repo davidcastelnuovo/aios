@@ -40,6 +40,64 @@ SET
   updated_at = now()
 WHERE id = 'a182df69-e951-46c5-95ff-4b51e6863d9f';
 
+-- זכיינות (franchise.org.il): wire Search Console from the active GSC integration
+WITH gsc_site AS (
+  SELECT elem->>'siteUrl' AS site_url
+  FROM public.tenant_integrations ti
+  CROSS JOIN LATERAL jsonb_array_elements(
+    COALESCE(ti.settings->'available_sites', '[]'::jsonb)
+  ) AS elem
+  WHERE ti.integration_type = 'google_search_console'
+    AND ti.is_active = true
+    AND lower(
+      replace(
+        replace(replace(elem->>'siteUrl', 'sc-domain:', ''), 'https://', ''),
+        'www.', ''
+      )
+    ) LIKE '%franchise.org.il%'
+    AND coalesce(elem->>'permissionLevel', '') <> 'siteUnverifiedUser'
+  ORDER BY ti.updated_at DESC NULLS LAST
+  LIMIT 1
+)
+UPDATE public.clients c
+SET gsc_site_url = gsc_site.site_url
+FROM gsc_site
+WHERE c.id = 'f850564a-2471-4ff0-89d3-ea55168aa8d9'
+  AND coalesce(c.gsc_site_url, '') = ''
+  AND gsc_site.site_url IS NOT NULL;
+
+WITH gsc_site AS (
+  SELECT elem->>'siteUrl' AS site_url
+  FROM public.tenant_integrations ti
+  CROSS JOIN LATERAL jsonb_array_elements(
+    COALESCE(ti.settings->'available_sites', '[]'::jsonb)
+  ) AS elem
+  WHERE ti.integration_type = 'google_search_console'
+    AND ti.is_active = true
+    AND lower(
+      replace(
+        replace(replace(elem->>'siteUrl', 'sc-domain:', ''), 'https://', ''),
+        'www.', ''
+      )
+    ) LIKE '%franchise.org.il%'
+    AND coalesce(elem->>'permissionLevel', '') <> 'siteUnverifiedUser'
+  ORDER BY ti.updated_at DESC NULLS LAST
+  LIMIT 1
+)
+UPDATE public.crm_tables t
+SET
+  integration_settings = integration_settings
+    || jsonb_build_object(
+      'linkedGscSiteUrl', gsc_site.site_url,
+      'gsc_site_url', gsc_site.site_url
+    ),
+  updated_at = now()
+FROM gsc_site
+WHERE t.id = 'a182df69-e951-46c5-95ff-4b51e6863d9f'
+  AND coalesce(t.integration_settings->>'linkedGscSiteUrl', '') = ''
+  AND coalesce(t.integration_settings->>'gsc_site_url', '') = ''
+  AND gsc_site.site_url IS NOT NULL;
+
 DELETE FROM public.crm_tables
 WHERE id = 'c9a748fe-818d-4c04-9a20-9d0774b9a845';
 
