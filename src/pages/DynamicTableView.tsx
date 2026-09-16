@@ -64,6 +64,8 @@ import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { WooAttributionSection } from "@/components/dynamic-tables/WooAttributionSection";
 import { fetchWooReportAttribution, getDynamicTableDateRangeIso } from "@/lib/wooDashboardQueries";
+import { reportRecordsQuery } from "@/lib/reportRecords";
+import { shouldUseGoogleWooAttributionOverlay } from "@/lib/wooAttribution";
 import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
@@ -366,22 +368,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     isFetching: recordsFetching,
     dataUpdatedAt: recordsUpdatedAt,
   } = useQuery({
-    queryKey: ['crm-records', table?.id, dateFilter, customFromStr, customToStr],
-    queryFn: async () => {
-      if (!table?.id) return [];
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
-      const params = new URLSearchParams({ table_id: table.id, date_filter: dateFilter });
-      if (dateFilter === 'custom' && customFromStr && customToStr) {
-        params.set('date_from', customFromStr);
-        params.set('date_to', customToStr);
-      }
-      const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
-        method: 'GET',
-      });
-      if (response.error) throw response.error;
-      return Array.isArray(response.data) ? response.data as CrmRecord[] : [];
-    },
+    ...reportRecordsQuery(supabase, table?.id || '', dateFilter, customFromStr, customToStr),
     enabled: !!table?.id && isCustomReady,
     ...reportQueryOptions<CrmRecord[]>(),
   });

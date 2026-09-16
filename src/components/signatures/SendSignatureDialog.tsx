@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -14,11 +14,10 @@ import { toast } from "sonner";
 import { Check, Copy, Mail } from "lucide-react";
 import {
   copyFirstSigningLink,
-  openWhatsAppForLinks,
   sendSignatureDocument,
   type SigningLinkResult,
 } from "@/lib/signatureSend";
-import { buildWhatsAppSignUrl } from "@/lib/signatureShare";
+import { buildWhatsAppSignUrl, copySigningUrl } from "@/lib/signatureShare";
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -56,6 +55,8 @@ export interface SendSignatureDialogProps {
 }
 
 /** Three independent actions — none depends on the others. */
+const EMPTY_RECIPIENTS: { name: string; email: string }[] = [];
+
 type SendAction = "copy" | "email" | "whatsapp";
 
 export function SendSignatureDialog({
@@ -79,7 +80,9 @@ export function SendSignatureDialog({
   const [links, setLinks] = useState<SigningLinkResult[]>([]);
   const [lastAction, setLastAction] = useState<SendAction | null>(null);
 
-  const { data: existingRecipients = [] } = useQuery({
+  const initializedDocument = useRef<string | null>(null);
+  const preparedDocument = useRef<string | null>(null);
+  const { data: existingRecipients = EMPTY_RECIPIENTS, isLoading: loadingRecipients } = useQuery({
     queryKey: ["signature-recipients-for-send", doc?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -95,20 +98,27 @@ export function SendSignatureDialog({
 
   useEffect(() => {
     if (!open) {
+      initializedDocument.current = null;
+      preparedDocument.current = null;
       setLinks([]);
       setBusy(null);
       setLastAction(null);
       return;
     }
+    if (!doc?.id || loadingRecipients || initializedDocument.current === doc.id) return;
+    initializedDocument.current = doc.id;
+    preparedDocument.current = null;
     const existing = existingRecipients[0];
     setName(defaultRecipient?.name || existing?.name || "");
     setEmail(defaultRecipient?.email || existing?.email || "");
     setPhone(defaultRecipient?.phone || "");
     setLinks([]);
     setLastAction(null);
-  }, [open, doc?.id, defaultRecipient, existingRecipients]);
+  }, [open, doc?.id, defaultRecipient?.name, defaultRecipient?.email, defaultRecipient?.phone, existingRecipients, loadingRecipients]);
 
-  const canAct = !!doc && name.trim() && (email.trim() || phone.trim());
+  const clearPrepared = () => { preparedDocument.current = null; setLinks([]); setLastAction(null); };
+
+  const canAct = !!doc && !loadingRecipients && name.trim() && (email.trim() || phone.trim());
   const canEmail = !!(email.trim() || existingRecipients[0]?.email);
   const canWhatsApp = !!phone.trim();
 
@@ -136,13 +146,16 @@ export function SendSignatureDialog({
       existingRecipients[0]?.email ||
       `${doc.id.replace(/-/g, "").slice(0, 12)}@sign.aios.local`;
 
+    // Reserve the window during the click; mobile browsers block windows opened after network work.
+    const whatsappWindow = action === "whatsapp" ? window.open("about:blank", "_blank") : null;
+    if (whatsappWindow) whatsappWindow.opener = null;
     setBusy(action);
     try {
-      const result = await sendSignatureDocument({
-        documentId: doc.id,
+      const preparation = sendSignatureDocument({
+        documentId: preparedDocument.current || doc.id,
         documentTitle: doc.title,
         isTemplate: doc.is_template,
-        mode: resolvedMode,
+        mode: preparedDocument.current ? "direct" : resolvedMode,
         sendEmail: action === "email",
         tenantId,
         recipient: {
@@ -160,26 +173,37 @@ export function SendSignatureDialog({
         documentTitleOverride,
       });
 
+      // Start clipboard work in the original user gesture, before awaiting the server.
+      const copying = action === "copy" ? copySigningUrl(preparation.then((result) => {
+        if (!result.signingLinks[0]?.url) throw new Error("לא נוצר קישור לחתימה");
+        return result.signingLinks[0].url;
+      })).then(() => true, () => false) : null;
+      const result = await preparation;
+      if (!result.signingLinks.length) throw new Error("לא נוצר קישור לחתימה");
+      preparedDocument.current = result.documentId;
       setLinks(result.signingLinks);
       setLastAction(action);
 
       if (action === "copy") {
-        await copyFirstSigningLink(result.signingLinks);
-        toast.success("הקישור לחתימה הועתק");
+        if (await copying) toast.success("הקישור לחתימה הועתק");
+        else toast.info("הקישור מוכן — לחץ על העתקה ליד הקישור למטה");
       } else if (action === "email") {
         if (result.emailSent) toast.success("נשלח לאימייל");
         else toast.warning("הכנה הצליחה — שליחת המייל נכשלה (אפשר להעתיק)");
       } else if (action === "whatsapp") {
-        const { opened } = openWhatsAppForLinks(
-          result.signingLinks,
-          documentTitleOverride || doc.title,
-        );
-        if (opened === 0) toast.warning("לא נמצא מספר טלפון תקין לוואטסאפ");
-        else toast.success("נפתח וואטסאפ עם קישור לחתימה");
+        const link = result.signingLinks[0];
+        const url = buildWhatsAppSignUrl({ phone, signingUrl: link.url, recipientName: link.name,
+          documentTitle: documentTitleOverride || doc.title });
+        if (url && whatsappWindow) whatsappWindow.location.replace(url);
+        else {
+          whatsappWindow?.close();
+          toast.info("הקישור מוכן — לחץ על קישור הוואטסאפ למטה");
+        }
       }
 
       onSuccess?.({ signingLinks: result.signingLinks, documentId: result.documentId });
     } catch (err) {
+      whatsappWindow?.close();
       toast.error(err instanceof Error ? err.message : "שגיאה בשליחה");
     } finally {
       setBusy(null);
@@ -205,7 +229,8 @@ export function SendSignatureDialog({
               <Label>שם</Label>
               <Input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); clearPrepared(); }}
+                disabled={!!busy}
                 placeholder="שם החותם"
               />
             </div>
@@ -214,7 +239,8 @@ export function SendSignatureDialog({
               <Input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); clearPrepared(); }}
+                disabled={!!busy}
                 placeholder="email@example.com"
                 dir="ltr"
                 className="text-left min-w-0"
@@ -224,7 +250,8 @@ export function SendSignatureDialog({
               <Label>טלפון (לוואטסאפ)</Label>
               <Input
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => { setPhone(e.target.value); clearPrepared(); }}
+                disabled={!!busy}
                 placeholder="05..."
                 dir="ltr"
                 className="text-left min-w-0"
@@ -278,6 +305,19 @@ export function SendSignatureDialog({
                 <Check className="h-4 w-4 shrink-0" />
                 הקישור מוכן — אפשר להעתיק או לשלוח שוב בכל עת
               </p>
+              {links.map((link) => <div key={link.url} className="mt-3 space-y-2">
+                <p className="text-sm">{link.name}</p>
+                <Input value={link.url} readOnly dir="ltr" aria-label="קישור לחתימה" onFocus={(event) => event.target.select()} />
+                <div className="flex gap-3 items-center text-sm">
+                  <Button type="button" size="sm" variant="outline" onClick={() => {
+                    copyFirstSigningLink([link]).then(() => toast.success("הקישור הועתק"), () => toast.error("סמן והעתק את הקישור מהשדה"));
+                  }}>העתקה</Button>
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-primary underline">פתח לחתימה</a>
+                  {buildWhatsAppSignUrl({ phone, signingUrl: link.url, recipientName: link.name, documentTitle: doc?.title }) &&
+                    <a href={buildWhatsAppSignUrl({ phone, signingUrl: link.url, recipientName: link.name, documentTitle: doc?.title })!}
+                      target="_blank" rel="noopener noreferrer" className="text-green-700 underline">פתח וואטסאפ</a>}
+                </div>
+              </div>)}
               {links[0] && buildWhatsAppSignUrl({
                 phone: links[0].phone ?? phone,
                 signingUrl: links[0].url,

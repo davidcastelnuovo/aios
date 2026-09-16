@@ -112,7 +112,7 @@ function RouteScopedProviders({ children }: { children: React.ReactNode }) {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <SessionRefreshInitializer />
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true }}>
       <RoutedErrorBoundary>
         <TooltipProvider delayDuration={0} skipDelayDuration={0}>
           <Toaster />

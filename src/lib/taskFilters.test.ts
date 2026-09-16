@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultTaskFilters, resolveMineTaskAssignee } from "./taskFilters.ts";
+import {
+  defaultTaskFilters,
+  filterTasksByCampaignerBoardFilter,
+  filterTasksForBoardUserPreview,
+  resolveMineTaskAssignee,
+} from "./taskFilters.ts";
 
 test("the tasks board opens on my own tasks", () => {
   assert.equal(defaultTaskFilters.campaignerId, "mine");
@@ -31,4 +36,43 @@ test("no other filter narrows the board on entry", () => {
   assert.equal(defaultTaskFilters.association, "all");
   assert.equal(defaultTaskFilters.startDate, undefined);
   assert.equal(defaultTaskFilters.endDate, undefined);
+});
+
+test("filterTasksByCampaignerBoardFilter keeps only mine assignments", () => {
+  const rows = [
+    { id: "1", campaigner_id: "staff-itay", sales_person_id: null, created_by: null },
+    { id: "2", campaigner_id: "staff-other", sales_person_id: null, created_by: null },
+  ];
+  const mine = {
+    kind: "assigned" as const,
+    campaignerId: "staff-itay",
+    userId: "user-itay",
+    campaignerIds: ["staff-itay"],
+  };
+  assert.deepEqual(
+    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map((task) => task.id),
+    ["1"],
+  );
+  assert.deepEqual(
+    filterTasksByCampaignerBoardFilter(rows, "staff-other", mine).map((task) => task.id),
+    ["2"],
+  );
+});
+
+test("filterTasksForBoardUserPreview hides other users' tasks in view-as mode", () => {
+  const rows = [
+    { id: "1", campaigner_id: "staff-felix", sales_person_id: null, created_by: "user-felix" },
+    { id: "2", campaigner_id: "staff-david", sales_person_id: null, created_by: "user-david" },
+    { id: "3", campaigner_id: null, sales_person_id: null, created_by: "user-david" },
+  ];
+  const felix = {
+    kind: "assigned" as const,
+    campaignerId: "staff-felix",
+    userId: "user-felix",
+    campaignerIds: ["staff-felix"],
+  };
+  assert.deepEqual(
+    filterTasksForBoardUserPreview(rows, "user-felix", felix).map((task) => task.id),
+    ["1"],
+  );
 });

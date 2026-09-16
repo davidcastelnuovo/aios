@@ -26,10 +26,12 @@ import { SeoReportDialog } from "@/components/dynamic-tables/SeoReportDialog";
 import { TikTokTableDialog } from "@/components/dynamic-tables/TikTokTableDialog";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncControl";
+import { EditTableDialog } from "@/components/dynamic-tables/EditTableDialog";
 
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
 import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
 import { invalidateClientCrmTablesQueries } from "@/lib/reportQueryCache";
+import { refetchOnMountIfEmpty } from "@/lib/reportQueryOptions";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -105,6 +107,7 @@ export default function DynamicTables() {
   const [showSeoReportDialog, setShowSeoReportDialog] = useState(false);
   const [showTikTokDialog, setShowTikTokDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
+  const [editViaConnectionDialog, setEditViaConnectionDialog] = useState(false);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editingDashboard, setEditingDashboard] = useState<{ id: string; name: string } | null>(null);
   const [editDashboardName, setEditDashboardName] = useState("");
@@ -253,7 +256,7 @@ export default function DynamicTables() {
       return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
     enabled: !!tenantId,
-    refetchOnMount: "always",
+    refetchOnMount: refetchOnMountIfEmpty,
   });
 
   // Fetch dashboards across own tenant + shared agencies (e.g. DMM-MC under DMM).
@@ -443,6 +446,16 @@ export default function DynamicTables() {
   const handleEdit = (table: CrmTable, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingTable(table);
+    // GA / GSC / Ahrefs: full connection picker (all org emails) via EditTableDialog.
+    if (
+      table.integration_type === 'google_analytics'
+      || table.integration_type === 'google_search_console'
+      || table.integration_type === 'ahrefs'
+    ) {
+      setEditViaConnectionDialog(true);
+      return;
+    }
+    setEditViaConnectionDialog(false);
     setEditName(table.name);
     setEditAgencyId(table.agency_id || "");
     setEditClientId(table.client_id || "");
@@ -1193,7 +1206,24 @@ export default function DynamicTables() {
       </Dialog>
 
       {/* Edit Dialog */}
-      <Dialog open={!!editingTable} onOpenChange={(open) => !open && setEditingTable(null)}>
+      <EditTableDialog
+        open={editViaConnectionDialog && !!editingTable}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditViaConnectionDialog(false);
+            setEditingTable(null);
+          }
+        }}
+        table={editingTable}
+        tenantId={tenantId || ''}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+          setEditViaConnectionDialog(false);
+          setEditingTable(null);
+        }}
+      />
+
+      <Dialog open={!!editingTable && !editViaConnectionDialog} onOpenChange={(open) => !open && setEditingTable(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>עריכת דוח</DialogTitle>

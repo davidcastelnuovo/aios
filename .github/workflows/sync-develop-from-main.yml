@@ -5,6 +5,9 @@
 
 name: Sync develop from main
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [main]
@@ -19,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      sha: ${{ steps.sync.outputs.sha }}
     steps:
       - name: Checkout develop
         uses: actions/checkout@v4
@@ -28,6 +33,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Merge main into develop
+        id: sync
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -35,6 +41,7 @@ jobs:
           git fetch origin main
           if git merge-base --is-ancestor origin/main HEAD; then
             echo "develop already contains main — Staging is current"
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if git merge-base --is-ancestor HEAD origin/main; then
@@ -43,4 +50,19 @@ jobs:
             git merge --no-edit -m "chore: sync develop from main (keep Staging current)" origin/main
           fi
           git push origin HEAD:develop
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "Staging (develop) updated from main"
+
+  staging-edge:
+    needs: sync
+    uses: ./.github/workflows/deploy-staging-edge-functions.yml
+    with:
+      source_sha: ${{ needs.sync.outputs.sha }}
+    secrets: inherit
+
+  staging-build:
+    needs: sync
+    uses: ./.github/workflows/ci-frontend.yml
+    with:
+      source_sha: ${{ needs.sync.outputs.sha }}
+    secrets: inherit

@@ -59,7 +59,7 @@ export function ClientDocsEditor({ client, tenantId }: ClientDocsEditorProps) {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {client.meta_ads_account_id && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/30 text-sm" dir="rtl">
+              <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-card text-sm" dir="rtl">
                 <span className="text-muted-foreground text-xs whitespace-nowrap">Meta Ads:</span>
                 <span className="font-mono truncate flex-1">{client.meta_ads_account_id}</span>
                 <Button
@@ -73,7 +73,7 @@ export function ClientDocsEditor({ client, tenantId }: ClientDocsEditorProps) {
               </div>
             )}
             {client.google_ads_account_id && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/30 text-sm" dir="rtl">
+              <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-card text-sm" dir="rtl">
                 <span className="text-muted-foreground text-xs whitespace-nowrap">Google Ads:</span>
                 <span className="font-mono truncate flex-1">{client.google_ads_account_id}</span>
                 <Button

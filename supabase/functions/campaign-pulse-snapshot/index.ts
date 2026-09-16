@@ -22,9 +22,14 @@ import {
   mergePulseDeliveryPlans,
   planCampaignerPulseDeliveries,
   planTeamManagerPulseDeliveries,
+  findCampaignersMissingPulsePhone,
+  buildPulseMissingPhoneAlert,
+  filterPulsePlansByCampaignerName,
+  filterMissingPhoneCampaignersByName,
   scopeSnapshotsForPlan,
   type PulseDeliveryPlan,
 } from '../_shared/pulse-delivery.ts'
+import { deliverInstantPulseAlerts } from '../_shared/pulse-instant-alerts.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -125,10 +130,11 @@ function bearerAuthorized(authHeader: string | null): boolean {
 async function queuePulseWhatsApp(
   supabase: any,
   tenantId: string,
+  tenantSlug: string,
   message: string,
   chatId: string | null,
 ): Promise<boolean> {
-  if (isPulseDeliveryExcludedPhone(chatId)) return false
+  if (isPulseDeliveryExcludedPhone(chatId, tenantSlug)) return false
   const delivery = await supabase.rpc('claude_notify_david', {
     p_message: message,
     p_tenant: tenantId,
@@ -140,6 +146,7 @@ async function queuePulseWhatsApp(
 async function loadTeamManagerDeliveryPlans(
   supabase: any,
   tenantId: string,
+  tenantSlug: string,
   snapshots: Array<{ client_id: string; agency_id?: string | null }>,
 ): Promise<PulseDeliveryPlan[]> {
   const { data: roles } = await supabase
@@ -175,12 +182,14 @@ async function loadTeamManagerDeliveryPlans(
       phone: profile.campaigners?.phone || null,
       agency_ids: agenciesByUser.get(profile.id) || [],
     })),
+    tenantSlug,
   )
 }
 
 async function deliverScopedPulseRecipients(
   supabase: any,
   tenantId: string,
+  tenantSlug: string,
   snapshots: any[],
   dashboardUrl: string,
   plans: PulseDeliveryPlan[],
@@ -191,17 +200,18 @@ async function deliverScopedPulseRecipients(
   const deliveries: any[] = []
   for (const plan of plans) {
     const recipientPhone = normalizeNotifyPhone(plan.phone)
-    if (!recipientPhone || skipPhones.has(recipientPhone) || isPulseDeliveryExcludedPhone(recipientPhone)) continue
+    if (!recipientPhone || skipPhones.has(recipientPhone) || isPulseDeliveryExcludedPhone(recipientPhone, tenantSlug)) continue
 
     const scoped = scopeSnapshotsForPlan(snapshots, plan)
     if (!scoped.length) continue
 
     const scopedDigest = buildPulseWhatsAppDigest(scoped, dashboardUrl)
-    const previewTarget = isPulseDeliveryExcludedPhone(previewPhone) ? null : previewPhone
+    const previewTarget = isPulseDeliveryExcludedPhone(previewPhone, tenantSlug) ? null : previewPhone
     if (previewTarget) {
       const previewQueued = await queuePulseWhatsApp(
         supabase,
         tenantId,
+        tenantSlug,
         buildPulsePreviewMessage(plan.name, scopedDigest),
         previewTarget,
       )
@@ -217,7 +227,7 @@ async function deliverScopedPulseRecipients(
 
     if (previewOnly) continue
 
-    const queued = await queuePulseWhatsApp(supabase, tenantId, scopedDigest, recipientPhone)
+    const queued = await queuePulseWhatsApp(supabase, tenantId, tenantSlug, scopedDigest, recipientPhone)
     deliveries.push({
       type: plan.role,
       recipient: plan.name,
@@ -243,8 +253,12 @@ Deno.serve(async (req) => {
     body.force_delivery === true && body.source === 'approved_manual_trigger'
   const previewOnlyDelivery =
     body.preview_only === true && body.source === 'approved_manual_trigger'
+  const campaignerNameFilter =
+    manualDeliveryBypass && typeof body.campaigner_name === 'string'
+      ? body.campaigner_name.trim()
+      : null
   let settingsQuery = supabase.from('tenant_heartbeat_settings')
-    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone')
+    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone, pulse_alert_rules')
   if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
   const { data: settings, error: settingsError } = await settingsQuery
   if (settingsError) return json({ error: settingsError.message }, 500)
@@ -588,6 +602,24 @@ Deno.serve(async (req) => {
     }
     const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
     const tenantSlug = tenantRow?.slug || tenantId
+    let instantAlerts = { sent: 0, skipped: 0, candidates: 0 }
+    if (snapshots.length) {
+      try {
+        instantAlerts = await deliverInstantPulseAlerts({
+          supabase,
+          tenantId,
+          tenantSlug,
+          pulsePhone: setting.campaign_pulse_phone,
+          snapshots,
+          criticalIssues,
+          rules: setting.pulse_alert_rules,
+          queueWhatsApp: (message, chatId) =>
+            queuePulseWhatsApp(supabase, tenantId, tenantSlug, message, chatId),
+        })
+      } catch (instantAlertError) {
+        console.warn('[campaign-pulse] instant alerts failed', tenantId, instantAlertError)
+      }
+    }
     const dashboardUrl = buildPulseDashboardAbsoluteUrl(tenantSlug)
     const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl, criticalIssues)
     let sent = false
@@ -608,15 +640,15 @@ Deno.serve(async (req) => {
       )
 
       // Full-tenant digest to the configured management phone (e.g. Felix on DMM).
-      if (!previewOnlyDelivery && setting.campaign_pulse_phone) {
-        sent = await queuePulseWhatsApp(supabase, tenantId, digest, setting.campaign_pulse_phone)
+      if (!previewOnlyDelivery && setting.campaign_pulse_phone && !campaignerNameFilter) {
+        sent = await queuePulseWhatsApp(supabase, tenantId, tenantSlug, digest, setting.campaign_pulse_phone)
         if (!sent) {
           console.error('Failed to queue full campaign pulse via Carmen Direct')
         }
       }
 
       const deliverToCampaigners = setting.campaign_pulse_deliver_to_campaigners === true
-      const deliverToManagers = setting.campaign_pulse_deliver_to_team_managers === true
+      const deliverToManagers = setting.campaign_pulse_deliver_to_team_managers === true && !campaignerNameFilter
       if (deliverToCampaigners || deliverToManagers) {
         const snapshotClientIds = snapshots.map((snapshot) => snapshot.client_id)
         const plans: PulseDeliveryPlan[] = []
@@ -626,17 +658,48 @@ Deno.serve(async (req) => {
             supabase.from('client_team').select('campaigner_id, client_id').in('client_id', snapshotClientIds),
             supabase.from('campaigners').select('id, full_name, phone').eq('tenant_id', tenantId).eq('active', true),
           ])
-          plans.push(...planCampaignerPulseDeliveries(snapshots, links || [], campaigners || []))
+          plans.push(...planCampaignerPulseDeliveries(snapshots, links || [], campaigners || [], tenantSlug))
+
+          const missingPhoneCampaigners = filterMissingPhoneCampaignersByName(
+            findCampaignersMissingPulsePhone(
+              snapshots,
+              links || [],
+              campaigners || [],
+              tenantSlug,
+            ),
+            campaignerNameFilter,
+          )
+          if (!previewOnlyDelivery && missingPhoneCampaigners.length && setting.campaign_pulse_phone) {
+            const alertMessage = buildPulseMissingPhoneAlert(missingPhoneCampaigners, { tenantLabel: tenantSlug })
+            const alertQueued = await queuePulseWhatsApp(
+              supabase,
+              tenantId,
+              tenantSlug,
+              alertMessage,
+              setting.campaign_pulse_phone,
+            )
+            scopedDeliveries.push({
+              type: 'missing_phone_alert',
+              campaigners: missingPhoneCampaigners.map((row) => row.name),
+              manager_phone: setting.campaign_pulse_phone,
+              queued: alertQueued,
+            })
+            if (alertQueued) sent = true
+          }
         }
 
         if (deliverToManagers) {
-          plans.push(...await loadTeamManagerDeliveryPlans(supabase, tenantId, snapshots))
+          plans.push(...await loadTeamManagerDeliveryPlans(supabase, tenantId, tenantSlug, snapshots))
         }
 
-        const mergedPlans = mergePulseDeliveryPlans(plans)
+        const mergedPlans = filterPulsePlansByCampaignerName(
+          mergePulseDeliveryPlans(plans),
+          campaignerNameFilter || '',
+        )
         const recipientDeliveries = await deliverScopedPulseRecipients(
           supabase,
           tenantId,
+          tenantSlug,
           snapshots,
           dashboardUrl,
           mergedPlans,
@@ -667,12 +730,14 @@ Deno.serve(async (req) => {
         dashboard_url: dashboardUrl,
         clients_checked: snapshots.length,
         scoped_deliveries: scopedDeliveries,
+        instant_alerts: instantAlerts,
       }],
       summary: digest, duration_ms: Date.now() - started,
     })
     results.push({
       tenant_id: tenantId,
       clients: snapshots.length,
+      instant_alerts: instantAlerts,
       onboarding_clients: onboardingClients.length,
       onboarding_open_tasks: onboardingClients.reduce((total: number, client: any) => total + client.open_tasks.length, 0),
       sent,

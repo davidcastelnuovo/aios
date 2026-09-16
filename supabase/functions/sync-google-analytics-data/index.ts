@@ -40,8 +40,8 @@ serve(async (req) => {
       throw new Error('Missing integration settings: integrationId=' + integrationId + ', propertyId=' + propertyIdRaw);
     }
 
-    // Get integration
-    const { data: integration, error: integrationError } = await supabase
+    // Get integration (may be repointed to another org email below)
+    let { data: integration, error: integrationError } = await supabase
       .from('tenant_integrations')
       .select('*')
       .eq('id', integrationId)
@@ -52,7 +52,7 @@ serve(async (req) => {
     }
 
     let accessToken = integration.api_key;
-    const integrationSettings = integration.settings as any;
+    let integrationSettings = { ...((integration.settings as any) || {}) };
     const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
     const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
 
@@ -144,6 +144,147 @@ serve(async (req) => {
 
     // Format property ID (remove 'properties/' prefix if present)
     const propertyId = propertyIdRaw.replace('properties/', '');
+
+    // If the stored connection lacks Data API access, try other org GA emails
+    // (Anna / Yuval / David's other accounts) and persist the working one.
+    async function loadCandidateIntegrations(): Promise<any[]> {
+      const preferredNorm = String(propertyIdRaw).startsWith('properties/')
+        ? propertyIdRaw
+        : `properties/${propertyId}`;
+      const { data: rows } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('integration_type', 'google_analytics')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false });
+
+      const sameTenant = (rows || []).filter((r: any) => r.tenant_id === table.tenant_id);
+      const others = (rows || []).filter((r: any) => r.tenant_id !== table.tenant_id);
+      const ordered = [...sameTenant, ...others].filter((r: any) => r.id !== integration.id);
+
+      const listsProperty = (r: any) => {
+        const props = (r.settings as any)?.available_properties;
+        if (!Array.isArray(props)) return false;
+        return props.some((p: any) => {
+          const id = typeof p === 'string' ? p : (p?.id || p?.propertyId || p?.property_id);
+          return id === preferredNorm || id === propertyId || id === `properties/${propertyId}`;
+        });
+      };
+
+      const listed = ordered.filter(listsProperty);
+      const rest = ordered.filter((r: any) => !listsProperty(r));
+      // Preferred first, then those listing the property, then remaining tokens.
+      return [integration, ...listed, ...rest];
+    }
+
+    async function refreshTokenFor(integ: any, settingsObj: any, force = false): Promise<string> {
+      let token = integ.api_key as string;
+      const refreshToken = settingsObj?.refresh_token;
+      if (!refreshToken) return token;
+      const expiresAt = settingsObj?.expires_at ? new Date(settingsObj.expires_at).getTime() : 0;
+      const stale = !expiresAt || expiresAt < Date.now() + 5 * 60 * 1000;
+      if (!force && !stale) return token;
+
+      const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId!,
+          client_secret: clientSecret!,
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      });
+      const refreshData = await refreshResponse.json();
+      if (!refreshResponse.ok || !refreshData.access_token) {
+        throw new Error('refresh_failed');
+      }
+      token = refreshData.access_token;
+      settingsObj.expires_at = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+      delete settingsObj.needs_reauth;
+      await supabase
+        .from('tenant_integrations')
+        .update({ api_key: token, settings: settingsObj })
+        .eq('id', integ.id);
+      return token;
+    }
+
+    async function probePropertyAccess(token: string): Promise<{ ok: boolean; message?: string }> {
+      const probe = await fetch(
+        `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            dateRanges: [{ startDate: '7daysAgo', endDate: 'yesterday' }],
+            metrics: [{ name: 'sessions' }],
+            limit: 1,
+          }),
+        },
+      );
+      const body = await probe.json().catch(() => ({}));
+      if (body?.error) {
+        return { ok: false, message: String(body.error.message || body.error.status || 'error') };
+      }
+      return { ok: true };
+    }
+
+    {
+      const candidates = await loadCandidateIntegrations();
+      let resolved = false;
+      let lastErr = '';
+      for (const cand of candidates) {
+        const candSettings = { ...((cand.settings as any) || {}) };
+        if (candSettings.needs_reauth) continue;
+        try {
+          const token = await refreshTokenFor(cand, candSettings, false);
+          const probe = await probePropertyAccess(token);
+          if (!probe.ok) {
+            lastErr = probe.message || 'permission denied';
+            if (!/permission|Permission|403|PERMISSION/i.test(lastErr)) {
+              // Non-permission errors (quota etc.) — keep trying others only for access issues
+              if (cand.id === integration.id) {
+                // Fall through to normal sync with preferred; it will surface the error
+                accessToken = token;
+                Object.assign(integrationSettings, candSettings);
+                resolved = true;
+                break;
+              }
+              continue;
+            }
+            continue;
+          }
+          accessToken = token;
+          integration = cand;
+          Object.keys(integrationSettings).forEach((k) => delete integrationSettings[k]);
+          Object.assign(integrationSettings, candSettings);
+          if (cand.id !== integrationId) {
+            await supabase
+              .from('crm_tables')
+              .update({
+                integration_settings: {
+                  ...(settings || {}),
+                  integrationId: cand.id,
+                },
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', tableId);
+            console.log(`[sync-ga] repointed table ${tableId} → integration ${cand.id} (${candSettings.google_email || 'unknown'})`);
+          }
+          resolved = true;
+          break;
+        } catch (e: any) {
+          lastErr = String(e?.message || e);
+          continue;
+        }
+      }
+      if (!resolved) {
+        throw new Error(lastErr || 'No Google Analytics connection in the org can access this property');
+      }
+    }
 
     // Calculate date range
     const now = new Date();

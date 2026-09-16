@@ -40,7 +40,57 @@ export function resolveMineTaskAssignee(input: {
 
 export type MineTaskIdentity = MineTaskAssignee & {
   campaignerIds: string[];
+  userId: string;
 };
+
+type CampaignerBoardTask = {
+  campaigner_id?: string | null;
+  sales_person_id?: string | null;
+  created_by?: string | null;
+};
+
+/** Client-side guard for the board campaigner toolbar / dialog filter. */
+export function filterTasksByCampaignerBoardFilter<T extends CampaignerBoardTask>(
+  tasks: T[],
+  campaignerFilter: string,
+  mine?: MineTaskIdentity | null,
+): T[] {
+  if (campaignerFilter === "all") return tasks;
+  if (campaignerFilter === "none") {
+    return tasks.filter((task) => task.campaigner_id == null);
+  }
+  if (campaignerFilter === "mine") {
+    if (!mine) return [];
+    const campaignerIds = new Set(mine.campaignerIds);
+    return tasks.filter((task) => {
+      if (task.campaigner_id && campaignerIds.has(task.campaigner_id)) return true;
+      if (mine.kind === "assigned" && mine.salesPersonId && task.sales_person_id === mine.salesPersonId) {
+        return true;
+      }
+      if (mine.kind === "created_by" && task.created_by === mine.userId) return true;
+      return false;
+    });
+  }
+  return tasks.filter((task) => task.campaigner_id === campaignerFilter);
+}
+
+/** View-as preview: only tasks owned by or assigned to the selected user. */
+export function filterTasksForBoardUserPreview<T extends CampaignerBoardTask>(
+  tasks: T[],
+  boardUserId: string,
+  mine?: MineTaskIdentity | null,
+): T[] {
+  if (!boardUserId || !mine) return [];
+  const campaignerIds = new Set(mine.campaignerIds);
+  return tasks.filter((task) => {
+    if (task.created_by === boardUserId) return true;
+    if (task.campaigner_id && campaignerIds.has(task.campaigner_id)) return true;
+    if (mine.kind === "assigned" && mine.salesPersonId && task.sales_person_id === mine.salesPersonId) {
+      return true;
+    }
+    return false;
+  });
+}
 
 /** PostgREST `.or()` filter for "שלי בלבד" assignment rows. */
 export function buildMineAssignmentOrFilter(identity: MineTaskIdentity): string | null {

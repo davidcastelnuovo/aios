@@ -1,6 +1,7 @@
-import { forwardRef, useState } from "react";
+import { forwardRef, useState, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import SharedDashboard from "@/pages/SharedDashboard";
+import { lazyWithRetry } from "@/lib/lazyWithRetry";
+const SharedDashboard = lazyWithRetry(() => import("@/pages/SharedDashboard"));
 
 interface Props {
   shareToken: string;
@@ -40,11 +41,13 @@ export const ClientDashboardSnapshot = forwardRef<HTMLDivElement, Props>(
         }}
       >
         <QueryClientProvider client={client}>
+          <Suspense fallback={<div aria-busy="true" style={{ minHeight: 600 }} />}>
           <SharedDashboard
             shareTokenOverride={shareToken}
             initialDateFilter={dateFilter}
             snapshotMode
           />
+          </Suspense>
         </QueryClientProvider>
       </div>
     );

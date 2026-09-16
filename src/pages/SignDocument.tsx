@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,667 +6,261 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, FileText, ExternalLink, Eraser, ChevronLeft, ChevronRight } from "lucide-react";
-import {
-  type DocumentField,
-  parseDocumentFields,
-  getFieldLabel,
-  getFieldFontSizePx,
-  isSignatureFieldType,
-  isStampSignatureType,
-} from "@/components/signatures/signatureFieldTypes";
-import { useSignatureDocumentUrl } from "@/hooks/useSignatureDocumentUrl";
+import { CheckCircle, XCircle, FileText, Eraser } from "lucide-react";
+import { type DocumentField, parseDocumentFields, getFieldLabel, getFieldFontSizePx,
+  isSignatureFieldType, isStampSignatureType } from "@/components/signatures/signatureFieldTypes";
+import type { SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
 import { SignatureDocumentViewer } from "@/components/signatures/SignatureDocumentViewer";
+import { SignaturePageNavigation } from "@/components/signatures/SignaturePageNavigation";
+import { SignatureCanvas } from "@/components/signatures/SignatureCanvas";
 import { detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
+import { getSignatureStamp, applySignatureStamp } from "@/lib/signatureStamp";
 
-interface SignaturePosition {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  page: number;
+interface SigningRecipient {
+  id: string;
+  name: string;
+  status: string;
+  sign_order: number;
+  signature_position: SignaturePosition | null;
+  field_values: Record<string, string> | null;
+  business_stamp?: { name?: string | null; company_id?: string | null };
+  signature_documents: {
+    title: string; status: string; file_url: string | null; content: string | null;
+    document_type: string; document_fields: unknown;
+  };
+}
+
+const LEGACY_SIGNATURE = "__signature";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function signingError(data: { error?: string } | null, error: Error | null) {
+  let message = data?.error;
+  // Function errors carry the validation response in their Response context.
+  const context = (error as { context?: Response } | null)?.context;
+  if (!message && context) message = (await context.clone().json().catch(() => ({}))).error;
+  const labels: Record<string, string> = {
+    document_not_signable: "המסמך בוטל או שאינו זמין עוד לחתימה. רענן את העמוד.",
+    missing_required_field: "יש למלא את כל שדות החובה במסמך.",
+    missing_stamp_details: "יש לאשר שם חברה וח.פ / ת.ז בחותמת.",
+    invalid_signature: "נא לצייר חתימה לפני האישור.",
+    not_found_or_already_signed: "הקישור כבר טופל או שאינו תקין. רענן את העמוד.",
+    not_found_or_already_processed: "הקישור כבר טופל או שאינו תקין. רענן את העמוד.",
+  };
+  if (message || error) throw new Error(labels[message ?? ""] || message || error?.message || "הפעולה נכשלה");
 }
 
 export default function SignDocument() {
   const { token } = useParams<{ token: string }>();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [docContainerHeight, setDocContainerHeight] = useState(700);
-  const signatureCanvasRefs = useRef<Record<string, HTMLCanvasElement | null>>({});
-  const [isDrawing, setIsDrawing] = useState<string | null>(null);
-  const [hasSignature, setHasSignature] = useState(false);
-  const [signatureFieldSigned, setSignatureFieldSigned] = useState<Record<string, boolean>>({});
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
-  const [signed, setSigned] = useState(false);
+  const [outcome, setOutcome] = useState<"signed" | "declined" | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [numPages, setNumPages] = useState(1);
+  const [activeSignatureId, setActiveSignatureId] = useState<string | null>(null);
+  const [draftSignature, setDraftSignature] = useState("");
+  const [draftCompanyName, setDraftCompanyName] = useState("");
+  const [draftCompanyId, setDraftCompanyId] = useState("");
+  const initializedToken = useRef<string | null>(null);
+  const documentTop = useRef<HTMLDivElement>(null);
 
-  const {
-    data: recipient,
-    isLoading: loadingRecipient,
-    isError: recipientQueryFailed,
-    error: recipientQueryError,
-  } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["sign-recipient", token],
     queryFn: async () => {
-      if (!token) return null;
-      const { data, error } = await supabase.rpc("get_signature_by_token", { _token: token });
-      if (error) throw error;
-      return data as any;
+      if (!token || !UUID.test(token)) return null;
+      const response = await supabase.functions.invoke("get-signature-document", { body: { token } });
+      await signingError(response.data, response.error);
+      return response.data as { recipient: SigningRecipient | null; fileUrl: string | null; fileError?: string };
     },
     enabled: !!token,
     retry: 1,
+    refetchOnWindowFocus: false,
   });
-
-  useEffect(() => {
-    if (!recipient?.field_values || typeof recipient.field_values !== "object") return;
-    const existing = recipient.field_values as Record<string, string>;
-    if (Object.keys(existing).length > 0) {
-      setFieldValues(existing);
-    }
-  }, [recipient?.field_values]);
-
-  const doc = recipient?.signature_documents as any;
-  const { resolvedUrl: docFileUrl, loading: loadingDocFile } = useSignatureDocumentUrl(doc?.file_url);
-  const signaturePosition = recipient?.signature_position as unknown as SignaturePosition | null;
+  const recipient = data?.recipient;
+  const doc = recipient?.signature_documents;
+  const docFileUrl = data?.fileUrl;
   const recipientIndex = Math.max(0, (recipient?.sign_order ?? 1) - 1);
-  const allDocFields = parseDocumentFields(doc?.document_fields);
-  const myFields = allDocFields.filter((f) => (f.recipient_index ?? 0) === recipientIndex);
-  const hasDocumentFields = myFields.length > 0;
-  const useOverlay = !!docFileUrl && (hasDocumentFields || !!signaturePosition);
-  const pageFields = useMemo(
-    () => myFields.filter((f) => (f.position.page ?? 1) === currentPage),
-    [myFields, currentPage],
-  );
-  const legacyOnCurrentPage =
-    !hasDocumentFields && (!signaturePosition || (signaturePosition.page ?? 1) === currentPage);
-
-  const businessStamp = (recipient?.business_stamp ?? {}) as { name?: string | null; company_id?: string | null };
-  const idNumberFromFields = myFields
-    .filter((f) => f.type === "id_number")
-    .map((f) => fieldValues[f.id]?.trim())
-    .find(Boolean);
-  const companyNameFromFields = myFields
-    .filter((f) => f.type === "company_name")
-    .map((f) => fieldValues[f.id]?.trim())
-    .find(Boolean);
-  const stampCompanyId = (idNumberFromFields || businessStamp.company_id || "").trim();
-  const stampBusinessName = (
-    companyNameFromFields ||
-    businessStamp.name ||
-    ""
-  ).trim();
-  const companyIdLabel = stampCompanyId
-    ? (/^\d+$/.test(stampCompanyId) ? `ח.פ/ע.מ ${stampCompanyId}` : stampCompanyId)
-    : "";
-
-  const setupCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const nextW = Math.round(rect.width * dpr);
-    const nextH = Math.round(rect.height * dpr);
-    if (canvas.width === nextW && canvas.height === nextH) {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = 2;
-      return;
-    }
-    canvas.width = nextW;
-    canvas.height = nextH;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 2;
-  }, []);
+  const myFields = useMemo(() => parseDocumentFields(doc?.document_fields)
+    .filter((field) => (field.recipient_index ?? 0) === recipientIndex), [doc?.document_fields, recipientIndex]);
+  const pageFields = myFields.filter((field) => (field.position.page ?? 1) === currentPage);
+  const signatureFields = myFields.filter((field) => isSignatureFieldType(field.type));
+  const hasSignatureFields = signatureFields.length > 0;
+  const signaturePosition = recipient?.signature_position;
+  const legacyOnCurrentPage = !hasSignatureFields && (!signaturePosition || (signaturePosition.page ?? 1) === currentPage);
+  const stamp = getSignatureStamp(myFields, fieldValues, recipient?.business_stamp);
+  const activeField = myFields.find((field) => field.id === activeSignatureId);
+  const editingStamp = isStampSignatureType(activeField?.type);
 
   useEffect(() => {
-    if (useOverlay || !recipient) return;
-    setupCanvas(canvasRef.current);
-  }, [recipient, useOverlay, setupCanvas]);
+    if (!recipient || initializedToken.current === token) return;
+    initializedToken.current = token ?? null;
+    setFieldValues(recipient.field_values ?? {});
+    setOutcome(null);
+    setActiveSignatureId(null);
+    setCurrentPage(1);
+  }, [recipient, token]);
 
-  useEffect(() => {
-    if (!useOverlay) return;
-    const ids = hasDocumentFields
-      ? pageFields.filter((f) => isSignatureFieldType(f.type)).map((f) => f.id)
-      : legacyOnCurrentPage && signaturePosition
-        ? ["legacy"]
-        : [];
-    for (const id of ids) {
-      const canvas = id === "legacy" ? canvasRef.current : signatureCanvasRefs.current[id];
-      setupCanvas(canvas);
-    }
-
-    const observers: ResizeObserver[] = [];
-    for (const id of ids) {
-      const canvas = id === "legacy" ? canvasRef.current : signatureCanvasRefs.current[id];
-      if (!canvas) continue;
-      const ro = new ResizeObserver(() => setupCanvas(canvas));
-      ro.observe(canvas);
-      observers.push(ro);
-    }
-    return () => observers.forEach((ro) => ro.disconnect());
-  }, [useOverlay, hasDocumentFields, pageFields, setupCanvas, docContainerHeight, signaturePosition, legacyOnCurrentPage, currentPage]);
-
-  const getPos = (
-    e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
-    canvas: HTMLCanvasElement,
-  ) => {
-    const rect = canvas.getBoundingClientRect();
-    const point =
-      "touches" in e && e.touches[0]
-        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
-        : { x: (e as React.PointerEvent).clientX, y: (e as React.PointerEvent).clientY };
-    return {
-      x: point.x - rect.left,
-      y: point.y - rect.top,
-    };
+  const openSignature = (id: string) => {
+    setDraftSignature(fieldValues[id] || "");
+    setDraftCompanyName(stamp.name);
+    setDraftCompanyId(stamp.companyId);
+    setActiveSignatureId(id);
   };
 
-  const startDraw = (fieldId: string | null) => (
-    e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
-  ) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const canvas = fieldId
-      ? signatureCanvasRefs.current[fieldId]
-      : canvasRef.current;
-    if (!canvas) return;
-    setupCanvas(canvas);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    if ("pointerId" in e) {
-      try {
-        canvas.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
-    }
-    setIsDrawing(fieldId ?? "legacy");
-    const pos = getPos(e, canvas);
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
+  const saveSignature = () => {
+    if (!activeSignatureId || !draftSignature) return;
+    if (editingStamp && (!draftCompanyName.trim() || !draftCompanyId.trim())) return;
+    setFieldValues((values) => {
+      const next = editingStamp ? applySignatureStamp(myFields, values, draftCompanyName, draftCompanyId) : { ...values };
+      next[activeSignatureId] = draftSignature;
+      return next;
+    });
+    setActiveSignatureId(null);
   };
 
-  const draw = (fieldId: string | null) => (
-    e: React.MouseEvent | React.TouchEvent | React.PointerEvent,
-  ) => {
-    e.preventDefault();
-    if (isDrawing !== (fieldId ?? "legacy")) return;
-    const canvas = fieldId
-      ? signatureCanvasRefs.current[fieldId]
-      : canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!ctx || !canvas) return;
-    const pos = getPos(e, canvas);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    if (fieldId) {
-      setSignatureFieldSigned((prev) => ({ ...prev, [fieldId]: true }));
-    } else {
-      setHasSignature(true);
-    }
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(numPages, page)));
+    documentTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const endDraw = () => setIsDrawing(null);
-
-  const clearSignature = (fieldId?: string) => {
-    const canvas = fieldId ? signatureCanvasRefs.current[fieldId] : canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-    setupCanvas(canvas);
-    if (fieldId) {
-      setSignatureFieldSigned((prev) => ({ ...prev, [fieldId]: false }));
-    } else {
-      setHasSignature(false);
-    }
-  };
-
-  const validateFields = (): boolean => {
-    if (!hasDocumentFields) return hasSignature;
-
-    for (const field of myFields) {
-      if (!field.required) continue;
-      if (isSignatureFieldType(field.type)) {
-        if (!signatureFieldSigned[field.id]) {
-          toast.error(`נא למלא שדה: ${getFieldLabel(field.type)}`);
-          return false;
-        }
-      } else if (!fieldValues[field.id]?.trim()) {
-        toast.error(`נא למלא שדה: ${field.label || getFieldLabel(field.type)}`);
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const collectFieldValues = (): Record<string, string> => {
-    const values = { ...fieldValues };
-    for (const field of myFields.filter((f) => isSignatureFieldType(f.type))) {
-      const canvas = signatureCanvasRefs.current[field.id];
-      if (canvas && signatureFieldSigned[field.id]) {
-        values[field.id] = canvas.toDataURL("image/png");
-      }
-    }
-    return values;
-  };
-
-  const getPrimarySignatureData = (values: Record<string, string>): string => {
-    const sigField = myFields.find((f) => isSignatureFieldType(f.type));
-    if (sigField && values[sigField.id]) return values[sigField.id];
-    if (canvasRef.current && hasSignature) return canvasRef.current.toDataURL("image/png");
-    const legacyCanvas = signatureCanvasRefs.current["legacy"];
-    if (legacyCanvas) return legacyCanvas.toDataURL("image/png");
-    return "";
-  };
+  const primarySignature = signatureFields.map((field) => fieldValues[field.id]).find(Boolean) || fieldValues[LEGACY_SIGNATURE] || "";
+  const canSubmit = !!primarySignature && myFields.filter((field) => field.required)
+    .every((field) => !!fieldValues[field.id]?.trim())
+    && (!signatureFields.some((field) => isStampSignatureType(field.type) && fieldValues[field.id]) || (!!stamp.name && !!stamp.companyId));
 
   const signMutation = useMutation({
     mutationFn: async () => {
-      if (!recipient || !token) throw new Error("Missing data");
-      if (!validateFields()) throw new Error("validation_failed");
-
-      const values = collectFieldValues();
-      const signatureData = getPrimarySignatureData(values);
-      if (!signatureData) throw new Error("missing_signature");
-
-      const { data, error } = await supabase.functions.invoke("submit-signature", {
-        body: { token, signatureData, fieldValues: values, action: "sign" },
+      if (!canSubmit) throw new Error("יש למלא את כל שדות החובה ולחתום");
+      const response = await supabase.functions.invoke("submit-signature", {
+        body: { token, signatureData: primarySignature, fieldValues, action: "sign" },
       });
-      const payload = (data ?? {}) as { error?: string; success?: boolean; ok?: boolean };
-      const message = payload.error || (error as Error | null)?.message || "";
-      if (message.includes("not_found_or_already_signed")) {
-        // Signature may already be saved while PDF generation failed previously.
-        return;
-      }
-      if (error && !payload.success && !payload.ok) throw error;
-      if (payload.error) throw new Error(payload.error);
+      await signingError(response.data, response.error);
+      if (!response.data?.ok) throw new Error("החתימה לא נשמרה. נסה שוב.");
     },
-    onSuccess: () => {
-      setSigned(true);
-      toast.success("החתימה נשמרה בהצלחה!");
-    },
-    onError: (err: any) => {
-      if (err.message !== "validation_failed") {
-        toast.error("שגיאה בשמירת החתימה: " + err.message);
-      }
-    },
+    onSuccess: () => { setOutcome("signed"); toast.success("החתימה נשמרה בהצלחה!"); },
+    onError: (failure: Error) => toast.error(failure.message),
   });
-
   const declineMutation = useMutation({
     mutationFn: async () => {
-      if (!token) throw new Error("Missing data");
-      const { data, error } = await supabase.functions.invoke("submit-signature", {
-        body: { token, action: "decline" },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const response = await supabase.functions.invoke("submit-signature", { body: { token, action: "decline" } });
+      await signingError(response.data, response.error);
+      if (!response.data?.ok) throw new Error("הסירוב לא נשמר. נסה שוב.");
     },
-    onSuccess: () => {
-      setSigned(true);
-      toast.info("סירבת לחתום על המסמך");
-    },
+    onSuccess: () => { setOutcome("declined"); toast.info("סירבת לחתום על המסמך"); },
+    onError: (failure: Error) => toast.error(failure.message),
   });
+  const busy = signMutation.isPending || declineMutation.isPending;
 
-  const canSubmit = hasDocumentFields
-    ? myFields.some((f) => isSignatureFieldType(f.type))
-      ? myFields.filter((f) => f.required).every((f) =>
-          isSignatureFieldType(f.type) ? signatureFieldSigned[f.id] : !!fieldValues[f.id]?.trim(),
-        )
-      : myFields.filter((f) => f.required).every((f) => !!fieldValues[f.id]?.trim())
-    : hasSignature;
-
-  const renderFieldOverlay = (field: DocumentField) => {
-    const style = {
-      left: `${field.position.x}%`,
-      top: `${field.position.y}%`,
-      width: `${field.position.width}%`,
-      height: `${field.position.height}%`,
-    };
-    const fontSize = getFieldFontSizePx(field.position, docContainerHeight);
-
-    if (isSignatureFieldType(field.type)) {
-      return (
-        <div
-          key={field.id}
-          className="absolute border-2 border-primary rounded bg-white/80 z-10 overflow-hidden"
-          style={style}
-        >
-          {isStampSignatureType(field.type) && stampBusinessName && (
-            <div
-              className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none px-1"
-              style={{ color: "#6B7280", opacity: 0.72, transform: "rotate(-2deg)" }}
-              aria-hidden
-            >
-              <div
-                className="font-bold text-center leading-tight truncate max-w-full"
-                style={{ fontSize: Math.max(10, fontSize + 2) }}
-              >
-                {stampBusinessName}
-              </div>
-              {companyIdLabel && (
-                <div className="text-center leading-tight truncate max-w-full mt-0.5" style={{ fontSize: Math.max(8, fontSize - 1) }}>
-                  {companyIdLabel}
-                </div>
-              )}
-            </div>
-          )}
-          {field.label ? (
-            <div
-              className="absolute top-0 right-0 bg-primary text-primary-foreground px-1 py-0.5 rounded-bl z-10 pointer-events-none"
-              style={{ fontSize: Math.max(8, fontSize - 2) }}
-            >
-              {field.label}
-            </div>
-          ) : null}
-          <canvas
-            ref={(el) => { signatureCanvasRefs.current[field.id] = el; }}
-            className="absolute inset-0 w-full h-full cursor-crosshair touch-none z-[1] bg-transparent"
-            onPointerDown={startDraw(field.id)}
-            onPointerMove={draw(field.id)}
-            onPointerUp={endDraw}
-            onPointerLeave={endDraw}
-            onPointerCancel={endDraw}
-          />
-        </div>
-      );
-    }
-
-    if (field.type === "address") {
-      return (
-        <div key={field.id} className="absolute" style={style}>
-          <Textarea
-            value={fieldValues[field.id] ?? ""}
-            onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
-            placeholder={field.label}
-            className="w-full h-full resize-none bg-white/95 border-primary"
-            style={{ fontSize }}
-            dir="rtl"
-          />
-        </div>
-      );
-    }
-
-    if (field.type === "text") {
-      return (
-        <div key={field.id} className="absolute" style={style}>
-          <Input
-            type="text"
-            value={fieldValues[field.id] ?? ""}
-            onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
-            placeholder=""
-            aria-label="שדה מילוי"
-            className="w-full h-full bg-white/90 border-primary/70 px-1 shadow-none"
-            style={{ fontSize }}
-            dir="rtl"
-          />
-        </div>
-      );
-    }
-
-    const inputType = field.type === "phone" ? "tel" : field.type === "date" ? "date" : "text";
-
+  const terminal = outcome || (recipient?.status === "signed" ? "signed" : recipient?.status === "declined" ? "declined" : null);
+  const unavailable = doc && !["pending", "partially_signed"].includes(doc.status);
+  if (isLoading) return <div className="min-h-screen grid place-items-center" dir="rtl">טוען מסמך...</div>;
+  if (isError || !recipient || terminal || unavailable) {
+    const title = isError ? "שגיאה בטעינת המסמך" : !recipient ? "קישור לא תקין" : terminal === "signed" ? "תודה!" : terminal === "declined" ? "הסירוב נשמר" : "המסמך אינו זמין לחתימה";
+    const message = isError ? (error as Error)?.message : !recipient ? "הקישור לחתימה אינו תקין או שפג תוקפו." : terminal === "signed" ? "החתימה נשמרה בהצלחה." : terminal === "declined" ? "סירבת לחתום על המסמך." : doc?.status === "cancelled" ? "המסמך בוטל." : "פנה לשולח לקבלת קישור מעודכן.";
     return (
-      <div key={field.id} className="absolute" style={style}>
-        <Input
-          type={inputType}
-          value={fieldValues[field.id] ?? ""}
-          onChange={(e) => setFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
-          placeholder={field.label}
-          className="w-full h-full bg-white/95 border-primary px-1"
-          style={{ fontSize }}
-          dir={field.type === "phone" || field.type === "id_number" ? "ltr" : "rtl"}
-        />
+      <div className="min-h-screen grid place-items-center bg-background p-4" dir="rtl">
+        <Card className="max-w-md w-full"><CardContent className="p-8 text-center">
+          {terminal === "signed" ? <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" /> : <XCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />}
+          <h2 className="text-xl font-bold mb-2">{title}</h2><p className="text-muted-foreground">{message}</p>
+        </CardContent></Card>
       </div>
     );
+  }
+
+  const renderSignature = (id: string, position: SignaturePosition, withStamp = false, label = "חתימה") => (
+    <button key={id} type="button" aria-label={`פתח ${label}`} onClick={() => openSignature(id)}
+      className="absolute border border-primary rounded bg-white/80 overflow-hidden z-10 focus-visible:ring-2 focus-visible:ring-primary"
+      style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${position.width}%`, height: `${position.height}%` }}>
+      {withStamp && stamp.name && (
+        <div className="absolute inset-0 grid content-center text-gray-500 opacity-70 px-1 leading-tight" aria-hidden="true">
+          <div className="font-bold truncate" style={{ fontSize: getFieldFontSizePx(position, docContainerHeight) }}>{stamp.name}</div>
+          <div className="truncate" style={{ fontSize: Math.max(6, getFieldFontSizePx(position, docContainerHeight) - 2) }}>ח.פ / ת.ז {stamp.companyId}</div>
+        </div>
+      )}
+      {fieldValues[id] ? <img src={fieldValues[id]} alt="החתימה שלך" className="relative w-full h-full object-fill" />
+        : <span className="relative text-primary font-medium leading-none" style={{ fontSize: getFieldFontSizePx(position, docContainerHeight) }}>{label}</span>}
+    </button>
+  );
+
+  const renderField = (field: DocumentField) => {
+    if (isSignatureFieldType(field.type)) return renderSignature(field.id, field.position, isStampSignatureType(field.type), getFieldLabel(field.type));
+    const style = { left: `${field.position.x}%`, top: `${field.position.y}%`, width: `${field.position.width}%`, height: `${field.position.height}%` };
+    const fontSize = getFieldFontSizePx(field.position, docContainerHeight);
+    const props = {
+      value: fieldValues[field.id] ?? "",
+      onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setFieldValues((values) => ({ ...values, [field.id]: event.target.value })),
+      placeholder: field.label,
+      "aria-label": field.label || getFieldLabel(field.type),
+      required: field.required,
+      className: "w-full h-full min-h-0 rounded-sm resize-none bg-white/95 border-primary px-1 py-0 leading-tight",
+      style: { fontSize },
+      dir: field.type === "phone" || field.type === "id_number" ? "ltr" : "rtl",
+    };
+    return <div key={field.id} className="absolute" style={style}>{field.type === "address" ? <Textarea {...props} /> : <Input {...props} type={field.type === "phone" ? "tel" : field.type === "date" ? "date" : "text"} />}</div>;
   };
 
-  if (loadingRecipient) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-muted-foreground">טוען...</p>
-      </div>
-    );
-  }
-
-  if (recipientQueryFailed) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-foreground mb-2">שגיאה בטעינת המסמך</h2>
-            <p className="text-muted-foreground">
-              {(recipientQueryError as Error)?.message || "לא ניתן לטעון את קישור החתימה כרגע. נסו שוב."}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!recipient) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-foreground mb-2">קישור לא תקין</h2>
-            <p className="text-muted-foreground">הקישור לחתימה אינו תקין או שפג תוקפו.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (recipient.status === "signed" || signed) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-foreground mb-2">תודה!</h2>
-            <p className="text-muted-foreground">
-              {recipient.status === "declined" ? "סירבת לחתום על המסמך." : "החתימה נשמרה בהצלחה."}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8" dir="rtl">
+    <div className="min-h-screen bg-background p-3 md:p-8" dir="rtl">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground mb-1">חתימה דיגיטלית</h1>
-          <p className="text-muted-foreground">שלום {recipient.name}, אנא מלא את השדות וחתום על המסמך</p>
-        </div>
-
-        {useOverlay ? (
-          <Card className="overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                {doc?.title}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-2 sm:p-4">
-              {numPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mb-3">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    disabled={currentPage >= numPages}
-                    onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
+        <div className="text-center"><h1 className="text-2xl font-bold mb-1">חתימה דיגיטלית</h1>
+          <p className="text-muted-foreground">שלום {recipient.name}, אנא מלא את השדות וחתום על המסמך</p></div>
+        <Card ref={documentTop} className="scroll-mt-4">
+          <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" />{doc?.title}</CardTitle></CardHeader>
+          <CardContent className="p-2 sm:p-4">
+            {doc?.file_url ? (
+              <>
+                <SignaturePageNavigation page={currentPage} count={numPages} onChange={goToPage} />
+                {docFileUrl ? <SignatureDocumentViewer fileUrl={docFileUrl}
+                  mediaKind={detectMediaKind(doc.file_url)} forcePdf={!/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(doc.file_url) && doc.document_type === "uploaded"}
+                  page={currentPage} onNumPagesChange={setNumPages} onHeightChange={setDocContainerHeight} className="bg-white">
+                  {pageFields.map(renderField)}
+                  {legacyOnCurrentPage && signaturePosition && renderSignature(LEGACY_SIGNATURE, signaturePosition)}
+                </SignatureDocumentViewer> : <p className="py-8 text-center text-destructive">{data?.fileError || "לא ניתן לטעון את הקובץ. רענן את העמוד או פנה לשולח."}</p>}
+                <SignaturePageNavigation page={currentPage} count={numPages} onChange={goToPage} />
+              </>
+            ) : <div className="whitespace-pre-wrap text-sm bg-muted/50 p-4 rounded-lg border">{doc?.content}</div>}
+            {(!doc?.file_url || (!hasSignatureFields && !signaturePosition)) && (
+              <div className="space-y-3 mt-4">
+                {!doc?.file_url && myFields.filter((field) => !isSignatureFieldType(field.type)).map((field) => (
+                  <div key={field.id}><Label htmlFor={field.id}>{field.label || getFieldLabel(field.type)}</Label>
+                    <Input id={field.id} value={fieldValues[field.id] || ""} onChange={(event) => setFieldValues((values) => ({ ...values, [field.id]: event.target.value }))} /></div>
+                ))}
+                {(hasSignatureFields ? signatureFields.map((field) => field.id) : [LEGACY_SIGNATURE]).map((id) => (
+                  <Button key={id} type="button" variant="outline" onClick={() => openSignature(id)}>
+                    {fieldValues[id] ? "ערוך חתימה" : "פתח חתימה"}
                   </Button>
-                  <span className="text-sm text-muted-foreground">
-                    עמוד {currentPage} מתוך {numPages}
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-
-              <SignatureDocumentViewer
-                fileUrl={docFileUrl}
-                mediaKind={detectMediaKind(doc?.file_url)}
-                forcePdf={
-                  !!doc?.file_url &&
-                  !/\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(doc.file_url) &&
-                  doc.document_type === "uploaded"
-                }
-                page={currentPage}
-                onNumPagesChange={(n) => {
-                  setNumPages(n);
-                  if (currentPage > n) setCurrentPage(n);
-                }}
-                loading={loadingDocFile}
-                error={!docFileUrl && !loadingDocFile ? "לא ניתן לטעון את המסמך" : null}
-                onHeightChange={setDocContainerHeight}
-                className="bg-white"
-              >
-                {hasDocumentFields
-                  ? pageFields.map(renderFieldOverlay)
-                  : legacyOnCurrentPage && signaturePosition && (
-                    <div
-                      className="absolute border-2 border-primary rounded bg-white/80 z-10 overflow-hidden"
-                      style={{
-                        left: `${signaturePosition.x}%`,
-                        top: `${signaturePosition.y}%`,
-                        width: `${signaturePosition.width}%`,
-                        height: `${signaturePosition.height}%`,
-                      }}
-                    >
-                      <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-bl z-10 pointer-events-none">
-                        חתום כאן
-                      </div>
-                      <canvas
-                        ref={canvasRef}
-                        className="absolute inset-0 w-full h-full cursor-crosshair touch-none z-[1] bg-transparent"
-                        onPointerDown={startDraw(null)}
-                        onPointerMove={draw(null)}
-                        onPointerUp={endDraw}
-                        onPointerLeave={endDraw}
-                        onPointerCancel={endDraw}
-                      />
-                    </div>
-                  )}
-              </SignatureDocumentViewer>
-
-              <div className="flex justify-end mt-2 gap-2 flex-wrap">
-                {hasDocumentFields && pageFields.some((f) => isSignatureFieldType(f.type)) && (
-                  pageFields.filter((f) => isSignatureFieldType(f.type)).map((f) => (
-                    <Button key={f.id} variant="ghost" size="sm" onClick={() => clearSignature(f.id)}>
-                      <Eraser className="h-4 w-4 ml-1" />
-                      נקה {f.label || "חתימה"}
-                    </Button>
-                  ))
-                )}
-                {!hasDocumentFields && legacyOnCurrentPage && (
-                  <Button variant="ghost" size="sm" onClick={() => clearSignature()}>
-                    <Eraser className="h-4 w-4 ml-1" />
-                    נקה חתימה
-                  </Button>
-                )}
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  {doc?.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {doc?.document_type === "created" && doc?.content && (
-                  <div className="whitespace-pre-wrap text-sm bg-muted/50 p-4 rounded-lg max-h-96 overflow-y-auto border">
-                    {doc.content}
-                  </div>
-                )}
-                {doc?.document_type === "uploaded" && doc?.file_url && (
-                  <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
-                    <ExternalLink className="h-4 w-4" />
-                    צפה בקובץ המקורי
-                  </a>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">חתימה</CardTitle>
-                  <Button variant="ghost" size="sm" onClick={() => clearSignature()}>
-                    <Eraser className="h-4 w-4 ml-1" />
-                    נקה
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="border-2 border-dashed border-border rounded-lg overflow-hidden bg-white">
-                  <canvas
-                    ref={canvasRef}
-                    className="w-full cursor-crosshair touch-none"
-                    style={{ height: "200px" }}
-                    onPointerDown={startDraw(null)}
-                    onPointerMove={draw(null)}
-                    onPointerUp={endDraw}
-                    onPointerLeave={endDraw}
-                    onPointerCancel={endDraw}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                  צייר את חתימתך בתוך המלבן למעלה
-                </p>
-              </CardContent>
-            </Card>
-          </>
-        )}
-
+            )}
+          </CardContent>
+        </Card>
         <div className="flex gap-3 justify-center">
-          <Button
-            variant="destructive"
-            onClick={() => declineMutation.mutate()}
-            disabled={declineMutation.isPending}
-          >
-            <XCircle className="h-4 w-4 ml-2" />
-            סירוב
-          </Button>
-          <Button
-            onClick={() => signMutation.mutate()}
-            disabled={!canSubmit || signMutation.isPending}
-            className="min-w-32"
-          >
-            <CheckCircle className="h-4 w-4 ml-2" />
-            {signMutation.isPending ? "חותם..." : "חתום"}
+          <Button variant="destructive" onClick={() => declineMutation.mutate()} disabled={busy}><XCircle className="h-4 w-4 ml-2" />סירוב</Button>
+          <Button onClick={() => signMutation.mutate()} disabled={!canSubmit || busy || (!!doc?.file_url && !docFileUrl)} className="min-w-32">
+            <CheckCircle className="h-4 w-4 ml-2" />{signMutation.isPending ? "חותם..." : "חתום"}
           </Button>
         </div>
+        <Dialog open={activeSignatureId !== null} onOpenChange={(open) => { if (!open) setActiveSignatureId(null); }}>
+          <DialogContent dir="rtl" className="max-w-lg max-h-[90dvh] overflow-y-auto">
+            <DialogHeader><DialogTitle>{editingStamp ? "חתימה עם חותמת" : "חתימה"}</DialogTitle>
+              <DialogDescription>{editingStamp ? "בדוק את פרטי החברה, השלם במידת הצורך וצייר את חתימתך." : "צייר את חתימתך באזור למטה ואשר כדי להוסיף אותה למסמך."}</DialogDescription></DialogHeader>
+            {editingStamp && <div className="space-y-3">
+              <div><Label htmlFor="stamp-company-name">שם חברה</Label><Input id="stamp-company-name" value={draftCompanyName} onChange={(event) => setDraftCompanyName(event.target.value)} required /></div>
+              <div><Label htmlFor="stamp-company-id">ח.פ / ת.ז</Label><Input id="stamp-company-id" value={draftCompanyId} onChange={(event) => setDraftCompanyId(event.target.value)} dir="ltr" required /></div>
+            </div>}
+            <div className="relative border-2 border-dashed rounded-lg bg-white overflow-hidden">
+              {editingStamp && <div className="absolute inset-0 grid content-center text-center text-gray-400 opacity-60 pointer-events-none select-none">
+                <div className="text-xl font-bold">{draftCompanyName}</div><div>ח.פ / ת.ז {draftCompanyId}</div></div>}
+              <div className="relative"><SignatureCanvas value={draftSignature} onChange={setDraftSignature} /></div>
+            </div>
+            <div className="flex justify-between gap-2">
+              <Button type="button" variant="ghost" onClick={() => setDraftSignature("")}><Eraser className="h-4 w-4 ml-1" />נקה חתימה</Button>
+              <Button type="button" onClick={saveSignature} disabled={!draftSignature || (editingStamp && (!draftCompanyName.trim() || !draftCompanyId.trim()))}>אישור והוספה למסמך</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

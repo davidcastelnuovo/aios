@@ -364,6 +364,7 @@ export function SeoKeywordsTable({
   const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? "all");
   const [filterIrrelevant, setFilterIrrelevant] = useState(true);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const {
     forceRelevant,
     forceIrrelevant,
@@ -559,6 +560,23 @@ export function SeoKeywordsTable({
       }),
     [applyRelevanceFilter, top20Raw, irrelevantSet, forceIrrelevantSet],
   );
+
+  // Top 20 needs a ranking position; when Ahrefs organic is empty but tracked/GSC
+  // lists exist, land on "כל הביטויים" — not the במעקב tab.
+  const resolvedDefaultTab = useMemo(() => {
+    if (defaultTab !== "top10") return defaultTab;
+    if (top20.length > 0) return "top10";
+    if (allKeywords.length > 0) return "all";
+    return "top10";
+  }, [defaultTab, top20.length, allKeywords.length]);
+
+  // defaultValue only applies on first mount (before async report data arrives).
+  const effectiveTab = activeTab ?? resolvedDefaultTab;
+
+  useEffect(() => {
+    if (activeTab !== null) return;
+    if (resolvedDefaultTab !== "top10") setActiveTab(resolvedDefaultTab);
+  }, [activeTab, resolvedDefaultTab]);
   const allDimmed = useMemo(() => {
     if (applyRelevanceFilter) return new Set<string>();
     // Manual marks are already removed from lists; dim only auto-filtered leftovers.
@@ -728,7 +746,7 @@ export function SeoKeywordsTable({
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Tabs defaultValue={defaultTab} className="w-full">
+        <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full">
           <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
             <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
               🏆 Top 20 מקודמים ({top20.length})

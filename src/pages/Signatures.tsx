@@ -68,7 +68,7 @@ const eventLabels: Record<string, string> = {
 };
 
 export default function Signatures() {
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, isActiveTenantDbSynced } = useCurrentTenant();
   const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -503,6 +503,14 @@ export default function Signatures() {
       }}
     />
   );
+
+  if (tenantId && !isActiveTenantDbSynced) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-muted-foreground" dir="rtl">
+        מסנכרן ארגון...
+      </div>
+    );
+  }
 
   if (editingDoc?.file_url) {
     return (
@@ -1098,7 +1106,7 @@ export default function Signatures() {
                       {docEvents.map((ev: any) => (
                         <div key={ev.id} className="flex items-center justify-between text-sm border-b pb-2 last:border-0">
                           <div>
-                            <span className="font-medium">{eventLabels[ev.event_type] || ev.event_type}</span>
+                            <span className="font-medium">{ev.event_type === "sent" && ev.metadata?.channel === "link" ? "קישור לחתימה הוכן" : eventLabels[ev.event_type] || ev.event_type}</span>
                             {ev.signature_recipients?.name && (
                               <span className="text-muted-foreground"> — {ev.signature_recipients.name}</span>
                             )}

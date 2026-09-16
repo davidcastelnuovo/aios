@@ -5,6 +5,9 @@ import {
   extractDomainHint,
   looksLikeSeoDomain,
   pickSeoSyncDomain,
+  resolveLinkedCrmTableId,
+  resolveSeoLinkedGscSiteUrl,
+  selectSeoTableForClient,
   seoTableNeedsSyncThisMonth,
 } from "./seoDomain.ts";
 
@@ -45,6 +48,75 @@ test("pickSeoSyncDomain prefers linkedGscSiteUrl and ahrefs_reports over empty c
   });
   assert.equal(fromReport.domain, "manltd.co.il");
   assert.equal(fromReport.from, "ahrefs_reports");
+});
+
+test("resolveLinkedCrmTableId ignores stale saved ids", () => {
+  const candidates = [
+    { id: "ga-live", client_id: "client-1" },
+  ];
+  assert.equal(resolveLinkedCrmTableId("ga-deleted", candidates, "client-1"), "ga-live");
+  assert.equal(resolveLinkedCrmTableId("ga-live", candidates, "client-1"), "ga-live");
+});
+
+test("selectSeoTableForClient prefers domain match over null-domain duplicate", () => {
+  const picked = selectSeoTableForClient(
+    [
+      {
+        id: "dup",
+        client_id: "client-1",
+        integration_settings: { targetDomain: null },
+        updated_at: "2026-09-01T00:00:00Z",
+      },
+      {
+        id: "good",
+        client_id: "client-1",
+        integration_settings: { targetDomain: "franchise.org.il" },
+        updated_at: "2026-08-01T00:00:00Z",
+      },
+    ],
+    "client-1",
+    "https://franchise.org.il",
+  );
+  assert.equal(picked?.id, "good");
+});
+
+test("resolveSeoLinkedGscSiteUrl prefers linkedGscSiteUrl and falls back to legacy gsc_site_url", () => {
+  assert.equal(
+    resolveSeoLinkedGscSiteUrl({
+      integrationSettings: {
+        linkedGscSiteUrl: "sc-domain:franchise.org.il",
+        gsc_site_url: "https://other.example/",
+      },
+      expectedDomain: "franchise.org.il",
+    }),
+    "sc-domain:franchise.org.il",
+  );
+
+  assert.equal(
+    resolveSeoLinkedGscSiteUrl({
+      integrationSettings: { gsc_site_url: "sc-domain:franchise.org.il" },
+      clientGscSiteUrl: "https://franchise.org.il/",
+      expectedDomain: "franchise.org.il",
+    }),
+    "sc-domain:franchise.org.il",
+  );
+
+  assert.equal(
+    resolveSeoLinkedGscSiteUrl({
+      integrationSettings: {},
+      clientGscSiteUrl: "https://franchise.org.il/",
+      expectedDomain: "franchise.org.il",
+    }),
+    "https://franchise.org.il/",
+  );
+
+  assert.equal(
+    resolveSeoLinkedGscSiteUrl({
+      integrationSettings: { gsc_site_url: "https://other.example/" },
+      expectedDomain: "franchise.org.il",
+    }),
+    "",
+  );
 });
 
 test("seoTableNeedsSyncThisMonth is true when last sync is before current month", () => {

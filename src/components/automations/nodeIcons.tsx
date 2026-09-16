@@ -46,6 +46,7 @@ import {
   Code2,
   SplitSquareHorizontal,
   Zap,
+  FileText,
   LucideIcon,
 } from "lucide-react";
 

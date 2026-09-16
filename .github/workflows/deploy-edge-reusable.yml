@@ -1,0 +1,133 @@
+name: Deploy complete Edge bundles
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      source_sha:
+        type: string
+        required: true
+      function_names:
+        type: string
+        default: ''
+      base_revision:
+        type: string
+        default: ''
+permissions:
+  contents: write
+concurrency:
+  group: edge-deploy-${{ inputs.environment }}
+  # Staging can resume atomic row/source checkpoints when a newer revision arrives.
+  # Production deployments finish in order.
+  cancel-in-progress: ${{ inputs.environment == 'staging' }}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ inputs.environment == 'staging' && (secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm') || 'zvoijyneresvkadpprel' }}
+      PRODUCTION_REF: zvoijyneresvkadpprel
+      DEPLOY_ENV: ${{ inputs.environment }}
+      DEPLOY_FUNCTIONS: ${{ inputs.function_names }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      BOOTSTRAP_BEFORE: ${{ inputs.base_revision }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+      - name: Require current environment revision and resolve complete range
+        id: revision
+        run: |
+          set -euo pipefail
+          BRANCH=main
+          if [ "$DEPLOY_ENV" = staging ]; then BRANCH=develop; fi
+          git fetch origin "$BRANCH" --tags
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/$BRANCH)" ]; then
+            echo "::error::This revision is no longer the environment head. Run the current revision."
+            exit 1
+          fi
+          BEFORE=$(git rev-parse --verify "refs/tags/edge-deployed-$DEPLOY_ENV^{commit}" 2>/dev/null || true)
+          if [ -z "$BEFORE" ] && [ "$DEPLOY_ENV" = production ] && [ -z "$DEPLOY_FUNCTIONS" ]; then
+            if [ -z "$BOOTSTRAP_BEFORE" ] || ! git cat-file -e "$BOOTSTRAP_BEFORE^{commit}" 2>/dev/null; then
+              echo "::error::Production initialization requires the previous deployed push revision."
+              exit 1
+            fi
+            git merge-base --is-ancestor "$BOOTSTRAP_BEFORE" HEAD
+            BEFORE=$BOOTSTRAP_BEFORE
+          fi
+          echo "DEPLOY_BEFORE=$BEFORE" >> "$GITHUB_ENV"
+      - name: Guard tests
+        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs
+      - name: Close Staging import gate during deployment
+        if: inputs.environment == 'staging'
+        env:
+          STAGING_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+        run: python3 scripts/verify-staging-containment.py --prepare-only
+      - name: Recover a completed Staging source deployment
+        if: inputs.environment == 'staging'
+        env:
+          STAGING_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+        run: |
+          set -euo pipefail
+          RECOVERED=$(python3 scripts/verify-staging-containment.py --deployment-base)
+          if [ -n "$RECOVERED" ] && git cat-file -e "$RECOVERED^{commit}" 2>/dev/null; then
+            git merge-base --is-ancestor "$RECOVERED" HEAD
+            echo "DEPLOY_BEFORE=$RECOVERED" >> "$GITHUB_ENV"
+            echo "Resuming from deployed sources; containment verification remains required."
+          fi
+      - name: Deploy complete source bundles
+        run: |
+          set -euo pipefail
+          FUNCTIONS=$(node scripts/edge-deploy-plan.mjs)
+          node scripts/deploy-edge.mjs "$DEPLOY_ENV" $FUNCTIONS
+      - name: Record source deployment before verification
+        if: inputs.environment == 'staging'
+        env:
+          STAGING_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+        run: python3 scripts/verify-staging-containment.py --record-deployment
+      - name: Keep agent credentials connected on Staging
+        if: inputs.environment == 'staging'
+        env:
+          CARMEN_TENANT_ID: 2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019
+        run: python3 scripts/sync-agent-credentials.py
+      - name: Verify Staging containment
+        if: inputs.environment == 'staging'
+        env:
+          STAGING_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+        run: |
+          python3 scripts/verify-staging-containment.py
+      - name: Record successful revision
+        if: inputs.function_names == ''
+        run: |
+          set -euo pipefail
+          git tag -f "edge-deployed-$DEPLOY_ENV" "$SOURCE_SHA"
+          git push origin "refs/tags/edge-deployed-$DEPLOY_ENV" --force
+          echo "### $DEPLOY_ENV Edge revision: $SOURCE_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+  mirror:
+    needs: deploy
+    if: inputs.environment == 'staging' && inputs.function_names == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: staging-business-data-mirror
+      cancel-in-progress: false
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+      PRODUCTION_REF: zvoijyneresvkadpprel
+      STAGING_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+      - name: Reconcile business data
+        run: python3 scripts/sync-staging-data.py --apply

@@ -21,7 +21,8 @@ import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { useSeoScope } from "@/hooks/useSeoScope";
-import { filterSeoReportsByDomain, seoDomainsMatch } from "@/lib/seoDomain";
+import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
+import { filterSeoReportsByDomain, resolveLinkedCrmTableId, resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
 
 interface SeoReportTabsProps {
   /**
@@ -57,14 +58,15 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
   // Check whether we actually have valid Ahrefs SEO reports for this client.
   // Use client-scoped lookup so reports stored under a sibling tenant still load.
+  /** The one domain this client's SEO artifacts may come from. */
+  const expectedDomain = scope?.expectedDomain || "";
+
   const { data: ahrefsReports } = useAhrefsReports({
     clientId,
     tenantIds: accessibleTenantIds,
+    domain: expectedDomain || undefined,
     limit: 12,
   });
-
-  /** The one domain this client's SEO artifacts may come from. */
-  const expectedDomain = scope?.expectedDomain || "";
 
   const ownDomainReports = useMemo(
     () => filterSeoReportsByDomain(ahrefsReports || [], expectedDomain),
@@ -114,14 +116,21 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const targetDomain = (seoTable?.integration_settings as any)?.targetDomain || '';
   const savedGaTableId = (seoTable?.integration_settings as any)?.linkedGaTableId || '';
   const savedGscTableId = (seoTable?.integration_settings as any)?.linkedGscTableId || '';
-  const savedGscSiteUrlRaw = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || '';
-  // Ignore a linked Search Console property that belongs to another site —
-  // otherwise a bad link keeps feeding another client's clicks/impressions in.
-  const savedGscSiteUrl =
-    savedGscSiteUrlRaw && expectedDomain && !seoDomainsMatch(savedGscSiteUrlRaw, expectedDomain)
-      ? ''
-      : savedGscSiteUrlRaw;
+  const savedGscSiteUrl = resolveSeoLinkedGscSiteUrl({
+    integrationSettings: (seoTable?.integration_settings || {}) as Record<string, unknown>,
+    clientGscSiteUrl: scope?.clientGscSiteUrl,
+    expectedDomain,
+  });
   const savedGscLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || 'all') as 'all' | 'he' | 'en';
+
+  // Org-wide GSC fallback — same path as SeoDashboardView so the Search Console
+  // tab works even when the viewer didn't OAuth personally (Anna's connection).
+  const resolvedGsc = useResolvedGscIntegration({
+    clientId,
+    tenantIds: accessibleTenantIds,
+    savedSiteUrl: savedGscSiteUrl,
+    expectedDomain,
+  });
 
   // GA / GSC tables come from the scope (already searched across all accessible tenants)
   const gaTables = scope?.gaTables || [];
@@ -133,32 +142,20 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const [showGaDialog, setShowGaDialog] = useState(false);
 
   useEffect(() => {
-    if (savedGaTableId) setSelectedGaTableId(savedGaTableId);
-    else {
-      // Auto-match by client_id
-      const matchByClient = gaTables.find(t => t.client_id === clientId);
-      if (matchByClient) {
-        setSelectedGaTableId(matchByClient.id);
-        // Auto-save the link
-        if (seoTable?.id) saveLinkMutation.mutate({ key: 'linkedGaTableId', value: matchByClient.id });
-      } else if (gaTables.length === 1) {
-        setSelectedGaTableId(gaTables[0].id);
-      }
+    const resolved = resolveLinkedCrmTableId(savedGaTableId, gaTables, clientId);
+    setSelectedGaTableId(resolved);
+    if (resolved && resolved !== savedGaTableId && seoTable?.id) {
+      saveLinkMutation.mutate({ key: "linkedGaTableId", value: resolved });
     }
-  }, [savedGaTableId, gaTables, clientId]);
+  }, [savedGaTableId, gaTables, clientId, seoTable?.id]);
 
   useEffect(() => {
-    if (savedGscTableId) setSelectedGscTableId(savedGscTableId);
-    else {
-      const matchByClient = gscTables.find(t => t.client_id === clientId);
-      if (matchByClient) {
-        setSelectedGscTableId(matchByClient.id);
-        if (seoTable?.id) saveLinkMutation.mutate({ key: 'linkedGscTableId', value: matchByClient.id });
-      } else if (gscTables.length === 1) {
-        setSelectedGscTableId(gscTables[0].id);
-      }
+    const resolved = resolveLinkedCrmTableId(savedGscTableId, gscTables, clientId);
+    setSelectedGscTableId(resolved);
+    if (resolved && resolved !== savedGscTableId && seoTable?.id) {
+      saveLinkMutation.mutate({ key: "linkedGscTableId", value: resolved });
     }
-  }, [savedGscTableId, gscTables, clientId]);
+  }, [savedGscTableId, gscTables, clientId, seoTable?.id]);
 
   // Save linked table ID to SEO table's integration_settings
   const saveLinkMutation = useMutation({
@@ -268,6 +265,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     (Array.isArray(gscUserIntegrations) && gscUserIntegrations.length > 0) ||
     gscTables.length > 0 ||
     !!savedGscTableId ||
+    !!resolvedGsc.integrationId ||
     !!savedGscSiteUrl;
 
   // Always render tabs so the Maskyoo (calls) tab is available even when no
@@ -375,6 +373,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   domain={savedGscSiteUrl || expectedDomain || targetDomain || clientWebsite}
                   initialSiteUrl={savedGscSiteUrl}
                   initialLangFilter={savedGscLangFilter}
+                  resolvedFallback={resolvedGsc}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
                   onSiteSelected={(siteUrl) => {
                     if (siteUrl && siteUrl !== savedGscSiteUrl) {

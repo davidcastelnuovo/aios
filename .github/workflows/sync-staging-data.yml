@@ -1,0 +1,31 @@
+name: Mirror live business data to Staging
+on:
+  workflow_dispatch:
+  # GitHub schedules run from the default branch. This starts after the reviewed
+  # infrastructure release reaches main; deployment verification also runs a sync.
+  schedule:
+    - cron: '*/5 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: staging-business-data-mirror
+  cancel-in-progress: false
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+      PRODUCTION_REF: zvoijyneresvkadpprel
+      STAGING_REF: ${{ secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Mirror regression tests
+        run: python3 -m unittest discover -s scripts -p 'test_staging_mirror.py'
+      - name: Reconcile changed customer and report rows
+        run: python3 scripts/sync-staging-data.py --apply

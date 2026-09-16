@@ -1,86 +1,23 @@
 name: Deploy Supabase Edge Function
-
-# Deploys edge functions from repo source to the PRODUCTION Supabase project.
-#
-# - On merge to main: auto-deploys every function whose files changed anywhere in
-#   the pushed range (verify_jwt is read per-function from supabase/config.toml).
-# - Manual (Actions tab → Run workflow): deploy one function, or several by
-#   passing a space-separated list of folder names.
-#
-# Requires a repo secret named BASE_ACCESS_TOKEN = a Supabase access token (sbp_...).
+permissions:
+  contents: write
 
 on:
+  push:
+    branches: [main]
+    paths: ['supabase/functions/**', 'supabase/config.toml', 'scripts/*edge*', 'scripts/staging-only-functions.json', '.github/workflows/deploy*edge*.yml']
   workflow_dispatch:
     inputs:
       function_name:
-        description: 'Edge function folder name(s) to deploy — space-separated for several'
-        required: false
-        default: 'trigger-automation'
-      verify_jwt:
-        description: 'Require a JWT? true for normal functions, false for public webhooks'
-        required: false
-        default: 'true'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/deploy-edge-function.yml'
-      - 'supabase/functions/**'
-
+        description: 'Function names; empty reconciles all changes since last successful deployment'
+        type: string
+        default: ''
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
-      PROJECT_REF: zvoijyneresvkadpprel
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Determine functions to deploy
-        id: funcs
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "list=${{ github.event.inputs.function_name }}" >> "$GITHUB_OUTPUT"
-          else
-            # Diff the whole pushed range, not just HEAD^..HEAD. A merge commit's
-            # first parent hides functions changed by the other commits in the same
-            # push, which silently left production running stale code.
-            BEFORE="${{ github.event.before }}"
-            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
-               || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-              BEFORE="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
-            fi
-            CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- 'supabase/functions/**' \
-              | sed -E 's#supabase/functions/([^/]+)/.*#\1#' \
-              | { grep -v '^_shared$' || true; } | sort -u | tr '\n' ' ')
-            echo "Diff range: $BEFORE..${{ github.sha }}"
-            echo "Changed functions: $CHANGED"
-            echo "list=$CHANGED" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Deploy
-        run: |
-          set -euo pipefail
-          FUNCS="${{ steps.funcs.outputs.list }}"
-          if [ -z "${FUNCS// }" ]; then echo "No functions to deploy."; exit 0; fi
-          for FUNC in $FUNCS; do
-            # Read verify_jwt for this function from config.toml (default true).
-            VJWT=$(awk -v sec="[functions.$FUNC]" '
-              $0==sec {found=1; next}
-              found && /^\[/ {exit}
-              found && /verify_jwt/ {print $3; exit}' supabase/config.toml)
-            VJWT="${VJWT:-true}"
-            FLAG=""
-            if [ "$VJWT" = "false" ]; then FLAG="--no-verify-jwt"; fi
-            echo "::group::Deploying $FUNC (verify_jwt=$VJWT)"
-            supabase functions deploy "$FUNC" --project-ref "$PROJECT_REF" $FLAG
-            echo "::endgroup::"
-          done
+    uses: ./.github/workflows/deploy-edge-reusable.yml
+    with:
+      environment: production
+      source_sha: ${{ github.sha }}
+      function_names: ${{ inputs.function_name || '' }}
+      base_revision: ${{ github.event.before || '' }}
+    secrets: inherit

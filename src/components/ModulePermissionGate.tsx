@@ -47,6 +47,7 @@ export function ModulePermissionGate({
     isReady,
     isFetchedAfterMount,
     isSuperAdmin,
+    isOwner,
   } = useUserPermissions();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
@@ -67,6 +68,10 @@ export function ModulePermissionGate({
   }
 
   if (view === "error") {
+    // Owners/admins should not be locked out when the permissions query flakes.
+    if (isSuperAdmin || isOwner) {
+      return <>{children}</>;
+    }
     return (
       <div className="flex flex-col items-center justify-center gap-4 p-12 text-center" dir="rtl">
         <p className="text-muted-foreground">לא הצלחנו לטעון את ההרשאות שלך. נסה שוב.</p>

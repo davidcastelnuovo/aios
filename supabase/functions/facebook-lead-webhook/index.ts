@@ -14,6 +14,7 @@ import {
   claimFacebookLeadIntake,
   facebookTriggerAutomationSucceeded,
   findExistingFacebookLead,
+  shouldCreateCrmLeadForFacebookFlow,
   wasFacebookLeadAutomationClaimed,
 } from "../_shared/facebook-lead-dedup.ts";
 
@@ -188,6 +189,19 @@ serve(async (req) => {
                   if (!flowAutomation) {
                     continue;
                   }
+
+                  const { data: flowTriggerStep } = await supabase
+                    .from('automation_flow_steps')
+                    .select('action_type, configuration')
+                    .eq('automation_id', flowStep.automation_id)
+                    .eq('step_type', 'trigger')
+                    .maybeSingle();
+                  const skipCrmLead = !(await shouldCreateCrmLeadForFacebookFlow(
+                    supabase,
+                    flowStep.automation_id,
+                    stepConfig,
+                    flowTriggerStep?.action_type,
+                  ));
                   
                   // Get access token from the referenced integration
                   const { data: fbIntegration } = await supabase
@@ -306,8 +320,8 @@ serve(async (req) => {
                     flowFbFields[`fb_${k}`] = v;
                   }
                   
-                  let flowLeadId = existingLead?.id || null;
-                  if (!flowLeadId) {
+                  let flowLeadId = skipCrmLead ? null : (existingLead?.id || null);
+                  if (!skipCrmLead && !flowLeadId) {
                     const { data: newFlowLead, error: flowInsertErr } = await supabase
                       .from('leads')
                       .insert(flowLeadRecord)
@@ -319,6 +333,21 @@ serve(async (req) => {
                       continue;
                     }
                     flowLeadId = newFlowLead.id;
+                  } else if (skipCrmLead) {
+                    const { error: receiptError } = await supabase
+                      .from('lead_notification_events')
+                      .insert({
+                        tenant_id: flowTenantId,
+                        source: 'facebook',
+                        external_id: leadgenId,
+                        client_id: flowClient?.client_id ?? null,
+                        form_id: formId,
+                      });
+                    if (receiptError?.code === '23505') {
+                      processedTenants.add(flowTenantId);
+                      continue;
+                    }
+                    if (receiptError) throw receiptError;
                   }
 
                   processedTenants.add(flowTenantId);
@@ -336,7 +365,7 @@ serve(async (req) => {
                         automationId: flowStep.automation_id,
                         source: 'flow',
                         data: {
-                          lead_id: flowLeadId,
+                          ...(flowLeadId ? { lead_id: flowLeadId } : {}),
                           contact_name: flowLeadRecord.contact_name || '',
                           company_name: flowLeadRecord.company_name || '',
                           phone: flowLeadRecord.phone || '',
@@ -347,6 +376,7 @@ serve(async (req) => {
                           notes: flowLeadRecord.notes || '',
                           facebook_form_id: formId,
                           facebook_leadgen_id: leadgenId,
+                          crm_lead_created: !skipCrmLead && Boolean(flowLeadId),
                           ...flowRoutingPayload,
                           ...flowFbFields,
                         },

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useLayoutEffect } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { markLinkedTaskDoneForCalendarEvent } from "@/lib/taskCalendarSync";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -31,13 +31,14 @@ import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
-import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters, resolveMineTaskAssignee } from "./TaskFiltersDialog";
+import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import type { QuickTaskPayload } from "./QuickTaskInput";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useViewAs } from "@/contexts/ViewAsContext";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTerminology } from "@/hooks/useTerminology";
@@ -50,9 +51,11 @@ import {
   resolveTasksBoardScope,
   filterTasksForBoardView,
   syncLocalTasksForAgencyFilter,
+  filterTasksByBoardTenantScope,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineAssignmentOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
+import { filterTasksByCampaignerBoardFilter, filterTasksForBoardUserPreview } from "@/lib/taskFilters";
 import { buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 
@@ -97,7 +100,9 @@ export function WeeklyTaskBoard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
-  const { isOwner, isSuperAdmin } = useUserRole();
+  const { isViewingAs, viewAsUserId, viewAsUserName } = useViewAs();
+  const boardUserId = isViewingAs && viewAsUserId ? viewAsUserId : user?.id ?? null;
+  const { isOwner, isSuperAdmin, userId: authenticatedUserId } = useUserRole();
   const { state: sidebarState } = useSidebar();
   const { t } = useTerminology();
 
@@ -137,14 +142,16 @@ export function WeeklyTaskBoard() {
   // Everyone lands on their own queue: tasks assigned to the staff member
   // linked on the user (profiles.campaigner_id / sales_person_id).
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+  const appliedOwnerBoardDefaultRef = useRef(false);
+  const effectiveCampaignerFilter = isViewingAs ? "mine" : filters.campaignerId;
 
   // Personal queue ("mine"): default header to "all agencies" so cross-agency
   // assignments are visible. User can still narrow by agency afterward.
   useLayoutEffect(() => {
-    if (filters.campaignerId === "mine") {
+    if (effectiveCampaignerFilter === "mine") {
       setSelectedAgency("all");
     }
-  }, [filters.campaignerId, setSelectedAgency]);
+  }, [effectiveCampaignerFilter, setSelectedAgency]);
 
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
@@ -225,14 +232,14 @@ export function WeeklyTaskBoard() {
 
   // Resolve every campaigner row + sales person that represents this user for "mine".
   const { data: mineIdentity, isSuccess: mineIdentityReady } = useQuery({
-    queryKey: ["mine-task-identity", user?.id, tenantId, crossTenantAgencyIds.join(",")],
+    queryKey: ["mine-task-identity", boardUserId, tenantId, crossTenantAgencyIds.join(","), isViewingAs, viewAsUserId],
     queryFn: () =>
       fetchMineTaskIdentity({
-        userId: user!.id,
+        userId: boardUserId!,
         tenantId: tenantId!,
         crossTenantAgencyIds,
       }),
-    enabled: !!user?.id && !!tenantId,
+    enabled: !!boardUserId && !!tenantId,
   });
 
   const primaryCampaignerId =
@@ -243,16 +250,19 @@ export function WeeklyTaskBoard() {
     mineIdentity?.kind === "assigned" ? mineIdentity.salesPersonId ?? null : null;
 
   // Owners without a linked staff row: "mine" only matches created_by and looks empty.
+  // Apply once on entry — do not override when the user explicitly picks "שלי בלבד".
   useLayoutEffect(() => {
-    if (!mineIdentityReady || !mineIdentity) return;
+    if (isViewingAs) return;
+    if (!mineIdentityReady || !mineIdentity || appliedOwnerBoardDefaultRef.current) return;
     if (
-      filters.campaignerId === "mine" &&
+      effectiveCampaignerFilter === "mine" &&
       mineIdentity.kind === "created_by" &&
       (isOwner || isSuperAdmin)
     ) {
+      appliedOwnerBoardDefaultRef.current = true;
       setFilters((prev) => ({ ...prev, campaignerId: "all" }));
     }
-  }, [mineIdentityReady, mineIdentity, isOwner, isSuperAdmin, filters.campaignerId]);
+  }, [mineIdentityReady, mineIdentity, isOwner, isSuperAdmin, effectiveCampaignerFilter, isViewingAs]);
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
@@ -291,11 +301,11 @@ export function WeeklyTaskBoard() {
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching, isSuccess, isError, error: tasksError } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency],
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, effectiveCampaignerFilter, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency, isViewingAs, viewAsUserId, boardUserId],
     enabled:
       !!tenantId &&
-      !!user?.id &&
-      (filters.campaignerId !== "mine" || mineIdentityReady),
+      !!boardUserId &&
+      (effectiveCampaignerFilter !== "mine" || mineIdentityReady),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
@@ -318,13 +328,11 @@ export function WeeklyTaskBoard() {
       const boardScope = resolveTasksBoardScope({
         tenantId: tenantId!,
         crossTenantAgencyIds,
-        accessibleAgencyIds: (agencies || []).map((agency) => agency.id),
       });
 
-      let personScopeCampaignerIds: string[] = [];
       let collaboratorTaskIds: string[] = [];
-      if (filters.campaignerId === "mine") {
-        personScopeCampaignerIds = mineIdentity?.campaignerIds ?? [];
+      if (effectiveCampaignerFilter === "mine") {
+        const personScopeCampaignerIds = mineIdentity?.campaignerIds ?? [];
         if (personScopeCampaignerIds.length > 0) {
           const { data: collabRows } = await supabase
             .from("task_collaborators")
@@ -332,13 +340,9 @@ export function WeeklyTaskBoard() {
             .in("campaigner_id", personScopeCampaignerIds);
           collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
         }
-      } else if (filters.campaignerId !== "all" && filters.campaignerId !== "none") {
-        personScopeCampaignerIds = [filters.campaignerId];
       }
 
-      query = query.or(
-        buildTasksBoardScopeOrFilter(boardScope, personScopeCampaignerIds, collaboratorTaskIds),
-      );
+      query = query.or(buildTasksBoardScopeOrFilter(boardScope));
 
       // Include: current range OR overdue open OR unscheduled open (no due_date).
       // Do not fetch historical done-undated / all-time untimed rows — that
@@ -354,24 +358,29 @@ export function WeeklyTaskBoard() {
       );
 
       // "שלי בלבד" = tasks assigned to the staff member this user is linked to.
-      if (filters.campaignerId === "mine") {
+      if (effectiveCampaignerFilter === "mine") {
         const mine = mineIdentity!;
         const assignmentOr = buildMineAssignmentOrFilter(mine);
-        if (assignmentOr) {
+        const mineParts: string[] = [];
+        if (assignmentOr) mineParts.push(assignmentOr);
+        if (collaboratorTaskIds.length > 0) {
+          mineParts.push(`id.in.(${collaboratorTaskIds.join(",")})`);
+        }
+        if (mineParts.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(assignmentOr);
+          query = (query as any).or(mineParts.join(","));
         } else if (mine.kind === "created_by") {
           query = query.eq("created_by", mine.userId);
         } else {
           // No staff row linked — "mine" would otherwise return the whole tenant scope.
           return [];
         }
-      } else if (filters.campaignerId === "none") {
+      } else if (effectiveCampaignerFilter === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         query = (query as any).is("campaigner_id", null);
-      } else if (filters.campaignerId !== "all") {
+      } else if (effectiveCampaignerFilter !== "all") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        query = (query as any).eq("campaigner_id", filters.campaignerId);
+        query = (query as any).eq("campaigner_id", effectiveCampaignerFilter);
       }
 
       // Apply task type filter
@@ -419,7 +428,45 @@ export function WeeklyTaskBoard() {
 
   // Local tasks state for optimistic updates
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
+
+  // View-as preview: show the selected user's queue, not the admin's.
+  useEffect(() => {
+    if (!isViewingAs || !viewAsUserId) return;
+    setFilters(defaultTaskFilters);
+    setLocalTasks([]);
+    appliedOwnerBoardDefaultRef.current = true;
+    queryClient.removeQueries({ queryKey: ["tasks", tenantId] });
+    queryClient.removeQueries({ queryKey: ["mine-task-identity"] });
+  }, [isViewingAs, viewAsUserId, tenantId, queryClient]);
   
+  const applyBoardViewFilters = useMemo(
+    () => (rows: FullTask[]) => {
+      let filtered = filterTasksByBoardTenantScope(
+        filterTasksForBoardView(rows, selectedAgency, effectiveCampaignerFilter),
+        tenantId!,
+        crossTenantAgencyIds,
+      );
+      filtered = filterTasksByCampaignerBoardFilter(
+        filtered,
+        effectiveCampaignerFilter,
+        mineIdentity ?? null,
+      );
+      if (isViewingAs && boardUserId) {
+        filtered = filterTasksForBoardUserPreview(filtered, boardUserId, mineIdentity ?? null);
+      }
+      return filtered;
+    },
+    [
+      selectedAgency,
+      effectiveCampaignerFilter,
+      tenantId,
+      crossTenantAgencyIds,
+      mineIdentity,
+      isViewingAs,
+      boardUserId,
+    ],
+  );
+
   useEffect(() => {
     if (isError) return;
     if (!isSuccess && !isFetching) return;
@@ -431,13 +478,14 @@ export function WeeklyTaskBoard() {
       fetchedTasks,
       previousLocal: localTasks,
       selectedAgency,
-      campaignerFilter: filters.campaignerId,
+      campaignerFilter: effectiveCampaignerFilter,
+      applyCampaignerFilter: applyBoardViewFilters,
     });
     setLocalTasks(next);
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
     // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFetching, isSuccess, isError, selectedAgency, filters.campaignerId, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+  }, [isFetching, isSuccess, isError, selectedAgency, effectiveCampaignerFilter, isViewingAs, boardUserId, applyBoardViewFilters, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
 
   useEffect(() => {
     if (!isError || !tasksError) return;
@@ -448,8 +496,8 @@ export function WeeklyTaskBoard() {
   // Team board: header agency narrows rows. Personal "mine" queue is the linked
   // staff member's assignments across every agency.
   const tasks = useMemo(
-    () => filterTasksForBoardView(localTasks, selectedAgency, filters.campaignerId),
-    [localTasks, selectedAgency, filters.campaignerId],
+    () => applyBoardViewFilters(localTasks),
+    [localTasks, applyBoardViewFilters],
   );
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates).
@@ -457,11 +505,11 @@ export function WeeklyTaskBoard() {
   // queue — "mine" and the user's own staff row keep the calendar.
   const filteredCalendarEvents = useMemo(() => {
     const viewingOtherCampaigner =
-      !!filters.campaignerId &&
-      filters.campaignerId !== "mine" &&
-      filters.campaignerId !== "all" &&
-      filters.campaignerId !== "none" &&
-      filters.campaignerId !== primaryCampaignerId;
+      !!effectiveCampaignerFilter &&
+      effectiveCampaignerFilter !== "mine" &&
+      effectiveCampaignerFilter !== "all" &&
+      effectiveCampaignerFilter !== "none" &&
+      effectiveCampaignerFilter !== primaryCampaignerId;
     if (viewingOtherCampaigner) {
       return [];
     }
@@ -479,7 +527,7 @@ export function WeeklyTaskBoard() {
         .map((t) => t.google_calendar_event_id as string),
     );
     return calendarEvents.filter((event) => !syncedEventIds.has(event.id));
-  }, [calendarEvents, tasks, filters.campaignerId, dateRange, primaryCampaignerId]);
+  }, [calendarEvents, tasks, effectiveCampaignerFilter, dateRange, primaryCampaignerId]);
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
@@ -542,7 +590,10 @@ export function WeeklyTaskBoard() {
         priority: 5,
         tenant_id: tenantId,
         agency_id: agencyId,
-        created_by: user?.id || null,
+        created_by: boardUserId,
+        ...(isViewingAs && authenticatedUserId
+          ? { impersonated_by: authenticatedUserId }
+          : {}),
         campaigner_id: assignedCampaignerId,
         sales_person_id: assignedCampaignerId ? null : assignedSalesPersonId,
         client_id: clientId ?? null,
@@ -1233,6 +1284,11 @@ export function WeeklyTaskBoard() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      {isViewingAs && (
+        <div className="mb-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+          מציג משימות של <strong>{viewAsUserName}</strong> בלבד (שלי בלבד)
+        </div>
+      )}
       {/* Header - Desktop only - single compact row */}
       <div className="hidden md:flex md:items-center md:justify-between mb-2 gap-3">
         <div className="flex items-center gap-3">
@@ -1280,9 +1336,9 @@ export function WeeklyTaskBoard() {
               <Button variant="outline" className="gap-2 relative">
                 <Filter className="h-4 w-4" />
                 פילטרים
-                {(activeFiltersCount > 0 || filters.campaignerId !== "mine") && (
+                {(activeFiltersCount > 0 || effectiveCampaignerFilter !== "mine") && (
                   <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
-                    {activeFiltersCount + (filters.campaignerId !== "mine" ? 1 : 0)}
+                    {activeFiltersCount + (effectiveCampaignerFilter !== "mine" ? 1 : 0)}
                   </Badge>
                 )}
               </Button>
@@ -1291,8 +1347,9 @@ export function WeeklyTaskBoard() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">{t('role_campaigner')}</label>
                 <Select
-                  value={filters.campaignerId}
+                  value={effectiveCampaignerFilter}
                   onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+                  disabled={isViewingAs}
                 >
                   <SelectTrigger className="w-full gap-2">
                     <Users className="h-4 w-4 shrink-0" />
@@ -1344,8 +1401,9 @@ export function WeeklyTaskBoard() {
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 justify-between shrink-0">
             <Select
-              value={filters.campaignerId}
+              value={effectiveCampaignerFilter}
               onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+              disabled={isViewingAs}
             >
               <SelectTrigger className="w-full gap-2">
                 <Users className="h-4 w-4 shrink-0" />
@@ -1688,7 +1746,10 @@ export function WeeklyTaskBoard() {
             priority: 5,
             tenant_id: tenantId,
             agency_id: agencyId,
-            created_by: user?.id || null,
+            created_by: boardUserId,
+        ...(isViewingAs && authenticatedUserId
+          ? { impersonated_by: authenticatedUserId }
+          : {}),
             campaigner_id: myCampaignerId,
             sales_person_id: myCampaignerId ? null : mySalesPersonId,
             due_date: data.dueDate,
