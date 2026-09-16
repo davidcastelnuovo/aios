@@ -17,6 +17,7 @@ import { DEV_ENVIRONMENT_STANDING } from '../_shared/environments-standing.ts'
 import {
   applyToolForceIncludes,
   buildQuickAck,
+  buildToolApiEntries,
   fetchRelevantMemoryPointers,
   searchToolsFromIndex,
   selectRelevantToolsForMessage,
@@ -7393,50 +7394,56 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // tools, and do not fall back to Carmen's full CRM set. The pinned
     // copywriter skin still lists operational tools (gmail_send, Meta reads);
     // those must not be injected later either.
+    let promotedToolNames = new Set(filteredTools.map((t) => t.name))
     if (pinSkillsOnly) {
       filteredTools = []
+      promotedToolNames = new Set()
       console.log('[AGENT] pin_skills_only: exposing no tools (isolated copy session)')
     } else if (isCarmen) {
-      filteredTools = await selectRelevantToolsForMessage(supabase, String(command_text || ''), filteredTools, {
+      const routed = await selectRelevantToolsForMessage(supabase, String(command_text || ''), filteredTools, {
         lazy: tokenOptimize,
         priorityTools: PRIORITY_TOOLS,
         legacyCoreTools: CORE_TOOLS,
-        forceInclude: (userText, picked) => applyToolForceIncludes(userText, picked, {
+        forceInclude: (userText, picked, fullSchemaNames) => applyToolForceIncludes(userText, picked, {
           isExplicitApprovalPhrase,
           isExplicitRejectionPhrase,
           extractMeetingUrl,
-        }),
+        }, fullSchemaNames),
       })
+      filteredTools = routed.tools
+      promotedToolNames = routed.fullSchemaNames
     }
 
-    const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
+    let exposedMcpTools: Array<{ name: string; description?: string; parameters?: any }> = []
+    const toolsForAPI: Array<{ type: 'function'; function: any }> = []
+    const rebuildToolsForApi = () => {
+      toolsForAPI.length = 0
+      toolsForAPI.push(...buildToolApiEntries(filteredTools, promotedToolNames, tokenOptimize))
+      toolsForAPI.push(...buildToolApiEntries(exposedMcpTools, promotedToolNames, tokenOptimize))
+    }
+    rebuildToolsForApi()
     const expandAgentTools = (extra: Array<{ name: string; description?: string; parameters?: any }>) => {
-      const present = new Set(toolsForAPI.map((t: any) => t.function?.name))
       for (const t of extra) {
-        if (!t?.name || present.has(t.name)) continue
-        toolsForAPI.push({ type: 'function', function: t })
+        if (!t?.name) continue
+        promotedToolNames.add(t.name)
         if (!filteredTools.some((ft) => ft.name === t.name)) filteredTools.push(t as any)
-        present.add(t.name)
       }
+      rebuildToolsForApi()
     }
 
     // Unauthorized callers must not see native GitHub-agent delegation either.
     if (!canEscalateDevFixes) {
       filteredTools = filteredTools.filter((t) => !isDevEscalationTool(t.name))
-      // Rebuild API list from the filtered native set (MCP added below).
-      toolsForAPI.length = 0
-      toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
+      rebuildToolsForApi()
     } else if (devEscalationTier === 'bugfix') {
       filteredTools = filteredTools.filter((t) => !isDevEscalationTool(t.name) || isDevEscalationToolAllowed(t.name, devEscalationTier))
-      toolsForAPI.length = 0
-      toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
+      rebuildToolsForApi()
     }
 
     // OpenAI billing/usage is super_admin-only — hide from everyone else.
     if (!isSuperAdminRole(callerRole)) {
       filteredTools = filteredTools.filter((t) => t.name !== 'get_openai_billing_status')
-      toolsForAPI.length = 0
-      toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
+      rebuildToolsForApi()
     }
 
     // 4b. Load MCP tools for this tenant + agent (Phase 3)
@@ -7473,11 +7480,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           if (escalationAgent === 'none'   && isEscalationMcp(t.name)) continue
           // 4b-ii. Hard auth: only allowlisted tiers may see/call coding-agent MCP tools.
           if (isDevEscalationTool(t.name) && !isDevEscalationToolAllowed(t.name, devEscalationTier)) continue
-          toolsForAPI.push({ type: 'function', function: t as any })
+          exposedMcpTools.push(t as any)
+          if (!tokenOptimize || isEscalationMcp(t.name)) promotedToolNames.add(t.name)
           const exec = mcp.executors.get(t.name)
           if (exec) mcpExecutors.set(t.name, exec)
         }
-        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent}, dev_tier=${devEscalationTier ?? 'none'}, exposed=${[...mcpExecutors.keys()].length})`)
+        rebuildToolsForApi()
+        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent}, dev_tier=${devEscalationTier ?? 'none'}, exposed=${exposedMcpTools.length})`)
       }
       }
     } catch (e: any) {
@@ -7493,10 +7502,10 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       systemPrompt += `\n\n=== סביבת פיתוח (חובה) ===\n${DEV_ENVIRONMENT_STANDING}`
     }
     if (tokenOptimize) {
-      systemPrompt += `\n\n=== אופטימיזציית טוקנים (פעילה) ===
-נטענו רק הנחיות קבועות, זיכרון רלוונטי למשימה, וכלים שעברו אינדקס embedding.
-אם חסר כלי — קראי ל-search_agent_tools עם תיאור קצר; הכלים יתווספו מסבב הבא.
-לזיכרון נוסף: recall_memory / kb_search / recall_memory_fts.`
+      systemPrompt += `\n\n=== אופטימיזציית טוקנים (שלב 2 — פעילה) ===
+נטענו הנחיות קבועות + זיכרון רלוונטי + כלים דרך אינדקס hybrid (מילות מפתח + embedding).
+רוב הכלים מוצגים כסיכום קומפקטי; ל-top רלוונטיים יש סכמה מלאה. קריאה לכלי מקדמת אותו לסכמה מלאה בסבב הבא.
+אם חסר כלי — search_agent_tools. לזיכרון: recall_memory / kb_search / recall_memory_fts.`
     }
 
     // ─── Skill resolver: detect active skills from the user message and append their prompts (DB-backed) ───
@@ -7530,7 +7539,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           isDevEscalationToolAllowed(t.name, devEscalationTier))
         if (missing.length > 0) {
           filteredTools = [...filteredTools, ...missing]
-          toolsForAPI.push(...missing.map(t => ({ type: 'function', function: t })))
+          for (const t of missing) promotedToolNames.add(t.name)
+          rebuildToolsForApi()
           console.log(`[AGENT] Skill tools added: ${missing.map(t => t.name).join(', ')}`)
         }
       }
@@ -7881,9 +7891,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         emit({ type: 'token', content: msg.content })
       }
 
-      // Execute tool calls
+      // Execute tool calls — promote any called tool to full schema for the next round.
       const toolResults: any[] = []
       let pulseDigestShortcut: string | null = null
+      if (tokenOptimize && msg.tool_calls?.length) {
+        for (const tc of msg.tool_calls) promotedToolNames.add(tc.function.name)
+        rebuildToolsForApi()
+      }
       for (const tc of msg.tool_calls) {
         const toolName = tc.function.name
         let toolArgs: Record<string, any> = {}
