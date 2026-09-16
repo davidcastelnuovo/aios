@@ -1,0 +1,38 @@
+---
+description: Never mix WhatsApp connection types (Manus vs Green API vs Meta).
+alwaysApply: true
+---
+
+# WhatsApp connections — NEVER mix
+
+AIOS has **multiple independent WhatsApp connections**. Agents must keep them strictly separate.
+
+| Connection | `integration_type` | Whose phone | Purpose |
+| --- | --- | --- | --- |
+| **Manus WA** | `manus_wa` | Carmen's bot | Carmen chat (private + groups she is in) |
+| **Green API** | `green_api` | Operator (David / campaigner) | CRM chat, broadcasts, operator mirror |
+| **Meta Cloud API** | (Meta WhatsApp) | Business number | Official Cloud API channel |
+
+## Hard rules
+
+1. **Carmen conversation permissions / group allowlists = Manus only.**
+   - Source of truth: Manus Gateway `list-groups` → `manus_groups_sync` / `description='manus_wa_sync'`.
+   - Fallback when Gateway unavailable: `chat_messages.provider = 'manus_wa'` only.
+   - **NEVER** load the full `whatsapp_groups` table for Carmen — it includes Green API operator groups.
+
+2. **Green API groups are not Carmen membership.**
+   - Operator phone sits in many groups Carmen is not in.
+   - Do not copy Green API JIDs into Carmen allowlists, Manus sync tags, or open-member mode.
+
+3. **Do not copy Production WhatsApp tokens into Staging.**
+   - Staging Manus rows are often `settings.mocked=true` with empty `api_key`.
+   - That is expected — do not "fix" by dumping all `whatsapp_groups` into the Manus catalog.
+
+4. **Automations are connection-scoped.**
+   - Carmen automations pin `carmen_integration_id` / `manus_wa`.
+   - Green API automations stay on the operator integration.
+   - Dual-channel echo/mirror guards exist for a reason — do not bypass them.
+
+5. When unsure which connection owns a group: check `chat_messages.provider` (`manus_wa` vs `green_api`) and `tenant_integrations.integration_type`. Prefer Manus Gateway membership over any CRM group list.
+
+If a task asks for "Carmen's groups" and the list looks like the full CRM/Green API roster — **stop and filter to Manus**. Mixing channels is a regression.

@@ -561,8 +561,9 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
         <Alert className="text-right" dir="rtl">
           <AlertDescription className="text-xs space-y-1">
             <p><strong>איך זה עובד:</strong> כרמן מגיבה בקבוצה רק אם (א) הקבוצה מורשית כאן, (ב) מישהו פונה לה ישירות («כרמן…» אם המתג למטה פעיל), ו-(ג) השולח מזוהה ומורשה.</p>
-            <p><strong>רשימה ידנית:</strong> סמן קבוצות — רק בהן כרמן תענה.</p>
-            <p><strong>כל קבוצות Manus:</strong> כל קבוצה שכרמן חברה בה (מסנכרון) — בלי לסמן אחת־אחת.</p>
+            <p><strong>רשימה ידנית:</strong> סמן קבוצות Manus — רק בהן כרמן תענה.</p>
+            <p><strong>כל קבוצות Manus:</strong> כל קבוצה שכרמן חברה בה ב-Manus — בלי לסמן אחת־אחת.</p>
+            <p className="text-muted-foreground">לא מוצגות קבוצות Green API (הטלפון שלך לצ׳אט/דיוור) — רק Manus של כרמן.</p>
           </AlertDescription>
         </Alert>
 

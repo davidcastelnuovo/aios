@@ -1,7 +1,17 @@
 import { normalizeManusGroupsPayload } from './manus-wa-groups.mjs';
 
+/**
+ * Manus group sync — Carmen's WhatsApp ONLY.
+ *
+ * NEVER mix with Green API (operator phone), Meta Cloud API, or any other WA
+ * connection. Source of truth for membership is Manus Gateway list-groups.
+ * Staging mocked Manus has no tokens — fallback is manus_wa chat traffic only,
+ * never the full whatsapp_groups table (that includes Green API groups).
+ */
+
 const BASE_URL = Deno.env.get('MANUS_GATEWAY_URL') || 'https://whatsappgw-pzpyrrww.manus.space';
 const WORKER_SECRET = Deno.env.get('MANUS_GATEWAY_WORKER_SECRET') || '';
+const MANUS_SYNC_TAG = 'manus_wa_sync';
 
 function extractNextCursor(data) {
   const cursor = data?.nextCursor ?? data?.next_cursor ?? data?.cursor;
@@ -30,24 +40,19 @@ async function fetchGroupsPage(url, headers) {
   return {
     groups: normalizeManusGroupsPayload(data),
     nextCursor: extractNextCursor(data),
-    rawCount: Array.isArray(data?.groups) ? data.groups.length
-      : Array.isArray(data?.data?.groups) ? data.data.groups.length
-      : Array.isArray(data) ? data.length : null,
   };
 }
 
 async function fetchAllGroups(buildUrl, headers) {
   const byId = new Map();
   let cursor;
-  let lastRawCount = null;
   for (let page = 0; page < 100; page++) {
-    const { groups, nextCursor, rawCount } = await fetchGroupsPage(buildUrl(cursor), headers);
-    lastRawCount = rawCount;
+    const { groups, nextCursor } = await fetchGroupsPage(buildUrl(cursor), headers);
     for (const g of groups) byId.set(g.id, g);
     if (!nextCursor || nextCursor === cursor) break;
     cursor = nextCursor;
   }
-  return { groups: [...byId.values()], lastRawCount };
+  return [...byId.values()];
 }
 
 function resolveInstanceId(integ) {
@@ -65,7 +70,7 @@ function isMockedIntegration(integ) {
   return settings.mocked === true || settings.mock === true;
 }
 
-/** Admin worker secret first, then instance API key. */
+/** Admin worker secret first, then instance API key. Never Green API. */
 export async function fetchGroupsFromGateway(instanceId, apiKey) {
   const attempts = [];
 
@@ -98,39 +103,53 @@ export async function fetchGroupsFromGateway(instanceId, apiKey) {
   }
 
   if (!attempts.length) {
-    throw new Error('אין דרך לגשת ל-Gateway (חסר api_key וגם MANUS_GATEWAY_WORKER_SECRET)');
+    throw new Error('אין דרך לגשת ל-Manus Gateway (חסר api_key וגם MANUS_GATEWAY_WORKER_SECRET)');
   }
 
   let lastErr = null;
   for (const attempt of attempts) {
     try {
-      const { groups, lastRawCount } = await attempt.run();
+      const groups = await attempt.run();
       if (groups.length > 0) return { groups, via: attempt.via };
-      lastErr = new Error(`${attempt.via}: gateway returned 0 groups (rawCount=${lastRawCount})`);
+      lastErr = new Error(`${attempt.via}: Gateway החזיר 0 קבוצות`);
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err));
       console.warn('[manus-wa-sync-groups] attempt failed', attempt.via, lastErr.message);
     }
   }
-  throw lastErr || new Error('סנכרון קבוצות מ-Gateway נכשל');
+  throw lastErr || new Error('סנכרון קבוצות מ-Manus Gateway נכשל');
 }
 
-async function loadLocalGroupCatalog(supabaseSvc, tenantId) {
-  const pageSize = 1000;
+/**
+ * Staging-safe fallback: ONLY groups that already have manus_wa message traffic.
+ * Never scan the full whatsapp_groups table — that mixes Green API operator groups.
+ */
+async function loadManusTrafficGroups(supabaseSvc, tenantId) {
+  const { data: manusMsgs, error: msgErr } = await supabaseSvc
+    .from('chat_messages')
+    .select('group_id')
+    .eq('tenant_id', tenantId)
+    .eq('provider', 'manus_wa')
+    .not('group_id', 'is', null);
+  if (msgErr) throw msgErr;
+
+  const ids = [...new Set((manusMsgs || []).map((m) => m.group_id).filter(Boolean).map(String))];
+  if (!ids.length) return [];
+
   const rows = [];
-  for (let from = 0; ; from += pageSize) {
+  const chunkSize = 200;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
     const { data, error } = await supabaseSvc
       .from('whatsapp_groups')
       .select('id, group_name, group_chat_id, is_blocked')
       .eq('tenant_id', tenantId)
-      .or('is_blocked.is.null,is_blocked.eq.false')
-      .order('group_name')
-      .range(from, from + pageSize - 1);
+      .in('id', chunk)
+      .or('is_blocked.is.null,is_blocked.eq.false');
     if (error) throw error;
-    if (!data?.length) break;
-    rows.push(...data);
-    if (data.length < pageSize) break;
+    rows.push(...(data || []));
   }
+
   return rows.map((row) => ({
     id: row.group_chat_id,
     name: row.group_name || row.group_chat_id,
@@ -138,10 +157,35 @@ async function loadLocalGroupCatalog(supabaseSvc, tenantId) {
   }));
 }
 
+async function clearStaleManusSyncTags(supabaseSvc, tenantId, keepGroupIds) {
+  const keep = new Set((keepGroupIds || []).map(String));
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseSvc
+      .from('whatsapp_groups')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('description', MANUS_SYNC_TAG)
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data?.length) break;
+    const stale = data.map((r) => r.id).filter((id) => !keep.has(String(id)));
+    if (stale.length) {
+      const { error: clearErr } = await supabaseSvc
+        .from('whatsapp_groups')
+        .update({ description: null, updated_at: new Date().toISOString() })
+        .in('id', stale);
+      if (clearErr) throw clearErr;
+    }
+    if (data.length < pageSize) break;
+  }
+}
+
 async function persistSyncCatalog(supabaseSvc, integ, settings, instanceId, groups, via, warning) {
   const groupChatIds = [];
   const syncedCatalog = [];
   const synced = [];
+  const keepIds = [];
 
   for (const g of groups) {
     let rowId = g.dbId || null;
@@ -155,7 +199,7 @@ async function persistSyncCatalog(supabaseSvc, integ, settings, instanceId, grou
             tenant_id: integ.tenant_id,
             group_chat_id: g.id,
             group_name: g.name || g.id,
-            description: 'manus_wa_sync',
+            description: MANUS_SYNC_TAG,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'tenant_id,group_chat_id' },
@@ -166,19 +210,23 @@ async function persistSyncCatalog(supabaseSvc, integ, settings, instanceId, grou
       rowId = row?.id || null;
       rowName = row?.group_name || g.name;
     } else {
-      // Keep local rows discoverable as Manus-sourced for the permissions UI.
       await supabaseSvc
         .from('whatsapp_groups')
-        .update({ description: 'manus_wa_sync', updated_at: new Date().toISOString() })
+        .update({ description: MANUS_SYNC_TAG, updated_at: new Date().toISOString() })
         .eq('id', rowId);
     }
 
     if (!rowId) continue;
+    keepIds.push(rowId);
     groupChatIds.push(g.id);
     const entry = { groupChatId: g.id, groupId: rowId, name: rowName || g.name };
     syncedCatalog.push(entry);
     synced.push({ integrationId: integ.id, ...entry });
   }
+
+  // Drop manus_wa_sync tags that are not in this Manus-only catalog
+  // (prevents Green API groups from sticking around after a bad sync).
+  await clearStaleManusSyncTags(supabaseSvc, integ.tenant_id, keepIds);
 
   const mergedSettings = {
     ...settings,
@@ -224,34 +272,34 @@ export async function syncManusGroupsForTenant(supabaseSvc, integrations) {
         if (!groups.length) {
           errors.push({
             integrationId: integ.id,
-            error: `Gateway החזיר 0 קבוצות (via=${via}, instance=${instanceId})`,
+            error: `Manus Gateway החזיר 0 קבוצות (via=${via}, instance=${instanceId})`,
           });
         }
         continue;
       }
 
-      // Staging / mocked Manus has no WhatsApp tokens by design.
-      // Fall back to the tenant's existing whatsapp_groups so permissions UI works.
+      // Staging mocked Manus: NO tokens, and MUST NOT read Green API groups.
+      // Only groups with confirmed manus_wa traffic are allowed.
       if (mocked || !canCallGateway) {
-        const localGroups = await loadLocalGroupCatalog(supabaseSvc, integ.tenant_id);
+        const trafficGroups = await loadManusTrafficGroups(supabaseSvc, integ.tenant_id);
         const warning = mocked
-          ? 'Staging: חיבור Manus מדומה (בלי api_key) — נטענו קבוצות מהמערכת, לא מה-Gateway החי'
-          : 'חסר api_key / WORKER_SECRET — נטענו קבוצות מהמערכת המקומית';
+          ? 'Staging: Manus מדומה (בלי api_key) — רק קבוצות עם תעבורת manus_wa (לא Green API)'
+          : 'חסר Manus api_key / WORKER_SECRET — רק קבוצות עם תעבורת manus_wa';
         const saved = await persistSyncCatalog(
           supabaseSvc,
           integ,
           settings,
           instanceId,
-          localGroups,
-          mocked ? 'staging_mocked_local_catalog' : 'local_catalog_fallback',
+          trafficGroups,
+          mocked ? 'staging_manus_traffic_only' : 'manus_traffic_fallback',
           warning,
         );
         synced.push(...saved);
         warnings.push(warning);
-        if (!localGroups.length) {
+        if (!trafficGroups.length) {
           errors.push({
             integrationId: integ.id,
-            error: 'אין קבוצות מקומיות לטעון, וגם אין גישה ל-Gateway',
+            error: 'אין תעבורת manus_wa לקבוצות, ואין גישה ל-Manus Gateway. לא נטענו קבוצות Green API בכוונה.',
           });
         }
         continue;
@@ -271,7 +319,7 @@ export async function syncManusGroupsForTenant(supabaseSvc, integrations) {
   if (!synced.length) {
     return {
       success: false,
-      error: errors[0]?.error || 'סנכרון קבוצות נכשל — לא נשמרו קבוצות',
+      error: errors[0]?.error || 'סנכרון קבוצות Manus נכשל — לא נשמרו קבוצות',
       errors,
     };
   }
