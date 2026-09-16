@@ -15,7 +15,7 @@ NEVER MODIFY PRODUCTION DIRECTLY.
 Feature → Preview → Staging → Production
 ```
 
-Secrets, project refs, team names, and domains live **outside git**. Use placeholders only:
+Keep secrets and Supabase project refs **outside documentation**; use placeholders for them. Public frontend URLs below are navigation references, not proof of deployment health:
 
 ```
 SUPABASE_STAGING_PROJECT_ID=<configured-outside-git>
@@ -24,14 +24,14 @@ STAGING_DOMAIN=<configured-in-vercel>
 PRODUCTION_DOMAIN=<configured-in-vercel>
 ```
 
-When a task finishes, **always send David the development environment link**: the Vercel Preview URL for the feature branch. If the work is on `develop`, also send `STAGING_DOMAIN=https://staging.aios.co.il`. Never merge to `main` without an explicit `מאשר לפרודקשן`.
+When a task finishes, **always send David the development environment link**: the Vercel Preview URL for the feature branch. For work on `develop`, send the stable alias `https://after-lead-git-develop-aios-crm.vercel.app`; include `https://staging.aios.co.il` only after verifying its branch assignment and availability. Never merge to `main` without an explicit `מאשר לפרודקשן`.
 
 ## Canonical URLs
 
 | Environment | Git | Frontend URL | When it updates |
 | --- | --- | --- | --- |
 | **Production** | `main` | `https://aios.co.il` | merge to `main` |
-| **Staging (persistent dev)** | `develop` | `https://staging.aios.co.il` (alias: `after-lead-git-develop-aios-crm.vercel.app`) | merge to `develop` |
+| **Staging (persistent dev)** | `develop` | `https://after-lead-git-develop-aios-crm.vercel.app` (custom domain `https://staging.aios.co.il` requires verification) | merge to `develop` |
 | **Feature Preview** | `feature/*`, `cursor/*`, etc. | `https://after-lead-git-{branch}-aios-crm.vercel.app` | push to that branch only |
 
 ### Staging domain
@@ -60,7 +60,7 @@ feature/* or fix/*
 
 **Branch freshness (required):** every PR must contain the latest tip of its base (`develop` or `main`) before merge. CI workflow `Require PR up to date with base` fails stale heads — enable it as a required status check in GitHub branch protection. Cloud Agents must `git fetch origin <base>` and merge/rebase before opening or updating a PR.
 
-**Staging stays current:** on every push to `main`, workflow `Sync develop from main` merges `main` → `develop` so `https://staging.aios.co.il` never lags Production hotfixes. Manual `workflow_dispatch` remains available.
+**Staging stays current:** on every push to `main`, workflow `Sync develop from main` merges `main` → `develop` to bring Staging code up to date with Production hotfixes; conflicts or failed runs require attention. Manual `workflow_dispatch` remains available.
 
 | Git | Deploy | Data |
 | --- | --- | --- |
@@ -71,9 +71,9 @@ feature/* or fix/*
 
 `APP_ENV`: `development` | `preview` | `staging` | `production`. Unset is treated as **production** so existing deploys stay unchanged.
 
-## Audit (current vs this plan)
+## Configuration and verification
 
-Already in place:
+The following setup is documented for these environments; Vercel variables, Supabase settings, credentials, DNS, and live data freshness must be verified in their owning services before being reported as healthy:
 
 - Vercel Production on `main` (Production env rows unchanged)
 - GitHub `develop` branch
@@ -82,7 +82,7 @@ Already in place:
 - Staging auth allows `http://localhost:8080` and `https://*.vercel.app`; email signup autoconfirm is on
 - WhatsApp send paths go through `IntegrationGuard`
 - Staging / Preview / Dev visual banner via `VITE_APP_ENV`
-- `deploy-staging-edge-functions.yml` deploys functions on **`develop` push** only
+- `deploy-staging-edge-functions.yml` runs on matching **`develop` pushes**, manual dispatch, and reusable workflow calls from the main-to-develop sync
 
 ## Code, data and deployment synchronization
 
@@ -110,7 +110,7 @@ Already in place:
 - A complete source attestation can be reused only when all function files and all live function IDs/versions remain identical. The database HTTP guard is still checked. Credential synchronization compares the allowlisted secret digests and avoids rewriting equal values, since a secret write increments every live function version.
 - The first full data sync requires a successful complete Staging deployment and containment verification. A green frontend Preview or passing local tests alone does not establish that business data is synchronized. Check the deployment, mirror workflow, and per-table timestamps before describing Staging as current.
 - Keep production WhatsApp/Meta credentials out of Staging. Platform authentication email settings are separate from automation delivery; automated Auth invite/recovery calls from Edge are also blocked.
-- **Never mix WhatsApp connections:** Manus (`manus_wa` = Carmen) ≠ Green API (`green_api` = operator). Carmen group sync must never load the full `whatsapp_groups` table. See `.cursor/rules/whatsapp-connections.mdc` and `AGENTS.md`.
+- **Never mix WhatsApp connections:** Manus (`manus_wa` = Carmen) ≠ Green API (`green_api` = operator). Carmen group sync must never load the full `whatsapp_groups` table. See `.cursor/rules/whatsapp-connections.mdc` and `docs/agents/carmen.md`.
 
 ### Google login on Preview / Staging
 
@@ -129,7 +129,7 @@ Branch protection on `main` / `develop` is a GitHub settings change; the freshne
 
 1. Branch from `develop`. Hotfixes David asked for on Production may branch from `main`.
 2. Implement on the feature branch. Never commit to `main` directly.
-3. Open a PR **to `develop`**. Send the Vercel Preview URL and in-app path.
+3. Open a **draft** PR **to `develop`**, following `AGENTS.md` and `docs/agents/releases.md`. Send the Vercel Preview URL and in-app path.
 4. After merge to `develop`, verify on Staging (`after-lead-git-develop` or `staging.aios.co.il`).
 5. Merge **`develop` → `main`** only after `מאשר לפרודקשן` (Production deploy + `deploy-edge-function.yml`).
 6. Main pushes automatically run `sync-develop-from-main`. A release PR must contain the current main revision and the exact Staging changes approved for release; review its file diff before merge.
@@ -157,21 +157,13 @@ Local `pnpm dev` in this Cloud Agent workspace still reads Production `.env`. Th
 
 Lazy snapshot renderers keep full report/export code out of the client-card entry path. Rollup derives shared chunks from imports to avoid chart/export entry cycles. Table and combined reports share per-table/date query entries; explicit refresh invalidates those entries and failed requests are not cached as empty successful reports. Empty permission-related lists revalidate on mount, and shared-agency access still uses `fetchAccessibleDashboards`.
 
-## Phases
+## Maintenance and evidence
 
-1. Audit — this document.
-2. Staging infrastructure — `develop` + Preview env vars (done). Remaining: Staging domain, Staging secrets on the Staging Supabase project, auto-deploy `develop`.
-3. Database — migration workflow onto Staging; seed data. No Production schema edits from agents.
-4. Integration safety — central guard (WhatsApp done). Next: email, webhooks, automations dry-run, cron.
-5. Preview workflow — feature branches should not use Production credentials.
-6. CI — typecheck/tests before merge; optional Staging function deploy on `develop`.
-7. Validation — E2E on Staging.
-8. Docs — this file is the source of truth.
+Workflow files define automation triggers; this document defines the environment model and operational constraints. Confirm external service state separately before claiming a deployment or data sync is healthy.
 
-## Production impact of this PR
+- September 9, 2026 (`2f3461d1`): restored automatic `main → develop` sync, superseding the August 31 manual-only hotfix flow.
+- September 10, 2026 (`0b755c32`): the sync explicitly invokes Staging Edge deployment and frontend CI for its resulting SHA; manual dispatch remains available.
+- September 15–16 changes refined data reconciliation and WhatsApp connection isolation; keep the synchronization and containment rules above.
+- Check `.github/workflows/sync-develop-from-main.yml`, `deploy-staging-edge-functions.yml`, `deploy-edge-function.yml`, and `sync-staging-data.yml` for current triggers and path filters.
 
-- **No Production env vars changed.**
-- **No Production database changed.**
-- Integration guard is a no-op when `APP_ENV` is unset or `production`.
-- Staging frame is hidden in Production.
-- Creating GitHub `develop` does not change `main`.
+The original rollout checklist and PR-specific impact statements are historical (see git history), not current status. Do not infer missing infrastructure or completed deployment work from that old plan.
