@@ -35,6 +35,8 @@ on:
       - 'supabase/ops/fix_task_agency_and_assignment_notifications.sql'
       - 'supabase/ops/create_campaign_pulse_overrides.sql'
       - 'supabase/ops/apply_pulse_twice_daily_cadence.sql'
+      - 'supabase/ops/apply_pulse_weekly_sunday_cadence.sql'
+      - 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'
       - 'supabase/ops/notify_felix_calendar_fix_ready.sql'
       - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
       - 'supabase/ops/apply_pulse_dmm_felix_mc_david.sql'
@@ -99,6 +101,12 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_owner_campaigner_rls.sql'; then
               FILE="supabase/ops/fix_owner_campaigner_rls.sql"
               NAME="fix_owner_campaigner_rls"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_weekly_sunday_cadence.sql'; then
+              FILE="supabase/ops/apply_pulse_weekly_sunday_cadence.sql"
+              NAME="apply_pulse_weekly_sunday_cadence"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'; then
+              FILE="supabase/ops/apply_pulse_refresh_and_instant_alerts.sql"
+              NAME="apply_pulse_refresh_and_instant_alerts"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_twice_daily_cadence.sql'; then
               FILE="supabase/ops/apply_pulse_twice_daily_cadence.sql"
               NAME="apply_pulse_twice_daily_cadence"
@@ -141,6 +149,12 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_dmm_felix_mc_david.sql'; then
               FILE="supabase/ops/apply_pulse_dmm_felix_mc_david.sql"
               NAME="apply_pulse_dmm_felix_mc_david"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_weekly_sunday_cadence.sql'; then
+              FILE="supabase/ops/apply_pulse_weekly_sunday_cadence.sql"
+              NAME="apply_pulse_weekly_sunday_cadence"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'; then
+              FILE="supabase/ops/apply_pulse_refresh_and_instant_alerts.sql"
+              NAME="apply_pulse_refresh_and_instant_alerts"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_twice_daily_cadence.sql'; then
               FILE="supabase/ops/apply_pulse_twice_daily_cadence.sql"
               NAME="apply_pulse_twice_daily_cadence"
