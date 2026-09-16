@@ -28,6 +28,8 @@ import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
 import { asUuidOrNull } from '../_shared/uuid.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
 import { loadDevEscalationTierFromDb } from '../_shared/carmen-access-policy.ts'
+import {
+  buildDevEscalationPromptRule,
   DEV_ESCALATION_REFUSAL_HE,
   DEV_ESCALATION_BUGFIX_ONLY_REFUSAL_HE,
   getDevEscalationTier,
