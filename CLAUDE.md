@@ -78,3 +78,17 @@ Carmen must support voice on **both** her surfaces — keep this true going forw
    - **Voice-IN:** mic button → `MediaRecorder` → `transcribe-voice` → auto-send (already wired).
    - **Voice-OUT:** each assistant bubble has a "השמע" speaker button → `carmen-speak` edge function (`aiSpeak`, mp3) → browser `<audio>` playback.
 - TTS/STT helpers live in `_shared/ai.ts` (`aiSpeak` / `aiTranscribe`). Voice = `ai_agents.voice` (default `shimmer`).
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs live in Linear team AIO. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels in AIO's Triage label group. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
