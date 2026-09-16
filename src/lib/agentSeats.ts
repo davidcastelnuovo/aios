@@ -1,4 +1,5 @@
 import type { BrainRoute } from "@/lib/agentChannelRouting";
+import type { TopicChat } from "@/lib/chatTopics";
 
 export type AgentSeatKey =
   | "shared"
@@ -79,20 +80,81 @@ type ChatLike = {
   channel?: string | null;
 };
 
-/** Shared space shows all agent traffic; direct hides other agents' lines. */
-export function filterMessagesForRoute<T extends ChatLike>(messages: T[], route: BrainRoute | null): T[] {
-  if (!route || route.route_type === "parliament") return messages;
-  const slug = route.slug;
-  if (slug === "internal") {
-    return messages.filter((m) => {
-      if (m.role === "user" || m.role === "tool_call") return true;
-      const key = messageSpeakerKey(m);
-      return key === "carmen";
-    });
+/** Normalize channel/speaker tags to a seat slug family. */
+export function messageChannelKey(msg: ChatLike): string {
+  const raw = String(msg.channel || msg.speaker || "").toLowerCase().trim();
+  if (!raw || raw === "user") return "";
+  if (raw === "internal" || raw === "carmen") return "internal";
+  if (raw === "parliament" || raw === "shared") return "parliament";
+  return raw;
+}
+
+function messageBelongsToRoute(msg: ChatLike, route: BrainRoute): boolean {
+  const channel = messageChannelKey(msg);
+  if (route.route_type === "parliament" || route.slug === "parliament") return true;
+
+  if (route.slug === "internal" || route.route_type === "internal") {
+    // Legacy untagged lines lived on Carmen; hide other direct seats.
+    if (!channel) return true;
+    return channel === "internal" || channel === "carmen";
   }
-  return messages.filter((m) => {
-    if (m.role === "user" || m.role === "tool_call") return true;
-    const key = messageSpeakerKey(m);
-    return key === slug;
-  });
+
+  // Direct seat: only that seat's traffic (including the user's lines to it).
+  if (!channel) return false;
+  return channel === route.slug || channel === route.provider;
+}
+
+/**
+ * Shared/parliament shows all agent traffic.
+ * Direct seats (and Carmen) show only that seat's thread — including user lines.
+ */
+export function filterMessagesForRoute<T extends ChatLike>(messages: T[], route: BrainRoute | null): T[] {
+  if (!route || route.route_type === "parliament" || route.slug === "parliament") return messages;
+  return messages.filter((m) => messageBelongsToRoute(m, route));
+}
+
+/** Last open chat per seat so switching Cursor ↔ Carmen does not reuse the same thread. */
+export function lastConversationStorageKeyForSeat(tenantId: string, seatSlug: string): string {
+  return `aios:cc-conversation:${tenantId}:${seatSlug || "cursor"}`;
+}
+
+export function conversationMatchesRoute(
+  conv: Pick<TopicChat, "brain_route_id" | "routing_mode">,
+  route: BrainRoute,
+  routes: BrainRoute[] = [],
+): boolean {
+  if (conv.brain_route_id) {
+    if (conv.brain_route_id === route.id) return true;
+    const owned = routes.find((r) => r.id === conv.brain_route_id);
+    if (owned) {
+      if (route.route_type === "parliament" || route.slug === "parliament") {
+        return owned.route_type === "parliament" || owned.slug === "parliament";
+      }
+      return owned.slug === route.slug;
+    }
+  }
+  const mode = String(conv.routing_mode || "").toLowerCase();
+  if (!mode) {
+    // Untagged legacy chats belong to Carmen only.
+    return route.slug === "internal" || route.route_type === "internal";
+  }
+  if (route.route_type === "parliament" || route.slug === "parliament") {
+    return mode === "parliament" || mode === "shared";
+  }
+  if (route.slug === "internal" || route.route_type === "internal") {
+    return mode === "internal" || mode === "carmen";
+  }
+  // routing_mode is stored as route_type ("direct_channel") for every direct seat —
+  // without a resolvable brain_route_id we must not leak Cursor↔Grok↔Codex threads.
+  if (mode === "direct_channel" || mode === route.route_type) return false;
+  return mode === route.slug || mode === route.provider;
+}
+
+export function conversationsForRoute(
+  items: TopicChat[],
+  route: BrainRoute | null,
+  routes: BrainRoute[] = [],
+): TopicChat[] {
+  if (!route) return items;
+  return items.filter((c) => conversationMatchesRoute(c, route, routes));
 }
