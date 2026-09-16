@@ -2,6 +2,22 @@
 
 Read the relevant sections when changing AI providers, Carmen memory, agent profiles, escalation bridges, or voice, or handling a Carmen-delegated task.
 
+## WhatsApp connections — NEVER mix (standing)
+
+Cursor rule: `.cursor/rules/whatsapp-connections.mdc`.
+
+| Connection | Whose phone | Use for |
+| --- | --- | --- |
+| **Manus** (`manus_wa`) | Carmen | Carmen chat + her group membership |
+| **Green API** (`green_api`) | Operator (David) | CRM chat / broadcasts — **not** Carmen membership |
+| **Meta Cloud API** | Business number | Official Cloud API |
+
+Hard rules for every agent:
+1. Carmen group allowlists / sync = **Manus only** (Gateway `list-groups` or `chat_messages.provider='manus_wa'`).
+2. **Never** dump the full `whatsapp_groups` table into Carmen permissions — it includes Green API operator groups.
+3. Staging Manus is often `mocked` without tokens — do **not** "fix" by copying Green API groups or Production WA tokens.
+4. Automations stay connection-scoped (`carmen_integration_id` / Manus vs Green). Do not bypass dual-channel guards.
+
 ## AI providers (replacing the former Lovable AI gateway)
 We use the org's own connected models. Standardized helper: `supabase/functions/_shared/ai.ts`.
 - **Chat / extraction:** OpenAI `gpt-4o-mini` (via `OPENAI_API_KEY` secret), endpoint `api.openai.com/v1/chat/completions`.
