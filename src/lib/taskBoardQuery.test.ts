@@ -107,6 +107,25 @@ test("buildChatTaskOrFilter custom range still keeps unscheduled open tasks", ()
   );
 });
 
+test("buildChatTaskOrFilter accepts a single date bound", () => {
+  assert.equal(
+    buildChatTaskOrFilter({
+      today: "2026-09-17",
+      doneSince: "2026-09-03",
+      customStart: "2026-09-10",
+    }),
+    "and(due_date.gte.2026-09-10),and(due_date.is.null,status.neq.done)",
+  );
+  assert.equal(
+    buildChatTaskOrFilter({
+      today: "2026-09-17",
+      doneSince: "2026-09-03",
+      customEnd: "2026-09-20",
+    }),
+    "and(due_date.lte.2026-09-20),and(due_date.is.null,status.neq.done)",
+  );
+});
+
 test("filterTasksForChatSearch matches title, client, and campaigner", () => {
   const tasks = [
     { title: "לסגור קמפיין", notes: null, clients: { name: "דלתא" }, campaigners: { full_name: "נועה" } },

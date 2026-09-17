@@ -40,7 +40,7 @@ export function buildTaskDueDateOrFilter(input: {
  *
  * Includes every not-done task (any due date / unscheduled) plus recently
  * completed rows so the list is a work queue, not a calendar window.
- * Custom date filters still narrow by due_date when both bounds are set.
+ * Custom date filters still narrow by due_date when a start and/or end bound is set.
  */
 export function buildChatTaskOrFilter(input: {
   today: string;
@@ -51,11 +51,11 @@ export function buildChatTaskOrFilter(input: {
   const { doneSince, customStart, customEnd } = input;
   const notDone = "status.neq.done";
   const recentDone = `and(status.eq.done,updated_at.gte.${doneSince})`;
-  if (customStart && customEnd) {
-    return (
-      `and(due_date.gte.${customStart},due_date.lte.${customEnd}),` +
-      "and(due_date.is.null,status.neq.done)"
-    );
+  const dueBounds: string[] = [];
+  if (customStart) dueBounds.push(`due_date.gte.${customStart}`);
+  if (customEnd) dueBounds.push(`due_date.lte.${customEnd}`);
+  if (dueBounds.length > 0) {
+    return `and(${dueBounds.join(",")}),and(due_date.is.null,status.neq.done)`;
   }
   return `${notDone},${recentDone}`;
 }

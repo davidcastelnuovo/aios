@@ -1439,53 +1439,17 @@ export function WeeklyTaskBoard() {
       {viewMode === "chat" ? (
         <>
           <div className="flex flex-col md:hidden gap-2 shrink-0">
-            <Select
-              value={effectiveCampaignerFilter}
-              onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
-              disabled={isViewingAs}
-            >
-              <SelectTrigger className="w-full gap-2">
-                <Users className="h-4 w-4 shrink-0" />
-                <SelectValue placeholder={t('role_campaigner')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mine">שלי בלבד</SelectItem>
-                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
-                <SelectItem value="none">ללא שיוך</SelectItem>
-                {campaignersList.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <div className="flex items-center gap-2 justify-between">
               <h1 className="text-xl font-bold">משימות</h1>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setFiltersDialogOpen(true)}
-                  className="relative"
-                  aria-label="פילטרים"
-                >
-                  <Filter className="h-4 w-4" />
-                  {activeFiltersCount > 0 && (
-                    <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-xs">
-                      {activeFiltersCount}
-                    </Badge>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setViewMode("weekly")}
-                  aria-label="תצוגת יומן"
-                  title="יומן"
-                >
-                  <CalendarDays className="h-5 w-5" />
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setViewMode("weekly")}
+                aria-label="תצוגת יומן"
+                title="יומן"
+              >
+                <CalendarDays className="h-5 w-5" />
+              </Button>
             </div>
           </div>
           <div className="flex-1 min-h-0 h-full">
@@ -1519,6 +1483,16 @@ export function WeeklyTaskBoard() {
               clientsList={clientsList}
               campaignersList={campaignersList}
               defaultCampaignerId={primaryCampaignerId}
+              campaignerFilter={effectiveCampaignerFilter}
+              onCampaignerFilterChange={(val) =>
+                setFilters((prev) => ({ ...prev, campaignerId: val }))
+              }
+              campaignerFilterDisabled={isViewingAs}
+              startDate={filters.startDate}
+              endDate={filters.endDate}
+              onDateRangeChange={({ startDate, endDate }) =>
+                setFilters((prev) => ({ ...prev, startDate, endDate }))
+              }
             />
           </div>
         </>
