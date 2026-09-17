@@ -1,13 +1,26 @@
+import { startOfDay, startOfMonth, startOfWeek, subMonths, subYears } from "date-fns";
+
 export type OpenClosedFilter = "all" | "open" | "done";
+export type TaskPeriodFilter = "all" | "week" | "month" | "quarter" | "year";
+export type TaskRelatedKind = "all" | "none" | "client" | "lead";
+
+export const TASK_PERIOD_OPTIONS: { value: TaskPeriodFilter; label: string }[] = [
+  { value: "all", label: "כל התקופות" },
+  { value: "week", label: "השבוע" },
+  { value: "month", label: "החודש" },
+  { value: "quarter", label: "3 חודשים האחרונים" },
+  { value: "year", label: "שנה האחרונה" },
+];
 
 export interface TaskFilterState {
   campaignerId: string;
   taskType: string;
   association: string;
-  startDate: Date | undefined;
-  endDate: Date | undefined;
+  period: TaskPeriodFilter;
+  relatedKind: TaskRelatedKind;
+  relatedId: string;
+  relatedLabel: string;
   openClosed: OpenClosedFilter;
-  clientId: string;
 }
 
 /**
@@ -18,14 +31,48 @@ export const defaultTaskFilters: TaskFilterState = {
   campaignerId: "mine_assigned",
   taskType: "all",
   association: "all",
-  startDate: undefined,
-  endDate: undefined,
+  period: "all",
+  relatedKind: "all",
+  relatedId: "",
+  relatedLabel: "",
   openClosed: "open",
-  clientId: "all",
 };
 
 export function isMineQueueFilter(campaignerFilter: string): boolean {
   return campaignerFilter === "mine" || campaignerFilter === "mine_assigned";
+}
+
+/** Activity window: open tasks by created_at, done tasks by updated_at. */
+export function resolveTaskPeriodStart(period: TaskPeriodFilter, now = new Date()): Date | undefined {
+  const today = startOfDay(now);
+  if (period === "all") return undefined;
+  if (period === "week") return startOfWeek(today, { weekStartsOn: 0 });
+  if (period === "month") return startOfMonth(today);
+  if (period === "quarter") return subMonths(today, 3);
+  return subYears(today, 1);
+}
+
+export function taskMatchesActivityPeriod<
+  T extends { status?: string | null; created_at?: string | null; updated_at?: string | null },
+>(task: T, since?: Date): boolean {
+  if (!since) return true;
+  const stamp = task.status === "done" ? task.updated_at || task.created_at : task.created_at;
+  if (!stamp) return false;
+  const parsed = new Date(stamp);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed >= since;
+}
+
+export function filterTasksByRelatedEntity<
+  T extends { client_id?: string | null; lead_id?: string | null },
+>(tasks: T[], relatedKind: TaskRelatedKind, relatedId?: string): T[] {
+  if (relatedKind === "all") return tasks;
+  if (relatedKind === "none") {
+    return tasks.filter((task) => !task.client_id && !task.lead_id);
+  }
+  if (!relatedId) return tasks;
+  if (relatedKind === "lead") return tasks.filter((task) => task.lead_id === relatedId);
+  return tasks.filter((task) => task.client_id === relatedId);
 }
 
 export function tasksFilterPresetKey(userId: string): string {
@@ -36,24 +83,40 @@ type StoredTasksFilterPreset = {
   campaignerId?: string;
   taskType?: string;
   association?: string;
-  startDate?: string | null;
-  endDate?: string | null;
+  period?: string;
+  relatedKind?: string;
+  relatedId?: string;
+  relatedLabel?: string;
   openClosed?: string;
   clientId?: string;
 };
 
-function toDayString(value?: Date): string | null {
-  if (!value) return null;
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function parsePeriod(value?: string): TaskPeriodFilter {
+  if (value === "week" || value === "month" || value === "quarter" || value === "year" || value === "all") {
+    return value;
+  }
+  return defaultTaskFilters.period;
 }
 
-function parseDayString(value?: string | null): Date | undefined {
-  if (!value) return undefined;
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+function parseRelated(stored: StoredTasksFilterPreset | null | undefined): {
+  relatedKind: TaskRelatedKind;
+  relatedId: string;
+  relatedLabel: string;
+} {
+  if (stored?.relatedKind === "client" || stored?.relatedKind === "lead" || stored?.relatedKind === "none") {
+    return {
+      relatedKind: stored.relatedKind,
+      relatedId: stored.relatedId || "",
+      relatedLabel: stored.relatedLabel || "",
+    };
+  }
+  if (stored?.clientId === "none") {
+    return { relatedKind: "none", relatedId: "", relatedLabel: "" };
+  }
+  if (stored?.clientId && stored.clientId !== "all") {
+    return { relatedKind: "client", relatedId: stored.clientId, relatedLabel: "" };
+  }
+  return { relatedKind: "all", relatedId: "", relatedLabel: "" };
 }
 
 export function serializeTasksFilterPreset(filters: TaskFilterState): StoredTasksFilterPreset {
@@ -61,10 +124,11 @@ export function serializeTasksFilterPreset(filters: TaskFilterState): StoredTask
     campaignerId: filters.campaignerId,
     taskType: filters.taskType,
     association: filters.association,
-    startDate: toDayString(filters.startDate),
-    endDate: toDayString(filters.endDate),
+    period: filters.period,
+    relatedKind: filters.relatedKind,
+    relatedId: filters.relatedId,
+    relatedLabel: filters.relatedLabel,
     openClosed: filters.openClosed,
-    clientId: filters.clientId,
   };
 }
 
@@ -73,14 +137,14 @@ export function parseTasksFilterPreset(stored: StoredTasksFilterPreset | null | 
     stored?.openClosed === "all" || stored?.openClosed === "done" || stored?.openClosed === "open"
       ? stored.openClosed
       : defaultTaskFilters.openClosed;
+  const related = parseRelated(stored);
   return {
     campaignerId: stored?.campaignerId || defaultTaskFilters.campaignerId,
     taskType: stored?.taskType || defaultTaskFilters.taskType,
     association: stored?.association || defaultTaskFilters.association,
-    startDate: parseDayString(stored?.startDate),
-    endDate: parseDayString(stored?.endDate),
+    period: parsePeriod(stored?.period),
+    ...related,
     openClosed,
-    clientId: stored?.clientId || defaultTaskFilters.clientId,
   };
 }
 

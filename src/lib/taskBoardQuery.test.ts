@@ -93,48 +93,31 @@ test("buildChatTaskOrFilter pulls all open work plus recently done", () => {
   assert.equal(filter.includes("due_date.gte"), false);
 });
 
-test("buildChatTaskOrFilter custom range still keeps unscheduled open tasks", () => {
+test("buildChatTaskOrFilter activity period uses created_at and updated_at", () => {
   const filter = buildChatTaskOrFilter({
     today: "2026-09-17",
     doneSince: "2026-09-03",
-    customStart: "2026-09-01",
-    customEnd: "2026-09-30",
+    activitySince: "2026-09-01",
   });
   assert.equal(
     filter,
-    "and(due_date.gte.2026-09-01,due_date.lte.2026-09-30)," +
-      "and(due_date.is.null,status.neq.done)",
+    "and(status.neq.done,created_at.gte.2026-09-01)," +
+      "and(status.eq.done,updated_at.gte.2026-09-01)",
   );
 });
 
-test("buildChatTaskOrFilter accepts a single date bound", () => {
-  assert.equal(
-    buildChatTaskOrFilter({
-      today: "2026-09-17",
-      doneSince: "2026-09-03",
-      customStart: "2026-09-10",
-    }),
-    "and(due_date.gte.2026-09-10),and(due_date.is.null,status.neq.done)",
-  );
-  assert.equal(
-    buildChatTaskOrFilter({
-      today: "2026-09-17",
-      doneSince: "2026-09-03",
-      customEnd: "2026-09-20",
-    }),
-    "and(due_date.lte.2026-09-20),and(due_date.is.null,status.neq.done)",
-  );
-});
-
-test("filterTasksForChatSearch matches title, client, and campaigner", () => {
+test("filterTasksForChatSearch matches title, client, lead, and campaigner", () => {
   const tasks = [
     { title: "לסגור קמפיין", notes: null, clients: { name: "דלתא" }, campaigners: { full_name: "נועה" } },
     { title: "שיחה", notes: "לקוח ויזה", clients: { name: "אחר" }, campaigners: { full_name: "דוד" } },
+    { title: "ליד חדש", notes: null, leads: { company_name: "אורבן", contact_name: "מיכל" }, campaigners: { full_name: "נועה" } },
   ];
   assert.equal(filterTasksForChatSearch(tasks, "קמפיין").length, 1);
   assert.equal(filterTasksForChatSearch(tasks, "דלתא")[0].title, "לסגור קמפיין");
   assert.equal(filterTasksForChatSearch(tasks, "דוד")[0].title, "שיחה");
-  assert.equal(filterTasksForChatSearch(tasks, "   ").length, 2);
+  assert.equal(filterTasksForChatSearch(tasks, "אורבן")[0].title, "ליד חדש");
+  assert.equal(filterTasksForChatSearch(tasks, "מיכל")[0].title, "ליד חדש");
+  assert.equal(filterTasksForChatSearch(tasks, "   ").length, 3);
 });
 
 test("sortTasksForChatList puts overdue and high priority first", () => {

@@ -56,10 +56,13 @@ import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
 import {
   filterTasksByCampaignerBoardFilter,
+  filterTasksByRelatedEntity,
   filterTasksForBoardUserPreview,
   hasTasksFilterPreset,
   isMineQueueFilter,
   readTasksFilterPreset,
+  resolveTaskPeriodStart,
+  taskMatchesActivityPeriod,
   writeTasksFilterPreset,
 } from "@/lib/taskFilters";
 import { buildChatTaskOrFilter, buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
@@ -81,11 +84,14 @@ interface Task {
   tenant_id: string | null;
   created_by?: string | null;
   creator_name?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   sort_order?: number;
   target_date?: string | null;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
   clients?: { name: string; agency_id?: string | null } | null;
+  leads?: { company_name?: string | null; contact_name?: string | null } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
 }
@@ -148,6 +154,24 @@ export function WeeklyTaskBoard() {
       const { data, error } = await query.order("name");
       if (error) throw error;
       return data;
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: leadsList = [] } = useQuery({
+    queryKey: ["leads-for-task-filter", tenantId, crossTenantAgencyIds],
+    queryFn: async () => {
+      let query = supabase
+        .from("leads")
+        .select("id, company_name, contact_name, created_at");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId!);
+      }
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(400);
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!tenantId,
   });
@@ -354,6 +378,7 @@ export function WeeklyTaskBoard() {
         .select(`
           *,
           clients (name, agency_id),
+          leads (company_name, contact_name),
           campaigners (full_name),
           task_updates (count),
           task_collaborators (count)
@@ -385,20 +410,19 @@ export function WeeklyTaskBoard() {
       // Include: current range OR overdue open OR unscheduled open (no due_date).
       // Do not fetch historical done-undated / all-time untimed rows — that
       // flooded the board after the target_date 400-fix made the query succeed.
+      const periodStart = viewMode === "chat" ? resolveTaskPeriodStart(filters.period) : undefined;
+      const activitySince = periodStart ? format(periodStart, "yyyy-MM-dd") : undefined;
       query = query.or(
         viewMode === "chat"
           ? buildChatTaskOrFilter({
               today,
-              doneSince: format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
-              customStart: filters.startDate ? format(filters.startDate, "yyyy-MM-dd") : undefined,
-              customEnd: filters.endDate ? format(filters.endDate, "yyyy-MM-dd") : undefined,
+              doneSince: activitySince ?? format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
+              activitySince,
             })
           : buildTaskDueDateOrFilter({
               rangeStart: rangeStartStr,
               rangeEnd: rangeEndStr,
               today,
-              customStart: filters.startDate ? format(filters.startDate, "yyyy-MM-dd") : undefined,
-              customEnd: filters.endDate ? format(filters.endDate, "yyyy-MM-dd") : undefined,
             }),
       );
 
@@ -433,14 +457,19 @@ export function WeeklyTaskBoard() {
       }
 
       // Apply association filter
-      if (filters.association === "clients") {
+      if (filters.relatedKind === "client" && filters.relatedId) {
+        query = query.eq("client_id", filters.relatedId);
+      } else if (filters.relatedKind === "lead" && filters.relatedId) {
+        query = query.eq("lead_id", filters.relatedId);
+      } else if (filters.relatedKind === "none") {
+        query = query.is("client_id", null).is("lead_id", null);
+      } else if (filters.association === "clients") {
         query = query.not("client_id", "is", null);
       } else if (filters.association === "leads") {
         query = query.not("lead_id", "is", null);
       } else if (filters.association === "general") {
         query = query.is("client_id", null).is("lead_id", null);
       } else if (filters.association === "unassigned") {
-        // Tasks not linked to any client (may still have a lead).
         query = query.is("client_id", null);
       }
 
@@ -496,10 +525,12 @@ export function WeeklyTaskBoard() {
         effectiveCampaignerFilter,
         mineIdentity ?? null,
       );
-      if (filters.clientId === "none") {
-        filtered = filtered.filter((task) => !task.client_id);
-      } else if (filters.clientId && filters.clientId !== "all") {
-        filtered = filtered.filter((task) => task.client_id === filters.clientId);
+      filtered = filterTasksByRelatedEntity(filtered, filters.relatedKind, filters.relatedId);
+      if (viewMode === "chat") {
+        const periodStart = resolveTaskPeriodStart(filters.period);
+        if (periodStart) {
+          filtered = filtered.filter((task) => taskMatchesActivityPeriod(task, periodStart));
+        }
       }
       if (isViewingAs && boardUserId) {
         filtered = filterTasksForBoardUserPreview(filtered, boardUserId, mineIdentity ?? null);
@@ -509,7 +540,10 @@ export function WeeklyTaskBoard() {
     [
       selectedAgency,
       effectiveCampaignerFilter,
-      filters.clientId,
+      filters.relatedKind,
+      filters.relatedId,
+      filters.period,
+      viewMode,
       tenantId,
       crossTenantAgencyIds,
       mineIdentity,
@@ -1275,8 +1309,8 @@ export function WeeklyTaskBoard() {
   const activeFiltersCount = [
     filters.taskType !== "all",
     filters.association !== "all",
-    filters.startDate !== undefined,
-    filters.endDate !== undefined,
+    filters.period !== "all",
+    filters.relatedKind !== "all",
   ].filter(Boolean).length;
 
   const saveFilterPreset = (next?: TaskFilterState) => {
@@ -1350,14 +1384,14 @@ export function WeeklyTaskBoard() {
       onCampaignerFilterChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
       campaignerFilterDisabled={isViewingAs}
       campaignersList={campaignersList}
-      clientFilter={filters.clientId}
-      onClientFilterChange={(clientId) => setFilters((prev) => ({ ...prev, clientId }))}
-      clientsList={clientsList}
-      startDate={filters.startDate}
-      endDate={filters.endDate}
-      onDateRangeChange={({ startDate, endDate }) =>
-        setFilters((prev) => ({ ...prev, startDate, endDate }))
-      }
+      relatedKind={filters.relatedKind}
+      relatedId={filters.relatedId}
+      relatedLabel={filters.relatedLabel}
+      onRelatedChange={(related) => setFilters((prev) => ({ ...prev, ...related }))}
+      clientsList={clientsList ?? []}
+      leadsList={leadsList ?? []}
+      period={filters.period}
+      onPeriodChange={(period) => setFilters((prev) => ({ ...prev, period }))}
       onSaveFilterPreset={() => saveFilterPreset()}
       saveDisabled={isViewingAs}
     />

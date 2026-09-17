@@ -40,24 +40,22 @@ export function buildTaskDueDateOrFilter(input: {
  *
  * Includes every not-done task (any due date / unscheduled) plus recently
  * completed rows so the list is a work queue, not a calendar window.
- * Custom date filters still narrow by due_date when a start and/or end bound is set.
+ * Custom period filters narrow by activity time (created_at for open,
+ * updated_at for done) — not due date.
  */
 export function buildChatTaskOrFilter(input: {
   today: string;
   doneSince: string;
-  customStart?: string;
-  customEnd?: string;
+  activitySince?: string;
 }): string {
-  const { doneSince, customStart, customEnd } = input;
-  const notDone = "status.neq.done";
-  const recentDone = `and(status.eq.done,updated_at.gte.${doneSince})`;
-  const dueBounds: string[] = [];
-  if (customStart) dueBounds.push(`due_date.gte.${customStart}`);
-  if (customEnd) dueBounds.push(`due_date.lte.${customEnd}`);
-  if (dueBounds.length > 0) {
-    return `and(${dueBounds.join(",")}),and(due_date.is.null,status.neq.done)`;
+  const { doneSince, activitySince } = input;
+  if (activitySince) {
+    return (
+      `and(status.neq.done,created_at.gte.${activitySince}),` +
+      `and(status.eq.done,updated_at.gte.${activitySince})`
+    );
   }
-  return `${notDone},${recentDone}`;
+  return `status.neq.done,and(status.eq.done,updated_at.gte.${doneSince})`;
 }
 
 export function filterTasksForChatSearch<
@@ -65,6 +63,7 @@ export function filterTasksForChatSearch<
     title?: string | null;
     notes?: string | null;
     clients?: { name?: string | null } | null;
+    leads?: { company_name?: string | null; contact_name?: string | null } | null;
     campaigners?: { full_name?: string | null } | null;
     creator_name?: string | null;
   },
@@ -75,6 +74,8 @@ export function filterTasksForChatSearch<
     (task.title || "").toLowerCase().includes(q) ||
     (task.notes || "").toLowerCase().includes(q) ||
     (task.clients?.name || "").toLowerCase().includes(q) ||
+    (task.leads?.company_name || "").toLowerCase().includes(q) ||
+    (task.leads?.contact_name || "").toLowerCase().includes(q) ||
     (task.campaigners?.full_name || "").toLowerCase().includes(q) ||
     (task.creator_name || "").toLowerCase().includes(q)
   );

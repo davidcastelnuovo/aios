@@ -47,6 +47,7 @@ export type ChatTask = {
   google_calendar_event_id?: string | null;
   duration_minutes?: number | null;
   clients?: { name: string; agency_id?: string | null } | null;
+  leads?: { company_name?: string | null; contact_name?: string | null } | null;
   campaigners?: { full_name: string } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
@@ -294,9 +295,9 @@ export function TasksChatView({
                           <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", priorityClass(task.priority))}>
                             דחיפות {task.priority}
                           </Badge>
-                          {task.clients?.name && (
+                          {(task.clients?.name || task.leads?.company_name || task.leads?.contact_name) && (
                             <span className="text-[11px] text-muted-foreground truncate max-w-[120px]">
-                              {task.clients.name}
+                              {task.clients?.name || task.leads?.company_name || task.leads?.contact_name}
                             </span>
                           )}
                           {task.campaigners?.full_name && (
