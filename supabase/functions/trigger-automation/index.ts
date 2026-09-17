@@ -10,7 +10,10 @@ import {
   queueLeadAlertFailureNotification,
 } from '../_shared/lead-alert-failure-notify.ts'
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
-import { formatTaskNotificationMessage } from '../_shared/task-notification-message.ts'
+import {
+  formatTaskNotificationMessage,
+  resolveTaskNotificationLinkTenantId,
+} from '../_shared/task-notification-message.ts'
 import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
 import { claimFacebookLeadAutomationRun, claimFacebookLeadWhatsAppSend, claimIdenticalWhatsAppSend, releaseFacebookLeadAutomationRun, releaseFacebookLeadWhatsAppSend } from '../_shared/facebook-lead-dedup.ts'
 import {
@@ -629,7 +632,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   if (campaignerId) {
     const { data, error: campaignerError } = await supabase
       .from('campaigners')
-      .select('id, full_name, phone, active')
+      .select('id, full_name, phone, active, tenant_id')
       .eq('id', campaignerId)
       .maybeSingle()
     if (campaignerError) throw campaignerError
@@ -640,7 +643,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   if (!campaigner && task.sales_person_id) {
     const { data, error: salesPersonError } = await supabase
       .from('sales_people')
-      .select('id, full_name, phone, active')
+      .select('id, full_name, phone, active, tenant_id')
       .eq('id', task.sales_person_id)
       .maybeSingle()
     if (salesPersonError) throw salesPersonError
@@ -650,6 +653,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   let creatorProfile: any = null
   let creatorName = ''
   let creatorPhone = ''
+  let creatorHomeTenantId: string | null = null
   if (task.created_by) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -660,25 +664,27 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     creatorProfile = profile
     creatorName = String(profile?.full_name || '').trim()
     creatorPhone = String(profile?.phone || '').trim()
-    if (profile?.campaigner_id && (!creatorName || !creatorPhone)) {
+    if (profile?.campaigner_id) {
       const { data: creatorCampaigner, error: creatorCampaignerError } = await supabase
         .from('campaigners')
-        .select('full_name, phone')
+        .select('full_name, phone, tenant_id')
         .eq('id', profile.campaigner_id)
         .maybeSingle()
       if (creatorCampaignerError) throw creatorCampaignerError
       creatorName = creatorName || String(creatorCampaigner?.full_name || '').trim()
       creatorPhone = creatorPhone || String(creatorCampaigner?.phone || '').trim()
+      creatorHomeTenantId = creatorCampaigner?.tenant_id || null
     }
-    if (profile?.sales_person_id && (!creatorName || !creatorPhone)) {
+    if (profile?.sales_person_id && (!creatorName || !creatorPhone || !creatorHomeTenantId)) {
       const { data: creatorSalesPerson, error: creatorSalesPersonError } = await supabase
         .from('sales_people')
-        .select('full_name, phone')
+        .select('full_name, phone, tenant_id')
         .eq('id', profile.sales_person_id)
         .maybeSingle()
       if (creatorSalesPersonError) throw creatorSalesPersonError
       creatorName = creatorName || String(creatorSalesPerson?.full_name || '').trim()
       creatorPhone = creatorPhone || String(creatorSalesPerson?.phone || '').trim()
+      creatorHomeTenantId = creatorHomeTenantId || creatorSalesPerson?.tenant_id || null
     }
   }
 
@@ -783,6 +789,26 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     return { handled: false }
   }
 
+  // Link tenant = recipient's home board (campaigner tenant), never Carmen/DMM
+  // just because she is the sender. Fallback only if the recipient has no home tenant.
+  const linkTenantId = resolveTaskNotificationLinkTenantId({
+    notifyCreator,
+    creatorHomeTenantId,
+    campaignerTenantId: campaigner?.tenant_id || null,
+    salesPersonTenantId: salesPerson?.tenant_id || null,
+    fallbackTenantId: notificationTenantId,
+  })
+  let recipientTenantSlug: string | null = null
+  if (linkTenantId) {
+    const { data: linkTenant, error: linkTenantError } = await supabase
+      .from('tenants')
+      .select('slug')
+      .eq('id', linkTenantId)
+      .maybeSingle()
+    if (linkTenantError) throw linkTenantError
+    recipientTenantSlug = linkTenant?.slug || null
+  }
+
   const message = formatTaskNotificationMessage(
     notificationType,
     task,
@@ -790,6 +816,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     campaigner?.full_name || salesPerson?.full_name || '',
     recipient.full_name,
     creatorName,
+    recipientTenantSlug,
   )
   const sent = await sendCarmenReplyViaActionStep({
     supabase,
@@ -807,6 +834,8 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     task_id: task.id,
     client_id: client?.id || null,
     tenant_id: notificationTenantId,
+    link_tenant_id: linkTenantId,
+    recipient_tenant_slug: recipientTenantSlug,
     campaigner_id: campaigner?.id || null,
     recipient_id: recipient.id,
     sent,
@@ -818,6 +847,8 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     notification_type: notificationType,
     client_id: client?.id || null,
     tenant_id: notificationTenantId,
+    link_tenant_id: linkTenantId,
+    recipient_tenant_slug: recipientTenantSlug,
     campaigner_id: campaigner?.id || null,
     recipient_id: recipient.id,
   }

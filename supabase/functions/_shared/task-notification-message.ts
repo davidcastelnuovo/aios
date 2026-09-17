@@ -1,5 +1,30 @@
 const AIOS_APP_URL = 'https://aios.co.il'
 
+/** Deep link into the tasks board. Always tenant-scoped so the recipient can open it. */
+export function buildTaskAppLink(taskId: string, tenantSlug?: string | null): string {
+  const encodedId = encodeURIComponent(String(taskId || ''))
+  const slug = String(tenantSlug || '').trim().replace(/^\/+|\/+$/g, '')
+  if (slug) return `${AIOS_APP_URL}/t/${encodeURIComponent(slug)}/tasks?task=${encodedId}`
+  return `${AIOS_APP_URL}/tasks?task=${encodedId}`
+}
+
+/**
+ * Tenant that owns the recipient's home board — not the task owner / Carmen sender.
+ * A Marketing Captain campaigner working a DMM-agency task must open
+ * `/t/marketingcaptain/tasks`, not DMM and not a bare `/tasks` URL.
+ */
+export function resolveTaskNotificationLinkTenantId(input: {
+  notifyCreator: boolean
+  creatorHomeTenantId?: string | null
+  campaignerTenantId?: string | null
+  salesPersonTenantId?: string | null
+  fallbackTenantId?: string | null
+}): string | null {
+  const fallback = input.fallbackTenantId || null
+  if (input.notifyCreator) return input.creatorHomeTenantId || fallback
+  return input.campaignerTenantId || input.salesPersonTenantId || fallback
+}
+
 export function formatTaskNotificationMessage(
   notificationType: string,
   task: any,
@@ -7,8 +32,9 @@ export function formatTaskNotificationMessage(
   assigneeName: string,
   recipientName: string,
   creatorName: string,
+  tenantSlug?: string | null,
 ): string {
-  const taskLink = `${AIOS_APP_URL}/tasks?task=${encodeURIComponent(task.id)}`
+  const taskLink = buildTaskAppLink(task.id, tenantSlug)
   const details = [`היי ${recipientName || 'צוות'}, כאן כרמן 👋`, '']
 
   if (notificationType === 'task_self_reminder') {
@@ -73,4 +99,3 @@ export function formatTaskNotificationMessage(
   details.push('', `לצפייה במשימה: ${taskLink}`)
   return details.join('\n')
 }
-
