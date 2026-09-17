@@ -811,7 +811,7 @@ export default function Leads() {
   
   // Pagination state
   const [page, setPage] = useState(1);
-  const TABLE_LEADS_PER_PAGE = 50;
+  const TABLE_LEADS_PER_PAGE = 100;
   const KANBAN_LEADS_PER_STAGE_LIMIT = 50;
   const CHAT_LEADS_PER_STAGE_LIMIT = 100;
   const leadsPerStageLimit = viewMode === "chat" ? CHAT_LEADS_PER_STAGE_LIMIT : KANBAN_LEADS_PER_STAGE_LIMIT;
@@ -841,7 +841,7 @@ export default function Leads() {
     setPage(1);
     setStageOffsets({});
     setAccumulatedLeads({});
-  }, [selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate, viewMode]);
+  }, [selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate, viewMode, tableLayout]);
   
   // Kanban limiting state - how many leads to SHOW per stage initially (can expand)
   const KANBAN_LEADS_PER_STAGE_DISPLAY = 20;
@@ -915,7 +915,7 @@ export default function Leads() {
 
   // Fetch total count for pagination - skip for Kanban view (not needed)
   const { data: totalLeadsCount = 0 } = useQuery({
-    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId],
+    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId, isOwner],
     queryFn: async () => {
       if (!tenantId) return 0;
       
@@ -941,8 +941,14 @@ export default function Leads() {
           .select("id", { count: 'exact', head: true })
       );
 
-      // Base tenant/agency filter
-      if (selectedAgency && selectedAgency !== "all") {
+      // Base tenant/agency filter. Owners stay on the current tenant so a
+      // page of 100 is 100 of their leads, not a mixed batch later trimmed.
+      if (isOwner) {
+        query = query.eq("tenant_id", tenantId);
+        if (selectedAgency && selectedAgency !== "all") {
+          query = query.eq("agency_id", selectedAgency);
+        }
+      } else if (selectedAgency && selectedAgency !== "all") {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
         const agencyIds = agencies.map((a) => a.id);
@@ -1191,7 +1197,7 @@ export default function Leads() {
   
   // Table view: use regular paginated query
   const { data: tableLeads, isLoading: isTableLoading, refetch: refetchTable, isFetching: isTableFetching } = useQuery({
-    queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId],
+    queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, effectiveLimit, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId, isOwner],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       
@@ -1291,7 +1297,12 @@ export default function Leads() {
       ).order("created_at", { ascending: false });
 
       // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
-      if (selectedAgency && selectedAgency !== "all") {
+      if (isOwner) {
+        query = query.eq("tenant_id", tenantId);
+        if (selectedAgency && selectedAgency !== "all") {
+          query = query.eq("agency_id", selectedAgency);
+        }
+      } else if (selectedAgency && selectedAgency !== "all") {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
         const agencyIds = agencies.map((a) => a.id);
@@ -3693,7 +3704,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       )}
 
       {/* Resizable Table */}
-      <div className="h-[540px]" dir="rtl">
+      <div className="h-[min(75vh,880px)]" dir="rtl">
         <ResizableTable
           columns={[
             { 
