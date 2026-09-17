@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, RotateCcw, X } from "lucide-react";
+import { Calendar as CalendarIcon, RotateCcw, X, Bookmark } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -35,6 +35,7 @@ interface TaskFiltersDialogProps {
   onOpenChange: (open: boolean) => void;
   currentFilters: TaskFilterState;
   onApply: (filters: TaskFilterState) => void;
+  onSaveDefault?: (filters: TaskFilterState) => void;
 }
 
 export function TaskFiltersDialog({
@@ -42,6 +43,7 @@ export function TaskFiltersDialog({
   onOpenChange,
   currentFilters,
   onApply,
+  onSaveDefault,
 }: TaskFiltersDialogProps) {
   const { tenantId } = useCurrentTenant();
   const { t } = useTerminology();
@@ -109,8 +111,9 @@ export function TaskFiltersDialog({
                 <SelectValue placeholder={`בחר ${t('role_campaigner')}`} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
+                <SelectItem value="mine_assigned">שלי וששייכתי</SelectItem>
                 <SelectItem value="mine">שלי בלבד</SelectItem>
+                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
                 <SelectItem value="none">ללא שיוך</SelectItem>
                 {campaigners?.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
@@ -244,7 +247,20 @@ export function TaskFiltersDialog({
 
         </div>
 
-        <DialogFooter className="flex gap-2 sm:gap-2">
+        <DialogFooter className="flex gap-2 sm:gap-2 flex-wrap">
+          {onSaveDefault && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                onApply(filters);
+                onSaveDefault(filters);
+              }}
+              className="gap-2"
+            >
+              <Bookmark className="h-4 w-4" />
+              שמור כברירת מחדל
+            </Button>
+          )}
           <Button variant="outline" onClick={handleReset} className="gap-2">
             <RotateCcw className="h-4 w-4" />
             איפוס

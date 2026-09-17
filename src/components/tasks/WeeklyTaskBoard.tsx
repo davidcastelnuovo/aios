@@ -25,7 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users, MessageSquare } from "lucide-react";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users, MessageSquare, Bookmark } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
@@ -55,8 +55,15 @@ import {
   filterTasksByBoardTenantScope,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
-import { buildMineAssignmentOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
-import { filterTasksByCampaignerBoardFilter, filterTasksForBoardUserPreview } from "@/lib/taskFilters";
+import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
+import {
+  filterTasksByCampaignerBoardFilter,
+  filterTasksForBoardUserPreview,
+  hasTasksFilterPreset,
+  isMineQueueFilter,
+  readTasksFilterPreset,
+  writeTasksFilterPreset,
+} from "@/lib/taskFilters";
 import { buildChatTaskOrFilter, buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 
@@ -165,12 +172,23 @@ export function WeeklyTaskBoard() {
   // linked on the user (profiles.campaigner_id / sales_person_id).
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
   const appliedOwnerBoardDefaultRef = useRef(false);
+  const presetKeyRef = useRef<string | null>(null);
   const effectiveCampaignerFilter = isViewingAs ? "mine" : filters.campaignerId;
 
-  // Personal queue ("mine"): default header to "all agencies" so cross-agency
+  useLayoutEffect(() => {
+    if (isViewingAs || !user?.id) return;
+    if (presetKeyRef.current === user.id) return;
+    presetKeyRef.current = user.id;
+    setFilters(readTasksFilterPreset(user.id));
+    if (hasTasksFilterPreset(user.id)) {
+      appliedOwnerBoardDefaultRef.current = true;
+    }
+  }, [isViewingAs, user?.id]);
+
+  // Personal queue: default header to "all agencies" so cross-agency
   // assignments are visible. User can still narrow by agency afterward.
   useLayoutEffect(() => {
-    if (effectiveCampaignerFilter === "mine") {
+    if (isMineQueueFilter(effectiveCampaignerFilter)) {
       setSelectedAgency("all");
     }
   }, [effectiveCampaignerFilter, setSelectedAgency]);
@@ -328,7 +346,7 @@ export function WeeklyTaskBoard() {
     enabled:
       !!tenantId &&
       !!boardUserId &&
-      (effectiveCampaignerFilter !== "mine" || mineIdentityReady),
+      (isMineQueueFilter(effectiveCampaignerFilter) ? mineIdentityReady : true),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
@@ -354,7 +372,7 @@ export function WeeklyTaskBoard() {
       });
 
       let collaboratorTaskIds: string[] = [];
-      if (effectiveCampaignerFilter === "mine") {
+      if (isMineQueueFilter(effectiveCampaignerFilter)) {
         const personScopeCampaignerIds = mineIdentity?.campaignerIds ?? [];
         if (personScopeCampaignerIds.length > 0) {
           const { data: collabRows } = await supabase
@@ -387,22 +405,21 @@ export function WeeklyTaskBoard() {
             }),
       );
 
-      // "שלי בלבד" = tasks assigned to the staff member this user is linked to.
-      if (effectiveCampaignerFilter === "mine") {
+      // Personal queue: assigned to me ("mine") or assigned to me + created by me.
+      if (isMineQueueFilter(effectiveCampaignerFilter)) {
         const mine = mineIdentity!;
-        const assignmentOr = buildMineAssignmentOrFilter(mine);
+        const mode = effectiveCampaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
+        const queueOr = buildMineQueueOrFilter(mine, mode);
         const mineParts: string[] = [];
-        if (assignmentOr) mineParts.push(assignmentOr);
+        if (queueOr) mineParts.push(queueOr);
         if (collaboratorTaskIds.length > 0) {
           mineParts.push(`id.in.(${collaboratorTaskIds.join(",")})`);
         }
         if (mineParts.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           query = (query as any).or(mineParts.join(","));
-        } else if (mine.kind === "created_by") {
-          query = query.eq("created_by", mine.userId);
         } else {
-          // No staff row linked — "mine" would otherwise return the whole tenant scope.
+          // No staff row linked and no created_by fallback — would otherwise return the tenant.
           return [];
         }
       } else if (effectiveCampaignerFilter === "none") {
@@ -462,6 +479,7 @@ export function WeeklyTaskBoard() {
   // View-as preview: show the selected user's queue, not the admin's.
   useEffect(() => {
     if (!isViewingAs || !viewAsUserId) return;
+    presetKeyRef.current = null;
     setFilters(defaultTaskFilters);
     setLocalTasks([]);
     appliedOwnerBoardDefaultRef.current = true;
@@ -536,7 +554,7 @@ export function WeeklyTaskBoard() {
   const filteredCalendarEvents = useMemo(() => {
     const viewingOtherCampaigner =
       !!effectiveCampaignerFilter &&
-      effectiveCampaignerFilter !== "mine" &&
+      !isMineQueueFilter(effectiveCampaignerFilter) &&
       effectiveCampaignerFilter !== "all" &&
       effectiveCampaignerFilter !== "none" &&
       effectiveCampaignerFilter !== primaryCampaignerId;
@@ -1258,6 +1276,16 @@ export function WeeklyTaskBoard() {
     filters.endDate !== undefined,
   ].filter(Boolean).length;
 
+  const saveFilterPreset = (next?: TaskFilterState) => {
+    if (!user?.id || isViewingAs) {
+      toast.error("אי אפשר לשמור ברירת מחדל במצב צפייה כמשתמש אחר");
+      return;
+    }
+    const toSave = next && "campaignerId" in next ? next : filters;
+    writeTasksFilterPreset(user.id, toSave);
+    toast.success("ברירת המחדל נשמרה");
+  };
+
   const goToToday = () => {
     setCurrentDate(startOfDay(new Date()));
   };
@@ -1376,9 +1404,9 @@ export function WeeklyTaskBoard() {
               <Button variant="outline" className="gap-2 relative">
                 <Filter className="h-4 w-4" />
                 פילטרים
-                {(activeFiltersCount > 0 || effectiveCampaignerFilter !== "mine") && (
+                {(activeFiltersCount > 0 || effectiveCampaignerFilter !== defaultTaskFilters.campaignerId) && (
                   <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
-                    {activeFiltersCount + (effectiveCampaignerFilter !== "mine" ? 1 : 0)}
+                    {activeFiltersCount + (effectiveCampaignerFilter !== defaultTaskFilters.campaignerId ? 1 : 0)}
                   </Badge>
                 )}
               </Button>
@@ -1396,6 +1424,7 @@ export function WeeklyTaskBoard() {
                     <SelectValue placeholder={t('role_campaigner')} />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="mine_assigned">שלי וששייכתי</SelectItem>
                     <SelectItem value="mine">שלי בלבד</SelectItem>
                     <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
                     <SelectItem value="none">ללא שיוך</SelectItem>
@@ -1407,6 +1436,15 @@ export function WeeklyTaskBoard() {
                   </SelectContent>
                 </Select>
               </div>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => saveFilterPreset()}
+                disabled={isViewingAs}
+              >
+                <Bookmark className="h-4 w-4" />
+                שמור כברירת מחדל
+              </Button>
               <Button
                 variant="outline"
                 className="w-full gap-2"
@@ -1493,6 +1531,15 @@ export function WeeklyTaskBoard() {
               onDateRangeChange={({ startDate, endDate }) =>
                 setFilters((prev) => ({ ...prev, startDate, endDate }))
               }
+              openClosedFilter={filters.openClosed}
+              onOpenClosedFilterChange={(openClosed) =>
+                setFilters((prev) => ({ ...prev, openClosed }))
+              }
+              clientFilter={filters.clientId}
+              onClientFilterChange={(clientId) =>
+                setFilters((prev) => ({ ...prev, clientId }))
+              }
+              onSaveFilterPreset={() => saveFilterPreset()}
             />
           </div>
         </>
@@ -1511,6 +1558,7 @@ export function WeeklyTaskBoard() {
                 <SelectValue placeholder={t('role_campaigner')} />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="mine_assigned">שלי וששייכתי</SelectItem>
                 <SelectItem value="mine">שלי בלבד</SelectItem>
                 <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
                 <SelectItem value="none">ללא שיוך</SelectItem>
@@ -1891,6 +1939,7 @@ export function WeeklyTaskBoard() {
         onOpenChange={setFiltersDialogOpen}
         currentFilters={filters}
         onApply={(next) => setFilters(next)}
+        onSaveDefault={(next) => saveFilterPreset(next)}
       />
 
       {/* Quick Add Task Dialog (double-click on slot) */}

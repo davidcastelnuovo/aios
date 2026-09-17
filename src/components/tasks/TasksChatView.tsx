@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Building2, CalendarDays, CheckCircle2, CircleDot, LayoutList, MessageSquare, Search, UserRound, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Bookmark, Building2, CalendarDays, CheckCircle2, CircleDot, LayoutList, MessageSquare, Search, UserRound, Users, X } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { isTaskOverdue } from "@/lib/taskDeadline";
 import { embedCount } from "@/lib/embedCount";
 import { filterTasksForChatSearch, sortTasksForChatList } from "@/lib/taskBoardQuery";
 import { useTerminology } from "@/hooks/useTerminology";
+import type { OpenClosedFilter } from "@/lib/taskFilters";
 
 function formatDueShort(value: string): string | null {
   const parsed = new Date(value);
@@ -54,8 +55,6 @@ export type ChatTask = {
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
 };
-
-type OpenClosedFilter = "all" | "open" | "done";
 
 const OPEN_CLOSED_TABS: {
   value: OpenClosedFilter;
@@ -113,6 +112,11 @@ interface TasksChatViewProps {
   startDate?: Date;
   endDate?: Date;
   onDateRangeChange?: (range: { startDate?: Date; endDate?: Date }) => void;
+  openClosedFilter?: OpenClosedFilter;
+  onOpenClosedFilterChange?: (value: OpenClosedFilter) => void;
+  clientFilter?: string;
+  onClientFilterChange?: (value: string) => void;
+  onSaveFilterPreset?: () => void;
 }
 
 export function TasksChatView({
@@ -133,12 +137,17 @@ export function TasksChatView({
   startDate,
   endDate,
   onDateRangeChange,
+  openClosedFilter = "open",
+  onOpenClosedFilterChange,
+  clientFilter = "all",
+  onClientFilterChange,
+  onSaveFilterPreset,
 }: TasksChatViewProps) {
   const isMobile = useIsMobile();
   const { t } = useTerminology();
   const [listSearch, setListSearch] = useState("");
-  const [openClosedFilter, setOpenClosedFilter] = useState<OpenClosedFilter>("open");
-  const [clientFilter, setClientFilter] = useState("all");
+  const setOpenClosedFilter = onOpenClosedFilterChange ?? (() => undefined);
+  const setClientFilter = onClientFilterChange ?? (() => undefined);
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -266,6 +275,7 @@ export function TasksChatView({
                         <SelectValue placeholder={t("role_campaigner")} />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="mine_assigned">שלי וששייכתי</SelectItem>
                         <SelectItem value="mine">שלי בלבד</SelectItem>
                         <SelectItem value="all">כל ה{t("role_campaigner", true)}</SelectItem>
                         <SelectItem value="none">ללא שיוך</SelectItem>
@@ -363,6 +373,18 @@ export function TasksChatView({
                     )}
                   </div>
                 </div>
+              )}
+              {onSaveFilterPreset && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8 text-xs gap-1.5 bg-card"
+                  onClick={onSaveFilterPreset}
+                  disabled={campaignerFilterDisabled}
+                >
+                  <Bookmark className="h-3.5 w-3.5" />
+                  שמור כברירת מחדל
+                </Button>
               )}
             </div>
             <div className="text-xs text-muted-foreground text-center">
