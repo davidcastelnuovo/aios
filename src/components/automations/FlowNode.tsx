@@ -157,6 +157,8 @@ export const ACTION_TYPE_LABELS: Record<string, string> = {
   task_status_changed: "סטאטוס משימה השתנה",
   task_completed: "משימה הושלמה",
   task_assigned: "משימה שוייכה",
+  task_collaborator_added: "קמפיינר נוסף למשימה",
+  task_update_added: "עדכון נוסף למשימה",
   task_overdue: "משימה באיחור",
   // טריגרים – פגישות
   meeting_created: "פגישה נוצרה",

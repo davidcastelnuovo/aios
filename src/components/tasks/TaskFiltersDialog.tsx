@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,16 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, RotateCcw, X } from "lucide-react";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
-import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useTerminology } from "@/hooks/useTerminology";
-import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
-import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
+import { RotateCcw } from "lucide-react";
 import { defaultTaskFilters, resolveMineTaskAssignee, type TaskFilterState } from "@/lib/taskFilters";
 
 export { defaultTaskFilters, resolveMineTaskAssignee, type TaskFilterState };
@@ -35,6 +25,8 @@ interface TaskFiltersDialogProps {
   onOpenChange: (open: boolean) => void;
   currentFilters: TaskFilterState;
   onApply: (filters: TaskFilterState) => void;
+  /** Campaigner / client-lead / period controls — used on mobile so one icon holds every filter. */
+  toolbarFilters?: ReactNode;
 }
 
 export function TaskFiltersDialog({
@@ -42,25 +34,15 @@ export function TaskFiltersDialog({
   onOpenChange,
   currentFilters,
   onApply,
+  toolbarFilters,
 }: TaskFiltersDialogProps) {
-  const { tenantId } = useCurrentTenant();
-  const { t } = useTerminology();
-  const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const [filters, setFilters] = useState<TaskFilterState>(currentFilters);
 
-  // Sync with current filters when dialog opens
   useEffect(() => {
     if (open) {
       setFilters(currentFilters);
     }
   }, [open, currentFilters]);
-
-  // Fetch campaigners for the tenant
-  const { data: campaigners = [] } = useQuery({
-    queryKey: ["campaigners-for-filter", tenantId, crossTenantAgencyIds.join(",")],
-    queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
-    enabled: !!tenantId && open,
-  });
 
   const handleApply = () => {
     onApply(filters);
@@ -90,38 +72,18 @@ export function TaskFiltersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]" dir="rtl">
+      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] overflow-y-auto" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-xl">סינון משימות</DialogTitle>
+          <DialogTitle className="text-xl">{toolbarFilters ? "פילטרים" : "סינון מתקדם"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 py-4">
-          {/* Campaigner */}
-          <div className="space-y-2">
-            <Label>{t('role_campaigner')}</Label>
-            <Select
-              value={filters.campaignerId}
-              onValueChange={(val) =>
-                setFilters((prev) => ({ ...prev, campaignerId: val }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={`בחר ${t('role_campaigner')}`} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
-                <SelectItem value="mine">שלי בלבד</SelectItem>
-                <SelectItem value="none">ללא שיוך</SelectItem>
-                {campaigners?.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Task Type */}
+          {toolbarFilters && (
+            <div className="space-y-2">
+              <Label>סינון מהיר</Label>
+              {toolbarFilters}
+            </div>
+          )}
           <div className="space-y-2">
             <Label>סוג משימה</Label>
             <Select
@@ -144,7 +106,6 @@ export function TaskFiltersDialog({
             </Select>
           </div>
 
-          {/* Association */}
           <div className="space-y-2">
             <Label>שיוך</Label>
             <Select
@@ -165,83 +126,6 @@ export function TaskFiltersDialog({
               </SelectContent>
             </Select>
           </div>
-
-          {/* Date Range */}
-          <div className="space-y-2">
-            <Label>טווח תאריכים</Label>
-            <div className="flex gap-3">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "flex-1 justify-start text-right font-normal",
-                      !filters.startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="ml-2 h-4 w-4" />
-                    {filters.startDate
-                      ? format(filters.startDate, "dd/MM/yyyy")
-                      : "מתאריך"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={filters.startDate}
-                    onSelect={(date) =>
-                      setFilters((prev) => ({ ...prev, startDate: date }))
-                    }
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "flex-1 justify-start text-right font-normal",
-                      !filters.endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="ml-2 h-4 w-4" />
-                    {filters.endDate
-                      ? format(filters.endDate, "dd/MM/yyyy")
-                      : "עד תאריך"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={filters.endDate}
-                    onSelect={(date) =>
-                      setFilters((prev) => ({ ...prev, endDate: date }))
-                    }
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-
-              {(filters.startDate || filters.endDate) && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      startDate: undefined,
-                      endDate: undefined,
-                    }))
-                  }
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-
         </div>
 
         <DialogFooter className="flex gap-2 sm:gap-2">
