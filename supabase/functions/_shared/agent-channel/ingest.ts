@@ -4,6 +4,7 @@ import {
   completeSession,
   getRunningSession,
   insertMessage,
+  loadAuthorizedConversation,
   loadSession,
   logChannelAction,
   serviceClient,
@@ -21,7 +22,7 @@ async function resolveSession(
     if (byId) return byId;
   }
   if (!payload.conversation_id || origin === "internal" || origin === "parliament") return null;
-  return await getRunningSession(sb, payload.conversation_id, origin);
+  return await getRunningSession(sb, payload.conversation_id, origin, payload.tenant_id || undefined);
 }
 
 export async function ingestChannelReply(payload: CallbackPayload): Promise<{ duplicate: boolean; message_id: string }> {
@@ -41,6 +42,12 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
   if (session && session.tenant_id !== tenantId) {
     throw new Error("session tenant mismatch");
   }
+  const conversation = await loadAuthorizedConversation(sb, {
+    conversationId: payload.conversation_id,
+    tenantId,
+    claimedRunId: payload.metadata?.parliament_run_id ? String(payload.metadata.parliament_run_id) : null,
+  });
+  if (!conversation.ok) throw new Error("conversation not found");
 
   const eventType = payload.event_type || "message";
   const { row, duplicate } = await insertMessage(sb, {
@@ -76,7 +83,7 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
         round: payload.parliament_round ?? session?.parliament_round,
       });
     } else {
-      await setConversationStatus(sb, payload.conversation_id, "idle");
+      await setConversationStatus(sb, payload.conversation_id, "idle", tenantId);
     }
   }
 

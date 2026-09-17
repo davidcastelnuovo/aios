@@ -9,6 +9,7 @@ import {
   ensureDefaultRoutes,
   findMessageByIdempotency,
   insertMessage,
+  loadAuthorizedConversation,
   loadRoute,
   logChannelAction,
   resolveCarmenAgent,
@@ -109,20 +110,50 @@ Deno.serve(async (req) => {
   if (action === "cancel_parliament") {
     const conversationId = String(body.conversation_id || "");
     if (!conversationId) return json(400, { error: "conversation_id is required" });
-    await cancelParliament(conversationId);
+    const authz = await loadAuthorizedConversation(sb, {
+      conversationId,
+      tenantId,
+      claimedAgentId: body.agent_id ? String(body.agent_id) : null,
+    });
+    if (!authz.ok) return json(authz.status, { error: authz.status === 404 ? "Not found" : "Forbidden" });
+    await cancelParliament(conversationId, tenantId);
     return json(200, { ok: true, status: "idle" });
   }
 
   if (action === "parliament_continue") {
     const conversationId = String(body.conversation_id || "");
     if (!conversationId) return json(400, { error: "conversation_id is required" });
-    return json(200, await forceContinueParliament(conversationId));
+    const authz = await loadAuthorizedConversation(sb, {
+      conversationId,
+      tenantId,
+      claimedAgentId: body.agent_id ? String(body.agent_id) : null,
+      claimedRunId: body.run_id ? String(body.run_id) : null,
+    });
+    if (!authz.ok) return json(authz.status, { error: authz.status === 404 ? "Not found" : "Forbidden" });
+    try {
+      return json(200, await forceContinueParliament(conversationId, tenantId, body.run_id ? String(body.run_id) : null));
+    } catch (e: any) {
+      if (String(e?.message || e).includes("no running parliament")) return json(404, { error: "Not found" });
+      throw e;
+    }
   }
 
   if (action === "parliament_synthesize") {
     const conversationId = String(body.conversation_id || "");
     if (!conversationId) return json(400, { error: "conversation_id is required" });
-    return json(200, await forceSynthesizeParliament(conversationId));
+    const authz = await loadAuthorizedConversation(sb, {
+      conversationId,
+      tenantId,
+      claimedAgentId: body.agent_id ? String(body.agent_id) : null,
+      claimedRunId: body.run_id ? String(body.run_id) : null,
+    });
+    if (!authz.ok) return json(authz.status, { error: authz.status === 404 ? "Not found" : "Forbidden" });
+    try {
+      return json(200, await forceSynthesizeParliament(conversationId, tenantId, body.run_id ? String(body.run_id) : null));
+    } catch (e: any) {
+      if (String(e?.message || e).includes("no running parliament")) return json(404, { error: "Not found" });
+      throw e;
+    }
   }
 
   if (action === "parliament_clarify") {
@@ -133,13 +164,30 @@ Deno.serve(async (req) => {
     if (provider !== "cursor" && provider !== "grok" && provider !== "codex") {
       return json(400, { error: "clarify only supports cursor, grok, or codex" });
     }
-    return json(200, await clarifyParliamentSeat(conversationId, provider, question));
+    const authz = await loadAuthorizedConversation(sb, {
+      conversationId,
+      tenantId,
+      claimedAgentId: body.agent_id ? String(body.agent_id) : null,
+    });
+    if (!authz.ok) return json(authz.status, { error: authz.status === 404 ? "Not found" : "Forbidden" });
+    try {
+      return json(200, await clarifyParliamentSeat(conversationId, provider, question, tenantId, body.run_id ? String(body.run_id) : null));
+    } catch (e: any) {
+      if (String(e?.message || e).includes("no running parliament")) return json(404, { error: "Not found" });
+      throw e;
+    }
   }
 
   if (action === "persist_assistant") {
     const conversationId = String(body.conversation_id || "");
     const content = String(body.content || "").trim();
     if (!conversationId || !content) return json(400, { error: "conversation_id and content are required" });
+    const authz = await loadAuthorizedConversation(sb, {
+      conversationId,
+      tenantId,
+      claimedAgentId: body.agent_id ? String(body.agent_id) : null,
+    });
+    if (!authz.ok) return json(authz.status, { error: authz.status === 404 ? "Not found" : "Forbidden" });
     const { row, duplicate } = await insertMessage(sb, {
       tenant_id: tenantId,
       conversation_id: conversationId,
@@ -150,7 +198,7 @@ Deno.serve(async (req) => {
       idempotency_key: body.idempotency_key ? String(body.idempotency_key) : null,
       metadata: { origin: "internal", input_mode: body.input_mode || "typed", delivery_mode: "text" },
     });
-    await setConversationStatus(sb, conversationId, "idle");
+    await setConversationStatus(sb, conversationId, "idle", tenantId);
     return json(200, { ok: true, duplicate, message_id: row.id });
   }
 
@@ -256,16 +304,16 @@ Deno.serve(async (req) => {
       idempotencyKey,
       history: Array.isArray(body.conversation_history) ? body.conversation_history : [],
     });
-    await setConversationStatus(sb, conv.id, result.status);
+    await setConversationStatus(sb, conv.id, result.status, tenantId);
     await sb.from("ai_conversation_messages").update({
       metadata: { dispatch: result, input_mode: body.input_mode || "typed" },
     }).eq("tenant_id", tenantId).eq("idempotency_key", idempotencyKey);
     if (result.inline_reply) {
-      await setConversationStatus(sb, conv.id, "idle");
+      await setConversationStatus(sb, conv.id, "idle", tenantId);
     }
     return json(200, result);
   } catch (e: any) {
-    await setConversationStatus(sb, conv.id, "error");
+    await setConversationStatus(sb, conv.id, "error", tenantId);
     console.error("[agent-channel-send]", e?.message ?? e);
     return json(500, { error: String(e?.message ?? e) });
   }

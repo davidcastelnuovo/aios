@@ -9,6 +9,7 @@ import {
 } from "../_shared/agent-channel/parliament.ts";
 import {
   ensureConversation,
+  loadAuthorizedConversation,
   loadRoute,
   resolveCarmenAgent,
   serviceClient,
@@ -39,25 +40,49 @@ Deno.serve(async (req) => {
 
   const action = String(body.action || "start");
   const conversationId = String(body.conversation_id || "");
+  const claimedAgentId = body.agent_id ? String(body.agent_id) : null;
   if (action === "cancel") {
     if (!conversationId) return json(400, { error: "conversation_id is required" });
-    await cancelParliament(conversationId);
+    const authz = await loadAuthorizedConversation(sb, { conversationId, tenantId, claimedAgentId });
+    if (!authz.ok) return json(authz.status, { error: authz.status === 404 ? "Not found" : "Forbidden" });
+    await cancelParliament(conversationId, tenantId);
     return json(200, { ok: true, status: "idle" });
   }
   if (action === "continue") {
     if (!conversationId) return json(400, { error: "conversation_id is required" });
-    return json(200, await forceContinueParliament(conversationId));
+    const authz = await loadAuthorizedConversation(sb, { conversationId, tenantId, claimedAgentId, claimedRunId: body.run_id ? String(body.run_id) : null });
+    if (!authz.ok) return json(authz.status, { error: authz.status === 404 ? "Not found" : "Forbidden" });
+    try {
+      return json(200, await forceContinueParliament(conversationId, tenantId, body.run_id ? String(body.run_id) : null));
+    } catch (e: any) {
+      if (String(e?.message || e).includes("no running parliament")) return json(404, { error: "Not found" });
+      throw e;
+    }
   }
   if (action === "synthesize") {
     if (!conversationId) return json(400, { error: "conversation_id is required" });
-    return json(200, await forceSynthesizeParliament(conversationId));
+    const authz = await loadAuthorizedConversation(sb, { conversationId, tenantId, claimedAgentId, claimedRunId: body.run_id ? String(body.run_id) : null });
+    if (!authz.ok) return json(authz.status, { error: authz.status === 404 ? "Not found" : "Forbidden" });
+    try {
+      return json(200, await forceSynthesizeParliament(conversationId, tenantId, body.run_id ? String(body.run_id) : null));
+    } catch (e: any) {
+      if (String(e?.message || e).includes("no running parliament")) return json(404, { error: "Not found" });
+      throw e;
+    }
   }
   if (action === "clarify") {
     const provider = String(body.provider || "");
     const question = String(body.content || body.question || "").trim();
     if (!conversationId || !question) return json(400, { error: "conversation_id and content are required" });
     if (provider !== "cursor" && provider !== "grok") return json(400, { error: "clarify only supports cursor or grok" });
-    return json(200, await clarifyParliamentSeat(conversationId, provider, question));
+    const authz = await loadAuthorizedConversation(sb, { conversationId, tenantId, claimedAgentId });
+    if (!authz.ok) return json(authz.status, { error: authz.status === 404 ? "Not found" : "Forbidden" });
+    try {
+      return json(200, await clarifyParliamentSeat(conversationId, provider, question, tenantId, body.run_id ? String(body.run_id) : null));
+    } catch (e: any) {
+      if (String(e?.message || e).includes("no running parliament")) return json(404, { error: "Not found" });
+      throw e;
+    }
   }
 
   const content = String(body.content || body.goal || "").trim();
