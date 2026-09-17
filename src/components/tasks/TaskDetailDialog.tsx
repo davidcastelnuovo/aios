@@ -32,6 +32,7 @@ import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachment
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 import { coerceHumanTaskStatus } from "@/lib/taskStatus";
+import { PRIORITY_BAR_LABELS, priorityBarColor } from "@/lib/taskPriority";
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
 const FRAME = "rounded-xl border border-border/60 bg-card shadow-sm text-right";
@@ -903,21 +904,24 @@ export function TaskDetailDialog({
               <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>דחיפות</span>
-                  <span className="font-medium text-foreground">{priority}</span>
+                  <span className="font-medium" style={{ color: priorityBarColor(priority) }}>{priority}</span>
                 </div>
-                <Slider
-                  value={[priority]}
-                  onValueChange={([val]) => setPriority(val)}
-                  min={1}
-                  max={10}
-                  step={1}
-                  className="py-2"
-                />
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span>נמוכה</span>
-                  <span>בינונית</span>
-                  <span>גבוהה</span>
-                  <span>דחופה</span>
+                <div dir="ltr">
+                  <Slider
+                    dir="ltr"
+                    value={[priority]}
+                    onValueChange={([val]) => setPriority(val)}
+                    min={1}
+                    max={10}
+                    step={1}
+                    className="py-2"
+                    style={{ ["--slider-color" as any]: priorityBarColor(priority) }}
+                  />
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    {PRIORITY_BAR_LABELS.map((label) => (
+                      <span key={label}>{label}</span>
+                    ))}
+                  </div>
                 </div>
               </div>
             </section>
