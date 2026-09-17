@@ -32,7 +32,7 @@ interface Task {
   clients?: { name: string } | null;
   campaigners?: { full_name: string } | null;
   task_updates?: { id: string }[];
-  task_collaborators?: { id: string }[];
+  task_collaborators?: { id?: string; campaigner_id?: string }[];
 }
 
 interface TaskBacklogPanelProps {

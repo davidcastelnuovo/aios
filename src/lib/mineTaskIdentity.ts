@@ -1,12 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
   buildMineAssignmentOrFilter,
+  buildMineQueueOrFilter,
   resolveMineTaskAssignee,
   type MineTaskIdentity,
 } from "@/lib/taskFilters";
 
 export type { MineTaskIdentity };
-export { buildMineAssignmentOrFilter };
+export { buildMineAssignmentOrFilter, buildMineQueueOrFilter };
 
 /**
  * Resolve every campaigner row that represents this user for task assignment.

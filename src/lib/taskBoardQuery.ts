@@ -1,4 +1,5 @@
 import { startOfDay } from "date-fns";
+import { isTaskOverdue } from "./taskDeadline.ts";
 
 /**
  * PostgREST `.or()` filter for the tasks board.
@@ -32,6 +33,82 @@ export function buildTaskDueDateOrFilter(input: {
     overdueOpen + "," +
     unscheduledOpen
   );
+}
+
+/**
+ * PostgREST `.or()` filter for the tasks chat list.
+ *
+ * Includes every not-done task (any due date / unscheduled) plus recently
+ * completed rows so the list is a work queue, not a calendar window.
+ * Custom period filters narrow by created_at — not due date.
+ */
+export function buildChatTaskOrFilter(input: {
+  today: string;
+  doneSince: string;
+  activitySince?: string;
+}): string {
+  const { doneSince, activitySince } = input;
+  if (activitySince) {
+    return `created_at.gte.${activitySince}`;
+  }
+  return `status.neq.done,and(status.eq.done,updated_at.gte.${doneSince})`;
+}
+
+export function filterTasksForChatSearch<
+  T extends {
+    title?: string | null;
+    notes?: string | null;
+    clients?: { name?: string | null } | null;
+    leads?: { company_name?: string | null; contact_name?: string | null } | null;
+    campaigners?: { full_name?: string | null } | null;
+    creator_name?: string | null;
+  },
+>(tasks: T[], search: string): T[] {
+  const q = search.trim().toLowerCase();
+  if (!q) return tasks;
+  return tasks.filter((task) =>
+    (task.title || "").toLowerCase().includes(q) ||
+    (task.notes || "").toLowerCase().includes(q) ||
+    (task.clients?.name || "").toLowerCase().includes(q) ||
+    (task.leads?.company_name || "").toLowerCase().includes(q) ||
+    (task.leads?.contact_name || "").toLowerCase().includes(q) ||
+    (task.campaigners?.full_name || "").toLowerCase().includes(q) ||
+    (task.creator_name || "").toLowerCase().includes(q)
+  );
+}
+
+export function sortTasksForChatList<
+  T extends {
+    id: string;
+    status: string;
+    priority: number;
+    due_date: string | null;
+    target_date?: string | null;
+    created_at?: string;
+  },
+>(tasks: T[], today: Date): T[] {
+  const rank = (task: T) => {
+    if (task.status === "done") return 3;
+    if (isTaskOverdue(task, today)) return 0;
+    if (task.status === "in_progress") return 1;
+    return 2;
+  };
+  return [...tasks].sort((a, b) => {
+    const rankDiff = rank(a) - rank(b);
+    if (rankDiff !== 0) return rankDiff;
+    if (b.priority !== a.priority) return b.priority - a.priority;
+    const aDeadline = a.target_date || a.due_date;
+    const bDeadline = b.target_date || b.due_date;
+    if (aDeadline && bDeadline && aDeadline !== bDeadline) {
+      return aDeadline.localeCompare(bDeadline);
+    }
+    if (aDeadline && !bDeadline) return -1;
+    if (!aDeadline && bDeadline) return 1;
+    const aCreated = a.created_at || "";
+    const bCreated = b.created_at || "";
+    if (aCreated !== bCreated) return bCreated.localeCompare(aCreated);
+    return b.id.localeCompare(a.id);
+  });
 }
 
 /** Whether a task should render on the timed day-column grid (not backlog). */

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { listenForUnifiedConnection, openUnifiedCalendarConnection } from "@/lib/unifiedCalendarConnection";
 
 /**
  * Dual-mode Calendar API.
@@ -126,6 +127,53 @@ export async function checkCalendarConnection(options: CalendarProxyOptions): Pr
 export async function initDirectGoogleAuth() {
   const data = await invokeDirectGoogle('google-calendar-auth', { action: 'init' });
   return data as { authUrl: string };
+}
+
+export function getStoredCalendarProvider(): CalendarProvider {
+  if (typeof localStorage === "undefined") return "direct";
+  return (localStorage.getItem("calendar_provider_mode") as CalendarProvider) || "direct";
+}
+
+/** Open Google Calendar OAuth / Unified connect and resolve when it succeeds. */
+export function startCalendarOAuth(
+  tenantId: string,
+  provider: CalendarProvider = getStoredCalendarProvider(),
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    void (async () => {
+      try {
+        if (provider === "unified") {
+          const stop = listenForUnifiedConnection(() => {
+            stop();
+            resolve();
+          });
+          await openUnifiedCalendarConnection({ tenantId });
+          return;
+        }
+        const { authUrl } = await initDirectGoogleAuth();
+        const popup = window.open(authUrl, "google-calendar-auth", "width=600,height=700");
+        if (!popup) {
+          throw new Error("חלון הקופץ נחסם. נא לאפשר חלונות קופצים ולנסות שוב.");
+        }
+        let closedTimer = 0;
+        const handler = (event: MessageEvent) => {
+          if (event.data?.type !== "calendar_connected") return;
+          window.removeEventListener("message", handler);
+          window.clearInterval(closedTimer);
+          resolve();
+        };
+        closedTimer = window.setInterval(() => {
+          if (!popup.closed) return;
+          window.clearInterval(closedTimer);
+          window.removeEventListener("message", handler);
+          reject(new Error("חיבור היומן בוטל"));
+        }, 600);
+        window.addEventListener("message", handler);
+      } catch (error) {
+        reject(error);
+      }
+    })();
+  });
 }
 
 /** Disconnect direct Google calendar */

@@ -36,6 +36,7 @@ import {
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { priorityBarColor } from "@/lib/taskPriority";
 import {
   Command,
   CommandEmpty,
@@ -632,10 +633,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                     control={form.control}
                     name="priority"
                     render={({ field }) => {
-                      const getPriorityColor = (priority: number) => {
-                        const hue = 240 - ((priority - 1) / 9) * 240;
-                        return `hsl(${hue}, 70%, 50%)`;
-                      };
+                      const getPriorityColor = (priority: number) => priorityBarColor(priority);
                       
                       const getPriorityText = (priority: number) => {
                         if (priority >= 8) return "דחיפות גבוהה";
@@ -741,10 +739,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                     control={form.control}
                     name="priority"
                     render={({ field }) => {
-                      const getPriorityColor = (priority: number) => {
-                        const hue = 240 - ((priority - 1) / 9) * 240;
-                        return `hsl(${hue}, 70%, 50%)`;
-                      };
+                      const getPriorityColor = (priority: number) => priorityBarColor(priority);
                       
                       const getPriorityText = (priority: number) => {
                         if (priority >= 8) return "דחיפות גבוהה";

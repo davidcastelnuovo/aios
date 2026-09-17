@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { notifyTaskUpdateAdded } from "@/lib/notifyTaskPeers";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -70,6 +71,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useCampaigners, useSalesPeople } from "@/hooks/useEntityLists";
+import { priorityBarColor } from "@/lib/taskPriority";
 
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
@@ -331,6 +333,13 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
           attachments,
         });
       if (error) throw error;
+      if (userId) {
+        void notifyTaskUpdateAdded({
+          taskId: task.id,
+          userId,
+          updateContent: content,
+        });
+      }
     },
     onSuccess: () => {
       refetchUpdates();
@@ -1302,10 +1311,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                 control={form.control}
                 name="priority"
                 render={({ field }) => {
-                  const getPriorityColor = (priority: number) => {
-                    const hue = 240 - ((priority - 1) / 9) * 240;
-                    return `hsl(${hue}, 70%, 50%)`;
-                  };
+                  const getPriorityColor = (priority: number) => priorityBarColor(priority);
                   
                   const getPriorityText = (priority: number) => {
                     if (priority >= 8) return "דחיפות גבוהה";

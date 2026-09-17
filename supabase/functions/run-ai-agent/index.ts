@@ -25,7 +25,7 @@ import {
   shouldUseTokenOptimize,
 } from '../_shared/carmen-token-optimizer.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
-import { asUuidOrNull } from '../_shared/uuid.ts'
+import { fireTaskPeerNotification } from '../_shared/notify-task-peers.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
 import { loadDevEscalationTierFromDb } from '../_shared/carmen-access-policy.ts'
 import {
@@ -3646,6 +3646,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
       const { data, error } = await supabase.from('task_updates').insert({ task_id: args.task_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
       if (error) throw error
+      void fireTaskPeerNotification({
+        supabaseUrl: SUPABASE_URL,
+        serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        triggerType: 'task_update_added',
+        data: { task_id: args.task_id, user_id: userId, update_content: args.content },
+      })
       return { update_id: data.id }
     }
     case 'manage_task_collaborators': {
@@ -3654,6 +3660,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: tenantId,
         }).select('id').single()
         if (error) throw error
+        void fireTaskPeerNotification({
+          supabaseUrl: SUPABASE_URL,
+          serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+          triggerType: 'task_collaborator_added',
+          data: { task_id: args.task_id, notify_campaigner_id: args.campaigner_id, user_id: userId },
+        })
         return { success: true, action: 'added', collaborator_id: data.id }
       } else {
         const { error } = await supabase.from('task_collaborators').delete()

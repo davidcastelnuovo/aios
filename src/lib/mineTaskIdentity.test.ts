@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildMineAssignmentOrFilter } from "./taskFilters.ts";
+import { buildMineAssignmentOrFilter, buildMineQueueOrFilter } from "./taskFilters.ts";
 
 test("buildMineAssignmentOrFilter ORs every campaigner id and sales person", () => {
   const filter = buildMineAssignmentOrFilter({
@@ -17,5 +17,12 @@ test("buildMineAssignmentOrFilter returns null when no assignment keys", () => {
   assert.equal(
     buildMineAssignmentOrFilter({ kind: "none", userId: "user-1", campaignerIds: [] }),
     null,
+  );
+});
+
+test("buildMineQueueOrFilter falls back to created_by when there is no staff row", () => {
+  assert.equal(
+    buildMineQueueOrFilter({ kind: "created_by", userId: "user-1", campaignerIds: [] }, "mine"),
+    "created_by.eq.user-1",
   );
 });

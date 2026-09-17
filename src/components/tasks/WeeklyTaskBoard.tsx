@@ -22,15 +22,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users } from "lucide-react";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, MessageSquare } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
+import { TasksChatView, TasksChatSearchInput } from "./TasksChatView";
+import { TasksToolbarFilters } from "./TasksToolbarFilters";
 import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import type { QuickTaskPayload } from "./QuickTaskInput";
@@ -41,7 +41,6 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useViewAs } from "@/contexts/ViewAsContext";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
-import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import {
@@ -54,10 +53,26 @@ import {
   filterTasksByBoardTenantScope,
 } from "@/lib/taskBoardAgency";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
-import { buildMineAssignmentOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
-import { filterTasksByCampaignerBoardFilter, filterTasksForBoardUserPreview } from "@/lib/taskFilters";
-import { buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
+import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
+import {
+  chunkIds,
+  filterTasksByCampaignerBoardFilter,
+  filterTasksByRelatedEntity,
+  filterTasksForBoardUserPreview,
+  hasTasksFilterPreset,
+  isMineQueueFilter,
+  readTasksFilterPreset,
+  resolveTaskPeriodStart,
+  taskMatchesActivityPeriod,
+  writeTasksFilterPreset,
+} from "@/lib/taskFilters";
+import { buildChatTaskOrFilter, buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
 import { isTaskOverdue } from "@/lib/taskDeadline";
+import {
+  checkCalendarConnection,
+  getStoredCalendarProvider,
+  startCalendarOAuth,
+} from "@/lib/calendarApi";
 
 interface Task {
   id: string;
@@ -75,13 +90,16 @@ interface Task {
   tenant_id: string | null;
   created_by?: string | null;
   creator_name?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   sort_order?: number;
   target_date?: string | null;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
   clients?: { name: string; agency_id?: string | null } | null;
+  leads?: { company_name?: string | null; contact_name?: string | null } | null;
   task_updates?: { id: string }[];
-  task_collaborators?: { id: string }[];
+  task_collaborators?: { id?: string; campaigner_id?: string }[];
 }
 
 interface CalendarEvent {
@@ -93,7 +111,21 @@ interface CalendarEvent {
   calendarId?: string;
 }
 
-export type ViewMode = "daily" | "weekly" | "monthly";
+export type ViewMode = "chat" | "daily" | "weekly" | "monthly";
+
+const TASKS_VIEW_MODE_KEY = "aios-tasks-view-mode";
+
+function readTasksViewMode(): ViewMode {
+  try {
+    const saved = localStorage.getItem(TASKS_VIEW_MODE_KEY);
+    if (saved === "chat" || saved === "daily" || saved === "weekly" || saved === "monthly") {
+      return saved;
+    }
+  } catch {
+    // ignore
+  }
+  return "chat";
+}
 
 export function WeeklyTaskBoard() {
   const queryClient = useQueryClient();
@@ -104,7 +136,6 @@ export function WeeklyTaskBoard() {
   const boardUserId = isViewingAs && viewAsUserId ? viewAsUserId : user?.id ?? null;
   const { isOwner, isSuperAdmin, userId: authenticatedUserId } = useUserRole();
   const { state: sidebarState } = useSidebar();
-  const { t } = useTerminology();
 
   // Fetch clients for inline selector
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
@@ -133,27 +164,65 @@ export function WeeklyTaskBoard() {
     enabled: !!tenantId,
   });
 
+  const { data: leadsList = [] } = useQuery({
+    queryKey: ["leads-for-task-filter", tenantId, crossTenantAgencyIds],
+    queryFn: async () => {
+      let query = supabase
+        .from("leads")
+        .select("id, company_name, contact_name, created_at");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId!);
+      }
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(400);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
   // Start from today instead of week start
   const [currentDate, setCurrentDate] = useState(() => startOfDay(new Date()));
-  const [viewMode, setViewMode] = useState<ViewMode>("weekly");
+  const [viewMode, setViewMode] = useState<ViewMode>(readTasksViewMode);
+  useEffect(() => {
+    try {
+      localStorage.setItem(TASKS_VIEW_MODE_KEY, viewMode);
+    } catch {
+      // ignore
+    }
+  }, [viewMode]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   // Everyone lands on their own queue: tasks assigned to the staff member
   // linked on the user (profiles.campaigner_id / sales_person_id).
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+  const [chatListSearch, setChatListSearch] = useState("");
   const appliedOwnerBoardDefaultRef = useRef(false);
+  const presetKeyRef = useRef<string | null>(null);
   const effectiveCampaignerFilter = isViewingAs ? "mine" : filters.campaignerId;
 
-  // Personal queue ("mine"): default header to "all agencies" so cross-agency
+  useLayoutEffect(() => {
+    if (isViewingAs || !user?.id) return;
+    if (presetKeyRef.current === user.id) return;
+    presetKeyRef.current = user.id;
+    setFilters(readTasksFilterPreset(user.id));
+    if (hasTasksFilterPreset(user.id)) {
+      appliedOwnerBoardDefaultRef.current = true;
+    }
+  }, [isViewingAs, user?.id]);
+
+  // Personal queue: default header to "all agencies" so cross-agency
   // assignments are visible. User can still narrow by agency afterward.
   useLayoutEffect(() => {
-    if (effectiveCampaignerFilter === "mine") {
+    if (isMineQueueFilter(effectiveCampaignerFilter)) {
       setSelectedAgency("all");
     }
   }, [effectiveCampaignerFilter, setSelectedAgency]);
 
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
+  const [filtersIncludeToolbar, setFiltersIncludeToolbar] = useState(false);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
   const [quickAddSlot, setQuickAddSlot] = useState<{ date: Date; time: string } | null>(null);
@@ -166,7 +235,7 @@ export function WeeklyTaskBoard() {
     clients?: { name: string; agency_id?: string | null } | null;
     campaigners?: { full_name: string } | null;
     task_updates?: { id: string }[];
-    task_collaborators?: { id: string }[];
+    task_collaborators?: { id?: string; campaigner_id?: string }[];
   };
 
   const linkedTaskId = searchParams.get("task");
@@ -193,7 +262,8 @@ export function WeeklyTaskBoard() {
         return;
       }
       setSelectedTask(data as FullTask);
-      setDialogOpen(true);
+      setViewMode("chat");
+      setDialogOpen(false);
     };
 
     void openLinkedTask();
@@ -269,11 +339,11 @@ export function WeeklyTaskBoard() {
     queryKey: ["calendar-events-weekly", format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), tenantId],
     queryFn: async () => {
       try {
-        const { getCalendarEvents } = await import("@/lib/calendarApi");
+        const { getCalendarEvents, getStoredCalendarProvider } = await import("@/lib/calendarApi");
         const data = await getCalendarEvents(
           dateRange.start.toISOString(),
           endOfDay(addDays(dateRange.end, 1)).toISOString(),
-          { tenantId: tenantId! }
+          { tenantId: tenantId!, provider: getStoredCalendarProvider() }
         );
         
         // Transform to our CalendarEvent format
@@ -295,31 +365,58 @@ export function WeeklyTaskBoard() {
         return [];
       }
     },
-    enabled: !!user?.id && !!tenantId && viewMode !== "monthly",
+    enabled: !!user?.id && !!tenantId && viewMode !== "monthly" && viewMode !== "chat",
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
+  const calendarProvider = getStoredCalendarProvider();
+  const { data: calendarStatus } = useQuery({
+    queryKey: ["calendar-status", tenantId, calendarProvider],
+    queryFn: () => checkCalendarConnection({ tenantId: tenantId!, provider: calendarProvider }),
+    enabled: !!tenantId && viewMode !== "chat",
+    staleTime: 1000 * 60,
+  });
+  const calendarConnected = Boolean(calendarStatus?.connected);
+  const [connectingCalendar, setConnectingCalendar] = useState(false);
+
+  const handleConnectCalendar = async () => {
+    if (!tenantId || connectingCalendar) return;
+    setConnectingCalendar(true);
+    try {
+      await startCalendarOAuth(tenantId, calendarProvider);
+      await queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
+      await queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      toast.success("היומן חובר");
+    } catch (error) {
+      console.error("[connectCalendar] failed", error);
+      toast.error((error as Error).message || "שגיאה בחיבור ליומן");
+    } finally {
+      setConnectingCalendar(false);
+    }
+  };
+
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching, isSuccess, isError, error: tasksError } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, effectiveCampaignerFilter, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency, isViewingAs, viewAsUserId, boardUserId],
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), viewMode === "chat" ? "chat" : format(dateRange.start, "yyyy-MM-dd"), viewMode === "chat" ? "chat" : format(dateRange.end, "yyyy-MM-dd"), filters, effectiveCampaignerFilter, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency, isViewingAs, viewAsUserId, boardUserId],
     enabled:
       !!tenantId &&
       !!boardUserId &&
-      (effectiveCampaignerFilter !== "mine" || mineIdentityReady),
+      (isMineQueueFilter(effectiveCampaignerFilter) ? mineIdentityReady : true),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
       const rangeEndStr = format(dateRange.end, "yyyy-MM-dd");
       
-      let query = supabase
-        .from("tasks")
-        .select(`
+      const TASK_BOARD_SELECT = `
           *,
           clients (name, agency_id),
+          leads (company_name, contact_name),
           campaigners (full_name),
           task_updates (count),
           task_collaborators (count)
-        `);
+        `;
+
+      let query = supabase.from("tasks").select(TASK_BOARD_SELECT);
 
       // Tenant scope only. The header agency is applied after the fetch, on the
       // task's effective agency (its client's agency when it has one), because
@@ -331,15 +428,17 @@ export function WeeklyTaskBoard() {
       });
 
       let collaboratorTaskIds: string[] = [];
-      if (effectiveCampaignerFilter === "mine") {
-        const personScopeCampaignerIds = mineIdentity?.campaignerIds ?? [];
-        if (personScopeCampaignerIds.length > 0) {
-          const { data: collabRows } = await supabase
-            .from("task_collaborators")
-            .select("task_id")
-            .in("campaigner_id", personScopeCampaignerIds);
-          collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
-        }
+      const collaboratorScopeIds = isMineQueueFilter(effectiveCampaignerFilter)
+        ? mineIdentity?.campaignerIds ?? []
+        : effectiveCampaignerFilter !== "all" && effectiveCampaignerFilter !== "none"
+          ? [effectiveCampaignerFilter]
+          : [];
+      if (collaboratorScopeIds.length > 0) {
+        const { data: collabRows } = await supabase
+          .from("task_collaborators")
+          .select("task_id")
+          .in("campaigner_id", collaboratorScopeIds);
+        collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
       }
 
       query = query.or(buildTasksBoardScopeOrFilter(boardScope));
@@ -347,33 +446,37 @@ export function WeeklyTaskBoard() {
       // Include: current range OR overdue open OR unscheduled open (no due_date).
       // Do not fetch historical done-undated / all-time untimed rows — that
       // flooded the board after the target_date 400-fix made the query succeed.
+      const periodStart = viewMode === "chat" ? resolveTaskPeriodStart(filters.period) : undefined;
+      const activitySince = periodStart ? format(periodStart, "yyyy-MM-dd") : undefined;
       query = query.or(
-        buildTaskDueDateOrFilter({
-          rangeStart: rangeStartStr,
-          rangeEnd: rangeEndStr,
-          today,
-          customStart: filters.startDate ? format(filters.startDate, "yyyy-MM-dd") : undefined,
-          customEnd: filters.endDate ? format(filters.endDate, "yyyy-MM-dd") : undefined,
-        }),
+        viewMode === "chat"
+          ? buildChatTaskOrFilter({
+              today,
+              doneSince: activitySince ?? format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
+              activitySince,
+            })
+          : buildTaskDueDateOrFilter({
+              rangeStart: rangeStartStr,
+              rangeEnd: rangeEndStr,
+              today,
+            }),
       );
 
-      // "שלי בלבד" = tasks assigned to the staff member this user is linked to.
-      if (effectiveCampaignerFilter === "mine") {
+      // Personal queue: assigned to me ("mine") or assigned to me + created by me.
+      // Collaborator tasks are fetched in a second query — do not stuff hundreds of
+      // UUIDs into this .or() or PostgREST 400s and the board never loads.
+      let skipAssignedQuery = false;
+      if (isMineQueueFilter(effectiveCampaignerFilter)) {
         const mine = mineIdentity!;
-        const assignmentOr = buildMineAssignmentOrFilter(mine);
-        const mineParts: string[] = [];
-        if (assignmentOr) mineParts.push(assignmentOr);
-        if (collaboratorTaskIds.length > 0) {
-          mineParts.push(`id.in.(${collaboratorTaskIds.join(",")})`);
-        }
-        if (mineParts.length > 0) {
+        const mode = effectiveCampaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
+        const queueOr = buildMineQueueOrFilter(mine, mode);
+        if (queueOr) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(mineParts.join(","));
-        } else if (mine.kind === "created_by") {
-          query = query.eq("created_by", mine.userId);
-        } else {
-          // No staff row linked — "mine" would otherwise return the whole tenant scope.
+          query = (query as any).or(queueOr);
+        } else if (collaboratorTaskIds.length === 0) {
           return [];
+        } else {
+          skipAssignedQuery = true;
         }
       } else if (effectiveCampaignerFilter === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -383,31 +486,81 @@ export function WeeklyTaskBoard() {
         query = (query as any).eq("campaigner_id", effectiveCampaignerFilter);
       }
 
-      // Apply task type filter
-      if (filters.taskType !== "all") {
-        query = query.eq("task_type", filters.taskType as "campaign" | "collection" | "creative" | "other");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const applyBoardFilters = (q: any) => {
+        if (filters.taskType !== "all") {
+          q = q.eq("task_type", filters.taskType as "campaign" | "collection" | "creative" | "other");
+        }
+        if (filters.relatedKind === "client" && filters.relatedId) {
+          q = q.eq("client_id", filters.relatedId);
+        } else if (filters.relatedKind === "lead" && filters.relatedId) {
+          q = q.eq("lead_id", filters.relatedId);
+        } else if (filters.relatedKind === "none") {
+          q = q.is("client_id", null).is("lead_id", null);
+        } else if (filters.association === "clients") {
+          q = q.not("client_id", "is", null);
+        } else if (filters.association === "leads") {
+          q = q.not("lead_id", "is", null);
+        } else if (filters.association === "general") {
+          q = q.is("client_id", null).is("lead_id", null);
+        } else if (filters.association === "unassigned") {
+          q = q.is("client_id", null);
+        }
+        return q;
+      };
+
+      query = applyBoardFilters(query);
+
+      let taskRows: FullTask[] = [];
+      if (!skipAssignedQuery) {
+        const { data, error } = await query
+          .order("due_date", { ascending: true })
+          .order("created_at", { ascending: true })
+          .order("sort_order", { ascending: true });
+
+        if (error) throw error;
+        taskRows = (data || []) as FullTask[];
       }
 
-      // Apply association filter
-      if (filters.association === "clients") {
-        query = query.not("client_id", "is", null);
-      } else if (filters.association === "leads") {
-        query = query.not("lead_id", "is", null);
-      } else if (filters.association === "general") {
-        query = query.is("client_id", null).is("lead_id", null);
-      } else if (filters.association === "unassigned") {
-        // Tasks not linked to any client (may still have a lead).
-        query = query.is("client_id", null);
+      if (collaboratorTaskIds.length > 0) {
+        const have = new Set(taskRows.map((task) => task.id));
+        const missing = collaboratorTaskIds.filter((id) => !have.has(id));
+        const dueOr = viewMode === "chat"
+          ? buildChatTaskOrFilter({
+              today,
+              doneSince: activitySince ?? format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
+              activitySince,
+            })
+          : buildTaskDueDateOrFilter({
+              rangeStart: rangeStartStr,
+              rangeEnd: rangeEndStr,
+              today,
+            });
+        for (const chunk of chunkIds(missing)) {
+          const extraQuery = applyBoardFilters(
+            supabase
+              .from("tasks")
+              .select(TASK_BOARD_SELECT)
+              .in("id", chunk)
+              .or(buildTasksBoardScopeOrFilter(boardScope))
+              .or(dueOr),
+          );
+          const { data: extra, error: extraError } = await extraQuery;
+          if (extraError) throw extraError;
+          taskRows = taskRows.concat((extra || []) as FullTask[]);
+        }
       }
 
+      const seen = new Set<string>();
+      const collabSet = new Set(collaboratorTaskIds);
+      taskRows = taskRows.filter((task) => {
+        if (seen.has(task.id)) return false;
+        seen.add(task.id);
+        return true;
+      }).map((task) => (
+        collabSet.has(task.id) ? { ...task, collaborator_for_me: true } : task
+      ));
 
-      const { data, error } = await query
-        .order("due_date", { ascending: true })
-        .order("created_at", { ascending: true })
-        .order("sort_order", { ascending: true });
-
-      if (error) throw error;
-      const taskRows = (data || []) as FullTask[];
       const creatorIds = Array.from(new Set(
         taskRows.map((task) => task.created_by).filter((id): id is string => Boolean(id))
       ));
@@ -432,6 +585,7 @@ export function WeeklyTaskBoard() {
   // View-as preview: show the selected user's queue, not the admin's.
   useEffect(() => {
     if (!isViewingAs || !viewAsUserId) return;
+    presetKeyRef.current = null;
     setFilters(defaultTaskFilters);
     setLocalTasks([]);
     appliedOwnerBoardDefaultRef.current = true;
@@ -451,6 +605,13 @@ export function WeeklyTaskBoard() {
         effectiveCampaignerFilter,
         mineIdentity ?? null,
       );
+      filtered = filterTasksByRelatedEntity(filtered, filters.relatedKind, filters.relatedId);
+      if (viewMode === "chat") {
+        const periodStart = resolveTaskPeriodStart(filters.period);
+        if (periodStart) {
+          filtered = filtered.filter((task) => taskMatchesActivityPeriod(task, periodStart));
+        }
+      }
       if (isViewingAs && boardUserId) {
         filtered = filterTasksForBoardUserPreview(filtered, boardUserId, mineIdentity ?? null);
       }
@@ -459,6 +620,10 @@ export function WeeklyTaskBoard() {
     [
       selectedAgency,
       effectiveCampaignerFilter,
+      filters.relatedKind,
+      filters.relatedId,
+      filters.period,
+      viewMode,
       tenantId,
       crossTenantAgencyIds,
       mineIdentity,
@@ -506,7 +671,7 @@ export function WeeklyTaskBoard() {
   const filteredCalendarEvents = useMemo(() => {
     const viewingOtherCampaigner =
       !!effectiveCampaignerFilter &&
-      effectiveCampaignerFilter !== "mine" &&
+      !isMineQueueFilter(effectiveCampaignerFilter) &&
       effectiveCampaignerFilter !== "all" &&
       effectiveCampaignerFilter !== "none" &&
       effectiveCampaignerFilter !== primaryCampaignerId;
@@ -1220,13 +1385,28 @@ export function WeeklyTaskBoard() {
     return isToday;
   });
 
-  // Count active filters (exclude campaigner since it has its own selector in toolbar)
   const activeFiltersCount = [
+    filters.campaignerId !== defaultTaskFilters.campaignerId,
     filters.taskType !== "all",
     filters.association !== "all",
-    filters.startDate !== undefined,
-    filters.endDate !== undefined,
+    filters.period !== "all",
+    filters.relatedKind !== "all",
   ].filter(Boolean).length;
+
+  const openFiltersDialog = (includeToolbar: boolean) => {
+    setFiltersIncludeToolbar(includeToolbar);
+    setFiltersDialogOpen(true);
+  };
+
+  const saveFilterPreset = (next?: TaskFilterState) => {
+    if (!user?.id || isViewingAs) {
+      toast.error("אי אפשר לשמור ברירת מחדל במצב צפייה כמשתמש אחר");
+      return;
+    }
+    const toSave = next && "campaignerId" in next ? next : filters;
+    writeTasksFilterPreset(user.id, toSave);
+    toast.success("ברירת המחדל נשמרה");
+  };
 
   const goToToday = () => {
     setCurrentDate(startOfDay(new Date()));
@@ -1255,6 +1435,7 @@ export function WeeklyTaskBoard() {
   const handleViewModeChange = (value: string) => {
     if (value) {
       setViewMode(value as ViewMode);
+      if (value === "chat") setMobileCalendarOpen(false);
     }
   };
 
@@ -1282,6 +1463,27 @@ export function WeeklyTaskBoard() {
     }
   };
 
+  const renderToolbarFilters = (layout: "inline" | "stacked" = "inline") => (
+    <TasksToolbarFilters
+      layout={layout}
+      campaignerFilter={effectiveCampaignerFilter}
+      onCampaignerFilterChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+      campaignerFilterDisabled={isViewingAs}
+      campaignersList={campaignersList}
+      relatedKind={filters.relatedKind}
+      relatedId={filters.relatedId}
+      relatedLabel={filters.relatedLabel}
+      onRelatedChange={(related) => setFilters((prev) => ({ ...prev, ...related }))}
+      clientsList={clientsList ?? []}
+      leadsList={leadsList ?? []}
+      period={filters.period}
+      onPeriodChange={(period) => setFilters((prev) => ({ ...prev, period }))}
+      onSaveFilterPreset={() => saveFilterPreset()}
+      saveDisabled={isViewingAs}
+    />
+  );
+  const toolbarFilters = renderToolbarFilters();
+
   return (
     <div className="flex flex-col h-full min-h-0">
       {isViewingAs && (
@@ -1289,8 +1491,8 @@ export function WeeklyTaskBoard() {
           מציג משימות של <strong>{viewAsUserName}</strong> בלבד (שלי בלבד)
         </div>
       )}
-      {/* Header - Desktop only - single compact row */}
-      <div className="hidden md:flex md:items-center md:justify-between mb-2 gap-3">
+      {/* Header - Desktop: view toggles + open filters on one row */}
+      <div className="hidden md:flex md:items-center md:justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <ToggleGroup
             type="single"
@@ -1298,6 +1500,10 @@ export function WeeklyTaskBoard() {
             onValueChange={handleViewModeChange}
             className="border rounded-lg"
           >
+            <ToggleGroupItem value="chat" aria-label="תצוגת צ'אט" className="gap-1 px-3">
+              <MessageSquare className="h-4 w-4" />
+              <span>צ'אט</span>
+            </ToggleGroupItem>
             <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-3">
               <List className="h-4 w-4" />
               <span>יומי</span>
@@ -1312,122 +1518,202 @@ export function WeeklyTaskBoard() {
             </ToggleGroupItem>
           </ToggleGroup>
           <h2 className="text-lg font-semibold">
+            {viewMode === "chat" && "משימות"}
             {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
             {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
             {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
           </h2>
+          {viewMode === "chat" && (
+            <TasksChatSearchInput
+              value={chatListSearch}
+              onChange={setChatListSearch}
+              className="w-[200px] shrink-0"
+            />
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={goToNext}>
+        <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-x-auto">
+          {viewMode !== "chat" && (
+            <>
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={goToNext}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={goToPrev}>
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={goToPrev}>
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button variant="outline" onClick={goToToday} className="gap-2">
-            <CalendarDays className="h-4 w-4" />
+          <Button variant="outline" onClick={goToToday} className="h-8 gap-1.5 px-2 text-xs shrink-0">
+            <CalendarDays className="h-3.5 w-3.5" />
             היום
           </Button>
-
-          {/* Filters popover */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2 relative">
-                <Filter className="h-4 w-4" />
-                פילטרים
-                {(activeFiltersCount > 0 || effectiveCampaignerFilter !== "mine") && (
-                  <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
-                    {activeFiltersCount + (effectiveCampaignerFilter !== "mine" ? 1 : 0)}
-                  </Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 space-y-3" align="end">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t('role_campaigner')}</label>
-                <Select
-                  value={effectiveCampaignerFilter}
-                  onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
-                  disabled={isViewingAs}
-                >
-                  <SelectTrigger className="w-full gap-2">
-                    <Users className="h-4 w-4 shrink-0" />
-                    <SelectValue placeholder={t('role_campaigner')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mine">שלי בלבד</SelectItem>
-                    <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
-                    <SelectItem value="none">ללא שיוך</SelectItem>
-                    {campaignersList.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => setFiltersDialogOpen(true)}
-              >
-                <Filter className="h-4 w-4" />
-                פילטרים מתקדמים
-                {activeFiltersCount > 0 && (
-                  <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
-                    {activeFiltersCount}
-                  </Badge>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => syncToCalendar.mutate()}
-                disabled={syncToCalendar.isPending}
-              >
-                <RefreshCw className={`h-4 w-4 ${syncToCalendar.isPending ? 'animate-spin' : ''}`} />
-                סנכרן ליומן
-              </Button>
-            </PopoverContent>
-          </Popover>
+            </>
+          )}
+          {toolbarFilters}
+          <Button
+            variant="outline"
+            className="h-8 gap-1.5 px-2 relative shrink-0 text-xs"
+            onClick={() => openFiltersDialog(false)}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            מתקדם
+            {activeFiltersCount > 0 && (
+              <Badge variant="secondary" className="h-4 w-4 p-0 justify-center text-[10px]">
+                {activeFiltersCount}
+              </Badge>
+            )}
+          </Button>
+          {viewMode !== "chat" && (
+            calendarConnected ? (
+            <Button
+              variant="outline"
+              className="h-8 gap-1.5 px-2 text-xs shrink-0"
+              onClick={() => syncToCalendar.mutate()}
+              disabled={syncToCalendar.isPending}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncToCalendar.isPending ? "animate-spin" : ""}`} />
+              סנכרן
+            </Button>
+            ) : (
+            <Button
+              className="h-8 gap-1.5 px-2 text-xs shrink-0 bg-emerald-600 text-white hover:bg-emerald-500"
+              onClick={() => void handleConnectCalendar()}
+              disabled={connectingCalendar}
+            >
+              <CalendarDays className={`h-3.5 w-3.5 ${connectingCalendar ? "animate-pulse" : ""}`} />
+              {connectingCalendar ? "מתחבר..." : "חבר יומן"}
+            </Button>
+            )
+          )}
         </div>
       </div>
 
+      {viewMode !== "chat" && calendarStatus && !calendarConnected && (
+        <div className="mb-2 rounded-md border border-emerald-500/30 bg-emerald-50 px-3 py-2 text-sm flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-emerald-950">
+            היומן לא מחובר. חבר Google Calendar מכאן כדי לראות אירועים ליד המשימות.
+          </span>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-500"
+            onClick={() => void handleConnectCalendar()}
+            disabled={connectingCalendar}
+          >
+            <CalendarDays className="h-4 w-4" />
+            {connectingCalendar ? "מתחבר..." : "חבר יומן"}
+          </Button>
+        </div>
+      )}
+
       {/* Board with Overdue Panel */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      {viewMode === "chat" ? (
+        <>
+          <div className="flex flex-col md:hidden gap-2 shrink-0">
+            <div className="flex items-center gap-2 justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-xl font-bold shrink-0">משימות</h1>
+                <TasksChatSearchInput
+                  value={chatListSearch}
+                  onChange={setChatListSearch}
+                  className="w-[140px] min-w-0 flex-1"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => openFiltersDialog(true)}
+                  className="relative h-9 w-9"
+                  aria-label="פילטרים"
+                >
+                  <Filter className="h-4 w-4" />
+                  {activeFiltersCount > 0 && (
+                    <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-[10px]">
+                      {activeFiltersCount}
+                    </Badge>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={() => setViewMode("weekly")}
+                  aria-label="תצוגת יומן"
+                  title="יומן"
+                >
+                  <CalendarDays className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 h-full">
+            <TasksChatView
+              tasks={tasks}
+              selectedTaskId={selectedTask?.id ?? null}
+              onSelectTask={(task) => {
+                setSelectedTask(task);
+                if (!task && linkedTaskId) {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("task");
+                  setSearchParams(next, { replace: true });
+                }
+              }}
+              onToggleComplete={(taskId, completed) =>
+                toggleComplete.mutate({ taskId, completed })
+              }
+              onDelete={(taskId, googleCalendarEventId) =>
+                deleteTask.mutate({ taskId, googleCalendarEventId })
+              }
+              onMoveToBacklog={(taskId) => {
+                setLocalTasks((prev) =>
+                  prev.map((t) =>
+                    t.id === taskId ? { ...t, due_date: null, due_time: null } : t
+                  )
+                );
+                updateDueDate.mutate({
+                  taskId,
+                  newDate: null,
+                  newTime: null,
+                  title: selectedTask?.title,
+                  googleCalendarEventId: selectedTask?.google_calendar_event_id,
+                });
+                toast.success("המשימה הועברה לרשימת המשימות");
+              }}
+              onAddTask={handleBacklogAddTask}
+              isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+              clientsList={clientsList}
+              campaignersList={campaignersList}
+              defaultCampaignerId={primaryCampaignerId}
+              openClosedFilter={filters.openClosed}
+              onOpenClosedFilterChange={(openClosed) =>
+                setFilters((prev) => ({ ...prev, openClosed }))
+              }
+              listSearch={chatListSearch}
+              onListSearchChange={setChatListSearch}
+              hideListSearch
+            />
+          </div>
+        </>
+      ) : (
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout — full task list by default; calendar opens from icon only */}
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
-          <div className="flex flex-wrap items-center gap-2 justify-between shrink-0">
-            <Select
-              value={effectiveCampaignerFilter}
-              onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
-              disabled={isViewingAs}
-            >
-              <SelectTrigger className="w-full gap-2">
-                <Users className="h-4 w-4 shrink-0" />
-                <SelectValue placeholder={t('role_campaigner')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mine">שלי בלבד</SelectItem>
-                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
-                <SelectItem value="none">ללא שיוך</SelectItem>
-                {campaignersList.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
           <div className="flex items-center gap-2 justify-between shrink-0">
             <h1 className="text-xl font-bold">משימות</h1>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setFiltersDialogOpen(true)}
+                onClick={() => setViewMode("chat")}
+                aria-label="תצוגת צ'אט"
+                title="תצוגת צ'אט"
+                className="shrink-0"
+              >
+                <MessageSquare className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => openFiltersDialog(true)}
                 className="relative"
                 aria-label="פילטרים"
               >
@@ -1509,6 +1795,9 @@ export function WeeklyTaskBoard() {
                       onValueChange={handleViewModeChange}
                       className="border rounded-lg"
                     >
+                      <ToggleGroupItem value="chat" aria-label="תצוגת צ'אט" className="px-2">
+                        <MessageSquare className="h-4 w-4" />
+                      </ToggleGroupItem>
                       <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="px-2">
                         <List className="h-4 w-4" />
                       </ToggleGroupItem>
@@ -1680,9 +1969,11 @@ export function WeeklyTaskBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+      )}
       </div>
 
-      {/* Task Detail Dialog */}
+      {/* Task Detail Dialog — calendar views only; chat view embeds the panel */}
+      {viewMode !== "chat" && (
       <TaskDetailDialog
         task={selectedTask}
         open={dialogOpen}
@@ -1713,6 +2004,7 @@ export function WeeklyTaskBoard() {
           toast.success("המשימה הועברה לרשימת המשימות");
         }}
       />
+      )}
 
       {/* Calendar Event Edit Dialog */}
       <CalendarEventEditDialog
@@ -1774,6 +2066,7 @@ export function WeeklyTaskBoard() {
         onOpenChange={setFiltersDialogOpen}
         currentFilters={filters}
         onApply={(next) => setFilters(next)}
+        toolbarFilters={filtersIncludeToolbar ? renderToolbarFilters("stacked") : undefined}
       />
 
       {/* Quick Add Task Dialog (double-click on slot) */}
