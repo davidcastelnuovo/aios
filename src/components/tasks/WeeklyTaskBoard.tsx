@@ -25,12 +25,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users } from "lucide-react";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users, MessageSquare } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
+import { TasksChatView } from "./TasksChatView";
 import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import type { QuickTaskPayload } from "./QuickTaskInput";
@@ -56,7 +57,7 @@ import {
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineAssignmentOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
 import { filterTasksByCampaignerBoardFilter, filterTasksForBoardUserPreview } from "@/lib/taskFilters";
-import { buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
+import { buildChatTaskOrFilter, buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 
 interface Task {
@@ -93,7 +94,21 @@ interface CalendarEvent {
   calendarId?: string;
 }
 
-export type ViewMode = "daily" | "weekly" | "monthly";
+export type ViewMode = "chat" | "daily" | "weekly" | "monthly";
+
+const TASKS_VIEW_MODE_KEY = "aios-tasks-view-mode";
+
+function readTasksViewMode(): ViewMode {
+  try {
+    const saved = localStorage.getItem(TASKS_VIEW_MODE_KEY);
+    if (saved === "chat" || saved === "daily" || saved === "weekly" || saved === "monthly") {
+      return saved;
+    }
+  } catch {
+    // ignore
+  }
+  return "chat";
+}
 
 export function WeeklyTaskBoard() {
   const queryClient = useQueryClient();
@@ -135,7 +150,14 @@ export function WeeklyTaskBoard() {
 
   // Start from today instead of week start
   const [currentDate, setCurrentDate] = useState(() => startOfDay(new Date()));
-  const [viewMode, setViewMode] = useState<ViewMode>("weekly");
+  const [viewMode, setViewMode] = useState<ViewMode>(readTasksViewMode);
+  useEffect(() => {
+    try {
+      localStorage.setItem(TASKS_VIEW_MODE_KEY, viewMode);
+    } catch {
+      // ignore
+    }
+  }, [viewMode]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -193,7 +215,8 @@ export function WeeklyTaskBoard() {
         return;
       }
       setSelectedTask(data as FullTask);
-      setDialogOpen(true);
+      setViewMode("chat");
+      setDialogOpen(false);
     };
 
     void openLinkedTask();
@@ -295,13 +318,13 @@ export function WeeklyTaskBoard() {
         return [];
       }
     },
-    enabled: !!user?.id && !!tenantId && viewMode !== "monthly",
+    enabled: !!user?.id && !!tenantId && viewMode !== "monthly" && viewMode !== "chat",
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching, isSuccess, isError, error: tasksError } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, effectiveCampaignerFilter, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency, isViewingAs, viewAsUserId, boardUserId],
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), viewMode === "chat" ? "chat" : format(dateRange.start, "yyyy-MM-dd"), viewMode === "chat" ? "chat" : format(dateRange.end, "yyyy-MM-dd"), filters, effectiveCampaignerFilter, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency, isViewingAs, viewAsUserId, boardUserId],
     enabled:
       !!tenantId &&
       !!boardUserId &&
@@ -348,13 +371,20 @@ export function WeeklyTaskBoard() {
       // Do not fetch historical done-undated / all-time untimed rows — that
       // flooded the board after the target_date 400-fix made the query succeed.
       query = query.or(
-        buildTaskDueDateOrFilter({
-          rangeStart: rangeStartStr,
-          rangeEnd: rangeEndStr,
-          today,
-          customStart: filters.startDate ? format(filters.startDate, "yyyy-MM-dd") : undefined,
-          customEnd: filters.endDate ? format(filters.endDate, "yyyy-MM-dd") : undefined,
-        }),
+        viewMode === "chat"
+          ? buildChatTaskOrFilter({
+              today,
+              doneSince: format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
+              customStart: filters.startDate ? format(filters.startDate, "yyyy-MM-dd") : undefined,
+              customEnd: filters.endDate ? format(filters.endDate, "yyyy-MM-dd") : undefined,
+            })
+          : buildTaskDueDateOrFilter({
+              rangeStart: rangeStartStr,
+              rangeEnd: rangeEndStr,
+              today,
+              customStart: filters.startDate ? format(filters.startDate, "yyyy-MM-dd") : undefined,
+              customEnd: filters.endDate ? format(filters.endDate, "yyyy-MM-dd") : undefined,
+            }),
       );
 
       // "שלי בלבד" = tasks assigned to the staff member this user is linked to.
@@ -1255,6 +1285,7 @@ export function WeeklyTaskBoard() {
   const handleViewModeChange = (value: string) => {
     if (value) {
       setViewMode(value as ViewMode);
+      if (value === "chat") setMobileCalendarOpen(false);
     }
   };
 
@@ -1298,6 +1329,10 @@ export function WeeklyTaskBoard() {
             onValueChange={handleViewModeChange}
             className="border rounded-lg"
           >
+            <ToggleGroupItem value="chat" aria-label="תצוגת צ'אט" className="gap-1 px-3">
+              <MessageSquare className="h-4 w-4" />
+              <span>צ'אט</span>
+            </ToggleGroupItem>
             <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-3">
               <List className="h-4 w-4" />
               <span>יומי</span>
@@ -1312,6 +1347,7 @@ export function WeeklyTaskBoard() {
             </ToggleGroupItem>
           </ToggleGroup>
           <h2 className="text-lg font-semibold">
+            {viewMode === "chat" && "משימות"}
             {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
             {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
             {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
@@ -1319,6 +1355,8 @@ export function WeeklyTaskBoard() {
         </div>
 
         <div className="flex items-center gap-2">
+          {viewMode !== "chat" && (
+            <>
           <Button variant="outline" size="icon" onClick={goToNext}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -1329,6 +1367,8 @@ export function WeeklyTaskBoard() {
             <CalendarDays className="h-4 w-4" />
             היום
           </Button>
+            </>
+          )}
 
           {/* Filters popover */}
           <Popover>
@@ -1396,6 +1436,93 @@ export function WeeklyTaskBoard() {
 
       {/* Board with Overdue Panel */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      {viewMode === "chat" ? (
+        <>
+          <div className="flex flex-col md:hidden gap-2 shrink-0">
+            <Select
+              value={effectiveCampaignerFilter}
+              onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+              disabled={isViewingAs}
+            >
+              <SelectTrigger className="w-full gap-2">
+                <Users className="h-4 w-4 shrink-0" />
+                <SelectValue placeholder={t('role_campaigner')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mine">שלי בלבד</SelectItem>
+                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
+                <SelectItem value="none">ללא שיוך</SelectItem>
+                {campaignersList.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2 justify-between">
+              <h1 className="text-xl font-bold">משימות</h1>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setFiltersDialogOpen(true)}
+                  className="relative"
+                  aria-label="פילטרים"
+                >
+                  <Filter className="h-4 w-4" />
+                  {activeFiltersCount > 0 && (
+                    <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-xs">
+                      {activeFiltersCount}
+                    </Badge>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setViewMode("weekly")}
+                  aria-label="תצוגת יומן"
+                  title="יומן"
+                >
+                  <CalendarDays className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0">
+            <TasksChatView
+              tasks={tasks}
+              selectedTaskId={selectedTask?.id ?? null}
+              onSelectTask={(task) => setSelectedTask(task)}
+              onToggleComplete={(taskId, completed) =>
+                toggleComplete.mutate({ taskId, completed })
+              }
+              onDelete={(taskId, googleCalendarEventId) =>
+                deleteTask.mutate({ taskId, googleCalendarEventId })
+              }
+              onMoveToBacklog={(taskId) => {
+                setLocalTasks((prev) =>
+                  prev.map((t) =>
+                    t.id === taskId ? { ...t, due_date: null, due_time: null } : t
+                  )
+                );
+                updateDueDate.mutate({
+                  taskId,
+                  newDate: null,
+                  newTime: null,
+                  title: selectedTask?.title,
+                  googleCalendarEventId: selectedTask?.google_calendar_event_id,
+                });
+                toast.success("המשימה הועברה לרשימת המשימות");
+              }}
+              onAddTask={handleBacklogAddTask}
+              isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+              clientsList={clientsList}
+              campaignersList={campaignersList}
+              defaultCampaignerId={primaryCampaignerId}
+            />
+          </div>
+        </>
+      ) : (
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout — full task list by default; calendar opens from icon only */}
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
@@ -1424,6 +1551,16 @@ export function WeeklyTaskBoard() {
           <div className="flex items-center gap-2 justify-between shrink-0">
             <h1 className="text-xl font-bold">משימות</h1>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setViewMode("chat")}
+                aria-label="תצוגת צ'אט"
+                title="תצוגת צ'אט"
+                className="shrink-0"
+              >
+                <MessageSquare className="h-5 w-5" />
+              </Button>
               <Button
                 variant="outline"
                 size="icon"
@@ -1509,6 +1646,9 @@ export function WeeklyTaskBoard() {
                       onValueChange={handleViewModeChange}
                       className="border rounded-lg"
                     >
+                      <ToggleGroupItem value="chat" aria-label="תצוגת צ'אט" className="px-2">
+                        <MessageSquare className="h-4 w-4" />
+                      </ToggleGroupItem>
                       <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="px-2">
                         <List className="h-4 w-4" />
                       </ToggleGroupItem>
@@ -1680,9 +1820,11 @@ export function WeeklyTaskBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+      )}
       </div>
 
-      {/* Task Detail Dialog */}
+      {/* Task Detail Dialog — calendar views only; chat view embeds the panel */}
+      {viewMode !== "chat" && (
       <TaskDetailDialog
         task={selectedTask}
         open={dialogOpen}
@@ -1713,6 +1855,7 @@ export function WeeklyTaskBoard() {
           toast.success("המשימה הועברה לרשימת המשימות");
         }}
       />
+      )}
 
       {/* Calendar Event Edit Dialog */}
       <CalendarEventEditDialog

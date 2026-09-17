@@ -62,6 +62,8 @@ interface TaskDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   onDelete?: (taskId: string) => void;
   onMoveToBacklog?: (taskId: string) => void;
+  /** Inline pane (tasks chat view) instead of a modal dialog. */
+  variant?: "dialog" | "panel";
 }
 
 export function TaskDetailDialog({
@@ -70,7 +72,10 @@ export function TaskDetailDialog({
   onOpenChange,
   onDelete,
   onMoveToBacklog,
+  variant = "dialog",
 }: TaskDetailDialogProps) {
+  const isPanel = variant === "panel";
+  const isActive = isPanel ? !!task?.id : open;
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
@@ -116,12 +121,12 @@ export function TaskDetailDialog({
       if (error) throw error;
       return data;
     },
-    enabled: !!leadId && open,
+    enabled: !!leadId && isActive,
   });
 
   // Reset form when task changes or dialog opens
   useEffect(() => {
-    if (task && open) {
+    if (task && isActive) {
       // Refetch fresh task data from DB to ensure we have latest
       const loadFreshTask = async () => {
         const { data: freshTask } = await supabase
@@ -168,7 +173,7 @@ export function TaskDetailDialog({
       };
       loadFreshTask();
     }
-  }, [task, open]);
+  }, [task, isActive]);
 
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
 
@@ -185,7 +190,7 @@ export function TaskDetailDialog({
       const { data } = await query.order("name");
       return data || [];
     },
-    enabled: !!tenantId && open,
+    enabled: !!tenantId && isActive,
   });
 
   // Fetch leads
@@ -199,14 +204,14 @@ export function TaskDetailDialog({
         .order("company_name");
       return data || [];
     },
-    enabled: !!tenantId && open,
+    enabled: !!tenantId && isActive,
   });
 
   // Fetch campaigners for collaboration
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners-for-tasks", tenantId, crossTenantAgencyIds.join(",")],
     queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
-    enabled: !!tenantId && open,
+    enabled: !!tenantId && isActive,
   });
 
   // Fetch collaborators
@@ -219,7 +224,7 @@ export function TaskDetailDialog({
         .eq("task_id", task!.id);
       return data || [];
     },
-    enabled: !!task?.id && open,
+    enabled: !!task?.id && isActive,
   });
 
   // Fetch updates
@@ -233,7 +238,7 @@ export function TaskDetailDialog({
         .order("created_at", { ascending: false });
       return data || [];
     },
-    enabled: !!task?.id && open,
+    enabled: !!task?.id && isActive,
   });
 
   // Filter clients based on search
@@ -338,7 +343,7 @@ export function TaskDetailDialog({
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
       toast.success("המשימה עודכנה");
-      onOpenChange(false);
+      if (!isPanel) onOpenChange(false);
     },
     onError: (error: Error) => {
       toast.error(`שגיאה בעדכון המשימה: ${error.message}`);
@@ -409,7 +414,16 @@ export function TaskDetailDialog({
     },
   });
 
-  if (!task) return null;
+  if (!task) {
+    if (isPanel) {
+      return (
+        <div className="flex-1 flex items-center justify-center p-8 text-center text-muted-foreground text-sm">
+          בחר משימה מהרשימה כדי לראות פרטים, דחיפות ועדכונים
+        </div>
+      );
+    }
+    return null;
+  }
 
   const availableCollaborators = campaigners?.filter(
     (c) =>
@@ -417,16 +431,19 @@ export function TaskDetailDialog({
       !collaborators?.some((col) => col.campaigner_id === c.id)
   );
 
-  return (
-    <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-2xl h-[90vh] flex flex-col gap-0 !block">
-        <div className="flex flex-col h-full">
-        <DialogHeader>
-          <DialogTitle>פרטי משימה</DialogTitle>
-        </DialogHeader>
+  const body = (
+        <div className={cn("flex flex-col h-full min-h-0", isPanel && "overflow-hidden")}>
+        {isPanel ? (
+          <div className="px-4 pt-3 pb-2 border-b shrink-0">
+            <h2 className="font-bold text-base truncate">{title || "פרטי משימה"}</h2>
+          </div>
+        ) : (
+          <DialogHeader>
+            <DialogTitle>פרטי משימה</DialogTitle>
+          </DialogHeader>
+        )}
 
-        <Tabs defaultValue="details" className="flex-1 min-h-0 overflow-hidden flex flex-col mt-4">
+        <Tabs defaultValue="details" className={cn("flex-1 min-h-0 overflow-hidden flex flex-col mt-4", isPanel && "px-4")}>
           <TabsList className="grid grid-cols-3 shrink-0">
             <TabsTrigger value="details">פרטים</TabsTrigger>
             <TabsTrigger value="team">צוות</TabsTrigger>
@@ -941,7 +958,7 @@ export function TaskDetailDialog({
           </div>
         </Tabs>
 
-        <div className="flex justify-between pt-4 border-t mt-4 shrink-0">
+        <div className={cn("flex justify-between pt-4 border-t mt-4 shrink-0", isPanel && "px-4 pb-4")}>
           <div className="flex gap-2">
             <Button
               variant="destructive"
@@ -960,7 +977,7 @@ export function TaskDetailDialog({
                 size="sm"
                 onClick={() => {
                   onMoveToBacklog(task.id);
-                  onOpenChange(false);
+                  if (!isPanel) onOpenChange(false);
                 }}
               >
                 <ListTodo className="h-4 w-4 ml-2" />
@@ -974,9 +991,19 @@ export function TaskDetailDialog({
           </Button>
         </div>
         </div>
-      </DialogContent>
-    </Dialog>
-    
+  );
+
+  return (
+    <>
+      {isPanel ? (
+        body
+      ) : (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          <DialogContent dir="rtl" className="max-w-2xl h-[90vh] flex flex-col gap-0 !block">
+            {body}
+          </DialogContent>
+        </Dialog>
+      )}
     {fullLeadData && (
       <EditLeadDialog
         lead={fullLeadData}
