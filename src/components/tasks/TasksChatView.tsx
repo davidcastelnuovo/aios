@@ -74,8 +74,8 @@ const OPEN_CLOSED_TABS: {
     value: "all",
     label: "הכל",
     icon: LayoutList,
-    active: "bg-violet-600 text-white shadow-lg shadow-violet-600/35",
-    idle: "bg-violet-50 text-violet-800 hover:bg-violet-100",
+    active: "bg-violet-600 text-white",
+    idle: "text-violet-800 hover:bg-violet-50",
     countActive: "bg-white/25 text-white",
     countIdle: "bg-violet-200/80 text-violet-900",
   },
@@ -83,8 +83,8 @@ const OPEN_CLOSED_TABS: {
     value: "open",
     label: "פתוחות",
     icon: CircleDot,
-    active: "bg-sky-500 text-white shadow-lg shadow-sky-500/40",
-    idle: "bg-sky-50 text-sky-800 hover:bg-sky-100",
+    active: "bg-sky-500 text-white",
+    idle: "text-sky-800 hover:bg-sky-50",
     countActive: "bg-white/25 text-white",
     countIdle: "bg-sky-200/80 text-sky-900",
   },
@@ -92,8 +92,8 @@ const OPEN_CLOSED_TABS: {
     value: "done",
     label: "סגורות",
     icon: CheckCircle2,
-    active: "bg-emerald-500 text-white shadow-lg shadow-emerald-500/40",
-    idle: "bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
+    active: "bg-emerald-500 text-white",
+    idle: "text-emerald-800 hover:bg-emerald-50",
     countActive: "bg-white/25 text-white",
     countIdle: "bg-emerald-200/80 text-emerald-900",
   },
@@ -227,11 +227,11 @@ export function TasksChatView({
           )}
           dir="rtl"
         >
-          <div className={cn("border-b bg-card shrink-0", isMobile ? "p-1.5 space-y-1.5" : "p-1.5")}>
+          <div className={cn("border-b bg-card shrink-0 space-y-1.5", isMobile ? "p-1.5" : "px-2 py-1.5")}>
             {!hideListSearch && (
               <TasksChatSearchInput value={listSearch} onChange={setListSearch} className="w-full" />
             )}
-            <div className="flex items-center gap-1 rounded-lg bg-background p-0.5">
+            <div className="flex items-center gap-1 min-w-0">
               {OPEN_CLOSED_TABS.map((tab) => {
                 const active = openClosedFilter === tab.value;
                 const Icon = tab.icon;
@@ -241,7 +241,7 @@ export function TasksChatView({
                     type="button"
                     onClick={() => setOpenClosedFilter(tab.value)}
                     className={cn(
-                      "h-8 flex-1 rounded-md text-[11px] font-bold transition-all inline-flex items-center justify-center gap-1 px-1.5 min-w-0",
+                      "h-7 flex-1 rounded-md text-[11px] font-semibold transition-colors inline-flex items-center justify-center gap-0.5 px-1 min-w-0",
                       active ? tab.active : tab.idle,
                     )}
                   >
@@ -259,10 +259,7 @@ export function TasksChatView({
                 );
               })}
             </div>
-          </div>
-
-          {onAddTask && (
-            <div className="p-2 border-b shrink-0 bg-background">
+            {onAddTask && (
               <QuickTaskInput
                 onAddTask={onAddTask}
                 disabled={isLoading}
@@ -270,8 +267,8 @@ export function TasksChatView({
                 campaignersList={campaignersList}
                 defaultCampaignerId={defaultCampaignerId}
               />
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 [scrollbar-width:thin]" dir="rtl">
             <div className="divide-y" dir="rtl">
