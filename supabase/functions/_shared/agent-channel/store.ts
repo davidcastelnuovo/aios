@@ -9,6 +9,11 @@ import type {
   SendResult,
 } from "./types.ts";
 import { DEFAULT_BRAIN_ROUTE_SEEDS } from "./types.ts";
+import {
+  authorizeConversationAction,
+  type ConversationAuthInput,
+  type ConversationAuthResult,
+} from "./conversation-auth.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -174,16 +179,50 @@ export async function ensureConversation(
   return { id: data.id, status: "idle" };
 }
 
+export async function loadAuthorizedConversation(
+  sb: SupabaseClient,
+  args: {
+    conversationId: string;
+    tenantId: string;
+    claimedAgentId?: string | null;
+    claimedSessionTenantId?: string | null;
+    claimedRunTenantId?: string | null;
+    claimedRunId?: string | null;
+    runId?: string | null;
+  },
+): Promise<ConversationAuthResult> {
+  const conversationId = String(args.conversationId || "").trim();
+  if (!conversationId) {
+    return { ok: false, status: 404, error: "not_found" };
+  }
+  const { data } = await sb
+    .from("ai_conversations")
+    .select("id, tenant_id, agent_id, status")
+    .eq("id", conversationId)
+    .maybeSingle();
+  return authorizeConversationAction({
+    conversation: data as ConversationAuthInput["conversation"],
+    tenantId: args.tenantId,
+    claimedAgentId: args.claimedAgentId,
+    claimedSessionTenantId: args.claimedSessionTenantId,
+    claimedRunTenantId: args.claimedRunTenantId,
+    claimedRunId: args.claimedRunId,
+    runId: args.runId,
+  });
+}
+
 export async function setConversationStatus(
   sb: SupabaseClient,
   conversationId: string,
   status: ConversationStatus,
+  tenantId: string,
   extra?: Record<string, unknown>,
 ): Promise<void> {
   await sb
     .from("ai_conversations")
     .update({ status, ...(extra || {}), updated_at: new Date().toISOString() })
-    .eq("id", conversationId);
+    .eq("id", conversationId)
+    .eq("tenant_id", tenantId);
 }
 
 export async function insertMessage(
@@ -233,7 +272,7 @@ export async function insertMessage(
     }
     throw new Error(`insert message failed: ${error.message}`);
   }
-  await appendJsonbMessage(sb, row.conversation_id, {
+  await appendJsonbMessage(sb, row.conversation_id, row.tenant_id, {
     role: row.role,
     content: row.content,
     speaker: row.speaker,
@@ -247,18 +286,21 @@ export async function insertMessage(
 async function appendJsonbMessage(
   sb: SupabaseClient,
   conversationId: string,
+  tenantId: string,
   msg: Record<string, unknown>,
 ): Promise<void> {
   const { data } = await sb
     .from("ai_conversations")
     .select("messages")
     .eq("id", conversationId)
+    .eq("tenant_id", tenantId)
     .maybeSingle();
   const current = Array.isArray(data?.messages) ? data!.messages : [];
   await sb
     .from("ai_conversations")
     .update({ messages: [...current, msg], updated_at: new Date().toISOString() })
-    .eq("id", conversationId);
+    .eq("id", conversationId)
+    .eq("tenant_id", tenantId);
 }
 
 export async function findMessageByIdempotency(
@@ -279,13 +321,16 @@ export async function getRunningSession(
   sb: SupabaseClient,
   conversationId: string,
   provider: ChannelProvider,
+  tenantId?: string,
 ): Promise<ChannelSessionRow | null> {
-  const { data } = await sb
+  let query = sb
     .from("agent_channel_sessions")
     .select("*")
     .eq("conversation_id", conversationId)
     .eq("provider", provider)
-    .in("status", ["running", "waiting"])
+    .in("status", ["running", "waiting"]);
+  if (tenantId) query = query.eq("tenant_id", tenantId);
+  const { data } = await query
     .order("last_activity_at", { ascending: false })
     .limit(1)
     .maybeSingle();

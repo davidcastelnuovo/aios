@@ -23,6 +23,7 @@ import {
   serviceClient,
   setConversationStatus,
 } from "./store.ts";
+import { authorizeParliamentRun } from "./conversation-auth.ts";
 import { isCursorSpendLimitError } from "./cloud-errors.ts";
 import { launchParliamentSeat } from "./direct.ts";
 
@@ -68,7 +69,7 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
     .single();
   if (error || !parent) throw new Error(`Failed to create parliament run: ${error?.message || "unknown"}`);
 
-  await setConversationStatus(sb, ctx.conversationId, "debating");
+  await setConversationStatus(sb, ctx.conversationId, "debating", ctx.tenantId);
   await insertMessage(sb, {
     tenant_id: ctx.tenantId,
     conversation_id: ctx.conversationId,
@@ -121,7 +122,7 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
   }
   if (!living.length) {
     const firstError = Object.values(nextState.seats).map((s) => s.error).find(Boolean) || "all seats failed to start";
-    await setConversationStatus(sb, ctx.conversationId, "error");
+    await setConversationStatus(sb, ctx.conversationId, "error", ctx.tenantId);
     await sb.from("agent_runs").update({ status: "failed", error_message: firstError }).eq("id", parent.id);
     throw new Error(isCursorSpendLimitError(firstError) || firstError.includes("401") || /api key|תקציב|מפתח/i.test(firstError)
       ? firstError
@@ -165,6 +166,7 @@ export async function onParliamentCallback(args: {
       .from("agent_runs")
       .select("id")
       .eq("conversation_id", args.conversationId)
+      .eq("tenant_id", args.tenantId)
       .eq("trigger_source", "parliament")
       .eq("status", "running")
       .order("started_at", { ascending: false })
@@ -174,8 +176,8 @@ export async function onParliamentCallback(args: {
   }
   if (!runId) return;
 
-  const { data: run } = await sb.from("agent_runs").select("*").eq("id", runId).maybeSingle();
-  if (!run) return;
+  const { data: run } = await sb.from("agent_runs").select("*").eq("id", runId).eq("tenant_id", args.tenantId).maybeSingle();
+  if (!run || run.conversation_id !== args.conversationId) return;
   let state = stateFromRun(run);
   if (!state) return;
 
@@ -221,8 +223,8 @@ export async function onParliamentCallback(args: {
 
 async function rebuildCtx(run: any, conversationId: string, state: ParliamentState): Promise<SendContext> {
   const sb = serviceClient();
-  const { data: conv } = await sb.from("ai_conversations").select("brain_route_id").eq("id", conversationId).maybeSingle();
-  const { data: route } = await sb.from("agent_brain_routes").select("*").eq("id", conv?.brain_route_id).maybeSingle();
+  const { data: conv } = await sb.from("ai_conversations").select("brain_route_id").eq("id", conversationId).eq("tenant_id", run.tenant_id).maybeSingle();
+  const { data: route } = await sb.from("agent_brain_routes").select("*").eq("id", conv?.brain_route_id).eq("tenant_id", run.tenant_id).maybeSingle();
   return {
     tenantId: run.tenant_id,
     userId: run.user_id || "system",
@@ -269,7 +271,7 @@ async function synthesizeParliament(
     correlation_id: runId,
     metadata: { parliament: true, origin: "parliament" },
   });
-  await setConversationStatus(sb, conversationId, "idle");
+  await setConversationStatus(sb, conversationId, "idle", tenantId);
   await sb
     .from("agent_runs")
     .update({
@@ -278,12 +280,14 @@ async function synthesizeParliament(
       context: withParliament(context, { ...state, status: "done" }),
       completed_at: new Date().toISOString(),
     })
-    .eq("id", runId);
+    .eq("id", runId)
+    .eq("tenant_id", tenantId);
 
   const { data: sessions } = await sb
     .from("agent_channel_sessions")
     .select("id")
     .eq("parliament_run_id", runId)
+    .eq("tenant_id", tenantId)
     .in("status", ["running", "waiting"]);
   for (const s of sessions || []) await completeSession(sb, s.id, "completed");
 
@@ -309,10 +313,10 @@ function fallbackSynthesis(state: ParliamentState): string {
   );
 }
 
-export async function cancelParliament(conversationId: string): Promise<void> {
-  const loaded = await loadRunningParliament(conversationId);
+export async function cancelParliament(conversationId: string, tenantId: string): Promise<void> {
+  const loaded = await loadRunningParliament(conversationId, tenantId);
   if (!loaded.run) {
-    await setConversationStatus(serviceClient(), conversationId, "idle");
+    await setConversationStatus(serviceClient(), conversationId, "idle", tenantId);
     return;
   }
   const { sb, run, state } = loaded;
@@ -323,14 +327,16 @@ export async function cancelParliament(conversationId: string): Promise<void> {
       context: state ? withParliament(run.context, { ...state, status: "cancelled" }) : run.context,
       completed_at: new Date().toISOString(),
     })
-    .eq("id", run.id);
+    .eq("id", run.id)
+    .eq("tenant_id", tenantId);
   const { data: sessions } = await sb
     .from("agent_channel_sessions")
     .select("id")
     .eq("parliament_run_id", run.id)
+    .eq("tenant_id", tenantId)
     .in("status", ["running", "waiting"]);
   for (const s of sessions || []) await completeSession(sb, s.id, "cancelled");
-  await setConversationStatus(sb, conversationId, "idle");
+  await setConversationStatus(sb, conversationId, "idle", tenantId);
   await insertMessage(sb, {
     tenant_id: run.tenant_id,
     conversation_id: conversationId,
@@ -343,7 +349,7 @@ export async function cancelParliament(conversationId: string): Promise<void> {
   });
 }
 
-async function loadRunningParliament(conversationId: string): Promise<{
+async function loadRunningParliament(conversationId: string, tenantId: string, claimedRunId?: string | null): Promise<{
   sb: ReturnType<typeof serviceClient>;
   run: any | null;
   state: ParliamentState | null;
@@ -353,11 +359,21 @@ async function loadRunningParliament(conversationId: string): Promise<{
     .from("agent_runs")
     .select("*")
     .eq("conversation_id", conversationId)
+    .eq("tenant_id", tenantId)
     .eq("trigger_source", "parliament")
     .eq("status", "running")
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (run) {
+    const allowed = authorizeParliamentRun({
+      run: { id: run.id, tenant_id: run.tenant_id, conversation_id: run.conversation_id },
+      tenantId,
+      conversationId,
+      claimedRunId,
+    });
+    if (!allowed.ok) return { sb, run: null, state: null };
+  }
   return { sb, run: run || null, state: run ? stateFromRun(run) : null };
 }
 
@@ -373,17 +389,17 @@ function skipSilentSeats(state: ParliamentState): ParliamentState {
 }
 
 /** Skip silent seats and start round 2, or synthesize if already in review. */
-export async function forceContinueParliament(conversationId: string): Promise<{ ok: true; status: string }> {
-  const loaded = await loadRunningParliament(conversationId);
+export async function forceContinueParliament(conversationId: string, tenantId: string, claimedRunId?: string | null): Promise<{ ok: true; status: string }> {
+  const loaded = await loadRunningParliament(conversationId, tenantId, claimedRunId);
   if (!loaded.run || !loaded.state) throw new Error("no running parliament");
   const { sb, run } = loaded;
   let state = skipSilentSeats(loaded.state);
-  await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", run.id);
+  await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", run.id).eq("tenant_id", tenantId);
 
   const living = livingSeats(state);
   if (state.status === "round1" && state.max_rounds >= 2 && living.some((s) => s.round1)) {
     state = { ...state, round: 2, status: "round2" };
-    await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", run.id);
+    await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", run.id).eq("tenant_id", tenantId);
     await insertMessage(sb, {
       tenant_id: run.tenant_id,
       conversation_id: conversationId,
@@ -412,8 +428,8 @@ export async function forceContinueParliament(conversationId: string): Promise<{
   return { ok: true, status: "idle" };
 }
 
-export async function forceSynthesizeParliament(conversationId: string): Promise<{ ok: true; status: string }> {
-  const loaded = await loadRunningParliament(conversationId);
+export async function forceSynthesizeParliament(conversationId: string, tenantId: string, claimedRunId?: string | null): Promise<{ ok: true; status: string }> {
+  const loaded = await loadRunningParliament(conversationId, tenantId, claimedRunId);
   if (!loaded.run || !loaded.state) throw new Error("no running parliament");
   const { run, state } = loaded;
   const skipped = skipSilentSeats(state);
@@ -425,8 +441,10 @@ export async function clarifyParliamentSeat(
   conversationId: string,
   provider: ChannelProvider,
   question: string,
+  tenantId: string,
+  claimedRunId?: string | null,
 ): Promise<{ ok: true; status: string }> {
-  const loaded = await loadRunningParliament(conversationId);
+  const loaded = await loadRunningParliament(conversationId, tenantId, claimedRunId);
   if (!loaded.run || !loaded.state) throw new Error("no running parliament");
   const { run, state } = loaded;
   const ctx = await rebuildCtx(run, conversationId, state);
