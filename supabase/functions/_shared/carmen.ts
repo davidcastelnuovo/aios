@@ -24,6 +24,7 @@ import {
   policyPhoneList,
   filterPolicyGroupsToManus,
 } from './carmen-access-policy.ts';
+import { looksLikeRealPhone } from './carmen-private-routing.ts';
 
 const CARMEN_SESSION_IDLE_MINUTES_DEFAULT = 5;
 
@@ -992,16 +993,19 @@ async function resolveCarmenIdentityPhone(
   phoneNumber: string,
 ): Promise<string> {
   let digits = String(phoneNumber || '').replace(/\D/g, '');
-  const tail = phoneTail(digits);
-  if (tail && /^[5-9]\d{8}$/.test(tail)) return digits;
-  if (!digits) return digits;
+  if (!digits) return '';
+  // Real phones only. Long WhatsApp LIDs can have a 5–9 tail that looks Israeli
+  // (e.g. 224686986293269 → 686986293) — never treat those as phones.
+  if (looksLikeRealPhone(digits)) return digits;
   const { data: known } = await supabase
     .from('wa_lid_map')
     .select('phone')
     .eq('lid', digits)
     .maybeSingle();
-  if (known?.phone) return String(known.phone).replace(/\D/g, '');
-  return digits;
+  if (known?.phone && looksLikeRealPhone(known.phone)) {
+    return String(known.phone).replace(/\D/g, '');
+  }
+  return '';
 }
 
 type CarmenTenantStaff = {

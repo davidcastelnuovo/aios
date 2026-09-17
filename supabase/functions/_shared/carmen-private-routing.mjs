@@ -67,6 +67,40 @@ export function pickInboundLidDigits({ fromRaw = "", chatIdRaw = "", senderLidRa
 }
 
 /**
+ * Manus group events often put the participant LID in `senderLid` / `from` /
+ * `senderPhone` as bare digits — no `@lid` suffix. The older `@`-only filter
+ * dropped those fields, so Carmen saw an empty author and replied
+ * «אני לא מזהה אותך» even when `wa_lid_map` already knew the phone.
+ */
+export function pickGroupAuthorLidDigits({
+  authorRaw = "",
+  authorPhone = "",
+  groupChatId = "",
+  senderLidRaw = "",
+  fromRaw = "",
+  senderPhoneRaw = "",
+  senderNumberRaw = "",
+  keyParticipantRaw = "",
+} = {}) {
+  const groupDigits = digitsOnly(String(groupChatId || "").split("@")[0]);
+  const sources = [
+    senderLidRaw,
+    fromRaw,
+    senderPhoneRaw,
+    senderNumberRaw,
+    keyParticipantRaw,
+    authorRaw,
+    authorPhone,
+  ];
+  for (const raw of sources) {
+    const d = digitsOnly(String(raw || "").split("@")[0]);
+    if (!d || d === groupDigits) continue;
+    if (isUsableLidKey(d)) return d;
+  }
+  return "";
+}
+
+/**
  * First real phone among the gateway's phone fields, ignoring the LID itself.
  * Israeli-shaped numbers win; other international numbers are still accepted.
  */
