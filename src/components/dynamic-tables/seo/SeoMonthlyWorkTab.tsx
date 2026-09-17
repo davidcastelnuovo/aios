@@ -582,7 +582,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <Select value={selectedMonth} onValueChange={(v) => setSelectedMonth(v)}>
-                <SelectTrigger className="w-[180px] h-8 text-sm">
+                <SelectTrigger className="w-full min-w-0 sm:w-[180px] h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -594,7 +594,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
                 </SelectContent>
               </Select>
               <Select value={status} onValueChange={(v) => { setStatus(v as any); setDirty(true); }}>
-                <SelectTrigger className="w-[130px] h-8 text-sm">
+                <SelectTrigger className="w-full min-w-0 sm:w-[130px] h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
+import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import {
   Select,
   SelectContent,
@@ -22,6 +23,7 @@ import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, Trendi
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashboardContent";
 import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboardDialog";
@@ -143,6 +145,7 @@ export default function DashboardView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const didSetSeoDefaultRef = useRef(false);
+  const isMobile = useIsMobile();
 
   // Fetch dashboard
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
@@ -398,6 +401,46 @@ export default function DashboardView() {
     if (hasWooCommerce) platforms.push('woocommerce');
     return platforms;
   }, [tables, hasSeoReports, hasWooCommerce]);
+
+  const platformTabItems = useMemo((): ResponsiveTabItem[] => {
+    const items: ResponsiveTabItem[] = [{ value: "all", label: "📊 הכל" }];
+    if (availablePlatforms.includes("facebook")) {
+      items.push({
+        value: "facebook",
+        label: "Facebook",
+        iconNode: <Facebook className="h-4 w-4 text-blue-600" />,
+      });
+    }
+    if (availablePlatforms.includes("google_ads")) {
+      items.push({
+        value: "google_ads",
+        label: "Google Ads",
+        iconNode: getIntegrationIcon("google_ads"),
+      });
+    }
+    if (availablePlatforms.includes("google_analytics")) {
+      items.push({
+        value: "google_analytics",
+        label: "Analytics",
+        iconNode: getIntegrationIcon("google_analytics"),
+      });
+    }
+    if (availablePlatforms.includes("seo")) {
+      items.push({
+        value: "seo",
+        label: "SEO",
+        iconNode: <Globe className="h-4 w-4 text-green-600" />,
+      });
+    }
+    if (availablePlatforms.includes("woocommerce")) {
+      items.push({
+        value: "woocommerce",
+        label: "WooCommerce",
+        iconNode: <ShoppingCart className="h-4 w-4 text-emerald-600" />,
+      });
+    }
+    return items;
+  }, [availablePlatforms]);
 
   // Filter records by platform tab AND only use daily aggregate records for Analytics
   // IMPORTANT: Use only report_type='daily' for aggregation (KPI, charts).
@@ -1167,7 +1210,7 @@ export default function DashboardView() {
 
   if (dashboardLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 space-y-6">
+      <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4 space-y-6">
         <Skeleton className="h-8 w-64" />
         <div className="grid gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
@@ -1178,7 +1221,7 @@ export default function DashboardView() {
 
   if (!dashboard) {
     return (
-      <div className="container mx-auto py-8 px-4">
+      <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4">
         <Card className="p-12 text-center">
           <h3 className="text-lg font-semibold mb-2">הדשבורד לא נמצא</h3>
           <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
@@ -1200,7 +1243,7 @@ export default function DashboardView() {
     && (showAnalyticsCards || hasWooData || (totalSummary.revenue || 0) > 0);
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6">
+    <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4 space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -1209,7 +1252,7 @@ export default function DashboardView() {
             חזרה
           </Button>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold">{dashboard.name}</h1>
+            <h1 className="text-xl md:text-3xl font-bold">{dashboard.name}</h1>
             {isAgencyDashboard && (
               <Badge variant="secondary" className="flex items-center gap-1">
                 <Building2 className="h-3 w-3" />
@@ -1254,10 +1297,10 @@ export default function DashboardView() {
           />
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
           {isOrganizationDashboard && (
             <Select value={selectedOrgAgencyId} onValueChange={setSelectedOrgAgencyId}>
-              <SelectTrigger className="w-[220px]">
+              <SelectTrigger className="w-full sm:w-[220px]">
                 <SelectValue placeholder="בחר סוכנות" />
               </SelectTrigger>
               <SelectContent>
@@ -1277,7 +1320,7 @@ export default function DashboardView() {
             </Button>
           )}
           <Select value={dateFilter} onValueChange={(v) => { setDateFilter(v); if (v === 'custom') setCalendarOpen(true); }}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1310,7 +1353,7 @@ export default function DashboardView() {
                     setCustomDateRange({ from: range?.from, to: range?.to });
                     if (range?.from && range?.to) setCalendarOpen(false);
                   }}
-                  numberOfMonths={2}
+                  numberOfMonths={isMobile ? 1 : 2}
                   className="pointer-events-auto"
                 />
               </PopoverContent>
@@ -1348,41 +1391,12 @@ export default function DashboardView() {
           {/* Platform Tabs */}
           {availablePlatforms.length > 0 && (
             <Tabs value={platformFilter} onValueChange={(v) => setPlatformFilter(v as PlatformFilter)}>
-              <TabsList className="flex-wrap h-auto gap-1">
-                <TabsTrigger value="all" className="flex items-center gap-2">
-                  📊 הכל
-                </TabsTrigger>
-                {availablePlatforms.includes('facebook') && (
-                  <TabsTrigger value="facebook" className="flex items-center gap-2">
-                    <Facebook className="h-4 w-4 text-blue-600" />
-                    Facebook
-                  </TabsTrigger>
-                )}
-                {availablePlatforms.includes('google_ads') && (
-                  <TabsTrigger value="google_ads" className="flex items-center gap-2">
-                    {getIntegrationIcon('google_ads')}
-                    Google Ads
-                  </TabsTrigger>
-                )}
-                {availablePlatforms.includes('google_analytics') && (
-                  <TabsTrigger value="google_analytics" className="flex items-center gap-2">
-                    {getIntegrationIcon('google_analytics')}
-                    Analytics
-                  </TabsTrigger>
-                )}
-                {availablePlatforms.includes('seo') && (
-                  <TabsTrigger value="seo" className="flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-green-600" />
-                    SEO
-                  </TabsTrigger>
-                )}
-                {availablePlatforms.includes('woocommerce') && (
-                  <TabsTrigger value="woocommerce" className="flex items-center gap-2">
-                    <ShoppingCart className="h-4 w-4 text-emerald-600" />
-                    WooCommerce
-                  </TabsTrigger>
-                )}
-              </TabsList>
+              <ResponsiveTabsList
+                items={platformTabItems}
+                value={platformFilter}
+                onValueChange={(v) => setPlatformFilter(v as PlatformFilter)}
+                mobileLabel="בחר פלטפורמה"
+              />
             </Tabs>
           )}
 

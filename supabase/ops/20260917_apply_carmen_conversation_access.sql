@@ -1,0 +1,4 @@
+-- Applied live 2026-09-17: missing migration 20260910120000 on prod+staging.
+-- Without surfaces/scope columns, Carmen group identity select failed and
+-- approved campaigners (e.g. David) were not recognized in groups.
+-- Source: supabase/migrations/20260910120000_carmen_conversation_access.sql

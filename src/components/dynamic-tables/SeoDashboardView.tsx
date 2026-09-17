@@ -585,10 +585,10 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   return (
     <div className="space-y-5" dir="rtl">
       {/* Report Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <Globe className="h-5 w-5 text-primary" />
-          <span className="font-semibold text-lg">{reportData?.domain || selectedReport?.domain}</span>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <Globe className="h-5 w-5 text-primary shrink-0" />
+          <span className="font-semibold text-base sm:text-lg break-words">{reportData?.domain || selectedReport?.domain}</span>
           {reportData?.project_name && (
             <Badge variant="outline">{reportData.project_name}</Badge>
           )}
@@ -613,7 +613,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
             בחר פרויקט מ-Ahrefs
           </Button>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground w-full sm:w-auto min-w-0">
           {(() => {
              const uniqueDomains = new Set(validReports.map(r => r.domain));
             const showDomain = uniqueDomains.size > 1;
@@ -630,7 +630,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
                 value={selectedReport?.id || ''}
                 onValueChange={(val) => setSelectedReportId(val)}
               >
-                <SelectTrigger className={`${showDomain ? 'w-[300px]' : 'w-[200px]'} h-8 text-xs`}>
+                <SelectTrigger className={`w-full min-w-0 ${showDomain ? 'sm:w-[300px]' : 'sm:w-[200px]'} h-8 text-xs`}>
                   <SelectValue placeholder="בחר דוח" />
                 </SelectTrigger>
                 <SelectContent>
