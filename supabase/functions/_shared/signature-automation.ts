@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { checkEmailSend } from './integration-guard.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 const DEFAULT_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') ?? 'noreply@aios.co.il';
@@ -123,6 +124,12 @@ export async function sendSignatureDocumentEmails(
 
     if (!sendEmail) {
       results.push({ email: recipient.email, ok: false, error: 'skipped' });
+      continue;
+    }
+
+    const guard = checkEmailSend(recipient.email);
+    if (guard.decision !== 'ALLOW') {
+      results.push({ email: recipient.email, ok: false, error: guard.reason });
       continue;
     }
 

@@ -61,6 +61,48 @@ test("staging blocks WhatsApp groups", () => {
   assert.equal(result.decision, "BLOCK");
 });
 
+test("empty WhatsApp destination is blocked even with a phone allowlist", () => {
+  const result = checkOutbound({
+    appEnv: "staging",
+    stagingSafeMode: "true",
+    integration: "whatsapp",
+    destination: "",
+    allowlistRaw: "972502222222",
+  });
+  assert.equal(result.decision, "BLOCK");
+  assert.equal(result.reason, "empty_destination");
+});
+
+test("email is never allowed via the phone allowlist", () => {
+  const result = checkOutbound({
+    appEnv: "staging",
+    stagingSafeMode: "true",
+    integration: "email",
+    destination: "audit@example.test",
+    allowlistRaw: "972502222222",
+  });
+  assert.equal(result.decision, "BLOCK");
+  assert.equal(result.reason, "empty_email_allowlist");
+});
+
+test("email allowlist matches only the listed address", () => {
+  const allowed = checkOutbound({
+    appEnv: "staging",
+    integration: "email",
+    destination: "audit@example.test",
+    emailAllowlistRaw: "audit@example.test",
+  });
+  assert.equal(allowed.decision, "ALLOW");
+
+  const blocked = checkOutbound({
+    appEnv: "staging",
+    integration: "email",
+    destination: "other@example.test",
+    emailAllowlistRaw: "audit@example.test",
+  });
+  assert.equal(blocked.decision, "BLOCK");
+});
+
 test("parseAllowlist splits commas and spaces", () => {
   assert.deepEqual(parseAllowlist("972501111111, 0502222222"), ["972501111111", "0502222222"]);
 });
