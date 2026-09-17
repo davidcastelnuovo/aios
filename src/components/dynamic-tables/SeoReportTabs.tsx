@@ -295,7 +295,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   }, [activeTab, seoTabItems]);
 
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-4 min-w-0 max-w-full" dir="rtl">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <ResponsiveTabsList
           items={seoTabItems}

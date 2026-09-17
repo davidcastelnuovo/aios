@@ -946,13 +946,13 @@ export default function SharedDashboard({
   const isSnapshotReady = !isLoading && !!data?.dashboard && Array.isArray(tables);
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6" dir="rtl" data-snapshot-ready={isSnapshotReady ? "true" : "false"} data-snapshot-frame="true">
+    <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4 space-y-6" dir="rtl" data-snapshot-ready={isSnapshotReady ? "true" : "false"} data-snapshot-frame="true">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             <BarChart3 className="h-6 w-6 text-primary" />
-            <h1 className="text-3xl font-bold">{dashboard.name}</h1>
+            <h1 className="text-xl md:text-3xl font-bold">{dashboard.name}</h1>
           </div>
           <div className="flex items-center gap-2 mt-2 text-muted-foreground">
             <span>{dashboard.client_name}</span>

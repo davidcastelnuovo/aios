@@ -240,7 +240,7 @@ export function PublicSeoMonthlyWorkView({
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <Select value={selected?.month || selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="h-8 w-[180px] text-sm">
+                <SelectTrigger className="h-8 w-full min-w-0 sm:w-[180px] text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

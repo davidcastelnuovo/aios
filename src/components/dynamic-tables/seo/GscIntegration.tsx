@@ -561,8 +561,8 @@ export function GscIntegration({
   if (!gscIntegration) {
     return (
       <Card className="border-dashed border-primary/30">
-        <CardContent className="p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 min-w-0">
             <Search className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">
               חבר Google Search Console כדי להשלים נתוני קליקים, חשיפות ו-CTR
@@ -607,7 +607,7 @@ export function GscIntegration({
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             {showDateRangeSelector && (
               <Select
                 value={effectiveDateRange}
@@ -617,7 +617,7 @@ export function GscIntegration({
                   onDateRangeChange?.(next);
                 }}
               >
-                <SelectTrigger className="h-7 text-xs w-[130px]">
+                <SelectTrigger className="h-7 text-xs w-full min-w-0 sm:w-[130px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -632,7 +632,7 @@ export function GscIntegration({
             {usableSites.length > 0 && (
               <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" className="h-7 text-xs w-[220px] justify-between">
+                  <Button variant="outline" role="combobox" className="h-7 text-xs w-full min-w-0 sm:w-[220px] justify-between">
                     {effectiveSiteUrl
                       ? effectiveSiteUrl.replace("sc-domain:", "").replace("https://", "")
                       : "בחר נכס Search Console"}
@@ -754,7 +754,7 @@ export function GscIntegration({
       {!hideTable && gscData && gscData.length > 0 && (
         <CardContent className="px-4 pb-4 pt-0 space-y-4">
           {/* Summary Stats */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="text-center">
               <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
                 <MousePointerClick className="h-3 w-3" />
@@ -946,7 +946,7 @@ function GscQueriesTable({
             placeholder="חפש ביטוי..."
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            className="h-8 w-[200px] text-sm"
+            className="h-8 w-full min-w-0 sm:w-[200px] text-sm"
           />
         </div>
       </div>

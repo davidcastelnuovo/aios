@@ -23,6 +23,7 @@ import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, Trendi
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashboardContent";
 import { ShareDashboardDialog } from "@/components/dynamic-tables/ShareDashboardDialog";
@@ -144,6 +145,7 @@ export default function DashboardView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
   const didSetSeoDefaultRef = useRef(false);
+  const isMobile = useIsMobile();
 
   // Fetch dashboard
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
@@ -1208,7 +1210,7 @@ export default function DashboardView() {
 
   if (dashboardLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 space-y-6">
+      <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4 space-y-6">
         <Skeleton className="h-8 w-64" />
         <div className="grid gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
@@ -1219,7 +1221,7 @@ export default function DashboardView() {
 
   if (!dashboard) {
     return (
-      <div className="container mx-auto py-8 px-4">
+      <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4">
         <Card className="p-12 text-center">
           <h3 className="text-lg font-semibold mb-2">הדשבורד לא נמצא</h3>
           <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
@@ -1241,7 +1243,7 @@ export default function DashboardView() {
     && (showAnalyticsCards || hasWooData || (totalSummary.revenue || 0) > 0);
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6">
+    <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4 space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -1351,7 +1353,7 @@ export default function DashboardView() {
                     setCustomDateRange({ from: range?.from, to: range?.to });
                     if (range?.from && range?.to) setCalendarOpen(false);
                   }}
-                  numberOfMonths={2}
+                  numberOfMonths={isMobile ? 1 : 2}
                   className="pointer-events-auto"
                 />
               </PopoverContent>

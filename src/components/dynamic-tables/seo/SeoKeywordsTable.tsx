@@ -191,28 +191,28 @@ function KeywordRow({
         <td className="p-3 text-center"><PositionChange value={posChangeMonth} /></td>
       )}
       {show3Month && (
-        <td className="p-3 text-center"><PositionChange value={posChange3m} /></td>
+        <td className="p-3 text-center hidden lg:table-cell"><PositionChange value={posChange3m} /></td>
       )}
       {showYearly && (
-        <td className="p-3 text-center"><PositionChange value={posChangeYear} /></td>
+        <td className="p-3 text-center hidden lg:table-cell"><PositionChange value={posChangeYear} /></td>
       )}
       {showGsc && (
         <>
           <td className="p-3 text-center text-xs" title={displayClicks === ahrefsTraffic && (!gscClicks || gscClicks === 0) ? "הערכת תנועה מ-Ahrefs" : undefined}>
             {displayClicks != null ? displayClicks.toLocaleString() : <span className="text-muted-foreground">—</span>}
           </td>
-          <td className="p-3 text-center text-xs">
+          <td className="p-3 text-center text-xs hidden md:table-cell">
             {kw.gsc_impressions != null ? Number(kw.gsc_impressions).toLocaleString() : <span className="text-muted-foreground">—</span>}
           </td>
-          <td className="p-3 text-center text-xs">
+          <td className="p-3 text-center text-xs hidden sm:table-cell">
             {kw.gsc_ctr != null ? formatGscCtrPercent(kw.gsc_ctr) : <span className="text-muted-foreground">—</span>}
           </td>
         </>
       )}
-      <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '—'}</td>
-      <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '—'}</td>
+      <td className="p-3 text-center hidden md:table-cell">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '—'}</td>
+      <td className="p-3 text-center hidden md:table-cell">{kw.volume != null ? Number(kw.volume).toLocaleString() : '—'}</td>
 
-      <td className="p-3 text-right text-xs max-w-[200px] truncate" title={kw.url}>
+      <td className="p-3 text-right text-xs max-w-[200px] truncate hidden lg:table-cell" title={kw.url}>
         {kw.url ? (
           <a
             href={kw.url}
@@ -269,13 +269,13 @@ function KeywordTable({
           {icon}
           {title}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="חיפוש ביטוי..."
-            className="h-8 w-48 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+            className="h-8 w-full min-w-0 sm:w-48 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
           />
           <Badge variant="outline" className="text-xs">
             {filtered.length}
@@ -298,25 +298,25 @@ function KeywordTable({
                   <th className="text-center p-3 font-medium">שינוי חודשי</th>
                 )}
                 {show3Month && (
-                  <th className="text-center p-3 font-medium">שינוי 3 חודשים</th>
+                  <th className="text-center p-3 font-medium hidden lg:table-cell">שינוי 3 חודשים</th>
                 )}
                 {showYearly && (
-                  <th className="text-center p-3 font-medium">שינוי שנתי</th>
+                  <th className="text-center p-3 font-medium hidden lg:table-cell">שינוי שנתי</th>
                 )}
                 {showGsc && (
                   <>
                     <th className="text-center p-3 font-medium text-xs">
                       <div className="flex items-center justify-center gap-1"><MousePointerClick className="h-3 w-3" />קליקים</div>
                     </th>
-                    <th className="text-center p-3 font-medium text-xs">
+                    <th className="text-center p-3 font-medium text-xs hidden md:table-cell">
                       <div className="flex items-center justify-center gap-1"><Eye className="h-3 w-3" />חשיפות</div>
                     </th>
-                    <th className="text-center p-3 font-medium text-xs">CTR</th>
+                    <th className="text-center p-3 font-medium text-xs hidden sm:table-cell">CTR</th>
                   </>
                 )}
-                <th className="text-center p-3 font-medium">תנועה</th>
-                <th className="text-center p-3 font-medium">נפח חיפוש</th>
-                <th className="text-right p-3 font-medium">URL</th>
+                <th className="text-center p-3 font-medium hidden md:table-cell">תנועה</th>
+                <th className="text-center p-3 font-medium hidden md:table-cell">נפח חיפוש</th>
+                <th className="text-right p-3 font-medium hidden lg:table-cell">URL</th>
               </tr>
             </thead>
             <tbody>

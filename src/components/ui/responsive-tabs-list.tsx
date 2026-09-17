@@ -1,6 +1,26 @@
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
+/** Tabs switch to dropdown below this width (covers phones + narrow tablets). */
+const COMPACT_TABS_BREAKPOINT = 1024;
+
+function useCompactTabsNav() {
+  const [isCompact, setIsCompact] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth < COMPACT_TABS_BREAKPOINT;
+  });
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${COMPACT_TABS_BREAKPOINT - 1}px)`);
+    const onChange = () => {
+      setIsCompact(window.innerWidth < COMPACT_TABS_BREAKPOINT);
+    };
+    mql.addEventListener("change", onChange);
+    setIsCompact(window.innerWidth < COMPACT_TABS_BREAKPOINT);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  return isCompact;
+}
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -61,7 +81,7 @@ export function ResponsiveTabsList({
   mobileDropdown = true,
   variant = "default",
 }: ResponsiveTabsListProps) {
-  const isMobile = useIsMobile();
+  const isMobile = useCompactTabsNav();
   const enabledItems = items.filter((item) => !item.disabled);
   const current =
     items.find((item) => item.value === value && !item.disabled) ??
