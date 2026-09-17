@@ -55,7 +55,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState, ReactNode, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import {
   Collapsible,
-  CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -552,31 +551,42 @@ function LeadsGroupTable({
   overallTotalCount?: number;
 }) {
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle}>
-      <Card className="border-r-4 border-primary/40 bg-card">
+    <Collapsible
+      open={isOpen}
+      onOpenChange={onToggle}
+      className={cn("flex flex-col", isOpen ? "min-h-0 flex-1 overflow-hidden" : "shrink-0")}
+    >
+      <Card className={cn(
+        "flex flex-col overflow-hidden border-r-4 border-primary/40 bg-card",
+        isOpen && "min-h-0 flex-1",
+      )}>
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-            <CardTitle className="text-xl flex items-center justify-between">
+          <CardHeader className="shrink-0 cursor-pointer px-3 py-2 hover:bg-muted/50 transition-colors">
+            <CardTitle className="flex items-center justify-between text-sm font-semibold">
               <span className="flex items-center gap-2">
                 {label}
-                <Badge variant="secondary" className="text-sm font-normal">
+                <Badge variant="secondary" className="text-xs font-normal">
                   {leads.length}
                 </Badge>
               </span>
-              <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+              <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
             </CardTitle>
           </CardHeader>
         </CollapsibleTrigger>
-        
-        <CollapsibleContent>
-          <CardContent>
+        {isOpen && (
+          <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
             {leads.length === 0 ? (
               <p className="text-muted-foreground text-center py-4">{emptyMessage}</p>
             ) : (
-              <TableWithStickyScroll stageLeads={leads} totalLeadsCount={totalLeadsCount} overallTotalCount={overallTotalCount} />
+              <TableWithStickyScroll
+                fillHeight
+                stageLeads={leads}
+                totalLeadsCount={totalLeadsCount}
+                overallTotalCount={overallTotalCount}
+              />
             )}
           </CardContent>
-        </CollapsibleContent>
+        )}
       </Card>
     </Collapsible>
   );
@@ -620,35 +630,49 @@ function LeadsPaginationBar({
   totalPages,
   isFetching,
   onPageChange,
+  totalLeadsCount,
 }: {
   page: number;
   totalPages: number;
   isFetching: boolean;
   onPageChange: (nextPage: number) => void;
+  totalLeadsCount?: number;
 }) {
   if (totalPages <= 1) return null;
   return (
-    <div className="flex flex-wrap justify-center items-center gap-3 py-2">
+    <div className="flex flex-wrap items-center justify-center gap-1.5">
       <Button
         variant="outline"
         size="sm"
         onClick={() => onPageChange(Math.max(1, page - 1))}
         disabled={page === 1 || isFetching}
+        className="h-7 px-2 text-xs"
       >
         הקודם →
       </Button>
-      <span className="text-sm text-muted-foreground whitespace-nowrap">
+      <span className="text-xs text-muted-foreground whitespace-nowrap px-1">
         עמוד {page} מתוך {totalPages}
-        {isFetching ? <span className="animate-pulse mr-2">טוען...</span> : null}
+        {isFetching ? <span className="animate-pulse mr-1">טוען...</span> : null}
       </span>
       <Button
         variant="outline"
         size="sm"
         onClick={() => onPageChange(Math.min(totalPages, page + 1))}
         disabled={page === totalPages || isFetching}
+        className="h-7 px-2 text-xs"
       >
         ← הבא
       </Button>
+      {page < totalPages && !isFetching && totalLeadsCount != null && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onPageChange(totalPages)}
+          className="h-7 px-2 text-xs text-muted-foreground"
+        >
+          עמוד אחרון ({totalLeadsCount})
+        </Button>
+      )}
     </div>
   );
 }
@@ -1413,7 +1437,6 @@ export default function Leads() {
   const displayTotalCount = isKanbanView ? kanbanTotalLeadsCount : totalLeadsCount;
 
   const totalPages = Math.ceil(totalLeadsCount / TABLE_LEADS_PER_PAGE);
-  const hasMorePages = page < totalPages;
 
   const goToPage = (nextPage: number) => {
     setPage(nextPage);
@@ -2458,17 +2481,23 @@ export default function Leads() {
 
   return (
     <LeadEditContext.Provider value={openLeadInChat}>
-    <div className={viewMode === "chat" ? "flex h-full min-h-0 max-h-full flex-col gap-4 overflow-hidden p-4" : "space-y-6 p-3 md:p-6"}>
+    <div className={
+      viewMode === "chat"
+        ? "flex h-full min-h-0 max-h-full flex-col gap-4 overflow-hidden p-4"
+        : viewMode === "table"
+          ? "flex h-full min-h-0 max-h-full flex-col overflow-hidden p-2 md:px-3 md:py-2"
+          : "space-y-6 p-3 md:p-6"
+    }>
       {/* View As Banner - shows when viewing as another user */}
       {isViewingAs && (
-        <div className="bg-warning/20 border border-warning text-warning-foreground px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+        <div className="bg-warning/20 border border-warning text-warning-foreground px-4 py-2 rounded-lg flex items-center gap-2 text-sm shrink-0">
           <span className="font-medium">📊 מצב צפייה:</span>
           <span>אתה צופה בלידים של <strong>{viewAsUserName}</strong> בלבד</span>
         </div>
       )}
       
       {/* Mobile Header */}
-      <div className="block md:hidden space-y-4">
+      <div className={cn("block md:hidden", viewMode === "table" ? "shrink-0 space-y-2" : "space-y-4")}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
@@ -2523,18 +2552,15 @@ export default function Leads() {
         </div>
 
         {viewMode === "table" && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
             {(isOwner || isSuperAdmin) && <LeadTableColumnsDialog />}
-          </div>
-        )}
-        {viewMode === "table" && (
-          <div className="sticky top-0 z-30 bg-background">
             <LeadsPaginationBar
               page={page}
               totalPages={totalPages}
               isFetching={isFetching}
               onPageChange={goToPage}
+              totalLeadsCount={totalLeadsCount}
             />
           </div>
         )}
@@ -2595,11 +2621,14 @@ export default function Leads() {
       </div>
 
       {/* Desktop Header - Sticky */}
-      <div className="hidden md:block sticky top-0 z-40 bg-background pb-4 space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
-            <Badge variant="secondary" className="text-base px-3 py-1">
+      <div className={cn(
+        "hidden md:block bg-background",
+        viewMode === "table" ? "shrink-0 space-y-2 pb-1.5" : "sticky top-0 z-40 space-y-4 pb-4",
+      )}>
+        <div className="flex flex-wrap justify-between items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className={viewMode === "table" ? "text-xl font-bold" : "text-3xl font-bold"}>לידים - Pipeline</h1>
+            <Badge variant="secondary" className={viewMode === "table" ? "text-sm px-2 py-0.5" : "text-base px-3 py-1"}>
               {isFetching ? (
                 <span className="animate-pulse">טוען...</span>
               ) : isKanbanView ? (
@@ -2608,8 +2637,17 @@ export default function Leads() {
                 <>מציג: {filteredLeads?.length || 0} {totalPages > 1 && `(מתוך ${totalLeadsCount})`}</>
               )}
             </Badge>
+            {viewMode === "table" && (
+              <LeadsPaginationBar
+                page={page}
+                totalPages={totalPages}
+                isFetching={isFetching}
+                onPageChange={goToPage}
+                totalLeadsCount={totalLeadsCount}
+              />
+            )}
           </div>
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-2 items-center shrink-0">
             {/* View mode toggle */}
             <div className="flex gap-1 border rounded-md p-1">
               <Button
@@ -2638,7 +2676,7 @@ export default function Leads() {
               <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
             )}
             <div className="flex gap-2">
-              <Button variant="outline" asChild>
+              <Button variant="outline" size={viewMode === "table" ? "sm" : "default"} asChild>
                 <Link to="archive" className="gap-2">
                   <Archive className="h-4 w-4" />
                   ארכיון
@@ -2646,6 +2684,7 @@ export default function Leads() {
               </Button>
               <Button
                 variant="outline"
+                size={viewMode === "table" ? "sm" : "default"}
                 onClick={() => syncFacebookLeadsMutation.mutate()}
                 disabled={syncFacebookLeadsMutation.isPending}
                 className="gap-2"
@@ -2662,8 +2701,8 @@ export default function Leads() {
         
         {/* Search + saved filters + stages — one row */}
         <div
-          className="grid w-full min-w-0 items-center gap-3"
-          style={{ gridTemplateColumns: "18rem minmax(0, 1fr) auto" }}
+          className="grid w-full min-w-0 items-center gap-2"
+          style={{ gridTemplateColumns: viewMode === "table" ? "14rem minmax(0, 1fr) auto" : "18rem minmax(0, 1fr) auto" }}
         >
           <div className="relative min-w-0">
             <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -2672,7 +2711,10 @@ export default function Leads() {
               placeholder="חיפוש לפי שם, טלפון או חברה..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-12 h-9 text-base font-medium shadow-sm border-2 focus:border-primary"
+              className={cn(
+                "pr-12 font-medium shadow-sm border-2 focus:border-primary",
+                viewMode === "table" ? "h-8 text-sm" : "h-9 text-base",
+              )}
             />
             {searchQuery && (
               <Button
@@ -2707,14 +2749,14 @@ export default function Leads() {
             )}
             <ManageLeadStatusesDialog 
               trigger={
-                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול סטטוסי לידים">
+                <Button variant="outline" size="icon" className={cn("shrink-0", viewMode === "table" ? "h-8 w-8" : "h-9 w-9")} title="ניהול סטטוסי לידים">
                   <Settings2 className="h-4 w-4" />
                 </Button>
               }
             />
             <ChatTagsManager 
               trigger={
-                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול תגיות">
+                <Button variant="outline" size="icon" className={cn("shrink-0", viewMode === "table" ? "h-8 w-8" : "h-9 w-9")} title="ניהול תגיות">
                   <Tag className="h-4 w-4" />
                 </Button>
               }
@@ -2722,7 +2764,7 @@ export default function Leads() {
             <Button 
               variant="outline" 
               size="icon"
-              className="h-9 w-9 shrink-0"
+              className={cn("shrink-0", viewMode === "table" ? "h-8 w-8" : "h-9 w-9")}
               onClick={handleExportExcel}
               disabled={isExporting}
               title="ייצוא כל הלידים לפי הסינון לקובץ Excel"
@@ -2731,14 +2773,6 @@ export default function Leads() {
             </Button>
           </div>
         </div>
-        {viewMode === "table" && (
-          <LeadsPaginationBar
-            page={page}
-            totalPages={totalPages}
-            isFetching={isFetching}
-            onPageChange={goToPage}
-          />
-        )}
       </div>
       
       {/* Filters Dialog */}
@@ -3120,70 +3154,37 @@ export default function Leads() {
         />
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {tableLayout === "by_date" ? (
-            <Card className="bg-card">
-              <CardHeader>
-                <CardTitle className="text-xl flex items-center gap-2">
-                  כל הלידים לפי תאריך
-                  <Badge variant="secondary" className="text-sm font-normal">
-                    {dateSortedLeads.length}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {dateSortedLeads.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">אין לידים להצגה</p>
-                ) : (
-                  <TableWithStickyScroll
-                    stageLeads={dateSortedLeads}
-                    totalLeadsCount={dateSortedLeads.length}
-                    overallTotalCount={totalLeadsCount}
-                  />
-                )}
-              </CardContent>
-            </Card>
+            dateSortedLeads.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">אין לידים להצגה</p>
+            ) : (
+              <TableWithStickyScroll
+                fillHeight
+                stageLeads={dateSortedLeads}
+                totalLeadsCount={dateSortedLeads.length}
+                overallTotalCount={totalLeadsCount}
+              />
+            )
           ) : tableUserGroups.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">אין לידים להצגה</p>
           ) : (
-            tableUserGroups.map((group) => (
-              <LeadsGroupTable
-                key={group.id}
-                label={group.label}
-                leads={group.leads}
-                isOpen={openTables[group.id] ?? group.leads.length > 0}
-                onToggle={(open) => setOpenTables(prev => ({ ...prev, [group.id]: open }))}
-                emptyMessage="אין לידים למשתמש זה"
-                totalLeadsCount={group.leads.length}
-                overallTotalCount={totalLeadsCount}
-              />
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Pagination Controls */}
-      {viewMode === "table" && (
-        <>
-          <LeadsPaginationBar
-            page={page}
-            totalPages={totalPages}
-            isFetching={isFetching}
-            onPageChange={goToPage}
-          />
-          {hasMorePages && !isFetching && (
-            <div className="flex justify-center pb-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => goToPage(totalPages)}
-                className="text-muted-foreground"
-              >
-                טען את כל {totalLeadsCount} הלידים (עמוד אחרון)
-              </Button>
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+              {tableUserGroups.map((group) => (
+                <LeadsGroupTable
+                  key={group.id}
+                  label={group.label}
+                  leads={group.leads}
+                  isOpen={openTables[group.id] ?? group.leads.length > 0}
+                  onToggle={(open) => setOpenTables(prev => ({ ...prev, [group.id]: open }))}
+                  emptyMessage="אין לידים למשתמש זה"
+                  totalLeadsCount={group.leads.length}
+                  overallTotalCount={totalLeadsCount}
+                />
+              ))}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* Auto-open lead dialog from URL parameter */}
@@ -3199,7 +3200,17 @@ export default function Leads() {
   );
 }
 
-function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount }: { stageLeads: any[]; totalLeadsCount?: number; overallTotalCount?: number }) {
+function TableWithStickyScroll({
+  stageLeads,
+  totalLeadsCount,
+  overallTotalCount,
+  fillHeight = false,
+}: {
+  stageLeads: any[];
+  totalLeadsCount?: number;
+  overallTotalCount?: number;
+  fillHeight?: boolean;
+}) {
   const { toast } = useToast();
   const openLeadInChat = useContext(LeadEditContext);
   const queryClient = useQueryClient();
@@ -3622,10 +3633,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
   const showSelectAllButton = isAllPageSelected && !isAllLeadsSelected && overallTotalCount && overallTotalCount > stageLeads.length;
 
   return (
-    <div className="relative">
+    <div className={cn("relative", fillHeight && "flex h-full min-h-0 flex-col")}>
       {/* Bulk Actions Toolbar */}
       {selectedLeads.length > 0 && (
-        <div className="bg-primary text-primary-foreground p-3 rounded-lg mb-3 flex flex-col gap-2">
+        <div className="bg-primary text-primary-foreground p-2 rounded-lg mb-2 flex flex-col gap-2 shrink-0">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="font-semibold">{selectedLeads.length} לידים נבחרו</span>
@@ -3704,7 +3715,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       )}
 
       {/* Resizable Table */}
-      <div className="h-[min(75vh,880px)]" dir="rtl">
+      <div className={fillHeight ? "min-h-0 flex-1" : "h-[min(75vh,880px)]"} dir="rtl">
         <ResizableTable
           columns={[
             { 

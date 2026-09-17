@@ -126,7 +126,7 @@ export function ResizableTable({
         <thead className="sticky top-0 z-20 bg-card">
           <tr className="border-b">
             {checkboxColumn && (
-              <th className="sticky right-0 z-30 bg-card border-l p-3 text-center w-[50px]">
+              <th className="sticky right-0 z-30 bg-card border-l px-2 py-1.5 text-center w-[50px]">
                 <Checkbox
                   checked={checkboxColumn.checked.every(Boolean)}
                   onCheckedChange={checkboxColumn.onSelectAll}
@@ -138,7 +138,7 @@ export function ResizableTable({
               return (
                 <th
                   key={column.id}
-                  className="sticky z-20 bg-card border-l p-3 text-right relative group overflow-hidden"
+                  className="sticky z-20 bg-card border-l px-2 py-1.5 text-right relative group overflow-hidden"
                   style={{ 
                     width: column.width,
                     minWidth: column.minWidth || 80,
@@ -176,7 +176,7 @@ export function ResizableTable({
             {regularColumns.map((column) => (
               <th
                 key={column.id}
-                className="bg-card border-l p-3 text-right relative group"
+                className="bg-card border-l px-2 py-1.5 text-right relative group"
                 style={{ width: column.width }}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -217,7 +217,7 @@ export function ResizableTable({
               className={`border-b hover:bg-muted/30 ${rowClassName}`}
             >
               {checkboxColumn && (
-                <td className={`sticky right-0 z-10 border-l p-3 text-center ${stickyCellClassName}`}>
+                <td className={`sticky right-0 z-10 border-l px-2 py-1.5 text-center ${stickyCellClassName}`}>
                   <Checkbox
                     checked={checkboxColumn.checked[rowIndex]}
                     onCheckedChange={(checked) => checkboxColumn.onCheckedChange(rowIndex, checked as boolean)}
@@ -229,7 +229,7 @@ export function ResizableTable({
                 return (
                   <td
                     key={column.id}
-                    className={`sticky z-10 border-l p-3 overflow-hidden ${stickyCellClassName}`}
+                    className={`sticky z-10 border-l px-2 py-1.5 overflow-hidden ${stickyCellClassName}`}
                     style={{ 
                       width: column.width,
                       minWidth: column.minWidth || 80,
@@ -244,7 +244,7 @@ export function ResizableTable({
               {regularColumns.map((column) => (
                 <td
                   key={column.id}
-                  className="border-l p-3"
+                  className="border-l px-2 py-1.5"
                   style={{ width: column.width }}
                 >
                   {column.render(row)}
