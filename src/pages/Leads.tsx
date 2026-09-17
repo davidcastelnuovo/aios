@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, GripVertical, ChevronDown, ChevronUp, User, Users, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, Pencil, Archive, Loader2 } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, GripVertical, ChevronDown, ChevronUp, User, Users, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, Pencil, Archive, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -754,6 +754,7 @@ export default function Leads() {
   const { isOwner, isSuperAdmin } = useUserRole();
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
+  const isMobile = useIsMobile();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
   const { isFieldVisible } = useCustomFieldLabels('lead');
@@ -2474,11 +2475,12 @@ export default function Leads() {
   return (
     <LeadEditContext.Provider value={openLeadInChat}>
     <div className={
-      viewMode === "chat"
-        ? "flex h-full min-h-0 max-h-full flex-col gap-4 overflow-hidden p-4"
-        : viewMode === "table"
-          ? "flex h-full min-h-0 max-h-full flex-col overflow-hidden p-2 md:px-3 md:py-2"
-          : "space-y-6 p-3 md:p-6"
+      isMobile || viewMode === "chat" || viewMode === "table"
+        ? cn(
+            "flex h-full min-h-0 max-h-full flex-col overflow-hidden",
+            isMobile ? "p-1.5" : viewMode === "chat" ? "gap-4 p-4" : "p-2 md:px-3 md:py-2",
+          )
+        : "space-y-6 p-3 md:p-6"
     }>
       {/* View As Banner - shows when viewing as another user */}
       {isViewingAs && (
@@ -2488,105 +2490,137 @@ export default function Leads() {
         </div>
       )}
       
-      {/* Mobile Header */}
-      <div className={cn("block md:hidden", viewMode === "table" ? "shrink-0 space-y-2" : "space-y-4")}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
-            <Badge variant="secondary" className="text-sm px-2 py-0.5">
-              {isFetching ? (
-                '...'
-              ) : isKanbanView ? (
-                `סה"כ: ${displayTotalCount.toLocaleString()}`
-              ) : (
-                `${filteredLeads?.length || 0}${totalPages > 1 ? ` / ${totalLeadsCount}` : ''}`
-              )}
-            </Badge>
-            <Button variant="outline" size="sm" asChild className="h-8 px-2">
-              <Link to="archive" title="ארכיון לידים">
-                <Archive className="h-4 w-4" />
-              </Link>
+      {/* Mobile Header — one slim row; tools live in a sheet */}
+      <div className="flex md:hidden shrink-0 items-center gap-1">
+        <Badge variant="secondary" className="h-6 px-1.5 text-[11px]">
+          {isFetching
+            ? "..."
+            : isKanbanView
+              ? displayTotalCount.toLocaleString()
+              : `${filteredLeads?.length || 0}${totalPages > 1 ? ` · ${page}/${totalPages}` : ""}`}
+        </Badge>
+        <LeadViewModeToggle
+          compact
+          hideDefaultMenu
+          viewMode={viewMode}
+          defaultView={defaultView}
+          onViewModeChange={setViewMode}
+          onDefaultViewChange={setDefaultView}
+        />
+        {viewMode === "table" && totalPages > 1 && (
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => goToPage(Math.max(1, page - 1))}
+              disabled={page === 1 || isFetching}
+              title="הקודם"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => goToPage(Math.min(totalPages, page + 1))}
+              disabled={page === totalPages || isFetching}
+              title="הבא"
+            >
+              <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
-
-          <div className="flex items-center gap-2">
-            <LeadViewModeToggle
-              compact
-              viewMode={viewMode}
-              defaultView={defaultView}
-              onViewModeChange={setViewMode}
-              onDefaultViewChange={setDefaultView}
-            />
-          </div>
-        </div>
-
-        {viewMode === "table" && (
-          <div className="flex flex-wrap items-center gap-2">
-            <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
-            {(isOwner || isSuperAdmin) && <LeadTableColumnsDialog />}
-            <LeadsPaginationBar
-              page={page}
-              totalPages={totalPages}
-              isFetching={isFetching}
-              onPageChange={goToPage}
-              totalLeadsCount={totalLeadsCount}
-            />
-          </div>
         )}
-
-        <div
-          className="grid w-full min-w-0 items-center gap-2"
-          style={{ gridTemplateColumns: "minmax(8rem, 12rem) minmax(0, 1fr)" }}
-        >
-          <div className="relative min-w-0">
-            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="חיפוש..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10 h-8"
-            />
-          </div>
-          <LeadFilterPresetTabs
-            activePresetId={activePresetId}
-            onPresetSelect={handlePresetSelect}
-            onOpenFiltersDialog={() => {
-              setEditingPreset(null);
-              setFiltersDialogOpen(true);
-            }}
-            onEditPreset={handleEditPreset}
-            hasActiveFilters={hasActiveFilters}
-            pipelineStages={PIPELINE_STAGES}
-            activeStageId={filterStage}
-            onStageSelect={handleStageSelect}
-            stageCounts={stagePresetCounts}
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => syncFacebookLeadsMutation.mutate()}
-            disabled={syncFacebookLeadsMutation.isPending}
-            className="gap-1"
-          >
-            <Download className={`h-4 w-4 ${syncFacebookLeadsMutation.isPending ? 'animate-spin' : ''}`} />
-            {syncFacebookLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן מפייסבוק'}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportExcel}
-            disabled={isExporting}
-            className="gap-1"
-          >
-            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-            {isExporting ? "מייצא…" : "ייצוא Excel"}
-          </Button>
-          <AddLeadForm />
-          <ImportLeadsWithMapping />
-        </div>
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="relative ms-auto h-8 w-8"
+              title="חיפוש וסינון"
+            >
+              <Filter className="h-4 w-4" />
+              {(hasActiveFilters || !!searchQuery) && (
+                <span className="absolute top-1 left-1 h-1.5 w-1.5 rounded-full bg-primary" />
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>חיפוש וסינון</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4 space-y-4" dir="rtl">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="חיפוש לפי שם, טלפון או חברה..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 pr-10"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute left-1 top-1/2 h-7 w-7 -translate-y-1/2"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <LeadFilterPresetTabs
+                activePresetId={activePresetId}
+                onPresetSelect={handlePresetSelect}
+                onOpenFiltersDialog={() => {
+                  setEditingPreset(null);
+                  setFiltersDialogOpen(true);
+                }}
+                onEditPreset={handleEditPreset}
+                hasActiveFilters={hasActiveFilters}
+                pipelineStages={PIPELINE_STAGES}
+                activeStageId={filterStage}
+                onStageSelect={handleStageSelect}
+                stageCounts={stagePresetCounts}
+              />
+              {viewMode === "table" && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
+                  {(isOwner || isSuperAdmin) && <LeadTableColumnsDialog />}
+                </div>
+              )}
+              {viewMode === "table" && (
+                <LeadsPaginationBar
+                  page={page}
+                  totalPages={totalPages}
+                  isFetching={isFetching}
+                  onPageChange={goToPage}
+                  totalLeadsCount={totalLeadsCount}
+                />
+              )}
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">תצוגת ברירת מחדל</p>
+                <LeadViewModeToggle
+                  viewMode={viewMode}
+                  defaultView={defaultView}
+                  onViewModeChange={setViewMode}
+                  onDefaultViewChange={setDefaultView}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 border-t pt-3">
+                <AddLeadForm />
+                <ImportLeadsWithMapping />
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="archive" className="gap-2">
+                    <Archive className="h-4 w-4" />
+                    ארכיון
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
       {/* Desktop Header - Sticky */}
@@ -2757,7 +2791,7 @@ export default function Leads() {
           </CardContent>
         </Card>
       ) : viewMode === "kanban" ? (
-        <>
+        <div className="relative min-h-0 flex-1 overflow-y-auto">
           {/* Mobile Kanban - Single Stage with Floating Button */}
           <div className="block md:hidden relative pb-20">
             <DndContext
@@ -3069,7 +3103,7 @@ export default function Leads() {
               ) : null}
             </DragOverlay>
           </DndContext>
-        </>
+        </div>
       ) : viewMode === "chat" ? (
         <div className="flex-1 min-h-0 overflow-hidden">
         <LeadsChatView

@@ -26,16 +26,18 @@ export function LeadViewModeToggle({
   onViewModeChange,
   onDefaultViewChange,
   compact = false,
+  hideDefaultMenu = false,
 }: {
   viewMode: LeadViewMode;
   defaultView: LeadViewMode | null;
   onViewModeChange: (mode: LeadViewMode) => void;
   onDefaultViewChange: (mode: LeadViewMode) => void;
   compact?: boolean;
+  hideDefaultMenu?: boolean;
 }) {
   return (
     <div className="flex items-center gap-1">
-      <div className="flex gap-1 border rounded-md p-1">
+      <div className={cn("flex gap-0.5 border rounded-md", compact ? "p-0.5" : "p-1")}>
         {LEAD_VIEW_MODES.map((mode) => {
           const Icon = VIEW_ICONS[mode];
           return (
@@ -44,7 +46,7 @@ export function LeadViewModeToggle({
               variant={viewMode === mode ? "default" : "ghost"}
               size="sm"
               onClick={() => onViewModeChange(mode)}
-              className={compact ? "h-8 w-8 p-0" : undefined}
+              className={compact ? "h-7 w-7 p-0" : undefined}
               title={LEAD_VIEW_MODE_LABELS[mode]}
             >
               <Icon className="h-4 w-4" />
@@ -52,6 +54,7 @@ export function LeadViewModeToggle({
           );
         })}
       </div>
+      {hideDefaultMenu ? null : (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -78,6 +81,7 @@ export function LeadViewModeToggle({
           })}
         </DropdownMenuContent>
       </DropdownMenu>
+      )}
     </div>
   );
 }
