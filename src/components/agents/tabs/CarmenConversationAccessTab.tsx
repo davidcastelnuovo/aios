@@ -233,8 +233,21 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     mutationFn: async () => {
       if (!tenantId || !automationCfg) return;
       const built = buildPolicyFromAutomation(automationCfg, manusGroups || []);
+      // Keep identity-approved private phones when seeding — never wipe the UI
+      // with an empty automation-only list from a group-only trigger step.
+      const phones = mergePrivatePhoneAllowlist({
+        automationPhones: automationCfg.carmen_allowed_phones,
+        identities: identities as Array<{
+          phone: string;
+          display_name?: string | null;
+          status?: string;
+          surfaces?: string[] | null;
+          dev_escalation_tier?: string | null;
+        }>,
+        policyPhones: built.phones,
+      });
       const draft = {
-        phones: built.phones,
+        phones,
         groupIds: built.groupIds,
         requireDirect: built.requireDirectAddress,
         openMemberGroups: built.openMemberGroups,
@@ -259,12 +272,15 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   useEffect(() => {
     if (autoSyncedRef.current || policyLoading || groupsLoading || automationLoading) return;
     if (!tenantId || !automationCfg) return;
+    const identityPrivateCount = (identities || []).filter((id: any) => {
+      const surfaces = Array.isArray(id.surfaces) ? id.surfaces : ["whatsapp_private", "whatsapp_group"];
+      return surfaces.includes("whatsapp_private");
+    }).length;
+    const automationPhoneCount = automationCfg.carmen_allowed_phones?.length ?? 0;
+    const policyPhoneCount = Array.isArray(policy?.private_phones) ? policy.private_phones.length : 0;
     const needsSeed = !policy
       || (automationCfg.carmen_open_member_groups === true && !policy?.open_member_groups)
-      || (
-        Array.isArray(policy?.private_phones) && policy.private_phones.length === 0
-        && (automationCfg.carmen_allowed_phones?.length ?? 0) > 0
-      );
+      || (policyPhoneCount === 0 && (automationPhoneCount > 0 || identityPrivateCount > 0));
     if (!needsSeed) return;
     autoSyncedRef.current = true;
     autoSyncFromAutomation.mutate();
@@ -274,6 +290,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     groupsLoading,
     automationLoading,
     automationCfg,
+    identities,
     tenantId,
   ]);
 
