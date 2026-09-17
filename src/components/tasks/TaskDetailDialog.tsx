@@ -360,6 +360,9 @@ export function TaskDetailDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigner-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
       toast.success("המשימה עודכנה");
       if (!isPanel) onOpenChange(false);
@@ -510,11 +513,11 @@ export function TaskDetailDialog({
           />
           {creatorName && (
             <span
-              className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground shrink-0 max-w-[11rem]"
+              className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground shrink-0 max-w-[14rem]"
               title={`המשימה ניתנה על ידי ${creatorName}`}
             >
               <UserRound className="h-3 w-3" />
-              <span className="truncate">{creatorName}</span>
+              <span className="truncate">ניתנה על ידי {creatorName}</span>
             </span>
           )}
         </div>
@@ -527,10 +530,24 @@ export function TaskDetailDialog({
                 <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
                 שיוך
               </div>
+              {creatorName && (
               <div className="flex items-center gap-2 py-1.5 border-t">
-                <div className="w-14 shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <div className="w-[4.25rem] shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <UserRound className="h-3 w-3" />
+                  נתן
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-1.5 py-0.5 text-xs max-w-full">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold">
+                    {personInitials(creatorName)}
+                  </span>
+                  <span className="truncate">{creatorName}</span>
+                </span>
+              </div>
+              )}
+              <div className="flex items-center gap-2 py-1.5 border-t">
+                <div className="w-[4.25rem] shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
                   <Megaphone className="h-3 w-3" />
-                  אחראי
+                  שויכה ל
                 </div>
                 {assignedCampaignerName && !campaignerDropdownOpen ? (
                   <button
@@ -564,7 +581,7 @@ export function TaskDetailDialog({
                 )}
               </div>
               <div className="flex items-center gap-2 py-1.5 border-t">
-                <div className="w-14 shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <div className="w-[4.25rem] shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
                   <Building2 className="h-3 w-3" />
                   לקוח
                 </div>
@@ -600,7 +617,7 @@ export function TaskDetailDialog({
                 )}
               </div>
               <div className="flex items-center gap-2 py-1.5 border-t">
-                <div className="w-14 shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <div className="w-[4.25rem] shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
                   <UserRound className="h-3 w-3" />
                   ליד
                 </div>
@@ -908,18 +925,20 @@ export function TaskDetailDialog({
 
       <div className="flex justify-between border-t bg-card px-4 py-3 shrink-0">
         <div className="flex gap-2">
+          {onDelete && (
           <Button
             variant="ghost"
             size="sm"
             className="text-destructive hover:text-destructive"
             onClick={() => {
-              onDelete?.(task.id);
+              onDelete(task.id);
               onOpenChange(false);
             }}
           >
             <Trash2 className="h-4 w-4" />
             מחק
           </Button>
+          )}
           {(task.due_date || task.due_time) && onMoveToBacklog && (
             <Button
               variant="outline"
