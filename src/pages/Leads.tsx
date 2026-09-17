@@ -2466,7 +2466,6 @@ export default function Leads() {
 
             {/* Mobile Pagination (Table view only) */}
             {!isKanbanView && totalPages > 1 && (
-            {!isKanbanView && totalPages > 1 && (
               <div className="flex items-center gap-1">
                 <Button
                   variant="outline"
