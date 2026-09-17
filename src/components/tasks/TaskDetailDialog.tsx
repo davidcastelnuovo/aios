@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -35,6 +34,7 @@ import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 import { coerceHumanTaskStatus, TASK_STATUS_CONFIG, type HumanTaskStatus } from "@/lib/taskStatus";
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
+const FRAME = "rounded-xl border border-border/60 bg-card p-3 shadow-sm text-right";
 
 function isUsableDate(value: Date | undefined): value is Date {
   return Boolean(value) && !Number.isNaN(value.getTime());
@@ -129,7 +129,6 @@ export function TaskDetailDialog({
   const [viewLeadOpen, setViewLeadOpen] = useState(false);
   const [googleCalendarEventId, setGoogleCalendarEventId] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState("");
-  const [activeTab, setActiveTab] = useState("details");
 
   // Fetch full lead data for viewing
   const { data: fullLeadData } = useQuery({
@@ -437,7 +436,7 @@ export function TaskDetailDialog({
   if (!task) {
     if (isPanel) {
       return (
-        <div className="flex-1 flex items-center justify-center p-8 text-center text-muted-foreground text-sm bg-muted/30">
+        <div className="flex-1 flex items-center justify-center p-8 text-center text-muted-foreground text-sm bg-muted/20">
           בחר משימה מהרשימה כדי לראות פרטים, דחיפות ועדכונים
         </div>
       );
@@ -473,7 +472,7 @@ export function TaskDetailDialog({
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={placeholder}
-        className="h-9 pr-8 bg-background"
+        className="h-9 pr-8 bg-card"
       />
       {open && options.length > 0 && (
         <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
@@ -497,8 +496,8 @@ export function TaskDetailDialog({
   );
 
   const body = (
-    <div className={cn("flex flex-col h-full min-h-0", isPanel && "overflow-hidden bg-background")} dir="rtl">
-      <div className="shrink-0 border-b bg-background px-4 pt-3">
+    <div className={cn("flex flex-col h-full min-h-0", isPanel && "overflow-hidden bg-muted/20")} dir="rtl">
+      <div className="shrink-0 border-b bg-card px-4 pt-3">
         {!isPanel && (
           <DialogHeader className="mb-2">
             <DialogTitle className="sr-only">פרטי משימה</DialogTitle>
@@ -531,28 +530,16 @@ export function TaskDetailDialog({
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 overflow-hidden flex flex-col">
-        <div className="shrink-0 border-b bg-background px-4">
-          <TabsList className="h-9 w-auto bg-transparent p-0 gap-1">
-            <TabsTrigger value="details" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3">
-              פרטים
-            </TabsTrigger>
-            <TabsTrigger value="updates" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3">
-              עדכונים
-            </TabsTrigger>
-          </TabsList>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/30 p-4">
-          <TabsContent value="details" className="mt-0 space-y-3 outline-none">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/20 p-4 space-y-3">
             {creatorName && (
-              <div className="flex items-center gap-2 rounded-xl border bg-background px-3 py-2 text-sm">
+              <div className={cn("flex items-center gap-2 px-3 py-2 text-sm", FRAME)}>
                 <UserRound className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">המשימה ניתנה על ידי</span>
                 <span className="font-medium">{creatorName}</span>
               </div>
             )}
 
-            <section className="rounded-xl border bg-background p-3 space-y-0">
+            <section className={cn(FRAME, "space-y-0")}>
               <div className="flex items-center gap-1.5 text-sm font-medium mb-1 pb-2">
                 <Link2 className="h-4 w-4 text-muted-foreground" />
                 שיוך
@@ -701,7 +688,7 @@ export function TaskDetailDialog({
                   })}
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-7 gap-1 rounded-full text-xs">
+                      <Button variant="outline" size="sm" className="h-7 gap-1 rounded-full text-xs bg-card">
                         <UserPlus className="h-3.5 w-3.5" />
                         הוסף איש צוות
                       </Button>
@@ -720,7 +707,7 @@ export function TaskDetailDialog({
                                   addCollaborator.mutate(c.id);
                                 }}
                               >
-                                <Check className={cn("h-4 w-4 mr-2", selectedCollaborator === c.id ? "opacity-100" : "opacity-0")} />
+                                <Check className={cn("h-4 w-4 ms-2", selectedCollaborator === c.id ? "opacity-100" : "opacity-0")} />
                                 {c.full_name}
                               </CommandItem>
                             ))}
@@ -734,7 +721,7 @@ export function TaskDetailDialog({
             </section>
 
             {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
-              <div className="space-y-3 rounded-xl border bg-background p-3">
+              <div className={cn("space-y-3", FRAME)}>
                 <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
                   <input
                     type="checkbox"
@@ -751,6 +738,7 @@ export function TaskDetailDialog({
                       type="datetime-local"
                       value={selfReminderAt}
                       onChange={(event) => setSelfReminderAt(event.target.value)}
+                      className="bg-card"
                     />
                   </div>
                 )}
@@ -767,9 +755,82 @@ export function TaskDetailDialog({
               onAttachmentsChange={setAttachments}
               taskId={task?.id}
               variant="cubes"
+              rows={3}
+              notesTitle="הערות ועדכונים"
+              placeholder="הערות קבועות למשימה..."
+              notesFooter={
+                <>
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={newUpdate}
+                      onChange={(e) => setNewUpdate(e.target.value)}
+                      placeholder="הוסף עדכון..."
+                      rows={2}
+                      className="flex-1 bg-transparent border-input"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && newUpdate.trim()) {
+                          e.preventDefault();
+                          addUpdate.mutate();
+                        }
+                      }}
+                    />
+                    <Button
+                      onClick={() => addUpdate.mutate()}
+                      disabled={!newUpdate.trim() || addUpdate.isPending}
+                      size="icon"
+                      className="self-end"
+                      aria-label="שלח עדכון"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {updates?.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">אין עדכונים עדיין</p>
+                  )}
+                  {updates?.map((update) => {
+                    const updateType = (update as { update_type?: string }).update_type || "comment";
+                    const createdAt = parseOptionalDate(update.created_at);
+                    const typeIcon =
+                      updateType === "agent_action" ? <Bot className="h-3.5 w-3.5 text-purple-500" /> :
+                      updateType === "status_change" ? <GitCommit className="h-3.5 w-3.5 text-blue-500" /> :
+                      updateType === "assignment" ? <ArrowRightLeft className="h-3.5 w-3.5 text-orange-500" /> :
+                      <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />;
+                    const typeLabel =
+                      updateType === "agent_action" ? "פעולת סוכן" :
+                      updateType === "status_change" ? "שינוי סטטוס" :
+                      updateType === "assignment" ? "שיוך" :
+                      "תגובה";
+                    return (
+                      <div
+                        key={update.id}
+                        className={cn(
+                          "p-2.5 rounded-lg border bg-card text-right",
+                          updateType === "agent_action" && "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800",
+                        )}
+                      >
+                        <div className="flex items-center justify-between mb-1 gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {typeIcon}
+                            <span className="text-sm font-medium truncate">
+                              {(update.profiles as { full_name?: string } | null)?.full_name || "משתמש"}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                              {typeLabel}
+                            </Badge>
+                          </div>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {createdAt ? format(createdAt, "dd/MM HH:mm", { locale: he }) : ""}
+                          </span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{update.content}</p>
+                      </div>
+                    );
+                  })}
+                </>
+              }
             />
 
-            <section className="rounded-xl border bg-background p-3 space-y-3">
+            <section className={cn(FRAME, "space-y-3")}>
               <div className="flex items-center gap-1.5 text-sm font-medium">
                 <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                 תאריכים, סטטוס ודחיפות
@@ -781,9 +842,9 @@ export function TaskDetailDialog({
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
-                        className={cn("w-full justify-start text-right h-9 bg-background", !isUsableDate(dueDate) && "text-muted-foreground")}
+                        className={cn("w-full justify-start text-right h-9 bg-card", !isUsableDate(dueDate) && "text-muted-foreground")}
                       >
-                        <CalendarIcon className="ml-2 h-4 w-4" />
+                        <CalendarIcon className="ms-2 h-4 w-4" />
                         {isUsableDate(dueDate) ? format(dueDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
                       </Button>
                     </PopoverTrigger>
@@ -802,9 +863,9 @@ export function TaskDetailDialog({
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
-                        className={cn("w-full justify-start text-right h-9 bg-background", !isUsableDate(targetDate) && "text-muted-foreground")}
+                        className={cn("w-full justify-start text-right h-9 bg-card", !isUsableDate(targetDate) && "text-muted-foreground")}
                       >
-                        <CalendarIcon className="ml-2 h-4 w-4" />
+                        <CalendarIcon className="ms-2 h-4 w-4" />
                         {isUsableDate(targetDate) ? format(targetDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
                       </Button>
                     </PopoverTrigger>
@@ -819,7 +880,7 @@ export function TaskDetailDialog({
                     value={String((DURATION_OPTIONS as readonly number[]).includes(durationMinutes) ? durationMinutes : 30)}
                     onValueChange={(val) => setDurationMinutes(parseInt(val))}
                   >
-                    <SelectTrigger className="h-9 bg-background">
+                    <SelectTrigger className="h-9 bg-card">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -854,81 +915,9 @@ export function TaskDetailDialog({
                 </div>
               </div>
             </section>
-          </TabsContent>
+      </div>
 
-          <TabsContent value="updates" className="mt-0 space-y-3 outline-none">
-            <div className="rounded-xl border bg-background p-3 space-y-3">
-              <div className="flex gap-2">
-                <Textarea
-                  value={newUpdate}
-                  onChange={(e) => setNewUpdate(e.target.value)}
-                  placeholder="כתוב עדכון..."
-                  rows={2}
-                  className="flex-1 bg-background"
-                />
-                <Button
-                  onClick={() => addUpdate.mutate()}
-                  disabled={!newUpdate.trim() || addUpdate.isPending}
-                  size="icon"
-                  className="self-end"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-              {updates?.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">אין עדכונים עדיין</p>
-              )}
-              {updates?.map((update) => {
-                const updateType = (update as { update_type?: string }).update_type || "comment";
-                const getUpdateTypeIcon = () => {
-                  switch (updateType) {
-                    case "agent_action": return <Bot className="h-3.5 w-3.5 text-purple-500" />;
-                    case "status_change": return <GitCommit className="h-3.5 w-3.5 text-blue-500" />;
-                    case "assignment": return <ArrowRightLeft className="h-3.5 w-3.5 text-orange-500" />;
-                    default: return <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />;
-                  }
-                };
-                const getUpdateTypeLabel = () => {
-                  switch (updateType) {
-                    case "agent_action": return "פעולת סוכן";
-                    case "status_change": return "שינוי סטטוס";
-                    case "assignment": return "שיוך";
-                    default: return "תגובה";
-                  }
-                };
-                const createdAt = parseOptionalDate(update.created_at);
-                return (
-                  <div
-                    key={update.id}
-                    className={cn(
-                      "p-3 rounded-lg border bg-background",
-                      updateType === "agent_action" && "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800",
-                    )}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        {getUpdateTypeIcon()}
-                        <span className="text-sm font-medium">
-                          {(update.profiles as { full_name?: string } | null)?.full_name || "משתמש"}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] h-4 px-1.5">
-                          {getUpdateTypeLabel()}
-                        </Badge>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {createdAt ? format(createdAt, "dd/MM HH:mm", { locale: he }) : ""}
-                      </span>
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap">{update.content}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </TabsContent>
-        </div>
-      </Tabs>
-
-      <div className="flex justify-between border-t bg-background px-4 py-3 shrink-0">
+      <div className="flex justify-between border-t bg-card px-4 py-3 shrink-0">
         <div className="flex gap-2">
           <Button
             variant="ghost"
@@ -939,25 +928,26 @@ export function TaskDetailDialog({
               onOpenChange(false);
             }}
           >
-            <Trash2 className="h-4 w-4 ml-2" />
+            <Trash2 className="h-4 w-4" />
             מחק
           </Button>
           {(task.due_date || task.due_time) && onMoveToBacklog && (
             <Button
               variant="outline"
               size="sm"
+              className="bg-card"
               onClick={() => {
                 onMoveToBacklog(task.id);
                 if (!isPanel) onOpenChange(false);
               }}
             >
-              <ListTodo className="h-4 w-4 ml-2" />
+              <ListTodo className="h-4 w-4" />
               העבר לרשימה
             </Button>
           )}
         </div>
         <Button onClick={() => updateTask.mutate()} disabled={updateTask.isPending}>
-          <Save className="h-4 w-4 ml-2" />
+          <Save className="h-4 w-4" />
           שמור שינויים
         </Button>
       </div>

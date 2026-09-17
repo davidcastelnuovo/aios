@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, type ReactNode } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,8 @@ interface Props {
   rows?: number;
   /** stacked = notes with attach bar; cubes = notes cube + files cube side by side */
   variant?: "stacked" | "cubes";
+  notesTitle?: string;
+  notesFooter?: ReactNode;
 }
 
 const MAX = 10 * 1024 * 1024;
@@ -54,6 +56,8 @@ export function NotesWithAttachments({
   placeholder = "הוסף הערות למשימה...",
   rows = 5,
   variant = "stacked",
+  notesTitle = "הערות",
+  notesFooter,
 }: Props) {
   const { tenantId } = useCurrentTenant();
   const [uploading, setUploading] = useState(false);
@@ -168,7 +172,7 @@ export function NotesWithAttachments({
         return (
           <div
             key={`${a.path}-${i}`}
-            className="group relative rounded-lg border bg-background overflow-hidden"
+            className="group relative rounded-lg border bg-card overflow-hidden"
           >
             {isImg && signed[a.path] ? (
               <button type="button" onClick={() => open(a)} className="block">
@@ -211,11 +215,11 @@ export function NotesWithAttachments({
 
   if (variant === "cubes") {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="rounded-xl border bg-background p-3 flex flex-col min-h-[180px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3" dir="rtl">
+        <div className="rounded-xl border border-border/60 bg-card p-3 flex flex-col min-h-[180px] shadow-sm text-right">
           <div className="flex items-center gap-1.5 text-sm font-medium mb-2">
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            הערות
+            {notesTitle}
           </div>
           <Textarea
             value={value}
@@ -223,8 +227,9 @@ export function NotesWithAttachments({
             onPaste={handlePaste}
             placeholder={placeholder}
             rows={rows}
-            className="flex-1 min-h-[120px] border-0 bg-transparent focus-visible:ring-0 resize-none p-0"
+            className="flex-1 min-h-[88px] border-0 bg-transparent focus-visible:ring-0 resize-none p-0"
           />
+          {notesFooter ? <div className="mt-3 pt-3 border-t space-y-3">{notesFooter}</div> : null}
         </div>
         <div
           onDragOver={(e) => {
@@ -238,7 +243,7 @@ export function NotesWithAttachments({
             upload(e.dataTransfer.files);
           }}
           className={cn(
-            "rounded-xl border bg-background p-3 flex flex-col min-h-[180px]",
+            "rounded-xl border border-border/60 bg-card p-3 flex flex-col min-h-[180px] shadow-sm text-right",
             dragOver && "border-primary bg-primary/5",
           )}
         >

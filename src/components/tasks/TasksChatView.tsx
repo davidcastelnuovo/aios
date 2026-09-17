@@ -141,9 +141,10 @@ export function TasksChatView({
       {(!isMobile || !selectedTaskId) && (
         <div
           className={cn(
-            "flex flex-col bg-muted/30 overflow-hidden min-h-0",
+            "flex flex-col bg-muted/20 overflow-hidden min-h-0",
             isMobile ? "w-full flex-1" : "w-[28%] min-w-[260px] max-w-[28%] border-s",
           )}
+          dir="rtl"
         >
           <div className={cn("border-b bg-background shrink-0", isMobile ? "p-2" : "p-3")}>
             <div className="relative">
@@ -170,7 +171,7 @@ export function TasksChatView({
                   onClick={() => setStatusFilter(value)}
                 >
                   {label}
-                  <span className="mr-1 text-[10px] opacity-80">{statusCounts[value]}</span>
+                  <span className="ms-1 text-[10px] opacity-80">{statusCounts[value]}</span>
                 </Button>
               ))}
             </div>
@@ -191,7 +192,7 @@ export function TasksChatView({
             </div>
           )}
 
-          <div dir="ltr" className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 [scrollbar-width:thin]">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 [scrollbar-width:thin]" dir="rtl">
             <div className="divide-y" dir="rtl">
               {filteredTasks.map((task) => {
                 const isSelected = task.id === selectedTaskId;
@@ -207,7 +208,7 @@ export function TasksChatView({
                     onClick={() => handleSelect(task)}
                     className={cn(
                       "w-full text-right p-3 hover:bg-muted/50 transition-colors",
-                      isSelected && "bg-primary/10 border-s-4 border-s-primary",
+                      isSelected && "bg-primary/10 border-e-4 border-e-primary",
                       overdue && !isSelected && "bg-destructive/5",
                     )}
                   >
@@ -223,7 +224,7 @@ export function TasksChatView({
                           }
                         />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 text-right">
                         <div className="flex items-start gap-2">
                           <p
                             className={cn(
@@ -237,7 +238,7 @@ export function TasksChatView({
                             <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />
                           )}
                         </div>
-                        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                        <div className="flex items-center gap-1 mt-1.5 flex-wrap justify-end">
                           <Badge
                             variant="outline"
                             className="text-[10px] px-1.5 py-0 h-4 border-0 text-white"
@@ -294,7 +295,7 @@ export function TasksChatView({
       )}
 
       {(!isMobile || selectedTaskId) && (
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-muted/30">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-muted/20" dir="rtl">
           {isMobile && selectedTask && (
             <div className="flex items-center gap-2 p-2 border-b shrink-0 bg-background">
               <Button
