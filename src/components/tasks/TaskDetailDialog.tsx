@@ -17,12 +17,11 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle, Link2, Users, Building2, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -33,6 +32,16 @@ import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { syncTaskCalendarEvent } from "@/lib/calendarApi";
+import { TASK_STATUS_CONFIG, type HumanTaskStatus } from "@/lib/taskStatus";
+
+function personInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("") || "?";
+}
 
 interface Task {
   id: string;
@@ -108,6 +117,7 @@ export function TaskDetailDialog({
   const [viewLeadOpen, setViewLeadOpen] = useState(false);
   const [googleCalendarEventId, setGoogleCalendarEventId] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState("");
+  const [activeTab, setActiveTab] = useState("details");
 
   // Fetch full lead data for viewing
   const { data: fullLeadData } = useQuery({
@@ -417,7 +427,7 @@ export function TaskDetailDialog({
   if (!task) {
     if (isPanel) {
       return (
-        <div className="flex-1 flex items-center justify-center p-8 text-center text-muted-foreground text-sm">
+        <div className="flex-1 flex items-center justify-center p-8 text-center text-muted-foreground text-sm bg-muted/30">
           בחר משימה מהרשימה כדי לראות פרטים, דחיפות ועדכונים
         </div>
       );
@@ -431,391 +441,259 @@ export function TaskDetailDialog({
       !collaborators?.some((col) => col.campaigner_id === c.id)
   );
 
+  const statusInfo = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG.open;
+
+  const assignmentSearch = (
+    open: boolean,
+    setOpen: (v: boolean) => void,
+    search: string,
+    setSearch: (v: string) => void,
+    placeholder: string,
+    options: { id: string; name: string }[],
+    onPick: (id: string) => void,
+  ) => (
+    <div className="relative flex-1 min-w-0">
+      <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <Input
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        className="h-9 pr-8 bg-background"
+      />
+      {open && options.length > 0 && (
+        <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+          {options.slice(0, 10).map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className="w-full px-3 py-2 text-right text-sm hover:bg-accent transition-colors"
+              onMouseDown={() => {
+                onPick(option.id);
+                setSearch("");
+                setOpen(false);
+              }}
+            >
+              {option.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   const body = (
-        <div className={cn("flex flex-col h-full min-h-0", isPanel && "overflow-hidden")}>
-        {isPanel ? (
-          <div className="px-4 pt-3 pb-2 border-b shrink-0">
-            <h2 className="font-bold text-base truncate">{title || "פרטי משימה"}</h2>
-          </div>
-        ) : (
-          <DialogHeader>
-            <DialogTitle>פרטי משימה</DialogTitle>
+    <div className={cn("flex flex-col h-full min-h-0", isPanel && "overflow-hidden bg-background")} dir="rtl">
+      <div className="shrink-0 border-b bg-background px-4 pt-3">
+        {!isPanel && (
+          <DialogHeader className="mb-2">
+            <DialogTitle className="sr-only">פרטי משימה</DialogTitle>
           </DialogHeader>
         )}
-
-        <Tabs defaultValue="details" className={cn("flex-1 min-h-0 overflow-hidden flex flex-col mt-4", isPanel && "px-4")}>
-          <TabsList className="grid grid-cols-3 shrink-0">
-            <TabsTrigger value="details">פרטים</TabsTrigger>
-            <TabsTrigger value="team">צוות</TabsTrigger>
-            <TabsTrigger value="updates">עדכונים</TabsTrigger>
+        <div className="flex items-center gap-3">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="כותרת המשימה"
+            className="h-10 flex-1 border-0 bg-transparent px-0 text-base font-bold shadow-none focus-visible:ring-0"
+          />
+          <Select value={status} onValueChange={(val) => setStatus(val as HumanTaskStatus)}>
+            <SelectTrigger
+              className="h-8 w-auto min-w-[96px] border-0 text-xs font-medium text-white"
+              style={{ backgroundColor: statusInfo.color }}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.entries(TASK_STATUS_CONFIG) as [HumanTaskStatus, { label: string; color: string }][]).map(
+                ([key, config]) => (
+                  <SelectItem key={key} value={key}>
+                    {config.label}
+                  </SelectItem>
+                ),
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-1">
+          <TabsList className="h-9 w-auto bg-transparent p-0 gap-1">
+            <TabsTrigger value="details" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3">
+              פרטים
+            </TabsTrigger>
+            <TabsTrigger value="updates" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3">
+              עדכונים
+            </TabsTrigger>
           </TabsList>
+        </Tabs>
+      </div>
 
-          <div className="flex-1 min-h-0 mt-4">
-
-            {/* Details Tab */}
-            <TabsContent value="details" className="h-full overflow-y-auto pr-2 space-y-4 px-1 mt-0">
-              <div className="space-y-2">
-                <Label>כותרת</Label>
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="כותרת המשימה"
-                />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/30 p-4">
+          <TabsContent value="details" className="mt-0 space-y-3 outline-none">
+            {creatorName && (
+              <div className="flex items-center gap-2 rounded-xl border bg-background px-3 py-2 text-sm">
+                <UserRound className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">המשימה ניתנה על ידי</span>
+                <span className="font-medium">{creatorName}</span>
               </div>
+            )}
 
-              {creatorName && (
-                <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                  <UserRound className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">המשימה ניתנה על ידי</span>
-                  <span className="font-medium">{creatorName}</span>
+            <section className="rounded-xl border bg-background p-3 space-y-0">
+              <div className="flex items-center gap-1.5 text-sm font-medium mb-1 pb-2">
+                <Link2 className="h-4 w-4 text-muted-foreground" />
+                שיוך
+              </div>
+              <div className="flex items-center gap-3 py-2 border-t">
+                <div className="w-[4.5rem] shrink-0 flex items-center gap-1 text-sm text-muted-foreground">
+                  <Megaphone className="h-3.5 w-3.5" />
+                  אחראי
                 </div>
-              )}
-
-              {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
-                <div className="space-y-3 rounded-md border p-3">
-                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={selfReminderEnabled}
-                      onChange={(event) => setSelfReminderEnabled(event.target.checked)}
-                      className="h-4 w-4 rounded border-input"
+                {assignedCampaignerName && !campaignerDropdownOpen ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-2 py-1 text-sm"
+                    onClick={() => setCampaignerDropdownOpen(true)}
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold">
+                      {personInitials(assignedCampaignerName)}
+                    </span>
+                    {assignedCampaignerName}
+                    <X
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAssignedCampaignerId("");
+                        setCampaignerSearch("");
+                      }}
                     />
-                    הזכר לי על המשימה
-                  </label>
-                  {selfReminderEnabled && (
-                    <div className="space-y-2">
-                      <Label>מתי לשלוח את התזכורת?</Label>
-                      <Input
-                        type="datetime-local"
-                        value={selfReminderAt}
-                        onChange={(event) => setSelfReminderAt(event.target.value)}
-                      />
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    משימה עצמית לא שולחת התראות אוטומטיות. כרמן תזכיר לך רק במועד שתבחר.
-                  </p>
+                  </button>
+                ) : (
+                  assignmentSearch(
+                    campaignerDropdownOpen,
+                    setCampaignerDropdownOpen,
+                    campaignerSearch,
+                    setCampaignerSearch,
+                    "חפש קמפיינר...",
+                    filteredCampaigners.map((c) => ({ id: c.id, name: c.full_name })),
+                    setAssignedCampaignerId,
+                  )
+                )}
+              </div>
+              <div className="flex items-center gap-3 py-2 border-t">
+                <div className="w-[4.5rem] shrink-0 flex items-center gap-1 text-sm text-muted-foreground">
+                  <Building2 className="h-3.5 w-3.5" />
+                  לקוח
                 </div>
-              )}
-
-              {/* Client, Lead and Campaigner associations - 3 columns */}
-              <div className="grid grid-cols-3 gap-4">
-                {/* Client search combobox */}
-                <div className="space-y-2">
-                  <Label>שיוך ללקוח</Label>
-                  <div className="relative">
-                    <div className="relative">
-                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={clientDropdownOpen ? clientSearch : (selectedClientName || clientSearch)}
-                        onChange={(e) => {
-                          setClientSearch(e.target.value);
-                          setClientDropdownOpen(true);
+                {selectedClientName && !clientDropdownOpen ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-2 py-1 text-sm"
+                    onClick={() => setClientDropdownOpen(true)}
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold">
+                      {personInitials(selectedClientName)}
+                    </span>
+                    {selectedClientName}
+                    <X
+                      className="h-3.5 w-3.5 text-muted-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setClientId("");
+                        setClientSearch("");
+                      }}
+                    />
+                  </button>
+                ) : (
+                  assignmentSearch(
+                    clientDropdownOpen,
+                    setClientDropdownOpen,
+                    clientSearch,
+                    setClientSearch,
+                    "חפש לקוח...",
+                    filteredClients.map((c) => ({ id: c.id, name: c.name })),
+                    setClientId,
+                  )
+                )}
+              </div>
+              <div className="flex items-center gap-3 py-2 border-t">
+                <div className="w-[4.5rem] shrink-0 flex items-center gap-1 text-sm text-muted-foreground">
+                  <UserRound className="h-3.5 w-3.5" />
+                  ליד
+                </div>
+                {selectedLeadName && !leadDropdownOpen ? (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-2 py-1 text-sm"
+                      onClick={() => setLeadDropdownOpen(true)}
+                    >
+                      {selectedLeadName}
+                      <X
+                        className="h-3.5 w-3.5 text-muted-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLeadId("");
+                          setLeadSearch("");
                         }}
-                        onFocus={() => setClientDropdownOpen(true)}
-                        onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
-                        placeholder="חפש לקוח..."
-                        className="pr-9"
                       />
-                      {clientId && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6"
-                          onClick={() => {
-                            setClientId("");
-                            setClientSearch("");
-                          }}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                    {clientDropdownOpen && filteredClients.length > 0 && (
-                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
-                        {filteredClients.slice(0, 10).map((client) => (
-                          <button
-                            key={client.id}
-                            type="button"
-                            className="w-full px-3 py-2 text-right text-sm hover:bg-accent transition-colors"
-                            onMouseDown={() => {
-                              setClientId(client.id);
-                              setClientSearch("");
-                              setClientDropdownOpen(false);
-                            }}
-                          >
-                            {client.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Lead search combobox */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>שיוך לליד</Label>
-                    {leadId && fullLeadData && (
+                    </button>
+                    {fullLeadData && (
                       <Button
-                        variant="link"
+                        variant="ghost"
                         size="sm"
-                        className="h-auto p-0 text-xs gap-1"
+                        className="h-7 px-2 text-xs gap-1"
                         onClick={() => setViewLeadOpen(true)}
                       >
                         <ExternalLink className="h-3 w-3" />
-                        צפה בליד
+                        צפה
                       </Button>
                     )}
                   </div>
-                  <div className="relative">
-                    <div className="relative">
-                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={leadDropdownOpen ? leadSearch : (selectedLeadName || leadSearch)}
-                        onChange={(e) => {
-                          setLeadSearch(e.target.value);
-                          setLeadDropdownOpen(true);
-                        }}
-                        onFocus={() => setLeadDropdownOpen(true)}
-                        onBlur={() => setTimeout(() => setLeadDropdownOpen(false), 150)}
-                        placeholder="חפש ליד..."
-                        className="pr-9"
-                      />
-                      {leadId && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6"
-                          onClick={() => {
-                            setLeadId("");
-                            setLeadSearch("");
-                          }}
+                ) : (
+                  assignmentSearch(
+                    leadDropdownOpen,
+                    setLeadDropdownOpen,
+                    leadSearch,
+                    setLeadSearch,
+                    "חפש ליד...",
+                    filteredLeads.map((l) => ({ id: l.id, name: l.company_name || "ליד" })),
+                    setLeadId,
+                  )
+                )}
+              </div>
+              <div className="flex items-start gap-3 py-2 border-t">
+                <div className="w-[4.5rem] shrink-0 flex items-center gap-1 text-sm text-muted-foreground pt-1.5">
+                  <Users className="h-3.5 w-3.5" />
+                  משתתפים
+                </div>
+                <div className="flex-1 flex flex-wrap items-center gap-1.5">
+                  {collaborators?.map((col) => {
+                    const name = (col.campaigners as { full_name?: string } | null)?.full_name || "איש צוות";
+                    return (
+                      <Badge key={col.id} variant="secondary" className="gap-1 pr-1 h-7">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold">
+                          {personInitials(name)}
+                        </span>
+                        {name}
+                        <button
+                          type="button"
+                          className="hover:text-destructive"
+                          onClick={() => removeCollaborator.mutate(col.id)}
                         >
                           <X className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                    {leadDropdownOpen && filteredLeads.length > 0 && (
-                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
-                        {filteredLeads.slice(0, 10).map((lead) => (
-                          <button
-                            key={lead.id}
-                            type="button"
-                            className="w-full px-3 py-2 text-right text-sm hover:bg-accent transition-colors"
-                            onMouseDown={() => {
-                              setLeadId(lead.id);
-                              setLeadSearch("");
-                              setLeadDropdownOpen(false);
-                            }}
-                          >
-                            {lead.company_name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Campaigner search combobox */}
-                <div className="space-y-2">
-                  <Label>שיוך לקמפיינר</Label>
-                  <div className="relative">
-                    <div className="relative">
-                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={campaignerDropdownOpen ? campaignerSearch : (assignedCampaignerName || campaignerSearch)}
-                        onChange={(e) => {
-                          setCampaignerSearch(e.target.value);
-                          setCampaignerDropdownOpen(true);
-                        }}
-                        onFocus={() => setCampaignerDropdownOpen(true)}
-                        onBlur={() => setTimeout(() => setCampaignerDropdownOpen(false), 150)}
-                        placeholder="חפש קמפיינר..."
-                        className="pr-9"
-                      />
-                      {assignedCampaignerId && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6"
-                          onClick={() => {
-                            setAssignedCampaignerId("");
-                            setCampaignerSearch("");
-                          }}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                    {campaignerDropdownOpen && filteredCampaigners.length > 0 && (
-                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
-                        {filteredCampaigners.slice(0, 10).map((campaigner) => (
-                          <button
-                            key={campaigner.id}
-                            type="button"
-                            className="w-full px-3 py-2 text-right text-sm hover:bg-accent transition-colors"
-                            onMouseDown={() => {
-                              setAssignedCampaignerId(campaigner.id);
-                              setCampaignerSearch("");
-                              setCampaignerDropdownOpen(false);
-                            }}
-                          >
-                            {campaigner.full_name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>הערות</Label>
-                <NotesWithAttachments
-                  value={notes}
-                  onChange={setNotes}
-                  attachments={attachments}
-                  onAttachmentsChange={setAttachments}
-                  taskId={task?.id}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>תאריך ביצוע</Label>
-                  <p className="text-xs text-muted-foreground">מתי לבצע / להציג ביומן</p>
+                        </button>
+                      </Badge>
+                    );
+                  })}
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-right",
-                          !dueDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="ml-2 h-4 w-4" />
-                        {dueDate
-                          ? format(dueDate, "dd/MM/yyyy", { locale: he })
-                          : "בחר תאריך"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={dueDate}
-                        onSelect={setDueDate}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>שעת ביצוע</Label>
-                  <TimeSlotPicker
-                    value={dueTime}
-                    onChange={setDueTime}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>תאריך יעד</Label>
-                <p className="text-xs text-muted-foreground">עד מתי להשלים (דדליין)</p>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-right",
-                        !targetDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="ml-2 h-4 w-4" />
-                      {targetDate
-                        ? format(targetDate, "dd/MM/yyyy", { locale: he })
-                        : "בחר תאריך יעד"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={targetDate}
-                      onSelect={setTargetDate}
-                      initialFocus
-                      className="p-3 pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="space-y-2">
-                <Label>משך המשימה</Label>
-                <Select 
-                  value={durationMinutes.toString()} 
-                  onValueChange={(val) => setDurationMinutes(parseInt(val))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="30">30 דקות</SelectItem>
-                    <SelectItem value="60">שעה</SelectItem>
-                    <SelectItem value="90">שעה וחצי</SelectItem>
-                    <SelectItem value="120">שעתיים</SelectItem>
-                    <SelectItem value="150">שעתיים וחצי</SelectItem>
-                    <SelectItem value="180">3 שעות</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>סטטוס</Label>
-                  <Select value={status} onValueChange={(val) => setStatus(val as "open" | "in_progress" | "done")}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="open">פתוח</SelectItem>
-                      <SelectItem value="in_progress">בתהליך</SelectItem>
-                      <SelectItem value="done">הושלם</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>דחיפות: {priority}</Label>
-                <Slider
-                  value={[priority]}
-                  onValueChange={([val]) => setPriority(val)}
-                  min={1}
-                  max={10}
-                  step={1}
-                  className="py-2"
-                />
-              </div>
-            </TabsContent>
-
-
-            {/* Team Tab */}
-            <TabsContent value="team" className="h-full overflow-y-auto pr-2 space-y-4 px-1 mt-0">
-              <div className="space-y-2">
-                <Label>הוסף איש צוות למשימה</Label>
-                <div className="flex gap-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className={cn("flex-1 justify-between", !selectedCollaborator && "text-muted-foreground")}
-                      >
-                        {selectedCollaborator
-                          ? availableCollaborators?.find(c => c.id === selectedCollaborator)?.full_name || "בחר איש צוות"
-                          : "בחר איש צוות"}
+                      <Button variant="outline" size="sm" className="h-7 gap-1 rounded-full text-xs">
+                        <UserPlus className="h-3.5 w-3.5" />
+                        הוסף איש צוות
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[250px] p-0 z-50" align="start">
@@ -828,7 +706,9 @@ export function TaskDetailDialog({
                               <CommandItem
                                 key={c.id}
                                 value={c.full_name}
-                                onSelect={() => setSelectedCollaborator(c.id)}
+                                onSelect={() => {
+                                  addCollaborator.mutate(c.id);
+                                }}
                               >
                                 <Check className={cn("h-4 w-4 mr-2", selectedCollaborator === c.id ? "opacity-100" : "opacity-0")} />
                                 {c.full_name}
@@ -839,158 +719,235 @@ export function TaskDetailDialog({
                       </Command>
                     </PopoverContent>
                   </Popover>
-                  <Button
-                    onClick={() => addCollaborator.mutate(selectedCollaborator)}
-                    disabled={!selectedCollaborator || addCollaborator.isPending}
-                    size="icon"
-                  >
-                    <UserPlus className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
+            </section>
 
-              <div className="space-y-2">
-                <Label>משתתפים במשימה</Label>
-                <div className="flex flex-wrap gap-2">
-                  {collaborators?.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      אין משתתפים נוספים
-                    </p>
-                  )}
-                  {collaborators?.map((col) => (
-                    <Badge
-                      key={col.id}
-                      variant="secondary"
-                      className="gap-1 pr-1"
-                    >
-                      {(col.campaigners as any)?.full_name}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-4 w-4 hover:bg-destructive/20"
-                        onClick={() => removeCollaborator.mutate(col.id)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* Updates Tab */}
-            <TabsContent value="updates" className="h-full overflow-y-auto pr-2 space-y-4 px-1 mt-0">
-              <div className="space-y-2">
-                <Label>הוסף עדכון</Label>
-                <div className="flex gap-2">
-                  <Textarea
-                    value={newUpdate}
-                    onChange={(e) => setNewUpdate(e.target.value)}
-                    placeholder="כתוב עדכון..."
-                    rows={2}
-                    className="flex-1"
+            {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
+              <div className="space-y-3 rounded-xl border bg-background p-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={selfReminderEnabled}
+                    onChange={(event) => setSelfReminderEnabled(event.target.checked)}
+                    className="h-4 w-4 rounded border-input"
                   />
-                  <Button
-                    onClick={() => addUpdate.mutate()}
-                    disabled={!newUpdate.trim() || addUpdate.isPending}
-                    size="icon"
-                    className="self-end"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+                  הזכר לי על המשימה
+                </label>
+                {selfReminderEnabled && (
+                  <div className="space-y-2">
+                    <Label>מתי לשלוח את התזכורת?</Label>
+                    <Input
+                      type="datetime-local"
+                      value={selfReminderAt}
+                      onChange={(event) => setSelfReminderAt(event.target.value)}
+                    />
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  משימה עצמית לא שולחת התראות אוטומטיות. כרמן תזכיר לך רק במועד שתבחר.
+                </p>
+              </div>
+            )}
+
+            <NotesWithAttachments
+              value={notes}
+              onChange={setNotes}
+              attachments={attachments}
+              onAttachmentsChange={setAttachments}
+              taskId={task?.id}
+              variant="cubes"
+            />
+
+            <section className="rounded-xl border bg-background p-3 space-y-3">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                תאריכים, סטטוס ודחיפות
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">תאריך ביצוע</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn("w-full justify-start text-right h-9 bg-background", !dueDate && "text-muted-foreground")}
+                      >
+                        <CalendarIcon className="ml-2 h-4 w-4" />
+                        {dueDate ? format(dueDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
+                      <Calendar mode="single" selected={dueDate} onSelect={setDueDate} initialFocus className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">שעה</Label>
+                  <TimeSlotPicker value={dueTime} onChange={setDueTime} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">תאריך יעד</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn("w-full justify-start text-right h-9 bg-background", !targetDate && "text-muted-foreground")}
+                      >
+                        <CalendarIcon className="ml-2 h-4 w-4" />
+                        {targetDate ? format(targetDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
+                      <Calendar mode="single" selected={targetDate} onSelect={setTargetDate} initialFocus className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">משך</Label>
+                  <Select value={durationMinutes.toString()} onValueChange={(val) => setDurationMinutes(parseInt(val))}>
+                    <SelectTrigger className="h-9 bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">30 דקות</SelectItem>
+                      <SelectItem value="60">שעה</SelectItem>
+                      <SelectItem value="90">שעה וחצי</SelectItem>
+                      <SelectItem value="120">שעתיים</SelectItem>
+                      <SelectItem value="150">שעתיים וחצי</SelectItem>
+                      <SelectItem value="180">3 שעות</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-
-              <div className="space-y-3">
-                {updates?.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    אין עדכונים עדיין
-                  </p>
-                )}
-                {updates?.map((update) => {
-                  const updateType = (update as any).update_type || "comment";
-                  const getUpdateTypeIcon = () => {
-                    switch (updateType) {
-                      case "agent_action": return <Bot className="h-3.5 w-3.5 text-purple-500" />;
-                      case "status_change": return <GitCommit className="h-3.5 w-3.5 text-blue-500" />;
-                      case "assignment": return <ArrowRightLeft className="h-3.5 w-3.5 text-orange-500" />;
-                      default: return <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />;
-                    }
-                  };
-                  const getUpdateTypeLabel = () => {
-                    switch (updateType) {
-                      case "agent_action": return "פעולת סוכן";
-                      case "status_change": return "שינוי סטטוס";
-                      case "assignment": return "שיוך";
-                      default: return "תגובה";
-                    }
-                  };
-                  return (
-                    <div
-                      key={update.id}
-                      className={cn(
-                        "p-3 rounded-lg border",
-                        updateType === "agent_action" ? "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800" : "bg-muted/30"
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-1.5">
-                          {getUpdateTypeIcon()}
-                          <span className="text-sm font-medium">
-                            {(update.profiles as any)?.full_name || "משתמש"}
-                          </span>
-                          <Badge variant="outline" className="text-[10px] h-4 px-1.5">
-                            {getUpdateTypeLabel()}
-                          </Badge>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(update.created_at), "dd/MM HH:mm", {
-                            locale: he,
-                          })}
-                        </span>
-                      </div>
-                      <p className="text-sm whitespace-pre-wrap">{update.content}</p>
-                    </div>
-                  );
-                })}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>דחיפות</span>
+                  <span className="font-medium text-foreground">{priority}</span>
+                </div>
+                <Slider
+                  value={[priority]}
+                  onValueChange={([val]) => setPriority(val)}
+                  min={1}
+                  max={10}
+                  step={1}
+                  className="py-2"
+                />
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>נמוכה</span>
+                  <span>בינונית</span>
+                  <span>גבוהה</span>
+                  <span>דחופה</span>
+                </div>
               </div>
-            </TabsContent>
-          </div>
-        </Tabs>
+            </section>
+          </TabsContent>
 
-        <div className={cn("flex justify-between pt-4 border-t mt-4 shrink-0", isPanel && "px-4 pb-4")}>
-          <div className="flex gap-2">
+          <TabsContent value="updates" className="mt-0 space-y-3 outline-none">
+            <div className="rounded-xl border bg-background p-3 space-y-3">
+              <div className="flex gap-2">
+                <Textarea
+                  value={newUpdate}
+                  onChange={(e) => setNewUpdate(e.target.value)}
+                  placeholder="כתוב עדכון..."
+                  rows={2}
+                  className="flex-1 bg-background"
+                />
+                <Button
+                  onClick={() => addUpdate.mutate()}
+                  disabled={!newUpdate.trim() || addUpdate.isPending}
+                  size="icon"
+                  className="self-end"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+              {updates?.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">אין עדכונים עדיין</p>
+              )}
+              {updates?.map((update) => {
+                const updateType = (update as { update_type?: string }).update_type || "comment";
+                const getUpdateTypeIcon = () => {
+                  switch (updateType) {
+                    case "agent_action": return <Bot className="h-3.5 w-3.5 text-purple-500" />;
+                    case "status_change": return <GitCommit className="h-3.5 w-3.5 text-blue-500" />;
+                    case "assignment": return <ArrowRightLeft className="h-3.5 w-3.5 text-orange-500" />;
+                    default: return <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />;
+                  }
+                };
+                const getUpdateTypeLabel = () => {
+                  switch (updateType) {
+                    case "agent_action": return "פעולת סוכן";
+                    case "status_change": return "שינוי סטטוס";
+                    case "assignment": return "שיוך";
+                    default: return "תגובה";
+                  }
+                };
+                return (
+                  <div
+                    key={update.id}
+                    className={cn(
+                      "p-3 rounded-lg border bg-background",
+                      updateType === "agent_action" && "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800",
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5">
+                        {getUpdateTypeIcon()}
+                        <span className="text-sm font-medium">
+                          {(update.profiles as { full_name?: string } | null)?.full_name || "משתמש"}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                          {getUpdateTypeLabel()}
+                        </Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(update.created_at), "dd/MM HH:mm", { locale: he })}
+                      </span>
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap">{update.content}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </TabsContent>
+        </div>
+      </Tabs>
+
+      <div className="flex justify-between border-t bg-background px-4 py-3 shrink-0">
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => {
+              onDelete?.(task.id);
+              onOpenChange(false);
+            }}
+          >
+            <Trash2 className="h-4 w-4 ml-2" />
+            מחק
+          </Button>
+          {(task.due_date || task.due_time) && onMoveToBacklog && (
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
               onClick={() => {
-                onDelete?.(task.id);
-                onOpenChange(false);
+                onMoveToBacklog(task.id);
+                if (!isPanel) onOpenChange(false);
               }}
             >
-              <Trash2 className="h-4 w-4 ml-2" />
-              מחק
+              <ListTodo className="h-4 w-4 ml-2" />
+              העבר לרשימה
             </Button>
-            {(task.due_date || task.due_time) && onMoveToBacklog && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  onMoveToBacklog(task.id);
-                  if (!isPanel) onOpenChange(false);
-                }}
-              >
-                <ListTodo className="h-4 w-4 ml-2" />
-                העבר לרשימה
-              </Button>
-            )}
-          </div>
-          <Button onClick={() => updateTask.mutate()} disabled={updateTask.isPending}>
-            <Save className="h-4 w-4 ml-2" />
-            שמור שינויים
-          </Button>
+          )}
         </div>
-        </div>
+        <Button onClick={() => updateTask.mutate()} disabled={updateTask.isPending}>
+          <Save className="h-4 w-4 ml-2" />
+          שמור שינויים
+        </Button>
+      </div>
+    </div>
   );
 
   return (
@@ -999,7 +956,7 @@ export function TaskDetailDialog({
         body
       ) : (
         <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogContent dir="rtl" className="max-w-2xl h-[90vh] flex flex-col gap-0 !block">
+          <DialogContent dir="rtl" className="max-w-4xl h-[90vh] flex flex-col gap-0 !block p-0 overflow-hidden">
             {body}
           </DialogContent>
         </Dialog>

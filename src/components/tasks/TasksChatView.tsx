@@ -12,13 +12,7 @@ import { TaskDetailDialog } from "./TaskDetailDialog";
 import { QuickTaskInput, type QuickTaskPayload } from "./QuickTaskInput";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 import { embedCount } from "@/lib/embedCount";
-import { filterTasksForChatSearch, sortTasksForChatList } from "@/lib/taskBoardQuery";
-
-export const TASK_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  open: { label: "פתוח", color: "hsl(217, 91%, 60%)" },
-  in_progress: { label: "בתהליך", color: "hsl(45, 93%, 47%)" },
-  done: { label: "הושלם", color: "hsl(142, 71%, 45%)" },
-};
+import { TASK_STATUS_CONFIG } from "@/lib/taskStatus";
 
 function priorityClass(priority: number) {
   if (priority >= 8) return "text-destructive border-destructive/40 bg-destructive/10";
@@ -139,12 +133,11 @@ export function TasksChatView({
       {(!isMobile || !selectedTaskId) && (
         <div
           className={cn(
-            "border-s flex flex-col bg-muted/20 overflow-hidden min-h-0",
-            isMobile ? "w-full flex-1" : "w-[28%] min-w-[260px] max-w-[28%]",
+            "flex flex-col bg-muted/30 overflow-hidden min-h-0",
+            isMobile ? "w-full flex-1" : "w-[28%] min-w-[260px] max-w-[28%] border-s",
           )}
-          dir="rtl"
         >
-          <div className={cn("border-b bg-background/80 backdrop-blur-sm shrink-0", isMobile ? "p-2" : "p-3")}>
+          <div className={cn("border-b bg-background shrink-0", isMobile ? "p-2" : "p-3")}>
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -190,8 +183,8 @@ export function TasksChatView({
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0" dir="rtl">
-            <div className="divide-y">
+          <div dir="ltr" className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 [scrollbar-width:thin]">
+            <div className="divide-y" dir="rtl">
               {filteredTasks.map((task) => {
                 const isSelected = task.id === selectedTaskId;
                 const overdue = isTaskOverdue(task, today);
@@ -205,7 +198,7 @@ export function TasksChatView({
                     onClick={() => handleSelect(task)}
                     className={cn(
                       "w-full text-right p-3 hover:bg-muted/50 transition-colors",
-                      isSelected && "bg-primary/10 border-e-4 border-e-primary",
+                      isSelected && "bg-primary/10 border-s-4 border-s-primary",
                       overdue && !isSelected && "bg-destructive/5",
                     )}
                   >
@@ -292,9 +285,9 @@ export function TasksChatView({
       )}
 
       {(!isMobile || selectedTaskId) && (
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-muted/30">
           {isMobile && selectedTask && (
-            <div className="flex items-center gap-2 p-2 border-b shrink-0">
+            <div className="flex items-center gap-2 p-2 border-b shrink-0 bg-background">
               <Button
                 variant="ghost"
                 size="icon"
@@ -304,7 +297,6 @@ export function TasksChatView({
               >
                 <ArrowRight className="h-5 w-5" />
               </Button>
-              <h2 className="font-bold text-sm truncate flex-1">{selectedTask.title}</h2>
             </div>
           )}
           <TaskDetailDialog

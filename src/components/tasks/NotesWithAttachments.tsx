@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
-import { Paperclip, X, Loader2, FileText, Image as ImageIcon } from "lucide-react";
+import { Paperclip, X, Loader2, FileText, Image as ImageIcon, MessageSquare } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface TaskAttachment {
   name: string;
@@ -22,6 +23,8 @@ interface Props {
   taskId?: string;
   placeholder?: string;
   rows?: number;
+  /** stacked = notes with attach bar; cubes = notes cube + files cube side by side */
+  variant?: "stacked" | "cubes";
 }
 
 const MAX = 10 * 1024 * 1024;
@@ -36,14 +39,21 @@ function sanitize(name: string) {
   return (base || "file") + ext;
 }
 
+function formatSize(size?: number) {
+  if (!size) return "";
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function NotesWithAttachments({
   value,
   onChange,
   attachments,
   onAttachmentsChange,
   taskId,
-  placeholder = "הערות נוספות...",
-  rows = 3,
+  placeholder = "הוסף הערות למשימה...",
+  rows = 5,
+  variant = "stacked",
 }: Props) {
   const { tenantId } = useCurrentTenant();
   const [uploading, setUploading] = useState(false);
@@ -140,6 +150,129 @@ export function NotesWithAttachments({
     if (data?.signedUrl) setSigned((s) => ({ ...s, [a.path]: data.signedUrl }));
   };
 
+  const fileInput = (
+    <input
+      ref={fileRef}
+      type="file"
+      multiple
+      className="hidden"
+      onChange={(e) => upload(e.target.files)}
+    />
+  );
+
+  const thumbs = (
+    <div className="flex flex-wrap gap-2">
+      {attachments.map((a, i) => {
+        const isImg = a.type?.startsWith("image/");
+        if (isImg && !signed[a.path]) void getThumb(a);
+        return (
+          <div
+            key={`${a.path}-${i}`}
+            className="group relative rounded-lg border bg-background overflow-hidden"
+          >
+            {isImg && signed[a.path] ? (
+              <button type="button" onClick={() => open(a)} className="block">
+                <img
+                  src={signed[a.path]}
+                  alt={a.name}
+                  className="h-20 w-20 object-cover"
+                />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => open(a)}
+                className="flex flex-col items-start justify-center min-h-[5rem] w-[8.5rem] px-2 py-2 text-xs gap-1 text-right"
+              >
+                {isImg ? (
+                  <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                ) : (
+                  <FileText className="h-6 w-6 text-red-500" />
+                )}
+                <span className="truncate w-full font-medium">{a.name}</span>
+                {a.size ? (
+                  <span className="text-[10px] text-muted-foreground">{formatSize(a.size)}</span>
+                ) : null}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              className="absolute top-0.5 left-0.5 bg-background/90 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+              aria-label="הסר קובץ"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  if (variant === "cubes") {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="rounded-xl border bg-background p-3 flex flex-col min-h-[180px]">
+          <div className="flex items-center gap-1.5 text-sm font-medium mb-2">
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            הערות
+          </div>
+          <Textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onPaste={handlePaste}
+            placeholder={placeholder}
+            rows={rows}
+            className="flex-1 min-h-[120px] border-0 bg-transparent focus-visible:ring-0 resize-none p-0"
+          />
+        </div>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            upload(e.dataTransfer.files);
+          }}
+          className={cn(
+            "rounded-xl border bg-background p-3 flex flex-col min-h-[180px]",
+            dragOver && "border-primary bg-primary/5",
+          )}
+        >
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5 text-sm font-medium">
+              <Paperclip className="h-4 w-4 text-muted-foreground" />
+              קבצים
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+              צרף
+            </Button>
+          </div>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex-1 rounded-lg border border-dashed border-muted-foreground/30 text-xs text-muted-foreground px-3 py-4 text-center hover:bg-muted/30 transition-colors"
+          >
+            גרור קבצים לכאן או לחץ לבחירה
+          </button>
+          {attachments.length > 0 && <div className="mt-3">{thumbs}</div>}
+          {fileInput}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <div
@@ -153,9 +286,10 @@ export function NotesWithAttachments({
           setDragOver(false);
           upload(e.dataTransfer.files);
         }}
-        className={`relative rounded-md border ${
-          dragOver ? "border-primary bg-primary/5" : "border-input"
-        }`}
+        className={cn(
+          "relative rounded-md border",
+          dragOver ? "border-primary bg-primary/5" : "border-input",
+        )}
       >
         <Textarea
           value={value}
@@ -184,59 +318,10 @@ export function NotesWithAttachments({
             )}
             צרף קובץ
           </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(e) => upload(e.target.files)}
-          />
+          {fileInput}
         </div>
       </div>
-
-      {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {attachments.map((a, i) => {
-            const isImg = a.type?.startsWith("image/");
-            if (isImg && !signed[a.path]) getThumb(a);
-            return (
-              <div
-                key={i}
-                className="group relative rounded-md border bg-muted/30 overflow-hidden"
-              >
-                {isImg && signed[a.path] ? (
-                  <img
-                    src={signed[a.path]}
-                    alt={a.name}
-                    className="h-20 w-20 object-cover cursor-pointer"
-                    onClick={() => open(a)}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => open(a)}
-                    className="flex flex-col items-center justify-center h-20 w-20 px-1 text-xs gap-1"
-                  >
-                    {isImg ? (
-                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                    ) : (
-                      <FileText className="h-6 w-6 text-muted-foreground" />
-                    )}
-                    <span className="truncate w-full text-center">{a.name}</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => remove(i)}
-                  className="absolute top-0.5 right-0.5 bg-background/80 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {attachments.length > 0 && thumbs}
     </div>
   );
 }
