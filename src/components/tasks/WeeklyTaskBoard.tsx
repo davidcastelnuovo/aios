@@ -22,16 +22,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users, MessageSquare, Bookmark } from "lucide-react";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, MessageSquare } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
 import { TasksChatView } from "./TasksChatView";
+import { TasksToolbarFilters } from "./TasksToolbarFilters";
 import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import type { QuickTaskPayload } from "./QuickTaskInput";
@@ -42,7 +41,6 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useViewAs } from "@/contexts/ViewAsContext";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
-import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import {
@@ -126,7 +124,6 @@ export function WeeklyTaskBoard() {
   const boardUserId = isViewingAs && viewAsUserId ? viewAsUserId : user?.id ?? null;
   const { isOwner, isSuperAdmin, userId: authenticatedUserId } = useUserRole();
   const { state: sidebarState } = useSidebar();
-  const { t } = useTerminology();
 
   // Fetch clients for inline selector
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
@@ -499,6 +496,11 @@ export function WeeklyTaskBoard() {
         effectiveCampaignerFilter,
         mineIdentity ?? null,
       );
+      if (filters.clientId === "none") {
+        filtered = filtered.filter((task) => !task.client_id);
+      } else if (filters.clientId && filters.clientId !== "all") {
+        filtered = filtered.filter((task) => task.client_id === filters.clientId);
+      }
       if (isViewingAs && boardUserId) {
         filtered = filterTasksForBoardUserPreview(filtered, boardUserId, mineIdentity ?? null);
       }
@@ -507,6 +509,7 @@ export function WeeklyTaskBoard() {
     [
       selectedAgency,
       effectiveCampaignerFilter,
+      filters.clientId,
       tenantId,
       crossTenantAgencyIds,
       mineIdentity,
@@ -1341,6 +1344,25 @@ export function WeeklyTaskBoard() {
     }
   };
 
+  const toolbarFilters = (
+    <TasksToolbarFilters
+      campaignerFilter={effectiveCampaignerFilter}
+      onCampaignerFilterChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+      campaignerFilterDisabled={isViewingAs}
+      campaignersList={campaignersList}
+      clientFilter={filters.clientId}
+      onClientFilterChange={(clientId) => setFilters((prev) => ({ ...prev, clientId }))}
+      clientsList={clientsList}
+      startDate={filters.startDate}
+      endDate={filters.endDate}
+      onDateRangeChange={({ startDate, endDate }) =>
+        setFilters((prev) => ({ ...prev, startDate, endDate }))
+      }
+      onSaveFilterPreset={() => saveFilterPreset()}
+      saveDisabled={isViewingAs}
+    />
+  );
+
   return (
     <div className="flex flex-col h-full min-h-0">
       {isViewingAs && (
@@ -1348,8 +1370,8 @@ export function WeeklyTaskBoard() {
           מציג משימות של <strong>{viewAsUserName}</strong> בלבד (שלי בלבד)
         </div>
       )}
-      {/* Header - Desktop only - single compact row */}
-      <div className="hidden md:flex md:items-center md:justify-between mb-2 gap-3">
+      {/* Header - Desktop: view toggles + open filters on one row */}
+      <div className="hidden md:flex md:items-center md:justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <ToggleGroup
             type="single"
@@ -1382,7 +1404,7 @@ export function WeeklyTaskBoard() {
           </h2>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {viewMode !== "chat" && (
             <>
           <Button variant="outline" size="icon" onClick={goToNext}>
@@ -1397,78 +1419,31 @@ export function WeeklyTaskBoard() {
           </Button>
             </>
           )}
-
-          {/* Filters popover */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2 relative">
-                <Filter className="h-4 w-4" />
-                פילטרים
-                {(activeFiltersCount > 0 || effectiveCampaignerFilter !== defaultTaskFilters.campaignerId) && (
-                  <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
-                    {activeFiltersCount + (effectiveCampaignerFilter !== defaultTaskFilters.campaignerId ? 1 : 0)}
-                  </Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 space-y-3" align="end">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t('role_campaigner')}</label>
-                <Select
-                  value={effectiveCampaignerFilter}
-                  onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
-                  disabled={isViewingAs}
-                >
-                  <SelectTrigger className="w-full gap-2">
-                    <Users className="h-4 w-4 shrink-0" />
-                    <SelectValue placeholder={t('role_campaigner')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mine_assigned">שלי וששייכתי</SelectItem>
-                    <SelectItem value="mine">שלי בלבד</SelectItem>
-                    <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
-                    <SelectItem value="none">ללא שיוך</SelectItem>
-                    {campaignersList.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => saveFilterPreset()}
-                disabled={isViewingAs}
-              >
-                <Bookmark className="h-4 w-4" />
-                שמור כברירת מחדל
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => setFiltersDialogOpen(true)}
-              >
-                <Filter className="h-4 w-4" />
-                פילטרים מתקדמים
-                {activeFiltersCount > 0 && (
-                  <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
-                    {activeFiltersCount}
-                  </Badge>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => syncToCalendar.mutate()}
-                disabled={syncToCalendar.isPending}
-              >
-                <RefreshCw className={`h-4 w-4 ${syncToCalendar.isPending ? 'animate-spin' : ''}`} />
-                סנכרן ליומן
-              </Button>
-            </PopoverContent>
-          </Popover>
+          {toolbarFilters}
+          <Button
+            variant="outline"
+            className="h-9 gap-2 relative"
+            onClick={() => setFiltersDialogOpen(true)}
+          >
+            <Filter className="h-4 w-4" />
+            מתקדם
+            {activeFiltersCount > 0 && (
+              <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
+                {activeFiltersCount}
+              </Badge>
+            )}
+          </Button>
+          {viewMode !== "chat" && (
+            <Button
+              variant="outline"
+              className="h-9 gap-2"
+              onClick={() => syncToCalendar.mutate()}
+              disabled={syncToCalendar.isPending}
+            >
+              <RefreshCw className={`h-4 w-4 ${syncToCalendar.isPending ? "animate-spin" : ""}`} />
+              סנכרן
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1489,6 +1464,7 @@ export function WeeklyTaskBoard() {
                 <CalendarDays className="h-5 w-5" />
               </Button>
             </div>
+            {toolbarFilters}
           </div>
           <div className="flex-1 min-h-0 h-full">
             <TasksChatView
@@ -1521,25 +1497,10 @@ export function WeeklyTaskBoard() {
               clientsList={clientsList}
               campaignersList={campaignersList}
               defaultCampaignerId={primaryCampaignerId}
-              campaignerFilter={effectiveCampaignerFilter}
-              onCampaignerFilterChange={(val) =>
-                setFilters((prev) => ({ ...prev, campaignerId: val }))
-              }
-              campaignerFilterDisabled={isViewingAs}
-              startDate={filters.startDate}
-              endDate={filters.endDate}
-              onDateRangeChange={({ startDate, endDate }) =>
-                setFilters((prev) => ({ ...prev, startDate, endDate }))
-              }
               openClosedFilter={filters.openClosed}
               onOpenClosedFilterChange={(openClosed) =>
                 setFilters((prev) => ({ ...prev, openClosed }))
               }
-              clientFilter={filters.clientId}
-              onClientFilterChange={(clientId) =>
-                setFilters((prev) => ({ ...prev, clientId }))
-              }
-              onSaveFilterPreset={() => saveFilterPreset()}
             />
           </div>
         </>
@@ -1547,28 +1508,8 @@ export function WeeklyTaskBoard() {
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout — full task list by default; calendar opens from icon only */}
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
-          <div className="flex flex-wrap items-center gap-2 justify-between shrink-0">
-            <Select
-              value={effectiveCampaignerFilter}
-              onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
-              disabled={isViewingAs}
-            >
-              <SelectTrigger className="w-full gap-2">
-                <Users className="h-4 w-4 shrink-0" />
-                <SelectValue placeholder={t('role_campaigner')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mine_assigned">שלי וששייכתי</SelectItem>
-                <SelectItem value="mine">שלי בלבד</SelectItem>
-                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
-                <SelectItem value="none">ללא שיוך</SelectItem>
-                {campaignersList.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {toolbarFilters}
           </div>
           <div className="flex items-center gap-2 justify-between shrink-0">
             <h1 className="text-xl font-bold">משימות</h1>
@@ -1939,7 +1880,6 @@ export function WeeklyTaskBoard() {
         onOpenChange={setFiltersDialogOpen}
         currentFilters={filters}
         onApply={(next) => setFilters(next)}
-        onSaveDefault={(next) => saveFilterPreset(next)}
       />
 
       {/* Quick Add Task Dialog (double-click on slot) */}

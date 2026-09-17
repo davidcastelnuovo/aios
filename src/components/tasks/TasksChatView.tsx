@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Bookmark, Building2, CalendarDays, CheckCircle2, CircleDot, LayoutList, MessageSquare, Search, UserRound, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, CircleDot, LayoutList, MessageSquare, Search, UserRound } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -16,7 +13,6 @@ import { QuickTaskInput, type QuickTaskPayload } from "./QuickTaskInput";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 import { embedCount } from "@/lib/embedCount";
 import { filterTasksForChatSearch, sortTasksForChatList } from "@/lib/taskBoardQuery";
-import { useTerminology } from "@/hooks/useTerminology";
 import type { OpenClosedFilter } from "@/lib/taskFilters";
 
 function formatDueShort(value: string): string | null {
@@ -106,17 +102,8 @@ interface TasksChatViewProps {
   clientsList?: { id: string; name: string }[];
   campaignersList?: { id: string; full_name: string }[];
   defaultCampaignerId?: string | null;
-  campaignerFilter?: string;
-  onCampaignerFilterChange?: (value: string) => void;
-  campaignerFilterDisabled?: boolean;
-  startDate?: Date;
-  endDate?: Date;
-  onDateRangeChange?: (range: { startDate?: Date; endDate?: Date }) => void;
   openClosedFilter?: OpenClosedFilter;
   onOpenClosedFilterChange?: (value: OpenClosedFilter) => void;
-  clientFilter?: string;
-  onClientFilterChange?: (value: string) => void;
-  onSaveFilterPreset?: () => void;
 }
 
 export function TasksChatView({
@@ -131,23 +118,12 @@ export function TasksChatView({
   clientsList,
   campaignersList,
   defaultCampaignerId,
-  campaignerFilter = "all",
-  onCampaignerFilterChange,
-  campaignerFilterDisabled,
-  startDate,
-  endDate,
-  onDateRangeChange,
   openClosedFilter = "open",
   onOpenClosedFilterChange,
-  clientFilter = "all",
-  onClientFilterChange,
-  onSaveFilterPreset,
 }: TasksChatViewProps) {
   const isMobile = useIsMobile();
-  const { t } = useTerminology();
   const [listSearch, setListSearch] = useState("");
   const setOpenClosedFilter = onOpenClosedFilterChange ?? (() => undefined);
-  const setClientFilter = onClientFilterChange ?? (() => undefined);
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -159,27 +135,21 @@ export function TasksChatView({
     [tasks, listSearch],
   );
 
-  const clientFilteredTasks = useMemo(() => {
-    if (clientFilter === "all") return searchedTasks;
-    if (clientFilter === "none") return searchedTasks.filter((task) => !task.client_id);
-    return searchedTasks.filter((task) => task.client_id === clientFilter);
-  }, [searchedTasks, clientFilter]);
-
   const tabCounts = useMemo(() => ({
-    all: clientFilteredTasks.length,
-    open: clientFilteredTasks.filter((task) => task.status !== "done").length,
-    done: clientFilteredTasks.filter((task) => task.status === "done").length,
-  }), [clientFilteredTasks]);
+    all: searchedTasks.length,
+    open: searchedTasks.filter((task) => task.status !== "done").length,
+    done: searchedTasks.filter((task) => task.status === "done").length,
+  }), [searchedTasks]);
 
   const filteredTasks = useMemo(() => {
     const byOpenClosed =
       openClosedFilter === "all"
-        ? clientFilteredTasks
+        ? searchedTasks
         : openClosedFilter === "done"
-          ? clientFilteredTasks.filter((task) => task.status === "done")
-          : clientFilteredTasks.filter((task) => task.status !== "done");
+          ? searchedTasks.filter((task) => task.status === "done")
+          : searchedTasks.filter((task) => task.status !== "done");
     return sortTasksForChatList(byOpenClosed, today);
-  }, [clientFilteredTasks, openClosedFilter, today]);
+  }, [searchedTasks, openClosedFilter, today]);
 
   const selectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
@@ -257,135 +227,6 @@ export function TasksChatView({
                   </button>
                 );
               })}
-            </div>
-            <div className="rounded-xl border border-violet-200/70 bg-violet-50/50 p-2 space-y-2">
-              <div className={cn("grid gap-2", onCampaignerFilterChange ? "grid-cols-2" : "grid-cols-1")}>
-                {onCampaignerFilterChange && (
-                  <label className="flex flex-col gap-1 min-w-0">
-                    <span className="text-[10px] font-bold text-violet-800 flex items-center gap-1">
-                      <Users className="h-3 w-3" />
-                      {t("role_campaigner")}
-                    </span>
-                    <Select
-                      value={campaignerFilter}
-                      onValueChange={onCampaignerFilterChange}
-                      disabled={campaignerFilterDisabled}
-                    >
-                      <SelectTrigger className="h-9 text-xs bg-card border-violet-200 gap-1.5">
-                        <SelectValue placeholder={t("role_campaigner")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="mine_assigned">שלי וששייכתי</SelectItem>
-                        <SelectItem value="mine">שלי בלבד</SelectItem>
-                        <SelectItem value="all">כל ה{t("role_campaigner", true)}</SelectItem>
-                        <SelectItem value="none">ללא שיוך</SelectItem>
-                        {campaignersList?.map((campaigner) => (
-                          <SelectItem key={campaigner.id} value={campaigner.id}>
-                            {campaigner.full_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                )}
-                <label className="flex flex-col gap-1 min-w-0">
-                  <span className="text-[10px] font-bold text-amber-800 flex items-center gap-1">
-                    <Building2 className="h-3 w-3" />
-                    לקוח
-                  </span>
-                  <Select value={clientFilter} onValueChange={setClientFilter}>
-                    <SelectTrigger className="h-9 text-xs bg-card border-amber-200 gap-1.5">
-                      <SelectValue placeholder="לקוח" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">כל הלקוחות</SelectItem>
-                      <SelectItem value="none">ללא לקוח</SelectItem>
-                      {clientsList?.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-              </div>
-              {onDateRangeChange && (
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-rose-800 flex items-center gap-1">
-                    <CalendarDays className="h-3 w-3" />
-                    תאריך יעד
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "h-9 flex-1 justify-start text-xs bg-card border-rose-200 font-normal",
-                            !startDate && "text-muted-foreground",
-                          )}
-                        >
-                          {startDate ? format(startDate, "dd/MM", { locale: he }) : "מתאריך"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={startDate}
-                          onSelect={(date) =>
-                            onDateRangeChange({ startDate: date, endDate })
-                          }
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "h-9 flex-1 justify-start text-xs bg-card border-rose-200 font-normal",
-                            !endDate && "text-muted-foreground",
-                          )}
-                        >
-                          {endDate ? format(endDate, "dd/MM", { locale: he }) : "עד תאריך"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={endDate}
-                          onSelect={(date) =>
-                            onDateRangeChange({ startDate, endDate: date })
-                          }
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    {(startDate || endDate) && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 shrink-0 text-rose-700 hover:text-rose-900"
-                        onClick={() => onDateRangeChange({ startDate: undefined, endDate: undefined })}
-                        aria-label="נקה תאריך"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-              {onSaveFilterPreset && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full h-8 text-xs gap-1.5 bg-card"
-                  onClick={onSaveFilterPreset}
-                  disabled={campaignerFilterDisabled}
-                >
-                  <Bookmark className="h-3.5 w-3.5" />
-                  שמור כברירת מחדל
-                </Button>
-              )}
             </div>
             <div className="text-xs text-muted-foreground text-center">
               {filteredTasks.length} משימות
