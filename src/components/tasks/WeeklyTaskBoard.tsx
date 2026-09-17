@@ -221,6 +221,7 @@ export function WeeklyTaskBoard() {
   }, [effectiveCampaignerFilter, setSelectedAgency]);
 
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
+  const [filtersIncludeToolbar, setFiltersIncludeToolbar] = useState(false);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
   const [quickAddSlot, setQuickAddSlot] = useState<{ date: Date; time: string } | null>(null);
@@ -1337,13 +1338,18 @@ export function WeeklyTaskBoard() {
     return isToday;
   });
 
-  // Count active filters (exclude campaigner since it has its own selector in toolbar)
   const activeFiltersCount = [
+    filters.campaignerId !== defaultTaskFilters.campaignerId,
     filters.taskType !== "all",
     filters.association !== "all",
     filters.period !== "all",
     filters.relatedKind !== "all",
   ].filter(Boolean).length;
+
+  const openFiltersDialog = (includeToolbar: boolean) => {
+    setFiltersIncludeToolbar(includeToolbar);
+    setFiltersDialogOpen(true);
+  };
 
   const saveFilterPreset = (next?: TaskFilterState) => {
     if (!user?.id || isViewingAs) {
@@ -1410,8 +1416,9 @@ export function WeeklyTaskBoard() {
     }
   };
 
-  const toolbarFilters = (
+  const renderToolbarFilters = (layout: "inline" | "stacked" = "inline") => (
     <TasksToolbarFilters
+      layout={layout}
       campaignerFilter={effectiveCampaignerFilter}
       onCampaignerFilterChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
       campaignerFilterDisabled={isViewingAs}
@@ -1428,6 +1435,7 @@ export function WeeklyTaskBoard() {
       saveDisabled={isViewingAs}
     />
   );
+  const toolbarFilters = renderToolbarFilters();
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -1496,7 +1504,7 @@ export function WeeklyTaskBoard() {
           <Button
             variant="outline"
             className="h-8 gap-1.5 px-2 relative shrink-0 text-xs"
-            onClick={() => setFiltersDialogOpen(true)}
+            onClick={() => openFiltersDialog(false)}
           >
             <Filter className="h-3.5 w-3.5" />
             מתקדם
@@ -1559,26 +1567,49 @@ export function WeeklyTaskBoard() {
                 <TasksChatSearchInput
                   value={chatListSearch}
                   onChange={setChatListSearch}
-                  className="w-[160px] min-w-0 flex-1"
+                  className="w-[140px] min-w-0 flex-1"
                 />
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setViewMode("weekly")}
-                aria-label="תצוגת יומן"
-                title="יומן"
-              >
-                <CalendarDays className="h-5 w-5" />
-              </Button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => openFiltersDialog(true)}
+                  className="relative h-9 w-9"
+                  aria-label="פילטרים"
+                >
+                  <Filter className="h-4 w-4" />
+                  {activeFiltersCount > 0 && (
+                    <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-[10px]">
+                      {activeFiltersCount}
+                    </Badge>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={() => setViewMode("weekly")}
+                  aria-label="תצוגת יומן"
+                  title="יומן"
+                >
+                  <CalendarDays className="h-5 w-5" />
+                </Button>
+              </div>
             </div>
-            {toolbarFilters}
           </div>
           <div className="flex-1 min-h-0 h-full">
             <TasksChatView
               tasks={tasks}
               selectedTaskId={selectedTask?.id ?? null}
-              onSelectTask={setSelectedTask}
+              onSelectTask={(task) => {
+                setSelectedTask(task);
+                if (!task && linkedTaskId) {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("task");
+                  setSearchParams(next, { replace: true });
+                }
+              }}
               onToggleComplete={(taskId, completed) =>
                 toggleComplete.mutate({ taskId, completed })
               }
@@ -1619,9 +1650,6 @@ export function WeeklyTaskBoard() {
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout — full task list by default; calendar opens from icon only */}
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {toolbarFilters}
-          </div>
           <div className="flex items-center gap-2 justify-between shrink-0">
             <h1 className="text-xl font-bold">משימות</h1>
             <div className="flex items-center gap-2">
@@ -1638,7 +1666,7 @@ export function WeeklyTaskBoard() {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setFiltersDialogOpen(true)}
+                onClick={() => openFiltersDialog(true)}
                 className="relative"
                 aria-label="פילטרים"
               >
@@ -1991,6 +2019,7 @@ export function WeeklyTaskBoard() {
         onOpenChange={setFiltersDialogOpen}
         currentFilters={filters}
         onApply={(next) => setFilters(next)}
+        toolbarFilters={filtersIncludeToolbar ? renderToolbarFilters("stacked") : undefined}
       />
 
       {/* Quick Add Task Dialog (double-click on slot) */}

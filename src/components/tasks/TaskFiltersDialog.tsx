@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,8 @@ interface TaskFiltersDialogProps {
   onOpenChange: (open: boolean) => void;
   currentFilters: TaskFilterState;
   onApply: (filters: TaskFilterState) => void;
+  /** Campaigner / client-lead / period controls — used on mobile so one icon holds every filter. */
+  toolbarFilters?: ReactNode;
 }
 
 export function TaskFiltersDialog({
@@ -32,6 +34,7 @@ export function TaskFiltersDialog({
   onOpenChange,
   currentFilters,
   onApply,
+  toolbarFilters,
 }: TaskFiltersDialogProps) {
   const [filters, setFilters] = useState<TaskFilterState>(currentFilters);
 
@@ -69,12 +72,18 @@ export function TaskFiltersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]" dir="rtl">
+      <DialogContent className="sm:max-w-[500px] max-h-[90dvh] overflow-y-auto" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="text-xl">סינון מתקדם</DialogTitle>
+          <DialogTitle className="text-xl">{toolbarFilters ? "פילטרים" : "סינון מתקדם"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 py-4">
+          {toolbarFilters && (
+            <div className="space-y-2">
+              <Label>סינון מהיר</Label>
+              {toolbarFilters}
+            </div>
+          )}
           <div className="space-y-2">
             <Label>סוג משימה</Label>
             <Select

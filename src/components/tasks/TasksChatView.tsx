@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, CircleDot, Clock, LayoutList, MessageSquare, Search, UserRound } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, CircleDot, Clock, LayoutList, MessageSquare, Search, UserRound } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -219,14 +218,13 @@ export function TasksChatView({
       )}
       dir="rtl"
     >
-      {(!isMobile || !selectedTaskId) && (
-        <div
-          className={cn(
-            "flex flex-col bg-muted/20 overflow-hidden min-h-0",
-            isMobile ? "w-full flex-1" : "w-[28%] min-w-[260px] max-w-[28%] border-s",
-          )}
-          dir="rtl"
-        >
+      <div
+        className={cn(
+          "flex flex-col bg-muted/20 overflow-hidden min-h-0",
+          isMobile ? "w-full flex-1" : "w-[28%] min-w-[260px] max-w-[28%] border-s",
+        )}
+        dir="rtl"
+      >
           <div className={cn("border-b bg-card shrink-0 space-y-1.5", isMobile ? "p-1.5" : "px-2 py-1.5")}>
             {!hideListSearch && (
               <TasksChatSearchInput value={listSearch} onChange={setListSearch} className="w-full" />
@@ -371,24 +369,10 @@ export function TasksChatView({
               )}
             </div>
           </div>
-        </div>
-      )}
+      </div>
 
-      {(!isMobile || selectedTaskId) && (
+      {!isMobile && (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0 bg-muted/20" dir="rtl">
-          {isMobile && selectedTask && (
-            <div className="flex items-center gap-2 p-2 border-b shrink-0 bg-background">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                onClick={() => onSelectTask(null)}
-                aria-label="חזרה לרשימה"
-              >
-                <ArrowRight className="h-5 w-5" />
-              </Button>
-            </div>
-          )}
           <TaskDetailDialog
             key={selectedTask?.id ?? "empty"}
             task={selectedTask}
@@ -406,6 +390,23 @@ export function TasksChatView({
             onMoveToBacklog={onMoveToBacklog}
           />
         </div>
+      )}
+
+      {isMobile && (
+        <TaskDetailDialog
+          key={selectedTask?.id ?? "empty"}
+          task={selectedTask}
+          open={Boolean(selectedTask)}
+          variant="dialog"
+          onOpenChange={(open) => {
+            if (!open) onSelectTask(null);
+          }}
+          onDelete={(taskId) => {
+            onDelete(taskId, selectedTask?.google_calendar_event_id);
+            onSelectTask(null);
+          }}
+          onMoveToBacklog={onMoveToBacklog}
+        />
       )}
     </div>
   );

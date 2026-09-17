@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
@@ -98,6 +99,7 @@ export function TaskDetailDialog({
 }: TaskDetailDialogProps) {
   const isPanel = variant === "panel";
   const isActive = isPanel ? !!task?.id : open;
+  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
@@ -498,14 +500,14 @@ export function TaskDetailDialog({
   );
 
   const body = (
-    <div className={cn("flex flex-col h-full min-h-0", isPanel && "overflow-hidden bg-muted/20")} dir="rtl">
+    <div className={cn("flex flex-col h-full min-h-0 overflow-hidden", isPanel && "bg-muted/20")} dir="rtl">
       <div className="shrink-0 border-b bg-card px-4 pt-3">
         {!isPanel && (
           <DialogHeader className="mb-2">
             <DialogTitle className="sr-only">פרטי משימה</DialogTitle>
           </DialogHeader>
         )}
-        <div className="flex items-center gap-2 pb-3">
+        <div className={cn("flex items-center gap-2 pb-3", !isPanel && "pl-10")}>
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -524,7 +526,7 @@ export function TaskDetailDialog({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/20 p-4 space-y-3">
+      <div className={cn("flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/20 space-y-3", isMobile ? "p-2.5" : "p-4")}>
             <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,0.38fr)_minmax(0,1fr)] gap-3 items-start">
             <section className={cn(FRAME, "space-y-0 p-2.5")}>
               <div className="flex items-center gap-1.5 text-xs font-medium mb-1 pb-1.5">
@@ -927,7 +929,7 @@ export function TaskDetailDialog({
             </section>
       </div>
 
-      <div className="flex justify-between border-t bg-card px-4 py-3 shrink-0">
+      <div className={cn("flex justify-between border-t bg-card shrink-0 gap-2 flex-wrap", isMobile ? "px-3 py-2.5" : "px-4 py-3")}>
         <div className="flex gap-2">
           {onDelete && (
           <Button
@@ -972,7 +974,15 @@ export function TaskDetailDialog({
         body
       ) : (
         <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogContent dir="rtl" className="max-w-4xl h-[90vh] flex flex-col gap-0 !block p-0 overflow-hidden">
+          <DialogContent
+            dir="rtl"
+            className={cn(
+              "flex flex-col gap-0 !block p-0 overflow-hidden",
+              isMobile
+                ? "left-0 top-0 h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-none sm:rounded-none"
+                : "max-w-4xl h-[90vh]",
+            )}
+          >
             {body}
           </DialogContent>
         </Dialog>

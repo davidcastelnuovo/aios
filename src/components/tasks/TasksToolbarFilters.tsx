@@ -35,6 +35,7 @@ interface TasksToolbarFiltersProps {
   onPeriodChange: (value: TaskPeriodFilter) => void;
   onSaveFilterPreset?: () => void;
   saveDisabled?: boolean;
+  layout?: "inline" | "stacked";
 }
 
 function leadDisplayName(lead: { company_name: string | null; contact_name: string | null }): string {
@@ -56,8 +57,10 @@ export function TasksToolbarFilters({
   onPeriodChange,
   onSaveFilterPreset,
   saveDisabled,
+  layout = "inline",
 }: TasksToolbarFiltersProps) {
   const { t } = useTerminology();
+  const stacked = layout === "stacked";
   const [relatedOpen, setRelatedOpen] = useState(false);
   const [pickerTab, setPickerTab] = useState<"client" | "lead">(
     relatedKind === "lead" ? "lead" : "client",
@@ -78,13 +81,13 @@ export function TasksToolbarFilters({
   );
 
   return (
-    <div className="flex items-center gap-1.5 flex-nowrap min-w-0">
+    <div className={cn(stacked ? "flex flex-col gap-3 w-full" : "flex items-center gap-1.5 flex-nowrap min-w-0")}>
       <Select
         value={campaignerFilter}
         onValueChange={onCampaignerFilterChange}
         disabled={campaignerFilterDisabled}
       >
-        <SelectTrigger className="h-8 w-[132px] text-xs bg-card gap-1 px-2">
+        <SelectTrigger className={cn("text-xs bg-card gap-1 px-2", stacked ? "h-10 w-full" : "h-8 w-[132px]")}>
           <Users className="h-3.5 w-3.5 shrink-0" />
           <SelectValue placeholder={t("role_campaigner")} />
         </SelectTrigger>
@@ -101,7 +104,7 @@ export function TasksToolbarFilters({
         </SelectContent>
       </Select>
 
-      <div className="flex items-center">
+      <div className={cn("flex items-center", stacked && "w-full")}>
         <Popover
           open={relatedOpen}
           onOpenChange={(open) => {
@@ -113,7 +116,8 @@ export function TasksToolbarFilters({
           <Button
             variant="outline"
             className={cn(
-              "h-8 min-w-[118px] max-w-[160px] justify-start text-xs bg-card font-normal gap-1 px-2",
+              "justify-start text-xs bg-card font-normal gap-1 px-2",
+              stacked ? "h-10 flex-1 min-w-0" : "h-8 min-w-[118px] max-w-[160px]",
               relatedKind === "all" && "text-muted-foreground",
             )}
           >
@@ -251,7 +255,7 @@ export function TasksToolbarFilters({
       </div>
 
       <Select value={period} onValueChange={(value) => onPeriodChange(value as TaskPeriodFilter)}>
-        <SelectTrigger className="h-8 w-[128px] text-xs bg-card gap-1 px-2">
+        <SelectTrigger className={cn("text-xs bg-card gap-1 px-2", stacked ? "h-10 w-full" : "h-8 w-[128px]")}>
           <CalendarDays className="h-3.5 w-3.5 shrink-0" />
           <SelectValue placeholder="תקופה" />
         </SelectTrigger>
@@ -267,7 +271,7 @@ export function TasksToolbarFilters({
       {onSaveFilterPreset && (
         <Button
           variant="outline"
-          className="h-8 gap-1 px-2 text-xs shrink-0"
+          className={cn("gap-1 px-2 text-xs shrink-0", stacked ? "h-10 w-full" : "h-8")}
           onClick={onSaveFilterPreset}
           disabled={saveDisabled}
         >
