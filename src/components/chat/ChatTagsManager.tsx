@@ -5,6 +5,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tags, Plus, Trash2, GripVertical, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -97,11 +98,13 @@ function ColorPicker({ color, onChange }: ColorPickerProps) {
 
 interface SortableTagRowProps {
   tag: ChatTag;
+  selected: boolean;
+  onToggleSelect: (id: string, selected: boolean) => void;
   onUpdate: (id: string, name: string, color: string) => void;
   onDelete: (id: string) => void;
 }
 
-function SortableTagRow({ tag, onUpdate, onDelete }: SortableTagRowProps) {
+function SortableTagRow({ tag, selected, onToggleSelect, onUpdate, onDelete }: SortableTagRowProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [editingName, setEditingName] = useState(tag.name);
 
@@ -150,6 +153,12 @@ function SortableTagRow({ tag, onUpdate, onDelete }: SortableTagRowProps) {
         <GripVertical className="h-4 w-4" />
       </button>
 
+      <Checkbox
+        checked={selected}
+        onCheckedChange={(checked) => onToggleSelect(tag.id, checked === true)}
+        aria-label={`בחר ${tag.name}`}
+      />
+
       <ColorPicker
         color={tag.color}
         onChange={(newColor) => onUpdate(tag.id, tag.name, newColor)}
@@ -193,6 +202,7 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
   const [newTagColor, setNewTagColor] = useState("#3b82f6");
   const [localTags, setLocalTags] = useState<ChatTag[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
@@ -283,12 +293,32 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
       
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
+      setSelectedIds((prev) => prev.filter((selectedId) => selectedId !== id));
       toast.success('התגית נמחקה');
     },
     onError: () => {
       toast.error('שגיאה במחיקת התגית');
+    },
+  });
+
+  const bulkDeleteTagsMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('chat_tags')
+        .delete()
+        .in('id', ids);
+      if (error) throw error;
+      return ids.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
+      setSelectedIds([]);
+      toast.success(count === 1 ? "תגית נמחקה" : `${count} תגיות נמחקו`);
+    },
+    onError: () => {
+      toast.error("שגיאה במחיקת התגיות");
     },
   });
 
@@ -322,6 +352,30 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
       setLocalTags(newOrder);
       updateSortOrdersMutation.mutate(newOrder);
     }
+  };
+
+  const filteredSelectedCount = filteredTags.filter((tag) => selectedIds.includes(tag.id)).length;
+  const allFilteredSelected = filteredTags.length > 0 && filteredSelectedCount === filteredTags.length;
+
+  const toggleSelect = (id: string, selected: boolean) => {
+    setSelectedIds((prev) => selected ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((item) => item !== id));
+  };
+
+  const toggleSelectAllFiltered = (selected: boolean) => {
+    const filteredIds = filteredTags.map((tag) => tag.id);
+    setSelectedIds((prev) => {
+      if (selected) {
+        return Array.from(new Set([...prev, ...filteredIds]));
+      }
+      return prev.filter((id) => !filteredIds.includes(id));
+    });
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    const label = selectedIds.length === 1 ? "תגית אחת" : `${selectedIds.length} תגיות`;
+    if (!confirm(`למחוק ${label}?`)) return;
+    bulkDeleteTagsMutation.mutate(selectedIds);
   };
 
   const dialogContent = (
@@ -385,6 +439,29 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
               לא נמצאו תגיות התואמות לחיפוש
             </div>
           ) : (
+            <>
+              <div className="flex items-center gap-2 px-1">
+                <Checkbox
+                  checked={allFilteredSelected}
+                  onCheckedChange={(checked) => toggleSelectAllFiltered(checked === true)}
+                  aria-label="בחר את כל התגיות"
+                />
+                <span className="text-xs text-muted-foreground flex-1">
+                  {selectedIds.length > 0 ? `${selectedIds.length} נבחרו` : "בחר הכל"}
+                </span>
+                {selectedIds.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-7"
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleteTagsMutation.isPending}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 ml-1" />
+                    מחק נבחרות
+                  </Button>
+                )}
+              </div>
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -398,6 +475,8 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
                   <SortableTagRow
                     key={tag.id}
                     tag={tag}
+                    selected={selectedIds.includes(tag.id)}
+                    onToggleSelect={toggleSelect}
                     onUpdate={(id, name, color) =>
                       updateTagMutation.mutate({ id, name, color })
                     }
@@ -406,6 +485,7 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
                 ))}
               </SortableContext>
             </DndContext>
+            </>
           )}
         </div>
       </div>
