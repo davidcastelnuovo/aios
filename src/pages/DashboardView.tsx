@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
+import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import {
   Select,
   SelectContent,
@@ -398,6 +399,46 @@ export default function DashboardView() {
     if (hasWooCommerce) platforms.push('woocommerce');
     return platforms;
   }, [tables, hasSeoReports, hasWooCommerce]);
+
+  const platformTabItems = useMemo((): ResponsiveTabItem[] => {
+    const items: ResponsiveTabItem[] = [{ value: "all", label: "📊 הכל" }];
+    if (availablePlatforms.includes("facebook")) {
+      items.push({
+        value: "facebook",
+        label: "Facebook",
+        iconNode: <Facebook className="h-4 w-4 text-blue-600" />,
+      });
+    }
+    if (availablePlatforms.includes("google_ads")) {
+      items.push({
+        value: "google_ads",
+        label: "Google Ads",
+        iconNode: getIntegrationIcon("google_ads"),
+      });
+    }
+    if (availablePlatforms.includes("google_analytics")) {
+      items.push({
+        value: "google_analytics",
+        label: "Analytics",
+        iconNode: getIntegrationIcon("google_analytics"),
+      });
+    }
+    if (availablePlatforms.includes("seo")) {
+      items.push({
+        value: "seo",
+        label: "SEO",
+        iconNode: <Globe className="h-4 w-4 text-green-600" />,
+      });
+    }
+    if (availablePlatforms.includes("woocommerce")) {
+      items.push({
+        value: "woocommerce",
+        label: "WooCommerce",
+        iconNode: <ShoppingCart className="h-4 w-4 text-emerald-600" />,
+      });
+    }
+    return items;
+  }, [availablePlatforms]);
 
   // Filter records by platform tab AND only use daily aggregate records for Analytics
   // IMPORTANT: Use only report_type='daily' for aggregation (KPI, charts).
@@ -1209,7 +1250,7 @@ export default function DashboardView() {
             חזרה
           </Button>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold">{dashboard.name}</h1>
+            <h1 className="text-xl md:text-3xl font-bold">{dashboard.name}</h1>
             {isAgencyDashboard && (
               <Badge variant="secondary" className="flex items-center gap-1">
                 <Building2 className="h-3 w-3" />
@@ -1254,10 +1295,10 @@ export default function DashboardView() {
           />
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
           {isOrganizationDashboard && (
             <Select value={selectedOrgAgencyId} onValueChange={setSelectedOrgAgencyId}>
-              <SelectTrigger className="w-[220px]">
+              <SelectTrigger className="w-full sm:w-[220px]">
                 <SelectValue placeholder="בחר סוכנות" />
               </SelectTrigger>
               <SelectContent>
@@ -1277,7 +1318,7 @@ export default function DashboardView() {
             </Button>
           )}
           <Select value={dateFilter} onValueChange={(v) => { setDateFilter(v); if (v === 'custom') setCalendarOpen(true); }}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1348,41 +1389,12 @@ export default function DashboardView() {
           {/* Platform Tabs */}
           {availablePlatforms.length > 0 && (
             <Tabs value={platformFilter} onValueChange={(v) => setPlatformFilter(v as PlatformFilter)}>
-              <TabsList className="flex-wrap h-auto gap-1">
-                <TabsTrigger value="all" className="flex items-center gap-2">
-                  📊 הכל
-                </TabsTrigger>
-                {availablePlatforms.includes('facebook') && (
-                  <TabsTrigger value="facebook" className="flex items-center gap-2">
-                    <Facebook className="h-4 w-4 text-blue-600" />
-                    Facebook
-                  </TabsTrigger>
-                )}
-                {availablePlatforms.includes('google_ads') && (
-                  <TabsTrigger value="google_ads" className="flex items-center gap-2">
-                    {getIntegrationIcon('google_ads')}
-                    Google Ads
-                  </TabsTrigger>
-                )}
-                {availablePlatforms.includes('google_analytics') && (
-                  <TabsTrigger value="google_analytics" className="flex items-center gap-2">
-                    {getIntegrationIcon('google_analytics')}
-                    Analytics
-                  </TabsTrigger>
-                )}
-                {availablePlatforms.includes('seo') && (
-                  <TabsTrigger value="seo" className="flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-green-600" />
-                    SEO
-                  </TabsTrigger>
-                )}
-                {availablePlatforms.includes('woocommerce') && (
-                  <TabsTrigger value="woocommerce" className="flex items-center gap-2">
-                    <ShoppingCart className="h-4 w-4 text-emerald-600" />
-                    WooCommerce
-                  </TabsTrigger>
-                )}
-              </TabsList>
+              <ResponsiveTabsList
+                items={platformTabItems}
+                value={platformFilter}
+                onValueChange={(v) => setPlatformFilter(v as PlatformFilter)}
+                mobileLabel="בחר פלטפורמה"
+              />
             </Tabs>
           )}
 

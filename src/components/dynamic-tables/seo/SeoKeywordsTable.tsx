@@ -23,7 +23,8 @@ import {
   Plus,
   EyeOff,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import { cn } from "@/lib/utils";
 import { formatGscCtrPercent } from "@/lib/gscFormat";
 import {
@@ -577,6 +578,15 @@ export function SeoKeywordsTable({
     if (activeTab !== null) return;
     if (resolvedDefaultTab !== "top10") setActiveTab(resolvedDefaultTab);
   }, [activeTab, resolvedDefaultTab]);
+
+  const keywordTabItems = useMemo((): ResponsiveTabItem[] => [
+    { value: "top10", label: `🏆 Top 20 מקודמים (${top20.length})` },
+    { value: "tracked", label: `🎯 ביטויים במעקב (${trackedFiltered.length})` },
+    { value: "all", label: `📋 כל הביטויים (${allKeywords.length})` },
+    { value: "3month", label: "📈 שינוי 3 חודשים" },
+    { value: "yearly", label: "📅 שינוי שנתי" },
+    { value: "monthly", label: "📅 שינוי חודשי" },
+  ], [top20.length, trackedFiltered.length, allKeywords.length]);
   const allDimmed = useMemo(() => {
     if (applyRelevanceFilter) return new Set<string>();
     // Manual marks are already removed from lists; dim only auto-filtered leftovers.
@@ -747,26 +757,13 @@ export function SeoKeywordsTable({
       </CardHeader>
       <CardContent className="p-0">
         <Tabs value={effectiveTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList dir="rtl" className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 gap-0">
-            <TabsTrigger value="top10" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              🏆 Top 20 מקודמים ({top20.length})
-            </TabsTrigger>
-            <TabsTrigger value="tracked" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              🎯 ביטויים במעקב ({trackedFiltered.length})
-            </TabsTrigger>
-            <TabsTrigger value="all" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              📋 כל הביטויים ({allKeywords.length})
-            </TabsTrigger>
-            <TabsTrigger value="3month" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              📈 שינוי 3 חודשים
-            </TabsTrigger>
-            <TabsTrigger value="yearly" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              📅 שינוי שנתי
-            </TabsTrigger>
-            <TabsTrigger value="monthly" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2.5 text-xs">
-              📅 שינוי חודשי
-            </TabsTrigger>
-          </TabsList>
+          <ResponsiveTabsList
+            items={keywordTabItems}
+            value={effectiveTab}
+            onValueChange={setActiveTab}
+            variant="underline"
+            mobileLabel="בחר תצוגת ביטויים"
+          />
 
           <TabsContent value="tracked" className="mt-0">
             <KeywordTable

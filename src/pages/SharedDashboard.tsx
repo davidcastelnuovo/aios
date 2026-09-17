@@ -1,11 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Select,
@@ -137,6 +138,7 @@ export default function SharedDashboard({
   const queryClient = useQueryClient();
   const [dateFilter, setDateFilter] = useState(initialDateFilter);
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
+  const [seoActiveTab, setSeoActiveTab] = useState("seo");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data, isLoading, error } = useQuery({
@@ -302,6 +304,66 @@ export default function SharedDashboard({
     if (hasSeo) platforms.push('seo');
     return platforms;
   }, [tables, hasWooCommerce, hasSeo, hasVisibleAnalyticsData]);
+
+  const platformTabItems = useMemo((): ResponsiveTabItem[] => {
+    const items: ResponsiveTabItem[] = [{ value: "all", label: "📊 הכל" }];
+    if (availablePlatforms.includes("facebook")) {
+      items.push({
+        value: "facebook",
+        label: "Facebook",
+        iconNode: <Facebook className="h-4 w-4 text-blue-600" />,
+      });
+    }
+    if (availablePlatforms.includes("google_ads")) {
+      items.push({
+        value: "google_ads",
+        label: "Google Ads",
+        iconNode: getIntegrationIcon("google_ads"),
+      });
+    }
+    if (availablePlatforms.includes("google_analytics")) {
+      items.push({
+        value: "google_analytics",
+        label: "Analytics",
+        iconNode: getIntegrationIcon("google_analytics"),
+      });
+    }
+    if (availablePlatforms.includes("woocommerce")) {
+      items.push({
+        value: "woocommerce",
+        label: "WooCommerce",
+        iconNode: <ShoppingCart className="h-4 w-4 text-emerald-600" />,
+      });
+    }
+    if (availablePlatforms.includes("seo")) {
+      items.push({
+        value: "seo",
+        label: "SEO",
+        iconNode: <Search className="h-4 w-4 text-purple-600" />,
+      });
+    }
+    return items;
+  }, [availablePlatforms]);
+
+  const seoTabItems = useMemo((): ResponsiveTabItem[] => {
+    const items: ResponsiveTabItem[] = [
+      { value: "seo", label: "SEO", icon: TrendingUp },
+    ];
+    if (hasSeoGsc) {
+      items.push({ value: "gsc", label: "Search Console", icon: Search });
+    }
+    if (hasSeoGa) {
+      items.push({ value: "ga", label: "Analytics", icon: BarChart3 });
+    }
+    items.push({ value: "monthly-work", label: "עבודה שבוצעה", icon: FileText });
+    return items;
+  }, [hasSeoGsc, hasSeoGa]);
+
+  useEffect(() => {
+    if (!seoTabItems.some((item) => item.value === seoActiveTab)) {
+      setSeoActiveTab(seoTabItems[0]?.value || "seo");
+    }
+  }, [seoActiveTab, seoTabItems]);
 
   // Filter records: platform filter + only use 'daily' aggregate records for Analytics
   const filteredRecords = useMemo(() => {
@@ -903,7 +965,7 @@ export default function SharedDashboard({
           </div>
         </div>
         {!snapshotMode && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <Button
             variant="outline"
             size="sm"
@@ -921,7 +983,7 @@ export default function SharedDashboard({
             רענן נתונים
           </Button>
           <Select value={dateFilter} onValueChange={setDateFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -937,39 +999,12 @@ export default function SharedDashboard({
       {/* Platform Tabs */}
       {availablePlatforms.length > 0 && (
         <Tabs value={platformFilter} onValueChange={(v) => setPlatformFilter(v as PlatformFilter)}>
-          <TabsList className="flex-wrap h-auto gap-1">
-            <TabsTrigger value="all">📊 הכל</TabsTrigger>
-            {availablePlatforms.includes('facebook') && (
-              <TabsTrigger value="facebook" className="flex items-center gap-2">
-                <Facebook className="h-4 w-4 text-blue-600" />
-                Facebook
-              </TabsTrigger>
-            )}
-            {availablePlatforms.includes('google_ads') && (
-              <TabsTrigger value="google_ads" className="flex items-center gap-2">
-                {getIntegrationIcon('google_ads')}
-                Google Ads
-              </TabsTrigger>
-            )}
-            {availablePlatforms.includes('google_analytics') && (
-              <TabsTrigger value="google_analytics" className="flex items-center gap-2">
-                {getIntegrationIcon('google_analytics')}
-                Analytics
-              </TabsTrigger>
-            )}
-            {availablePlatforms.includes('woocommerce') && (
-              <TabsTrigger value="woocommerce" className="flex items-center gap-2">
-                <ShoppingCart className="h-4 w-4 text-emerald-600" />
-                WooCommerce
-              </TabsTrigger>
-            )}
-            {availablePlatforms.includes('seo') && (
-              <TabsTrigger value="seo" className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-purple-600" />
-                SEO
-              </TabsTrigger>
-            )}
-          </TabsList>
+          <ResponsiveTabsList
+            items={platformTabItems}
+            value={platformFilter}
+            onValueChange={(v) => setPlatformFilter(v as PlatformFilter)}
+            mobileLabel="בחר פלטפורמה"
+          />
         </Tabs>
       )}
 
@@ -985,29 +1020,13 @@ export default function SharedDashboard({
       ) : platformFilter === 'woocommerce' ? (
         <PublicWooCommerceView sites={wooSites} orders={wooOrders} />
       ) : platformFilter === 'seo' ? (
-        <Tabs defaultValue="seo" className="w-full">
-          <TabsList className="w-full justify-start gap-1">
-            <TabsTrigger value="seo" className="gap-1.5">
-              <TrendingUp className="h-4 w-4" />
-              SEO
-            </TabsTrigger>
-            {hasSeoGsc && (
-              <TabsTrigger value="gsc" className="gap-1.5">
-                <Search className="h-4 w-4" />
-                Search Console
-              </TabsTrigger>
-            )}
-            {hasSeoGa && (
-              <TabsTrigger value="ga" className="gap-1.5">
-                <BarChart3 className="h-4 w-4" />
-                Analytics
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="monthly-work" className="gap-1.5">
-              <FileText className="h-4 w-4" />
-              עבודה שבוצעה
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={seoActiveTab} onValueChange={setSeoActiveTab} className="w-full">
+          <ResponsiveTabsList
+            items={seoTabItems}
+            value={seoActiveTab}
+            onValueChange={setSeoActiveTab}
+            mobileLabel="בחר דוח SEO"
+          />
           <TabsContent value="seo" className="space-y-4">
             <PublicSeoView
               tableName={dashboard?.client_name || 'SEO'}

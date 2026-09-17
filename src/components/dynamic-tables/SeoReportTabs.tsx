@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -268,39 +269,40 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     !!resolvedGsc.integrationId ||
     !!savedGscSiteUrl;
 
-  // Always render tabs so the Maskyoo (calls) tab is available even when no
-  // GSC/GA integrations are linked.
+  const [activeTab, setActiveTab] = useState("seo");
 
+  const seoTabItems = useMemo((): ResponsiveTabItem[] => {
+    const items: ResponsiveTabItem[] = [
+      { value: "seo", label: "SEO", icon: TrendingUp },
+    ];
+    if (hasGsc) {
+      items.push({ value: "gsc", label: "Search Console", icon: Search });
+    }
+    if (hasGa) {
+      items.push({ value: "ga", label: "Analytics", icon: BarChart3 });
+    }
+    items.push(
+      { value: "maskyoo", label: "שיחות מסקיו", icon: Phone },
+      { value: "monthly-work", label: "עבודה חודשית", icon: FileText },
+    );
+    return items;
+  }, [hasGsc, hasGa]);
+
+  useEffect(() => {
+    if (!seoTabItems.some((item) => item.value === activeTab)) {
+      setActiveTab(seoTabItems[0]?.value || "seo");
+    }
+  }, [activeTab, seoTabItems]);
 
   return (
     <div className="space-y-4" dir="rtl">
-      <Tabs defaultValue="seo" className="w-full">
-        <TabsList className="w-full justify-start gap-1">
-          <TabsTrigger value="seo" className="gap-1.5">
-            <TrendingUp className="h-4 w-4" />
-            SEO
-          </TabsTrigger>
-          {hasGsc && (
-            <TabsTrigger value="gsc" className="gap-1.5">
-              <Search className="h-4 w-4" />
-              Search Console
-            </TabsTrigger>
-          )}
-          {hasGa && (
-            <TabsTrigger value="ga" className="gap-1.5">
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </TabsTrigger>
-          )}
-          <TabsTrigger value="maskyoo" className="gap-1.5">
-            <Phone className="h-4 w-4" />
-            שיחות מסקיו
-          </TabsTrigger>
-          <TabsTrigger value="monthly-work" className="gap-1.5">
-            <FileText className="h-4 w-4" />
-            עבודה חודשית
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <ResponsiveTabsList
+          items={seoTabItems}
+          value={activeTab}
+          onValueChange={setActiveTab}
+          mobileLabel="בחר דוח SEO"
+        />
 
         <TabsContent value="maskyoo">
           <MaskyooSiblingCard clientId={clientId} fallbackTenantId={reportTenantId} />
@@ -404,7 +406,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                         saveLinkMutation.mutate({ key: 'linkedGaTableId', value: id });
                       }}
                     >
-                      <SelectTrigger className="h-8 w-[280px] text-sm">
+                      <SelectTrigger className="h-8 w-full max-w-full sm:w-[280px] text-sm">
                         <SelectValue placeholder="בחר חשבון Analytics" />
                       </SelectTrigger>
                       <SelectContent>
@@ -523,7 +525,7 @@ function GscTableSelector({ tables, selectedId, onSelect }: {
             <span>חיבור Search Console:</span>
           </div>
           <Select value={selectedId} onValueChange={onSelect}>
-            <SelectTrigger className="h-8 w-[280px] text-sm">
+            <SelectTrigger className="h-8 w-full max-w-full sm:w-[280px] text-sm">
               <SelectValue placeholder="בחר אתר Search Console" />
             </SelectTrigger>
             <SelectContent>
