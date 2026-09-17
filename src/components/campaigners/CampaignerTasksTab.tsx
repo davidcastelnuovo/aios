@@ -41,8 +41,16 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
           clients (name),
           leads (company_name)
         `)
-        .eq("campaigner_id", campaignerId)
         .order("due_date", { ascending: false });
+
+      const { data: collabRows } = await supabase
+        .from("task_collaborators")
+        .select("task_id")
+        .eq("campaigner_id", campaignerId);
+      const collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
+      query = collaboratorTaskIds.length > 0
+        ? query.or(`campaigner_id.eq.${campaignerId},id.in.(${collaboratorTaskIds.join(",")})`)
+        : query.eq("campaigner_id", campaignerId);
 
       if (crossTenantAgencyIds.length > 0) {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);

@@ -62,6 +62,39 @@ test('new assignment identifies the person who gave the task', () => {
   assert.doesNotMatch(message, /https:\/\/aios\.co\.il\/tasks\?task=/)
 })
 
+test('adding a collaborator tells them they were added, with a tenant link', () => {
+  const message = formatTaskNotificationMessage(
+    'task_collaborator_added',
+    task,
+    'אביאלי',
+    'אנה',
+    'אנה',
+    'דוד',
+    'marketingcaptain',
+  )
+  assert.match(message, /נוספת למשימה על ידי דוד/)
+  assert.match(message, /אביאלי/)
+  assert.match(message, /\/t\/marketingcaptain\/tasks\?task=task-123/)
+})
+
+test('a task update names the author, the task, and the link', () => {
+  const message = formatTaskNotificationMessage(
+    'task_update_added',
+    { ...task, notes: 'הערות פנימיות שלא אמורות להישלח' },
+    'אביאלי',
+    'אנה',
+    'אנה',
+    'דוד',
+    'marketingcaptain',
+    { updaterName: 'דוד', updateContent: 'יש עדכון לגבי נטישת העגלה' },
+  )
+  assert.match(message, /יש עדכון חדש במשימה מאת דוד/)
+  assert.match(message, /להכין דוח/)
+  assert.match(message, /יש עדכון לגבי נטישת העגלה/)
+  assert.match(message, /\/t\/marketingcaptain\/tasks\?task=task-123/)
+  assert.doesNotMatch(message, /הערות פנימיות/)
+})
+
 test('legacy unattributed assignment still has a useful fallback message', () => {
   const message = formatTaskNotificationMessage(
     'task_assigned',

@@ -34,6 +34,7 @@ import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 import { coerceHumanTaskStatus } from "@/lib/taskStatus";
 import { PRIORITY_BAR_LABELS, priorityBarColor } from "@/lib/taskPriority";
+import { notifyTaskCollaboratorAdded, notifyTaskUpdateAdded } from "@/lib/notifyTaskPeers";
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
 const FRAME = "rounded-xl border border-border/60 bg-card shadow-sm text-right";
@@ -385,6 +386,13 @@ export function TaskDetailDialog({
         added_by: user?.id,
       });
       if (error) throw error;
+      if (campaignerId !== userCampaignerId) {
+        void notifyTaskCollaboratorAdded({
+          taskId: task!.id,
+          campaignerId,
+          addedByUserId: user?.id,
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-collaborators", task?.id] });
@@ -416,6 +424,31 @@ export function TaskDetailDialog({
     },
   });
 
+  const persistAssignedCampaigner = useMutation({
+    mutationFn: async (campaignerId: string | null) => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ campaigner_id: campaignerId })
+        .eq("id", task!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigner-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-tasks"] });
+    },
+    onError: () => {
+      toast.error("שגיאה בשיוך קמפיינר");
+    },
+  });
+
+  const handleAssignedCampaignerChange = (campaignerId: string | null) => {
+    setAssignedCampaignerId(campaignerId || "");
+    setCampaignerSearch("");
+    persistAssignedCampaigner.mutate(campaignerId);
+  };
+
   // Add update mutation
   const addUpdate = useMutation({
     mutationFn: async () => {
@@ -426,6 +459,11 @@ export function TaskDetailDialog({
         user_id: user.id,
       });
       if (error) throw error;
+      void notifyTaskUpdateAdded({
+        taskId: task!.id,
+        userId: user.id,
+        updateContent: newUpdate,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-updates", task?.id] });
@@ -452,7 +490,7 @@ export function TaskDetailDialog({
 
   const availableCollaborators = campaigners?.filter(
     (c) =>
-      c.id !== task.campaigner_id &&
+      c.id !== assignedCampaignerId &&
       !collaborators?.some((col) => col.campaigner_id === c.id)
   );
 
@@ -566,8 +604,7 @@ export function TaskDetailDialog({
                       className="h-3 w-3 text-muted-foreground shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setAssignedCampaignerId("");
-                        setCampaignerSearch("");
+                        handleAssignedCampaignerChange(null);
                       }}
                     />
                   </button>
@@ -579,7 +616,7 @@ export function TaskDetailDialog({
                     setCampaignerSearch,
                     "חפש...",
                     filteredCampaigners.map((c) => ({ id: c.id, name: c.full_name })),
-                    setAssignedCampaignerId,
+                    (id) => handleAssignedCampaignerChange(id),
                   )
                 )}
               </div>

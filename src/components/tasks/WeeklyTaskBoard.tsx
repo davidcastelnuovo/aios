@@ -98,7 +98,7 @@ interface Task {
   clients?: { name: string; agency_id?: string | null } | null;
   leads?: { company_name?: string | null; contact_name?: string | null } | null;
   task_updates?: { id: string }[];
-  task_collaborators?: { id: string }[];
+  task_collaborators?: { id?: string; campaigner_id?: string }[];
 }
 
 interface CalendarEvent {
@@ -234,7 +234,7 @@ export function WeeklyTaskBoard() {
     clients?: { name: string; agency_id?: string | null } | null;
     campaigners?: { full_name: string } | null;
     task_updates?: { id: string }[];
-    task_collaborators?: { id: string }[];
+    task_collaborators?: { id?: string; campaigner_id?: string }[];
   };
 
   const linkedTaskId = searchParams.get("task");
@@ -250,7 +250,7 @@ export function WeeklyTaskBoard() {
           clients (name, agency_id),
           campaigners (full_name),
           task_updates (count),
-          task_collaborators (count)
+          task_collaborators (campaigner_id)
         `)
         .eq("id", linkedTaskId)
         .maybeSingle();
@@ -414,7 +414,7 @@ export function WeeklyTaskBoard() {
           leads (company_name, contact_name),
           campaigners (full_name),
           task_updates (count),
-          task_collaborators (count)
+          task_collaborators (campaigner_id)
         `);
 
       // Tenant scope only. The header agency is applied after the fetch, on the
@@ -427,15 +427,17 @@ export function WeeklyTaskBoard() {
       });
 
       let collaboratorTaskIds: string[] = [];
-      if (isMineQueueFilter(effectiveCampaignerFilter)) {
-        const personScopeCampaignerIds = mineIdentity?.campaignerIds ?? [];
-        if (personScopeCampaignerIds.length > 0) {
-          const { data: collabRows } = await supabase
-            .from("task_collaborators")
-            .select("task_id")
-            .in("campaigner_id", personScopeCampaignerIds);
-          collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
-        }
+      const collaboratorScopeIds = isMineQueueFilter(effectiveCampaignerFilter)
+        ? mineIdentity?.campaignerIds ?? []
+        : effectiveCampaignerFilter !== "all" && effectiveCampaignerFilter !== "none"
+          ? [effectiveCampaignerFilter]
+          : [];
+      if (collaboratorScopeIds.length > 0) {
+        const { data: collabRows } = await supabase
+          .from("task_collaborators")
+          .select("task_id")
+          .in("campaigner_id", collaboratorScopeIds);
+        collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
       }
 
       query = query.or(buildTasksBoardScopeOrFilter(boardScope));
@@ -480,8 +482,12 @@ export function WeeklyTaskBoard() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         query = (query as any).is("campaigner_id", null);
       } else if (effectiveCampaignerFilter !== "all") {
+        const namedParts = [`campaigner_id.eq.${effectiveCampaignerFilter}`];
+        if (collaboratorTaskIds.length > 0) {
+          namedParts.push(`id.in.(${collaboratorTaskIds.join(",")})`);
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        query = (query as any).eq("campaigner_id", effectiveCampaignerFilter);
+        query = (query as any).or(namedParts.join(","));
       }
 
       // Apply task type filter

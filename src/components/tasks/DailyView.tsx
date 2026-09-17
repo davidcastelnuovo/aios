@@ -26,7 +26,7 @@ interface Task {
   tenant_id: string | null;
   clients?: { name: string } | null;
   task_updates?: { id: string }[];
-  task_collaborators?: { id: string }[];
+  task_collaborators?: { id?: string; campaigner_id?: string }[];
 }
 
 interface DailyViewProps {

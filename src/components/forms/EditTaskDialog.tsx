@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { notifyTaskUpdateAdded } from "@/lib/notifyTaskPeers";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -332,6 +333,13 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
           attachments,
         });
       if (error) throw error;
+      if (userId) {
+        void notifyTaskUpdateAdded({
+          taskId: task.id,
+          userId,
+          updateContent: content,
+        });
+      }
     },
     onSuccess: () => {
       refetchUpdates();

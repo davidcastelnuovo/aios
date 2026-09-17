@@ -577,6 +577,8 @@ const TASK_NOTIFICATION_TYPES = new Set([
   'task_self_reminder',
   'task_overdue',
   'task_overdue_sent',
+  'task_collaborator_added',
+  'task_update_added',
 ])
 
 const CLIENT_FOLLOW_UP_NOTIFICATION_TYPES = new Set([
@@ -597,6 +599,58 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   if (taskError) throw taskError
   if (!task) return { handled: true, sent: false, reason: 'task not found' }
 
+  const overrideCampaignerId = String(requestBody?.data?.notify_campaigner_id || '').trim()
+  if (notificationType === 'task_update_added' && !overrideCampaignerId) {
+    const authorUserId = String(requestBody?.data?.user_id || '').trim()
+    let authorCampaignerId: string | null = null
+    let updaterName = String(requestBody?.data?.updater_name || '').trim()
+    if (authorUserId) {
+      const { data: authorProfile, error: authorError } = await supabase
+        .from('profiles')
+        .select('campaigner_id, full_name')
+        .eq('id', authorUserId)
+        .maybeSingle()
+      if (authorError) throw authorError
+      authorCampaignerId = authorProfile?.campaigner_id || null
+      updaterName = updaterName || String(authorProfile?.full_name || '').trim()
+    }
+    const recipientIds = new Set<string>()
+    if (task.campaigner_id && task.campaigner_id !== authorCampaignerId) {
+      recipientIds.add(task.campaigner_id)
+    }
+    const { data: collabs, error: collabError } = await supabase
+      .from('task_collaborators')
+      .select('campaigner_id')
+      .eq('task_id', task.id)
+    if (collabError) throw collabError
+    for (const row of collabs || []) {
+      if (row.campaigner_id && row.campaigner_id !== authorCampaignerId) {
+        recipientIds.add(row.campaigner_id)
+      }
+    }
+    if (recipientIds.size === 0) {
+      return { handled: true, sent: false, reason: 'no peer recipients for task update', task_id: task.id }
+    }
+    const results = []
+    for (const recipientId of recipientIds) {
+      results.push(await sendTaskNotificationFromTenantCarmen(supabase, {
+        ...requestBody,
+        data: {
+          ...(requestBody?.data || {}),
+          notify_campaigner_id: recipientId,
+          updater_name: updaterName,
+        },
+      }))
+    }
+    return {
+      handled: true,
+      sent: results.some((result) => result.sent),
+      task_id: task.id,
+      notification_type: notificationType,
+      recipients: results,
+    }
+  }
+
   // The client is the source of truth for the Carmen identity. A task can be
   // created while an owner is viewing another tenant, or for a cross-tenant
   // agency, so tasks.tenant_id is not reliable enough for outbound routing.
@@ -613,7 +667,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   const notificationTenantId = client?.tenant_id || task.tenant_id
   if (!notificationTenantId) return { handled: true, sent: false, reason: 'task tenant is missing' }
 
-  let campaignerId = task.campaigner_id
+  let campaignerId = overrideCampaignerId || task.campaigner_id
   if (!campaignerId && !task.sales_person_id && client?.id) {
     const today = new Date().toISOString().slice(0, 10)
     const { data: team } = await supabase
@@ -685,6 +739,25 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
       creatorName = creatorName || String(creatorSalesPerson?.full_name || '').trim()
       creatorPhone = creatorPhone || String(creatorSalesPerson?.phone || '').trim()
       creatorHomeTenantId = creatorHomeTenantId || creatorSalesPerson?.tenant_id || null
+    }
+  }
+
+  if (notificationType === 'task_collaborator_added') {
+    if (!overrideCampaignerId) {
+      return { handled: true, sent: false, reason: 'notify_campaigner_id missing', task_id: task.id }
+    }
+    const adderUserId = String(requestBody?.data?.user_id || '').trim()
+    if (adderUserId) {
+      const { data: adderProfile, error: adderError } = await supabase
+        .from('profiles')
+        .select('full_name, campaigner_id')
+        .eq('id', adderUserId)
+        .maybeSingle()
+      if (adderError) throw adderError
+      if (adderProfile?.full_name) creatorName = String(adderProfile.full_name).trim()
+      if (adderProfile?.campaigner_id && adderProfile.campaigner_id === (overrideCampaignerId || task.campaigner_id)) {
+        return { handled: true, sent: false, reason: 'self collaborator skip', task_id: task.id }
+      }
     }
   }
 
@@ -817,6 +890,10 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     recipient.full_name,
     creatorName,
     recipientTenantSlug,
+    {
+      updateContent: requestBody?.data?.update_content,
+      updaterName: requestBody?.data?.updater_name,
+    },
   )
   const sent = await sendCarmenReplyViaActionStep({
     supabase,

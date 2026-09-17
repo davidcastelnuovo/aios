@@ -200,7 +200,25 @@ type CampaignerBoardTask = {
   campaigner_id?: string | null;
   sales_person_id?: string | null;
   created_by?: string | null;
+  task_collaborators?: { campaigner_id?: string | null }[] | null;
 };
+
+export function taskCollaboratorCampaignerIds(
+  task: Pick<CampaignerBoardTask, "task_collaborators">,
+): string[] {
+  return (task.task_collaborators || [])
+    .map((row) => row.campaigner_id)
+    .filter((id): id is string => Boolean(id));
+}
+
+export function taskTouchesCampaigner(
+  task: CampaignerBoardTask,
+  campaignerId: string,
+): boolean {
+  if (!campaignerId) return false;
+  if (task.campaigner_id === campaignerId) return true;
+  return taskCollaboratorCampaignerIds(task).includes(campaignerId);
+}
 
 /** Client-side guard for the board campaigner toolbar / dialog filter. */
 export function matchesMineQueueTask(
@@ -210,6 +228,7 @@ export function matchesMineQueueTask(
 ): boolean {
   const campaignerIds = new Set(mine.campaignerIds);
   if (task.campaigner_id && campaignerIds.has(task.campaigner_id)) return true;
+  if (taskCollaboratorCampaignerIds(task).some((id) => campaignerIds.has(id))) return true;
   if (mine.kind === "assigned" && mine.salesPersonId && task.sales_person_id === mine.salesPersonId) {
     return true;
   }
@@ -232,7 +251,7 @@ export function filterTasksByCampaignerBoardFilter<T extends CampaignerBoardTask
     const mode = campaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
     return tasks.filter((task) => matchesMineQueueTask(task, mine, mode));
   }
-  return tasks.filter((task) => task.campaigner_id === campaignerFilter);
+  return tasks.filter((task) => taskTouchesCampaigner(task, campaignerFilter));
 }
 
 /** View-as preview: only tasks owned by or assigned to the selected user. */
@@ -246,6 +265,7 @@ export function filterTasksForBoardUserPreview<T extends CampaignerBoardTask>(
   return tasks.filter((task) => {
     if (task.created_by === boardUserId) return true;
     if (task.campaigner_id && campaignerIds.has(task.campaigner_id)) return true;
+    if (taskCollaboratorCampaignerIds(task).some((id) => campaignerIds.has(id))) return true;
     if (mine.kind === "assigned" && mine.salesPersonId && task.sales_person_id === mine.salesPersonId) {
       return true;
     }

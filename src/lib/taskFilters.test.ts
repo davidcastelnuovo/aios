@@ -12,6 +12,7 @@ import {
   buildMineQueueOrFilter,
   isMineQueueFilter,
   taskMatchesActivityPeriod,
+  taskTouchesCampaigner,
 } from "./taskFilters.ts";
 
 test("the tasks board opens on my tasks and tasks I assigned", () => {
@@ -70,6 +71,35 @@ test("filterTasksByCampaignerBoardFilter keeps only mine assignments", () => {
   assert.deepEqual(
     filterTasksByCampaignerBoardFilter(rows, "staff-other", mine).map((task) => task.id),
     ["2"],
+  );
+});
+
+test("mine includes tasks where I am a collaborator", () => {
+  const rows = [
+    { id: "assigned", campaigner_id: "staff-itay", sales_person_id: null, created_by: null },
+    {
+      id: "collab",
+      campaigner_id: "staff-other",
+      sales_person_id: null,
+      created_by: "user-other",
+      task_collaborators: [{ campaigner_id: "staff-itay" }],
+    },
+    { id: "unrelated", campaigner_id: "staff-other", sales_person_id: null, created_by: "user-other" },
+  ];
+  const mine = {
+    kind: "assigned" as const,
+    campaignerId: "staff-itay",
+    userId: "user-itay",
+    campaignerIds: ["staff-itay"],
+  };
+  assert.deepEqual(
+    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map((task) => task.id),
+    ["assigned", "collab"],
+  );
+  assert.equal(taskTouchesCampaigner(rows[1], "staff-itay"), true);
+  assert.deepEqual(
+    filterTasksByCampaignerBoardFilter(rows, "staff-itay", mine).map((task) => task.id),
+    ["assigned", "collab"],
   );
 });
 

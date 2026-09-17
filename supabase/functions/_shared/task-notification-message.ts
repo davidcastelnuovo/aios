@@ -25,6 +25,11 @@ export function resolveTaskNotificationLinkTenantId(input: {
   return input.campaignerTenantId || input.salesPersonTenantId || fallback
 }
 
+export type TaskNotificationExtras = {
+  updateContent?: string | null
+  updaterName?: string | null
+}
+
 export function formatTaskNotificationMessage(
   notificationType: string,
   task: any,
@@ -33,6 +38,7 @@ export function formatTaskNotificationMessage(
   recipientName: string,
   creatorName: string,
   tenantSlug?: string | null,
+  extras?: TaskNotificationExtras,
 ): string {
   const taskLink = buildTaskAppLink(task.id, tenantSlug)
   const details = [`היי ${recipientName || 'צוות'}, כאן כרמן 👋`, '']
@@ -79,6 +85,22 @@ export function formatTaskNotificationMessage(
       '',
       'אעדכן אותך כשהמשימה תסומן כבוצעה.',
     )
+  } else if (notificationType === 'task_collaborator_added') {
+    details.push(
+      creatorName
+        ? `נוספת למשימה על ידי ${creatorName} עבור ${clientName}:`
+        : `נוספת למשימה עבור ${clientName}:`,
+      `*${task.title}*`,
+    )
+  } else if (notificationType === 'task_update_added') {
+    details.push(
+      extras?.updaterName
+        ? `יש עדכון חדש במשימה מאת ${extras.updaterName}:`
+        : 'יש עדכון חדש במשימה:',
+      `*${task.title}*`,
+      `לקוח: ${clientName}`,
+    )
+    if (extras?.updateContent) details.push('', String(extras.updateContent))
   } else {
     details.push(
       creatorName
@@ -88,7 +110,9 @@ export function formatTaskNotificationMessage(
     )
   }
 
-  if (task.notes) details.push('', String(task.notes))
+  if (notificationType !== 'task_update_added' && task.notes) {
+    details.push('', String(task.notes))
+  }
   if (Number(task.priority) >= 8) details.push('', 'דחיפות: גבוהה')
   if (task.due_date) {
     const due = task.due_time

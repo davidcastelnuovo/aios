@@ -57,7 +57,7 @@ export type ChatTask = {
   leads?: { company_name?: string | null; contact_name?: string | null } | null;
   campaigners?: { full_name: string } | null;
   task_updates?: { id: string }[];
-  task_collaborators?: { id: string }[];
+  task_collaborators?: { id?: string; campaigner_id?: string }[];
 };
 
 const OPEN_CLOSED_TABS: {
