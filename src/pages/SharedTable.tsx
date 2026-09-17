@@ -353,7 +353,6 @@ export default function SharedTable() {
     const hasMaskyoo = maskyooSnapshots.length > 0;
     const seoMonthly = (data as any).seo_monthly || null;
     const hasMonthlyWork = Array.isArray(seoMonthly?.months) && seoMonthly.months.length > 0;
-    const showTabs = true;
 
     // Derive monthly NON-PAID GA sessions for the SEO traffic chart — using the
     // shared helper so the public viewer matches the internal SeoDashboardView 1:1.
