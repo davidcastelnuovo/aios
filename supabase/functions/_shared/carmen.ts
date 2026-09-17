@@ -1138,13 +1138,25 @@ async function resolveCarmenGroupIdentity(
     };
   }
 
-  const { data: identities } = await supabase
+  const { data: identities, error: identityErr } = await supabase
     .from('carmen_whatsapp_identities')
     .select('id, phone, entity_type, entity_id, client_id, display_name, role_title, status, verified_at, surfaces, scope_mode, allowed_group_ids, dev_escalation_tier')
     .eq('tenant_id', tenantId)
     .or(`phone.eq.${digits},phone.ilike.%${tail}`)
     .limit(3);
-  const identity = (identities || []).find((row: any) => phoneTail(row.phone) === tail);
+  // Schema lag: conversation-access columns may be missing — retry without them.
+  let identityRows = identities;
+  if (identityErr) {
+    console.warn('[carmen] identity select with surfaces failed, retrying base columns', identityErr.message || identityErr);
+    const { data: fallback } = await supabase
+      .from('carmen_whatsapp_identities')
+      .select('id, phone, entity_type, entity_id, client_id, display_name, role_title, status, verified_at')
+      .eq('tenant_id', tenantId)
+      .or(`phone.eq.${digits},phone.ilike.%${tail}`)
+      .limit(3);
+    identityRows = fallback;
+  }
+  const identity = (identityRows || []).find((row: any) => phoneTail(row.phone) === tail);
   if (identity?.status === 'approved') {
     if (!identityAllowsSurface(identity, SURFACE_GROUP)) {
       return {
