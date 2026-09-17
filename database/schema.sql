@@ -1691,7 +1691,8 @@ CREATE TABLE public.profiles (
   phone text,
   avatar_url text,
   notification_group_link text,
-  ui_mode text NOT NULL DEFAULT 'classic'::text
+  ui_mode text NOT NULL DEFAULT 'classic'::text,
+  leads_default_view text
 );
 
 CREATE TABLE public.rank_tracking_alert_logs (
