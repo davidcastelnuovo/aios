@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Users, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle, Pencil, Archive, Loader2 } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, GripVertical, ChevronDown, ChevronUp, User, Users, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, Pencil, Archive, Loader2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -76,6 +76,8 @@ import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 import { LeadsChatView } from "@/components/leads/LeadsChatView";
 import { LeadTableColumnsDialog } from "@/components/leads/LeadTableColumnsDialog";
+import { LeadViewModeToggle } from "@/components/leads/LeadViewModeToggle";
+import { useLeadsViewMode } from "@/hooks/useLeadsViewMode";
 import { archiveLeads, excludeArchivedLeads } from "@/lib/leadArchive";
 import { leadSearchOrFilter } from "@/lib/leadPhone";
 import {
@@ -801,17 +803,7 @@ export default function Leads() {
 
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [viewMode, setViewModeState] = useState<"kanban" | "table" | "chat">(() => {
-    if (typeof window === "undefined") return "kanban";
-    const saved = window.localStorage.getItem("leads-view-mode");
-    return saved === "kanban" || saved === "table" || saved === "chat" ? saved : "kanban";
-  });
-  const setViewMode = (mode: "kanban" | "table" | "chat") => {
-    setViewModeState(mode);
-    try {
-      window.localStorage.setItem("leads-view-mode", mode);
-    } catch {}
-  };
+  const { viewMode, setViewMode, defaultView, setDefaultView } = useLeadsViewMode(userId);
   const [tableLayout, setTableLayoutState] = useState<LeadTableLayout>(() => {
     if (typeof window === "undefined") return "by_user";
     return parseLeadTableLayout(window.localStorage.getItem(LEAD_TABLE_LAYOUT_STORAGE_KEY));
@@ -2518,36 +2510,13 @@ export default function Leads() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* View mode toggle (was desktop-only) */}
-            <div className="flex gap-1 border rounded-md p-1">
-              <Button
-                variant={viewMode === "kanban" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("kanban")}
-                className="h-8 w-8 p-0"
-                title="קנבן"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "table" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("table")}
-                className="h-8 w-8 p-0"
-                title="טבלה"
-              >
-                <TableIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "chat" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("chat")}
-                className="h-8 w-8 p-0"
-                title="תצוגת צ'אט"
-              >
-                <MessageCircle className="h-4 w-4" />
-              </Button>
-            </div>
+            <LeadViewModeToggle
+              compact
+              viewMode={viewMode}
+              defaultView={defaultView}
+              onViewModeChange={setViewMode}
+              onDefaultViewChange={setDefaultView}
+            />
           </div>
         </div>
 
@@ -2648,30 +2617,12 @@ export default function Leads() {
             )}
           </div>
           <div className="flex gap-2 items-center shrink-0">
-            {/* View mode toggle */}
-            <div className="flex gap-1 border rounded-md p-1">
-              <Button
-                variant={viewMode === "kanban" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("kanban")}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "table" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("table")}
-              >
-                <TableIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "chat" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("chat")}
-              >
-                <MessageCircle className="h-4 w-4" />
-              </Button>
-            </div>
+            <LeadViewModeToggle
+              viewMode={viewMode}
+              defaultView={defaultView}
+              onViewModeChange={setViewMode}
+              onDefaultViewChange={setDefaultView}
+            />
             {viewMode === "table" && (
               <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
             )}
