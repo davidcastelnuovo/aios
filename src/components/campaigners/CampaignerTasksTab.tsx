@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, Circle, Calendar, Plus, Clock, CheckCheck, Building2 } from "lucide-react";
-import { format } from "date-fns";
-import { he } from "date-fns/locale";
+import { CheckCircle2, Circle, Plus, Clock, CheckCheck } from "lucide-react";
 import { toast } from "sonner";
 import AddTaskForm from "@/components/forms/AddTaskForm";
-import EditTaskDialog from "@/components/forms/EditTaskDialog";
+import { TaskDetailDialog } from "@/components/tasks/TaskDetailDialog";
+import { EntityTaskCard } from "@/components/tasks/EntityTaskCard";
+import { withTaskCreatorNames } from "@/lib/taskCreators";
+import { chunkIds } from "@/lib/taskFilters";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
@@ -32,37 +33,62 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["campaigner-tasks", tenantId, campaignerId, dateFilter, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
-      let query = supabase
-        .from("tasks")
-        .select(`
+      const TASK_SELECT = `
           *,
           campaigners (full_name),
           agencies (name),
           clients (name),
           leads (company_name)
-        `)
-        .eq("campaigner_id", campaignerId)
-        .order("due_date", { ascending: false });
+        `;
 
-      if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
-      } else {
-        query = query.eq("tenant_id", tenantId!);
-      }
+      const { data: collabRows } = await supabase
+        .from("task_collaborators")
+        .select("task_id")
+        .eq("campaigner_id", campaignerId);
+      const collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
 
-      if (dateFilter === "week") {
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        query = query.gte("created_at", weekAgo.toISOString());
-      } else if (dateFilter === "month") {
-        const monthAgo = new Date();
-        monthAgo.setDate(monthAgo.getDate() - 30);
-        query = query.gte("created_at", monthAgo.toISOString());
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const applyTabFilters = (q: any) => {
+        if (crossTenantAgencyIds.length > 0) {
+          q = q.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          q = q.eq("tenant_id", tenantId!);
+        }
+        if (dateFilter === "week") {
+          const weekAgo = new Date();
+          weekAgo.setDate(weekAgo.getDate() - 7);
+          q = q.gte("created_at", weekAgo.toISOString());
+        } else if (dateFilter === "month") {
+          const monthAgo = new Date();
+          monthAgo.setDate(monthAgo.getDate() - 30);
+          q = q.gte("created_at", monthAgo.toISOString());
+        }
+        return q;
+      };
 
-      const { data, error } = await query;
+      const { data, error } = await applyTabFilters(
+        supabase
+          .from("tasks")
+          .select(TASK_SELECT)
+          .eq("campaigner_id", campaignerId)
+          .order("due_date", { ascending: false }),
+      );
       if (error) throw error;
-      return data;
+      let rows = data || [];
+      const have = new Set(rows.map((task: { id: string }) => task.id));
+      const missing = collaboratorTaskIds.filter((id) => !have.has(id));
+      for (const chunk of chunkIds(missing)) {
+        const { data: extra, error: extraError } = await applyTabFilters(
+          supabase
+            .from("tasks")
+            .select(TASK_SELECT)
+            .in("id", chunk)
+            .order("due_date", { ascending: false }),
+        );
+        if (extraError) throw extraError;
+        rows = rows.concat(extra || []);
+      }
+      return withTaskCreatorNames(rows);
     },
     enabled: !!campaignerId && !!tenantId,
   });
@@ -87,81 +113,6 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
 
   const inProgressTasks = tasks?.filter(t => t.status === "open" || t.status === "in_progress") || [];
   const completedTasks = tasks?.filter(t => t.status === "done") || [];
-
-  const getPriorityBadge = (priority: number) => {
-    if (priority >= 8) return "גבוהה";
-    if (priority >= 4) return "בינונית";
-    return "נמוכה";
-  };
-
-  const TaskCard = ({ task, isCompleted }: { task: any; isCompleted: boolean }) => (
-    <Card
-      className="cursor-pointer hover:shadow-md transition-shadow"
-      onClick={() => setEditingTask(task)}
-    >
-      <CardContent className="p-4 space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="font-semibold text-sm flex-1">{task.title}</h4>
-          {isCompleted ? (
-            <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-              <CheckCheck className="h-3 w-3 mr-1" />
-              הושלמה
-            </Badge>
-          ) : (
-            <Badge variant="outline">
-              דחיפות: {getPriorityBadge(task.priority)}
-            </Badge>
-          )}
-        </div>
-
-        {(task.clients?.name || task.leads?.company_name) && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Building2 className="h-3 w-3" />
-            {task.clients?.name || task.leads?.company_name}
-          </div>
-        )}
-
-        {task.due_date && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Calendar className="h-3 w-3" />
-            {format(new Date(task.due_date), "d בMMMM yyyy", { locale: he })}
-          </div>
-        )}
-
-        {task.notes && (
-          <p className="text-xs text-muted-foreground line-clamp-2">{task.notes}</p>
-        )}
-
-        {!isCompleted ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full mt-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              updateStatusMutation.mutate({ taskId: task.id, status: "done" });
-            }}
-          >
-            <CheckCircle2 className="h-4 w-4 mr-2" />
-            סיים משימה
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full mt-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              updateStatusMutation.mutate({ taskId: task.id, status: "open" });
-            }}
-          >
-            <Circle className="h-4 w-4 mr-2" />
-            פתח שוב
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  );
 
   if (isLoading) {
     return <div className="text-center py-8 text-muted-foreground">טוען משימות...</div>;
@@ -211,7 +162,13 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
             {inProgressTasks.length > 0 ? (
               inProgressTasks.map(task => (
-                <TaskCard key={task.id} task={task} isCompleted={false} />
+                <EntityTaskCard
+                  key={task.id}
+                  task={task}
+                  isCompleted={false}
+                  onEdit={() => setEditingTask(task)}
+                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "done" })}
+                />
               ))
             ) : (
               <Card className="border-dashed">
@@ -238,7 +195,13 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
           <div className="space-y-3 max-h-[500px] overflow-y-auto">
             {completedTasks.length > 0 ? (
               completedTasks.map(task => (
-                <TaskCard key={task.id} task={task} isCompleted={true} />
+                <EntityTaskCard
+                  key={task.id}
+                  task={task}
+                  isCompleted
+                  onEdit={() => setEditingTask(task)}
+                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "open" })}
+                />
               ))
             ) : (
               <Card className="border-dashed">
@@ -253,7 +216,7 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
       </div>
 
       {editingTask && (
-        <EditTaskDialog
+        <TaskDetailDialog
           task={editingTask}
           open={!!editingTask}
           onOpenChange={(open) => !open && setEditingTask(null)}

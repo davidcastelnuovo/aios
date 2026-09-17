@@ -11137,6 +11137,8 @@ export type Database = {
         | "send_signature"
       automation_trigger:
         | "task_assigned"
+        | "task_collaborator_added"
+        | "task_update_added"
         | "task_status_changed"
         | "lead_status_changed"
         | "lead_created"
@@ -11404,6 +11406,8 @@ export const Constants = {
       ],
       automation_trigger: [
         "task_assigned",
+        "task_collaborator_added",
+        "task_update_added",
         "task_status_changed",
         "lead_status_changed",
         "lead_created",

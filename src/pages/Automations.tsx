@@ -38,6 +38,8 @@ import {
 const TRIGGER_LABELS: Record<string, string> = {
   carmen_whatsapp_session: "שיחת כרמן ב-WhatsApp",
   task_assigned: "משימה שוייכה",
+  task_collaborator_added: "קמפיינר נוסף למשימה",
+  task_update_added: "עדכון נוסף למשימה",
   task_status_changed: "סטטוס משימה השתנה",
   lead_status_changed: "סטטוס ליד השתנה",
   lead_created: "ליד נוצר",

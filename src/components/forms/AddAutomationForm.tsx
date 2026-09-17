@@ -43,6 +43,8 @@ const formSchema = z.object({
   description: z.string().optional(),
   trigger_type: z.enum([
     "task_assigned",
+    "task_collaborator_added",
+    "task_update_added",
     "task_status_changed",
     "lead_status_changed",
     "lead_created",
@@ -107,6 +109,8 @@ type FormValues = z.infer<typeof formSchema>;
 
 const TRIGGER_OPTIONS = [
   { value: "task_assigned", label: "משימה שוייכה" },
+  { value: "task_collaborator_added", label: "קמפיינר נוסף למשימה" },
+  { value: "task_update_added", label: "עדכון נוסף למשימה" },
   { value: "task_status_changed", label: "סטטוס משימה השתנה" },
   { value: "lead_status_changed", label: "סטטוס ליד השתנה" },
   { value: "lead_created", label: "ליד נוצר" },
