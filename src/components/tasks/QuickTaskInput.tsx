@@ -133,11 +133,11 @@ export function QuickTaskInput({
         <Button
           type="submit"
           size="icon"
-          variant="outline"
           disabled={!title.trim() || disabled || (reminderEnabled && !reminderAt)}
-          className="h-9 w-9 shrink-0"
+          className="h-9 w-9 shrink-0 bg-emerald-600 text-white hover:bg-emerald-500 hover:text-white shadow-sm shadow-emerald-600/30 disabled:bg-emerald-600/45 disabled:text-white/90 disabled:opacity-100"
+          aria-label="הוסף משימה"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-5 w-5" strokeWidth={2.5} />
         </Button>
       </div>
 

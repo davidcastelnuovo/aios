@@ -29,7 +29,7 @@ import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
-import { TasksChatView } from "./TasksChatView";
+import { TasksChatView, TasksChatSearchInput } from "./TasksChatView";
 import { TasksToolbarFilters } from "./TasksToolbarFilters";
 import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
@@ -192,6 +192,7 @@ export function WeeklyTaskBoard() {
   // Everyone lands on their own queue: tasks assigned to the staff member
   // linked on the user (profiles.campaigner_id / sales_person_id).
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+  const [chatListSearch, setChatListSearch] = useState("");
   const appliedOwnerBoardDefaultRef = useRef(false);
   const presetKeyRef = useRef<string | null>(null);
   const effectiveCampaignerFilter = isViewingAs ? "mine" : filters.campaignerId;
@@ -1436,6 +1437,13 @@ export function WeeklyTaskBoard() {
             {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
             {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
           </h2>
+          {viewMode === "chat" && (
+            <TasksChatSearchInput
+              value={chatListSearch}
+              onChange={setChatListSearch}
+              className="w-[200px] shrink-0"
+            />
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -1487,7 +1495,14 @@ export function WeeklyTaskBoard() {
         <>
           <div className="flex flex-col md:hidden gap-2 shrink-0">
             <div className="flex items-center gap-2 justify-between">
-              <h1 className="text-xl font-bold">משימות</h1>
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-xl font-bold shrink-0">משימות</h1>
+                <TasksChatSearchInput
+                  value={chatListSearch}
+                  onChange={setChatListSearch}
+                  className="w-[160px] min-w-0 flex-1"
+                />
+              </div>
               <Button
                 variant="outline"
                 size="icon"
@@ -1535,6 +1550,9 @@ export function WeeklyTaskBoard() {
               onOpenClosedFilterChange={(openClosed) =>
                 setFilters((prev) => ({ ...prev, openClosed }))
               }
+              listSearch={chatListSearch}
+              onListSearchChange={setChatListSearch}
+              hideListSearch
             />
           </div>
         </>

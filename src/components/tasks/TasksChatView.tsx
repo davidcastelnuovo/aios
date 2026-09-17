@@ -91,6 +91,28 @@ const OPEN_CLOSED_TABS: {
   },
 ];
 
+export function TasksChatSearchInput({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("relative", className)}>
+      <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+      <Input
+        placeholder="חיפוש משימה או לקוח..."
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-full pr-7 text-xs bg-card"
+      />
+    </div>
+  );
+}
+
 interface TasksChatViewProps {
   tasks: ChatTask[];
   selectedTaskId: string | null;
@@ -105,6 +127,9 @@ interface TasksChatViewProps {
   defaultCampaignerId?: string | null;
   openClosedFilter?: OpenClosedFilter;
   onOpenClosedFilterChange?: (value: OpenClosedFilter) => void;
+  listSearch?: string;
+  onListSearchChange?: (value: string) => void;
+  hideListSearch?: boolean;
 }
 
 export function TasksChatView({
@@ -121,9 +146,14 @@ export function TasksChatView({
   defaultCampaignerId,
   openClosedFilter = "open",
   onOpenClosedFilterChange,
+  listSearch: listSearchProp,
+  onListSearchChange,
+  hideListSearch = false,
 }: TasksChatViewProps) {
   const isMobile = useIsMobile();
-  const [listSearch, setListSearch] = useState("");
+  const [uncontrolledSearch, setUncontrolledSearch] = useState("");
+  const listSearch = onListSearchChange ? (listSearchProp ?? "") : uncontrolledSearch;
+  const setListSearch = onListSearchChange ?? setUncontrolledSearch;
   const setOpenClosedFilter = onOpenClosedFilterChange ?? (() => undefined);
   const today = useMemo(() => {
     const d = new Date();
@@ -189,16 +219,10 @@ export function TasksChatView({
           )}
           dir="rtl"
         >
-          <div className={cn("border-b bg-card shrink-0 space-y-2", isMobile ? "p-2" : "p-3")}>
-            <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="חיפוש משימה, לקוח או קמפיינר..."
-                value={listSearch}
-                onChange={(e) => setListSearch(e.target.value)}
-                className="pr-9 h-9 text-sm bg-card"
-              />
-            </div>
+          <div className={cn("border-b bg-card shrink-0 space-y-2", isMobile ? "p-2" : "p-2.5")}>
+            {!hideListSearch && (
+              <TasksChatSearchInput value={listSearch} onChange={setListSearch} className="w-full" />
+            )}
             <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
               {OPEN_CLOSED_TABS.map((tab) => {
                 const active = openClosedFilter === tab.value;
@@ -228,9 +252,6 @@ export function TasksChatView({
                   </button>
                 );
               })}
-            </div>
-            <div className="text-xs text-muted-foreground text-center">
-              {filteredTasks.length} משימות
             </div>
           </div>
 
