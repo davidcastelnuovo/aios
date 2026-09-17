@@ -13,7 +13,6 @@ import { QuickTaskInput, type QuickTaskPayload } from "./QuickTaskInput";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 import { embedCount } from "@/lib/embedCount";
 import { filterTasksForChatSearch, sortTasksForChatList } from "@/lib/taskBoardQuery";
-import { TASK_STATUS_CONFIG } from "@/lib/taskStatus";
 
 function formatDueShort(value: string): string | null {
   const parsed = new Date(value);
@@ -52,8 +51,6 @@ export type ChatTask = {
   task_collaborators?: { id: string }[];
 };
 
-type StatusFilter = "all" | "open" | "in_progress" | "done";
-
 interface TasksChatViewProps {
   tasks: ChatTask[];
   selectedTaskId: string | null;
@@ -83,21 +80,16 @@ export function TasksChatView({
 }: TasksChatViewProps) {
   const isMobile = useIsMobile();
   const [listSearch, setListSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   }, []);
 
-  const filteredTasks = useMemo(() => {
-    const searched = filterTasksForChatSearch(tasks, listSearch);
-    const byStatus =
-      statusFilter === "all"
-        ? searched
-        : searched.filter((task) => task.status === statusFilter);
-    return sortTasksForChatList(byStatus, today);
-  }, [tasks, listSearch, statusFilter, today]);
+  const filteredTasks = useMemo(
+    () => sortTasksForChatList(filterTasksForChatSearch(tasks, listSearch), today),
+    [tasks, listSearch, today],
+  );
 
   const selectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
@@ -119,16 +111,6 @@ export function TasksChatView({
     },
     [onSelectTask],
   );
-
-  const statusCounts = useMemo(() => {
-    const searched = filterTasksForChatSearch(tasks, listSearch);
-    return {
-      all: searched.length,
-      open: searched.filter((task) => task.status === "open").length,
-      in_progress: searched.filter((task) => task.status === "in_progress").length,
-      done: searched.filter((task) => task.status === "done").length,
-    };
-  }, [tasks, listSearch]);
 
   return (
     <div
@@ -156,25 +138,6 @@ export function TasksChatView({
                 className="pr-9 h-9 text-sm"
               />
             </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              {([
-                ["all", "הכל"],
-                ["open", "פתוח"],
-                ["in_progress", "בתהליך"],
-                ["done", "הושלם"],
-              ] as const).map(([value, label]) => (
-                <Button
-                  key={value}
-                  size="sm"
-                  variant={statusFilter === value ? "default" : "outline"}
-                  className="h-7 px-2 text-[11px]"
-                  onClick={() => setStatusFilter(value)}
-                >
-                  {label}
-                  <span className="ms-1 text-[10px] opacity-80">{statusCounts[value]}</span>
-                </Button>
-              ))}
-            </div>
             <div className="mt-2 text-xs text-muted-foreground text-center">
               {filteredTasks.length} משימות
             </div>
@@ -197,7 +160,6 @@ export function TasksChatView({
               {filteredTasks.map((task) => {
                 const isSelected = task.id === selectedTaskId;
                 const overdue = isTaskOverdue(task, today);
-                const statusInfo = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.open;
                 const updatesCount = embedCount(task.task_updates);
                 const dueLabel = task.due_date ? formatDueShort(task.due_date) : null;
 
@@ -239,13 +201,6 @@ export function TasksChatView({
                           )}
                         </div>
                         <div className="flex items-center gap-1 mt-1.5 flex-wrap justify-end">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] px-1.5 py-0 h-4 border-0 text-white"
-                            style={{ backgroundColor: statusInfo.color }}
-                          >
-                            {statusInfo.label}
-                          </Badge>
                           <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", priorityClass(task.priority))}>
                             דחיפות {task.priority}
                           </Badge>

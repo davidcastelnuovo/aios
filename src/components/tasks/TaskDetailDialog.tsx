@@ -31,7 +31,7 @@ import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { syncTaskCalendarEvent } from "@/lib/calendarApi";
-import { coerceHumanTaskStatus, TASK_STATUS_CONFIG, type HumanTaskStatus } from "@/lib/taskStatus";
+import { coerceHumanTaskStatus } from "@/lib/taskStatus";
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
 const FRAME = "rounded-xl border border-border/60 bg-card shadow-sm text-right";
@@ -450,8 +450,6 @@ export function TaskDetailDialog({
       !collaborators?.some((col) => col.campaigner_id === c.id)
   );
 
-  const statusInfo = TASK_STATUS_CONFIG[status] || TASK_STATUS_CONFIG.open;
-
   const assignmentSearch = (
     open: boolean,
     setOpen: (v: boolean) => void,
@@ -519,23 +517,6 @@ export function TaskDetailDialog({
               <span className="truncate">{creatorName}</span>
             </span>
           )}
-          <Select value={status} onValueChange={(val) => setStatus(val as HumanTaskStatus)}>
-            <SelectTrigger
-              className="h-8 w-auto min-w-[96px] border-0 text-xs font-medium text-white"
-              style={{ backgroundColor: statusInfo.color }}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.entries(TASK_STATUS_CONFIG) as [HumanTaskStatus, { label: string; color: string }][]).map(
-                ([key, config]) => (
-                  <SelectItem key={key} value={key}>
-                    {config.label}
-                  </SelectItem>
-                ),
-              )}
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
@@ -841,7 +822,7 @@ export function TaskDetailDialog({
             <section className={cn(FRAME, "space-y-3 p-3")}>
               <div className="flex items-center gap-1.5 text-sm font-medium">
                 <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                תאריכים, סטטוס ודחיפות
+                תאריכים ודחיפות
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
