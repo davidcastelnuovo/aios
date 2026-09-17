@@ -227,11 +227,11 @@ export function TasksChatView({
           )}
           dir="rtl"
         >
-          <div className={cn("border-b bg-card shrink-0 space-y-2", isMobile ? "p-2" : "p-2.5")}>
+          <div className={cn("border-b bg-card shrink-0", isMobile ? "p-1.5 space-y-1.5" : "p-1.5")}>
             {!hideListSearch && (
               <TasksChatSearchInput value={listSearch} onChange={setListSearch} className="w-full" />
             )}
-            <div className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
+            <div className="flex items-center gap-1 rounded-lg bg-background p-0.5">
               {OPEN_CLOSED_TABS.map((tab) => {
                 const active = openClosedFilter === tab.value;
                 const Icon = tab.icon;
@@ -241,17 +241,15 @@ export function TasksChatView({
                     type="button"
                     onClick={() => setOpenClosedFilter(tab.value)}
                     className={cn(
-                      "h-12 rounded-lg text-[11px] font-extrabold transition-all inline-flex flex-col items-center justify-center gap-0.5 px-1 leading-tight",
+                      "h-8 flex-1 rounded-md text-[11px] font-bold transition-all inline-flex items-center justify-center gap-1 px-1.5 min-w-0",
                       active ? tab.active : tab.idle,
                     )}
                   >
-                    <span className="inline-flex items-center gap-0.5">
-                      <Icon className="h-3.5 w-3.5 shrink-0" />
-                      {tab.label}
-                    </span>
+                    <Icon className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{tab.label}</span>
                     <span
                       className={cn(
-                        "min-w-5 rounded-full px-1.5 text-[10px] leading-4 font-bold",
+                        "min-w-4 rounded-full px-1 text-[10px] leading-4 font-bold",
                         active ? tab.countActive : tab.countIdle,
                       )}
                     >

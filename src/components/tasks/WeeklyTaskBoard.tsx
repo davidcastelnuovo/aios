@@ -1477,17 +1477,17 @@ export function WeeklyTaskBoard() {
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-x-auto">
           {viewMode !== "chat" && (
             <>
-          <Button variant="outline" size="icon" onClick={goToNext}>
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={goToNext}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={goToPrev}>
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={goToPrev}>
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button variant="outline" onClick={goToToday} className="gap-2">
-            <CalendarDays className="h-4 w-4" />
+          <Button variant="outline" onClick={goToToday} className="h-8 gap-1.5 px-2 text-xs shrink-0">
+            <CalendarDays className="h-3.5 w-3.5" />
             היום
           </Button>
             </>
@@ -1495,13 +1495,13 @@ export function WeeklyTaskBoard() {
           {toolbarFilters}
           <Button
             variant="outline"
-            className="h-9 gap-2 relative"
+            className="h-8 gap-1.5 px-2 relative shrink-0 text-xs"
             onClick={() => setFiltersDialogOpen(true)}
           >
-            <Filter className="h-4 w-4" />
+            <Filter className="h-3.5 w-3.5" />
             מתקדם
             {activeFiltersCount > 0 && (
-              <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
+              <Badge variant="secondary" className="h-4 w-4 p-0 justify-center text-[10px]">
                 {activeFiltersCount}
               </Badge>
             )}
@@ -1510,20 +1510,20 @@ export function WeeklyTaskBoard() {
             calendarConnected ? (
             <Button
               variant="outline"
-              className="h-9 gap-2"
+              className="h-8 gap-1.5 px-2 text-xs shrink-0"
               onClick={() => syncToCalendar.mutate()}
               disabled={syncToCalendar.isPending}
             >
-              <RefreshCw className={`h-4 w-4 ${syncToCalendar.isPending ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${syncToCalendar.isPending ? "animate-spin" : ""}`} />
               סנכרן
             </Button>
             ) : (
             <Button
-              className="h-9 gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+              className="h-8 gap-1.5 px-2 text-xs shrink-0 bg-emerald-600 text-white hover:bg-emerald-500"
               onClick={() => void handleConnectCalendar()}
               disabled={connectingCalendar}
             >
-              <CalendarDays className={`h-4 w-4 ${connectingCalendar ? "animate-pulse" : ""}`} />
+              <CalendarDays className={`h-3.5 w-3.5 ${connectingCalendar ? "animate-pulse" : ""}`} />
               {connectingCalendar ? "מתחבר..." : "חבר יומן"}
             </Button>
             )

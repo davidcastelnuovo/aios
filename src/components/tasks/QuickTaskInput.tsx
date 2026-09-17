@@ -143,7 +143,7 @@ export function QuickTaskInput({
 
       {isTyping && (clientsList || campaignersList || canSetReminder) && (
         <div className="space-y-2 rounded-md border border-dashed border-border/70 bg-muted/20 p-2">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-nowrap items-center gap-1.5 min-w-0">
             <Popover open={executionOpen} onOpenChange={setExecutionOpen}>
               <PopoverTrigger asChild>
                 <Button

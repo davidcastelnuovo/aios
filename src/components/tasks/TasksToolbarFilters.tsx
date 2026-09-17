@@ -78,13 +78,13 @@ export function TasksToolbarFilters({
   );
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-1.5 flex-nowrap min-w-0">
       <Select
         value={campaignerFilter}
         onValueChange={onCampaignerFilterChange}
         disabled={campaignerFilterDisabled}
       >
-        <SelectTrigger className="h-9 w-[168px] text-xs bg-card gap-1.5">
+        <SelectTrigger className="h-8 w-[132px] text-xs bg-card gap-1 px-2">
           <Users className="h-3.5 w-3.5 shrink-0" />
           <SelectValue placeholder={t("role_campaigner")} />
         </SelectTrigger>
@@ -113,7 +113,7 @@ export function TasksToolbarFilters({
           <Button
             variant="outline"
             className={cn(
-              "h-9 min-w-[150px] max-w-[220px] justify-start text-xs bg-card font-normal gap-1.5",
+              "h-8 min-w-[118px] max-w-[160px] justify-start text-xs bg-card font-normal gap-1 px-2",
               relatedKind === "all" && "text-muted-foreground",
             )}
           >
@@ -241,7 +241,7 @@ export function TasksToolbarFilters({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-9 w-9 shrink-0"
+            className="h-8 w-8 shrink-0"
             aria-label="נקה לקוח או ליד"
             onClick={() => onRelatedChange({ relatedKind: "all", relatedId: "", relatedLabel: "" })}
           >
@@ -251,7 +251,7 @@ export function TasksToolbarFilters({
       </div>
 
       <Select value={period} onValueChange={(value) => onPeriodChange(value as TaskPeriodFilter)}>
-        <SelectTrigger className="h-9 w-[168px] text-xs bg-card gap-1.5">
+        <SelectTrigger className="h-8 w-[128px] text-xs bg-card gap-1 px-2">
           <CalendarDays className="h-3.5 w-3.5 shrink-0" />
           <SelectValue placeholder="תקופה" />
         </SelectTrigger>
@@ -267,12 +267,12 @@ export function TasksToolbarFilters({
       {onSaveFilterPreset && (
         <Button
           variant="outline"
-          className="h-9 gap-1.5 text-xs"
+          className="h-8 gap-1 px-2 text-xs shrink-0"
           onClick={onSaveFilterPreset}
           disabled={saveDisabled}
         >
           <Bookmark className="h-3.5 w-3.5" />
-          שמור כברירת מחדל
+          שמור
         </Button>
       )}
     </div>
