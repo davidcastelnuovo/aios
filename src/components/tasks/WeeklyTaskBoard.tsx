@@ -67,6 +67,11 @@ import {
 } from "@/lib/taskFilters";
 import { buildChatTaskOrFilter, buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
 import { isTaskOverdue } from "@/lib/taskDeadline";
+import {
+  checkCalendarConnection,
+  getStoredCalendarProvider,
+  startCalendarOAuth,
+} from "@/lib/calendarApi";
 
 interface Task {
   id: string;
@@ -332,11 +337,11 @@ export function WeeklyTaskBoard() {
     queryKey: ["calendar-events-weekly", format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), tenantId],
     queryFn: async () => {
       try {
-        const { getCalendarEvents } = await import("@/lib/calendarApi");
+        const { getCalendarEvents, getStoredCalendarProvider } = await import("@/lib/calendarApi");
         const data = await getCalendarEvents(
           dateRange.start.toISOString(),
           endOfDay(addDays(dateRange.end, 1)).toISOString(),
-          { tenantId: tenantId! }
+          { tenantId: tenantId!, provider: getStoredCalendarProvider() }
         );
         
         // Transform to our CalendarEvent format
@@ -361,6 +366,32 @@ export function WeeklyTaskBoard() {
     enabled: !!user?.id && !!tenantId && viewMode !== "monthly" && viewMode !== "chat",
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
+
+  const calendarProvider = getStoredCalendarProvider();
+  const { data: calendarStatus } = useQuery({
+    queryKey: ["calendar-status", tenantId, calendarProvider],
+    queryFn: () => checkCalendarConnection({ tenantId: tenantId!, provider: calendarProvider }),
+    enabled: !!tenantId && viewMode !== "chat",
+    staleTime: 1000 * 60,
+  });
+  const calendarConnected = Boolean(calendarStatus?.connected);
+  const [connectingCalendar, setConnectingCalendar] = useState(false);
+
+  const handleConnectCalendar = async () => {
+    if (!tenantId || connectingCalendar) return;
+    setConnectingCalendar(true);
+    try {
+      await startCalendarOAuth(tenantId, calendarProvider);
+      await queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
+      await queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      toast.success("היומן חובר");
+    } catch (error) {
+      console.error("[connectCalendar] failed", error);
+      toast.error((error as Error).message || "שגיאה בחיבור ליומן");
+    } finally {
+      setConnectingCalendar(false);
+    }
+  };
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching, isSuccess, isError, error: tasksError } = useQuery({
@@ -1476,6 +1507,7 @@ export function WeeklyTaskBoard() {
             )}
           </Button>
           {viewMode !== "chat" && (
+            calendarConnected ? (
             <Button
               variant="outline"
               className="h-9 gap-2"
@@ -1485,9 +1517,36 @@ export function WeeklyTaskBoard() {
               <RefreshCw className={`h-4 w-4 ${syncToCalendar.isPending ? "animate-spin" : ""}`} />
               סנכרן
             </Button>
+            ) : (
+            <Button
+              className="h-9 gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+              onClick={() => void handleConnectCalendar()}
+              disabled={connectingCalendar}
+            >
+              <CalendarDays className={`h-4 w-4 ${connectingCalendar ? "animate-pulse" : ""}`} />
+              {connectingCalendar ? "מתחבר..." : "חבר יומן"}
+            </Button>
+            )
           )}
         </div>
       </div>
+
+      {viewMode !== "chat" && calendarStatus && !calendarConnected && (
+        <div className="mb-2 rounded-md border border-emerald-500/30 bg-emerald-50 px-3 py-2 text-sm flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-emerald-950">
+            היומן לא מחובר. חבר Google Calendar מכאן כדי לראות אירועים ליד המשימות.
+          </span>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-500"
+            onClick={() => void handleConnectCalendar()}
+            disabled={connectingCalendar}
+          >
+            <CalendarDays className="h-4 w-4" />
+            {connectingCalendar ? "מתחבר..." : "חבר יומן"}
+          </Button>
+        </div>
+      )}
 
       {/* Board with Overdue Panel */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
