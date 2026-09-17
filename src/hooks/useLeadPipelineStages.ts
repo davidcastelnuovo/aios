@@ -114,14 +114,16 @@ export function useLeadPipelineStageMutations() {
 
   const updateSortOrders = useMutation({
     mutationFn: async (updates: { id: string; sort_order: number }[]) => {
-      for (const update of updates) {
-        const { error } = await supabase
-          .from("lead_pipeline_stages")
-          .update({ sort_order: update.sort_order })
-          .eq("id", update.id);
-        
-        if (error) throw error;
-      }
+      const results = await Promise.all(
+        updates.map((update) =>
+          supabase
+            .from("lead_pipeline_stages")
+            .update({ sort_order: update.sort_order })
+            .eq("id", update.id)
+        ),
+      );
+      const failed = results.find((result) => result.error);
+      if (failed?.error) throw failed.error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lead-pipeline-stages", tenantId] });
