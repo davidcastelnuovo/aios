@@ -23,10 +23,11 @@ interface Props {
   taskId?: string;
   placeholder?: string;
   rows?: number;
-  /** stacked = notes with attach bar; cubes = notes cube + files cube side by side */
-  variant?: "stacked" | "cubes";
+  /** stacked = notes with attach bar; notes = notes cube only; files = files cube only; cubes = notes + files side by side */
+  variant?: "stacked" | "cubes" | "notes" | "files";
   notesTitle?: string;
   notesFooter?: ReactNode;
+  thumbSize?: "sm" | "lg";
 }
 
 const MAX = 10 * 1024 * 1024;
@@ -58,6 +59,7 @@ export function NotesWithAttachments({
   variant = "stacked",
   notesTitle = "הערות",
   notesFooter,
+  thumbSize = "sm",
 }: Props) {
   const { tenantId } = useCurrentTenant();
   const [uploading, setUploading] = useState(false);
@@ -164,8 +166,9 @@ export function NotesWithAttachments({
     />
   );
 
+  const largeThumbs = thumbSize === "lg";
   const thumbs = (
-    <div className="flex flex-wrap gap-2">
+    <div className={cn("flex flex-wrap gap-2", largeThumbs && "gap-3")}>
       {attachments.map((a, i) => {
         const isImg = a.type?.startsWith("image/");
         if (isImg && !signed[a.path]) void getThumb(a);
@@ -179,19 +182,22 @@ export function NotesWithAttachments({
                 <img
                   src={signed[a.path]}
                   alt={a.name}
-                  className="h-20 w-20 object-cover"
+                  className={cn("object-cover", largeThumbs ? "h-36 w-36" : "h-20 w-20")}
                 />
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => open(a)}
-                className="flex flex-col items-start justify-center min-h-[5rem] w-[8.5rem] px-2 py-2 text-xs gap-1 text-right"
+                className={cn(
+                  "flex flex-col items-start justify-center px-2 py-2 text-xs gap-1 text-right",
+                  largeThumbs ? "min-h-[9rem] w-[10.5rem]" : "min-h-[5rem] w-[8.5rem]",
+                )}
               >
                 {isImg ? (
-                  <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  <ImageIcon className={cn(largeThumbs ? "h-8 w-8" : "h-6 w-6", "text-muted-foreground")} />
                 ) : (
-                  <FileText className="h-6 w-6 text-red-500" />
+                  <FileText className={cn(largeThumbs ? "h-8 w-8" : "h-6 w-6", "text-red-500")} />
                 )}
                 <span className="truncate w-full font-medium">{a.name}</span>
                 {a.size ? (
@@ -202,7 +208,7 @@ export function NotesWithAttachments({
             <button
               type="button"
               onClick={() => remove(i)}
-              className="absolute top-0.5 left-0.5 bg-background/90 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+              className="absolute top-0.5 left-0.5 bg-card/90 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
               aria-label="הסר קובץ"
             >
               <X className="h-3 w-3" />
@@ -213,67 +219,95 @@ export function NotesWithAttachments({
     </div>
   );
 
+  const notesCube = (
+    <div className="rounded-xl border border-border/60 bg-card p-3 flex flex-col min-h-[180px] h-full shadow-sm text-right">
+      <div className="flex items-center gap-1.5 text-sm font-medium mb-2">
+        <MessageSquare className="h-4 w-4 text-muted-foreground" />
+        {notesTitle}
+      </div>
+      <Textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onPaste={handlePaste}
+        placeholder={placeholder}
+        rows={rows}
+        className="flex-1 min-h-[72px] border-0 bg-transparent focus-visible:ring-0 resize-none p-0"
+      />
+      {notesFooter ? <div className="mt-3 pt-3 border-t space-y-2">{notesFooter}</div> : null}
+    </div>
+  );
+
+  const filesCube = (
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        upload(e.dataTransfer.files);
+      }}
+      onPaste={handlePaste}
+      className={cn(
+        "rounded-xl border border-border/60 bg-card p-3 flex flex-col shadow-sm text-right",
+        largeThumbs ? "min-h-[200px]" : "min-h-[180px]",
+        dragOver && "border-primary bg-primary/5",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 text-sm font-medium">
+          <Paperclip className="h-4 w-4 text-muted-foreground" />
+          קבצים
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          צרף
+        </Button>
+      </div>
+      {attachments.length > 0 ? (
+        <div className="flex-1">{thumbs}</div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className={cn(
+            "flex-1 rounded-lg border border-dashed border-muted-foreground/30 text-xs text-muted-foreground px-3 py-4 text-center hover:bg-muted/20 transition-colors",
+            largeThumbs && "min-h-[140px]",
+          )}
+        >
+          גרור קבצים לכאן או לחץ לבחירה
+        </button>
+      )}
+      {attachments.length > 0 && (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="mt-3 rounded-lg border border-dashed border-muted-foreground/30 text-xs text-muted-foreground px-3 py-2 text-center hover:bg-muted/20 transition-colors"
+        >
+          גרור קבצים נוספים או לחץ לבחירה
+        </button>
+      )}
+      {fileInput}
+    </div>
+  );
+
+  if (variant === "notes") return notesCube;
+  if (variant === "files") return filesCube;
+
   if (variant === "cubes") {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3" dir="rtl">
-        <div className="rounded-xl border border-border/60 bg-card p-3 flex flex-col min-h-[180px] shadow-sm text-right">
-          <div className="flex items-center gap-1.5 text-sm font-medium mb-2">
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            {notesTitle}
-          </div>
-          <Textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onPaste={handlePaste}
-            placeholder={placeholder}
-            rows={rows}
-            className="flex-1 min-h-[88px] border-0 bg-transparent focus-visible:ring-0 resize-none p-0"
-          />
-          {notesFooter ? <div className="mt-3 pt-3 border-t space-y-3">{notesFooter}</div> : null}
-        </div>
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            upload(e.dataTransfer.files);
-          }}
-          className={cn(
-            "rounded-xl border border-border/60 bg-card p-3 flex flex-col min-h-[180px] shadow-sm text-right",
-            dragOver && "border-primary bg-primary/5",
-          )}
-        >
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-1.5 text-sm font-medium">
-              <Paperclip className="h-4 w-4 text-muted-foreground" />
-              קבצים
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-            >
-              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-              צרף
-            </Button>
-          </div>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="flex-1 rounded-lg border border-dashed border-muted-foreground/30 text-xs text-muted-foreground px-3 py-4 text-center hover:bg-muted/30 transition-colors"
-          >
-            גרור קבצים לכאן או לחץ לבחירה
-          </button>
-          {attachments.length > 0 && <div className="mt-3">{thumbs}</div>}
-          {fileInput}
-        </div>
+        {notesCube}
+        {filesCube}
       </div>
     );
   }

@@ -20,7 +20,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle, Link2, Users, Building2, Megaphone } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle, Link2, Users, Building2, Megaphone, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -34,7 +34,7 @@ import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 import { coerceHumanTaskStatus, TASK_STATUS_CONFIG, type HumanTaskStatus } from "@/lib/taskStatus";
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
-const FRAME = "rounded-xl border border-border/60 bg-card p-3 shadow-sm text-right";
+const FRAME = "rounded-xl border border-border/60 bg-card shadow-sm text-right";
 
 function isUsableDate(value: Date | undefined): value is Date {
   return Boolean(value) && !Number.isNaN(value.getTime());
@@ -462,7 +462,7 @@ export function TaskDetailDialog({
     onPick: (id: string) => void,
   ) => (
     <div className="relative flex-1 min-w-0">
-      <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
       <Input
         value={search}
         onChange={(e) => {
@@ -472,7 +472,7 @@ export function TaskDetailDialog({
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder={placeholder}
-        className="h-9 pr-8 bg-card"
+        className="h-7 pr-7 bg-card text-xs"
       />
       {open && options.length > 0 && (
         <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
@@ -503,13 +503,22 @@ export function TaskDetailDialog({
             <DialogTitle className="sr-only">פרטי משימה</DialogTitle>
           </DialogHeader>
         )}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 pb-3">
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="כותרת המשימה"
             className="h-10 flex-1 border-0 bg-transparent px-0 text-base font-bold shadow-none focus-visible:ring-0"
           />
+          {creatorName && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground shrink-0 max-w-[11rem]"
+              title={`המשימה ניתנה על ידי ${creatorName}`}
+            >
+              <UserRound className="h-3 w-3" />
+              <span className="truncate">{creatorName}</span>
+            </span>
+          )}
           <Select value={status} onValueChange={(val) => setStatus(val as HumanTaskStatus)}>
             <SelectTrigger
               className="h-8 w-auto min-w-[96px] border-0 text-xs font-medium text-white"
@@ -531,36 +540,29 @@ export function TaskDetailDialog({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/20 p-4 space-y-3">
-            {creatorName && (
-              <div className={cn("flex items-center gap-2 px-3 py-2 text-sm", FRAME)}>
-                <UserRound className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">המשימה ניתנה על ידי</span>
-                <span className="font-medium">{creatorName}</span>
-              </div>
-            )}
-
-            <section className={cn(FRAME, "space-y-0")}>
-              <div className="flex items-center gap-1.5 text-sm font-medium mb-1 pb-2">
-                <Link2 className="h-4 w-4 text-muted-foreground" />
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,0.38fr)_minmax(0,1fr)] gap-3 items-start">
+            <section className={cn(FRAME, "space-y-0 p-2.5")}>
+              <div className="flex items-center gap-1.5 text-xs font-medium mb-1 pb-1.5">
+                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
                 שיוך
               </div>
-              <div className="flex items-center gap-3 py-2 border-t">
-                <div className="w-[4.5rem] shrink-0 flex items-center gap-1 text-sm text-muted-foreground">
-                  <Megaphone className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-2 py-1.5 border-t">
+                <div className="w-14 shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Megaphone className="h-3 w-3" />
                   אחראי
                 </div>
                 {assignedCampaignerName && !campaignerDropdownOpen ? (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-2 py-1 text-sm"
+                    className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-1.5 py-0.5 text-xs max-w-full"
                     onClick={() => setCampaignerDropdownOpen(true)}
                   >
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold">
                       {personInitials(assignedCampaignerName)}
                     </span>
-                    {assignedCampaignerName}
+                    <span className="truncate">{assignedCampaignerName}</span>
                     <X
-                      className="h-3.5 w-3.5 text-muted-foreground"
+                      className="h-3 w-3 text-muted-foreground shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         setAssignedCampaignerId("");
@@ -574,29 +576,29 @@ export function TaskDetailDialog({
                     setCampaignerDropdownOpen,
                     campaignerSearch,
                     setCampaignerSearch,
-                    "חפש קמפיינר...",
+                    "חפש...",
                     filteredCampaigners.map((c) => ({ id: c.id, name: c.full_name })),
                     setAssignedCampaignerId,
                   )
                 )}
               </div>
-              <div className="flex items-center gap-3 py-2 border-t">
-                <div className="w-[4.5rem] shrink-0 flex items-center gap-1 text-sm text-muted-foreground">
-                  <Building2 className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-2 py-1.5 border-t">
+                <div className="w-14 shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Building2 className="h-3 w-3" />
                   לקוח
                 </div>
                 {selectedClientName && !clientDropdownOpen ? (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-2 py-1 text-sm"
+                    className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-1.5 py-0.5 text-xs max-w-full"
                     onClick={() => setClientDropdownOpen(true)}
                   >
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold">
                       {personInitials(selectedClientName)}
                     </span>
-                    {selectedClientName}
+                    <span className="truncate">{selectedClientName}</span>
                     <X
-                      className="h-3.5 w-3.5 text-muted-foreground"
+                      className="h-3 w-3 text-muted-foreground shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         setClientId("");
@@ -610,27 +612,27 @@ export function TaskDetailDialog({
                     setClientDropdownOpen,
                     clientSearch,
                     setClientSearch,
-                    "חפש לקוח...",
+                    "חפש...",
                     filteredClients.map((c) => ({ id: c.id, name: c.name })),
                     setClientId,
                   )
                 )}
               </div>
-              <div className="flex items-center gap-3 py-2 border-t">
-                <div className="w-[4.5rem] shrink-0 flex items-center gap-1 text-sm text-muted-foreground">
-                  <UserRound className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-2 py-1.5 border-t">
+                <div className="w-14 shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <UserRound className="h-3 w-3" />
                   ליד
                 </div>
                 {selectedLeadName && !leadDropdownOpen ? (
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-1 min-w-0">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-2 py-1 text-sm"
+                      className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-1.5 py-0.5 text-xs max-w-full"
                       onClick={() => setLeadDropdownOpen(true)}
                     >
-                      {selectedLeadName}
+                      <span className="truncate">{selectedLeadName}</span>
                       <X
-                        className="h-3.5 w-3.5 text-muted-foreground"
+                        className="h-3 w-3 text-muted-foreground shrink-0"
                         onClick={(e) => {
                           e.stopPropagation();
                           setLeadId("");
@@ -642,7 +644,7 @@ export function TaskDetailDialog({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs gap-1"
+                        className="h-6 px-1.5 text-[10px] gap-1"
                         onClick={() => setViewLeadOpen(true)}
                       >
                         <ExternalLink className="h-3 w-3" />
@@ -656,23 +658,23 @@ export function TaskDetailDialog({
                     setLeadDropdownOpen,
                     leadSearch,
                     setLeadSearch,
-                    "חפש ליד...",
+                    "חפש...",
                     filteredLeads.map((l) => ({ id: l.id, name: l.company_name || "ליד" })),
                     setLeadId,
                   )
                 )}
               </div>
-              <div className="flex items-start gap-3 py-2 border-t">
-                <div className="w-[4.5rem] shrink-0 flex items-center gap-1 text-sm text-muted-foreground pt-1.5">
-                  <Users className="h-3.5 w-3.5" />
-                  משתתפים
+              <div className="flex items-start gap-2 py-1.5 border-t">
+                <div className="w-14 shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground pt-1">
+                  <Users className="h-3 w-3" />
+                  צוות
                 </div>
-                <div className="flex-1 flex flex-wrap items-center gap-1.5">
+                <div className="flex-1 flex flex-wrap items-center gap-1">
                   {collaborators?.map((col) => {
                     const name = (col.campaigners as { full_name?: string } | null)?.full_name || "איש צוות";
                     return (
-                      <Badge key={col.id} variant="secondary" className="gap-1 pr-1 h-7">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold">
+                      <Badge key={col.id} variant="secondary" className="gap-1 pr-1 h-6 text-[10px]">
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15 text-[8px] font-bold">
                           {personInitials(name)}
                         </span>
                         {name}
@@ -688,9 +690,9 @@ export function TaskDetailDialog({
                   })}
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-7 gap-1 rounded-full text-xs bg-card">
-                        <UserPlus className="h-3.5 w-3.5" />
-                        הוסף איש צוות
+                      <Button variant="outline" size="sm" className="h-6 gap-1 rounded-full text-[10px] bg-card px-2">
+                        <UserPlus className="h-3 w-3" />
+                        הוסף
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[250px] p-0 z-50" align="start">
@@ -718,35 +720,30 @@ export function TaskDetailDialog({
                   </Popover>
                 </div>
               </div>
-            </section>
-
-            {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
-              <div className={cn("space-y-3", FRAME)}>
-                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-                  <input
-                    type="checkbox"
-                    checked={selfReminderEnabled}
-                    onChange={(event) => setSelfReminderEnabled(event.target.checked)}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  הזכר לי על המשימה
-                </label>
-                {selfReminderEnabled && (
-                  <div className="space-y-2">
-                    <Label>מתי לשלוח את התזכורת?</Label>
+              {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
+                <div className="flex items-center gap-2 py-1.5 border-t">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={selfReminderEnabled}
+                      onChange={(event) => setSelfReminderEnabled(event.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-input"
+                    />
+                    <Bell className="h-3 w-3 text-muted-foreground" />
+                    הזכר לי
+                  </label>
+                  {selfReminderEnabled && (
                     <Input
                       type="datetime-local"
                       value={selfReminderAt}
                       onChange={(event) => setSelfReminderAt(event.target.value)}
-                      className="bg-card"
+                      className="h-7 bg-card text-xs flex-1 min-w-0"
+                      title="כרמן תזכיר רק במועד שתבחר"
                     />
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  משימה עצמית לא שולחת התראות אוטומטיות. כרמן תזכיר לך רק במועד שתבחר.
-                </p>
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+            </section>
 
             <NotesWithAttachments
               value={notes}
@@ -754,7 +751,7 @@ export function TaskDetailDialog({
               attachments={attachments}
               onAttachmentsChange={setAttachments}
               taskId={task?.id}
-              variant="cubes"
+              variant="notes"
               rows={3}
               notesTitle="הערות ועדכונים"
               placeholder="הערות קבועות למשימה..."
@@ -766,7 +763,7 @@ export function TaskDetailDialog({
                       onChange={(e) => setNewUpdate(e.target.value)}
                       placeholder="הוסף עדכון..."
                       rows={2}
-                      className="flex-1 bg-transparent border-input"
+                      className="flex-1 bg-transparent border-input min-h-[52px]"
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && newUpdate.trim()) {
                           e.preventDefault();
@@ -778,14 +775,14 @@ export function TaskDetailDialog({
                       onClick={() => addUpdate.mutate()}
                       disabled={!newUpdate.trim() || addUpdate.isPending}
                       size="icon"
-                      className="self-end"
+                      className="self-end h-8 w-8"
                       aria-label="שלח עדכון"
                     >
                       <Send className="h-4 w-4" />
                     </Button>
                   </div>
                   {updates?.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-2">אין עדכונים עדיין</p>
+                    <p className="text-xs text-muted-foreground text-center py-1">אין עדכונים עדיין</p>
                   )}
                   {updates?.map((update) => {
                     const updateType = (update as { update_type?: string }).update_type || "comment";
@@ -804,33 +801,44 @@ export function TaskDetailDialog({
                       <div
                         key={update.id}
                         className={cn(
-                          "p-2.5 rounded-lg border bg-card text-right",
+                          "p-2 rounded-lg border bg-card text-right",
                           updateType === "agent_action" && "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800",
                         )}
                       >
-                        <div className="flex items-center justify-between mb-1 gap-2">
+                        <div className="flex items-center justify-between mb-0.5 gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {typeIcon}
-                            <span className="text-sm font-medium truncate">
+                            <span className="text-xs font-medium truncate">
                               {(update.profiles as { full_name?: string } | null)?.full_name || "משתמש"}
                             </span>
                             <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                               {typeLabel}
                             </Badge>
                           </div>
-                          <span className="text-xs text-muted-foreground shrink-0">
+                          <span className="text-[10px] text-muted-foreground shrink-0">
                             {createdAt ? format(createdAt, "dd/MM HH:mm", { locale: he }) : ""}
                           </span>
                         </div>
-                        <p className="text-sm whitespace-pre-wrap">{update.content}</p>
+                        <p className="text-xs whitespace-pre-wrap">{update.content}</p>
                       </div>
                     );
                   })}
                 </>
               }
             />
+            </div>
 
-            <section className={cn(FRAME, "space-y-3")}>
+            <NotesWithAttachments
+              value={notes}
+              onChange={setNotes}
+              attachments={attachments}
+              onAttachmentsChange={setAttachments}
+              taskId={task?.id}
+              variant="files"
+              thumbSize="lg"
+            />
+
+            <section className={cn(FRAME, "space-y-3 p-3")}>
               <div className="flex items-center gap-1.5 text-sm font-medium">
                 <CalendarIcon className="h-4 w-4 text-muted-foreground" />
                 תאריכים, סטטוס ודחיפות
