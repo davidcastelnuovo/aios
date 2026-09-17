@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, type ReactNode } from "react";
+import { useState, useRef, useCallback, useEffect, type ReactNode } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,6 +6,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
 import { Paperclip, X, Loader2, FileText, Image as ImageIcon, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { claimClipboardPaste, filesFromClipboardData, isClipboardTypingTarget } from "@/lib/clipboardFiles";
 
 export interface TaskAttachment {
   name: string;
@@ -110,21 +111,38 @@ export function NotesWithAttachments({
     [attachments, onAttachmentsChange, taskId, tenantId]
   );
 
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    const files: File[] = [];
-    for (const it of Array.from(items)) {
-      if (it.kind === "file") {
-        const f = it.getAsFile();
-        if (f) files.push(f);
-      }
-    }
-    if (files.length) {
-      e.preventDefault();
-      upload(files);
-    }
-  };
+  const takeClipboardFiles = useCallback(
+    (clipboardData: DataTransfer | null | undefined, preventDefault: () => void) => {
+      const files = filesFromClipboardData(clipboardData ?? null);
+      if (!files.length) return false;
+      if (!claimClipboardPaste()) return true;
+      preventDefault();
+      void upload(files);
+      return true;
+    },
+    [upload],
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      takeClipboardFiles(e.clipboardData, () => e.preventDefault());
+    },
+    [takeClipboardFiles],
+  );
+
+  const listenForPagePaste = variant === "files" || variant === "cubes" || variant === "stacked";
+  useEffect(() => {
+    if (!listenForPagePaste) return;
+    const onPaste = (event: ClipboardEvent) => {
+      const files = filesFromClipboardData(event.clipboardData);
+      if (!files.length) return;
+      const hasImage = files.some((file) => file.type.startsWith("image/"));
+      if (isClipboardTypingTarget(event.target) && !hasImage) return;
+      takeClipboardFiles(event.clipboardData, () => event.preventDefault());
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [listenForPagePaste, takeClipboardFiles]);
 
   const remove = async (i: number) => {
     const a = attachments[i];
@@ -239,6 +257,7 @@ export function NotesWithAttachments({
 
   const filesCube = (
     <div
+      tabIndex={0}
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -251,7 +270,7 @@ export function NotesWithAttachments({
       }}
       onPaste={handlePaste}
       className={cn(
-        "rounded-xl border border-border/60 bg-card p-3 flex flex-col shadow-sm text-right",
+        "rounded-xl border border-border/60 bg-card p-3 flex flex-col shadow-sm text-right outline-none focus-visible:ring-2 focus-visible:ring-ring",
         largeThumbs ? "min-h-[200px]" : "min-h-[180px]",
         dragOver && "border-primary bg-primary/5",
       )}
@@ -279,21 +298,23 @@ export function NotesWithAttachments({
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
+          onPaste={handlePaste}
           className={cn(
             "flex-1 rounded-lg border border-dashed border-muted-foreground/30 text-xs text-muted-foreground px-3 py-4 text-center hover:bg-muted/20 transition-colors",
             largeThumbs && "min-h-[140px]",
           )}
         >
-          גרור קבצים לכאן או לחץ לבחירה
+          גרור לכאן, Ctrl+V, או לחץ לבחירה
         </button>
       )}
       {attachments.length > 0 && (
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
+          onPaste={handlePaste}
           className="mt-3 rounded-lg border border-dashed border-muted-foreground/30 text-xs text-muted-foreground px-3 py-2 text-center hover:bg-muted/20 transition-colors"
         >
-          גרור קבצים נוספים או לחץ לבחירה
+          גרור, Ctrl+V, או לחץ להוספה
         </button>
       )}
       {fileInput}
