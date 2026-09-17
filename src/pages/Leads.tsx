@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle, Pencil, Archive, Loader2 } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Users, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle, Pencil, Archive, Loader2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -91,6 +91,14 @@ import {
   fetchAllLeadsForExport,
   writeLeadExportFile,
 } from "@/lib/exportLeads";
+import {
+  groupLeadsBySurfaceUsers,
+  parseLeadTableLayout,
+  sortLeadsByDate,
+  type LeadTableLayout,
+  type SurfaceSalesPerson,
+  LEAD_TABLE_LAYOUT_STORAGE_KEY,
+} from "@/lib/leadTableLayout";
 
 
 // Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
@@ -524,21 +532,35 @@ function SortableLeadCard({
   );
 }
 
-function StageTable({ stage, stageLeads, isOpen, onToggle, totalLeadsCount, overallTotalCount }: { 
-  stage: any; 
-  stageLeads: any[]; 
-  isOpen: boolean; 
+function LeadsGroupTable({
+  label,
+  leads,
+  isOpen,
+  onToggle,
+  emptyMessage,
+  totalLeadsCount,
+  overallTotalCount,
+}: {
+  label: string;
+  leads: any[];
+  isOpen: boolean;
   onToggle: (open: boolean) => void;
+  emptyMessage: string;
   totalLeadsCount?: number;
   overallTotalCount?: number;
 }) {
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle}>
-      <Card className={`border-r-4 ${stage.borderColor} bg-card`}>
+      <Card className="border-r-4 border-primary/40 bg-card">
         <CollapsibleTrigger asChild>
           <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
             <CardTitle className="text-xl flex items-center justify-between">
-              <span>{stage.label}</span>
+              <span className="flex items-center gap-2">
+                {label}
+                <Badge variant="secondary" className="text-sm font-normal">
+                  {leads.length}
+                </Badge>
+              </span>
               <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
             </CardTitle>
           </CardHeader>
@@ -546,15 +568,48 @@ function StageTable({ stage, stageLeads, isOpen, onToggle, totalLeadsCount, over
         
         <CollapsibleContent>
           <CardContent>
-            {stageLeads.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
+            {leads.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">{emptyMessage}</p>
             ) : (
-              <TableWithStickyScroll stageLeads={stageLeads} totalLeadsCount={totalLeadsCount} overallTotalCount={overallTotalCount} />
+              <TableWithStickyScroll stageLeads={leads} totalLeadsCount={totalLeadsCount} overallTotalCount={overallTotalCount} />
             )}
           </CardContent>
         </CollapsibleContent>
       </Card>
     </Collapsible>
+  );
+}
+
+function LeadTableLayoutToggle({
+  value,
+  onChange,
+}: {
+  value: LeadTableLayout;
+  onChange: (layout: LeadTableLayout) => void;
+}) {
+  return (
+    <div className="flex gap-1 border rounded-md p-1">
+      <Button
+        variant={value === "by_user" ? "default" : "ghost"}
+        size="sm"
+        onClick={() => onChange("by_user")}
+        title="לפי משתמשים במשטח"
+        className="gap-1 h-8"
+      >
+        <Users className="h-4 w-4" />
+        <span className="hidden sm:inline">לפי משתמשים</span>
+      </Button>
+      <Button
+        variant={value === "by_date" ? "default" : "ghost"}
+        size="sm"
+        onClick={() => onChange("by_date")}
+        title="טבלה אחת לפי תאריך"
+        className="gap-1 h-8"
+      >
+        <CalendarIcon className="h-4 w-4" />
+        <span className="hidden sm:inline">לפי תאריך</span>
+      </Button>
+    </div>
   );
 }
 
@@ -691,6 +746,16 @@ export default function Leads() {
     setViewModeState(mode);
     try {
       window.localStorage.setItem("leads-view-mode", mode);
+    } catch {}
+  };
+  const [tableLayout, setTableLayoutState] = useState<LeadTableLayout>(() => {
+    if (typeof window === "undefined") return "by_user";
+    return parseLeadTableLayout(window.localStorage.getItem(LEAD_TABLE_LAYOUT_STORAGE_KEY));
+  });
+  const setTableLayout = (layout: LeadTableLayout) => {
+    setTableLayoutState(layout);
+    try {
+      window.localStorage.setItem(LEAD_TABLE_LAYOUT_STORAGE_KEY, layout);
     } catch {}
   };
   const [pendingChatLeadId, setPendingChatLeadId] = useState<string | null>(null);
@@ -1321,19 +1386,26 @@ export default function Leads() {
     });
   }, [leads, tenantId, userAgencyIds, isOwner]);
 
-  // Fetch sales people for filter
+  // Fetch sales people for filter + table grouping by users on this surface
   const { data: salesPeople } = useQuery({
     queryKey: ["sales-people-filter", tenantId],
     queryFn: async () => {
-      if (!tenantId) return [] as any[];
+      if (!tenantId) return [] as SurfaceSalesPerson[];
       const { data, error } = await supabase
         .from("sales_people")
-        .select("id, full_name")
+        .select("id, full_name, agency_id, sales_person_agencies(agency_id)")
         .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
-      return data;
+      return (data || []).map((person: any) => ({
+        id: person.id,
+        full_name: person.full_name,
+        agency_id: person.agency_id,
+        agencyIds: (person.sales_person_agencies || [])
+          .map((row: { agency_id?: string | null }) => row.agency_id)
+          .filter(Boolean),
+      })) as SurfaceSalesPerson[];
     },
     enabled: !!tenantId,
     staleTime: 1000 * 60 * 10, // 10 minutes - sales people rarely change
@@ -1875,6 +1947,19 @@ export default function Leads() {
     return result;
   }, [secureFilteredLeads, filterTagIds, filterResponseStatus, filterStage, leadsTagsMap, optimisticStatusByLeadId]);
 
+  const dateSortedLeads = useMemo(
+    () => sortLeadsByDate(filteredLeads || []),
+    [filteredLeads],
+  );
+
+  const tableUserGroups = useMemo(() => {
+    const people = (salesPeople || []) as SurfaceSalesPerson[];
+    const surfacePeople = isViewingAs && viewAsSalesPersonId
+      ? people.filter((person) => person.id === viewAsSalesPersonId)
+      : people;
+    return groupLeadsBySurfaceUsers(dateSortedLeads, surfacePeople, selectedAgency);
+  }, [dateSortedLeads, salesPeople, isViewingAs, viewAsSalesPersonId, selectedAgency]);
+
   // Helper to check if any filters are active
   const hasActiveFilters = useMemo(() => {
     return filterSalesPersonIds.length > 0 ||
@@ -2381,6 +2466,7 @@ export default function Leads() {
 
             {/* Mobile Pagination (Table view only) */}
             {!isKanbanView && totalPages > 1 && (
+            {!isKanbanView && totalPages > 1 && (
               <div className="flex items-center gap-1">
                 <Button
                   variant="outline"
@@ -2407,6 +2493,10 @@ export default function Leads() {
             )}
           </div>
         </div>
+
+        {viewMode === "table" && (
+          <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
+        )}
 
         <div
           className="grid w-full min-w-0 items-center gap-2"
@@ -2528,6 +2618,9 @@ export default function Leads() {
                 <MessageCircle className="h-4 w-4" />
               </Button>
             </div>
+            {viewMode === "table" && (
+              <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
+            )}
             <div className="flex gap-2">
               <Button variant="outline" asChild>
                 <Link to="archive" className="gap-2">
@@ -3001,21 +3094,44 @@ export default function Leads() {
         </div>
       ) : (
         <div className="space-y-6">
-          {PIPELINE_STAGES.map((stage) => {
-            const stageLeads = getLeadsByStage(stage.id);
-            const stageCount = getLeadsCountByStage(stage.id);
-            return (
-              <StageTable 
-                key={stage.id}
-                stage={stage}
-                stageLeads={stageLeads}
-                isOpen={openTables[stage.id]}
-                onToggle={(open) => setOpenTables(prev => ({ ...prev, [stage.id]: open }))}
-                totalLeadsCount={stageCount}
+          {tableLayout === "by_date" ? (
+            <Card className="bg-card">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  כל הלידים לפי תאריך
+                  <Badge variant="secondary" className="text-sm font-normal">
+                    {dateSortedLeads.length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {dateSortedLeads.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-4">אין לידים להצגה</p>
+                ) : (
+                  <TableWithStickyScroll
+                    stageLeads={dateSortedLeads}
+                    totalLeadsCount={dateSortedLeads.length}
+                    overallTotalCount={totalLeadsCount}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          ) : tableUserGroups.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">אין לידים להצגה</p>
+          ) : (
+            tableUserGroups.map((group) => (
+              <LeadsGroupTable
+                key={group.id}
+                label={group.label}
+                leads={group.leads}
+                isOpen={openTables[group.id] ?? group.leads.length > 0}
+                onToggle={(open) => setOpenTables(prev => ({ ...prev, [group.id]: open }))}
+                emptyMessage="אין לידים למשתמש זה"
+                totalLeadsCount={group.leads.length}
                 overallTotalCount={totalLeadsCount}
               />
-            );
-          })}
+            ))
+          )}
         </div>
       )}
 
@@ -3590,6 +3706,20 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   <User className="h-4 w-4 shrink-0" />
                   <span className="truncate">{lead.contact_name || "-"}</span>
                 </div>
+              )
+            },
+            {
+              id: "created_at",
+              label: "תאריך",
+              width: 160,
+              render: (lead: any) => <LeadCreatedAtLines lead={lead} compact />
+            },
+            {
+              id: "sales_person",
+              label: "משתמש",
+              width: 140,
+              render: (lead: any) => (
+                <span className="truncate">{lead.sales_people?.full_name || "ללא שיוך"}</span>
               )
             },
             { 
