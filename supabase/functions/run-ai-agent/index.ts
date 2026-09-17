@@ -81,6 +81,7 @@ import {
   linkTaskToGoal,
   logGoalEvent,
 } from '../_shared/goal-execution.ts'
+import { formatAutomationStepForCarmen } from '../_shared/automation-flow-steps.ts'
 import {
   OPENAI_BILLING_REFUSAL_HE,
   buildOpenAiBillingStatus,
@@ -749,7 +750,7 @@ const ALL_TOOLS = [
   { name: 'get_automation_details', description: 'פרטי אוטומציה כולל צעדי flow (automation_flow_steps) — טריגר, agent, action, condition.', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, name_search: { type: 'string' } } } },
   { name: 'toggle_automation', description: 'הפעלה/כיבוי אוטומציה. מכניס לתור אישורים — לא מבצע מיד.', parameters: { type: 'object', properties: { automation_id: { type: 'string' }, active: { type: 'boolean' } }, required: ['automation_id', 'active'] } },
   { name: 'delete_automation', description: 'מחיקת אוטומציה (כולל צעדי flow). מכניס לתור אישורים.', parameters: { type: 'object', properties: { automation_id: { type: 'string' } }, required: ['automation_id'] } },
-  { name: 'propose_automation_edit', description: 'הצעת עריכה לאוטומציה קיימת (שם/תיאור/טריגר/החלפת steps). מכניס לתור אישורים; אחרי אישור מעדכן את האוטומציה.', parameters: { type: 'object', properties: {
+  { name: 'propose_automation_edit', description: 'הצעת עריכה לאוטומציה קיימת (שם/תיאור/טריגר/החלפת steps). מכניס לתור אישורים; אחרי אישור מעדכן את האוטומציה. העדפי propose_automation_add_step להוספת צעד בודד — פחות מסוכן.', parameters: { type: 'object', properties: {
     automation_id: { type: 'string' },
     name: { type: 'string' },
     description: { type: 'string' },
@@ -757,6 +758,18 @@ const ALL_TOOLS = [
     trigger_config: { type: 'object' },
     steps: { type: 'array', description: 'אם מסופק — מחליף את כל צעדי ה-flow (חוץ מהטריגר נבנה מחדש)', items: { type: 'object' } },
   }, required: ['automation_id'] } },
+  { name: 'propose_automation_add_step', description: 'הוספת צעד בודד לאוטומציה קיימת (למשל send_greenapi_message / send_meta_whatsapp_message / send_whatsapp) — לא מוחק צעדים קיימים. מכניס לתור אישורים. קודם get_automation_details, אחר כך הצעה + אישור.', parameters: { type: 'object', properties: {
+    automation_id: { type: 'string' },
+    after_step_id: { type: 'string', description: 'מזהה צעד קיים — הצעד החדש ייכנס אחריו. אם ריק — בסוף השרשרת.' },
+    step: { type: 'object', description: 'הצעד להוספה', properties: {
+      type: { type: 'string', enum: ['agent', 'action', 'condition', 'delay', 'merge'] },
+      action_type: { type: 'string', description: 'לשלב action — send_greenapi_message / send_meta_whatsapp_message / send_whatsapp / notification וכו׳' },
+      skin: { type: 'string' },
+      instruction: { type: 'string' },
+      config: { type: 'object' },
+      label: { type: 'string' },
+    }, required: ['type'] },
+  }, required: ['automation_id', 'step'] } },
   { name: 'inspect_meta_lead_forms', description: 'בדיקה חיה של טפסי לידים ב-Meta ושל הטופס המחובר לאוטומציה. מחזיר אוטומציות, Page/Form ID, שמות, סטטוס ושדות. השתמשי בכלי זה לפני החלפה או יצירה של טופס, וניתן לחפש לפי שם אוטומציה, עמוד או טופס.', parameters: { type: 'object', properties: { automation_name: { type: 'string', description: 'שם מלא או חלקי של האוטומציה' }, page_name: { type: 'string', description: 'שם מלא או חלקי של עמוד Meta' }, form_name: { type: 'string', description: 'שם מלא או חלקי של טופס הלידים' } } } },
   { name: 'set_automation_meta_lead_form', description: 'החלפת טופס הלידים המחובר לטריגר של אוטומציה לפי שם הטופס ב-Meta. הכלי מאמת התאמה יחידה לעמוד, לטופס ולאוטומציה, מעדכן את Form ID ורושם את הטופס לסנכרון. דורש אישור מפורש של המשתמש.', parameters: { type: 'object', properties: { automation_id: { type: 'string', description: 'מזהה האוטומציה, אם ידוע' }, automation_name: { type: 'string', description: 'שם מלא או חלקי של האוטומציה' }, form_name: { type: 'string', description: 'שם טופס Meta המדויק או חלק ייחודי ממנו' }, page_name: { type: 'string', description: 'שם עמוד Meta; מומלץ כשיש טפסים בעלי שם זהה' }, confirmed: { type: 'boolean', description: 'חובה true ורק לאחר אישור מפורש של המשתמש' } }, required: ['form_name', 'confirmed'] } },
   { name: 'create_meta_lead_form', description: 'יצירת Instant Form חדש בעמוד Meta. ניתן גם לחבר אותו מיד לאוטומציה. טופס שפורסם ב-Meta אינו ניתן לעריכה רגילה, לכן יש להציג למשתמש את השם, השדות, מדיניות הפרטיות והעמוד ולקבל אישור מפורש לפני הקריאה.', parameters: { type: 'object', properties: { page_name: { type: 'string', description: 'שם עמוד Meta המדויק או חלק ייחודי ממנו' }, form_name: { type: 'string', description: 'שם הטופס החדש' }, questions: { type: 'array', description: 'שדות הטופס לפי הסדר', items: { type: 'object', properties: { type: { type: 'string', description: 'סוג שדה Meta, למשל FULL_NAME, EMAIL, PHONE, CITY, CUSTOM' }, label: { type: 'string', description: 'חובה לשדה CUSTOM; אופציונלי לשדה רגיל' } }, required: ['type'] } }, privacy_policy_url: { type: 'string', description: 'קישור HTTPS למדיניות הפרטיות' }, privacy_policy_link_text: { type: 'string', description: 'טקסט קישור למדיניות, ברירת מחדל מדיניות פרטיות' }, follow_up_action_url: { type: 'string', description: 'קישור HTTPS למסך התודה/אתר לאחר השליחה' }, automation_id: { type: 'string', description: 'אוטומציה לחיבור מיידי, אם ידועה' }, automation_name: { type: 'string', description: 'שם אוטומציה לחיבור מיידי' }, confirmed: { type: 'boolean', description: 'חובה true ורק לאחר אישור מפורש של המשתמש' } }, required: ['page_name', 'form_name', 'questions', 'privacy_policy_url', 'follow_up_action_url', 'confirmed'] } },
@@ -3792,35 +3805,31 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .order('sort_order', { ascending: true })
       return {
         automation: auto,
-        steps: (steps || []).map((s: any) => ({
-          id: s.id,
-          step_type: s.step_type,
-          action_type: s.action_type,
-          label: s.label,
-          sort_order: s.sort_order,
-          parent_step_id: s.parent_step_id,
-          condition_branch: s.condition_branch,
-          skin_slugs: s.configuration?.skin_slugs || null,
-          step_instruction: s.configuration?.step_instruction || null,
-          agent_id: s.configuration?.agent_id || null,
-          facebook_form_id: s.configuration?.facebook_form_id || null,
-          config_keys: s.configuration ? Object.keys(s.configuration) : [],
-        })),
+        steps: (steps || []).map((s: any) => formatAutomationStepForCarmen(s)),
         steps_count: steps?.length || 0,
       }
     }
     case 'toggle_automation':
     case 'delete_automation':
-    case 'propose_automation_edit': {
+    case 'propose_automation_edit':
+    case 'propose_automation_add_step': {
       if (!args.automation_id) return { error: 'automation_id נדרש' }
+      if (name === 'propose_automation_add_step' && (!args.step || typeof args.step !== 'object')) {
+        return { error: 'step נדרש (type + action_type/config)' }
+      }
       const { data: auto } = await supabase.from('automations').select('id, name, active').eq('id', args.automation_id).in('tenant_id', accessibleTenantIds).maybeSingle()
       if (!auto) return { error: 'אוטומציה לא נמצאה' }
       const autoTitles: Record<string, string> = {
         toggle_automation: `${args.active ? 'הפעלת' : 'כיבוי'} אוטומציה: ${auto.name}`,
         delete_automation: `מחיקת אוטומציה: ${auto.name}`,
         propose_automation_edit: `עריכת אוטומציה: ${auto.name}`,
+        propose_automation_add_step: `הוספת צעד לאוטומציה: ${auto.name}`,
       }
-      const toolName = name === 'propose_automation_edit' ? 'edit_automation' : name
+      const toolName = name === 'propose_automation_edit'
+        ? 'edit_automation'
+        : name === 'propose_automation_add_step'
+          ? 'add_automation_step'
+          : name
       const { data: aqRow, error: aqErr } = await supabase.from('agent_approval_queue').insert({
         tenant_id: tenantId,
         agent_id: agentId || null,

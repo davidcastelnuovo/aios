@@ -2,6 +2,7 @@
 // Routes to carmen-fb-tools / carmen-google-tools / carmen-save-media based on tool_name.
 // Used by run-ai-agent (when Carmen calls execute_pending_approval) and by campaign-scheduler-cron.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { insertAutomationStepAfter } from '../_shared/automation-flow-steps.ts';
 import { asUuidOrNull } from '../_shared/uuid.ts';
 
 const corsHeaders = {
@@ -262,7 +263,7 @@ Deno.serve(async (req) => {
     }
 
     // ── Automation mutations ────────────────────────────────────────────────
-    if (row.tool_name === 'toggle_automation' || row.tool_name === 'delete_automation' || row.tool_name === 'edit_automation') {
+    if (row.tool_name === 'toggle_automation' || row.tool_name === 'delete_automation' || row.tool_name === 'edit_automation' || row.tool_name === 'add_automation_step') {
       const inp = (row.tool_input as any) || {};
       let result: any = null;
       let failed = false;
@@ -279,6 +280,18 @@ Deno.serve(async (req) => {
           const { error } = await supabase.from('automations').delete().eq('id', inp.automation_id).eq('tenant_id', row.tenant_id);
           if (error) throw error;
           result = { deleted: inp.automation_id, name: auto.name };
+        } else if (row.tool_name === 'add_automation_step') {
+          if (!inp.step || typeof inp.step !== 'object') throw new Error('step required');
+          const { data: agents } = await supabase.from('ai_agents').select('id,name').eq('tenant_id', row.tenant_id).eq('active', true);
+          const carmen = (agents as any[] || []).find((a) => /כרמן|carmen/i.test(a.name || '')) || (agents as any[] || [])[0];
+          const inserted = await insertAutomationStepAfter(supabase, {
+            automation_id: inp.automation_id,
+            tenant_id: row.tenant_id,
+            step: inp.step,
+            after_step_id: inp.after_step_id || null,
+            carmenAgentId: carmen?.id || null,
+          });
+          result = { automation_id: inp.automation_id, ...inserted, label: inp.step.label || inp.step.action_type || inp.step.type };
         } else {
           // edit_automation
           const patch: Record<string, unknown> = {};
