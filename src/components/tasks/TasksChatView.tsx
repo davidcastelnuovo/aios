@@ -12,7 +12,14 @@ import { TaskDetailDialog } from "./TaskDetailDialog";
 import { QuickTaskInput, type QuickTaskPayload } from "./QuickTaskInput";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 import { embedCount } from "@/lib/embedCount";
+import { filterTasksForChatSearch, sortTasksForChatList } from "@/lib/taskBoardQuery";
 import { TASK_STATUS_CONFIG } from "@/lib/taskStatus";
+
+function formatDueShort(value: string): string | null {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return format(parsed, "dd/MM", { locale: he });
+}
 
 function priorityClass(priority: number) {
   if (priority >= 8) return "text-destructive border-destructive/40 bg-destructive/10";
@@ -100,8 +107,9 @@ export function TasksChatView({
   useEffect(() => {
     if (isMobile) return;
     const stillPresent = Boolean(selectedTaskId && tasks.some((task) => task.id === selectedTaskId));
-    if (!stillPresent && filteredTasks.length > 0) {
-      onSelectTask(filteredTasks[0]);
+    const nextTask = filteredTasks[0];
+    if (!stillPresent && nextTask && nextTask.id !== selectedTaskId) {
+      onSelectTask(nextTask);
     }
   }, [isMobile, selectedTaskId, tasks, filteredTasks, onSelectTask]);
 
@@ -190,6 +198,7 @@ export function TasksChatView({
                 const overdue = isTaskOverdue(task, today);
                 const statusInfo = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.open;
                 const updatesCount = embedCount(task.task_updates);
+                const dueLabel = task.due_date ? formatDueShort(task.due_date) : null;
 
                 return (
                   <button
@@ -249,10 +258,10 @@ export function TasksChatView({
                               {task.campaigners.full_name}
                             </span>
                           )}
-                          {task.due_date && (
+                          {dueLabel && (
                             <span className={cn("inline-flex items-center gap-0.5 text-[10px]", overdue ? "text-destructive" : "text-muted-foreground")}>
                               <CalendarDays className="h-3 w-3" />
-                              {format(new Date(task.due_date), "dd/MM", { locale: he })}
+                              {dueLabel}
                               {task.due_time ? ` ${String(task.due_time).substring(0, 5)}` : ""}
                             </span>
                           )}

@@ -1488,11 +1488,11 @@ export function WeeklyTaskBoard() {
               </div>
             </div>
           </div>
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 h-full">
             <TasksChatView
               tasks={tasks}
               selectedTaskId={selectedTask?.id ?? null}
-              onSelectTask={(task) => setSelectedTask(task)}
+              onSelectTask={setSelectedTask}
               onToggleComplete={(taskId, completed) =>
                 toggleComplete.mutate({ taskId, completed })
               }

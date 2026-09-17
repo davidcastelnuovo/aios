@@ -32,7 +32,19 @@ import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { syncTaskCalendarEvent } from "@/lib/calendarApi";
-import { TASK_STATUS_CONFIG, type HumanTaskStatus } from "@/lib/taskStatus";
+import { coerceHumanTaskStatus, TASK_STATUS_CONFIG, type HumanTaskStatus } from "@/lib/taskStatus";
+
+const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
+
+function isUsableDate(value: Date | undefined): value is Date {
+  return Boolean(value) && !Number.isNaN(value.getTime());
+}
+
+function parseOptionalDate(value: string | null | undefined): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
 
 function personInitials(name: string) {
   return name
@@ -148,20 +160,18 @@ export function TaskDetailDialog({
         setTitle(t.title);
         setNotes(t.notes || "");
         setPriority(t.priority);
-        setStatus((t.status as "open" | "in_progress" | "done") || "open");
-        setDueDate(t.due_date ? new Date(t.due_date) : undefined);
-        setTargetDate(t.target_date ? new Date(t.target_date) : undefined);
+        setStatus(coerceHumanTaskStatus(t.status));
+        setDueDate(parseOptionalDate(t.due_date));
+        setTargetDate(parseOptionalDate(t.target_date));
         setClientId(t.client_id || "");
         setLeadId(t.lead_id || "");
         setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
-        setDurationMinutes((t as any).duration_minutes || 30);
+        const rawDuration = Number((t as { duration_minutes?: number }).duration_minutes) || 30;
+        setDurationMinutes((DURATION_OPTIONS as readonly number[]).includes(rawDuration) ? rawDuration : 30);
         setAssignedCampaignerId(t.campaigner_id || "");
         setSelfReminderEnabled(Boolean(t.self_reminder_at));
-        setSelfReminderAt(
-          t.self_reminder_at
-            ? format(new Date(t.self_reminder_at), "yyyy-MM-dd'T'HH:mm")
-            : ""
-        );
+        const reminderAt = parseOptionalDate(t.self_reminder_at);
+        setSelfReminderAt(reminderAt ? format(reminderAt, "yyyy-MM-dd'T'HH:mm") : "");
         setAttachments(Array.isArray((t as any).attachments) ? (t as any).attachments : []);
         setGoogleCalendarEventId((t as any).google_calendar_event_id || null);
         const knownCreatorName = (t as any).creator_name || "";
@@ -302,8 +312,8 @@ export function TaskDetailDialog({
       if (selfReminderEnabled && assignedCampaignerId === userCampaignerId && !selfReminderAt) {
         throw new Error("יש לבחור תאריך ושעה לתזכורת");
       }
-      const nextDueDate = dueDate ? format(dueDate, "yyyy-MM-dd") : null;
-      const nextTargetDate = targetDate ? format(targetDate, "yyyy-MM-dd") : null;
+      const nextDueDate = isUsableDate(dueDate) ? format(dueDate, "yyyy-MM-dd") : null;
+      const nextTargetDate = isUsableDate(targetDate) ? format(targetDate, "yyyy-MM-dd") : null;
       const nextDueTime = dueTime ? dueTime + ":00" : null;
       const { error } = await supabase
         .from("tasks")
@@ -519,7 +529,10 @@ export function TaskDetailDialog({
             </SelectContent>
           </Select>
         </div>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-1">
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="shrink-0 border-b bg-background px-4">
           <TabsList className="h-9 w-auto bg-transparent p-0 gap-1">
             <TabsTrigger value="details" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-3">
               פרטים
@@ -528,10 +541,7 @@ export function TaskDetailDialog({
               עדכונים
             </TabsTrigger>
           </TabsList>
-        </Tabs>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        </div>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/30 p-4">
           <TabsContent value="details" className="mt-0 space-y-3 outline-none">
             {creatorName && (
@@ -771,10 +781,10 @@ export function TaskDetailDialog({
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
-                        className={cn("w-full justify-start text-right h-9 bg-background", !dueDate && "text-muted-foreground")}
+                        className={cn("w-full justify-start text-right h-9 bg-background", !isUsableDate(dueDate) && "text-muted-foreground")}
                       >
                         <CalendarIcon className="ml-2 h-4 w-4" />
-                        {dueDate ? format(dueDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
+                        {isUsableDate(dueDate) ? format(dueDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
@@ -792,10 +802,10 @@ export function TaskDetailDialog({
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
-                        className={cn("w-full justify-start text-right h-9 bg-background", !targetDate && "text-muted-foreground")}
+                        className={cn("w-full justify-start text-right h-9 bg-background", !isUsableDate(targetDate) && "text-muted-foreground")}
                       >
                         <CalendarIcon className="ml-2 h-4 w-4" />
-                        {targetDate ? format(targetDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
+                        {isUsableDate(targetDate) ? format(targetDate, "dd/MM/yyyy", { locale: he }) : "בחר"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
@@ -805,7 +815,10 @@ export function TaskDetailDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">משך</Label>
-                  <Select value={durationMinutes.toString()} onValueChange={(val) => setDurationMinutes(parseInt(val))}>
+                  <Select
+                    value={String((DURATION_OPTIONS as readonly number[]).includes(durationMinutes) ? durationMinutes : 30)}
+                    onValueChange={(val) => setDurationMinutes(parseInt(val))}
+                  >
                     <SelectTrigger className="h-9 bg-background">
                       <SelectValue />
                     </SelectTrigger>
@@ -883,6 +896,7 @@ export function TaskDetailDialog({
                     default: return "תגובה";
                   }
                 };
+                const createdAt = parseOptionalDate(update.created_at);
                 return (
                   <div
                     key={update.id}
@@ -902,7 +916,7 @@ export function TaskDetailDialog({
                         </Badge>
                       </div>
                       <span className="text-xs text-muted-foreground">
-                        {format(new Date(update.created_at), "dd/MM HH:mm", { locale: he })}
+                        {createdAt ? format(createdAt, "dd/MM HH:mm", { locale: he }) : ""}
                       </span>
                     </div>
                     <p className="text-sm whitespace-pre-wrap">{update.content}</p>
