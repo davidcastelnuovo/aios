@@ -1376,6 +1376,26 @@ export async function handleCarmenMessage(ctx: CarmenContext): Promise<CarmenHan
     if (mergedScope.requireDirectAddress && !groupMessageInvokesCarmen(messageText)) {
       return { handled: false, reason: 'group_not_addressed' };
     }
+
+    // Default-deny groups BEFORE identity. Otherwise strangers get «לא מזהה»
+    // and approved staff get silence in groups that were never opted in
+    // (specific_phone automations, open_member_groups=false).
+    {
+      const scopeModePreview = mergedScope.hasPolicy && mergedScope.allowedPhones.length > 0
+        ? 'specific_phone'
+        : (mergedScope.hasPolicy && mergedScope.allowedGroups.length > 0
+          ? 'specific_group'
+          : (cfg.carmen_scope_mode || 'all'));
+      const openMemberGroupsPreview = (
+        mergedScope.openMemberGroups || cfg.carmen_open_member_groups === true
+      ) && sourceChannel === 'own_instance';
+      if (scopeModePreview !== 'specific_group' && !openMemberGroupsPreview) {
+        console.log('[carmen] group not opted in — silent before identity', {
+          tenantId, chatId, scopeModePreview, sourceChannel,
+        });
+        return { handled: false, reason: 'group_requires_explicit_scope' };
+      }
+    }
   }
 
   // 🔁 DUAL-CHANNEL GUARD: if the matched automation is pinned to a DIFFERENT integration
