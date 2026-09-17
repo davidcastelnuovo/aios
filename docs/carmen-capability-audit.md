@@ -120,17 +120,19 @@
 
 | פעולה | כלי | סטטוס |
 |---|---|---|
-| רשימה | `list_automations` | ⚠️ בלי צעדי flow |
-| הפעלה/כיבוי | `toggle_automation` | ✅ (בלי approval — לשקול) |
+| רשימה | `list_automations` | ✅ (פרטים ב-`get_automation_details`) |
+| פרטי flow | `get_automation_details` | ✅ (`configuration` + `propose_format`) |
+| הוספת צעד | `propose_automation_add_step` → `add_automation_step` | ✅ (לא מוחק צעדים קיימים) |
+| עריכה מלאה | `propose_automation_edit` → `edit_automation` | ✅ (מחליף steps[] — מסוכן) |
+| הפעלה/כיבוי | `toggle_automation` | ✅ (באישור) |
+| מחיקה | `delete_automation` | ✅ (באישור) |
 | הצעת אוטומציה חדשה | `propose_automation` → queue → `carmen-approval-execute` | ✅ (לינארית, נוצרת **כבויה**) |
 | טפסי ליד Meta | `inspect_meta_lead_forms`, `set_automation_meta_lead_form`, `create_meta_lead_form` | ✅ (`confirmed` + manager) |
 
-### פערים (גדולים)
-1. **אין עריכת אוטומציה קיימת** (`propose_automation_edit`).
-2. **אין מחיקה / שכפול**.
-3. **אין הרצה/בדיקה** (test / manual trigger).
-4. `list_automations` לא מחזיר steps — קשה לכרמן "לראות" מה האוטומציה עושה.
-5. `toggle_automation` בלי approval gate (לשקול — כיבוי בטעות מסוכן).
+### פערים (נותרו)
+1. **אין שכפול** אוטומציה.
+2. **אין הרצה/בדיקה** (test / manual trigger) מכרמן.
+3. ענפים / fan-in לא לינאריים — מנוע עדיין שרשרת בלבד.
 
 ---
 

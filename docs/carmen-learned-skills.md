@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-09-17 — הוספת מודול WhatsApp לאוטומציה קיימת
+- **Skin slug:** `carmen_automation_add_whatsapp_step` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** מחברת צעד שליחת WhatsApp (`send_greenapi_message` / Meta / ManyChat) לאוטומציה קיימת — בלי למחוק צעדים — דרך אישור.
+- **How:** `get_automation_details` (config מלא) → `propose_automation_add_step` → `add_automation_step`. חוקי חיבור WA: Manus לכרמן, Green ל-CRM.
+- **Origin:** David — ללמד כרמן בסקין אוטומציות לחבר אוטומציה קיימת ולהוסיף מודול שליחת WhatsApp.
+
 ### 2026-09-10 — מודול הרשאות שיחה (Agent → 📱 הרשאות WhatsApp)
 - **Skin slug:** `carmen_conversation_access_admin` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** מנהל מגדיר ב-Agent Hub טאב **הרשאות שיחה**: טלפונים לפרטי, קבוצות, לקוח↔קבוצה, dev tier (full/bugfix). Runtime קורא `carmen_access_policies` + `carmen_whatsapp_identities` + `carmen_client_group_access`.
