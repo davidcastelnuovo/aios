@@ -40,8 +40,7 @@ export function buildTaskDueDateOrFilter(input: {
  *
  * Includes every not-done task (any due date / unscheduled) plus recently
  * completed rows so the list is a work queue, not a calendar window.
- * Custom period filters narrow by activity time (created_at for open,
- * updated_at for done) — not due date.
+ * Custom period filters narrow by created_at — not due date.
  */
 export function buildChatTaskOrFilter(input: {
   today: string;
@@ -50,10 +49,7 @@ export function buildChatTaskOrFilter(input: {
 }): string {
   const { doneSince, activitySince } = input;
   if (activitySince) {
-    return (
-      `and(status.neq.done,created_at.gte.${activitySince}),` +
-      `and(status.eq.done,updated_at.gte.${activitySince})`
-    );
+    return `created_at.gte.${activitySince}`;
   }
   return `status.neq.done,and(status.eq.done,updated_at.gte.${doneSince})`;
 }

@@ -42,7 +42,7 @@ export function isMineQueueFilter(campaignerFilter: string): boolean {
   return campaignerFilter === "mine" || campaignerFilter === "mine_assigned";
 }
 
-/** Activity window: open tasks by created_at, done tasks by updated_at. */
+/** Period window: tasks created in the selected range. */
 export function resolveTaskPeriodStart(period: TaskPeriodFilter, now = new Date()): Date | undefined {
   const today = startOfDay(now);
   if (period === "all") return undefined;
@@ -53,12 +53,11 @@ export function resolveTaskPeriodStart(period: TaskPeriodFilter, now = new Date(
 }
 
 export function taskMatchesActivityPeriod<
-  T extends { status?: string | null; created_at?: string | null; updated_at?: string | null },
+  T extends { created_at?: string | null },
 >(task: T, since?: Date): boolean {
   if (!since) return true;
-  const stamp = task.status === "done" ? task.updated_at || task.created_at : task.created_at;
-  if (!stamp) return false;
-  const parsed = new Date(stamp);
+  if (!task.created_at) return false;
+  const parsed = new Date(task.created_at);
   if (Number.isNaN(parsed.getTime())) return false;
   return parsed >= since;
 }

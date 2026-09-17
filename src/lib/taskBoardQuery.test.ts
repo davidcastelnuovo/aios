@@ -93,17 +93,13 @@ test("buildChatTaskOrFilter pulls all open work plus recently done", () => {
   assert.equal(filter.includes("due_date.gte"), false);
 });
 
-test("buildChatTaskOrFilter activity period uses created_at and updated_at", () => {
+test("buildChatTaskOrFilter activity period uses created_at", () => {
   const filter = buildChatTaskOrFilter({
     today: "2026-09-17",
     doneSince: "2026-09-03",
     activitySince: "2026-09-01",
   });
-  assert.equal(
-    filter,
-    "and(status.neq.done,created_at.gte.2026-09-01)," +
-      "and(status.eq.done,updated_at.gte.2026-09-01)",
-  );
+  assert.equal(filter, "created_at.gte.2026-09-01");
 });
 
 test("filterTasksForChatSearch matches title, client, lead, and campaigner", () => {

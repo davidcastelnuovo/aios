@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, CircleDot, LayoutList, MessageSquare, Search, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, CircleDot, Clock, LayoutList, MessageSquare, Search, UserRound } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,14 @@ function formatDueShort(value: string): string | null {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return format(parsed, "dd/MM", { locale: he });
+}
+
+function formatCreatedShort(value?: string | null): string | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const sameYear = parsed.getFullYear() === new Date().getFullYear();
+  return format(parsed, sameYear ? "dd/MM" : "dd/MM/yy", { locale: he });
 }
 
 function priorityClass(priority: number) {
@@ -274,6 +282,7 @@ export function TasksChatView({
                 const overdue = isTaskOverdue(task, today);
                 const updatesCount = embedCount(task.task_updates);
                 const dueLabel = task.due_date ? formatDueShort(task.due_date) : null;
+                const createdLabel = formatCreatedShort(task.created_at);
 
                 return (
                   <button
@@ -324,6 +333,15 @@ export function TasksChatView({
                           {task.campaigners?.full_name && (
                             <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">
                               {task.campaigners.full_name}
+                            </span>
+                          )}
+                          {createdLabel && (
+                            <span
+                              className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
+                              title="נוצרה"
+                            >
+                              <Clock className="h-3 w-3" />
+                              {createdLabel}
                             </span>
                           )}
                           {dueLabel && (

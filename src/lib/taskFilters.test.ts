@@ -147,6 +147,13 @@ test("period window uses week/month starts and rolling 3 months / year", () => {
       { status: "done", updated_at: "2026-09-16T10:00:00", created_at: "2026-01-01T10:00:00" },
       month,
     ),
+    false,
+  );
+  assert.equal(
+    taskMatchesActivityPeriod(
+      { status: "done", updated_at: "2026-09-16T10:00:00", created_at: "2026-09-02T10:00:00" },
+      month,
+    ),
     true,
   );
 });
